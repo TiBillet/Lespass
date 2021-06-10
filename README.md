@@ -6,7 +6,10 @@ Vente de billet et gestion d'évènement.
 ```shell
 cd Docker/Development
 docker-compose --build up -d
+
+# une fois buildé et lancé, on rentre dans le conteneur :
 docker exec -ti tibillet_django bash
+
 # --> dans le conteneur :
   python manage.py migrate
   rsp # bashrc alias pour : python /DjangoFiles/manage.py runserver_plus 0.0.0.0:8002
