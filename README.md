@@ -1,5 +1,5 @@
 # TiBillet-Ticket
-Vente de billet et gestion d'évènement.
+Vente de billet et gestion évènementielle.
 
 ## Installation pour dev' :
 
