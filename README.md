@@ -2,6 +2,14 @@
 Vente de billet et gestion d'évènement.
 
 # Credits :
+Développement :
+
+Jonas TURBEAUX & Nicolas DIJOUX
+pour Peaks2Prod & 3Peaks Production.
+
+Free for personal and commercial use under the MIT 3.0 license
+
+
 
 Graphisme : 
 
