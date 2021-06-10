@@ -11,7 +11,7 @@ def create_premier_tenant(apps, schema_editor):
     DNS = os.getenv('DOMAIN')
 
     tenant_public = Client.objects.get_or_create(schema_name='public',
-                                                 name='Tibillet inc.',
+                                                 name='Tibillet Public',
                                                  paid_until='2200-12-05',
                                                  on_trial=False)[0]
 

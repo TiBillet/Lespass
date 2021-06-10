@@ -15,7 +15,11 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
+from Administration.admin_public import public_admin_site
+
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    path('admin/', public_admin_site.urls, name="public_admin_url"),
+
+    # path('admin/', admin.site.urls, name="public_admin_url"),
 ]

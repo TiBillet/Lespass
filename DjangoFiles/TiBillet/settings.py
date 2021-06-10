@@ -58,8 +58,9 @@ TENANT_APPS = (
 INSTALLED_APPS = list(SHARED_APPS) + [app for app in TENANT_APPS if app not in SHARED_APPS]
 TENANT_MODEL = "Customers.Client" # app.Model
 TENANT_DOMAIN_MODEL = "Customers.Domain"  # app.Model
-# ROOT_URLCONF = 'TiBillet.urls_tenants'
-# PUBLIC_SCHEMA_URLCONF = 'TiBillet.urls_public'
+ROOT_URLCONF = 'TiBillet.urls_tenants'
+PUBLIC_SCHEMA_URLCONF = 'TiBillet.urls_public'
+SITE_ID = 1
 
 
 MIDDLEWARE = [
@@ -72,8 +73,6 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
-
-ROOT_URLCONF = 'TiBillet.urls'
 
 TEMPLATES = [
     {
