@@ -1,0 +1,27 @@
+version: '3.7'
+services:
+  tibillet_postgres:
+    image: postgres:11.5-alpine
+    restart: always
+    volumes:
+      - "../Postgres/dbdata:/var/lib/postgresql/data"
+      - "/etc/localtime:/etc/localtime:ro"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+
+
+  tibillet_django:
+    build: ../Dockerfile/
+    restart: always
+    env_file: .env
+    ports:
+      - 8002:8002
+    volumes:
+      - "../DjangoFiles:/DjangoFiles"
+      - "../Docker/bashrc:/root/.bashrc"
+    working_dir: /DjangoFiles
+    command: "bash /DjangoFiles/launch.sh"
+    depends_on:
+      - tibillet_postgres

@@ -1,0 +1,20 @@
+# CHANGE ME
+DJANGO_SECRET = 'ingeci8ar6Ahr6aiBi!ghovezahs@eiNgai4eingaa1zaeRi7E'
+
+POSTGRES_HOST = 'ticket_postgres'
+POSTGRES_USER = 'ticket_postgres_user'
+POSTGRES_PASSWORD = 'ticket_postgres_password'
+POSTGRES_DB = 'ticket'
+
+DEBUG_DJANGO = True
+TIME_ZONE = 'Indian/Reunion'
+
+DOMAIN= 'tibillet-local.me'
+EMAIL= 'me@me.me'
+
+EMAIL_HOST = ""
+EMAIL_PORT = ""
+EMAIL_HOST_USER = ""
+EMAIL_HOST_PASSWORD = ""
+
+MOLLIE_API_KEY = ""
