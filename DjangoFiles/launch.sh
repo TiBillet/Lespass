@@ -1,1 +1,1 @@
-sleep 36d
+sleep 30d
