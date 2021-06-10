@@ -1,15 +1,15 @@
 # TiBillet-Ticket
 Vente de billet et gestion d'évènement.
 
-## Installation pour dev':
+## Installation pour dev' :
 
 ```shell
-
 cd Docker/Development
 docker-compose --build up -d
-docker exec -ti tibillet_django migrate
-docker exec -ti tibillet_django rsp
-
+docker exec -ti tibillet_django bash
+# --> dans le conteneur :
+  python manage.py migrate
+  rsp # bashrc alias pour : python /DjangoFiles/manage.py runserver_plus 0.0.0.0:8002
 ```
 
 # Credits :
