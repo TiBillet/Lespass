@@ -16,7 +16,6 @@ RUN pip install sentry-sdk
 RUN pip install psycopg2-binary
 RUN pip install python-dateutil
 RUN pip install Werkzeug
-RUN pip install django-extensions
 RUN pip install django-solo
 RUN pip install django-admin-sortable2
 RUN pip install admin-totals
@@ -28,6 +27,7 @@ RUN pip install mollie-api-python
 RUN pip install ipython
 RUN pip install ipdb
 RUN pip install django_debug_toolbar
+RUN pip install django-extensions
 
 
 ## POSTGRES CLIENT

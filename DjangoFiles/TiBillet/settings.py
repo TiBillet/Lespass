@@ -44,7 +44,7 @@ SHARED_APPS = (
     'django.contrib.sites',
     'django.contrib.messages',
     'django.contrib.admin',
-
+    'django_extensions',
     'Administration',
 )
 
