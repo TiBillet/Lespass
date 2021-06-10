@@ -1,6 +1,17 @@
 # TiBillet-Ticket
 Vente de billet et gestion d'évènement.
 
+## Installation :
+
+```shell
+
+cd Docker/Development
+docker-compose --build up -d
+docker exec -ti tibillet_django migrate
+docker exec -ti tibillet_django rsp
+
+```
+
 # Credits :
 Développement :
 
