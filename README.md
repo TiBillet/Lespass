@@ -1,7 +1,7 @@
 # TiBillet-Ticket
 Vente de billet et gestion d'évènement.
 
-## Installation :
+## Installation pour dev':
 
 ```shell
 
