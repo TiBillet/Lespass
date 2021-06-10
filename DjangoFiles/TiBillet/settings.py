@@ -46,6 +46,7 @@ SHARED_APPS = (
     'django.contrib.admin',
     'django_extensions',
     'Administration',
+    'MetaBillet',
 )
 
 TENANT_APPS = (
