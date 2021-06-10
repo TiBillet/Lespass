@@ -11,8 +11,11 @@ docker-compose --build up -d
 docker exec -ti tibillet_django bash
 
 # --> dans le conteneur :
+  # on crée la DB :
   python manage.py migrate
-  rsp # bashrc alias pour : python /DjangoFiles/manage.py runserver_plus 0.0.0.0:8002
+  # On lance le serveur avec un alias ( cf bashrc dans root )  
+  # python /DjangoFiles/manage.py runserver_plus 0.0.0.0:8002
+  rsp 
 ```
 
 # Credits :
