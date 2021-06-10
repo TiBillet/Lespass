@@ -13,16 +13,15 @@ docker exec -ti tibillet_django rsp
 ```
 
 # Credits :
-Développement :
+
+## Développement :
 
 Jonas TURBEAUX & Nicolas DIJOUX
 pour Peaks2Prod & 3Peaks Production.
 
 Free for personal and commercial use under the MIT 3.0 license
 
-
-
-Graphisme : 
+## Graphisme : 
 
 Massively by HTML5 UP
 html5up.net | @ajlkn
