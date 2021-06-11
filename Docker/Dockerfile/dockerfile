@@ -21,7 +21,8 @@ RUN pip install django-admin-sortable2
 RUN pip install admin-totals
 RUN pip install django-tenants
 RUN pip install mollie-api-python
-
+RUN pip install markdown       # Markdown support for the browsable API.
+RUN pip install django-filter  # Filtering support
 
 ## PYTHON FOR DEV
 RUN pip install ipython

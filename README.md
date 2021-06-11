@@ -5,6 +5,11 @@ Vente de billet et gestion évènementielle.
 
 ```shell
 cd Docker/Development
+cp env_example .env
+
+# populate .env file with your variables.
+
+cd Docker/Development
 docker-compose --build up -d
 
 # une fois buildé et lancé, on rentre dans le conteneur :
