@@ -47,6 +47,8 @@ SHARED_APPS = (
     'django_extensions',
     'Administration',
     'MetaBillet',
+    'BaseBillet',
+    'ApiBillet',
 )
 
 TENANT_APPS = (

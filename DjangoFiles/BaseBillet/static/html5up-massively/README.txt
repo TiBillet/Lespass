@@ -1,38 +1,3 @@
-# TiBillet-Ticket
-Vente de billet et gestion évènementielle.
-
-## Installation pour dev' :
-
-```shell
-cd Docker/Development
-docker-compose --build up -d
-
-# une fois buildé et lancé, on rentre dans le conteneur :
-docker exec -ti tibillet_django bash
-
-# --> dans le conteneur :
-  # on crée la DB :
-  python manage.py migrate
-  
-  # on crée le premier tenant "demo" :
-  python manage.py create_demo_tenant
-  
-  # On lance le serveur web de dev avec un alias ( cf bashrc dans root )  
-  # python /DjangoFiles/manage.py runserver_plus 0.0.0.0:8002
-  rsp 
-```
-
-# Credits :
-
-## Développement :
-
-Jonas TURBEAUX & Nicolas DIJOUX
-pour Peaks2Prod & 3Peaks Production.
-
-Free for personal and commercial use under the MIT 3.0 license
-
-## Graphisme : 
-
 Massively by HTML5 UP
 html5up.net | @ajlkn
 Free for personal and commercial use under the CCA 3.0 license (html5up.net/license)

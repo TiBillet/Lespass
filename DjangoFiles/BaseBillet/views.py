@@ -9,8 +9,4 @@ class index(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        return render(request, 'html5up-story/index.html')
-
-
-
-
+        return render(request, 'html5up-massively/index.html')
