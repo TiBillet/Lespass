@@ -34,6 +34,8 @@ ALLOWED_HOSTS = ['*']
 
 SHARED_APPS = (
     'django_tenants',  # mandatory
+    'jet.dashboard',
+    'jet',
     'Customers', # you must list the app where your tenant model resides in
 
     'django.contrib.contenttypes',
@@ -161,3 +163,10 @@ EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', False)
 EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', True)
+
+
+# Jet Menu
+# -------------------------------------/
+
+JET_SIDE_MENU_COMPACT = True
+JET_CHANGE_FORM_SIBLING_LINKS = False
