@@ -22,6 +22,11 @@ docker exec -ti tibillet_django bash
   rsp 
 ```
 
+Test with www.$DOMAIN and demo.$DOMAIN
+Don't forget to change your /etc/host if you are in localhost :)
+
+Enjoy !
+
 # Credits :
 
 ## Développement :
