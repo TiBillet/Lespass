@@ -23,6 +23,10 @@ RUN pip install django-tenants
 RUN pip install mollie-api-python
 RUN pip install markdown       # Markdown support for the browsable API.
 RUN pip install django-filter  # Filtering support
+RUN pip install djoser
+RUN pip install djangorestframework_simplejwt
+RUN pip install social-auth-app-django
+
 
 ## PYTHON FOR DEV
 RUN pip install ipython
@@ -50,8 +54,7 @@ RUN apt-get install -y --no-install-recommends postgresql-client
 # RUN pip install django-stdimage
 # RUN pip install django-crispy-forms
 # RUN pip install reportlab
-# RUN pip install -U djoser
-# RUN pip install -U djangorestframework_simplejwt
+
 # RUN pip install -U social-auth-app-django
 # RUN pip install -U django-templated-mail
 

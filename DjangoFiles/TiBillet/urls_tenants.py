@@ -23,6 +23,10 @@ urlpatterns = [
     path('jet/', include('jet.urls', 'jet')),  # Django JET URLS
     re_path(r'^jet/dashboard/', include('jet.dashboard.urls', 'jet-dashboard')),  # Django JET dashboard URLS
     path('admin/', admin.site.urls, name="public_admin_url"),
+
+    re_path(r'^auth/', include('djoser.urls')),
+    re_path(r'^auth/', include('djoser.urls.authtoken')),
+
     path('', include('BaseBillet.urls')),
 
     # path('admin/', admin.site.urls, name="public_admin_url"),

@@ -42,6 +42,10 @@ SHARED_APPS = (
 
     # everything below here is optional
     'django.contrib.auth',
+    'rest_framework',
+    'rest_framework.authtoken',
+    'djoser',
+
     'django.contrib.sessions',
     'django.contrib.sites',
     'django.contrib.messages',
@@ -133,6 +137,17 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+REST_FRAMEWORK = {
+    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "rest_framework.authentication.TokenAuthentication",
+    ),
+}
+
+SIMPLE_JWT = {
+   'AUTH_HEADER_TYPES': ('JWT',),
+}
 # Internationalization
 # https://docs.djangoproject.com/en/3.1/topics/i18n/
 
