@@ -50,16 +50,22 @@ SHARED_APPS = (
     'django.contrib.sites',
     'django.contrib.messages',
     'django.contrib.admin',
+    'django.contrib.staticfiles',
+
     'django_extensions',
     'Administration',
     'MetaBillet',
-    'BaseBillet',
-    'ApiBillet',
+
+    'solo',
+    'stdimage',
+
 )
 
 TENANT_APPS = (
     # The following Django contrib apps must be in TENANT_APPS
     'django.contrib.contenttypes',
+    'BaseBillet',
+    'ApiBillet',
 
     # your tenant-specific apps
 )
@@ -169,7 +175,6 @@ STATIC_URL = '/static/'
 
 MEDIA_ROOT = os.path.join(BASE_DIR, "www", "media")
 MEDIA_URL = '/media/'
-
 
 # EMAIL
 EMAIL_HOST = os.environ.get('EMAIL_HOST')

@@ -15,14 +15,15 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include, re_path
-
-# from Administration.admin_public import public_admin_site
+from django.conf.urls.static import static
+from django.conf import settings
+from Administration.admin_tenant import staff_admin_site
 
 
 urlpatterns = [
     path('jet/', include('jet.urls', 'jet')),  # Django JET URLS
     re_path(r'^jet/dashboard/', include('jet.dashboard.urls', 'jet-dashboard')),  # Django JET dashboard URLS
-    path('admin/', admin.site.urls, name="public_admin_url"),
+    path('admin/', staff_admin_site.urls, name="staff_admin_site"),
 
     re_path(r'^auth/', include('djoser.urls')),
     re_path(r'^auth/', include('djoser.urls.authtoken')),
@@ -30,4 +31,4 @@ urlpatterns = [
     path('', include('BaseBillet.urls')),
 
     # path('admin/', admin.site.urls, name="public_admin_url"),
-]
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

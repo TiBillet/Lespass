@@ -1,0 +1,122 @@
+{% extends "html5up-massively/base.html" %}
+{% block content %}
+    <!-- Wrapper -->
+    <div id="wrapper">
+
+    <!-- Header -->
+    <header id="header">
+        <a href="/" class="logo">{{ configuration.organisation }}</a>
+    </header>
+
+    <!-- Nav -->
+    <nav id="nav">
+        <ul class="links">
+            <li class="active"><a href="index.html">Billetterie</a></li>
+            <li><a href="">Informations</a></li>
+            <li><a href="">Cashless</a></li>
+        </ul>
+        <ul class="icons">
+            {% if configuration.twitter %}
+                <li><a href="{{ configuration.twitter }}" class="icon brands fa-twitter"><span
+                        class="label">Twitter</span></a></li>
+            {% endif %}
+            {% if configuration.facebook %}
+                <li><a href="{{ configuration.facebook }}" class="icon brands fa-facebook-f"><span
+                        class="label">Facebook</span></a>
+                </li>
+            {% endif %}
+            {% if configuration.instagram %}
+                <li><a href="{{ configuration.instagram }}" class="icon brands fa-instagram"><span
+                        class="label">Instagram</span></a>
+                </li>
+            {% endif %}
+        </ul>
+    </nav>
+
+    <!-- Main -->
+    <div id="main">
+
+        <!-- Post -->
+        <section class="post">
+            <header class="major">
+                <span class="date">{{ event.datetime.date }}<br/>{{ event.datetime.time }}</span>
+                <h1>{{ event.name }}</h1>
+                <p>{{ event.short_description }}</p>
+            </header>
+            <div class="image main"><img src="/media/{{ event.img }}" alt=""/></div>
+            <p>{{ event.long_description }}</p>
+        </section>
+
+
+        {% if not event.complet %}
+            <!-- Form -->
+
+            <form id="reservation" method="post" action="#">
+                {% csrf_token %}
+                <h2>RESERVEZ</h2>
+                <div class="row gtr-uniform">
+                    <div class="col-6 col-12-xsmall">
+                        <input type="text" name="nom" id="nom" value="" placeholder="Nom" required="True"/>
+                    </div>
+                    <div class="col-6 col-12-xsmall">
+                        <input type="text" name="prenom" id="prenom" value="" placeholder="Prénom" required="True"/>
+                    </div>
+                    <div class="col-12 col-12-xsmall">
+                        <input type="email" name="email" id="email" value="" placeholder="Email" required="True"/>
+                    </div>
+                    <div class="col-12 col-12-xsmall">
+                        <input type="text" name="phone" id="phone" value="" placeholder="Téléphone" required="True"/>
+                    </div>
+                    <!-- Break -->
+                    <div class="col-12">
+                        <select name="qty" id="qty" required="True">
+                            <option value="">- Quantitée -</option>
+                            {#                        {% for nbr in configuration.reservation_max %}#}
+                            <option value="{{ configuration.reservation_par_user_max }}">{{ configuration.reservation_par_user_max }}</option>
+                            {#                        {% endfor %}#}
+                        </select>
+                    </div>
+                    <!-- Break -->
+                    {% for option_radio in configuration.option_generale_radio.all %}
+                        <div class="col-4 col-12-small">
+                            <input type="radio" id="{{ option_radio.name }}" name="radio_generale" value="{{ option_radio.pk }}">
+                            <label for="{{ option_radio.name }}">{{ option_radio.name }}</label>
+                        </div>
+                    {% endfor %}
+                    <!-- Break -->
+                    {% for option_checkbox in configuration.option_generale_checkbox.all %}
+
+                        <div class="col-6 col-12-small">
+                            <input type="checkbox" id="{{ option_checkbox.name }}" name="{{ option_checkbox.name }}" value="{{ option_checkbox.pk }}">
+                            <label for="{{ option_checkbox.name }}">{{ option_checkbox.name }}</label>
+                        </div>
+
+                    {% endfor %}
+                    <!-- Break -->
+                    {#                    <div class="col-12">#}
+                    {#                    <textarea name="demo-message" id="demo-message" placeholder="Enter your message"#}
+                    {#                              rows="6"></textarea>#}
+                    {#                    </div>#}
+                    <!-- Break -->
+                    <div class="col-12">
+                        <ul class="actions">
+                            <li><input type="submit" value="validez" class="primary"/></li>
+                            <li><input type="reset" value="Reset"/></li>
+                        </ul>
+                    </div>
+                </div>
+            </form>
+
+            <hr/>
+
+        {% else %}
+
+            <h2>COMPLET</h2>
+
+        {% endif %}
+
+
+    </div>
+
+
+{% endblock content %}

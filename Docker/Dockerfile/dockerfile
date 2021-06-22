@@ -50,8 +50,8 @@ RUN apt-get install -y --no-install-recommends postgresql-client
 # RUN pip install django-silk
 # RUN apt install openssh-client -y
 # RUN pip install beautifulsoup4
-# RUN pip install Pillow
-# RUN pip install django-stdimage
+RUN pip install Pillow
+RUN pip install django-stdimage
 # RUN pip install django-crispy-forms
 # RUN pip install reportlab
 
