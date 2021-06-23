@@ -21,6 +21,7 @@ class OptionGenerale(models.Model):
         verbose_name = _('Options Generales')
         verbose_name_plural = _('Options Generales')
 
+
 @receiver(post_save, sender=OptionGenerale)
 def poids_option_generaler(sender, instance: OptionGenerale, created, **kwargs):
     if created:
@@ -29,7 +30,6 @@ def poids_option_generaler(sender, instance: OptionGenerale, created, **kwargs):
             instance.poids = len(OptionGenerale.objects.all()) + 1
 
         instance.save()
-
 
 
 class Configuration(SingletonModel):
@@ -46,27 +46,30 @@ class Configuration(SingletonModel):
 
     img = StdImageField(upload_to='images/',
                         null=True, blank=True,
-                        validators=[MaxSizeValidator(1920, 1920)],
+                        # validators=[MaxSizeValidator(1920, 1920)],
                         variations={
-                            'thumbnail': (1200, 1200),
-                        }, delete_orphans=True)
+                            'fhd': (1920, 1920),
+                            'hdr': (720, 720),
+                            'med': (480, 480),
+                            'thumbnail': (150, 90),
+                        },
+                        delete_orphans=True
+                        )
 
     mollie_api_key = models.CharField(max_length=50,
                                       blank=True, null=True)
 
     reservation_par_user_max = models.PositiveSmallIntegerField(default=6)
 
-    jauge_max = models.PositiveSmallIntegerField()
+    jauge_max = models.PositiveSmallIntegerField(default=50)
 
     option_generale_radio = models.ManyToManyField(OptionGenerale,
-                                          blank=True,
-                                          related_name="radiobutton")
+                                                   blank=True,
+                                                   related_name="radiobutton")
 
     option_generale_checkbox = models.ManyToManyField(OptionGenerale,
-                                          blank=True,
-                                             related_name="checkbox")
-
-
+                                                      blank=True,
+                                                      related_name="checkbox")
 
 
 class Event(models.Model):
@@ -79,8 +82,12 @@ class Event(models.Model):
                         null=True, blank=True,
                         validators=[MaxSizeValidator(1920, 1920)],
                         variations={
-                            'thumbnail': (500, 500),
-                        }, delete_orphans=True)
+                            'fhd': (1920, 1920),
+                            'hdr': (1280, 1280),
+                            'crop': (510, 310, True),
+                        },
+                        delete_orphans=True
+                        )
 
     reservations = models.PositiveSmallIntegerField(default=0)
 
@@ -97,7 +104,6 @@ class Event(models.Model):
         verbose_name_plural = _('Evenements')
 
 
-
 class reservation(models.Model):
     event = models.ForeignKey(Event,
                               on_delete=models.CASCADE,
@@ -111,6 +117,6 @@ class reservation(models.Model):
         (PAYEE, _('Payée')),
     ]
     status = models.CharField(max_length=3, choices=TYPE_CHOICES, default=NON_VALIDEE,
-                                        verbose_name=_("Status de la réservation"))
+                              verbose_name=_("Status de la réservation"))
 
     qty = models.IntegerField()

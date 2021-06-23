@@ -29,6 +29,9 @@ class EventAdmin(admin.ModelAdmin):
         'reservations',
         'datetime',
     )
+    readonly_fields = (
+        'reservations',
+    )
 
 staff_admin_site.register(Event, EventAdmin)
 

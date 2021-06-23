@@ -39,12 +39,12 @@
         <!-- Post -->
         <section class="post">
             <header class="major">
-                <span class="date">{{ event.datetime.date }}<br/>{{ event.datetime.time }}</span>
+                <span class="date">{{ event.datetime | date:"d F Y"}}<br/>{{ event.datetime | time }}</span>
                 <h1>{{ event.name }}</h1>
                 <p>{{ event.short_description }}</p>
             </header>
-            <div class="image main"><img src="/media/{{ event.img }}" alt=""/></div>
-            <p>{{ event.long_description }}</p>
+            <div class="image main"><img src="/media/{{ event.img.fhd }}" alt=""/></div>
+            <p>{{ event.long_description | linebreaks}}</p>
         </section>
 
 

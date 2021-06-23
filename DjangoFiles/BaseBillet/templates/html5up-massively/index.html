@@ -50,11 +50,11 @@
 
             <article class="post featured">
                 <header class="major">
-                    <span class="date">{{ first_event.datetime.date }}<br/>{{ first_event.datetime.time }}</span>
+                    <span class="date">{{ first_event.datetime | date:"d F Y"}}<br/>{{ first_event.datetime | time }}</span>
                     <h2><a href="/event/{{ first_event.pk }}">{{ first_event.name }}</a></h2>
                     <p>{{ first_event.short_description }}</p>
                 </header>
-                <a href="#" class="image main"><img src="/media/{{ first_event.img }}" alt=""/></a>
+                <a href="/event/{{ first_event.pk }}" class="image main"><img src="/media/{{ first_event.img.hdr }}" alt=""/></a>
                 <ul class="actions special">
                     <li><a href="/event/{{ first_event.pk }}" class="button large">RESERVEZ</a></li>
                 </ul>
@@ -79,10 +79,10 @@
             {% for event in events %}
                 <article>
                     <header>
-                        <span class="date">{{ event.datetime.date }}</span>
+                        <span class="date">{{ event.datetime | date:"d F Y"}}</span>
                         <h2><a href="/event/{{ event.pk }}">{{ event.name }}</a></h2>
                     </header>
-                    <a href="#" class="image fit"><img src="/media/{{ event.img }}" alt=""/></a>
+                    <a href="/event/{{ event.pk }}" class="image fit"><img src="/media/{{ event.img.crop }}" alt=""/></a>
                     <p>{{ event.short_description }}</p>
                     <ul class="actions special">
                         <li><a href="/event/{{ event.pk }}" class="button">RESERVEZ</a></li>

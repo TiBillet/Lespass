@@ -42,6 +42,8 @@ SHARED_APPS = (
 
     # everything below here is optional
     'django.contrib.auth',
+    'AuthBillet',
+
     'rest_framework',
     'rest_framework.authtoken',
     'djoser',
@@ -64,10 +66,11 @@ SHARED_APPS = (
 TENANT_APPS = (
     # The following Django contrib apps must be in TENANT_APPS
     'django.contrib.contenttypes',
+    # your tenant-specific apps
+
     'BaseBillet',
     'ApiBillet',
 
-    # your tenant-specific apps
 )
 
 INSTALLED_APPS = list(SHARED_APPS) + [app for app in TENANT_APPS if app not in SHARED_APPS]
@@ -128,6 +131,7 @@ DATABASE_ROUTERS = (
 # Password validation
 # https://docs.djangoproject.com/en/3.1/ref/settings/#auth-password-validators
 
+# AUTH_USER_MODEL = 'AuthBillet.TibilletUser'
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
