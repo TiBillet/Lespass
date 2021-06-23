@@ -79,6 +79,7 @@ TENANT_DOMAIN_MODEL = "Customers.Domain"  # app.Model
 ROOT_URLCONF = 'TiBillet.urls_tenants'
 PUBLIC_SCHEMA_URLCONF = 'TiBillet.urls_public'
 SITE_ID = 1
+AUTH_USER_MODEL = 'AuthBillet.TibilletUser'
 
 
 MIDDLEWARE = [
@@ -131,7 +132,6 @@ DATABASE_ROUTERS = (
 # Password validation
 # https://docs.djangoproject.com/en/3.1/ref/settings/#auth-password-validators
 
-# AUTH_USER_MODEL = 'AuthBillet.TibilletUser'
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -158,6 +158,25 @@ REST_FRAMEWORK = {
 SIMPLE_JWT = {
    'AUTH_HEADER_TYPES': ('JWT',),
 }
+
+DJOSER = {
+    "SEND_ACTIVATION_EMAIL": True,
+    "PASSWORD_CHANGED_EMAIL_CONFIRMATION": True,
+    "PASSWORD_RESET_CONFIRM_URL": "password/reset/confirm/{uid}/{token}",
+    "USERNAME_RESET_CONFIRM_URL": "username/reset/confirm/{uid}/{token}",
+    # "ACTIVATION_URL": "activate/{uid}/{token}",
+    "ACTIVATION_URL": "activate/{uid}/{token}",
+    # "SOCIAL_AUTH_ALLOWED_REDIRECT_URIS": ["http://manap.django-local.org:8002/"],
+    'EMAIL': {
+        'activation': 'AuthBillet.email.ActivationEmail',
+        'confirmation': 'AuthBillet.email.ConfirmationEmail',
+        'password_reset': 'AuthBillet.email.PasswordResetEmail',
+        'password_changed_confirmation': 'AuthBillet.email.PasswordChangedConfirmationEmail',
+        'username_changed_confirmation': 'AuthBillet.email.UsernameChangedConfirmationEmail',
+        'username_reset': 'AuthBillet.email.UsernameResetEmail',
+    },
+}
+
 # Internationalization
 # https://docs.djangoproject.com/en/3.1/topics/i18n/
 

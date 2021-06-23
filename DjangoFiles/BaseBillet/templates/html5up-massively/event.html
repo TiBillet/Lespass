@@ -39,12 +39,12 @@
         <!-- Post -->
         <section class="post">
             <header class="major">
-                <span class="date">{{ event.datetime | date:"d F Y"}}<br/>{{ event.datetime | time }}</span>
+                <span class="date">{{ event.datetime | date:"d F Y" }}<br/>{{ event.datetime | time }}</span>
                 <h1>{{ event.name }}</h1>
                 <p>{{ event.short_description }}</p>
             </header>
             <div class="image main"><img src="/media/{{ event.img.fhd }}" alt=""/></div>
-            <p>{{ event.long_description | linebreaks}}</p>
+            <p>{{ event.long_description | linebreaks }}</p>
         </section>
 
 
@@ -79,7 +79,8 @@
                     <!-- Break -->
                     {% for option_radio in configuration.option_generale_radio.all %}
                         <div class="col-4 col-12-small">
-                            <input type="radio" id="{{ option_radio.name }}" name="radio_generale" value="{{ option_radio.pk }}">
+                            <input type="radio" id="{{ option_radio.name }}" name="radio_generale"
+                                   value="{{ option_radio.pk }}">
                             <label for="{{ option_radio.name }}">{{ option_radio.name }}</label>
                         </div>
                     {% endfor %}
@@ -87,7 +88,8 @@
                     {% for option_checkbox in configuration.option_generale_checkbox.all %}
 
                         <div class="col-6 col-12-small">
-                            <input type="checkbox" id="{{ option_checkbox.name }}" name="{{ option_checkbox.name }}" value="{{ option_checkbox.pk }}">
+                            <input type="checkbox" id="{{ option_checkbox.name }}" name="{{ option_checkbox.name }}"
+                                   value="{{ option_checkbox.pk }}">
                             <label for="{{ option_checkbox.name }}">{{ option_checkbox.name }}</label>
                         </div>
 
@@ -104,7 +106,7 @@
                             <li><input type="reset" value="Reset"/></li>
                         </ul>
                     </div>
-                </div>
+                    </brdiv>
             </form>
 
             <hr/>

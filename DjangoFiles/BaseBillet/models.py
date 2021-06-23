@@ -53,7 +53,8 @@ class Configuration(SingletonModel):
                             'med': (480, 480),
                             'thumbnail': (150, 90),
                         },
-                        delete_orphans=True
+                        delete_orphans=True,
+                        verbose_name='Background'
                         )
 
     mollie_api_key = models.CharField(max_length=50,
