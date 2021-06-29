@@ -131,8 +131,15 @@ class event(APIView):
 
                 request.user = user
 
-            if not request.user.is_active:
-                print(f"{request.user} not active")
+            if not request.user.is_active or not request.user.password :
+
+                print(f"{request.user} not active or no password")
+                # on retire les commande non validé pour éviter les doublons
+                # et on le remet non actif si pas de mot de passe :
+                asupr = Reservation.objects.filter(user_commande=request.user, status=Reservation.MAIL_NON_VALIDEE, event=event)
+                asupr.delete()
+                request.user.is_active = False
+                request.user.save()
 
                 email_activation = ActivationEmail(request)
 

@@ -5,7 +5,7 @@ from django.utils.translation import ugettext_lazy as _
 
 from djoser import utils
 from djoser.conf import settings
-
+from TiBillet.settings import DEBUG
 
 
 class ActivationEmail(BaseEmailMessage):
@@ -21,6 +21,10 @@ class ActivationEmail(BaseEmailMessage):
         user = context.get("user")
         context["site_name"] = self.request.tenant.name
         context["domain"] = self.request.tenant.domain_url
+
+        if DEBUG :
+            context["domain"] += ":8002"
+
         context["uid"] = utils.encode_uid(user.pk)
         context["token"] = default_token_generator.make_token(user)
         context["url"] = settings.ACTIVATION_URL.format(**context)

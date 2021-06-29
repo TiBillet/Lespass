@@ -1,3 +1,5 @@
+from django.contrib.auth import get_user_model
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.shortcuts import render
 
 # Create your views here.
@@ -9,6 +11,8 @@ from djoser.views import UserViewSet
 import requests
 from django.db import connection
 from TiBillet import settings
+from djoser import utils
+User = get_user_model()
 
 class activate(APIView):
     permission_classes = [AllowAny]
@@ -17,6 +21,15 @@ class activate(APIView):
     def get(self, request, uid, token):
         print(uid)
         print(token)
+
+        import ipdb; ipdb.set_trace()
+        user = User.objects.get(pk=utils.decode_uid(uid))
+
+        PR = PasswordResetTokenGenerator()
+        is_token_valid = PR.check_token( user, token )
+
+        if is_token_valid :
+            #TODO POUR DEMAIN JOJO : DEMANDER LE MOT DE PASSE ICI !
 
         domain = self.request.tenant.domain_url
         protocol = "https"
