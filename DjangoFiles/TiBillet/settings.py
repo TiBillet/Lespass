@@ -165,7 +165,7 @@ DJOSER = {
     "PASSWORD_RESET_CONFIRM_URL": "password/reset/confirm/{uid}/{token}",
     "USERNAME_RESET_CONFIRM_URL": "username/reset/confirm/{uid}/{token}",
     # "ACTIVATION_URL": "activate/{uid}/{token}",
-    "ACTIVATION_URL": "activate/{uid}/{token}",
+    "ACTIVATION_URL": "user/activate/{uid}/{token}",
     # "SOCIAL_AUTH_ALLOWED_REDIRECT_URIS": ["http://manap.django-local.org:8002/"],
     'EMAIL': {
         'activation': 'AuthBillet.email.ActivationEmail',

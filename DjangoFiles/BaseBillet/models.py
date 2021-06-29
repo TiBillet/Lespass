@@ -145,7 +145,7 @@ class Reservation(models.Model):
     user_commande = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
 
     event = models.ForeignKey(Event,
-                              on_delete=models.CASCADE,
+                              on_delete=models.PROTECT,
                               related_name="reservation")
 
     ANNULEE, MAIL_NON_VALIDEE, NON_PAYEE, VALIDEE, PAYEE = 'NAN', 'MNV', 'NPA', 'VAL', 'PAY'
