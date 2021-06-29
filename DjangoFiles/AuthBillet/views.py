@@ -28,7 +28,7 @@ class activate(APIView):
         PR = PasswordResetTokenGenerator()
         is_token_valid = PR.check_token( user, token )
 
-        if is_token_valid :
+        # if is_token_valid :
             #TODO POUR DEMAIN JOJO : DEMANDER LE MOT DE PASSE ICI !
 
         domain = self.request.tenant.domain_url
