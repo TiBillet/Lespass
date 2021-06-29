@@ -29,6 +29,8 @@ urlpatterns = [
     re_path(r'^auth/', include('djoser.urls.authtoken')),
     re_path(r'^auth/', include('djoser.urls.jwt')),
 
+    path('activate/', include('AuthBillet.urls')),
+
     path('', include('BaseBillet.urls')),
 
     # path('admin/', admin.site.urls, name="public_admin_url"),

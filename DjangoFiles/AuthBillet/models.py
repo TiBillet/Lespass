@@ -53,6 +53,7 @@ class TibilletUser(AbstractUser):
 
     email = models.EmailField(_('email'), unique=True)  # changes email to unique and blank to false
     username = models.CharField(max_length=200, null=True, blank=True)
+    phone = models.CharField(max_length=20, null=True, blank=True)
 
     TYPE_TERM, TYPE_HUM, TYPE_ANDR = 'TE', 'HU', 'AN'
     ESPECE_CHOICES = (

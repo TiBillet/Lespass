@@ -1,11 +1,11 @@
 from django.contrib.auth.tokens import default_token_generator
 from rest_framework import serializers
 from templated_mail.mail import BaseEmailMessage
+from django.utils.translation import ugettext_lazy as _
 
 from djoser import utils
 from djoser.conf import settings
 
-from BaseBillet.models import Configuration
 
 
 class ActivationEmail(BaseEmailMessage):
@@ -28,9 +28,8 @@ class ActivationEmail(BaseEmailMessage):
         return context
 
     def send(self, to, *args, **kwargs):
-        configuration = Configuration.get_solo()
-        if not configuration.email :
-            return serializers.ValidationError(_(f"Manque l'email de la structure. Merci de configurer votre instance."))
+
+        from_email = kwargs.get('from_email', 'contact@tibillet.re')
 
         self.render()
 
@@ -39,11 +38,12 @@ class ActivationEmail(BaseEmailMessage):
         self.bcc = kwargs.pop('bcc', [])
         self.reply_to = kwargs.pop('reply_to', [])
         self.from_email = kwargs.pop(
-            'from_email', configuration.email
+            'from_email', from_email
         )
 
         # import ipdb; ipdb.set_trace()
         mail_send = super(BaseEmailMessage, self).send(*args, **kwargs)
+
         print(f'mail_send to {self.to} from {self.from_email} : {mail_send}')
 
 

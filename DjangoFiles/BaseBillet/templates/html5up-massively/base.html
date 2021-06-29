@@ -1,27 +1,27 @@
 {% block header %}
-<!DOCTYPE HTML>
-<!--
-	Massively by HTML5 UP
-	html5up.net | @ajlkn
-	Free for personal and commercial use under the CCA 3.0 license (html5up.net/license)
--->
-<html lang="fr">
-<head>
-    <title>{{ configuration.organisation }}</title>
-    <meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no"/>
-    {% load static %}
-    <style>
-        #wrapper > .bg {
-            background-image: url("{% static 'html5up-massively/images/overlay.png' %}"), linear-gradient(0deg, rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.1)), url("/media/{{ configuration.img }}");
-        }
-    </style>
-    <link rel="stylesheet" href="{% static 'html5up-massively/assets/css/main.css' %}"/>
+    <!DOCTYPE HTML>
+    <!--
+        Massively by HTML5 UP
+        html5up.net | @ajlkn
+        Free for personal and commercial use under the CCA 3.0 license (html5up.net/license)
+    -->
+    <html lang="fr">
+    <head>
+        <title>{{ configuration.organisation }}</title>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no"/>
+        {% load static %}
+        <style>
+            #wrapper > .bg {
+                background-image: url("{% static 'html5up-massively/images/overlay.png' %}"), linear-gradient(0deg, rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.1)), url("/media/{{ configuration.img }}");
+            }
+        </style>
+        <link rel="stylesheet" href="{% static 'html5up-massively/assets/css/main.css' %}"/>
 
-    {#    <noscript>#}
-    {#        <link rel="stylesheet" href="{% static 'html5up-massively/assets/css/noscript.css' %}"/>#}
-    {#    </noscript>#}
-</head>
+        {#    <noscript>#}
+        {#        <link rel="stylesheet" href="{% static 'html5up-massively/assets/css/noscript.css' %}"/>#}
+        {#    </noscript>#}
+    </head>
 
 {% endblock header %}
 
@@ -31,23 +31,22 @@
 {% block footer %}
 
 
-        <!-- Footer -->
+    <!-- Footer -->
 
-        {#							<footer>#}
-        {#								<div class="pagination">#}
-        {#									<!--<a href="#" class="previous">Prev</a>-->#}
-        {#									<a href="#" class="page active">1</a>#}
-        {#									<a href="#" class="page">2</a>#}
-        {#									<a href="#" class="page">3</a>#}
-        {#									<span class="extra">&hellip;</span>#}
-        {#									<a href="#" class="page">8</a>#}
-        {#									<a href="#" class="page">9</a>#}
-        {#									<a href="#" class="page">10</a>#}
-        {#									<a href="#" class="next">Next</a>#}
-        {#								</div>#}
-        {#							</footer>#}
+    {#							<footer>#}
+    {#								<div class="pagination">#}
+    {#									<!--<a href="#" class="previous">Prev</a>-->#}
+    {#									<a href="#" class="page active">1</a>#}
+    {#									<a href="#" class="page">2</a>#}
+    {#									<a href="#" class="page">3</a>#}
+    {#									<span class="extra">&hellip;</span>#}
+    {#									<a href="#" class="page">8</a>#}
+    {#									<a href="#" class="page">9</a>#}
+    {#									<a href="#" class="page">10</a>#}
+    {#									<a href="#" class="next">Next</a>#}
+    {#								</div>#}
+    {#							</footer>#}
 
-    </div>
 
     <!-- Footer -->
     <footer id="footer">
@@ -83,7 +82,7 @@
             </section>
             <section>
                 <h3>Email</h3>
-                <p>{{ configuration.email }}</p>
+                <p><a href="mailto:{{ configuration.email }}">{{ configuration.email }}</a></p>
             </section>
             <section>
                 <h3>Social</h3>
@@ -115,19 +114,17 @@
         </ul>
     </div>
 
-</div>
 
-<!-- Scripts -->
-<script src="{% static 'html5up-massively/assets/js/jquery.min.js' %}"></script>
-<script src="{% static 'html5up-massively/assets/js/jquery.scrollex.min.js' %}"></script>
-<script src="{% static 'html5up-massively/assets/js/jquery.scrolly.min.js' %}"></script>
-<script src="{% static 'html5up-massively/assets/js/browser.min.js' %}"></script>
-<script src="{% static 'html5up-massively/assets/js/breakpoints.min.js' %}"></script>
-<script src="{% static 'html5up-massively/assets/js/util.js' %}"></script>
-<script src="{% static 'html5up-massively/assets/js/main.js' %}"></script>
+    <script src="{% static 'html5up-massively/assets/js/jquery.min.js' %}"></script>
+    <script src="{% static 'html5up-massively/assets/js/jquery.scrollex.min.js' %}"></script>
+    <script src="{% static 'html5up-massively/assets/js/jquery.scrolly.min.js' %}"></script>
+    <script src="{% static 'html5up-massively/assets/js/browser.min.js' %}"></script>
+    <script src="{% static 'html5up-massively/assets/js/breakpoints.min.js' %}"></script>
+    <script src="{% static 'html5up-massively/assets/js/util.js' %}"></script>
+    <script src="{% static 'html5up-massively/assets/js/main.js' %}"></script>
 
 
-</body>
-</html>
+    </body>
+    </html>
 
 {% endblock footer %}

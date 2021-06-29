@@ -53,6 +53,7 @@ class UserAdminTibillet(UserAdmin):
                 'first_name',
                 'last_name',
                 'email',
+                'phone',
                 'client_source',
                 'client_admin',
                 'client_achat',

@@ -1,3 +1,6 @@
+import uuid
+
+from django.contrib.auth import get_user_model
 from django.db import models
 
 # Create your models here.
@@ -7,6 +10,8 @@ from solo.models import SingletonModel
 from django.utils.translation import ugettext_lazy as _
 from stdimage import StdImageField
 from stdimage.validators import MaxSizeValidator
+
+from TiBillet import settings
 
 
 class OptionGenerale(models.Model):
@@ -60,8 +65,6 @@ class Configuration(SingletonModel):
     mollie_api_key = models.CharField(max_length=50,
                                       blank=True, null=True)
 
-    reservation_par_user_max = models.PositiveSmallIntegerField(default=6)
-
     jauge_max = models.PositiveSmallIntegerField(default=50)
 
     option_generale_radio = models.ManyToManyField(OptionGenerale,
@@ -73,11 +76,42 @@ class Configuration(SingletonModel):
                                                       related_name="checkbox")
 
 
+class Billet(models.Model):
+    name = models.CharField(max_length=50,
+                            blank=True, null=True)
+    prix = models.FloatField()
+
+    reservation_par_user_max = models.PositiveSmallIntegerField(default=6)
+
+    def range_max(self):
+        return range(self.reservation_par_user_max + 1)
+
+    def __str__(self):
+        return f"{self.name}"
+
+
+class Article(models.Model):
+    name = models.CharField(max_length=50,
+                            blank=True, null=True)
+    prix = models.FloatField()
+    stock = models.SmallIntegerField(blank=True, null=True)
+
+    reservation_par_user_max = models.PositiveSmallIntegerField(default=10)
+
+    def range_max(self):
+        return range(self.reservation_par_user_max + 1)
+
+    def __str__(self):
+        return f"{self.name}"
+
+
 class Event(models.Model):
     name = models.CharField(max_length=200)
     short_description = models.CharField(max_length=250)
     long_description = models.TextField(blank=True, null=True)
     datetime = models.DateTimeField()
+    billets = models.ManyToManyField(Billet)
+    articles = models.ManyToManyField(Article)
 
     img = StdImageField(upload_to='images/',
                         null=True, blank=True,
@@ -105,19 +139,74 @@ class Event(models.Model):
         verbose_name_plural = _('Evenements')
 
 
-class reservation(models.Model):
+class Reservation(models.Model):
+    uuid = models.UUIDField(primary_key=True, db_index=True, default=uuid.uuid4)
+
+    user_commande = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+
     event = models.ForeignKey(Event,
                               on_delete=models.CASCADE,
                               related_name="reservation")
 
-    ANNULEE, NON_VALIDEE, VALIDEE, PAYEE = 'NAN', 'NOV', 'VAL', 'PAY'
+    ANNULEE, MAIL_NON_VALIDEE, NON_PAYEE, VALIDEE, PAYEE = 'NAN', 'MNV', 'NPA', 'VAL', 'PAY'
     TYPE_CHOICES = [
         (ANNULEE, _('Annulée')),
-        (NON_VALIDEE, _('Email non validé')),
+        (MAIL_NON_VALIDEE, _('Email non validé')),
+        (NON_PAYEE, _('Non payée')),
         (VALIDEE, _('Validée')),
         (PAYEE, _('Payée')),
     ]
-    status = models.CharField(max_length=3, choices=TYPE_CHOICES, default=NON_VALIDEE,
+
+    status = models.CharField(max_length=3, choices=TYPE_CHOICES, default=NON_PAYEE,
                               verbose_name=_("Status de la réservation"))
 
-    qty = models.IntegerField()
+    options = models.ManyToManyField(OptionGenerale)
+
+    def __str__(self):
+        return self.user_commande.email
+
+    def user_mail(self):
+        return self.user_commande.email
+
+    def total_billet(self):
+        total = 0
+        for ligne in self.lignearticle_set.all():
+            if ligne.billet:
+                total += ligne.qty
+        return total
+
+    def total_prix(self):
+        total = 0
+        for ligne in self.lignearticle_set.all():
+            if ligne.article :
+                total += ligne.qty * ligne.article.prix
+            if ligne.billet :
+                total += ligne.qty * ligne.billet.prix
+
+        return total
+
+    def _options_(self):
+        return " - ".join([f"{option.name}" for option in self.options.all()])
+
+@receiver(post_save, sender=Reservation)
+def poids_option_generaler(sender, instance: Reservation, created, **kwargs):
+    if created:
+        if not instance.user_commande.is_active :
+            instance.status = instance.MAIL_NON_VALIDEE
+            instance.save()
+
+
+
+class LigneArticle(models.Model):
+    uuid = models.UUIDField(primary_key=True, db_index=True, default=uuid.uuid4)
+    reservation = models.ForeignKey(Reservation, on_delete=models.CASCADE, verbose_name="lignes_article")
+    article = models.ForeignKey(Article, on_delete=models.CASCADE, blank=True, null=True)
+    billet = models.ForeignKey(Billet, on_delete=models.CASCADE, blank=True, null=True)
+    qty = models.SmallIntegerField()
+    reste = models.SmallIntegerField()
+
+    def __str__(self):
+        if self.article :
+            return f"{self.reservation.user_commande.email} {self.qty} {self.article}"
+        if self.billet :
+            return f"{self.reservation.user_commande.email} {self.qty} {self.billet}"

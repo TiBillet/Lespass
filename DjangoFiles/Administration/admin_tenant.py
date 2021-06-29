@@ -4,7 +4,7 @@ from django.contrib.auth.models import Group
 from solo.admin import SingletonModelAdmin
 
 from AuthBillet.models import HumanUser, SuperHumanUser, TermUser
-from BaseBillet.models import Configuration, Event, OptionGenerale
+from BaseBillet.models import Configuration, Event, OptionGenerale, Article, Billet, Reservation, LigneArticle
 from django.contrib.auth.admin import UserAdmin
 
 from Customers.models import Client
@@ -124,4 +124,25 @@ class OptionGeneraleAdmin(admin.ModelAdmin):
         'poids',
     )
 
+class ReservationAdmin(admin.ModelAdmin):
+    list_display = (
+        'user_mail',
+        'total_billet',
+        '_options_',
+        'total_prix',
+        'status'
+    )
+    readonly_fields = list_display
+
+staff_admin_site.register(Reservation, ReservationAdmin)
+
+
 staff_admin_site.register(OptionGenerale, OptionGeneraleAdmin)
+
+staff_admin_site.register(Billet, admin.ModelAdmin)
+staff_admin_site.register(Article, admin.ModelAdmin)
+
+
+
+
+staff_admin_site.register(LigneArticle, admin.ModelAdmin)
