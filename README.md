@@ -1,4 +1,5 @@
 # TiBillet-Ticket
+
 Vente de billet et gestion évènementielle.
 
 ## Installation pour dev' :
@@ -32,7 +33,7 @@ Don't forget to change your /etc/host if you are in localhost :)
 
 Enjoy !
 
-# Credits :
+# Crédits :
 
 ## Développement :
 
