@@ -97,9 +97,45 @@ staff_admin_site.register(TermUser, TermUserAdmin)
 
 
 ########################################################################
+class ConfigurationAdmin(SingletonModelAdmin):
+    # readonly_fields = []
+
+    fieldsets = (
+        (None, {
+            'fields': (
+                'organisation',
+                'short_description',
+                'adresse',
+                'phone',
+                'email',
+                'twitter',
+                'facebook',
+                'instagram',
+                'img',
+            )
+        }),
+        ('Paiements', {
+            'fields': (
+                'mollie_api_key',
+            ),
+        }),
+        ('Billetterie', {
+            'fields': (
+                'jauge_max',
+                'option_generale_radio',
+                'option_generale_checkbox',
+            ),
+        }),
+        ('Cashless', {
+            'fields': (
+                'server_cashless',
+                'key_cashless',
+            ),
+        }),
+    )
 
 
-staff_admin_site.register(Configuration, SingletonModelAdmin)
+staff_admin_site.register(Configuration, ConfigurationAdmin)
 
 
 class EventAdmin(admin.ModelAdmin):

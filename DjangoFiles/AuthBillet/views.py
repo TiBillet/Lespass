@@ -14,6 +14,7 @@ from TiBillet import settings
 from djoser import utils
 User = get_user_model()
 
+
 class activate(APIView):
     permission_classes = [AllowAny]
 
@@ -22,7 +23,7 @@ class activate(APIView):
         print(uid)
         print(token)
 
-        import ipdb; ipdb.set_trace()
+        # import ipdb; ipdb.set_trace()
         user = User.objects.get(pk=utils.decode_uid(uid))
 
         PR = PasswordResetTokenGenerator()

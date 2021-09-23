@@ -43,6 +43,7 @@ SHARED_APPS = (
     # everything below here is optional
     'django.contrib.auth',
     'AuthBillet',
+    'QrcodeCashless',
 
     'rest_framework',
     'rest_framework.authtoken',
@@ -70,6 +71,7 @@ TENANT_APPS = (
 
     'BaseBillet',
     'ApiBillet',
+    'PaiementStripe',
 
 )
 

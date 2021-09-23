@@ -11,7 +11,9 @@ from django.utils.translation import ugettext_lazy as _
 from stdimage import StdImageField
 from stdimage.validators import MaxSizeValidator
 
+from PaiementStripe.models import Paiement_stripe
 from TiBillet import settings
+
 
 
 class OptionGenerale(models.Model):
@@ -28,7 +30,7 @@ class OptionGenerale(models.Model):
 
 
 @receiver(post_save, sender=OptionGenerale)
-def poids_option_generaler(sender, instance: OptionGenerale, created, **kwargs):
+def poids_option_generale(sender, instance: OptionGenerale, created, **kwargs):
     if created:
         # poids d'apparition
         if instance.poids == 0:
@@ -75,6 +77,20 @@ class Configuration(SingletonModel):
                                                       blank=True,
                                                       related_name="checkbox")
 
+
+    server_cashless = models.URLField(
+        max_length=300,
+        blank=True,
+        null=True,
+        verbose_name="Adresse du serveur Cashless"
+    )
+
+    key_cashless = models.CharField(
+        max_length=41,
+        blank=True,
+        null=True,
+        verbose_name="Clé d'API du serveur cashless"
+    )
 
 class Billet(models.Model):
     name = models.CharField(max_length=50,
@@ -133,6 +149,9 @@ class Event(models.Model):
         else:
             return False
 
+    def __str__(self):
+        return f"{self.datetime.strftime('%d/%m')} {self.name}"
+
     class Meta:
         ordering = ('datetime',)
         verbose_name = _('Evenement')
@@ -189,7 +208,7 @@ class Reservation(models.Model):
         return " - ".join([f"{option.name}" for option in self.options.all()])
 
 @receiver(post_save, sender=Reservation)
-def poids_option_generaler(sender, instance: Reservation, created, **kwargs):
+def verif_mail_valide(sender, instance: Reservation, created, **kwargs):
     if created:
         if not instance.user_commande.is_active :
             instance.status = instance.MAIL_NON_VALIDEE
@@ -199,14 +218,18 @@ def poids_option_generaler(sender, instance: Reservation, created, **kwargs):
 
 class LigneArticle(models.Model):
     uuid = models.UUIDField(primary_key=True, db_index=True, default=uuid.uuid4)
-    reservation = models.ForeignKey(Reservation, on_delete=models.CASCADE, verbose_name="lignes_article")
+    reservation = models.ForeignKey(Reservation, on_delete=models.CASCADE, blank=True, null=True)
     article = models.ForeignKey(Article, on_delete=models.CASCADE, blank=True, null=True)
     billet = models.ForeignKey(Billet, on_delete=models.CASCADE, blank=True, null=True)
     qty = models.SmallIntegerField()
     reste = models.SmallIntegerField()
+    paiement_stripe = models.ForeignKey(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True)
 
-    def __str__(self):
-        if self.article :
-            return f"{self.reservation.user_commande.email} {self.qty} {self.article}"
-        if self.billet :
-            return f"{self.reservation.user_commande.email} {self.qty} {self.billet}"
+    # def __str__(self):
+    #     if self.reservation :
+    #         if self.article :
+    #             return f"{self.reservation.user_commande.email} {self.qty} {self.article}"
+    #         if self.billet :
+    #             return f"{self.reservation.user_commande.email} {self.qty} {self.billet}"
+
+

@@ -32,6 +32,7 @@ urlpatterns = [
     re_path(r'^user/', include('AuthBillet.urls')),
 
     re_path(r'api/', include('ApiBillet.urls')),
+    re_path(r'qr/', include('QrcodeCashless.urls')),
 
 
     path('', include('BaseBillet.urls')),
