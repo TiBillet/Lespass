@@ -1,7 +1,11 @@
 from django.shortcuts import render
 
 # Create your views here.
+from ApiBillet.serializers import EventSerializer
 from Customers.models import Client, Domain
+from BaseBillet.models import Event
+from rest_framework import viewsets, permissions
+
 import os
 
 def new_tenants(schema_name):
@@ -18,3 +22,14 @@ def new_tenants(schema_name):
                                                    )
 
     return tenant, tenant_domain
+
+
+
+
+class EventViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint that allows users to be viewed or edited.
+    """
+    queryset = Event.objects.all().order_by('-datetime')
+    serializer_class = EventSerializer
+    permission_classes = [permissions.AllowAny]

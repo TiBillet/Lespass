@@ -31,6 +31,9 @@ urlpatterns = [
 
     re_path(r'^user/', include('AuthBillet.urls')),
 
+    re_path(r'api/', include('ApiBillet.urls')),
+
+
     path('', include('BaseBillet.urls')),
 
     # path('admin/', admin.site.urls, name="public_admin_url"),

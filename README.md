@@ -40,7 +40,7 @@ Enjoy !
 Jonas TURBEAUX & Nicolas DIJOUX
 pour Peaks2Prod & 3Peaks Production.
 
-Free for personal and commercial use under the MIT 3.0 license
+Free for personal and commercial use under the AGPL-3.0 licence.
 
 ## Graphisme : 
 
