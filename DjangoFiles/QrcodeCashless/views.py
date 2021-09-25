@@ -96,6 +96,7 @@ class index_scan(View):
                 request,
                 self.template_name,
                 {
+                    'url_image_carte': carte.detail.img_url,
                     'numero_carte': carte.number,
                     'domain': sub_addr,
                     'informations_carte': reponse_server_cashless.text,
@@ -122,7 +123,7 @@ class index_scan(View):
         montant_recharge = float(data.get('thune'))
         configuration = Configuration.get_solo()
 
-        if data.get('numero_carte_cashless') == str(uuid).split('-')[0].upper() and \
+        if data.get('numero_carte_cashless') == carte.number and \
                 reponse_server_cashless.status_code == 200 and \
                 montant_recharge > 0:
 
