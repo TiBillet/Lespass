@@ -8,6 +8,7 @@ from BaseBillet.models import Configuration, Event, OptionGenerale, Article, Bil
 from django.contrib.auth.admin import UserAdmin
 
 from Customers.models import Client
+from PaiementStripe.models import Paiement_stripe
 
 
 class StaffAdminSite(AdminSite):
@@ -117,6 +118,9 @@ class ConfigurationAdmin(SingletonModelAdmin):
         ('Paiements', {
             'fields': (
                 'mollie_api_key',
+                'stripe_api_key',
+                'stripe_test_api_key',
+                'stripe_mode_test',
             ),
         }),
         ('Billetterie', {
@@ -172,13 +176,51 @@ class ReservationAdmin(admin.ModelAdmin):
 
 staff_admin_site.register(Reservation, ReservationAdmin)
 
+class ArticleAdmin(admin.ModelAdmin):
+    list_display = (
+        'name',
+        'prix',
+        'stock',
+        'reservation_par_user_max',
+        'vat',
+        'publish',
+    )
+    list_editable = (
+        'prix',
+        'stock',
+        'reservation_par_user_max',
+        'vat',
+        'publish',
+    )
 
-staff_admin_site.register(OptionGenerale, OptionGeneraleAdmin)
-
-staff_admin_site.register(Billet, admin.ModelAdmin)
-staff_admin_site.register(Article, admin.ModelAdmin)
-
+staff_admin_site.register(Article, ArticleAdmin)
 
 
 
 staff_admin_site.register(LigneArticle, admin.ModelAdmin)
+
+
+
+staff_admin_site.register(OptionGenerale, OptionGeneraleAdmin)
+
+staff_admin_site.register(Billet, admin.ModelAdmin)
+
+
+class PaiementStripeAdmin(admin.ModelAdmin):
+    list_display = (
+        'detail',
+        'total',
+        'order_date',
+        'user',
+        'status',
+    )
+    ordering = ('-order_date',)
+    # readonly_fields = (
+    #     'reservations',
+    # )
+
+
+staff_admin_site.register(Paiement_stripe, PaiementStripeAdmin)
+
+
+

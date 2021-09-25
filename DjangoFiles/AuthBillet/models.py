@@ -169,7 +169,6 @@ class HumanUserManager(TibilletManager):
                                              is_superuser=False,
                                              client_achat__id__in=[connection.tenant.id, ],
                                              )
-        # .distinct() ???
 
 
 class HumanUser(TibilletUser):

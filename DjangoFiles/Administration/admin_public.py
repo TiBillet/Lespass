@@ -7,6 +7,7 @@ from django.contrib.auth.admin import UserAdmin, GroupAdmin
 from Customers.models import Client, Domain
 from AuthBillet.models import TibilletUser, HumanUser, TermUser, SuperHumanUser
 from django.utils.translation import gettext, gettext_lazy as _
+from QrcodeCashless.models import Detail, CarteCashless
 
 
 # from boutique.models import Category, Product, Tag, VAT, Event, LandingPageContent, Billet
@@ -128,5 +129,35 @@ class ClientAdmin(admin.ModelAdmin):
         'created_on',
     )
 
-
 public_admin_site.register(Client, ClientAdmin)
+
+
+class DetailAdmin(admin.ModelAdmin):
+    list_display = (
+        'base_url',
+        'origine',
+        'generation',
+        'img_url',
+        'img',
+    )
+
+public_admin_site.register(Detail, DetailAdmin)
+
+class CarteCashlessAdmin(admin.ModelAdmin):
+
+
+    list_display = (
+        'tag_id',
+        'uuid',
+        'number',
+        'get_origin',
+    )
+
+    def get_origin(self, obj):
+        return obj.detail.origine
+    get_origin.short_description = 'Origine'
+
+    search_fields = ('tag_id', 'uuid', 'number')
+    list_filter = ('tag_id', 'uuid', 'number')
+
+public_admin_site.register(CarteCashless, CarteCashlessAdmin)

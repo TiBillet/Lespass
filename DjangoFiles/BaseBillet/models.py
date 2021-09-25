@@ -67,6 +67,10 @@ class Configuration(SingletonModel):
     mollie_api_key = models.CharField(max_length=50,
                                       blank=True, null=True)
 
+    stripe_api_key = models.CharField(max_length=110, blank=True, null=True)
+    stripe_test_api_key = models.CharField(max_length=110, blank=True, null=True)
+    stripe_mode_test = models.BooleanField(default=True)
+
     jauge_max = models.PositiveSmallIntegerField(default=50)
 
     option_generale_radio = models.ManyToManyField(OptionGenerale,
@@ -105,6 +109,18 @@ class Billet(models.Model):
     def __str__(self):
         return f"{self.name}"
 
+class VAT(models.Model):
+    """
+    Les différents taux de TVA sont associés à des produits.
+    """
+    percent = models.FloatField(verbose_name="Taux de TVA (%)")
+
+    class Meta:
+        verbose_name = _('TVA')
+        verbose_name_plural = _('TVA')
+
+    def __str__(self):
+        return f"{self.percent}%"
 
 class Article(models.Model):
     name = models.CharField(max_length=50,
@@ -113,6 +129,9 @@ class Article(models.Model):
     stock = models.SmallIntegerField(blank=True, null=True)
 
     reservation_par_user_max = models.PositiveSmallIntegerField(default=10)
+    vat = models.ForeignKey(VAT, on_delete=models.PROTECT, verbose_name="TVA", null=True, blank=True)
+
+    publish = models.BooleanField(default=False)
 
     def range_max(self):
         return range(self.reservation_par_user_max + 1)
@@ -224,7 +243,7 @@ class LigneArticle(models.Model):
     qty = models.SmallIntegerField()
     reste = models.SmallIntegerField()
     paiement_stripe = models.ForeignKey(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True)
-
+    datetime = models.DateTimeField(auto_now=True)
     # def __str__(self):
     #     if self.reservation :
     #         if self.article :

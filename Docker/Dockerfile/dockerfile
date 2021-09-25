@@ -58,6 +58,7 @@ RUN pip install django-stdimage
 # RUN pip install -U social-auth-app-django
 # RUN pip install -U django-templated-mail
 
+RUN pip install stripe
 
 
 

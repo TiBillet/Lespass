@@ -4,6 +4,8 @@ services:
     container_name: tibillet_postgres
     image: postgres:11.5-alpine
     restart: always
+    ports:
+      - 5432:5432
     volumes:
       - "../../Postgres/dbdata:/var/lib/postgresql/data"
       - "/etc/localtime:/etc/localtime:ro"
