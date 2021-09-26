@@ -9,6 +9,7 @@
     <title>Scan TiBillet</title>
     <meta charset="utf-8"/>
     {% load static %}
+    {% load humanize %}
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no"/>
     <link rel="stylesheet" href="{% static 'html5up-dimension/assets/css/main.css' %}"/>
     <noscript>
@@ -37,7 +38,9 @@
         <nav>
             <ul>
                 <li><a href="#recharger">Recharger</a></li>
-                <li><a href="#historique">Historique</a></li>
+                {% if history %}
+                    <li><a href="#historique">Historique</a></li>
+                {% endif %}
                 {% if carte_resto %}
                     <li><a href="/media/{{ carte_resto }}">Restaurant</a></li>
                 {% endif %}
@@ -48,6 +51,11 @@
                 {% if site_web %}
                     <li><a href="{{ site_web }}">Site web</a></li>
                 {% endif %}
+
+                {% if not email %}
+                    <li><a href="#adherer">Adhérer</a></li>
+                {% endif %}
+
                 {#                <li><a href="#elements">Elements</a></li>#}
 
             </ul>
@@ -87,16 +95,62 @@
 
         <!-- Historique -->
         <article id="historique">
+            <div class="table-wrapper">
+                <h2 class="major">Solde</h2>
+
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Carte {{ numero_carte }}</th>
+                        <th>Quantité</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for asset in assets %}
+                        <tr>
+                            <td>{{ asset.nom }}</td>
+                            <td>{{ asset.qty |floatformat:2|intcomma }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                    <tfoot>
+                    <tr>
+                        <td colspan="1"></td>
+                        <td>{{ total_monnaie |floatformat:2|intcomma }}</td>
+                    </tr>
+                    </tfoot>
+                </table>
+            </div>
             <h2 class="major">Historique</h2>
-            <h4>carte : {{ numero_carte }}</h4>
-            <span class="image main"><img src="images/pic02.jpg" alt=""/></span>
-            <p>Adipiscing magna sed dolor elit. Praesent eleifend dignissim arcu, at eleifend sapien imperdiet ac.
-                Aliquam erat volutpat. Praesent urna nisi, fringila lorem et vehicula lacinia quam. Integer sollicitudin
-                mauris nec lorem luctus ultrices.</p>
-            <p>Nullam et orci eu lorem consequat tincidunt vivamus et sagittis libero. Mauris aliquet magna magna sed
-                nunc rhoncus pharetra. Pellentesque condimentum sem. In efficitur ligula tate urna. Maecenas laoreet
-                massa vel lacinia pellentesque lorem ipsum dolor. Nullam et orci eu lorem consequat tincidunt. Vivamus
-                et sagittis libero. Mauris aliquet magna magna sed nunc rhoncus amet feugiat tempus.</p>
+
+
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Qty</th>
+                        <th>Article</th>
+                        <th>Total</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for ligne in history %}
+                        <tr>
+                            <td>{{ ligne.date | naturaltime }}</td>
+                            <td>{{ ligne.qty  | floatformat:0 | intcomma }}</td>
+                            <td>{{ ligne.article }}</td>
+                            <td>{{ ligne.total }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </article>
+
+        <article id="adhesionsuccess">
+            <h2 class="major">Adhésion</h2>
+            <h4>Merci !</h4>
         </article>
 
         <article id="success">
@@ -106,16 +160,24 @@
                 <table>
                     <thead>
                     <tr>
-                        <th>Portefeuille :</th>
+                        <th>Portefeuille</th>
+                        <th>Quantité</th>
                     </tr>
                     </thead>
                     <tbody>
-                    {% for asset in liste_assets %}
+                    {% for asset in assets %}
                         <tr>
-                            <td>{{ asset }}</td>
+                            <td>{{ asset.nom }}</td>
+                            <td>{{ asset.qty |floatformat:2|intcomma }}</td>
                         </tr>
                     {% endfor %}
                     </tbody>
+                    <tfoot>
+                    <tr>
+                        <td colspan="1"></td>
+                        <td>{{ total_monnaie |floatformat:2|intcomma }}</td>
+                    </tr>
+                    </tfoot>
                 </table>
             </div>
             <ul class="actions">
@@ -124,42 +186,41 @@
         </article>
 
         <article id="error">
-            <h2 class="major">ERREUR Rechargement</h2>
-            <h3>Le paiement semble ne pas être passé. Vérifiez votre paiement ou contacter un administrateur</h3>
+            <h2 class="major">ERREUR</h2>
+            <h3>Le paiement n'a pas fonctionné.</h3>
+            <h4>Vérifiez votre moyen de paiement ou contacter un administrateur</h4>
             <ul class="actions">
                 <li><a href="#historique" class="button primary">Voir l'historique</a></li>
             </ul>
         </article>
 
-        <!-- Contact -->
-        <article id="external">
-            <h2 class="major">Contact</h2>
+        <!-- adhesion -->
+        <article id="adherer">
+            <h2 class="major">Adhésion {{ client_name }}</h2>
             <form method="post" action="#">
+                {% csrf_token %}
                 <div class="fields">
                     <div class="field half">
-                        <label for="name">Name</label>
-                        <input type="text" name="name" id="name"/>
+                        <label for="name">Nom</label>
+                        <input id="name" name="name" required="True" type="text"/>
+                    </div>
+                    <div class="field half">
+                        <label for="prenom">Prénom</label>
+                        <input id="prenom" name="prenom" required="True" type="text"/>
                     </div>
                     <div class="field half">
                         <label for="email">Email</label>
-                        <input type="text" name="email" id="email"/>
+                        <input id="email" name="email" required="True" type="email"/>
                     </div>
-                    <div class="field">
-                        <label for="message">Message</label>
-                        <textarea name="message" id="message" rows="4"></textarea>
+                    <div class="field half">
+                        <label for="tel">Téléphone</label>
+                        <input id="tel" name="tel" required="True" type="tel"/>
                     </div>
                 </div>
                 <ul class="actions">
-                    <li><input type="submit" value="Send Message" class="primary"/></li>
-                    <li><input type="reset" value="Reset"/></li>
+                    <li><input type="submit" value="Adhérer" class="primary"/></li>
                 </ul>
             </form>
-            <ul class="icons">
-                <li><a href="#" class="icon brands fa-twitter"><span class="label">Twitter</span></a></li>
-                <li><a href="#" class="icon brands fa-facebook-f"><span class="label">Facebook</span></a></li>
-                <li><a href="#" class="icon brands fa-instagram"><span class="label">Instagram</span></a></li>
-                <li><a href="#" class="icon brands fa-github"><span class="label">GitHub</span></a></li>
-            </ul>
         </article>
 
         <!-- Elements -->
@@ -415,7 +476,8 @@ print 'It took ' + i + ' iterations to sort the deck.';</code></pre>
 
     <!-- Footer -->
     <footer id="footer">
-        <p class="copyright">&copy; Untitled. Design: <a href="https://html5up.net">HTML5 UP</a>.</p>
+        <p class="copyright"><a href="https://www.tibillet.re">TiBillet.re</a> Design: <a href="https://html5up.net">HTML5
+            UP</a>.</p>
     </footer>
 
 </div>

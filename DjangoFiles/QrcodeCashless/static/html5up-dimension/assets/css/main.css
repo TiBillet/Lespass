@@ -460,6 +460,7 @@ input, select, textarea {
 	input[type="password"],
 	input[type="email"],
 	input[type="number"],
+	input[type="tel"],
 	select {
 		height: 2.75rem;
 	}

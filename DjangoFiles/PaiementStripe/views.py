@@ -28,7 +28,6 @@ class retour_stripe(View):
         else:
             stripe.api_key = configuration.stripe_api_key
 
-
         if paiement_stripe.status != Paiement_stripe.VALID :
 
             checkout_session = stripe.checkout.Session.retrieve(paiement_stripe.id_stripe)
@@ -36,8 +35,11 @@ class retour_stripe(View):
                 paiement_stripe.status = Paiement_stripe.PENDING
                 if checkout_session.expires_at > datetime.now().timestamp() :
                     paiement_stripe.status = Paiement_stripe.EXPIRE
+                paiement_stripe.save()
+
             elif checkout_session.payment_status == "paid":
                 paiement_stripe.status = Paiement_stripe.PAID
+                paiement_stripe.save()
 
                 # on vérifie si les infos sont cohérente avec la db : Never Trust Input :)
                 metadata_stripe_json = checkout_session.metadata
@@ -59,6 +61,8 @@ class retour_stripe(View):
 
                 # on check si il y a un rechargement de carte cashless dans la commande
                 if metadata_db.get('recharge_carte_uuid') :
+                    logger.info(f'{timezone.now()} retour stripe pour rechargement carte : {metadata_db.get("recharge_carte_uuid")}')
+                    print (f'{timezone.now()} retour stripe pour rechargement carte : {metadata_db.get("recharge_carte_uuid")}')
                     return postPaimentRecharge(paiement_stripe, request)
 
 
@@ -66,9 +70,9 @@ class retour_stripe(View):
 
             else:
                 paiement_stripe.status = Paiement_stripe.CANCELED
+                paiement_stripe.save()
                 return HttpResponse(f'Le paiement a été annulé.')
 
-            paiement_stripe.save()
         return  HttpResponse(f'ok {uuid_stripe}')
 
 

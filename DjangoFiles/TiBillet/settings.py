@@ -54,6 +54,7 @@ SHARED_APPS = (
     'django.contrib.messages',
     'django.contrib.admin',
     'django.contrib.staticfiles',
+    'django.contrib.humanize',
 
     'django_extensions',
     'Administration',
@@ -217,3 +218,4 @@ EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', True)
 
 JET_SIDE_MENU_COMPACT = True
 JET_CHANGE_FORM_SIBLING_LINKS = False
+
