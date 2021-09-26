@@ -234,7 +234,6 @@ def postPaimentRecharge(paiementStripe: Paiement_stripe, request):
                              f"carte detail origine correspond pas : {carte.detail.origine} != {connection.tenant}")
                 raise Http404
 
-            '''
             sess = requests.Session()
             configuration = Configuration.get_solo()
             r = sess.post(f'{configuration.server_cashless}/api/rechargementPaid',
@@ -256,12 +255,6 @@ def postPaimentRecharge(paiementStripe: Paiement_stripe, request):
 
                 absolute_domain = request.build_absolute_uri().partition('/stripe/return')[0]
                 return HttpResponseRedirect(f'{absolute_domain}/qr/{uuid_carte}#historique')
-            '''
-            paiementStripe.status = Paiement_stripe.VALID
-            paiementStripe.save()
-
-            absolute_domain = request.build_absolute_uri().partition('/stripe/return')[0]
-            return HttpResponseRedirect(f'{absolute_domain}/qr/{uuid_carte}#historique')
 
         elif paiementStripe.status == Paiement_stripe.VALID:
             # Le paiement a bien été accepté par le passé et envoyé au serveur cashless.
