@@ -1,21 +1,28 @@
+import json
 from datetime import datetime
 
-from django.http import HttpResponse
-from django.shortcuts import render, get_object_or_404
+from django.http import HttpResponse, Http404
+from django.shortcuts import get_object_or_404
 import stripe
 # Create your views here.
+from django.utils import timezone
 from django.views import View
 
 from BaseBillet.models import Configuration
 from PaiementStripe.models import Paiement_stripe
 
 
+from QrcodeCashless.views import postPaimentRecharge
+
+import logging
+logger = logging.getLogger(__name__)
+
 class retour_stripe(View):
 
-    def get(self, request, uuid):
-        configuration = Configuration.get_solo()
-        paiement_stripe = get_object_or_404(Paiement_stripe, uuid=uuid)
+    def get(self, request, uuid_stripe):
+        paiement_stripe = get_object_or_404(Paiement_stripe, uuid=uuid_stripe)
 
+        configuration = Configuration.get_solo()
         if configuration.stripe_mode_test:
             stripe.api_key = configuration.stripe_test_api_key
         else:
@@ -31,11 +38,38 @@ class retour_stripe(View):
                     paiement_stripe.status = Paiement_stripe.EXPIRE
             elif checkout_session.payment_status == "paid":
                 paiement_stripe.status = Paiement_stripe.PAID
+
+                # on vérifie si les infos sont cohérente avec la db : Never Trust Input :)
+                metadata_stripe_json = checkout_session.metadata
+                metadata_stripe = json.loads(str(metadata_stripe_json))
+
+                metadata_db_json = paiement_stripe.metadata_stripe
+                metadata_db = json.loads(metadata_db_json)
+
+                try:
+                    assert metadata_stripe == metadata_db
+                    assert set(metadata_db.keys()) == set(metadata_stripe.keys())
+                    for key in set(metadata_stripe.keys()) :
+                        assert metadata_db[key] == metadata_stripe[key]
+                except:
+                    logger.error(f"{timezone.now()} "
+                                 f"retour_stripe {uuid_stripe} : "
+                                 f"metadata ne correspondent pas : {metadata_stripe} {metadata_db}")
+                    raise Http404
+
+                # on check si il y a un rechargement de carte cashless dans la commande
+                if metadata_db.get('recharge_carte_uuid') :
+                    return postPaimentRecharge(paiement_stripe, request)
+
+
+
+
             else:
                 paiement_stripe.status = Paiement_stripe.CANCELED
+                return HttpResponse(f'Le paiement a été annulé.')
 
             paiement_stripe.save()
-        return  HttpResponse(f'ok {uuid}')
+        return  HttpResponse(f'ok {uuid_stripe}')
 
 
 class webhook_stripe(View):

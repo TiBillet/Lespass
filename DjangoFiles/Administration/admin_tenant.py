@@ -109,10 +109,12 @@ class ConfigurationAdmin(SingletonModelAdmin):
                 'adresse',
                 'phone',
                 'email',
+                'site_web',
                 'twitter',
                 'facebook',
                 'instagram',
                 'img',
+                'carte_restaurant',
             )
         }),
         ('Paiements', {

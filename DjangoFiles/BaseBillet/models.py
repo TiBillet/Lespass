@@ -15,7 +15,6 @@ from PaiementStripe.models import Paiement_stripe
 from TiBillet import settings
 
 
-
 class OptionGenerale(models.Model):
     name = models.CharField(max_length=30)
     poids = models.PositiveSmallIntegerField(default=0, verbose_name=_("Poids"))
@@ -47,9 +46,24 @@ class Configuration(SingletonModel):
     phone = models.CharField(max_length=20)
     email = models.EmailField()
 
+    site_web = models.URLField(blank=True, null=True)
+
     twitter = models.URLField(blank=True, null=True)
     facebook = models.URLField(blank=True, null=True)
     instagram = models.URLField(blank=True, null=True)
+
+    carte_restaurant = StdImageField(upload_to='images/',
+                                     null=True, blank=True,
+                                     validators=[MaxSizeValidator(1920, 1920)],
+                                     variations={
+                                         'fhd': (1920, 1920),
+                                         'hdr': (720, 720),
+                                         'med': (480, 480),
+                                         'thumbnail': (150, 90),
+                                     },
+                                     delete_orphans=True,
+                                     verbose_name='Carte du restaurant'
+                                     )
 
     img = StdImageField(upload_to='images/',
                         null=True, blank=True,
@@ -81,7 +95,6 @@ class Configuration(SingletonModel):
                                                       blank=True,
                                                       related_name="checkbox")
 
-
     server_cashless = models.URLField(
         max_length=300,
         blank=True,
@@ -96,6 +109,7 @@ class Configuration(SingletonModel):
         verbose_name="Clé d'API du serveur cashless"
     )
 
+
 class Billet(models.Model):
     name = models.CharField(max_length=50,
                             blank=True, null=True)
@@ -109,6 +123,7 @@ class Billet(models.Model):
     def __str__(self):
         return f"{self.name}"
 
+
 class VAT(models.Model):
     """
     Les différents taux de TVA sont associés à des produits.
@@ -121,6 +136,7 @@ class VAT(models.Model):
 
     def __str__(self):
         return f"{self.percent}%"
+
 
 class Article(models.Model):
     name = models.CharField(max_length=50,
@@ -216,9 +232,9 @@ class Reservation(models.Model):
     def total_prix(self):
         total = 0
         for ligne in self.lignearticle_set.all():
-            if ligne.article :
+            if ligne.article:
                 total += ligne.qty * ligne.article.prix
-            if ligne.billet :
+            if ligne.billet:
                 total += ligne.qty * ligne.billet.prix
 
         return total
@@ -226,13 +242,13 @@ class Reservation(models.Model):
     def _options_(self):
         return " - ".join([f"{option.name}" for option in self.options.all()])
 
+
 @receiver(post_save, sender=Reservation)
 def verif_mail_valide(sender, instance: Reservation, created, **kwargs):
     if created:
-        if not instance.user_commande.is_active :
+        if not instance.user_commande.is_active:
             instance.status = instance.MAIL_NON_VALIDEE
             instance.save()
-
 
 
 class LigneArticle(models.Model):
@@ -250,5 +266,3 @@ class LigneArticle(models.Model):
     #             return f"{self.reservation.user_commande.email} {self.qty} {self.article}"
     #         if self.billet :
     #             return f"{self.reservation.user_commande.email} {self.qty} {self.billet}"
-
-

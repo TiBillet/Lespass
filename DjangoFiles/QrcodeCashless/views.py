@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from django.db import connection
 from django.http import HttpResponseRedirect, HttpResponse, Http404
 from django.shortcuts import render
+from django.utils import timezone
 from rest_framework.generics import get_object_or_404
 
 import stripe
@@ -16,6 +17,9 @@ from AuthBillet.models import TibilletUser, HumanUser
 from BaseBillet.models import Configuration, Article
 from PaiementStripe.models import Paiement_stripe
 from QrcodeCashless.models import CarteCashless
+import logging
+logger = logging.getLogger(__name__)
+
 
 def get_domain(request):
     absolute_uri = request.build_absolute_uri()
@@ -25,21 +29,22 @@ def get_domain(request):
 
     raise Http404
 
+def check_carte_local(uuid):
+    carte = get_object_or_404(CarteCashless, uuid=uuid)
+    return carte
+
 class gen_one_bisik(View):
     def get(self, request, numero_carte):
         print(numero_carte)
         carte = get_object_or_404(CarteCashless, number=numero_carte)
         address = request.build_absolute_uri()
-        return HttpResponseRedirect(address.replace("://m.", "://bisik.").replace(f"{carte.number}", f"qr/{carte.uuid}"))
+        return HttpResponseRedirect(
+            address.replace("://m.", "://bisik.").replace(f"{carte.number}", f"qr/{carte.uuid}"))
 
 
 class index_scan(View):
-    template_name = "RechargementWebUuid.html"
-
-    def check_carte_local(self, uuid):
-        carte = get_object_or_404(CarteCashless, uuid=uuid)
-        return carte
-
+    # template_name = "RechargementWebUuid.html"
+    template_name = "html5up-dimension/index.html"
 
     def check_carte_serveur_cashless(self, uuid):
         configuration = Configuration.get_solo()
@@ -63,8 +68,8 @@ class index_scan(View):
         return reponse
 
     def get(self, request, uuid):
-        carte = self.check_carte_local(uuid)
-        if carte.detail.origine != connection.tenant :
+        carte = check_carte_local(uuid)
+        if carte.detail.origine != connection.tenant:
             raise Http404
 
         # dette technique ...
@@ -76,7 +81,6 @@ class index_scan(View):
         sub_addr = host.partition('.')[0]
         if sub_addr == "m":
             return HttpResponseRedirect(address.replace("://m.", "://raffinerie."))
-
 
         configuration = Configuration.get_solo()
         if not configuration.server_cashless:
@@ -96,8 +100,11 @@ class index_scan(View):
                 request,
                 self.template_name,
                 {
+                    'carte_resto': configuration.carte_restaurant,
+                    'site_web': configuration.site_web,
                     'url_image_carte': carte.detail.img_url,
                     'numero_carte': carte.number,
+                    'client_name': carte.detail.origine.name,
                     'domain': sub_addr,
                     'informations_carte': reponse_server_cashless.text,
                     'liste_assets': liste_assets,
@@ -109,22 +116,21 @@ class index_scan(View):
         elif reponse_server_cashless.status_code == 400:
             # Carte non trouvée
             return HttpResponse('Carte inconnue', status=status.HTTP_400_BAD_REQUEST)
-        elif reponse_server_cashless.status_code == 500:
+        elif reponse_server_cashless.status_code in (500, 503):
             # Serveur cashless hors ligne
             return reponse_server_cashless
 
     def post(self, request, uuid):
-        carte = self.check_carte_local(uuid)
-        if carte.detail.origine != connection.tenant :
+        carte = check_carte_local(uuid)
+        if carte.detail.origine != connection.tenant:
             raise Http404
 
         data = request.POST
         reponse_server_cashless = self.check_carte_serveur_cashless(carte.uuid)
-        montant_recharge = float(data.get('thune'))
+        montant_recharge = float("{0:.2f}".format(float(data.get('montant_recharge'))))
         configuration = Configuration.get_solo()
 
-        if data.get('numero_carte_cashless') == carte.number and \
-                reponse_server_cashless.status_code == 200 and \
+        if reponse_server_cashless.status_code == 200 and \
                 montant_recharge > 0:
 
             User = get_user_model()
@@ -145,13 +151,20 @@ class index_scan(View):
                 publish=False,
             )
 
+
+            metadata = {
+                'recharge_carte_uuid': str(carte.uuid),
+                'recharge_carte_montant': str(montant_recharge),
+            }
+            metadata_json = json.dumps(metadata)
+
             paiementStripe = Paiement_stripe.objects.create(
                 user=user_recharge,
                 detail=f"{art.name}",
-                total=float("{0:.2f}".format(montant_recharge)),
+                total=montant_recharge,
+                metadata_stripe=metadata_json,
             )
 
-            domain = get_domain(request)
             absolute_domain = request.build_absolute_uri().partition('/qr')[0]
 
             if configuration.stripe_mode_test:
@@ -178,9 +191,7 @@ class index_scan(View):
                     'card',
                 ],
                 mode='payment',
-                metadata={
-                    'Carte': str(uuid).split('-')[0].upper()
-                            },
+                metadata=metadata,
                 success_url=f'{absolute_domain}/stripe/return/{paiementStripe.uuid}',
                 cancel_url=f'{absolute_domain}/stripe/return/{paiementStripe.uuid}',
                 # submit_type='Go go go',
@@ -203,35 +214,58 @@ class index_scan(View):
             # if Paiement.is_send():
             #     return HttpResponseRedirect(Paiement.is_send())
 
-#
-# def postPaimentRecharge(paiementStripe: Paiement_stripe):
-#
-#     if paiementStripe.status == Paiement_stripe.PAID :
-#
-#     sess = requests.Session()
-#     configuration = Configuration.get_solo()
-#     r = sess.post(f'{configuration.server_cashless}/wv/rechargementWeb',
-#                   data={
-#                       'number': numero_carte_cashless,
-#                       'qty': commande.total(),
-#                       'uuid_commande': commande_uuid,
-#                       'API_TIBILLET_BILLETERIE_VERS_CASHLESS': os.getenv(
-#                           'API_TIBILLET_BILLETERIE_VERS_CASHLESS'),
-#                   })
-#
-#     sess.close()
-#
-#     if r.status_code == 200:
-#         # la commande a été envoyé au serveur cashless, on la met en validée
-#         commande.status = 'V'
-#         commande.save()
-#
-#         return HttpResponse(
-#             f"<center><h1>Paiement validé, vous avez rechargé votre carte ! Disponible : {r.text}</h1></center>")
-#
-# elif commande.status == "V":
-#     # Le paiement a bien été accepté par le passé et envoyé au serveur cashless.
-#     return HttpResponse(
-#         f"<center><h1>Paiement bien validé, vous avez rechargé votre carte !</h1></center>")
-#
-# return HttpResponse("<center><h1>Paiement non valide. Contactez un responsable.<h1></center>")
+
+def postPaimentRecharge(paiementStripe: Paiement_stripe, request):
+    if paiementStripe.status == Paiement_stripe.PAID:
+
+        metadata_db_json = paiementStripe.metadata_stripe
+        metadata_db = json.loads(metadata_db_json)
+        uuid_carte = metadata_db.get('recharge_carte_uuid')
+        total_rechargement = metadata_db.get('recharge_carte_montant')
+
+        if uuid_carte and total_rechargement :
+
+
+            # on vérifie toujours que la carte vienne bien du domain et Client tenant.
+            carte = check_carte_local(uuid_carte)
+            if carte.detail.origine != connection.tenant:
+                logger.error(f"{timezone.now()} "
+                             f"postPaimentRecharge {uuid_carte} : "
+                             f"carte detail origine correspond pas : {carte.detail.origine} != {connection.tenant}")
+                raise Http404
+
+            '''
+            sess = requests.Session()
+            configuration = Configuration.get_solo()
+            r = sess.post(f'{configuration.server_cashless}/api/rechargementPaid',
+                          headers={
+                              'Authorization': f'Api-Key {configuration.key_cashless}'
+                          },
+                          data={
+                              'uuid_carte': uuid_carte,
+                              'qty': float(total_rechargement),
+                              'uuid_commande': paiementStripe.uuid,
+                          })
+
+            sess.close()
+
+            if r.status_code == 200:
+                # la commande a été envoyé au serveur cashless, on la met en validée
+                paiementStripe.status = Paiement_stripe.VALID
+                paiementStripe.save()
+
+                absolute_domain = request.build_absolute_uri().partition('/stripe/return')[0]
+                return HttpResponseRedirect(f'{absolute_domain}/qr/{uuid_carte}#historique')
+            '''
+            paiementStripe.status = Paiement_stripe.VALID
+            paiementStripe.save()
+
+            absolute_domain = request.build_absolute_uri().partition('/stripe/return')[0]
+            return HttpResponseRedirect(f'{absolute_domain}/qr/{uuid_carte}#historique')
+
+        elif paiementStripe.status == Paiement_stripe.VALID:
+            # Le paiement a bien été accepté par le passé et envoyé au serveur cashless.
+            return HttpResponse(
+                f"<center><h1>Le paiement a déja été validé. Vous avez bien rechargé votre carte !</h1></center>")
+
+        return HttpResponse("<center><h1>Paiement non valide. Contactez un responsable.<h1></center>")
