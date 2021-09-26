@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from django.contrib.auth import get_user_model
+from django.http import HttpResponseRedirect
 from django.shortcuts import render, redirect
 
 # Create your views here.
@@ -25,6 +26,8 @@ class index(APIView):
 
     def get(self, request):
         configuration = Configuration.get_solo()
+        if not configuration.activer_billetterie :
+            return HttpResponseRedirect('https://www.tibillet.re')
 
         events = Event.objects.filter(datetime__gt=datetime.now())
         if len(events) > 0:

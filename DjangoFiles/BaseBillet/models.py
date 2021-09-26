@@ -85,6 +85,8 @@ class Configuration(SingletonModel):
     stripe_test_api_key = models.CharField(max_length=110, blank=True, null=True)
     stripe_mode_test = models.BooleanField(default=True)
 
+    activer_billetterie = models.BooleanField(default=True)
+
     jauge_max = models.PositiveSmallIntegerField(default=50)
 
     option_generale_radio = models.ManyToManyField(OptionGenerale,

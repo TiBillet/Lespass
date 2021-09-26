@@ -43,7 +43,6 @@ class gen_one_bisik(View):
 
 
 class index_scan(View):
-    # template_name = "RechargementWebUuid.html"
     template_name = "html5up-dimension/index.html"
 
     def check_carte_serveur_cashless(self, uuid):
@@ -75,7 +74,6 @@ class index_scan(View):
         # dette technique ...
         # pour rediriger les premières générations de qrcode
         # m.tibillet.re et raffinerie
-
         address = request.build_absolute_uri()
         host = address.partition('://')[2]
         sub_addr = host.partition('.')[0]
@@ -102,13 +100,14 @@ class index_scan(View):
                 {
                     'carte_resto': configuration.carte_restaurant,
                     'site_web': configuration.site_web,
-                    'url_image_carte': carte.detail.img_url,
+                    'image_carte': carte.detail.img,
                     'numero_carte': carte.number,
                     'client_name': carte.detail.origine.name,
                     'domain': sub_addr,
                     'informations_carte': reponse_server_cashless.text,
                     'liste_assets': liste_assets,
                     'email': email,
+                    'billetterie_bool': configuration.activer_billetterie,
                 }
             )
 
@@ -207,6 +206,7 @@ class index_scan(View):
 
 
 def postPaimentRecharge(paiementStripe: Paiement_stripe, request):
+    absolute_domain = request.build_absolute_uri().partition('/stripe/return')[0]
     if paiementStripe.status == Paiement_stripe.PAID:
 
         metadata_db_json = paiementStripe.metadata_stripe
@@ -244,12 +244,10 @@ def postPaimentRecharge(paiementStripe: Paiement_stripe, request):
                 paiementStripe.status = Paiement_stripe.VALID
                 paiementStripe.save()
 
-                absolute_domain = request.build_absolute_uri().partition('/stripe/return')[0]
-                return HttpResponseRedirect(f'{absolute_domain}/qr/{uuid_carte}#historique')
+                return HttpResponseRedirect(f'{absolute_domain}/qr/{uuid_carte}#success')
 
         elif paiementStripe.status == Paiement_stripe.VALID:
             # Le paiement a bien été accepté par le passé et envoyé au serveur cashless.
-            return HttpResponse(
-                f"<center><h1>Le paiement a déja été validé. Vous avez bien rechargé votre carte !</h1></center>")
+            return HttpResponseRedirect(f'{absolute_domain}/qr/{uuid_carte}#historique')
 
-        return HttpResponse("<center><h1>Paiement non valide. Contactez un responsable.<h1></center>")
+        return HttpResponseRedirect(f'{absolute_domain}/qr/{uuid_carte}#error')
