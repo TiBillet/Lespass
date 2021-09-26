@@ -205,15 +205,6 @@ class index_scan(View):
 
             return HttpResponseRedirect(checkout_session.url)
 
-            # Paiement = CreationPaiementMollie(commande, domain,
-            #                                   description=f"Rechargez votre carte {sub_domain.capitalize()}",
-            #                                   redirectUrl=f"{absolute_domain}/RechargementWebAfterMollie/{commande.uuid}",
-            #                                   webhookUrl=f"{absolute_domain}/RechargementWebAfterMollie/{commande.uuid}",
-            #                                   numero_carte_cashless=data.get('numero_carte_cashless'))
-            #
-            # if Paiement.is_send():
-            #     return HttpResponseRedirect(Paiement.is_send())
-
 
 def postPaimentRecharge(paiementStripe: Paiement_stripe, request):
     if paiementStripe.status == Paiement_stripe.PAID:
