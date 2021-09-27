@@ -10,9 +10,11 @@ from solo.models import SingletonModel
 from django.utils.translation import ugettext_lazy as _
 from stdimage import StdImageField
 from stdimage.validators import MaxSizeValidator
+from django.db import connection
 
 from PaiementStripe.models import Paiement_stripe
 from TiBillet import settings
+import stripe
 
 
 class OptionGenerale(models.Model):
@@ -38,6 +40,17 @@ def poids_option_generale(sender, instance: OptionGenerale, created, **kwargs):
         instance.save()
 
 
+class TarifsAdhesion(models.Model):
+    name = models.CharField(max_length=30)
+    tarif = models.FloatField()
+
+    class Meta:
+        ordering = ('-tarif',)
+
+    def __str__(self):
+        return f"{self.name} {self.tarif}"
+
+
 class Configuration(SingletonModel):
     organisation = models.CharField(max_length=50)
     short_description = models.CharField(max_length=250)
@@ -51,6 +64,9 @@ class Configuration(SingletonModel):
     twitter = models.URLField(blank=True, null=True)
     facebook = models.URLField(blank=True, null=True)
     instagram = models.URLField(blank=True, null=True)
+
+    adhesion_obligatoire = models.BooleanField(default=False)
+    cadeau_adhesion = models.FloatField(default=0, help_text="Recharge cadeau a l'adhésion")
 
     carte_restaurant = StdImageField(upload_to='images/',
                                      null=True, blank=True,
@@ -141,6 +157,8 @@ class VAT(models.Model):
 
 
 class Article(models.Model):
+    uuid = models.UUIDField(primary_key=True, db_index=True, default=uuid.uuid4, editable=False)
+
     name = models.CharField(max_length=50,
                             blank=True, null=True)
     prix = models.FloatField()
@@ -151,8 +169,93 @@ class Article(models.Model):
 
     publish = models.BooleanField(default=False)
 
+    img = StdImageField(upload_to='images/',
+                        null=True, blank=True,
+                        validators=[MaxSizeValidator(1920, 1920)],
+                        variations={
+                            'fhd': (1920, 1920),
+                            'hdr': (720, 720),
+                            'med': (480, 480),
+                            'thumbnail': (150, 90),
+                        },
+                        delete_orphans=True,
+                        verbose_name='Image'
+                        )
+
+    BILLET, PACK, RECHARGE_CASHLESS, VETEMENT, MERCH, ADHESION = 'B', 'P', 'R', 'T', 'M', 'A'
+    TYPE_CHOICES = [
+        (BILLET, _('Billet')),
+        (PACK, _("Pack d'objets")),
+        (RECHARGE_CASHLESS, _('Recharge cashless')),
+        (VETEMENT, _('Vetement')),
+        (MERCH, _('Merchandasing')),
+        (ADHESION, ('Adhésion')),
+    ]
+
+    categorie_article = models.CharField(max_length=3, choices=TYPE_CHOICES, default=BILLET,
+                                         verbose_name=_("Type d'article"))
+
+    id_product_stripe = models.CharField(max_length=30, null=True, blank=True)
+    id_price_stripe = models.CharField(max_length=30, null=True, blank=True)
+
     def range_max(self):
         return range(self.reservation_par_user_max + 1)
+
+    def get_id_product_stripe(self):
+        configuration = Configuration.get_solo()
+        if configuration.stripe_api_key and not self.id_product_stripe:
+            if configuration.stripe_mode_test:
+                stripe.api_key = configuration.stripe_test_api_key
+            else:
+                stripe.api_key = configuration.stripe_api_key
+
+            if self.img :
+                # noinspection PyUnresolvedReferences
+                domain_url = connection.tenant.domains.all()[0].domain
+                images = [f"https://{domain_url}{self.img.med.url}",]
+            else:
+                images = []
+
+            product = stripe.Product.create(
+                name=f"{self.name}",
+                images=images
+            )
+            self.id_product_stripe = product.id
+            self.save()
+            return self.id_product_stripe
+
+        elif self.id_product_stripe:
+            return self.id_product_stripe
+        else:
+            return False
+
+    def get_id_price_stripe(self):
+        configuration = Configuration.get_solo()
+        if configuration.stripe_api_key and not self.id_price_stripe:
+            if configuration.stripe_mode_test:
+                stripe.api_key = configuration.stripe_test_api_key
+            else:
+                stripe.api_key = configuration.stripe_api_key
+
+            price = stripe.Price.create(
+                unit_amount=int("{0:.2f}".format(self.prix).replace('.', '')),
+                currency="eur",
+                product=self.get_id_product_stripe(),
+            )
+
+            self.id_price_stripe = price.id
+            self.save()
+            return self.id_price_stripe
+
+        elif self.id_price_stripe:
+            return self.id_price_stripe
+        else:
+            return False
+
+    def reset_id_stripe(self):
+        self.id_price_stripe = None
+        self.id_product_stripe = None
+        self.save()
 
     def __str__(self):
         return f"{self.name}"

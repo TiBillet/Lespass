@@ -4,7 +4,7 @@ from django.contrib.auth.models import Group
 from solo.admin import SingletonModelAdmin
 
 from AuthBillet.models import HumanUser, SuperHumanUser, TermUser
-from BaseBillet.models import Configuration, Event, OptionGenerale, Article, Billet, Reservation, LigneArticle
+from BaseBillet.models import Configuration, Event, OptionGenerale, Article, Billet, Reservation, LigneArticle, TarifsAdhesion
 from django.contrib.auth.admin import UserAdmin
 
 from Customers.models import Client
@@ -117,6 +117,12 @@ class ConfigurationAdmin(SingletonModelAdmin):
                 'carte_restaurant',
             )
         }),
+        ('Adhésions', {
+            'fields': (
+                'adhesion_obligatoire',
+                'cadeau_adhesion',
+            ),
+        }),
         ('Paiements', {
             'fields': (
                 'mollie_api_key',
@@ -143,6 +149,16 @@ class ConfigurationAdmin(SingletonModelAdmin):
 
 
 staff_admin_site.register(Configuration, ConfigurationAdmin)
+
+class TarifsAdhesionAdmin(admin.ModelAdmin):
+    list_display = (
+        'name',
+        'tarif'
+    )
+    list_editable = ('tarif',)
+    ordering = ('tarif',)
+
+staff_admin_site.register(TarifsAdhesion, TarifsAdhesionAdmin)
 
 
 class EventAdmin(admin.ModelAdmin):

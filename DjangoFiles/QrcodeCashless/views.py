@@ -1,7 +1,7 @@
 from datetime import datetime
 
 import requests, json
-from django.contrib.auth import get_user_model
+from django.contrib import messages
 from django.db import connection
 from django.http import HttpResponseRedirect, HttpResponse, Http404
 from django.shortcuts import render
@@ -13,11 +13,10 @@ import stripe
 # Create your views here.
 from django.views import View
 from rest_framework import status
-from rest_framework.response import Response
 
-from AuthBillet.models import TibilletUser, HumanUser
-from BaseBillet.models import Configuration, Article
+from BaseBillet.models import Configuration, Article, TarifsAdhesion, LigneArticle
 from PaiementStripe.models import Paiement_stripe
+from PaiementStripe.views import creation_checkout_stripe
 from QrcodeCashless.models import CarteCashless
 import logging
 logger = logging.getLogger(__name__)
@@ -46,6 +45,11 @@ class gen_one_bisik(View):
 
 class index_scan(View):
     template_name = "html5up-dimension/index.html"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.carte = None
+        self.adhesion = None
 
     def check_carte_serveur_cashless(self, uuid):
         configuration = Configuration.get_solo()
@@ -104,6 +108,8 @@ class index_scan(View):
                 request,
                 self.template_name,
                 {
+                    'tarifs_adhesion': TarifsAdhesion.objects.all(),
+                    'adhesion_obligatoire': configuration.adhesion_obligatoire,
                     'assets': json_reponse.get('assets'),
                     'total_monnaie': json_reponse.get('total_monnaie'),
                     'history': json_reponse.get('history'),
@@ -140,98 +146,112 @@ class index_scan(View):
         data = request.POST
         print(data)
         # c'est une recharge
-        if data.get('montant_recharge') :
-
-            reponse_server_cashless = self.check_carte_serveur_cashless(carte.uuid)
+        if data.get('montant_recharge') and data.get('email'):
+            # montant_recharge = data.get('montant_recharge')
             montant_recharge = float("{0:.2f}".format(float(data.get('montant_recharge'))))
-            configuration = Configuration.get_solo()
+            if montant_recharge > 0:
 
-            if reponse_server_cashless.status_code == 200 and \
-                    montant_recharge > 0:
-
-                User = get_user_model()
-                user_recharge, created = User.objects.get_or_create(
-                    email=data.get('email'))
-                if created:
-                    user_recharge: HumanUser
-                    user_recharge.client_source = connection.tenant
-                    user_recharge.client_achat.add(connection.tenant)
-                    user_recharge.is_active = False
-                else:
-                    user_recharge.client_achat.add(connection.tenant)
-                user_recharge.save()
+                # reponse_server_cashless = self.check_carte_serveur_cashless(carte.uuid)
+                # configuration = Configuration.get_solo()
 
                 art, created = Article.objects.get_or_create(
-                    name="Recharge Stripe",
-                    prix="1",
+                    name="Recharge Carte",
+                    prix=1,
                     publish=False,
+                    categorie_article=Article.RECHARGE_CASHLESS,
                 )
 
+                ligne_article = LigneArticle.objects.create(
+                    article = art,
+                    qty = montant_recharge,
+                )
 
                 metadata = {
                     'recharge_carte_uuid': str(carte.uuid),
                     'recharge_carte_montant': str(montant_recharge),
                 }
-                metadata_json = json.dumps(metadata)
 
-                paiementStripe = Paiement_stripe.objects.create(
-                    user=user_recharge,
-                    detail=f"{art.name}",
-                    total=montant_recharge,
-                    metadata_stripe=metadata_json,
+                new_checkout_session = creation_checkout_stripe(
+                    email_paiement = data.get('email'),
+                    liste_ligne_article = [ligne_article,],
+                    metadata = metadata,
+                    absolute_domain = request.build_absolute_uri().partition('/qr')[0],
                 )
 
-                absolute_domain = request.build_absolute_uri().partition('/qr')[0]
+                if new_checkout_session.is_valid() :
+                    print(new_checkout_session.checkout_session.stripe_id)
+                    return new_checkout_session.redirect_to_stripe()
 
-                if configuration.stripe_mode_test:
-                    stripe.api_key = configuration.stripe_test_api_key
-                else:
-                    stripe.api_key = configuration.stripe_api_key
+        # c'est la première étape de l'adhésion
+        elif data.get('email') \
+                and not data.get('prenom') \
+                and not data.get('prenom') \
+                and not data.get('tel') :
 
-                checkout_session = stripe.checkout.Session.create(
-                    customer_email=f'{user_recharge.email}',
-                    line_items=[{
-                        'price_data': {
-                            'currency': 'eur',
+            sess = requests.Session()
+            configuration = Configuration.get_solo()
+            r = sess.post(
+                          f'{configuration.server_cashless}/api/billetterie_qrcode_adhesion',
+                          headers={
+                              'Authorization': f'Api-Key {configuration.key_cashless}'
+                          },
+                          data={
+                              'email': data.get('email'),
+                              'uuid_carte': carte.uuid,
+                          })
 
-                            'product_data': {
-                                'name': 'Recharge Cashless',
-                                "images": [f'{carte.detail.img_url}', ],
-                            },
-                            'unit_amount': int("{0:.2f}".format(montant_recharge).replace('.', '')),
-                        },
-                        'quantity': 1,
+            sess.close()
 
-                    }],
-                    payment_method_types=[
-                        'card',
-                    ],
-                    mode='payment',
-                    metadata=metadata,
-                    success_url=f'{absolute_domain}/stripe/return/{paiementStripe.uuid}',
-                    cancel_url=f'{absolute_domain}/stripe/return/{paiementStripe.uuid}',
-                    # submit_type='Go go go',
-                    client_reference_id=f"{data.get('numero_carte_cashless')}",
-                )
+            # nouveau membre crée avec uniquqment l'email on demande la suite.
+            if r.status_code in (201, 204) :
+                messages.success(request, f"{data.get('email')}", extra_tags='email')
+                return HttpResponseRedirect(f'#demande_nom_prenom_tel')
 
-                print(checkout_session.id)
-                paiementStripe.id_stripe = checkout_session.id
-                paiementStripe.status = Paiement_stripe.PENDING
-                paiementStripe.save()
+            #partial information :
+            elif r.status_code == 206:
+                partial = json.loads(r.text)
+                messages.success(request, f"{data.get('email')}", extra_tags='email')
+                if partial.get('name'):
+                    messages.success(request, f"Email déja connu. Name déja connu", extra_tags='name')
+                if partial.get('prenom'):
+                    messages.success(request, f"Email déja connu. prenom déja connu", extra_tags='prenom')
+                if partial.get('tel'):
+                    messages.success(request, f"Email déja connu. tel déja connu", extra_tags='tel')
+                return HttpResponseRedirect(f'#demande_nom_prenom_tel')
+            else:
+                messages.error(request, f'Erreur {r.status_code} {r.text}')
+                return HttpResponseRedirect(f'#erreur')
 
-                return HttpResponseRedirect(checkout_session.url)
+        # suite de l'adhesion
+        elif data.get('email') and data.get('name') and data.get('prenom') and data.get('tel'):
+            sess = requests.Session()
+            configuration = Configuration.get_solo()
+            r = sess.post(
+                          f'{configuration.server_cashless}/api/billetterie_qrcode_adhesion',
+                          headers={
+                              'Authorization': f'Api-Key {configuration.key_cashless}'
+                          },
+                          data={
+                              'prenom': data.get('prenom'),
+                              'name': data.get('name'),
+                              'email': data.get('email'),
+                              'tel': data.get('tel'),
+                              'uuid_carte': carte.uuid,
+                          })
 
-        elif data.get('prenom') \
-            and data.get('name') \
-            and data.get('email') \
-            and data.get('tel'):
+            sess.close()
 
-            print("adhésion !")
-            absolute_domain = request.build_absolute_uri().partition('/qr')[0]
-            return HttpResponseRedirect(f'{absolute_domain}/qr/{carte.uuid}#adhesionsuccess')
+            # nouveau membre crée, on demande la suite.
+            if r.status_code == 202 :
+                messages.success(request, f"Merci ! Membre créé et carte liée.")
+
+                return HttpResponseRedirect(f'#adhesionsuccess')
+            else :
+                messages.error(request, f'Erreur {r.status_code} {r.text}')
+                return HttpResponseRedirect(f'#erreur')
+
 
 def postPaimentRecharge(paiementStripe: Paiement_stripe, request):
-    absolute_domain = request.build_absolute_uri().partition('/stripe/return')[0]
     if paiementStripe.status == Paiement_stripe.PAID:
 
         metadata_db_json = paiementStripe.metadata_stripe
@@ -273,10 +293,10 @@ def postPaimentRecharge(paiementStripe: Paiement_stripe, request):
                 paiementStripe.status = Paiement_stripe.VALID
                 paiementStripe.save()
 
-                return HttpResponseRedirect(f'{absolute_domain}/qr/{uuid_carte}#success')
+                return HttpResponseRedirect(f'#success')
 
         elif paiementStripe.status == Paiement_stripe.VALID:
-            # Le paiement a bien été accepté par le passé et envoyé au serveur cashless.
-            return HttpResponseRedirect(f'{absolute_domain}/qr/{uuid_carte}#historique')
+            messages.success(request, f"Le paiement a déja été validé.")
+            return HttpResponseRedirect(f'#historique')
 
-        return HttpResponseRedirect(f'{absolute_domain}/qr/{uuid_carte}#error')
+        return HttpResponseRedirect(f'#erreurpaiement')
