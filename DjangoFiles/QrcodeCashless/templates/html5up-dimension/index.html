@@ -16,8 +16,7 @@
         <link rel="stylesheet" href="{% static 'html5up-dimension/assets/css/noscript.css' %}"/>
     </noscript>
 </head>
-< class="is-preload">
-
+<body class="is-preload">
 <!-- Wrapper -->
 <div id="wrapper">
 
@@ -38,12 +37,15 @@
         <nav>
             <ul>
                 <li><a href="#recharger">Recharger</a></li>
+
                 {% if history %}
                     <li><a href="#historique">Historique</a></li>
                 {% endif %}
+
                 {% if carte_resto %}
                     <li><a href="/media/{{ carte_resto }}">Restaurant</a></li>
                 {% endif %}
+
                 {% if billetterie_bool %}
                     <li><a href="/">Billetterie</a></li>
                 {% endif %}
@@ -56,6 +58,9 @@
                     <li><a href="#adherer">Adhérer</a></li>
                 {% endif %}
 
+                {% if email and not a_jour_cotisation %}
+                    <li><a href="#adherer">Adhérer</a></li>
+                {% endif %}
                 {#                <li><a href="#elements">Elements</a></li>#}
 
             </ul>
@@ -75,15 +80,19 @@
                     <div class="field">
                         <label for="email">Email</label>
                         {% if email %}
-                            <input type="email" name="email" id="Email" required="True" value="{{ email }}"/>
+                            <label for="email">Vérifiez votre adresse Email</label>
+                            <input type="email" name="email" id="Email" required="True" value="{{ email }}"
+                                   style="text-transform: lowercase;"/>
                         {% else %}
-                            <input type="email" name="email" id="email" required="True"/>
+                            <label for="email">Entrez votre adresse Email</label>
+                            <input type="email" name="email" id="email" required="True"
+                                   style="text-transform: lowercase;"/>
                         {% endif %}
                     </div>
 
                     <div class="field">
                         <label for="montant_recharge">Somme à recharger (€)</label>
-                        <input id="montant_recharge" type="number" step="any" name="montant_recharge" required="True"/>
+                        <input id="montant_recharge" type="number" name="montant_recharge" required="True"/>
                     </div>
                 </div>
                 <ul class="actions">
@@ -155,8 +164,11 @@
 
 
         <article id="success">
-            <h2 class="major">Rechargement OK</h2>
-            <h4>Vous avez bien rechargé la carte {{ numero_carte }}.</h4>
+            {% if messages %}
+                {% for message in messages %}
+                    <h2>{{ message }}</h2>
+                {% endfor %}
+            {% endif %}
             <div class="table-wrapper">
                 <table>
                     <thead>
@@ -193,9 +205,17 @@
             <form method="post" action="#">
                 {% csrf_token %}
                 <div class="fields">
+
                     <div class="field">
-                        <label for="email">Entrez votre Email</label>
-                        <input id="email" name="email" required="True" type="email"/>
+                        {% if email %}
+                            <label for="email">Vérifiez votre adresse Email</label>
+                            <input type="email" name="email" id="Email" required="True" value="{{ email }}"
+                                   style="text-transform: lowercase;"/>
+                        {% else %}
+                            <label for="email">Entrez votre adresse Email</label>
+                            <input type="email" name="email" id="email" required="True"
+                                   style="text-transform: lowercase;"/>
+                        {% endif %}
                     </div>
                 </div>
                 <ul class="actions">
@@ -247,7 +267,7 @@
                     {% for tarif in tarifs_adhesion %}
                         <ul class="actions">
                             <li><a id="{{ tarif.name | slugify }}" href="#paiementadhesionenligne"
-                                   class="button primary field">{{ tarif.name }} {{ tarif.tarif }}€</a></li>
+                                   class="button primary field">{{ tarif.name }} {{ tarif.prix }}€</a></li>
                         </ul>
                     {% endfor %}
                     <h4>Payer à l'acceuil de l'association avec un vrai humain :</h4>
@@ -260,11 +280,6 @@
 
         <article id="paiementadhesionenligne">
             <h2 class="major">Paiement en ligne</h2>
-            {% if messages %}
-                {% for message in messages %}
-                    <h3>{{ message }}</h3>
-                {% endfor %}
-            {% endif %}
             <h3>Adhésion : <span id="text_name_adhesion"></span> <span id="text_tarif_adhesion"></span></h3>
             <form method="post" action="#">
                 {% csrf_token %}
@@ -279,6 +294,8 @@
                     </div>
 
                     <div class="field" style="display: none">
+                        <input id="pk_adhesion" type="text" name="pk_adhesion"
+                               required="True"/>
                         <input id="montant_adhesion" type="number" step="any" name="montant_adhesion"
                                required="True"/>
                     </div>
@@ -286,7 +303,7 @@
                     <div class="field">
                         <h4>Voulez vous recharger votre carte en même temps ? Laissez vide si non.</h4>
                         <label for="montant_recharge">Recharge cashless (€) :</label>
-                        <input id="montant_recharge" type="number" step="any" name="montant_recharge" />
+                        <input id="montant_recharge" type="number" name="montant_recharge"/>
                     </div>
                 </div>
                 <ul class="actions">
@@ -384,9 +401,10 @@
     {% for tarif in tarifs_adhesion %}
         document.getElementById('{{ tarif.name | slugify }}').onclick = function () {
             console.log('{{ tarif.name | slugify }}')
-            document.getElementById("montant_adhesion").value = "{{ tarif.tarif }}";
+            document.getElementById("montant_adhesion").value = "{{ tarif.prix }}";
+            document.getElementById("pk_adhesion").value = "{{ tarif.pk }}";
             document.getElementById("text_name_adhesion").textContent = "{{ tarif.name }}";
-            document.getElementById("text_tarif_adhesion").textContent = "{{ tarif.tarif }}€";
+            document.getElementById("text_tarif_adhesion").textContent = "{{ tarif.prix }}€";
         }
 
     {% endfor %}

@@ -4,7 +4,7 @@ from django.contrib.auth.models import Group
 from solo.admin import SingletonModelAdmin
 
 from AuthBillet.models import HumanUser, SuperHumanUser, TermUser
-from BaseBillet.models import Configuration, Event, OptionGenerale, Article, Billet, Reservation, LigneArticle, TarifsAdhesion
+from BaseBillet.models import Configuration, Event, OptionGenerale, Article, Billet, Reservation, LigneArticle
 from django.contrib.auth.admin import UserAdmin
 
 from Customers.models import Client
@@ -150,15 +150,6 @@ class ConfigurationAdmin(SingletonModelAdmin):
 
 staff_admin_site.register(Configuration, ConfigurationAdmin)
 
-class TarifsAdhesionAdmin(admin.ModelAdmin):
-    list_display = (
-        'name',
-        'tarif'
-    )
-    list_editable = ('tarif',)
-    ordering = ('tarif',)
-
-staff_admin_site.register(TarifsAdhesion, TarifsAdhesionAdmin)
 
 
 class EventAdmin(admin.ModelAdmin):

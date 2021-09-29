@@ -48,7 +48,7 @@ class TibilletUser(AbstractUser):
     #TODO regarder du coté du dashboard de jet, ça plante avec uuid !
     # uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
 
-    uuid_user = models.UUIDField(default=uuid.uuid4, editable=False)
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False)
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []  # removes email from REQUIRED_FIELDS
@@ -157,6 +157,7 @@ class TermUser(TibilletUser):
         # Si création :
         if not self.pk:
             self.espece = TibilletUser.TYPE_TERM
+            self.email = self.email.lower()
 
         super().save(*args, **kwargs)
 
@@ -187,6 +188,7 @@ class HumanUser(TibilletUser):
 
         self.is_staff = False
         self.is_superuser = False
+        self.email = self.email.lower()
 
         super().save(*args, **kwargs)
 
@@ -218,6 +220,7 @@ class SuperHumanUser(TibilletUser):
 
         self.is_staff = True
         self.is_superuser = False
+        self.email = self.email.lower()
 
         super().save(*args, **kwargs)
 

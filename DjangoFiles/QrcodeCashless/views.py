@@ -7,18 +7,19 @@ from django.http import HttpResponseRedirect, HttpResponse, Http404
 from django.shortcuts import render
 from django.utils import timezone
 from rest_framework.generics import get_object_or_404
-
-import stripe
-
-# Create your views here.
 from django.views import View
 from rest_framework import status
 
-from BaseBillet.models import Configuration, Article, TarifsAdhesion, LigneArticle
+from BaseBillet.models import Configuration, Article, LigneArticle
 from PaiementStripe.models import Paiement_stripe
 from PaiementStripe.views import creation_checkout_stripe
 from QrcodeCashless.models import CarteCashless
+
+from django.db.models.signals import pre_save
+from django.dispatch import receiver
+
 import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -30,9 +31,18 @@ def get_domain(request):
 
     raise Http404
 
+
 def check_carte_local(uuid):
     carte = get_object_or_404(CarteCashless, uuid=uuid)
+    # on vérifie toujours que la carte vienne bien du domain et Client tenant.
+    if carte.detail.origine != connection.tenant:
+        logger.error(f"{timezone.now()} "
+                     f"check_carte_local {carte.uuid} : "
+                     f"carte detail origine correspond pas : {carte.detail.origine} != {connection.tenant}")
+        raise Http404
+
     return carte
+
 
 class gen_one_bisik(View):
     def get(self, request, numero_carte):
@@ -74,9 +84,6 @@ class index_scan(View):
 
     def get(self, request, uuid):
         carte = check_carte_local(uuid)
-        if carte.detail.origine != connection.tenant:
-            raise Http404
-
         # dette technique ...
         # pour rediriger les premières générations de qrcode
         # m.tibillet.re et raffinerie
@@ -97,21 +104,19 @@ class index_scan(View):
         reponse_server_cashless = self.check_carte_serveur_cashless(carte.uuid)
         if reponse_server_cashless.status_code == 200:
             json_reponse = json.loads(reponse_server_cashless.json())
-            liste_assets = json_reponse.get('liste_assets')
             email = json_reponse.get('email')
+            a_jour_cotisation = json_reponse.get('a_jour_cotisation')
 
-            if json_reponse.get('history') :
-                for his in json_reponse.get('history') :
+            if json_reponse.get('history'):
+                for his in json_reponse.get('history'):
                     his['date'] = datetime.fromisoformat(his['date'])
 
             return render(
                 request,
                 self.template_name,
                 {
-                    'tarifs_adhesion': TarifsAdhesion.objects.all(),
+                    'tarifs_adhesion': Article.objects.filter(categorie_article=Article.ADHESION).order_by('-prix'),
                     'adhesion_obligatoire': configuration.adhesion_obligatoire,
-                    'assets': json_reponse.get('assets'),
-                    'total_monnaie': json_reponse.get('total_monnaie'),
                     'history': json_reponse.get('history'),
                     'carte_resto': configuration.carte_restaurant,
                     'site_web': configuration.site_web,
@@ -119,8 +124,11 @@ class index_scan(View):
                     'numero_carte': carte.number,
                     'client_name': carte.detail.origine.name,
                     'domain': sub_addr,
-                    'informations_carte': reponse_server_cashless.text,
-                    'liste_assets': liste_assets,
+                    # 'informations_carte': reponse_server_cashless.text,
+                    'total_monnaie': json_reponse.get('total_monnaie'),
+                    'assets': json_reponse.get('assets'),
+                    'a_jour_cotisation': a_jour_cotisation,
+                    # 'liste_assets': liste_assets,
                     'email': email,
                     'billetterie_bool': configuration.activer_billetterie,
                 }
@@ -130,84 +138,95 @@ class index_scan(View):
         elif reponse_server_cashless.status_code == 400:
             # Carte non trouvée
             return HttpResponse('Carte inconnue', status=status.HTTP_400_BAD_REQUEST)
-        elif reponse_server_cashless.status_code == 403 :
+        elif reponse_server_cashless.status_code == 403:
             # Clé api HS
             logger.error(reponse_server_cashless)
             return HttpResponse('Forbidden', status=status.HTTP_403_FORBIDDEN)
-        else :
-            return HttpResponse(f'{reponse_server_cashless.status_code}', status=reponse_server_cashless.status_code)
+        else:
+            return HttpResponse("Serveur non disponible. Merci de revenir ultérieurement.",
+                                   status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
     def post(self, request, uuid):
         carte = check_carte_local(uuid)
         if carte.detail.origine != connection.tenant:
             raise Http404
 
-
         data = request.POST
         print(data)
-        # c'est une recharge
-        if data.get('montant_recharge') and data.get('email'):
+        montant_adhesion = data.get('montant_adhesion')
+        montant_recharge = data.get('montant_recharge')
+
+        # c'est un paiement
+        if (montant_adhesion or montant_recharge) and data.get('email'):
             # montant_recharge = data.get('montant_recharge')
-            montant_recharge = float("{0:.2f}".format(float(data.get('montant_recharge'))))
-            if montant_recharge > 0:
-
-                # reponse_server_cashless = self.check_carte_serveur_cashless(carte.uuid)
-                # configuration = Configuration.get_solo()
-
+            ligne_articles = []
+            metadata = {}
+            metadata['recharge_carte_uuid'] = str(carte.uuid)
+            if montant_recharge:
                 art, created = Article.objects.get_or_create(
                     name="Recharge Carte",
                     prix=1,
-                    publish=False,
                     categorie_article=Article.RECHARGE_CASHLESS,
                 )
 
-                ligne_article = LigneArticle.objects.create(
-                    article = art,
-                    qty = montant_recharge,
+                ligne_article_recharge = LigneArticle.objects.create(
+                    article=art,
+                    qty=montant_recharge,
                 )
+                ligne_articles.append(ligne_article_recharge)
 
-                metadata = {
-                    'recharge_carte_uuid': str(carte.uuid),
-                    'recharge_carte_montant': str(montant_recharge),
-                }
 
+                metadata['recharge_carte_montant'] = str(montant_recharge)
+
+            if montant_adhesion:
+                art_adhesion = Article.objects.get(pk=data.get('pk_adhesion'))
+                ligne_article_recharge = LigneArticle.objects.create(
+                    article=art_adhesion,
+                    qty=1,
+                )
+                ligne_articles.append(ligne_article_recharge)
+                metadata['pk_adhesion'] = str(art_adhesion.pk)
+
+            if len(ligne_articles) > 0:
                 new_checkout_session = creation_checkout_stripe(
-                    email_paiement = data.get('email'),
-                    liste_ligne_article = [ligne_article,],
-                    metadata = metadata,
-                    absolute_domain = request.build_absolute_uri().partition('/qr')[0],
+                    email_paiement=data.get('email'),
+                    liste_ligne_article=ligne_articles,
+                    metadata=metadata,
+                    absolute_domain=request.build_absolute_uri().partition('/qr')[0],
                 )
 
-                if new_checkout_session.is_valid() :
+                if new_checkout_session.is_valid():
                     print(new_checkout_session.checkout_session.stripe_id)
                     return new_checkout_session.redirect_to_stripe()
 
-        # c'est la première étape de l'adhésion
-        elif data.get('email') \
-                and not data.get('prenom') \
-                and not data.get('prenom') \
-                and not data.get('tel') :
+        # Email seul sans montant, c'est une adhésion
+        elif data.get('email'):
 
             sess = requests.Session()
             configuration = Configuration.get_solo()
             r = sess.post(
-                          f'{configuration.server_cashless}/api/billetterie_qrcode_adhesion',
-                          headers={
-                              'Authorization': f'Api-Key {configuration.key_cashless}'
-                          },
-                          data={
-                              'email': data.get('email'),
-                              'uuid_carte': carte.uuid,
-                          })
+                f'{configuration.server_cashless}/api/billetterie_qrcode_adhesion',
+                headers={
+                    'Authorization': f'Api-Key {configuration.key_cashless}'
+                },
+                data={
+                    'prenom': data.get('prenom'),
+                    'name': data.get('name'),
+                    'email': data.get('email'),
+                    'tel': data.get('tel'),
+                    'uuid_carte': carte.uuid,
+                })
 
             sess.close()
 
-            # nouveau membre crée avec uniquqment l'email on demande la suite.
-            if r.status_code in (201, 204) :
+            # nouveau membre crée avec uniquement l'email on demande la suite.
+            # HTTP_202_ACCEPTED
+            # HTTP_201_CREATED
+            if r.status_code in (201, 204):
                 messages.success(request, f"{data.get('email')}", extra_tags='email')
                 return HttpResponseRedirect(f'#demande_nom_prenom_tel')
 
-            #partial information :
+            # partial information :
             elif r.status_code == 206:
                 partial = json.loads(r.text)
                 messages.success(request, f"{data.get('email')}", extra_tags='email')
@@ -218,85 +237,73 @@ class index_scan(View):
                 if partial.get('tel'):
                     messages.success(request, f"Email déja connu. tel déja connu", extra_tags='tel')
                 return HttpResponseRedirect(f'#demande_nom_prenom_tel')
+
+            # nouveau membre crée, on demande la suite.
+            elif r.status_code == 202:
+                messages.success(request, f"Carte liée au membre {data.get('email')}")
+                return HttpResponseRedirect(f'#adhesionsuccess')
+
             else:
                 messages.error(request, f'Erreur {r.status_code} {r.text}')
                 return HttpResponseRedirect(f'#erreur')
 
-        # suite de l'adhesion
-        elif data.get('email') and data.get('name') and data.get('prenom') and data.get('tel'):
-            sess = requests.Session()
-            configuration = Configuration.get_solo()
-            r = sess.post(
-                          f'{configuration.server_cashless}/api/billetterie_qrcode_adhesion',
-                          headers={
-                              'Authorization': f'Api-Key {configuration.key_cashless}'
-                          },
-                          data={
-                              'prenom': data.get('prenom'),
-                              'name': data.get('name'),
-                              'email': data.get('email'),
-                              'tel': data.get('tel'),
-                              'uuid_carte': carte.uuid,
-                          })
 
-            sess.close()
+@receiver(pre_save, sender=Paiement_stripe)
+def changement_paid_to_valid(sender, instance: Paiement_stripe, update_fields=None, **kwargs):
+    # si l'instance vient d'être créé, ne rien faire :
+    if instance.pk is None:
+        pass
+    else:
+        paiementStripe = instance
+        if paiementStripe.status == Paiement_stripe.PAID:
+            # old_instance = Paiement_stripe.objects.get(pk=paiementStripe.pk)
+            # print(f"on passe de {old_instance.status} à {paiementStripe.status}")
+            # on passe de non payé -> payé
+            metadata_db_json = paiementStripe.metadata_stripe
+            metadata_db = json.loads(metadata_db_json)
+            uuid_carte = metadata_db.get('recharge_carte_uuid')
+            recharge_carte_montant = metadata_db.get('recharge_carte_montant')
+            pk_adhesion = metadata_db.get('pk_adhesion')
+            if recharge_carte_montant or pk_adhesion:
+                carte = check_carte_local(uuid_carte)
 
-            # nouveau membre crée, on demande la suite.
-            if r.status_code == 202 :
-                messages.success(request, f"Merci ! Membre créé et carte liée.")
+                data_pour_serveur_cashless = {
+                    'uuid': carte.uuid,
+                    'uuid_commande': paiementStripe.uuid,
+                }
 
-                return HttpResponseRedirect(f'#adhesionsuccess')
-            else :
-                messages.error(request, f'Erreur {r.status_code} {r.text}')
-                return HttpResponseRedirect(f'#erreur')
-
-
-def postPaimentRecharge(paiementStripe: Paiement_stripe, request):
-    if paiementStripe.status == Paiement_stripe.PAID:
-
-        metadata_db_json = paiementStripe.metadata_stripe
-        metadata_db = json.loads(metadata_db_json)
-        uuid_carte = metadata_db.get('recharge_carte_uuid')
-        total_rechargement = metadata_db.get('recharge_carte_montant')
-
-        if uuid_carte and total_rechargement :
+                if recharge_carte_montant:
+                    data_pour_serveur_cashless['recharge_qty'] = float(recharge_carte_montant)
+                if pk_adhesion :
+                    adhesion = Article.objects.get(pk=pk_adhesion)
+                    data_pour_serveur_cashless['tarif_adhesion'] = adhesion.prix
 
 
-            # on vérifie toujours que la carte vienne bien du domain et Client tenant.
-            carte = check_carte_local(uuid_carte)
-            if carte.detail.origine != connection.tenant:
-                logger.error(f"{timezone.now()} "
-                             f"postPaimentRecharge {uuid_carte} : "
-                             f"carte detail origine correspond pas : {carte.detail.origine} != {connection.tenant}")
-                raise Http404
+                sess = requests.Session()
+                configuration = Configuration.get_solo()
+                r = sess.post(
+                    f'{configuration.server_cashless}/api/billetterie_endpoint',
+                    headers={
+                        'Authorization': f'Api-Key {configuration.key_cashless}'
+                    },
+                    data=data_pour_serveur_cashless,
+                )
 
-            sess = requests.Session()
-            configuration = Configuration.get_solo()
-            r = sess.post(
-                          f'{configuration.server_cashless}/api/billetterie_endpoint',
-                          headers={
-                              'Authorization': f'Api-Key {configuration.key_cashless}'
-                          },
-                          data={
-                              'uuid': uuid_carte,
-                              'qty': float(total_rechargement),
-                              'uuid_commande': paiementStripe.uuid,
-                          })
+                sess.close()
+                print(
+                    f"{timezone.now()} demande au serveur cashless pour un rechargement. réponse : {r.status_code} ")
 
-            sess.close()
+                if r.status_code == 200:
+                    # la commande a été envoyé au serveur cashless et validé.
+                    paiementStripe.status = Paiement_stripe.VALID
 
-            logger.info(f"{timezone.now()} demande au serveur cashless pour un rechargement. réponse : {r.status_code} ")
-            print (f"{timezone.now()} demande au serveur cashless pour un rechargement. réponse : {r.status_code} ")
 
-            if r.status_code == 200:
-                # la commande a été envoyé au serveur cashless, on la met en validée
-                paiementStripe.status = Paiement_stripe.VALID
-                paiementStripe.save()
-
-                return HttpResponseRedirect(f'#success')
-
-        elif paiementStripe.status == Paiement_stripe.VALID:
-            messages.success(request, f"Le paiement a déja été validé.")
-            return HttpResponseRedirect(f'#historique')
-
-        return HttpResponseRedirect(f'#erreurpaiement')
+'''
+# return HttpResponseRedirect(f'#success')
+#
+# elif paiementStripe.status == Paiement_stripe.VALID:
+#     messages.success(request, f"Le paiement a déja été validé.")
+#     return HttpResponseRedirect(f'#historique')
+#
+# return HttpResponseRedirect(f'#erreurpaiement')
+'''

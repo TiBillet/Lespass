@@ -1,6 +1,7 @@
 import json
 from datetime import datetime
 
+from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.db import connection
 from django.http import HttpResponse, Http404, HttpResponseRedirect
@@ -31,13 +32,14 @@ class creation_checkout_stripe():
                  ) -> None:
 
         self.absolute_domain = absolute_domain
-        self.configuration = Configuration.get_solo()
+        self.liste_ligne_article = liste_ligne_article
         self.email_paiement = email_paiement
+        self.metadata = metadata
+
+        self.configuration = Configuration.get_solo()
         self.user = self._user_paiement()
         self.detail = self._detail()
         self.total = self._total()
-        self.liste_ligne_article = liste_ligne_article
-        self.metadata = metadata
         self.metadata_json = json.dumps(self.metadata)
         self.paiement_stripe_db = self._paiement_stripe_db()
         self.stripe_api_key = self._stripe_api_key()
@@ -64,7 +66,7 @@ class creation_checkout_stripe():
         total = 0
         for ligne in self.liste_ligne_article:
             ligne: LigneArticle
-            total += ligne.qty * ligne.article.prix
+            total += float(ligne.qty) * float(ligne.article.prix)
         return total
 
     def _detail(self):
@@ -100,20 +102,23 @@ class creation_checkout_stripe():
             line_items.append(
                 {
                     "price": f"{ligne.article.get_id_price_stripe()}",
-                    "quantity": ligne.qty,
+                    "quantity": int(ligne.qty),
                 }
             )
+        return line_items
 
     def _checkout_session(self):
+
+
         checkout_session = stripe.checkout.Session.create(
-            customer_email=f'{self.user.email}',
-            line_items=self.line_items,
-            payment_method_types=['card'],
-            mode='payment',
-            metadata=self.metadata,
             success_url=f'{self.absolute_domain}/stripe/return/{self.paiement_stripe_db.uuid}',
             cancel_url=f'{self.absolute_domain}/stripe/return/{self.paiement_stripe_db.uuid}',
-            client_reference_id=f"{self.user.uuid_user}",
+            payment_method_types=["card"],
+            customer_email=f'{self.user.email}',
+            line_items=self.line_items,
+            mode='payment',
+            metadata=self.metadata,
+            client_reference_id=f"{self.user.uuid}",
         )
 
         print(checkout_session.id)
@@ -146,6 +151,7 @@ class retour_stripe(View):
         else:
             stripe.api_key = configuration.stripe_api_key
 
+        print(paiement_stripe.status)
         if paiement_stripe.status != Paiement_stripe.VALID:
 
             checkout_session = stripe.checkout.Session.retrieve(paiement_stripe.id_stripe)
@@ -156,9 +162,6 @@ class retour_stripe(View):
                 paiement_stripe.save()
 
             elif checkout_session.payment_status == "paid":
-                paiement_stripe.status = Paiement_stripe.PAID
-                paiement_stripe.save()
-
                 # on vérifie si les infos sont cohérente avec la db : Never Trust Input :)
                 metadata_stripe_json = checkout_session.metadata
                 metadata_stripe = json.loads(str(metadata_stripe_json))
@@ -177,25 +180,26 @@ class retour_stripe(View):
                                  f"metadata ne correspondent pas : {metadata_stripe} {metadata_db}")
                     raise Http404
 
-                # on check si il y a un rechargement de carte cashless dans la commande
-                if metadata_db.get('recharge_carte_uuid'):
-                    logger.info(
-                        f'{timezone.now()} retour stripe pour rechargement carte : {metadata_db.get("recharge_carte_uuid")}')
-                    print(
-                        f'{timezone.now()} retour stripe pour rechargement carte : {metadata_db.get("recharge_carte_uuid")}')
-
-                    print('gerer la recharge sur le serveur cashless')
-                    # return postPaimentRecharge(paiement_stripe, request)
-
-
-
+                paiement_stripe.status = Paiement_stripe.PAID
+                paiement_stripe.save()
+                # le .save() lance le process pre_save dans le view QrcodeCashless, qui peut modifier son status
+                paiement_stripe.refresh_from_db()
+                if paiement_stripe.status == Paiement_stripe.VALID :
+                    messages.success(request, f"Paiement validé. Merci !")
+                    return HttpResponseRedirect(f"/qr/{metadata_db.get('recharge_carte_uuid')}#success")
 
             else:
                 paiement_stripe.status = Paiement_stripe.CANCELED
                 paiement_stripe.save()
-                return HttpResponse(f'Le paiement annulé.')
 
-        return HttpResponse(f'Paiement validé')
+        if paiement_stripe.status == Paiement_stripe.VALID:
+            metadata_db_json = paiement_stripe.metadata_stripe
+            metadata_db = json.loads(metadata_db_json)
+            if metadata_db.get('recharge_carte_uuid'):
+                return HttpResponseRedirect(f"/qr/{metadata_db.get('recharge_carte_uuid')}#historique")
+        else :
+            return HttpResponse('Un problème de validation de paiement a été detecté. Merci de contacter un responsable.')
+            # return HttpResponseRedirect("/")
 
 
 '''

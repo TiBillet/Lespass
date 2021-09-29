@@ -3,8 +3,9 @@ from django.contrib.postgres.fields import JSONField
 import uuid
 # Create your models here.
 from TiBillet import settings
-
-# class Configuration_stripe(models.Model):
+from django.db.models.signals import post_save, pre_save
+from django.dispatch import receiver
+# from QrcodeCashless.views import postPaimentRecharge
 
 
 class Paiement_stripe(models.Model):
@@ -38,5 +39,13 @@ class Paiement_stripe(models.Model):
     def __str__(self):
         return f"{self.detail} - {self.status}"
 
-
-
+''' RECEIVER PRESAVE DANS LE VIEW QRCODECASHELESS
+@receiver(pre_save, sender=Paiement_stripe)
+def changement_paid_to_valid(sender, instance: Paiement_stripe, update_fields=None, **kwargs):
+    try:
+        old_instance = Paiement_stripe.objects.get(pk=instance.pk)
+        if old_instance.status != Paiement_stripe.PAID :
+            print(f"on passe de {old_instance.status} à {instance.status}")
+            if instance.status == Paiement_stripe.PAID:
+                on lance la recharge vers le serveur cashless
+'''

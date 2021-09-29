@@ -40,16 +40,6 @@ def poids_option_generale(sender, instance: OptionGenerale, created, **kwargs):
         instance.save()
 
 
-class TarifsAdhesion(models.Model):
-    name = models.CharField(max_length=30)
-    tarif = models.FloatField()
-
-    class Meta:
-        ordering = ('-tarif',)
-
-    def __str__(self):
-        return f"{self.name} {self.tarif}"
-
 
 class Configuration(SingletonModel):
     organisation = models.CharField(max_length=50)
@@ -157,7 +147,7 @@ class VAT(models.Model):
 
 
 class Article(models.Model):
-    uuid = models.UUIDField(primary_key=True, db_index=True, default=uuid.uuid4, editable=False)
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
 
     name = models.CharField(max_length=50,
                             blank=True, null=True)
@@ -362,12 +352,5 @@ class LigneArticle(models.Model):
     article = models.ForeignKey(Article, on_delete=models.CASCADE, blank=True, null=True)
     billet = models.ForeignKey(Billet, on_delete=models.CASCADE, blank=True, null=True)
     qty = models.SmallIntegerField()
-    reste = models.SmallIntegerField()
     paiement_stripe = models.ForeignKey(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True)
     datetime = models.DateTimeField(auto_now=True)
-    # def __str__(self):
-    #     if self.reservation :
-    #         if self.article :
-    #             return f"{self.reservation.user_commande.email} {self.qty} {self.article}"
-    #         if self.billet :
-    #             return f"{self.reservation.user_commande.email} {self.qty} {self.billet}"
