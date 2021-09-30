@@ -22,16 +22,11 @@
 
     <!-- Header -->
     <header id="header">
-        {#        <div class="logo">#}
-        {#            <span class="icon fa-gem"></span>#}
-        {#        </div>#}
         <div class="content">
             <div class="inner">
                 <h1>Carte Cashless</h1>
                 <h1>{{ numero_carte }}</h1>
                 <h1>{{ client_name }}</h1>
-                {#								<p>A fully responsive site template designed by <a href="https://html5up.net">HTML5 UP</a> and released<br />#}
-                {#								for free under the <a href="https://html5up.net/license">Creative Commons</a> license.</p>#}
             </div>
         </div>
         <nav>
@@ -81,8 +76,8 @@
                         <label for="email">Email</label>
                         {% if email %}
                             <label for="email">Vérifiez votre adresse Email</label>
-                            <input type="email" name="email" id="Email" required="True" value="{{ email }}"
-                                   style="text-transform: lowercase;"/>
+                            <input type="email" name="email" id="Email" required="True"
+                                   style="text-transform: lowercase;"  value="{{ email }}" />
                         {% else %}
                             <label for="email">Entrez votre adresse Email</label>
                             <input type="email" name="email" id="email" required="True"
@@ -267,7 +262,7 @@
                     {% for tarif in tarifs_adhesion %}
                         <ul class="actions">
                             <li><a id="{{ tarif.name | slugify }}" href="#paiementadhesionenligne"
-                                   class="button primary field">{{ tarif.name }} {{ tarif.prix }}€</a></li>
+                                   class="button primary field">{{ tarif.name }} {{ tarif.prix | floatformat:2 | intcomma }}€</a></li>
                         </ul>
                     {% endfor %}
                     <h4>Payer à l'acceuil de l'association avec un vrai humain :</h4>

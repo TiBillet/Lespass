@@ -13,6 +13,7 @@ from stdimage.validators import MaxSizeValidator
 from django.db import connection
 
 from PaiementStripe.models import Paiement_stripe
+from QrcodeCashless.models import CarteCashless
 from TiBillet import settings
 import stripe
 
@@ -350,6 +351,7 @@ class LigneArticle(models.Model):
     uuid = models.UUIDField(primary_key=True, db_index=True, default=uuid.uuid4)
     reservation = models.ForeignKey(Reservation, on_delete=models.CASCADE, blank=True, null=True)
     article = models.ForeignKey(Article, on_delete=models.CASCADE, blank=True, null=True)
+    carte = models.ForeignKey(CarteCashless, on_delete=models.PROTECT, blank=True, null=True)
     billet = models.ForeignKey(Billet, on_delete=models.CASCADE, blank=True, null=True)
     qty = models.SmallIntegerField()
     paiement_stripe = models.ForeignKey(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True)

@@ -5,6 +5,8 @@ from stdimage import StdImageField
 from stdimage.validators import MaxSizeValidator
 
 from Customers.models import Client as Customers_Client
+from TiBillet import settings
+
 
 class Detail(models.Model):
     img = StdImageField(upload_to='images/',
@@ -45,4 +47,5 @@ class CarteCashless(models.Model):
 
     detail = models.ForeignKey(Detail, on_delete=models.CASCADE, null=True, blank=True)
 
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True)
 

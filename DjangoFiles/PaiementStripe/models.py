@@ -3,9 +3,6 @@ from django.contrib.postgres.fields import JSONField
 import uuid
 # Create your models here.
 from TiBillet import settings
-from django.db.models.signals import post_save, pre_save
-from django.dispatch import receiver
-# from QrcodeCashless.views import postPaimentRecharge
 
 
 class Paiement_stripe(models.Model):
@@ -36,8 +33,17 @@ class Paiement_stripe(models.Model):
 
     total = models.FloatField(default=0)
 
+
+    def uuid_8(self):
+        return f"{self.uuid}".partition('-')[0]
+
     def __str__(self):
-        return f"{self.detail} - {self.status}"
+        return self.uuid_8()
+
+    def articles(self):
+        return " - ".join([ f"{ligne.article.name} {ligne.qty * ligne.article.prix }€" for ligne in self.lignearticle_set.all() ])
+
+
 
 ''' RECEIVER PRESAVE DANS LE VIEW QRCODECASHELESS
 @receiver(pre_save, sender=Paiement_stripe)

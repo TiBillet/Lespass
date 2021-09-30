@@ -218,11 +218,12 @@ staff_admin_site.register(Billet, admin.ModelAdmin)
 
 class PaiementStripeAdmin(admin.ModelAdmin):
     list_display = (
-        'detail',
+        'uuid_8',
+        'user',
         'total',
         'order_date',
-        'user',
         'status',
+        'articles',
     )
     ordering = ('-order_date',)
     # readonly_fields = (

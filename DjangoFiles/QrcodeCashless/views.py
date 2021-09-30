@@ -12,14 +12,13 @@ from rest_framework import status
 
 from BaseBillet.models import Configuration, Article, LigneArticle
 from PaiementStripe.models import Paiement_stripe
-from PaiementStripe.views import creation_checkout_stripe
+from PaiementStripe.views import creation_paiement_stripe
 from QrcodeCashless.models import CarteCashless
 
 from django.db.models.signals import pre_save
 from django.dispatch import receiver
 
 import logging
-
 logger = logging.getLogger(__name__)
 
 
@@ -172,6 +171,7 @@ class index_scan(View):
                 ligne_article_recharge = LigneArticle.objects.create(
                     article=art,
                     qty=montant_recharge,
+                    carte=carte,
                 )
                 ligne_articles.append(ligne_article_recharge)
 
@@ -183,21 +183,23 @@ class index_scan(View):
                 ligne_article_recharge = LigneArticle.objects.create(
                     article=art_adhesion,
                     qty=1,
+                    carte=carte,
                 )
                 ligne_articles.append(ligne_article_recharge)
                 metadata['pk_adhesion'] = str(art_adhesion.pk)
 
             if len(ligne_articles) > 0:
-                new_checkout_session = creation_checkout_stripe(
+                new_paiement_stripe = creation_paiement_stripe(
                     email_paiement=data.get('email'),
                     liste_ligne_article=ligne_articles,
                     metadata=metadata,
                     absolute_domain=request.build_absolute_uri().partition('/qr')[0],
                 )
 
-                if new_checkout_session.is_valid():
-                    print(new_checkout_session.checkout_session.stripe_id)
-                    return new_checkout_session.redirect_to_stripe()
+                if new_paiement_stripe.is_valid():
+                    print(new_paiement_stripe.checkout_session.stripe_id)
+                    return new_paiement_stripe.redirect_to_stripe()
+
 
         # Email seul sans montant, c'est une adhésion
         elif data.get('email'):
@@ -256,29 +258,20 @@ def changement_paid_to_valid(sender, instance: Paiement_stripe, update_fields=No
     else:
         paiementStripe = instance
         if paiementStripe.status == Paiement_stripe.PAID:
-            # old_instance = Paiement_stripe.objects.get(pk=paiementStripe.pk)
-            # print(f"on passe de {old_instance.status} à {paiementStripe.status}")
-            # on passe de non payé -> payé
-            metadata_db_json = paiementStripe.metadata_stripe
-            metadata_db = json.loads(metadata_db_json)
-            uuid_carte = metadata_db.get('recharge_carte_uuid')
-            recharge_carte_montant = metadata_db.get('recharge_carte_montant')
-            pk_adhesion = metadata_db.get('pk_adhesion')
-            if recharge_carte_montant or pk_adhesion:
-                carte = check_carte_local(uuid_carte)
+            data_pour_serveur_cashless = {'uuid_commande': paiementStripe.uuid}
 
-                data_pour_serveur_cashless = {
-                    'uuid': carte.uuid,
-                    'uuid_commande': paiementStripe.uuid,
-                }
+            for ligne_article in paiementStripe.lignearticle_set.all():
+                if ligne_article.carte :
+                    data_pour_serveur_cashless['uuid'] = ligne_article.carte.uuid
 
-                if recharge_carte_montant:
-                    data_pour_serveur_cashless['recharge_qty'] = float(recharge_carte_montant)
-                if pk_adhesion :
-                    adhesion = Article.objects.get(pk=pk_adhesion)
-                    data_pour_serveur_cashless['tarif_adhesion'] = adhesion.prix
+                if ligne_article.article.categorie_article == Article.RECHARGE_CASHLESS :
+                    data_pour_serveur_cashless['recharge_qty'] = float(ligne_article.qty)
 
+                if ligne_article.article.categorie_article == Article.ADHESION :
+                    data_pour_serveur_cashless['tarif_adhesion'] = ligne_article.article.prix
 
+            # si il y a autre chose que uuid_commande :
+            if len(data_pour_serveur_cashless) > 1 :
                 sess = requests.Session()
                 configuration = Configuration.get_solo()
                 r = sess.post(
@@ -296,14 +289,3 @@ def changement_paid_to_valid(sender, instance: Paiement_stripe, update_fields=No
                 if r.status_code == 200:
                     # la commande a été envoyé au serveur cashless et validé.
                     paiementStripe.status = Paiement_stripe.VALID
-
-
-'''
-# return HttpResponseRedirect(f'#success')
-#
-# elif paiementStripe.status == Paiement_stripe.VALID:
-#     messages.success(request, f"Le paiement a déja été validé.")
-#     return HttpResponseRedirect(f'#historique')
-#
-# return HttpResponseRedirect(f'#erreurpaiement')
-'''
