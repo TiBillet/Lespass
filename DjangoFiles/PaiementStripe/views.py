@@ -12,10 +12,8 @@ from django.utils import timezone
 from django.views import View
 
 from AuthBillet.models import HumanUser
-from BaseBillet.models import Configuration, LigneArticle, Article
+from BaseBillet.models import Configuration, LigneArticle
 from PaiementStripe.models import Paiement_stripe
-
-# from QrcodeCashless.views import postPaimentRecharge
 
 import logging
 
