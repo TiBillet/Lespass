@@ -22,8 +22,8 @@ services:
     build: ../Dockerfile/
     restart: always
     env_file: .env
-    ports:
-      - 8002:8002
+#    ports:
+#      - 8002:8002
     volumes:
       - "../../DjangoFiles:/DjangoFiles"
       - "../../Docker/bashrc:/root/.bashrc"
@@ -40,10 +40,10 @@ services:
     image: nginx
     restart: always
     volumes:
-      - ../DjangoFiles:/DjangoFiles
-      - ../Nginx:/etc/nginx/conf.d
-    ports:
-      - 8008:80
+      - ../../DjangoFiles:/DjangoFiles
+      - ../../Nginx:/etc/nginx/conf.d
+#    ports:
+#      - 8008:80
     depends_on:
       - billetterie_django
     labels:
