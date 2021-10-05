@@ -10,8 +10,8 @@ class Command(BaseCommand):
 
         # create your public tenant
         tenant = Client(schema_name='public',
-                        name='Schemas Inc.',
-                        paid_until='2016-12-05',
+                        name='TiBillet Coop.',
+                        paid_until='2242-12-05',
                         on_trial=False)
         tenant.save()
 
