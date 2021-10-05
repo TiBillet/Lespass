@@ -22,8 +22,8 @@ services:
     build: ../Dockerfile/
     restart: always
     env_file: .env
-#    ports:
-#      - 8002:8002
+    ports:
+      - 8002:8002
     volumes:
       - "../../DjangoFiles:/DjangoFiles"
       - "../../Docker/bashrc:/root/.bashrc"
