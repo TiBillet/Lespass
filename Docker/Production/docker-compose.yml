@@ -1,0 +1,61 @@
+version: '3.7'
+services:
+  billetterie_postgres:
+    container_name: billetterie_postgres
+    image: postgres:11.5-alpine
+    restart: always
+#    ports:
+#      - 5432:5432
+    volumes:
+      - "../../Postgres/dbdata:/var/lib/postgresql/data"
+      - "/etc/localtime:/etc/localtime:ro"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    networks:
+      - backend
+
+
+  billetterie_django:
+    container_name: billetterie_django
+    build: ../Dockerfile/
+    restart: always
+    env_file: .env
+#    ports:
+#      - 8002:8002
+    volumes:
+      - "../../DjangoFiles:/DjangoFiles"
+      - "../../Docker/bashrc:/root/.bashrc"
+    working_dir: /DjangoFiles
+    command: "bash /DjangoFiles/launch.sh"
+    depends_on:
+      - billetterie_postgres
+    networks:
+      - frontend
+      - backend
+
+  billeterie_nginx:
+    image: nginx
+    restart: always
+    volumes:
+      - ../DjangoFiles:/DjangoFiles
+      - ../Nginx:/etc/nginx/conf.d
+#    ports:
+#      - 8008:80
+    depends_on:
+      - billeterie_django
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=frontend
+      - traefik.http.routers.billeterie_nginx.tls.certresolver=myresolver
+      - traefik.http.routers.billeterie_nginx.rule=Host(`m.${DOMAIN}`) || Host(`www.${DOMAIN}`) || Host(`raffinerie.${DOMAIN}`) || Host(`bisik.${DOMAIN}`) || Host(`vavangart.${DOMAIN}`) || Host(`manapany.${DOMAIN}`) || Host(`${DOMAIN}`)
+    networks:
+      - frontend
+
+
+networks:
+  frontend:
+    external: true
+  backend:
+    external: true
