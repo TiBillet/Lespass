@@ -28,7 +28,7 @@ services:
       - "../../DjangoFiles:/DjangoFiles"
       - "../../Docker/bashrc:/root/.bashrc"
     working_dir: /DjangoFiles
-    command: "bash /DjangoFiles/launch.sh"
+    command: "bash /DjangoFiles/launch_prod.sh"
     depends_on:
       - billetterie_postgres
     networks:
