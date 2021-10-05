@@ -44,7 +44,7 @@ services:
 #    ports:
 #      - 8008:80
     depends_on:
-      - billeterie_django
+      - billetterie_django
     labels:
       - traefik.enable=true
       - traefik.docker.network=frontend
