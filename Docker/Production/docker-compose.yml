@@ -27,6 +27,7 @@ services:
     volumes:
       - "../../DjangoFiles:/DjangoFiles"
       - "../../Docker/bashrc:/root/.bashrc"
+      - "../../Backup:/Backup"
     working_dir: /DjangoFiles
     command: "bash /DjangoFiles/launch_prod.sh"
     depends_on:
@@ -42,7 +43,6 @@ services:
     volumes:
       - ../../DjangoFiles:/DjangoFiles
       - ../../Nginx:/etc/nginx/conf.d
-      - ../../Backup:/Backup
     #    ports:
 #      - 8008:80
     depends_on:
