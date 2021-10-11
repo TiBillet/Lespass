@@ -20,7 +20,7 @@ export BORG_PASSPHRASE=$BORG_PASSPHRASE
 
 
 touch /Backup/logs/backup_cron.log
-touch /Backup/error_backup_cron.log
+touch /Backup/logs/error_backup_cron.log
 DATE_NOW=`date +%Y-%m-%d-%H-%M`
 MIGRATION=`ls /DjangoFiles/BaseBillet/migrations | grep -E '^[0]' | tail -1 | head -c 4`
 
