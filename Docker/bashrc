@@ -6,3 +6,11 @@ alias mm="python /DjangoFiles/manage.py migrate"
 alias sp="python manage.py tenant_command shell_plus"
 alias rsp="python /DjangoFiles/manage.py runserver_plus 0.0.0.0:8002"
 alias flush="python manage.py flushall --noinput"
+
+load_sql() {
+export PGPASSWORD=$POSTGRES_PASSWORD
+export PGUSER=$POSTGRES_USER
+export PGHOST=$POSTGRES_HOST
+
+psql --dbname $POSTGRES_DB -f $1
+}
