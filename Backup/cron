@@ -1,0 +1,3 @@
+
+# sauvegarde de la billetterie TiBillet toute les nuits
+1 4 * * * /usr/bin/docker exec cashless_django_bisik /Backup/saveDb.sh && rsync -avs /home/ubuntu/Bisik/TiBillet-Ticket/Backup/borg /home/syncthing/data/billetterie_borg/ --delete

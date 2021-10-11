@@ -24,6 +24,7 @@ services:
       - 8002:8002
     volumes:
       - "../../DjangoFiles:/DjangoFiles"
+      - "../../Backup:/Backup"
       - "../../Docker/bashrc:/root/.bashrc"
     working_dir: /DjangoFiles
     command: "bash /DjangoFiles/launch.sh"
