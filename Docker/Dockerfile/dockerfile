@@ -43,9 +43,9 @@ RUN apt-get install -y --no-install-recommends postgresql-client
 
 ## LATER ?
 # RUN pip install mailchimp3
-# RUN apt install cron -y
+RUN apt install cron -y
 # RUN apt install curl -y
-# RUN apt install borgbackup -y
+RUN apt install borgbackup -y
 # RUN pip install inotify
 # RUN pip install django-silk
 # RUN apt install openssh-client -y
