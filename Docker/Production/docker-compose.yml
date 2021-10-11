@@ -42,7 +42,7 @@ services:
     volumes:
       - ../../DjangoFiles:/DjangoFiles
       - ../../Nginx:/etc/nginx/conf.d
-      - "../../Backup:/Backup"
+      - ../../Backup:/Backup
     #    ports:
 #      - 8008:80
     depends_on:
