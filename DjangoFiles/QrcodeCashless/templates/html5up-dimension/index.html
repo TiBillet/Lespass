@@ -294,8 +294,8 @@
                     <div class="field" style="display: none">
                         <input id="pk_adhesion" type="text" name="pk_adhesion"
                                required="True"/>
-                        <input id="montant_adhesion" type="number" step="any" name="montant_adhesion"
-                               required="True"/>
+{#                        <input id="montant_adhesion" type="number" step="any" name="montant_adhesion"#}
+{#                               required="True"/>#}
                     </div>
 
                     <div class="field">
@@ -399,7 +399,7 @@
     {% for tarif in tarifs_adhesion %}
         document.getElementById('{{ tarif.name | slugify }}').onclick = function () {
             console.log('{{ tarif.name | slugify }}')
-            document.getElementById("montant_adhesion").value = "{{ tarif.prix }}";
+            {#document.getElementById("montant_adhesion").value = "{{ tarif.prix }}";#}
             document.getElementById("pk_adhesion").value = "{{ tarif.pk }}";
             document.getElementById("text_name_adhesion").textContent = "{{ tarif.name }}";
             document.getElementById("text_tarif_adhesion").textContent = "{{ tarif.prix }}€";

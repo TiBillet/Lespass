@@ -152,11 +152,12 @@ class index_scan(View):
 
         data = request.POST
         print(data)
-        montant_adhesion = data.get('montant_adhesion')
+        # montant_adhesion = data.get('montant_adhesion')
+        pk_adhesion = data.get('pk_adhesion')
         montant_recharge = data.get('montant_recharge')
 
         # c'est un paiement
-        if (montant_adhesion or montant_recharge) and data.get('email'):
+        if ( pk_adhesion or montant_recharge ) and data.get('email'):
             # montant_recharge = data.get('montant_recharge')
             ligne_articles = []
             metadata = {}
@@ -178,7 +179,7 @@ class index_scan(View):
 
                 metadata['recharge_carte_montant'] = str(montant_recharge)
 
-            if montant_adhesion:
+            if pk_adhesion:
                 art_adhesion = Article.objects.get(pk=data.get('pk_adhesion'))
                 ligne_article_recharge = LigneArticle.objects.create(
                     article=art_adhesion,
