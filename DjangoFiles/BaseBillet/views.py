@@ -65,7 +65,6 @@ def creation_de_la_reservation(user: TibilletUser, event: Event, data):
             reservation = reservation,
             billet = billet,
             qty = qty,
-            reste = qty,
         )
 
     for article in data.get('articles'):
@@ -74,7 +73,6 @@ def creation_de_la_reservation(user: TibilletUser, event: Event, data):
             reservation = reservation,
             article = article,
             qty = qty,
-            reste = qty,
         )
 
     return reservation
@@ -96,13 +94,7 @@ class event(APIView):
     def post(self, request, id):
 
         print(request.data)
-        # for key, value in enumerate(request.data):
-        #     print(key, value, request.data[value])
-        # print(request.POST)
-        # for key, value in enumerate(request.POST):
-        #     print(key, value, request.data[value])
 
-        # import ipdb; ipdb.set_trace()
         reservation_validator = ReservationValidator(data=request.data)
 
         if reservation_validator.is_valid():

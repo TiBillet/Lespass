@@ -1,35 +1,73 @@
 # TiBillet-Ticket
 
-Vente de billet et gestion évènementielle.
+Réseau événementiel et coopératif.
 
-## Installation pour dev' :
+TiBillet est un système de paiement sans contact Zéro Espèce ( Cashless ), de gestion d'évènements, de gestion de salles
+de restauration, d'engagement associatif et d'achat de billets en ligne … mais pas uniquement !
+
+C'est aussi un outil de mise en réseau et de gestion d'une monnaie locale et commune à plusieurs lieux.
+
+TiBillet permet la création d'une économie sociale et solidaire à l'échelle d'un territoire.
+
+Pour en savoir plus :
+https://www.tibillet.re
+https://wiki.tibillet.re
+
+## Introduction.
+
+TiBillet est en période d'Alpha, et en expérimentation sur plusieurs lieux sur l'ile de la Réunion. Venez nous voir au
+Bisik, à la Raffinerie, à Vavang'Art et au Manapany Festival !
+
+Le présent dépot ne contient pas encore toutes les sources du projet. La billetterie est en cours de refactoring et les
+sources sont publiées petit à petit sous licence aGPLv3. Mise en production totale prévue fin 2021.
+
+Le Cashless est en cours d'audit de sécurité et sera publié sous licence de type BSL : open-source et libre en dehors
+de toute utilisation commerciale type SaaS, avec mise en licence aGPLv3 progressive au fil des financements et des
+rentabilisations du développement.
+
+Inspirée par les expériences de Sentry, ElasticSearch, MongoDb, nous souhaitons que TiBillet soit libre d'utilisation
+pour toutes structures associatives ou entreprises coopératives à but non lucratif tout en encourageant les acteurs
+commerciaux à participer activement au développement.
+
+TiBillet est construit par l'association des 3Peaks de Manapany. Créateurs du Manapany Surf Festival. Nous sommes des
+développeurs passionnés et bénévoles presque à plein temps sur ce projet, et nous souhaitons sincèrement pouvoir en
+vivre un jour !
+
+## Installation :
+
+Requierement : Docker & docker-compose.
 
 ```shell
 cd Docker/Development
+# populate .env file with your own variables and copy it.
 cp env_example .env
+# build docker image
+docker-compose build
+# launch 
+docker-compose up -d
+```
 
-# populate .env file with your variables.
+## First time launch
 
-cd Docker/Development
-docker-compose --build up -d
+```shell
 
-# une fois buildé et lancé, on rentre dans le conteneur :
+# Go deeper inside the django container :
 docker exec -ti tibillet_django bash
 
-# --> dans le conteneur :
-  # on crée la DB :
+# --> Inside the container :
+  # apply the db migration ( Django créate the table on postgres )
   python manage.py migrate
   
-  # on crée le premier tenant "demo" :
+  # Populate the database with example
   python manage.py create_demo_tenant
   
-  # On lance le serveur web de dev avec un alias ( cf bashrc dans root )  
-  # python /DjangoFiles/manage.py runserver_plus 0.0.0.0:8002
+  # Launch the http dev' server ( for production, see the Django & gunicorn doc ) 
+  python /DjangoFiles/manage.py runserver_plus 0.0.0.0:8002
+  # or you can use the alias in the .bashrc i've made : 
   rsp 
 ```
 
-Test with www.$DOMAIN and demo.$DOMAIN
-Don't forget to change your /etc/host if you are in localhost :)
+Test with www.$DOMAIN and demo.$DOMAIN Don't forget to change your /etc/host if you are in localhost :)
 
 Enjoy !
 
@@ -37,35 +75,16 @@ Enjoy !
 
 ## Développement :
 
-Jonas TURBEAUX & Nicolas DIJOUX
-pour Peaks2Prod & 3Peaks Production.
+Jonas TURBEAUX & Nicolas DIJOUX pour 3Peaks2Prod.
 
 Free for personal and commercial use under the AGPL-3.0 licence.
 
-## Graphisme : 
-
-Massively by HTML5 UP
-html5up.net | @ajlkn
-Free for personal and commercial use under the CCA 3.0 license (html5up.net/license)
-
-
-This is Massively, a text-heavy, article-oriented design built around a huge background
-image (with a new parallax implementation I'm testing) and scroll effects (powered by
-Scrollex). A *slight* departure from all the one-pagers I've been doing lately, but one
-that fulfills a few user requests and makes use of some new techniques I've been wanting
-to try out. Enjoy it :)
-
-Demo images* courtesy of Unsplash, a radtastic collection of CC0 (public domain) images
-you can use for pretty much whatever.
-
-(* = not included)
-
-AJ
-aj@lkn.io | @ajlkn
-
-
 Credits:
 
+    Graphical démo :
+        Massively by HTML5 UP html5up.net | @ajlkn Free for personal and commercial use under the CCA 3.0 license (
+        html5up.net/license)
+        AJ aj@lkn.io | @ajlkn
 	Demo Images:
 		Unsplash (unsplash.com)
 

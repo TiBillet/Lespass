@@ -263,7 +263,7 @@
                     <h4>Payer en ligne avec un vrai robot :</h4>
                     {% for tarif in tarifs_adhesion %}
                         <ul class="actions">
-                            <li><a id="{{ tarif.name | slugify }}" href="#paiementadhesionenligne"
+                            <li><a id="adh_{{ tarif.name | slugify }}" href="#paiementadhesionenligne"
                                    class="button primary field">{{ tarif.name }} {{ tarif.prix | floatformat:2 | intcomma }}€</a>
                             </li>
                         </ul>
@@ -397,8 +397,8 @@
 {#Script pour remplir la page d'adhésion de paiement#}
 <script>
     {% for tarif in tarifs_adhesion %}
-        document.getElementById('{{ tarif.name | slugify }}').onclick = function () {
-            console.log('{{ tarif.name | slugify }}')
+        document.getElementById('adh_{{ tarif.name | slugify }}').onclick = function () {
+            console.log('adh_{{ tarif.name | slugify }}')
             {#document.getElementById("montant_adhesion").value = "{{ tarif.prix }}";#}
             document.getElementById("pk_adhesion").value = "{{ tarif.pk }}";
             document.getElementById("text_name_adhesion").textContent = "{{ tarif.name }}";
