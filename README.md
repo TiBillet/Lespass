@@ -19,8 +19,8 @@ Bisik, à la Raffinerie, à Vavang'Art et au Manapany Festival !
 Le présent dépot ne contient pas encore toutes les sources du projet. La billetterie est en cours de refactoring et les
 sources sont publiées petit à petit sous licence aGPLv3. Mise en production totale prévue fin 2021.
 
-Le Cashless est en cours d'audit de sécurité et sera publié sous licence de type BSL : open-source et libre en dehors
-de toute utilisation commerciale type SaaS, avec mise en licence aGPLv3 progressive au fil des financements et des
+Le Cashless est en cours d'audit de sécurité et sera publié sous licence de type BSL : open-source et libre en dehors de
+toute utilisation commerciale type SaaS, avec mise en licence aGPLv3 progressive au fil des financements et des
 rentabilisations du développement.
 
 Inspirée par les expériences de Sentry, ElasticSearch, MongoDb, nous souhaitons que TiBillet soit libre d'utilisation
@@ -33,8 +33,7 @@ vivre un jour !
 
 ## Installation :
 
-We need Docker & docker-compose.
-See https://docs.docker.com/ for installation.
+We need Docker & docker-compose. See https://docs.docker.com/ for installation.
 
 ```shell
 cd Docker/Development
@@ -66,8 +65,17 @@ docker exec -ti tibillet_django bash
   rsp 
 ```
 
-Test with ```www.$DOMAIN/admin``` and ```demo.$DOMAIN/admin```
+Test with ```www.$DOMAIN:8002/admin``` and ```demo.$DOMAIN:8002/admin```
 Don't forget to change your /etc/host if you are in localhost :)
+
+```
+#example /etc/hosts
+127.0.0.1       dev-local.org
+127.0.0.1       www.dev-local.org
+127.0.0.1       manap.dev-local.org
+
+# go to dev-local.org:8002/admin 
+```
 
 Enjoy !
 
