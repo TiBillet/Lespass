@@ -62,7 +62,7 @@ docker exec -ti tibillet_django bash
   
   # Launch the http dev' server ( for production, see the Django & gunicorn doc ) 
   python /DjangoFiles/manage.py runserver_plus 0.0.0.0:8002
-  # or you can use the alias in the .bashrc i've made : 
+  # or you can use the alias from the .bashrc : 
   rsp 
 ```
 
