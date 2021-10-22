@@ -9,9 +9,7 @@ C'est aussi un outil de mise en réseau et de gestion d'une monnaie locale et co
 
 TiBillet permet la création d'une économie sociale et solidaire à l'échelle d'un territoire.
 
-Pour en savoir plus :
-https://www.tibillet.re
-https://wiki.tibillet.re
+Pour en savoir plus : https://www.tibillet.re & https://wiki.tibillet.re
 
 ## Introduction.
 
@@ -68,7 +66,7 @@ docker exec -ti tibillet_django bash
   rsp 
 ```
 
-Test with www.$DOMAIN/admin and demo.$DOMAIN/admin
+Test with ```www.$DOMAIN/admin``` and ```demo.$DOMAIN/admin```
 Don't forget to change your /etc/host if you are in localhost :)
 
 Enjoy !
