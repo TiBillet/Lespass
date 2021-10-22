@@ -35,7 +35,8 @@ vivre un jour !
 
 ## Installation :
 
-Requierement : Docker & docker-compose.
+We need Docker & docker-compose.
+See https://docs.docker.com/ for installation.
 
 ```shell
 cd Docker/Development
@@ -67,7 +68,8 @@ docker exec -ti tibillet_django bash
   rsp 
 ```
 
-Test with www.$DOMAIN and demo.$DOMAIN Don't forget to change your /etc/host if you are in localhost :)
+Test with www.$DOMAIN/admin and demo.$DOMAIN/admin
+Don't forget to change your /etc/host if you are in localhost :)
 
 Enjoy !
 
