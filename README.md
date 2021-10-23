@@ -74,11 +74,11 @@ Don't forget to change your /etc/host if you are in localhost :)
 
 ```
 #example /etc/hosts
-127.0.0.1       dev-local.org
-127.0.0.1       www.dev-local.org
-127.0.0.1       manap.dev-local.org
+127.0.0.1       django-local.org
+127.0.0.1       www.django-local.org
+127.0.0.1       demo.django-local.org
 
-# go to dev-local.org:8002/admin 
+# go to demo.django-local.org:8002/admin to create an admin user for the tenant. 
 ```
 
 Enjoy !
