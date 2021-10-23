@@ -152,8 +152,7 @@ class VAT(models.Model):
 class Article(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
 
-    name = models.CharField(max_length=50,
-                            blank=True, null=True)
+    name = models.CharField(max_length=50)
     prix = models.FloatField()
     stock = models.SmallIntegerField(blank=True, null=True)
 

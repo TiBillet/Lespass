@@ -7,6 +7,7 @@ from rest_framework import routers
 router = routers.DefaultRouter()
 router.register(r'events', api_view.EventsViewSet, basename='event')
 router.register(r'tarifs', api_view.TarifBilletViewSet, basename='billet')
+router.register(r'articles', api_view.ArticleViewSet, basename='article')
 
 
 urlpatterns = [

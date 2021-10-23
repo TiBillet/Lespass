@@ -3,7 +3,7 @@ import json
 from django.utils.translation import gettext, gettext_lazy as _
 from rest_framework.generics import get_object_or_404
 
-from BaseBillet.models import Event, TarifBillet
+from BaseBillet.models import Event, TarifBillet, Article
 
 
 class TarifsSerializer(serializers.ModelSerializer):
@@ -15,7 +15,31 @@ class TarifsSerializer(serializers.ModelSerializer):
             "prix",
             "reservation_par_user_max",
         ]
-        extra_kwargs = {'event': {'required': False}}
+        read_only_fields = ['uuid']
+
+
+class ArticleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Article
+        fields = [
+            'uuid',
+            'name',
+            'prix',
+            'stock',
+            'reservation_par_user_max',
+            'vat',
+            'publish',
+            'img',
+            'categorie_article',
+            'id_product_stripe',
+            'id_price_stripe',
+        ]
+        read_only_fields = [
+            'uuid',
+            'id_product_stripe',
+            'id_price_stripe',
+        ]
+        depth = 1
 
 
 class EventSerializer(serializers.ModelSerializer):
@@ -38,7 +62,7 @@ class EventSerializer(serializers.ModelSerializer):
             'reservations',
             'complet',
         ]
-        read_only_fields = ['reservations']
+        read_only_fields = ['uuid', 'reservations']
         depth = 1
 
     def validate(self, attrs):
@@ -47,7 +71,7 @@ class EventSerializer(serializers.ModelSerializer):
         if tarifs:
             try:
                 tarifs_list = json.loads(tarifs)
-            except json.decoder.JSONDecodeError as e :
+            except json.decoder.JSONDecodeError as e:
                 raise serializers.ValidationError(_(f'tarifs doit être un json valide : {e}'))
 
             self.tarif_to_db = []
@@ -60,9 +84,10 @@ class EventSerializer(serializers.ModelSerializer):
     def save(self, **kwargs):
         instance = super().save(**kwargs)
         instance.tarifs.clear()
-        for tarif in self.tarif_to_db :
+        for tarif in self.tarif_to_db:
             instance.tarifs.add(tarif)
         return instance
+
 
 '''
 [
