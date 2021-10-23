@@ -16,11 +16,14 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include, re_path
 from Administration.admin_public import public_admin_site
-
+# on modifie la creation du token pour rajouter access_token dans la réponse pour Postman
+# from AuthBillet.views import TokenCreateView_custom
 
 urlpatterns = [
     path('jet/', include('jet.urls', 'jet')),  # Django JET URLS
     re_path(r'^jet/dashboard/', include('jet.dashboard.urls', 'jet-dashboard')),  # Django JET dashboard URLS
+    # on modifie la creation du token pour rajouter access_token dans la réponse pour Postman
+    # re_path(r"^auth/token/login/?$", TokenCreateView_custom.as_view(), name="login"),
     re_path(r'^auth/', include('djoser.urls')),
     path('admin/', public_admin_site.urls, name="public_admin_url"),
 

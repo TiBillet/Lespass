@@ -77,8 +77,12 @@ def creation_de_la_reservation(user: TibilletUser, event: Event, data):
 
     return reservation
 
+
+#Modèle MVC
 class event(APIView):
     permission_classes = [AllowAny]
+
+
 
     def get(self, request, id):
         event = get_object_or_404(Event, pk=id)

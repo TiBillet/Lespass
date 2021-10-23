@@ -5,7 +5,18 @@ import uuid
 from django.contrib.auth.models import AbstractUser, Group, Permission
 from Customers.models import Client
 from django.db import connection
+from rest_framework import permissions
 
+
+
+class TenantAdminPermission(permissions.BasePermission):
+    message = 'No admin in tenant'
+
+    def has_permission(self, request, view):
+        if request.user.is_authenticated :
+            return bool((connection.tenant in request.user.client_admin.all() and request.user.is_staff) or request.user.is_superuser)
+        else :
+            return False
 
 class TibilletManager(BaseUserManager):
     def _create_user(self, email, password, **extra_fields):
@@ -14,7 +25,9 @@ class TibilletManager(BaseUserManager):
             raise ValueError(_("email obligatoire"))
 
         email = self.normalize_email(email)
-        user = self.model(username=email, email=email, **extra_fields)
+        user = self.model(**extra_fields)
+        user.username = email
+        user.email = email
         user.set_password(password)
 
         user.client_source = connection.tenant
@@ -50,11 +63,11 @@ class TibilletUser(AbstractUser):
 
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
 
-    USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = []  # removes email from REQUIRED_FIELDS
+    # USERNAME_FIELD = 'email'
+    # REQUIRED_FIELDS = []  # removes email from REQUIRED_FIELDS
 
     email = models.EmailField(_('email'), unique=True)  # changes email to unique and blank to false
-    username = models.CharField(max_length=200, null=True, blank=True)
+    username = models.CharField(max_length=200, unique=True)
     phone = models.CharField(max_length=20, null=True, blank=True)
 
     TYPE_TERM, TYPE_HUM, TYPE_ANDR = 'TE', 'HU', 'AN'

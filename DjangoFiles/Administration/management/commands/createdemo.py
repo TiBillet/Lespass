@@ -35,15 +35,3 @@ class Command(BaseCommand):
                                      )
 
 
-        tenant_raffinerie = Client.objects.get_or_create(schema_name="raffinerie",
-                                                       name="raffinerie",
-                                                       paid_until='2200-12-05',
-                                                       on_trial=False)[0]
-
-        # Add one or more domains for the tenant
-
-        tenant_raffinerie_domain = Domain.objects.get_or_create(domain=f'raffinerie.{os.getenv("DOMAIN")}',
-                                     tenant=tenant_demo,
-                                     is_primary=True,
-                                     )
-

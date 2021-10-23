@@ -5,7 +5,8 @@ from ApiBillet import views as api_view
 from rest_framework import routers
 
 router = routers.DefaultRouter()
-router.register(r'events', api_view.EventViewSet)
+router.register(r'events', api_view.EventsViewSet, basename='event')
+router.register(r'tarifs', api_view.TarifBilletViewSet, basename='billet')
 
 
 urlpatterns = [

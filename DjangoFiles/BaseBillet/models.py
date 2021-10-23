@@ -19,6 +19,7 @@ import stripe
 
 
 class OptionGenerale(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
     name = models.CharField(max_length=30)
     poids = models.PositiveSmallIntegerField(default=0, verbose_name=_("Poids"))
 
@@ -39,7 +40,6 @@ def poids_option_generale(sender, instance: OptionGenerale, created, **kwargs):
             instance.poids = len(OptionGenerale.objects.all()) + 1
 
         instance.save()
-
 
 
 class Configuration(SingletonModel):
@@ -119,7 +119,8 @@ class Configuration(SingletonModel):
     )
 
 
-class Billet(models.Model):
+class TarifBillet(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
     name = models.CharField(max_length=50,
                             blank=True, null=True)
     prix = models.FloatField()
@@ -137,6 +138,7 @@ class VAT(models.Model):
     """
     Les différents taux de TVA sont associés à des produits.
     """
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
     percent = models.FloatField(verbose_name="Taux de TVA (%)")
 
     class Meta:
@@ -200,10 +202,10 @@ class Article(models.Model):
             else:
                 stripe.api_key = configuration.stripe_api_key
 
-            if self.img :
+            if self.img:
                 # noinspection PyUnresolvedReferences
                 domain_url = connection.tenant.domains.all()[0].domain
-                images = [f"https://{domain_url}{self.img.med.url}",]
+                images = [f"https://{domain_url}{self.img.med.url}", ]
             else:
                 images = []
 
@@ -253,15 +255,15 @@ class Article(models.Model):
 
 
 class Event(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
     name = models.CharField(max_length=200)
     short_description = models.CharField(max_length=250)
     long_description = models.TextField(blank=True, null=True)
     datetime = models.DateTimeField()
-    billets = models.ManyToManyField(Billet)
-    articles = models.ManyToManyField(Article)
+    tarifs = models.ManyToManyField(TarifBillet)
+    articles = models.ManyToManyField(Article, blank=True)
 
     img = StdImageField(upload_to='images/',
-                        null=True, blank=True,
                         validators=[MaxSizeValidator(1920, 1920)],
                         variations={
                             'fhd': (1920, 1920),
@@ -272,6 +274,20 @@ class Event(models.Model):
                         )
 
     reservations = models.PositiveSmallIntegerField(default=0)
+
+    CONCERT = "LIV"
+    FESTIVAL = "FES"
+    REUNION = "REU"
+    CONFERENCE = "CON"
+    TYPE_CHOICES = [
+        (CONCERT, _('Concert')),
+        (FESTIVAL, _('Festival')),
+        (REUNION, _('Réunion')),
+        (CONFERENCE, _('Conférence')),
+    ]
+
+    categorie = models.CharField(max_length=3, choices=TYPE_CHOICES, default=CONCERT,
+                              verbose_name=_("Catégorie d'évènement"))
 
     def complet(self):
         # TODO: Benchmarker et tester si c'est pas mieux dans template
@@ -352,7 +368,7 @@ class LigneArticle(models.Model):
     reservation = models.ForeignKey(Reservation, on_delete=models.CASCADE, blank=True, null=True)
     article = models.ForeignKey(Article, on_delete=models.CASCADE, blank=True, null=True)
     carte = models.ForeignKey(CarteCashless, on_delete=models.PROTECT, blank=True, null=True)
-    billet = models.ForeignKey(Billet, on_delete=models.CASCADE, blank=True, null=True)
+    billet = models.ForeignKey(TarifBillet, on_delete=models.CASCADE, blank=True, null=True)
     qty = models.SmallIntegerField()
     paiement_stripe = models.ForeignKey(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True)
     datetime = models.DateTimeField(auto_now=True)

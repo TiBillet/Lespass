@@ -4,7 +4,7 @@ from django.contrib.auth.models import Group
 from solo.admin import SingletonModelAdmin
 
 from AuthBillet.models import HumanUser, SuperHumanUser, TermUser
-from BaseBillet.models import Configuration, Event, OptionGenerale, Article, Billet, Reservation, LigneArticle
+from BaseBillet.models import Configuration, Event, OptionGenerale, Article, TarifBillet, Reservation, LigneArticle
 from django.contrib.auth.admin import UserAdmin
 
 from Customers.models import Client
@@ -213,7 +213,7 @@ staff_admin_site.register(LigneArticle, admin.ModelAdmin)
 
 staff_admin_site.register(OptionGenerale, OptionGeneraleAdmin)
 
-staff_admin_site.register(Billet, admin.ModelAdmin)
+staff_admin_site.register(TarifBillet, admin.ModelAdmin)
 
 
 class PaiementStripeAdmin(admin.ModelAdmin):

@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.utils import timezone
 from django.utils.translation import ugettext_lazy as _
-from BaseBillet.models import OptionGenerale, Configuration, Event, Article, Billet
+from BaseBillet.models import OptionGenerale, Configuration, Event, Article, TarifBillet
 
 
 class ReservationValidator(serializers.Serializer):
@@ -25,7 +25,7 @@ class ReservationValidator(serializers.Serializer):
 
     def validate_billets(self, value):
         value_dict = {}
-        billet_obj = Billet.objects.all()
+        billet_obj = TarifBillet.objects.all()
         for couple in value:
             pk, qty = billet_obj.get(pk=couple.split(',')[0]), int(couple.split(',')[1])
             value_dict[pk] = qty

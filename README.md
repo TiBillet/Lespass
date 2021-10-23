@@ -57,8 +57,12 @@ docker exec -ti tibillet_django bash
   python manage.py migrate
   
   # Populate the database with example
-  python manage.py create_demo_tenant
+  python manage.py createdemo
   
+  # Create the root user 
+  python manage.py create_tenant_superuser
+    -> public
+    
   # Launch the http dev' server ( for production, see the Django & gunicorn doc ) 
   python /DjangoFiles/manage.py runserver_plus 0.0.0.0:8002
   # or you can use the alias from the .bashrc : 
