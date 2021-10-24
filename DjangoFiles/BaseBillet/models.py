@@ -43,10 +43,10 @@ def poids_option_generale(sender, instance: OptionGenerale, created, **kwargs):
 
 
 class Configuration(SingletonModel):
-    organisation = models.CharField(max_length=50)
-    short_description = models.CharField(max_length=250)
+    organisation = models.CharField(max_length=50, verbose_name=_("Nom de l'organisation"))
+    short_description = models.CharField(max_length=250, verbose_name=_("Description courte"))
 
-    adresse = models.CharField(max_length=250)
+    adress = models.CharField(max_length=250)
     phone = models.CharField(max_length=20)
     email = models.EmailField()
 
@@ -57,7 +57,6 @@ class Configuration(SingletonModel):
     instagram = models.URLField(blank=True, null=True)
 
     adhesion_obligatoire = models.BooleanField(default=False)
-    cadeau_adhesion = models.FloatField(default=0, help_text="Recharge cadeau a l'adhésion")
 
     carte_restaurant = StdImageField(upload_to='images/',
                                      null=True, blank=True,
@@ -69,7 +68,7 @@ class Configuration(SingletonModel):
                                          'thumbnail': (150, 90),
                                      },
                                      delete_orphans=True,
-                                     verbose_name='Carte du restaurant'
+                                     verbose_name=_('Carte du restaurant')
                                      )
 
     img = StdImageField(upload_to='images/',
@@ -92,9 +91,9 @@ class Configuration(SingletonModel):
     stripe_test_api_key = models.CharField(max_length=110, blank=True, null=True)
     stripe_mode_test = models.BooleanField(default=True)
 
-    activer_billetterie = models.BooleanField(default=True)
+    activer_billetterie = models.BooleanField(default=True, verbose_name=_("Activer la billetterie"))
 
-    jauge_max = models.PositiveSmallIntegerField(default=50)
+    jauge_max = models.PositiveSmallIntegerField(default=50, verbose_name=_("Jauge maximale"))
 
     option_generale_radio = models.ManyToManyField(OptionGenerale,
                                                    blank=True,
@@ -108,56 +107,22 @@ class Configuration(SingletonModel):
         max_length=300,
         blank=True,
         null=True,
-        verbose_name="Adresse du serveur Cashless"
+        verbose_name=_("Adresse du serveur Cashless")
     )
 
     key_cashless = models.CharField(
         max_length=41,
         blank=True,
         null=True,
-        verbose_name="Clé d'API du serveur cashless"
+        verbose_name=_("Clé d'API du serveur cashless")
     )
 
 
-class TarifBillet(models.Model):
-    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
-    name = models.CharField(max_length=50,
-                            blank=True, null=True)
-    prix = models.FloatField()
 
-    reservation_par_user_max = models.PositiveSmallIntegerField(default=6)
-
-    def range_max(self):
-        return range(self.reservation_par_user_max + 1)
-
-    def __str__(self):
-        return f"{self.name}"
-
-
-class VAT(models.Model):
-    """
-    Les différents taux de TVA sont associés à des produits.
-    """
-    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
-    percent = models.FloatField(verbose_name="Taux de TVA (%)")
-
-    class Meta:
-        verbose_name = _('TVA')
-        verbose_name_plural = _('TVA')
-
-    def __str__(self):
-        return f"{self.percent}%"
-
-
-class Article(models.Model):
+class Product(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
 
     name = models.CharField(max_length=50)
-    prix = models.FloatField()
-    stock = models.SmallIntegerField(blank=True, null=True)
-
-    reservation_par_user_max = models.PositiveSmallIntegerField(default=10)
-    vat = models.ForeignKey(VAT, on_delete=models.PROTECT, verbose_name="TVA", null=True, blank=True)
 
     publish = models.BooleanField(default=False)
 
@@ -188,11 +153,11 @@ class Article(models.Model):
                                          verbose_name=_("Type d'article"))
 
     id_product_stripe = models.CharField(max_length=30, null=True, blank=True)
-    id_price_stripe = models.CharField(max_length=30, null=True, blank=True)
 
-    def range_max(self):
-        return range(self.reservation_par_user_max + 1)
+    def __str__(self):
+        return f"{self.name}"
 
+    '''
     def get_id_product_stripe(self):
         configuration = Configuration.get_solo()
         if configuration.stripe_api_key and not self.id_product_stripe:
@@ -204,6 +169,7 @@ class Article(models.Model):
             if self.img:
                 # noinspection PyUnresolvedReferences
                 domain_url = connection.tenant.domains.all()[0].domain
+                # noinspection PyUnresolvedReferences
                 images = [f"https://{domain_url}{self.img.med.url}", ]
             else:
                 images = []
@@ -248,6 +214,37 @@ class Article(models.Model):
         self.id_price_stripe = None
         self.id_product_stripe = None
         self.save()
+    '''
+
+
+class Price(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
+
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="prices")
+
+    name = models.CharField(max_length=50)
+    prix = models.FloatField()
+
+    NA, DIX, VINGT = 'NA', 'DX', 'VG'
+    TVA_CHOICES = [
+        (NA, _('Non applicable')),
+        (DIX, _("10 %")),
+        (VINGT, _('20 %')),
+    ]
+
+    vat = models.CharField(max_length=2,
+                           choices=TVA_CHOICES,
+                           default=NA,
+                           verbose_name=_("Taux TVA"),
+                           )
+
+    id_price_stripe = models.CharField(max_length=30, null=True, blank=True)
+
+    stock = models.SmallIntegerField(blank=True, null=True)
+    max_per_user = models.PositiveSmallIntegerField(default=10)
+
+    def range_max(self):
+        return range(self.max_per_user + 1)
 
     def __str__(self):
         return f"{self.name}"
@@ -255,12 +252,14 @@ class Article(models.Model):
 
 class Event(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
+
     name = models.CharField(max_length=200)
+    datetime = models.DateTimeField()
+
     short_description = models.CharField(max_length=250)
     long_description = models.TextField(blank=True, null=True)
-    datetime = models.DateTimeField()
-    tarifs = models.ManyToManyField(TarifBillet)
-    articles = models.ManyToManyField(Article, blank=True)
+
+    products = models.ManyToManyField(Product, blank=True)
 
     img = StdImageField(upload_to='images/',
                         validators=[MaxSizeValidator(1920, 1920)],
@@ -286,7 +285,7 @@ class Event(models.Model):
     ]
 
     categorie = models.CharField(max_length=3, choices=TYPE_CHOICES, default=CONCERT,
-                              verbose_name=_("Catégorie d'évènement"))
+                                 verbose_name=_("Catégorie d'évènement"))
 
     def complet(self):
         # TODO: Benchmarker et tester si c'est pas mieux dans template
@@ -343,8 +342,8 @@ class Reservation(models.Model):
     def total_prix(self):
         total = 0
         for ligne in self.lignearticle_set.all():
-            if ligne.article:
-                total += ligne.qty * ligne.article.prix
+            if ligne.product:
+                total += ligne.qty * ligne.product.prix
             if ligne.billet:
                 total += ligne.qty * ligne.billet.prix
 
@@ -357,6 +356,7 @@ class Reservation(models.Model):
 @receiver(post_save, sender=Reservation)
 def verif_mail_valide(sender, instance: Reservation, created, **kwargs):
     if created:
+        # noinspection PyUnresolvedReferences
         if not instance.user_commande.is_active:
             instance.status = instance.MAIL_NON_VALIDEE
             instance.save()
@@ -364,10 +364,12 @@ def verif_mail_valide(sender, instance: Reservation, created, **kwargs):
 
 class LigneArticle(models.Model):
     uuid = models.UUIDField(primary_key=True, db_index=True, default=uuid.uuid4)
-    reservation = models.ForeignKey(Reservation, on_delete=models.CASCADE, blank=True, null=True)
-    article = models.ForeignKey(Article, on_delete=models.CASCADE, blank=True, null=True)
-    carte = models.ForeignKey(CarteCashless, on_delete=models.PROTECT, blank=True, null=True)
-    billet = models.ForeignKey(TarifBillet, on_delete=models.CASCADE, blank=True, null=True)
-    qty = models.SmallIntegerField()
-    paiement_stripe = models.ForeignKey(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True)
     datetime = models.DateTimeField(auto_now=True)
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, blank=True, null=True)
+    qty = models.SmallIntegerField()
+
+    reservation = models.ForeignKey(Reservation, on_delete=models.CASCADE, blank=True, null=True)
+    carte = models.ForeignKey(CarteCashless, on_delete=models.PROTECT, blank=True, null=True)
+
+    paiement_stripe = models.ForeignKey(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True)

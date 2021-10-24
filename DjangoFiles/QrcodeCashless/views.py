@@ -10,7 +10,7 @@ from rest_framework.generics import get_object_or_404
 from django.views import View
 from rest_framework import status
 
-from BaseBillet.models import Configuration, Article, LigneArticle
+from BaseBillet.models import Configuration, Product, LigneArticle
 from PaiementStripe.models import Paiement_stripe
 from PaiementStripe.views import creation_paiement_stripe
 from QrcodeCashless.models import CarteCashless
@@ -95,7 +95,7 @@ class index_scan(View):
         configuration = Configuration.get_solo()
         if not configuration.server_cashless:
             return HttpResponse(
-                "L'adresse du serveur cashless n'est pas renseignée dans la configuration de la billetterie.")
+                "L'adress du serveur cashless n'est pas renseignée dans la configuration de la billetterie.")
         if not configuration.stripe_api_key or not configuration.stripe_test_api_key:
             return HttpResponse(
                 "Pas d'information de configuration pour paiement en ligne.")
@@ -114,7 +114,7 @@ class index_scan(View):
                 request,
                 self.template_name,
                 {
-                    'tarifs_adhesion': Article.objects.filter(categorie_article=Article.ADHESION).order_by('-prix'),
+                    'tarifs_adhesion': Product.objects.filter(categorie_article=Product.ADHESION).order_by('-prix'),
                     'adhesion_obligatoire': configuration.adhesion_obligatoire,
                     'history': json_reponse.get('history'),
                     'carte_resto': configuration.carte_restaurant,
@@ -163,10 +163,10 @@ class index_scan(View):
             metadata = {}
             metadata['recharge_carte_uuid'] = str(carte.uuid)
             if montant_recharge:
-                art, created = Article.objects.get_or_create(
+                art, created = Product.objects.get_or_create(
                     name="Recharge Carte",
                     prix=1,
-                    categorie_article=Article.RECHARGE_CASHLESS,
+                    categorie_article=Product.RECHARGE_CASHLESS,
                 )
 
                 ligne_article_recharge = LigneArticle.objects.create(
@@ -180,7 +180,7 @@ class index_scan(View):
                 metadata['recharge_carte_montant'] = str(montant_recharge)
 
             if pk_adhesion:
-                art_adhesion = Article.objects.get(pk=data.get('pk_adhesion'))
+                art_adhesion = Product.objects.get(pk=data.get('pk_adhesion'))
                 ligne_article_recharge = LigneArticle.objects.create(
                     article=art_adhesion,
                     qty=1,
@@ -265,11 +265,11 @@ def changement_paid_to_valid(sender, instance: Paiement_stripe, update_fields=No
                 if ligne_article.carte :
                     data_pour_serveur_cashless['uuid'] = ligne_article.carte.uuid
 
-                if ligne_article.article.categorie_article == Article.RECHARGE_CASHLESS :
+                if ligne_article.product.categorie_article == Product.RECHARGE_CASHLESS :
                     data_pour_serveur_cashless['recharge_qty'] = float(ligne_article.qty)
 
-                if ligne_article.article.categorie_article == Article.ADHESION :
-                    data_pour_serveur_cashless['tarif_adhesion'] = ligne_article.article.prix
+                if ligne_article.product.categorie_article == Product.ADHESION :
+                    data_pour_serveur_cashless['tarif_adhesion'] = ligne_article.product.prix
 
             # si il y a autre chose que uuid_commande :
             if len(data_pour_serveur_cashless) > 1 :

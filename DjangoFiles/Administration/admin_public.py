@@ -10,7 +10,7 @@ from django.utils.translation import gettext, gettext_lazy as _
 from QrcodeCashless.models import Detail, CarteCashless
 
 
-# from boutique.models import Category, Product, Tag, VAT, Event, LandingPageContent, TarifBillet
+# from boutique.models import Category, Product, Tag, VAT, Event, LandingPageContent, Price
 # from solo.admin import SingletonModelAdmin
 
 class PublicAdminSite(AdminSite):

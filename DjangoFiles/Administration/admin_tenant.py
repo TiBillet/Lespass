@@ -4,7 +4,7 @@ from django.contrib.auth.models import Group
 from solo.admin import SingletonModelAdmin
 
 from AuthBillet.models import HumanUser, SuperHumanUser, TermUser
-from BaseBillet.models import Configuration, Event, OptionGenerale, Article, TarifBillet, Reservation, LigneArticle
+from BaseBillet.models import Configuration, Event, OptionGenerale, Product, Price, Reservation, LigneArticle
 from django.contrib.auth.admin import UserAdmin
 
 from Customers.models import Client
@@ -106,7 +106,7 @@ class ConfigurationAdmin(SingletonModelAdmin):
             'fields': (
                 'organisation',
                 'short_description',
-                'adresse',
+                'adress',
                 'phone',
                 'email',
                 'site_web',
@@ -186,24 +186,19 @@ class ReservationAdmin(admin.ModelAdmin):
 
 staff_admin_site.register(Reservation, ReservationAdmin)
 
-class ArticleAdmin(admin.ModelAdmin):
+class ProductAdmin(admin.ModelAdmin):
     list_display = (
         'name',
-        'prix',
-        'stock',
-        'reservation_par_user_max',
-        'vat',
         'publish',
+        'img',
+        'categorie_article',
+        'id_product_stripe',
     )
     list_editable = (
-        'prix',
-        'stock',
-        'reservation_par_user_max',
-        'vat',
         'publish',
     )
 
-staff_admin_site.register(Article, ArticleAdmin)
+staff_admin_site.register(Product, ProductAdmin)
 
 
 
@@ -213,7 +208,7 @@ staff_admin_site.register(LigneArticle, admin.ModelAdmin)
 
 staff_admin_site.register(OptionGenerale, OptionGeneraleAdmin)
 
-staff_admin_site.register(TarifBillet, admin.ModelAdmin)
+staff_admin_site.register(Price, admin.ModelAdmin)
 
 
 class PaiementStripeAdmin(admin.ModelAdmin):
@@ -223,12 +218,8 @@ class PaiementStripeAdmin(admin.ModelAdmin):
         'total',
         'order_date',
         'status',
-        'articles',
     )
     ordering = ('-order_date',)
-    # readonly_fields = (
-    #     'reservations',
-    # )
 
 
 staff_admin_site.register(Paiement_stripe, PaiementStripeAdmin)

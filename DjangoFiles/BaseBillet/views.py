@@ -67,8 +67,8 @@ def creation_de_la_reservation(user: TibilletUser, event: Event, data):
             qty = qty,
         )
 
-    for article in data.get('articles'):
-        qty = data.get('articles')[article]
+    for article in data.get('products'):
+        qty = data.get('products')[article]
         LigneArticle.objects.create(
             reservation = reservation,
             article = article,

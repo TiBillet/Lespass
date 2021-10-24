@@ -13,7 +13,7 @@ Pour en savoir plus : https://www.tibillet.re & https://wiki.tibillet.re
 
 ## Introduction.
 
-TiBillet est en période d'Alpha, et en expérimentation sur plusieurs lieux sur l'ile de la Réunion. Venez nous voir au
+TiBillet est en période de BETA et en expérimentation sur plusieurs lieux sur l'ile de la Réunion. Venez nous voir au
 Bisik, à la Raffinerie, à Vavang'Art et au Manapany Festival !
 
 Le présent dépot ne contient pas encore toutes les sources du projet. La billetterie est en cours de refactoring et les

@@ -3,47 +3,55 @@ import json
 from django.utils.translation import gettext, gettext_lazy as _
 from rest_framework.generics import get_object_or_404
 
-from BaseBillet.models import Event, TarifBillet, Article
+from BaseBillet.models import Event, Price, Product
 
 
-class TarifsSerializer(serializers.ModelSerializer):
+
+
+class ProductSerializer(serializers.ModelSerializer):
     class Meta:
-        model = TarifBillet
+        model = Product
         fields = [
-            'uuid',
+            "uuid",
             "name",
-            "prix",
-            "reservation_par_user_max",
+            "publish",
+            "img",
+            "categorie_article",
+            "prices",
+            "id_product_stripe",
         ]
-        read_only_fields = ['uuid']
-
-
-class ArticleSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Article
-        fields = [
-            'uuid',
-            'name',
-            'prix',
-            'stock',
-            'reservation_par_user_max',
-            'vat',
-            'publish',
-            'img',
-            'categorie_article',
-            'id_product_stripe',
-            'id_price_stripe',
-        ]
+        depth = 1
         read_only_fields = [
             'uuid',
             'id_product_stripe',
+            'prices',
+        ]
+
+class PriceSerializer(serializers.ModelSerializer):
+    product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
+
+    class Meta:
+        model = Price
+        fields = [
+            'uuid',
+            'product',
+            'name',
+            'prix',
+            'vat',
+            'id_price_stripe',
+            'stock',
+            'max_per_user',
+        ]
+
+        read_only_fields = [
+            'uuid',
             'id_price_stripe',
         ]
         depth = 1
 
 
 class EventSerializer(serializers.ModelSerializer):
-    tarifs = TarifsSerializer(
+    products = ProductSerializer(
         many=True,
         read_only=True
     )
@@ -56,8 +64,7 @@ class EventSerializer(serializers.ModelSerializer):
             'short_description',
             'long_description',
             'datetime',
-            'tarifs',
-            'articles',
+            'products',
             'img',
             'reservations',
             'complet',
@@ -65,37 +72,36 @@ class EventSerializer(serializers.ModelSerializer):
         read_only_fields = ['uuid', 'reservations']
         depth = 1
 
+
     def validate(self, attrs):
 
-        tarifs = self.initial_data.get('tarifs')
-        if tarifs:
+        products = self.initial_data.get('products')
+        if products:
             try:
-                tarifs_list = json.loads(tarifs)
+                products_list = json.loads(products)
             except json.decoder.JSONDecodeError as e:
-                raise serializers.ValidationError(_(f'tarifs doit être un json valide : {e}'))
+                raise serializers.ValidationError(_(f'products doit être un json valide : {e}'))
 
-            self.tarif_to_db = []
-            for tarif in tarifs_list:
-                self.tarif_to_db.append(get_object_or_404(TarifBillet, uuid=tarif.get('uuid')))
+            self.products_to_db = []
+            for product in products_list:
+                self.products_to_db.append(get_object_or_404(Product, uuid=product.get('uuid')))
             return super().validate(attrs)
         else:
-            raise serializers.ValidationError(_('tarifs doit être un json valide'))
+            raise serializers.ValidationError(_('products doit être un json valide'))
 
     def save(self, **kwargs):
         instance = super().save(**kwargs)
-        instance.tarifs.clear()
-        for tarif in self.tarif_to_db:
-            instance.tarifs.add(tarif)
+        instance.products.clear()
+        for product in self.products_to_db:
+            instance.products.add(product)
         return instance
 
-
 '''
-[
-    {
-        "uuid": "37a1093f-565d-4b38-858d-680568269d43",
-    },
-    {
-        "uuid": "94d36be2-9bb9-4aa6-ab60-fc76287a1290",
-    }
+
+products = [
+    {"uuid":"9340a9a1-1b90-488e-ab68-7b358b213dd7"},
+    {"uuid":"60db1531-fd0a-4d92-a785-f384e77cd213"}
 ]
+
+
 '''

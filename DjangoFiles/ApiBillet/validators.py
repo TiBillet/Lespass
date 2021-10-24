@@ -1,16 +1,16 @@
 from rest_framework import serializers
 import json
 
-from BaseBillet.models import Event, TarifBillet
+from BaseBillet.models import Event, Price
 
 class BilletSerializer(serializers.ModelSerializer):
     class Meta:
-        model = TarifBillet
+        model = Price
         fields = [
             'uuid',
             "name",
             "prix",
-            "reservation_par_user_max",
+            "max_per_user",
         ]
 
 
@@ -20,7 +20,7 @@ class EventSerializer(serializers.ModelSerializer):
         many=True,
         read_only=True,
     )
-    # billets = serializers.PrimaryKeyRelatedField(queryset=TarifBillet.objects.all(), many=True)
+    # billets = serializers.PrimaryKeyRelatedField(queryset=Price.objects.all(), many=True)
 
     class Meta:
         model = Event
@@ -31,7 +31,7 @@ class EventSerializer(serializers.ModelSerializer):
             'long_description',
             'datetime',
             'billets',
-            # 'articles',
+            # 'products',
             'img',
             # 'reservations',
             'complet',
@@ -49,6 +49,6 @@ class EventSerializer(serializers.ModelSerializer):
     #         billet_to_db = []
     #         for billet in billets_list :
     #             billet_to_db.append(billet.get('uuid'))
-            # value['billets'] = serializers.ManyRelatedField(queryset=TarifBillet.objects.filter(uuid__in=billet_to_db), many=True)
+            # value['billets'] = serializers.ManyRelatedField(queryset=Price.objects.filter(uuid__in=billet_to_db), many=True)
         # return value
 

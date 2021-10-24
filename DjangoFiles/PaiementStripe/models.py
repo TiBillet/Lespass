@@ -41,7 +41,7 @@ class Paiement_stripe(models.Model):
         return self.uuid_8()
 
     def articles(self):
-        return " - ".join([ f"{ligne.article.name} {ligne.qty * ligne.article.prix }€" for ligne in self.lignearticle_set.all() ])
+        return " - ".join([ f"{ligne.product.name} {ligne.qty * ligne.product.prix }€" for ligne in self.lignearticle_set.all()])
 
 
 

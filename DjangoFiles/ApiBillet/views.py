@@ -4,10 +4,10 @@ from django.shortcuts import render
 from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 
-from ApiBillet.serializers import EventSerializer, TarifsSerializer, ArticleSerializer
+from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer
 from AuthBillet.models import TenantAdminPermission
 from Customers.models import Client, Domain
-from BaseBillet.models import Event, TarifBillet, Article
+from BaseBillet.models import Event, Price, Product
 from rest_framework import viewsets, permissions, status
 
 import os
@@ -29,12 +29,12 @@ def new_tenants(schema_name):
 
 class TarifBilletViewSet(viewsets.ViewSet):
     def list(self, request):
-        queryset = TarifBillet.objects.all().order_by('prix')
-        serializer = TarifsSerializer(queryset, many=True, context={'request': request})
+        queryset = Price.objects.all().order_by('prix')
+        serializer = PriceSerializer(queryset, many=True, context={'request': request})
         return Response(serializer.data)
 
     def create(self, request):
-        serializer = TarifsSerializer(data=request.data)
+        serializer = PriceSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -48,15 +48,15 @@ class TarifBilletViewSet(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
-class ArticleViewSet(viewsets.ViewSet):
+class ProductViewSet(viewsets.ViewSet):
 
     def list(self, request):
-        serializer = ArticleSerializer(Article.objects.all(), many=True, context={'request': request})
+        serializer = ProductSerializer(Product.objects.all(), many=True, context={'request': request})
         print(serializer.data)
         return Response(serializer.data)
 
     def create(self, request):
-        serializer = ArticleSerializer(data=request.data)
+        serializer = ProductSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)

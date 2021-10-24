@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.utils import timezone
 from django.utils.translation import ugettext_lazy as _
-from BaseBillet.models import OptionGenerale, Configuration, Event, Article, TarifBillet
+from BaseBillet.models import OptionGenerale, Configuration, Event, Product, Price
 
 
 class ReservationValidator(serializers.Serializer):
@@ -16,7 +16,7 @@ class ReservationValidator(serializers.Serializer):
 
     def validate_articles(self, value):
         value_dict = {}
-        art_obj = Article.objects.all()
+        art_obj = Product.objects.all()
         for couple in value:
             pk, qty = art_obj.get(pk=couple.split(',')[0]), int(couple.split(',')[1])
             value_dict[pk] = qty
@@ -25,14 +25,14 @@ class ReservationValidator(serializers.Serializer):
 
     def validate_billets(self, value):
         value_dict = {}
-        billet_obj = TarifBillet.objects.all()
+        billet_obj = Price.objects.all()
         for couple in value:
             pk, qty = billet_obj.get(pk=couple.split(',')[0]), int(couple.split(',')[1])
             value_dict[pk] = qty
 
         return value_dict
     #
-    # #     if value <= configuration.reservation_par_user_max :
+    # #     if value <= configuration.max_per_user :
     #         return value
     #     else :
-    #         raise serializers.ValidationError(_(f"Pas plus de {configuration.reservation_par_user_max} places en même temps."))
+    #         raise serializers.ValidationError(_(f"Pas plus de {configuration.max_per_user} places en même temps."))
