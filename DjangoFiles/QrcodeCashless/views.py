@@ -10,7 +10,7 @@ from rest_framework.generics import get_object_or_404
 from django.views import View
 from rest_framework import status
 
-from BaseBillet.models import Configuration, Product, LigneArticle
+from BaseBillet.models import Configuration, Product, LigneArticle, Price
 from PaiementStripe.models import Paiement_stripe
 from PaiementStripe.views import creation_paiement_stripe
 from QrcodeCashless.models import CarteCashless
@@ -19,6 +19,7 @@ from django.db.models.signals import pre_save
 from django.dispatch import receiver
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -114,7 +115,7 @@ class index_scan(View):
                 request,
                 self.template_name,
                 {
-                    'tarifs_adhesion': Product.objects.filter(categorie_article=Product.ADHESION).order_by('-prix'),
+                    'tarifs_adhesion': Price.objects.filter(product__categorie_article=Product.ADHESION),
                     'adhesion_obligatoire': configuration.adhesion_obligatoire,
                     'history': json_reponse.get('history'),
                     'carte_resto': configuration.carte_restaurant,
@@ -143,7 +144,7 @@ class index_scan(View):
             return HttpResponse('Forbidden', status=status.HTTP_403_FORBIDDEN)
         else:
             return HttpResponse("Serveur non disponible. Merci de revenir ultérieurement.",
-                                   status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                                status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
     def post(self, request, uuid):
         carte = check_carte_local(uuid)
@@ -157,37 +158,43 @@ class index_scan(View):
         montant_recharge = data.get('montant_recharge')
 
         # c'est un paiement
-        if ( pk_adhesion or montant_recharge ) and data.get('email'):
+        if (pk_adhesion or montant_recharge) and data.get('email'):
             # montant_recharge = data.get('montant_recharge')
             ligne_articles = []
             metadata = {}
             metadata['recharge_carte_uuid'] = str(carte.uuid)
+
             if montant_recharge:
-                art, created = Product.objects.get_or_create(
-                    name="Recharge Carte",
-                    prix=1,
+                product, created = Product.objects.get_or_create(
+                    name=f"Recharge Carte {carte.detail.origine.name} v{carte.detail.generation}",
                     categorie_article=Product.RECHARGE_CASHLESS,
+                    img=carte.detail.img,
+                )
+
+                price, created = Price.objects.get_or_create(
+                    product=product,
+                    name=f"{montant_recharge}€",
+                    prix=int(montant_recharge),
                 )
 
                 ligne_article_recharge = LigneArticle.objects.create(
-                    article=art,
-                    qty=montant_recharge,
-                    carte=carte,
-                )
-                ligne_articles.append(ligne_article_recharge)
-
-
-                metadata['recharge_carte_montant'] = str(montant_recharge)
-
-            if pk_adhesion:
-                art_adhesion = Product.objects.get(pk=data.get('pk_adhesion'))
-                ligne_article_recharge = LigneArticle.objects.create(
-                    article=art_adhesion,
+                    price=price,
                     qty=1,
                     carte=carte,
                 )
                 ligne_articles.append(ligne_article_recharge)
-                metadata['pk_adhesion'] = str(art_adhesion.pk)
+
+                metadata['recharge_carte_montant'] = str(montant_recharge)
+
+            if pk_adhesion:
+                price_adhesion = Price.objects.get(pk=data.get('pk_adhesion'))
+                ligne_article_recharge = LigneArticle.objects.create(
+                    price=price_adhesion,
+                    qty=1,
+                    carte=carte,
+                )
+                ligne_articles.append(ligne_article_recharge)
+                metadata['pk_adhesion'] = str(price_adhesion.pk)
 
             if len(ligne_articles) > 0:
                 new_paiement_stripe = creation_paiement_stripe(
@@ -262,17 +269,17 @@ def changement_paid_to_valid(sender, instance: Paiement_stripe, update_fields=No
             data_pour_serveur_cashless = {'uuid_commande': paiementStripe.uuid}
 
             for ligne_article in paiementStripe.lignearticle_set.all():
-                if ligne_article.carte :
+                if ligne_article.carte:
                     data_pour_serveur_cashless['uuid'] = ligne_article.carte.uuid
 
-                if ligne_article.product.categorie_article == Product.RECHARGE_CASHLESS :
-                    data_pour_serveur_cashless['recharge_qty'] = float(ligne_article.qty)
+                if ligne_article.price.product.categorie_article == Product.RECHARGE_CASHLESS:
+                    data_pour_serveur_cashless['recharge_qty'] = ligne_article.price.prix
 
-                if ligne_article.product.categorie_article == Product.ADHESION :
-                    data_pour_serveur_cashless['tarif_adhesion'] = ligne_article.product.prix
+                if ligne_article.price.product.categorie_article == Product.ADHESION:
+                    data_pour_serveur_cashless['tarif_adhesion'] = ligne_article.price.prix
 
             # si il y a autre chose que uuid_commande :
-            if len(data_pour_serveur_cashless) > 1 :
+            if len(data_pour_serveur_cashless) > 1:
                 sess = requests.Session()
                 configuration = Configuration.get_solo()
                 r = sess.post(

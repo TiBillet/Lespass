@@ -264,7 +264,7 @@
                     {% for tarif in tarifs_adhesion %}
                         <ul class="actions">
                             <li><a id="adh_{{ tarif.name | slugify }}" href="#paiementadhesionenligne"
-                                   class="button primary field">{{ tarif.name }} {{ tarif.prix | floatformat:2 | intcomma }}€</a>
+                                   class="button primary field">{{ tarif.product.name }} {{ tarif.name }} {{ tarif.prix | floatformat:2 | intcomma }}€</a>
                             </li>
                         </ul>
                     {% endfor %}

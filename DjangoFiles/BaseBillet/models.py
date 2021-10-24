@@ -157,7 +157,6 @@ class Product(models.Model):
     def __str__(self):
         return f"{self.name}"
 
-    '''
     def get_id_product_stripe(self):
         configuration = Configuration.get_solo()
         if configuration.stripe_api_key and not self.id_product_stripe:
@@ -180,6 +179,7 @@ class Product(models.Model):
             )
             self.id_product_stripe = product.id
             self.save()
+
             return self.id_product_stripe
 
         elif self.id_product_stripe:
@@ -187,35 +187,9 @@ class Product(models.Model):
         else:
             return False
 
-    def get_id_price_stripe(self):
-        configuration = Configuration.get_solo()
-        if configuration.stripe_api_key and not self.id_price_stripe:
-            if configuration.stripe_mode_test:
-                stripe.api_key = configuration.stripe_test_api_key
-            else:
-                stripe.api_key = configuration.stripe_api_key
-
-            price = stripe.Price.create(
-                unit_amount=int("{0:.2f}".format(self.prix).replace('.', '')),
-                currency="eur",
-                product=self.get_id_product_stripe(),
-            )
-
-            self.id_price_stripe = price.id
-            self.save()
-            return self.id_price_stripe
-
-        elif self.id_price_stripe:
-            return self.id_price_stripe
-        else:
-            return False
-
     def reset_id_stripe(self):
-        self.id_price_stripe = None
         self.id_product_stripe = None
         self.save()
-    '''
-
 
 class Price(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
@@ -247,7 +221,35 @@ class Price(models.Model):
         return range(self.max_per_user + 1)
 
     def __str__(self):
-        return f"{self.name}"
+        return f"{self.product.name} {self.name}"
+
+
+    def get_id_price_stripe(self):
+        configuration = Configuration.get_solo()
+        if configuration.stripe_api_key and not self.id_price_stripe:
+            if configuration.stripe_mode_test:
+                stripe.api_key = configuration.stripe_test_api_key
+            else:
+                stripe.api_key = configuration.stripe_api_key
+
+            price = stripe.Price.create(
+                unit_amount=int("{0:.2f}".format(self.prix).replace('.', '')),
+                currency="eur",
+                product=self.product.get_id_product_stripe(),
+            )
+
+            self.id_price_stripe = price.id
+            self.save()
+            return self.id_price_stripe
+
+        elif self.id_price_stripe:
+            return self.id_price_stripe
+        else:
+            return False
+
+    def reset_id_stripe(self):
+        self.id_price_stripe = None
+        self.save()
 
 
 class Event(models.Model):
@@ -366,7 +368,8 @@ class LigneArticle(models.Model):
     uuid = models.UUIDField(primary_key=True, db_index=True, default=uuid.uuid4)
     datetime = models.DateTimeField(auto_now=True)
 
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, blank=True, null=True)
+    price = models.ForeignKey(Price, on_delete=models.CASCADE)
+
     qty = models.SmallIntegerField()
 
     reservation = models.ForeignKey(Reservation, on_delete=models.CASCADE, blank=True, null=True)

@@ -120,7 +120,6 @@ class ConfigurationAdmin(SingletonModelAdmin):
         ('Adhésions', {
             'fields': (
                 'adhesion_obligatoire',
-                'cadeau_adhesion',
             ),
         }),
         ('Paiements', {
