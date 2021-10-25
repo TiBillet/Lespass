@@ -58,6 +58,8 @@ class Configuration(SingletonModel):
 
     adhesion_obligatoire = models.BooleanField(default=False)
 
+    name_required_for_ticket = models.BooleanField(default=False,verbose_name=_("Billet nominatifs"))
+
     carte_restaurant = StdImageField(upload_to='images/',
                                      null=True, blank=True,
                                      validators=[MaxSizeValidator(1920, 1920)],
@@ -116,7 +118,6 @@ class Configuration(SingletonModel):
         null=True,
         verbose_name=_("Clé d'API du serveur cashless")
     )
-
 
 
 class Product(models.Model):
@@ -191,6 +192,7 @@ class Product(models.Model):
         self.id_product_stripe = None
         self.save()
 
+
 class Price(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
 
@@ -223,7 +225,6 @@ class Price(models.Model):
     def __str__(self):
         return f"{self.product.name} {self.name}"
 
-
     def get_id_price_stripe(self):
         configuration = Configuration.get_solo()
         if configuration.stripe_api_key and not self.id_price_stripe:
@@ -236,6 +237,7 @@ class Price(models.Model):
                 unit_amount=int("{0:.2f}".format(self.prix).replace('.', '')),
                 currency="eur",
                 product=self.product.get_id_product_stripe(),
+                nickname= self.name,
             )
 
             self.id_price_stripe = price.id
@@ -306,7 +308,8 @@ class Event(models.Model):
 
 
 class Reservation(models.Model):
-    uuid = models.UUIDField(primary_key=True, db_index=True, default=uuid.uuid4)
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
+    datetime = models.DateTimeField(auto_now=True)
 
     user_commande = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
 
@@ -314,46 +317,40 @@ class Reservation(models.Model):
                               on_delete=models.PROTECT,
                               related_name="reservation")
 
-    ANNULEE, MAIL_NON_VALIDEE, NON_PAYEE, VALIDEE, PAYEE = 'NAN', 'MNV', 'NPA', 'VAL', 'PAY'
+    CANCELED, UNPAID, PAID, VALID,  = 'C', 'N', 'P', 'V'
     TYPE_CHOICES = [
-        (ANNULEE, _('Annulée')),
-        (MAIL_NON_VALIDEE, _('Email non validé')),
-        (NON_PAYEE, _('Non payée')),
-        (VALIDEE, _('Validée')),
-        (PAYEE, _('Payée')),
+        (CANCELED, _('Annulée')),
+        (UNPAID, _('Non payée')),
+        (PAID, _('Payée')),
+        (VALID, _('Validée')),
     ]
 
-    status = models.CharField(max_length=3, choices=TYPE_CHOICES, default=NON_PAYEE,
+    status = models.CharField(max_length=3, choices=TYPE_CHOICES, default=UNPAID,
                               verbose_name=_("Status de la réservation"))
 
     options = models.ManyToManyField(OptionGenerale)
 
-    def __str__(self):
-        return self.user_commande.email
-
     def user_mail(self):
         return self.user_commande.email
-
-    def total_billet(self):
-        total = 0
-        for ligne in self.lignearticle_set.all():
-            if ligne.billet:
-                total += ligne.qty
-        return total
-
-    def total_prix(self):
-        total = 0
-        for ligne in self.lignearticle_set.all():
-            if ligne.product:
-                total += ligne.qty * ligne.product.prix
-            if ligne.billet:
-                total += ligne.qty * ligne.billet.prix
-
-        return total
-
-    def _options_(self):
-        return " - ".join([f"{option.name}" for option in self.options.all()])
-
+    #
+    # def total_billet(self):
+    #     total = 0
+    #     for ligne in self.paiements.all():
+    #         if ligne.billet:
+    #             total += ligne.qty
+    #     return total
+    #
+    # def total_prix(self):
+    #     total = 0
+    #     for ligne in self.paiements.all():
+    #         if ligne.product:
+    #             total += ligne.qty * ligne.product.prix
+    #
+    #     return total
+    #
+    # def _options_(self):
+    #     return " - ".join([f"{option.name}" for option in self.options.all()])
+    #
 
 @receiver(post_save, sender=Reservation)
 def verif_mail_valide(sender, instance: Reservation, created, **kwargs):
@@ -364,6 +361,25 @@ def verif_mail_valide(sender, instance: Reservation, created, **kwargs):
             instance.save()
 
 
+class Ticket(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
+
+    first_name = models.CharField(max_length=200)
+    last_name = models.CharField(max_length=200)
+
+    reservation = models.ForeignKey(Reservation, on_delete=models.CASCADE, related_name="tickets")
+
+    NOT_ACTIV, NOT_SCANNED, SCANNED = 'N', 'K', 'S'
+    SCAN_CHOICES = [
+        (NOT_ACTIV, _('Non actif')),
+        (NOT_SCANNED, _('Non scanné')),
+        (SCANNED, _('scanné')),
+    ]
+
+    scan_status = models.CharField(max_length=1, choices=SCAN_CHOICES, default=NOT_ACTIV,
+                                   verbose_name=_("Status du scan"))
+
+
 class LigneArticle(models.Model):
     uuid = models.UUIDField(primary_key=True, db_index=True, default=uuid.uuid4)
     datetime = models.DateTimeField(auto_now=True)
@@ -372,7 +388,7 @@ class LigneArticle(models.Model):
 
     qty = models.SmallIntegerField()
 
-    reservation = models.ForeignKey(Reservation, on_delete=models.CASCADE, blank=True, null=True)
+    reservation = models.ForeignKey(Reservation, on_delete=models.CASCADE, blank=True, null=True, related_name='paiements')
     carte = models.ForeignKey(CarteCashless, on_delete=models.PROTECT, blank=True, null=True)
 
     paiement_stripe = models.ForeignKey(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True)

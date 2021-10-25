@@ -12,7 +12,6 @@ class ReservationValidator(serializers.Serializer):
     radio_generale = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(), many=True)
     option_checkbox = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(), many=True)
     articles = serializers.ListField()
-    billets = serializers.ListField()
 
     def validate_articles(self, value):
         value_dict = {}
@@ -22,17 +21,3 @@ class ReservationValidator(serializers.Serializer):
             value_dict[pk] = qty
 
         return value_dict
-
-    def validate_billets(self, value):
-        value_dict = {}
-        billet_obj = Price.objects.all()
-        for couple in value:
-            pk, qty = billet_obj.get(pk=couple.split(',')[0]), int(couple.split(',')[1])
-            value_dict[pk] = qty
-
-        return value_dict
-    #
-    # #     if value <= configuration.max_per_user :
-    #         return value
-    #     else :
-    #         raise serializers.ValidationError(_(f"Pas plus de {configuration.max_per_user} places en même temps."))

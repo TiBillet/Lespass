@@ -4,10 +4,11 @@ from django.shortcuts import render
 from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 
-from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer
+from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
+    ReservationValidator
 from AuthBillet.models import TenantAdminPermission
 from Customers.models import Client, Domain
-from BaseBillet.models import Event, Price, Product
+from BaseBillet.models import Event, Price, Product, Reservation
 from rest_framework import viewsets, permissions, status
 
 import os
@@ -112,4 +113,24 @@ class EventsViewSet(viewsets.ViewSet):
             permission_classes = [permissions.AllowAny]
         else:
             permission_classes = [TenantAdminPermission]
+        return [permission() for permission in permission_classes]
+
+
+class ReservationViewset(viewsets.ViewSet):
+    def list(self, request):
+        queryset = Reservation.objects.all().order_by('-datetime')
+        serializer = ReservationSerializer(queryset, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    def create(self, request):
+        print(request.data)
+        validator = ReservationValidator(data=request.data, context={'request': request})
+        if validator.is_valid():
+            # serializer.save()
+            return Response(validator.data, status=status.HTTP_201_CREATED)
+        return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+    def get_permissions(self):
+        permission_classes = [TenantAdminPermission]
         return [permission() for permission in permission_classes]

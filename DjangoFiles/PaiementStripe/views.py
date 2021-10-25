@@ -103,8 +103,6 @@ class creation_paiement_stripe():
         return line_items
 
     def _checkout_session(self):
-
-
         checkout_session = stripe.checkout.Session.create(
             success_url=f'{self.absolute_domain}/stripe/return/{self.paiement_stripe_db.uuid}',
             cancel_url=f'{self.absolute_domain}/stripe/return/{self.paiement_stripe_db.uuid}',

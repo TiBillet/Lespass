@@ -4,7 +4,7 @@ from django.contrib.auth.models import Group
 from solo.admin import SingletonModelAdmin
 
 from AuthBillet.models import HumanUser, SuperHumanUser, TermUser
-from BaseBillet.models import Configuration, Event, OptionGenerale, Product, Price, Reservation, LigneArticle
+from BaseBillet.models import Configuration, Event, OptionGenerale, Product, Price, Reservation, LigneArticle, Ticket
 from django.contrib.auth.admin import UserAdmin
 
 from Customers.models import Client
@@ -133,6 +133,7 @@ class ConfigurationAdmin(SingletonModelAdmin):
         ('Billetterie', {
             'fields': (
                 'activer_billetterie',
+                'name_required_for_ticket',
                 'jauge_max',
                 'option_generale_radio',
                 'option_generale_checkbox',
@@ -175,15 +176,27 @@ class OptionGeneraleAdmin(admin.ModelAdmin):
 
 class ReservationAdmin(admin.ModelAdmin):
     list_display = (
-        'user_mail',
-        'total_billet',
-        '_options_',
-        'total_prix',
-        'status'
+        'datetime',
+        'user_commande',
+        'event',
+        'status',
     )
     readonly_fields = list_display
 
 staff_admin_site.register(Reservation, ReservationAdmin)
+
+
+class TicketAdmin(admin.ModelAdmin):
+    list_display = [
+        'first_name',
+        'last_name',
+        'reservation',
+        'scan_status',
+    ]
+    readonly_fields = list_display
+
+staff_admin_site.register(Ticket, TicketAdmin)
+
 
 class ProductAdmin(admin.ModelAdmin):
     list_display = (
