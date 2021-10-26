@@ -26,6 +26,7 @@ class creation_paiement_stripe():
                  email_paiement: str,
                  liste_ligne_article: list,
                  metadata: dict,
+                 source: str,
                  absolute_domain: str
                  ) -> None:
 
@@ -33,6 +34,7 @@ class creation_paiement_stripe():
         self.liste_ligne_article = liste_ligne_article
         self.email_paiement = email_paiement
         self.metadata = metadata
+        self.source = source
 
         self.configuration = Configuration.get_solo()
         self.user = self._user_paiement()
@@ -73,9 +75,10 @@ class creation_paiement_stripe():
             user=self.user,
             total=self.total,
             metadata_stripe=self.metadata_json,
+            source=self.source,
         )
 
-        for ligne_article in self.liste_ligne_article :
+        for ligne_article in self.liste_ligne_article:
             ligne_article: LigneArticle
             ligne_article.paiement_stripe = paiementStripeDb
             ligne_article.save()
@@ -123,7 +126,7 @@ class creation_paiement_stripe():
 
     def is_valid(self):
         if self.checkout_session.id and \
-            self.checkout_session.url :
+                self.checkout_session.url:
             return True
 
         else:
@@ -133,26 +136,26 @@ class creation_paiement_stripe():
         return HttpResponseRedirect(self.checkout_session.url)
 
 
-
 # On vérifie que les métatada soient les meme dans la DB et chez Stripe.
 def metatadata_valid(paiement_stripe_db: Paiement_stripe, checkout_session):
-        metadata_stripe_json = checkout_session.metadata
-        metadata_stripe = json.loads(str(metadata_stripe_json))
+    metadata_stripe_json = checkout_session.metadata
+    metadata_stripe = json.loads(str(metadata_stripe_json))
 
-        metadata_db_json = paiement_stripe_db.metadata_stripe
-        metadata_db = json.loads(metadata_db_json)
+    metadata_db_json = paiement_stripe_db.metadata_stripe
+    metadata_db = json.loads(metadata_db_json)
 
-        try:
-            assert metadata_stripe == metadata_db
-            assert set(metadata_db.keys()) == set(metadata_stripe.keys())
-            for key in set(metadata_stripe.keys()):
-                assert metadata_db[key] == metadata_stripe[key]
-            return True
-        except:
-            logger.error(f"{timezone.now()} "
-                         f"retour_stripe {paiement_stripe_db.uuid} : "
-                         f"metadata ne correspondent pas : {metadata_stripe} {metadata_db}")
-            return False
+    try:
+        assert metadata_stripe == metadata_db
+        assert set(metadata_db.keys()) == set(metadata_stripe.keys())
+        for key in set(metadata_stripe.keys()):
+            assert metadata_db[key] == metadata_stripe[key]
+        return True
+    except:
+        logger.error(f"{timezone.now()} "
+                     f"retour_stripe {paiement_stripe_db.uuid} : "
+                     f"metadata ne correspondent pas : {metadata_stripe} {metadata_db}")
+        return False
+
 
 class retour_stripe(View):
 
@@ -170,8 +173,8 @@ class retour_stripe(View):
 
             checkout_session = stripe.checkout.Session.retrieve(paiement_stripe.id_stripe)
 
-            # on vérfie que les metatada soient cohérente. #NTUI !
-            if metatadata_valid(paiement_stripe , checkout_session):
+            # on vérfie que les metatada soient cohérentes. #NTUI !
+            if metatadata_valid(paiement_stripe, checkout_session):
 
                 if checkout_session.payment_status == "unpaid":
                     paiement_stripe.status = Paiement_stripe.PENDING
@@ -181,7 +184,14 @@ class retour_stripe(View):
 
                 elif checkout_session.payment_status == "paid":
                     paiement_stripe.status = Paiement_stripe.PAID
-                    # le .save() lance le process pre_save dans le view QrcodeCashless qui peut modifier son status
+
+                    # le .save() lance le process pre_save BaseBillet.models.send_to_cashless
+                    # qui modifie le status de chaque ligne
+                    # et envoie les informations au serveur cashless.
+                    # si validé par le serveur cashless, alors la ligne sera VALID.
+                    # Si toute les lignes sont VALID, le paiement_stripe sera aussi VALID
+                    # grace au post_save BaseBillet.models.check_status_stripe
+
                     paiement_stripe.save()
 
                 else:
@@ -192,19 +202,28 @@ class retour_stripe(View):
 
         # on vérifie que le status n'ai pas changé
         paiement_stripe.refresh_from_db()
-        if paiement_stripe.status == Paiement_stripe.VALID:
-            for ligne_article in paiement_stripe.lignearticle_set.all():
-                if ligne_article.carte :
-                    messages.success(request, f"Paiement validé. Merci !")
-                    return HttpResponseRedirect(f"/qr/{ligne_article.carte.uuid}#success")
 
-        else :
-            for ligne_article in paiement_stripe.lignearticle_set.all():
-                if ligne_article.carte :
-                    messages.error(request, f"Un problème de validation de paiement a été detecté. Merci de vérifier votre moyen de paiement ou contactez un responsable.")
-                    return HttpResponseRedirect(f"/qr/{ligne_article.carte.uuid}#error")
+        # si c'est depuis le qrcode, on renvoie vers la vue mobile :
+        if paiement_stripe.source == Paiement_stripe.QRCODE :
+            if paiement_stripe.status == Paiement_stripe.VALID :
+                # on boucle ici pour récuperer l'uuid de la carte.
+                for ligne_article in paiement_stripe.lignearticle_set.all():
+                    if ligne_article.carte:
+                        messages.success(request, f"Paiement validé. Merci !")
+                        return HttpResponseRedirect(f"/qr/{ligne_article.carte.uuid}#success")
 
-            return HttpResponse('Un problème de validation de paiement a été detecté. Merci de vérifier votre moyen de paiement ou contactez un responsable.')
+            else :
+                # on boucle ici pour récuperer l'uuid de la carte.
+                for ligne_article in paiement_stripe.lignearticle_set.all():
+                    if ligne_article.carte:
+                        messages.error(request,
+                                       f"Un problème de validation de paiement a été detecté. "
+                                       f"Merci de vérifier votre moyen de paiement ou contactez un responsable.")
+                        return HttpResponseRedirect(f"/qr/{ligne_article.carte.uuid}#error")
+
+        else:
+            return HttpResponse(
+                'Un problème de validation de paiement a été detecté. Merci de vérifier votre moyen de paiement ou contactez un responsable.')
             # return HttpResponseRedirect("/")
 
 

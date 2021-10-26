@@ -241,7 +241,6 @@ class ReservationValidator(serializers.Serializer):
         lignes_article = []
         for price in self.prices_list:
             ligne_article = LigneArticle.objects.create(
-                reservation=reservation,
                 price=price.get('price'),
                 qty=price.get('qty'),
             )
@@ -264,6 +263,8 @@ class ReservationValidator(serializers.Serializer):
         )
 
         if new_paiement_stripe.is_valid():
+            reservation.paiement = new_paiement_stripe.paiement_stripe_db
+            reservation.save()
             print(new_paiement_stripe.checkout_session.stripe_id)
             # return new_paiement_stripe.redirect_to_stripe()
             self.checkout_session = new_paiement_stripe.checkout_session

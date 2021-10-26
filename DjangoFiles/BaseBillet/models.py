@@ -1,11 +1,14 @@
 import uuid
 
+import requests
 from django.contrib.auth import get_user_model
 from django.db import models
 
 # Create your models here.
-from django.db.models.signals import post_save
+from django.db.models import Q
+from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
+from django.utils import timezone
 from solo.models import SingletonModel
 from django.utils.translation import ugettext_lazy as _
 from stdimage import StdImageField
@@ -328,11 +331,14 @@ class Reservation(models.Model):
     status = models.CharField(max_length=3, choices=TYPE_CHOICES, default=UNPAID,
                               verbose_name=_("Status de la réservation"))
 
+    paiement = models.OneToOneField(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True, related_name='reservation')
+
     options = models.ManyToManyField(OptionGenerale)
 
     def user_mail(self):
         return self.user_commande.email
-    #
+
+
     # def total_billet(self):
     #     total = 0
     #     for ligne in self.paiements.all():
@@ -388,7 +394,81 @@ class LigneArticle(models.Model):
 
     qty = models.SmallIntegerField()
 
-    reservation = models.ForeignKey(Reservation, on_delete=models.CASCADE, blank=True, null=True, related_name='paiements')
     carte = models.ForeignKey(CarteCashless, on_delete=models.PROTECT, blank=True, null=True)
 
     paiement_stripe = models.ForeignKey(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True)
+
+    CANCELED, UNPAID, PAID, VALID,  = 'C', 'N', 'P', 'V'
+    TYPE_CHOICES = [
+        (CANCELED, _('Annulée')),
+        (UNPAID, _('Non payée')),
+        (PAID, _('Payée')),
+        (VALID, _('Validée par serveur cashless')),
+    ]
+
+    status = models.CharField(max_length=3, choices=TYPE_CHOICES, default=UNPAID,
+                              verbose_name=_("Status de ligne article"))
+
+    def status_stripe(self):
+        if self.paiement_stripe:
+            return self.paiement_stripe.status
+        else:
+            return _('no stripe send')
+
+
+@receiver(post_save, sender=LigneArticle)
+def check_status_stripe(sender, instance: LigneArticle, created, **kwargs):
+    if instance.paiement_stripe :
+        lignes_dans_paiement_stripe = instance.paiement_stripe.lignearticle_set.all()
+        if len(lignes_dans_paiement_stripe) == len(lignes_dans_paiement_stripe.filter(status=LigneArticle.VALID)):
+            # toute les lignes d'article sont VALID
+            # on passe le status du paiement stripe en VALID
+            instance.paiement_stripe.status = Paiement_stripe.VALID
+            instance.paiement_stripe.save()
+
+
+
+
+@receiver(pre_save, sender=Paiement_stripe)
+def send_to_cashless(sender, instance: Paiement_stripe, update_fields=None, **kwargs):
+    # si l'instance vient d'être créé, ne rien faire :
+    if instance.pk is None:
+        pass
+    else:
+        paiementStripe = instance
+        if paiementStripe.status == Paiement_stripe.PAID:
+            data_pour_serveur_cashless = {'uuid_commande': paiementStripe.uuid}
+
+            for ligne_article in paiementStripe.lignearticle_set.all():
+                if ligne_article.carte:
+                    data_pour_serveur_cashless['uuid'] = ligne_article.carte.uuid
+
+                if ligne_article.price.product.categorie_article == Product.RECHARGE_CASHLESS:
+                    data_pour_serveur_cashless['recharge_qty'] = ligne_article.price.prix
+
+                if ligne_article.price.product.categorie_article == Product.ADHESION:
+                    data_pour_serveur_cashless['tarif_adhesion'] = ligne_article.price.prix
+
+            # si il y a autre chose que uuid_commande :
+            if len(data_pour_serveur_cashless) > 1:
+                sess = requests.Session()
+                configuration = Configuration.get_solo()
+                r = sess.post(
+                    f'{configuration.server_cashless}/api/billetterie_endpoint',
+                    headers={
+                        'Authorization': f'Api-Key {configuration.key_cashless}'
+                    },
+                    data=data_pour_serveur_cashless,
+                )
+
+                sess.close()
+                print(
+                    f"{timezone.now()} demande au serveur cashless pour un rechargement. réponse : {r.status_code} ")
+
+                if r.status_code == 200:
+                    # la commande a été envoyé au serveur cashless et validé.
+                    for ligne_article in paiementStripe.lignearticle_set.filter(
+                            Q(price__product__categorie_article=Product.RECHARGE_CASHLESS) |
+                            Q(price__product__categorie_article=Product.ADHESION)):
+                        ligne_article.status = LigneArticle.VALID
+                        ligne_article.save()

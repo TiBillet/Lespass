@@ -3,6 +3,7 @@ from datetime import datetime
 import requests, json
 from django.contrib import messages
 from django.db import connection
+from django.db.models import Q
 from django.http import HttpResponseRedirect, HttpResponse, Http404
 from django.shortcuts import render
 from django.utils import timezone
@@ -201,6 +202,7 @@ class index_scan(View):
                     email_paiement=data.get('email'),
                     liste_ligne_article=ligne_articles,
                     metadata=metadata,
+                    source=Paiement_stripe.QRCODE,
                     absolute_domain=request.build_absolute_uri().partition('/qr')[0],
                 )
 
@@ -256,44 +258,3 @@ class index_scan(View):
             else:
                 messages.error(request, f'Erreur {r.status_code} {r.text}')
                 return HttpResponseRedirect(f'#erreur')
-
-
-@receiver(pre_save, sender=Paiement_stripe)
-def changement_paid_to_valid(sender, instance: Paiement_stripe, update_fields=None, **kwargs):
-    # si l'instance vient d'être créé, ne rien faire :
-    if instance.pk is None:
-        pass
-    else:
-        paiementStripe = instance
-        if paiementStripe.status == Paiement_stripe.PAID:
-            data_pour_serveur_cashless = {'uuid_commande': paiementStripe.uuid}
-
-            for ligne_article in paiementStripe.lignearticle_set.all():
-                if ligne_article.carte:
-                    data_pour_serveur_cashless['uuid'] = ligne_article.carte.uuid
-
-                if ligne_article.price.product.categorie_article == Product.RECHARGE_CASHLESS:
-                    data_pour_serveur_cashless['recharge_qty'] = ligne_article.price.prix
-
-                if ligne_article.price.product.categorie_article == Product.ADHESION:
-                    data_pour_serveur_cashless['tarif_adhesion'] = ligne_article.price.prix
-
-            # si il y a autre chose que uuid_commande :
-            if len(data_pour_serveur_cashless) > 1:
-                sess = requests.Session()
-                configuration = Configuration.get_solo()
-                r = sess.post(
-                    f'{configuration.server_cashless}/api/billetterie_endpoint',
-                    headers={
-                        'Authorization': f'Api-Key {configuration.key_cashless}'
-                    },
-                    data=data_pour_serveur_cashless,
-                )
-
-                sess.close()
-                print(
-                    f"{timezone.now()} demande au serveur cashless pour un rechargement. réponse : {r.status_code} ")
-
-                if r.status_code == 200:
-                    # la commande a été envoyé au serveur cashless et validé.
-                    paiementStripe.status = Paiement_stripe.VALID

@@ -214,10 +214,6 @@ staff_admin_site.register(Product, ProductAdmin)
 
 
 
-staff_admin_site.register(LigneArticle, admin.ModelAdmin)
-
-
-
 staff_admin_site.register(OptionGenerale, OptionGeneraleAdmin)
 
 staff_admin_site.register(Price, admin.ModelAdmin)
@@ -230,6 +226,7 @@ class PaiementStripeAdmin(admin.ModelAdmin):
         'total',
         'order_date',
         'status',
+        'source',
     )
     ordering = ('-order_date',)
 
@@ -237,4 +234,16 @@ class PaiementStripeAdmin(admin.ModelAdmin):
 staff_admin_site.register(Paiement_stripe, PaiementStripeAdmin)
 
 
+class LigneArticleAdmin(admin.ModelAdmin):
+    list_display = (
+        'datetime',
+        'price',
+        'qty',
+        'carte',
+        'status',
+        'paiement_stripe',
+        'status_stripe'
+    )
+    ordering = ('-datetime',)
 
+staff_admin_site.register(LigneArticle, LigneArticleAdmin)

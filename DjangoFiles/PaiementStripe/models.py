@@ -1,6 +1,8 @@
 from django.db import models
 from django.contrib.postgres.fields import JSONField
 import uuid
+from django.utils.translation import gettext, gettext_lazy as _
+
 # Create your models here.
 from TiBillet import settings
 
@@ -20,7 +22,7 @@ class Paiement_stripe(models.Model):
 
     NON, OPEN, PENDING, EXPIRE, PAID, VALID, CANCELED = 'N', 'O', 'W', 'E', 'P', 'V', 'C'
     STATUT_CHOICES = (
-        (NON, 'Lien de paiement non crée'),
+        (NON, 'Lien de paiement non créé'),
         (OPEN, 'Envoyée a Stripe'),
         (PENDING, 'En attente de paiement'),
         (EXPIRE, 'Expiré'),
@@ -31,8 +33,14 @@ class Paiement_stripe(models.Model):
 
     status = models.CharField(max_length=1, choices=STATUT_CHOICES, default=NON, verbose_name="Statut de la commande")
 
-    total = models.FloatField(default=0)
+    QRCODE, BILLETTERIE = 'Q', 'B'
+    SOURCE_CHOICES = (
+        (QRCODE, _('Depuis scan QR-Code')),
+        (BILLETTERIE, _('Depuis billetterie')),
+    )
+    source = models.CharField(max_length=1, choices=SOURCE_CHOICES, default=BILLETTERIE, verbose_name="Source de la commande")
 
+    total = models.FloatField(default=0)
 
     def uuid_8(self):
         return f"{self.uuid}".partition('-')[0]
@@ -41,8 +49,8 @@ class Paiement_stripe(models.Model):
         return self.uuid_8()
 
     def articles(self):
-        return " - ".join([ f"{ligne.product.name} {ligne.qty * ligne.product.prix }€" for ligne in self.lignearticle_set.all()])
-
+        return " - ".join(
+            [f"{ligne.product.name} {ligne.qty * ligne.product.prix}€" for ligne in self.lignearticle_set.all()])
 
 
 ''' RECEIVER PRESAVE DANS LE VIEW QRCODECASHELESS
