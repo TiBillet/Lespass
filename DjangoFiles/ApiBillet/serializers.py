@@ -8,6 +8,7 @@ from rest_framework.generics import get_object_or_404
 import PaiementStripe
 from AuthBillet.models import TibilletUser, HumanUser
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket
+from PaiementStripe.models import Paiement_stripe
 from PaiementStripe.views import creation_paiement_stripe
 
 
@@ -259,6 +260,7 @@ class ReservationValidator(serializers.Serializer):
             email_paiement=self.user_commande.email,
             liste_ligne_article=lignes_article,
             metadata=metadata,
+            source=Paiement_stripe.BILLETTERIE,
             absolute_domain=self.context.get('request').build_absolute_uri().partition('/api')[0],
         )
 
