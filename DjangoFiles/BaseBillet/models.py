@@ -20,6 +20,10 @@ from QrcodeCashless.models import CarteCashless
 from TiBillet import settings
 import stripe
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class OptionGenerale(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
@@ -61,7 +65,7 @@ class Configuration(SingletonModel):
 
     adhesion_obligatoire = models.BooleanField(default=False)
 
-    name_required_for_ticket = models.BooleanField(default=False,verbose_name=_("Billet nominatifs"))
+    name_required_for_ticket = models.BooleanField(default=False, verbose_name=_("Billet nominatifs"))
 
     carte_restaurant = StdImageField(upload_to='images/',
                                      null=True, blank=True,
@@ -240,7 +244,7 @@ class Price(models.Model):
                 unit_amount=int("{0:.2f}".format(self.prix).replace('.', '')),
                 currency="eur",
                 product=self.product.get_id_product_stripe(),
-                nickname= self.name,
+                nickname=self.name,
             )
 
             self.id_price_stripe = price.id
@@ -320,7 +324,7 @@ class Reservation(models.Model):
                               on_delete=models.PROTECT,
                               related_name="reservation")
 
-    CANCELED, UNPAID, PAID, VALID,  = 'C', 'N', 'P', 'V'
+    CANCELED, UNPAID, PAID, VALID, = 'C', 'N', 'P', 'V'
     TYPE_CHOICES = [
         (CANCELED, _('Annulée')),
         (UNPAID, _('Non payée')),
@@ -331,14 +335,19 @@ class Reservation(models.Model):
     status = models.CharField(max_length=3, choices=TYPE_CHOICES, default=UNPAID,
                               verbose_name=_("Status de la réservation"))
 
-    paiement = models.OneToOneField(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True, related_name='reservation')
+    paiement = models.OneToOneField(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True,
+                                    related_name='reservation')
 
-    options = models.ManyToManyField(OptionGenerale)
+    options = models.ManyToManyField(OptionGenerale, blank=True)
+
+    class Meta:
+        ordering = ('-datetime',)
 
     def user_mail(self):
         return self.user_commande.email
 
-
+    def __str__(self):
+        return f"{str(self.uuid).partition('-')[0]} - {self.user_commande.email}"
     # def total_billet(self):
     #     total = 0
     #     for ligne in self.paiements.all():
@@ -358,13 +367,15 @@ class Reservation(models.Model):
     #     return " - ".join([f"{option.name}" for option in self.options.all()])
     #
 
+
 @receiver(post_save, sender=Reservation)
-def verif_mail_valide(sender, instance: Reservation, created, **kwargs):
-    if created:
-        # noinspection PyUnresolvedReferences
-        if not instance.user_commande.is_active:
-            instance.status = instance.MAIL_NON_VALIDEE
-            instance.save()
+def trigger_reservation(sender, instance: Reservation, created, **kwargs):
+    if instance.status == Reservation.PAID:
+        if instance.tickets:
+            for ticket in instance.tickets.filter(status=Ticket.NOT_ACTIV):
+                logger.info(f'trigger_reservation, activation des tickets {ticket} NOT_SCANNED')
+                ticket.status = Ticket.NOT_SCANNED
+                ticket.save()
 
 
 class Ticket(models.Model):
@@ -382,8 +393,25 @@ class Ticket(models.Model):
         (SCANNED, _('scanné')),
     ]
 
-    scan_status = models.CharField(max_length=1, choices=SCAN_CHOICES, default=NOT_ACTIV,
-                                   verbose_name=_("Status du scan"))
+    status = models.CharField(max_length=1, choices=SCAN_CHOICES, default=NOT_ACTIV,
+                              verbose_name=_("Status du scan"))
+
+    def event(self):
+        return self.reservation.event
+
+    event.allow_tags = True
+    event.short_description = 'Évènement'
+    event.admin_order_field = 'reservation__event'
+
+    def datetime(self):
+        return self.reservation.datetime
+
+    datetime.allow_tags = True
+    datetime.short_description = 'Date de reservation'
+    datetime.admin_order_field = 'reservation__datetime'
+
+    class meta:
+        ordering = ('-datetime',)
 
 
 class LigneArticle(models.Model):
@@ -398,7 +426,7 @@ class LigneArticle(models.Model):
 
     paiement_stripe = models.ForeignKey(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True)
 
-    CANCELED, UNPAID, PAID, VALID,  = 'C', 'N', 'P', 'V'
+    CANCELED, UNPAID, PAID, VALID, = 'C', 'N', 'P', 'V'
     TYPE_CHOICES = [
         (CANCELED, _('Annulée')),
         (UNPAID, _('Non payée')),
@@ -409,6 +437,9 @@ class LigneArticle(models.Model):
     status = models.CharField(max_length=3, choices=TYPE_CHOICES, default=UNPAID,
                               verbose_name=_("Status de ligne article"))
 
+    class Meta:
+        ordering = ('-datetime',)
+
     def status_stripe(self):
         if self.paiement_stripe:
             return self.paiement_stripe.status
@@ -418,28 +449,40 @@ class LigneArticle(models.Model):
 
 @receiver(post_save, sender=LigneArticle)
 def check_status_stripe(sender, instance: LigneArticle, created, **kwargs):
-    if instance.paiement_stripe :
-        lignes_dans_paiement_stripe = instance.paiement_stripe.lignearticle_set.all()
-        if len(lignes_dans_paiement_stripe) == len(lignes_dans_paiement_stripe.filter(status=LigneArticle.VALID)):
+    if instance.paiement_stripe:
+        logger.info(f"Trigger LigneArticle {instance.status}")
+        if instance.paiement_stripe.status != Paiement_stripe.VALID:
+            lignes_dans_paiement_stripe = instance.paiement_stripe.lignearticle_set.all()
+
             # toute les lignes d'article sont VALID
-            # on passe le status du paiement stripe en VALID
-            instance.paiement_stripe.status = Paiement_stripe.VALID
-            instance.paiement_stripe.save()
+            if len(lignes_dans_paiement_stripe) == len(lignes_dans_paiement_stripe.filter(status=LigneArticle.VALID)):
 
+                # Si le paiement à une reservation, on la passe en payée.
+                # Cela enclanchera la création et l'envoie des billets
+                if instance.paiement_stripe.reservation:
+                    if instance.paiement_stripe.reservation.status not in [Reservation.PAID, Reservation.VALID]:
+                        instance.paiement_stripe.reservation.status = Reservation.PAID
+                        instance.paiement_stripe.reservation.save()
 
+                # on passe le status du paiement stripe en VALID
+                logger.info(
+                    f"Trigger LigneArticle {instance} check_status_stripe Passage de {instance.paiement_stripe} {instance.paiement_stripe.status} à VALID")
+                instance.paiement_stripe.status = Paiement_stripe.VALID
+                instance.paiement_stripe.save()
 
 
 @receiver(pre_save, sender=Paiement_stripe)
-def send_to_cashless(sender, instance: Paiement_stripe, update_fields=None, **kwargs):
+def trigger_paiement_stripe(sender, instance: Paiement_stripe, update_fields=None, **kwargs):
     # si l'instance vient d'être créé, ne rien faire :
     if instance.pk is None:
         pass
     else:
-        paiementStripe = instance
-        if paiementStripe.status == Paiement_stripe.PAID:
-            data_pour_serveur_cashless = {'uuid_commande': paiementStripe.uuid}
+        if instance.status == Paiement_stripe.PAID:
+            logger.info(f"trigger_paiement_stripe {instance} PAID")
+            paiementStripe = instance
 
-            for ligne_article in paiementStripe.lignearticle_set.all():
+            data_pour_serveur_cashless = {'uuid_commande': paiementStripe.uuid}
+            for ligne_article in paiementStripe.lignearticle_set.exclude(status=LigneArticle.VALID):
                 if ligne_article.carte:
                     data_pour_serveur_cashless['uuid'] = ligne_article.carte.uuid
 
@@ -449,7 +492,19 @@ def send_to_cashless(sender, instance: Paiement_stripe, update_fields=None, **kw
                 if ligne_article.price.product.categorie_article == Product.ADHESION:
                     data_pour_serveur_cashless['tarif_adhesion'] = ligne_article.price.prix
 
-            # si il y a autre chose que uuid_commande :
+                logger.info(
+                    f"trigger_paiement_stripe, ligne_article : {ligne_article.qty} x {ligne_article.price} payé ! status = PAID")
+                ligne_article.status = LigneArticle.PAID
+                ligne_article.save()
+
+            # Si il y a une reservation, on a la met en payée
+            if instance.reservation:
+                if instance.reservation.status not in [Reservation.PAID, Reservation.VALID]:
+                    logger.info(f"trigger_paiement_stripe, reservation : {instance.reservation} payé ! status = PAID")
+                    instance.reservation.status = Reservation.PAID
+                    instance.reservation.save()
+
+            # si il y a des données a envoyer au serveur cashless :
             if len(data_pour_serveur_cashless) > 1:
                 sess = requests.Session()
                 configuration = Configuration.get_solo()
@@ -462,7 +517,7 @@ def send_to_cashless(sender, instance: Paiement_stripe, update_fields=None, **kw
                 )
 
                 sess.close()
-                print(
+                logger.info(
                     f"{timezone.now()} demande au serveur cashless pour un rechargement. réponse : {r.status_code} ")
 
                 if r.status_code == 200:
@@ -470,5 +525,10 @@ def send_to_cashless(sender, instance: Paiement_stripe, update_fields=None, **kw
                     for ligne_article in paiementStripe.lignearticle_set.filter(
                             Q(price__product__categorie_article=Product.RECHARGE_CASHLESS) |
                             Q(price__product__categorie_article=Product.ADHESION)):
+                        logger.info(
+                            f'réponse serveur cashless ok : on passe {ligne_article} {ligne_article.status} -> VALID')
                         ligne_article.status = LigneArticle.VALID
                         ligne_article.save()
+                else:
+                    logger.error(
+                        f"erreur réponse serveur cashless {r.status_code} {r.text} pour paiement stripe {instance}")

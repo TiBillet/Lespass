@@ -16,7 +16,6 @@ from BaseBillet.models import Configuration, LigneArticle
 from PaiementStripe.models import Paiement_stripe
 
 import logging
-
 logger = logging.getLogger(__name__)
 
 
@@ -184,7 +183,7 @@ class retour_stripe(View):
 
                 elif checkout_session.payment_status == "paid":
                     paiement_stripe.status = Paiement_stripe.PAID
-
+                    logger.info(f"retour_stripe - checkout_session.payment_status : {checkout_session.payment_status}")
                     # le .save() lance le process pre_save BaseBillet.models.send_to_cashless
                     # qui modifie le status de chaque ligne
                     # et envoie les informations au serveur cashless.

@@ -181,7 +181,7 @@ class ReservationAdmin(admin.ModelAdmin):
         'event',
         'status',
     )
-    readonly_fields = list_display
+    # readonly_fields = list_display
 
 staff_admin_site.register(Reservation, ReservationAdmin)
 
@@ -190,8 +190,10 @@ class TicketAdmin(admin.ModelAdmin):
     list_display = [
         'first_name',
         'last_name',
+        'event',
         'reservation',
-        'scan_status',
+        'status',
+        'datetime',
     ]
     readonly_fields = list_display
 

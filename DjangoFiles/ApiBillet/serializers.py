@@ -260,7 +260,7 @@ class ReservationValidator(serializers.Serializer):
             email_paiement=self.user_commande.email,
             liste_ligne_article=lignes_article,
             metadata=metadata,
-            source=Paiement_stripe.BILLETTERIE,
+            source=Paiement_stripe.API_BILLETTERIE,
             absolute_domain=self.context.get('request').build_absolute_uri().partition('/api')[0],
         )
 
