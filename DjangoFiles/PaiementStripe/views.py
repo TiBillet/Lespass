@@ -205,6 +205,10 @@ class retour_stripe(View):
 
         # si c'est depuis le qrcode, on renvoie vers la vue mobile :
         if paiement_stripe.source == Paiement_stripe.QRCODE :
+
+            # SI le paiement est valide, c'est que les presave et postsave
+            # ont validé la réponse du serveur cashless pour les recharges
+
             if paiement_stripe.status == Paiement_stripe.VALID :
                 # on boucle ici pour récuperer l'uuid de la carte.
                 for ligne_article in paiement_stripe.lignearticle_set.all():
@@ -221,10 +225,12 @@ class retour_stripe(View):
                                        f"Merci de vérifier votre moyen de paiement ou contactez un responsable.")
                         return HttpResponseRedirect(f"/qr/{ligne_article.carte.uuid}#error")
 
-        else:
+        elif paiement_stripe.source == Paiement_stripe.API_BILLETTERIE :
             return HttpResponse(
-                'Un problème de validation de paiement a été detecté. Merci de vérifier votre moyen de paiement ou contactez un responsable.')
-            # return HttpResponseRedirect("/")
+                'Coucou')
+
+        else :
+            raise Http404('paiement_stripe.source ?')
 
 
 '''

@@ -27,9 +27,7 @@ Inspirée par les expériences de Sentry, ElasticSearch, MongoDb, nous souhaiton
 pour toutes structures associatives ou entreprises coopératives à but non lucratif tout en encourageant les acteurs
 commerciaux à participer activement au développement.
 
-TiBillet est construit par l'association des 3Peaks de Manapany. Créateurs du Manapany Surf Festival. Nous sommes des
-développeurs passionnés et bénévoles presque à plein temps sur ce projet, et nous souhaitons sincèrement pouvoir en
-vivre un jour !
+TiBillet est construit par l'association des 3Peaks de Manapany. Créateurs du Manapany Surf Festival !
 
 ## Installation :
 

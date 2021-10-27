@@ -33,12 +33,12 @@ class Paiement_stripe(models.Model):
 
     status = models.CharField(max_length=1, choices=STATUT_CHOICES, default=NON, verbose_name="Statut de la commande")
 
-    QRCODE, BILLETTERIE = 'Q', 'B'
+    QRCODE, API_BILLETTERIE = 'Q', 'B'
     SOURCE_CHOICES = (
         (QRCODE, _('Depuis scan QR-Code')),
-        (BILLETTERIE, _('Depuis billetterie')),
+        (API_BILLETTERIE, _('Depuis billetterie')),
     )
-    source = models.CharField(max_length=1, choices=SOURCE_CHOICES, default=BILLETTERIE, verbose_name="Source de la commande")
+    source = models.CharField(max_length=1, choices=SOURCE_CHOICES, default=API_BILLETTERIE, verbose_name="Source de la commande")
 
     total = models.FloatField(default=0)
 
