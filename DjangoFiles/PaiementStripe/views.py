@@ -184,13 +184,15 @@ class retour_stripe(View):
                 elif checkout_session.payment_status == "paid":
                     paiement_stripe.status = Paiement_stripe.PAID
                     logger.info(f"retour_stripe - checkout_session.payment_status : {checkout_session.payment_status}")
+
+
                     # le .save() lance le process pre_save BaseBillet.models.send_to_cashless
                     # qui modifie le status de chaque ligne
                     # et envoie les informations au serveur cashless.
                     # si validé par le serveur cashless, alors la ligne sera VALID.
                     # Si toute les lignes sont VALID, le paiement_stripe sera aussi VALID
                     # grace au post_save BaseBillet.models.check_status_stripe
-
+                    paiement_stripe.last_action = timezone.now()
                     paiement_stripe.save()
 
                 else:
@@ -221,8 +223,8 @@ class retour_stripe(View):
                     if ligne_article.carte:
                         messages.error(request,
                                        f"Un problème de validation de paiement a été detecté. "
-                                       f"Merci de vérifier votre moyen de paiement ou contactez un responsable.")
-                        return HttpResponseRedirect(f"/qr/{ligne_article.carte.uuid}#error")
+                                       f"Merci de vérifier votre moyen de paiement et/ou contactez un responsable.")
+                        return HttpResponseRedirect(f"/qr/{ligne_article.carte.uuid}#erreurpaiement")
 
         elif paiement_stripe.source == Paiement_stripe.API_BILLETTERIE :
             return HttpResponse(

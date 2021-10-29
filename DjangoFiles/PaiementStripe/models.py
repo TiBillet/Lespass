@@ -17,7 +17,9 @@ class Paiement_stripe(models.Model):
     id_stripe = models.CharField(max_length=80, blank=True, null=True)
     metadata_stripe = JSONField(blank=True, null=True)
 
-    order_date = models.DateTimeField(auto_now=True, verbose_name="Date")
+    order_date = models.DateTimeField(auto_now_add=True, verbose_name="Date")
+    last_action = models.DateTimeField(auto_now=True)
+
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, blank=True, null=True)
 
     NON, OPEN, PENDING, EXPIRE, PAID, VALID, CANCELED = 'N', 'O', 'W', 'E', 'P', 'V', 'C'
