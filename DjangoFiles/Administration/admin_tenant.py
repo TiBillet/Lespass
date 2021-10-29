@@ -4,11 +4,10 @@ from django.contrib.auth.models import Group
 from solo.admin import SingletonModelAdmin
 
 from AuthBillet.models import HumanUser, SuperHumanUser, TermUser
-from BaseBillet.models import Configuration, Event, OptionGenerale, Product, Price, Reservation, LigneArticle, Ticket
+from BaseBillet.models import Configuration, Event, OptionGenerale, Product, Price, Reservation, LigneArticle, Ticket, Paiement_stripe
 from django.contrib.auth.admin import UserAdmin
 
 from Customers.models import Client
-from PaiementStripe.models import Paiement_stripe
 
 
 class StaffAdminSite(AdminSite):

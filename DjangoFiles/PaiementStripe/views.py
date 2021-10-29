@@ -12,8 +12,7 @@ from django.utils import timezone
 from django.views import View
 
 from AuthBillet.models import HumanUser
-from BaseBillet.models import Configuration, LigneArticle
-from PaiementStripe.models import Paiement_stripe
+from BaseBillet.models import Configuration, LigneArticle, Paiement_stripe, Reservation
 
 import logging
 logger = logging.getLogger(__name__)
@@ -25,6 +24,7 @@ class creation_paiement_stripe():
                  email_paiement: str,
                  liste_ligne_article: list,
                  metadata: dict,
+                 reservation: (Reservation, None),
                  source: str,
                  absolute_domain: str
                  ) -> None:
@@ -33,6 +33,7 @@ class creation_paiement_stripe():
         self.liste_ligne_article = liste_ligne_article
         self.email_paiement = email_paiement
         self.metadata = metadata
+        self.reservation = reservation
         self.source = source
 
         self.configuration = Configuration.get_solo()
@@ -74,6 +75,7 @@ class creation_paiement_stripe():
             user=self.user,
             total=self.total,
             metadata_stripe=self.metadata_json,
+            reservation=self.reservation,
             source=self.source,
         )
 

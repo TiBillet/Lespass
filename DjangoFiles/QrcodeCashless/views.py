@@ -11,8 +11,7 @@ from rest_framework.generics import get_object_or_404
 from django.views import View
 from rest_framework import status
 
-from BaseBillet.models import Configuration, Product, LigneArticle, Price
-from PaiementStripe.models import Paiement_stripe
+from BaseBillet.models import Configuration, Product, LigneArticle, Price, Paiement_stripe
 from PaiementStripe.views import creation_paiement_stripe
 from QrcodeCashless.models import CarteCashless
 
@@ -202,6 +201,7 @@ class index_scan(View):
                     email_paiement=data.get('email'),
                     liste_ligne_article=ligne_articles,
                     metadata=metadata,
+                    reservation=None,
                     source=Paiement_stripe.QRCODE,
                     absolute_domain=request.build_absolute_uri().partition('/qr')[0],
                 )

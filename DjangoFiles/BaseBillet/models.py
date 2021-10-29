@@ -9,13 +9,13 @@ from django.db.models import Q
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from django.utils import timezone
+from django.contrib.postgres.fields import JSONField
 from solo.models import SingletonModel
 from django.utils.translation import ugettext_lazy as _
 from stdimage import StdImageField
 from stdimage.validators import MaxSizeValidator
 from django.db import connection
 
-from PaiementStripe.models import Paiement_stripe
 from QrcodeCashless.models import CarteCashless
 from TiBillet import settings
 import stripe
@@ -314,6 +314,8 @@ class Event(models.Model):
         verbose_name_plural = _('Evenements')
 
 
+
+
 class Reservation(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
     datetime = models.DateTimeField(auto_now=True)
@@ -335,8 +337,8 @@ class Reservation(models.Model):
     status = models.CharField(max_length=3, choices=TYPE_CHOICES, default=UNPAID,
                               verbose_name=_("Status de la réservation"))
 
-    paiement = models.OneToOneField(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True,
-                                    related_name='reservation')
+    # paiement = models.OneToOneField(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True,
+    #                                 related_name='reservation')
 
     options = models.ManyToManyField(OptionGenerale, blank=True)
 
@@ -406,6 +408,59 @@ class Ticket(models.Model):
 
     class meta:
         ordering = ('-datetime',)
+
+
+
+class Paiement_stripe(models.Model):
+    """
+    La commande
+    """
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
+    detail = models.CharField(max_length=50, blank=True, null=True)
+
+    id_stripe = models.CharField(max_length=80, blank=True, null=True)
+    metadata_stripe = JSONField(blank=True, null=True)
+
+    order_date = models.DateTimeField(auto_now_add=True, verbose_name="Date")
+    last_action = models.DateTimeField(auto_now=True)
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, blank=True, null=True)
+
+    NON, OPEN, PENDING, EXPIRE, PAID, VALID, CANCELED = 'N', 'O', 'W', 'E', 'P', 'V', 'C'
+    STATUT_CHOICES = (
+        (NON, 'Lien de paiement non créé'),
+        (OPEN, 'Envoyée a Stripe'),
+        (PENDING, 'En attente de paiement'),
+        (EXPIRE, 'Expiré'),
+        (PAID, 'Payée'),
+        (VALID, 'Payée et validée'),  # envoyé sur serveur cashless
+        (CANCELED, 'Annulée'),
+    )
+
+    reservation = models.ForeignKey(Reservation, on_delete=models.PROTECT, blank=True, null=True)
+
+    status = models.CharField(max_length=1, choices=STATUT_CHOICES, default=NON, verbose_name="Statut de la commande")
+
+    QRCODE, API_BILLETTERIE = 'Q', 'B'
+    SOURCE_CHOICES = (
+        (QRCODE, _('Depuis scan QR-Code')),
+        (API_BILLETTERIE, _('Depuis billetterie')),
+    )
+    source = models.CharField(max_length=1, choices=SOURCE_CHOICES, default=API_BILLETTERIE, verbose_name="Source de la commande")
+
+    total = models.FloatField(default=0)
+
+    def uuid_8(self):
+        return f"{self.uuid}".partition('-')[0]
+
+    def __str__(self):
+        return self.uuid_8()
+
+    def articles(self):
+        return " - ".join(
+            [f"{ligne.product.name} {ligne.qty * ligne.product.prix}€" for ligne in self.lignearticle_set.all()])
+
+
 
 
 class LigneArticle(models.Model):

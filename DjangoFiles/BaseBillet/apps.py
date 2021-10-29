@@ -6,4 +6,3 @@ class BasebilletConfig(AppConfig):
 
     def ready(self):
         import BaseBillet.signals
-        super().ready()

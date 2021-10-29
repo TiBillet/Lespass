@@ -2,12 +2,12 @@ import requests
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 
-from BaseBillet.models import Reservation, LigneArticle, Ticket, Product, Configuration
+from BaseBillet.models import Reservation, LigneArticle, Ticket, Product, Configuration, Paiement_stripe
 import logging
 
-from PaiementStripe.models import Paiement_stripe
-
 logger = logging.getLogger(__name__)
+
+logger.info(f'import basebillet.signals')
 
 
 @receiver(post_save, sender=Reservation)
@@ -122,9 +122,11 @@ def set_ligne_article_paid(old_instance, new_instance):
         ligne_article.save()
 
     # si ya une reservation, on la met aussi en payée :
+    # try :
     if new_instance.reservation:
         new_instance.reservation.status = Reservation.PAID
         new_instance.reservation.save()
+    # except new_instance.reservation.RelatedObjectDoesNotExist:
 
 
 def expire_paiement_stripe(old_instance, new_instance):
@@ -135,6 +137,7 @@ def expire_paiement_stripe(old_instance, new_instance):
 def valide_stripe_paiement(old_instance, new_instance):
     logger.info(f"    TRIGGER PAIEMENT STRIPE valide_stripe_paiement {old_instance.status} to {new_instance.status}")
     pass
+
 
 ######################## TRIGGER RESERVATION ########################
 
@@ -153,42 +156,23 @@ def error_regression(old_instance, new_instance):
     pass
 
 
-# def pass(old_instance, new_instance):
-
 # On déclare les transitions possibles entre différents etats des statuts.
 # Exemple première ligne : Si status passe de PENDING vers PAID, alors on lance set_ligne_article_paid
-class Transitions():
-    ''''''
-    '''
-        Reservation choices :
-        (CANCELED, _('Annulée')),
-        (UNPAID, _('Non payée')),
-        (PAID, _('Payée')),
-        (VALID, _('Validée')),
-    '''
-    RESERVATION = {
+
+TRANSITIONS = {
+    'RESERVATION': {
         Reservation.UNPAID: {
-            Reservation.PAID : send_billet_to_mail
+            Reservation.PAID: send_billet_to_mail
         },
         Reservation.PAID: {
             LigneArticle.PAID: send_billet_to_mail,
-           '_else_': error_regression,
+            '_else_': error_regression,
         },
         Reservation.VALID: {
             '_all_': error_regression,
         }
-    }
-    '''
-        Paiement_stripe choices :
-        (NON, 'Lien de paiement non créé'),
-        (OPEN, 'Envoyée a Stripe'),
-        (PENDING, 'En attente de paiement'),
-        (EXPIRE, 'Expiré'),
-        (PAID, 'Payée'),
-        (VALID, 'Payée et validée'),  # envoyé sur serveur cashless
-        (CANCELED, 'Annulée'),
-    '''
-    PAIEMENT_STRIPE = {
+    },
+    'PAIEMENT_STRIPE': {
         Paiement_stripe.PENDING: {
             Paiement_stripe.PAID: set_ligne_article_paid,
             Paiement_stripe.EXPIRE: expire_paiement_stripe,
@@ -202,15 +186,8 @@ class Transitions():
         Paiement_stripe.VALID: {
             '_all_': error_regression,
         }
-    }
-    '''
-        LigneArticle Choices :
-        (CANCELED, _('Annulée')),
-        (UNPAID, _('Non payée')),
-        (PAID, _('Payée')),
-        (VALID, _('Validée par serveur cashless')),
-    '''
-    LIGNEARTICLE = {
+    },
+    'LIGNEARTICLE': {
         LigneArticle.UNPAID: {
             LigneArticle.PAID: check_paid,
         },
@@ -222,13 +199,13 @@ class Transitions():
         LigneArticle.VALID: {
             '_all_': error_regression,
         }
-    }
+    },
+}
 
 
 def pre_save_signal_status(old_instance, new_instance):
-    # import ipdb; ipdb.set_trace()
     sender_str = old_instance.__class__.__name__.upper()
-    dict_transition = getattr(Transitions, f"{sender_str}", None)
+    dict_transition = TRANSITIONS.get(sender_str)
     if dict_transition:
         logger.info(f"dict_transition {sender_str} {new_instance} : {old_instance.status} to {new_instance.status}")
         transitions = dict_transition.get(old_instance.status, None)
@@ -240,8 +217,6 @@ def pre_save_signal_status(old_instance, new_instance):
                 ))))
 
             if trigger_function:
-                # import ipdb; ipdb.set_trace()
-
                 if not callable(trigger_function):
                     raise Exception(f'Fonction {trigger_function} is not callable. Disdonc !?')
                 trigger_function(old_instance, new_instance)
