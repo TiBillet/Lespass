@@ -454,29 +454,6 @@ def trigger_LigneArticle(sender, instance: LigneArticle, update_fields=None, **k
         old_instance = sender.objects.get(pk=instance.pk)
         new_instance = pre_save_signal_status(old_instance, instance)
 
-    '''
-    if instance.paiement_stripe:
-        logger.info(f"Trigger LigneArticle {instance.status}")
-        if instance.paiement_stripe.status != Paiement_stripe.VALID:
-            lignes_dans_paiement_stripe = instance.paiement_stripe.lignearticle_set.all()
-
-            # toute les lignes d'article sont VALID
-            if len(lignes_dans_paiement_stripe) == len(lignes_dans_paiement_stripe.filter(status=LigneArticle.VALID)):
-
-                # Si le paiement à une reservation, on la passe en payée.
-                # Cela enclanchera la création et l'envoie des billets
-                if instance.paiement_stripe.reservation:
-                    if instance.paiement_stripe.reservation.status not in [Reservation.PAID, Reservation.VALID]:
-                        instance.paiement_stripe.reservation.status = Reservation.PAID
-                        instance.paiement_stripe.reservation.save()
-
-                # on passe le status du paiement stripe en VALID
-                logger.info(
-                    f"Trigger LigneArticle {instance} check_status_stripe Passage de {instance.paiement_stripe} {instance.paiement_stripe.status} à VALID")
-                instance.paiement_stripe.status = Paiement_stripe.VALID
-                instance.paiement_stripe.save()
-    '''
-
 
 @receiver(pre_save, sender=Paiement_stripe)
 def trigger_paiement_stripe(sender, instance: Paiement_stripe, update_fields=None, **kwargs):
@@ -484,15 +461,6 @@ def trigger_paiement_stripe(sender, instance: Paiement_stripe, update_fields=Non
     if not instance._state.adding:
         old_instance = sender.objects.get(pk=instance.pk)
         new_instance = pre_save_signal_status(old_instance, instance)
-
-        '''
-            # Si il y a une reservation, on a la met en payée
-            if instance.reservation:
-                if instance.reservation.status not in [Reservation.PAID, Reservation.VALID]:
-                    logger.info(f"trigger_paiement_stripe, reservation : {instance.reservation} payé ! status = PAID")
-                    instance.reservation.status = Reservation.PAID
-                    instance.reservation.save()
-        '''
 
 
 ########################################################################
