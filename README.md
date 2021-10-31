@@ -92,9 +92,9 @@ https://documenter.getpostman.com/view/17519122/UV5agG58
 
 Jonas TURBEAUX & Nicolas DIJOUX pour 3Peaks2Prod.
 
-TiBillet is ( for the moment ) under the Elastic License 2.0 (ELv2)
-https://www.elastic.co/fr/blog/elastic-license-v2
-https://www.elastic.co/fr/licensing/elastic-license
+TiBillet is ( for the moment ) under the Server Side Public Licence ( SSPL )
+https://www.mongodb.com/licensing/server-side-public-license
+https://webassets.mongodb.com/_com_assets/legal/SSPL-compared-to-AGPL.pdf
 
 Credits:
 
