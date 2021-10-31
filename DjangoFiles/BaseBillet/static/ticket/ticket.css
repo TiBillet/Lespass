@@ -25,14 +25,15 @@
 html {
   align-content: center;
   align-items: center;
-  background: #eef1f5;
+  background: #fff;
   display: flex;
   font-family: Barlow Condensed, sans-serif;
   height: 100%;
   justify-content: center;
 }
 body {
-  background: #fff;
+  background: #eef1f5;
+
   box-sizing: border-box;
   color: #2A3239;
   display: flex;

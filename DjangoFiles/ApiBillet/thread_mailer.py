@@ -1,8 +1,10 @@
 import os
 import threading
 from django.core.mail import send_mail, EmailMessage, EmailMultiAlternatives
+from django.db import connection
 from django.template.loader import render_to_string
 from django.utils import timezone
+from stripe.http_client import requests
 from weasyprint import HTML
 from BaseBillet.models import Configuration, Reservation, Ticket
 
@@ -31,18 +33,24 @@ class ThreadMaileur():
         if template and context :
             self.html = render_to_string(template, context=context)
             self.context = context
-        self.attached_file = self._attached_file()
+        self.tickets_uuid = self._tickets_uuid()
+        self.url = self._url()
 
-    def _attached_file(self):
-        attached_file = []
+    def _url(self):
+        url = f"http://{connection.tenant.domains.all()[0].domain}:8002/api/ticket/"
+        return url
+
+    def _tickets_uuid(self):
+        tickets_uuid = []
         if self.context :
             if self.context.get('reservation'):
                 reservation: Reservation = self.context.get('reservation')
                 tickets = reservation.tickets.filter(status=Ticket.NOT_SCANNED)
                 if len(tickets) > 0:
                     for ticket in tickets :
-                        attached_file.append(render_to_string('ticket/ticket.html', context={'context': 'context'}))
-        return attached_file
+                        tickets_uuid.append(f"{ticket.uuid}")
+
+        return tickets_uuid
 
     def config_valid(self):
         EMAIL_HOST = os.environ.get('EMAIL_HOST')
@@ -66,15 +74,24 @@ class ThreadMaileur():
             )
             mail.attach_alternative(self.html, "text/html")
 
+            attached_file = []
+            for ticket in self.tickets_uuid :
+
+                response = requests.get(f"{self.url}{ticket}")
+                if response.status_code == 200:
+                    attached_file.append(response.content)
+
+            # attached_file.append(render_to_string('ticket/ticket.html', context={'context': 'context'}))
             # msg = EmailMessage(subject, html_content, from_email, [to])
             # msg.content_subtype = "html"  # Main content is now text/html
             # msg.send()
 
             # import ipdb; ipdb.set_trace()
             i=1
-            for file in self.attached_file:
-                html_before_pdf = HTML(string=file)
-                mail.attach(f'ticket_{i}.pdf', html_before_pdf.write_pdf(), 'application/pdf')
+            for file in attached_file:
+                # html_before_pdf = HTML(string=file)
+                # mail.attach(f'ticket_{i}.pdf', html_before_pdf.write_pdf(), 'application/pdf')
+                mail.attach(f'ticket_{i}.pdf', file, 'application/pdf')
                 i += 1
 
 
@@ -91,8 +108,8 @@ class ThreadMaileur():
 
     def send_with_tread(self):
 
-        self.send()
-        # logger.info(f'{timezone.now()} on lance le thread email {self.email}')
-        # thread_email = threading.Thread(target=self.send)
-        # thread_email.start()
-        # logger.info(f'{timezone.now()} Thread email lancé')
+        # self.send()
+        logger.info(f'{timezone.now()} on lance le thread email {self.email}')
+        thread_email = threading.Thread(target=self.send)
+        thread_email.start()
+        logger.info(f'{timezone.now()} Thread email lancé')

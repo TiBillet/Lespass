@@ -15,6 +15,6 @@ router.register(r'reservations', api_view.ReservationViewset, basename='reservat
 
 urlpatterns = [
     path('', include(router.urls)),
-    path('ticket/<uuid:pk_uuid>', TicketPdf.as_view()),
+    path('ticket/<uuid:pk_uuid>', TicketPdf.as_view(), name='ticket_uuid'),
 
 ]
