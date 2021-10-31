@@ -94,6 +94,7 @@ Jonas TURBEAUX & Nicolas DIJOUX pour 3Peaks2Prod.
 
 TiBillet is ( for the moment ) under the Elastic License 2.0 (ELv2)
 https://www.elastic.co/fr/blog/elastic-license-v2
+https://www.elastic.co/fr/licensing/elastic-license
 
 Credits:
 
