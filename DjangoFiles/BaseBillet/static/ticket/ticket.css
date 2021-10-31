@@ -117,6 +117,7 @@ li {
 }
 #informations li:last-of-type {
   font-family: Libre Barcode, cursive;
+  color: black;
   font-size: 25pt;
   margin-left: auto;
   padding-right: 1cm;

@@ -14,14 +14,10 @@ logger = logging.getLogger(__name__)
 logger.info(f'import basebillet.signals')
 
 
-@receiver(post_save, sender=Reservation)
-def trigger_reservation(sender, instance: Reservation, created, **kwargs):
-    if instance.status == Reservation.PAID:
-        if instance.tickets:
-            for ticket in instance.tickets.filter(status=Ticket.NOT_ACTIV):
-                logger.info(f'trigger_reservation, activation des tickets {ticket} NOT_SCANNED')
-                ticket.status = Ticket.NOT_SCANNED
-                ticket.save()
+# @receiver(post_save, sender=Reservation)
+# def trigger_reservation(sender, instance: Reservation, created, **kwargs):
+#     if instance.status == Reservation.PAID:
+
 
 
 
@@ -132,8 +128,15 @@ def valide_stripe_paiement(old_instance, new_instance):
 
 ######################## TRIGGER RESERVATION ########################
 
-
 def send_billet_to_mail(old_instance, new_instance):
+    # On active les tickets
+    if new_instance.tickets:
+        for ticket in new_instance.tickets.filter(status=Ticket.NOT_ACTIV):
+            logger.info(f'trigger_reservation, activation des tickets {ticket} NOT_SCANNED')
+            ticket.status = Ticket.NOT_SCANNED
+            ticket.save()
+
+    # On vérifier qu'on a pas déja envoyé le mail
     if not new_instance.mail_send :
         logger.info(f"    TRIGGER RESERVATION send_billet_to_mail {old_instance.status} to {new_instance.status}")
         new_instance : Reservation
@@ -173,7 +176,7 @@ def error_regression(old_instance, new_instance):
 TRANSITIONS = {
     'RESERVATION': {
         Reservation.UNPAID: {
-            Reservation.PAID: send_billet_to_mail
+            Reservation.PAID: send_billet_to_mail,
         },
         Reservation.PAID: {
             Reservation.VALID: send_billet_to_mail,

@@ -266,6 +266,7 @@ class ReservationValidator(serializers.Serializer):
 
         if new_paiement_stripe.is_valid():
             reservation.paiement = new_paiement_stripe.paiement_stripe_db
+            reservation.status = Reservation.UNPAID
             reservation.save()
             print(new_paiement_stripe.checkout_session.stripe_id)
             # return new_paiement_stripe.redirect_to_stripe()

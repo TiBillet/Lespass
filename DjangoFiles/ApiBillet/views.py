@@ -1,8 +1,3 @@
-from datetime import datetime
-
-from django.http import Http404
-from django.shortcuts import render
-
 # Create your views here.
 from django.utils import timezone
 from django_weasyprint import WeasyTemplateView
@@ -149,13 +144,13 @@ class TicketPdf(WeasyTemplateView):
 
     def get_context_data(self, pk_uuid, **kwargs):
         logger.info(f"{timezone.now()} création de pdf demandé. uuid : {pk_uuid}")
+
         self.config = Configuration.get_solo()
         ticket: Ticket = get_object_or_404(Ticket, uuid=pk_uuid)
         kwargs['ticket'] = ticket
         kwargs['config'] = self.config
 
         self.nom_prenom = f"{ticket.first_name.upper()}_{ticket.last_name.capitalize()}"
-
         return kwargs
 
     def get_pdf_filename(self, **kwargs):

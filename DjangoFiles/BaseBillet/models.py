@@ -325,15 +325,16 @@ class Reservation(models.Model):
                               on_delete=models.PROTECT,
                               related_name="reservation")
 
-    CANCELED, UNPAID, PAID, VALID, = 'C', 'N', 'P', 'V'
+    CANCELED, CREATED, UNPAID, PAID, VALID, = 'C', 'R', 'N', 'P', 'V'
     TYPE_CHOICES = [
         (CANCELED, _('Annulée')),
+        (CREATED, _('Crée')),
         (UNPAID, _('Non payée')),
         (PAID, _('Payée')),
         (VALID, _('Validée')),
     ]
 
-    status = models.CharField(max_length=3, choices=TYPE_CHOICES, default=UNPAID,
+    status = models.CharField(max_length=3, choices=TYPE_CHOICES, default=CREATED,
                               verbose_name=_("Status de la réservation"))
 
     mail_send = models.BooleanField(default=False)
