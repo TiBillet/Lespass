@@ -1,7 +1,11 @@
 import requests
+from django.db import connection
+from django.db.models import Q
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
+from django.utils import timezone
 
+from ApiBillet.thread_mailer import ThreadMaileur
 from BaseBillet.models import Reservation, LigneArticle, Ticket, Product, Configuration, Paiement_stripe
 import logging
 
@@ -19,21 +23,6 @@ def trigger_reservation(sender, instance: Reservation, created, **kwargs):
                 ticket.status = Ticket.NOT_SCANNED
                 ticket.save()
 
-
-@receiver(pre_save, sender=LigneArticle)
-def trigger_LigneArticle(sender, instance: LigneArticle, update_fields=None, **kwargs):
-    # if not created
-    if not instance._state.adding:
-        old_instance = sender.objects.get(pk=instance.pk)
-        new_instance = pre_save_signal_status(old_instance, instance)
-
-
-@receiver(pre_save, sender=Paiement_stripe)
-def trigger_paiement_stripe(sender, instance: Paiement_stripe, update_fields=None, **kwargs):
-    # if not create
-    if not instance._state.adding:
-        old_instance = sender.objects.get(pk=instance.pk)
-        new_instance = pre_save_signal_status(old_instance, instance)
 
 
 ########################################################################
@@ -136,6 +125,8 @@ def expire_paiement_stripe(old_instance, new_instance):
 
 def valide_stripe_paiement(old_instance, new_instance):
     logger.info(f"    TRIGGER PAIEMENT STRIPE valide_stripe_paiement {old_instance.status} to {new_instance.status}")
+
+
     pass
 
 
@@ -143,8 +134,28 @@ def valide_stripe_paiement(old_instance, new_instance):
 
 
 def send_billet_to_mail(old_instance, new_instance):
-    logger.info(f"    TRIGGER RESERVATION send_billet_to_mail {old_instance.status} to {new_instance.status}")
-    pass
+    if not new_instance.mail_send :
+        logger.info(f"    TRIGGER RESERVATION send_billet_to_mail {old_instance.status} to {new_instance.status}")
+        new_instance : Reservation
+        config = Configuration.get_solo()
+
+        if new_instance.user_commande.email:
+            try:
+                mail = ThreadMaileur(
+                    new_instance.user_commande.email,
+                    f"Votre reservation pour {config.organisation}",
+                    template='mails/buy_confirmation.html',
+                    context={
+                        'config': config,
+                        'reservation': new_instance,
+                    },
+                )
+                # import ipdb; ipdb.set_trace()
+                mail.send_with_tread()
+            except Exception as e :
+                logger.error(f"{timezone.now()} Erreur envoie de mail pour reservation {new_instance} : {e}")
+    else :
+        logger.info(f"    TRIGGER RESERVATION mail déja envoyé {new_instance} : {new_instance.mail_send} - status :  {old_instance.status} to {new_instance.status}")
 
 
 ######################## MOTEUR TRIGGER ########################
@@ -165,7 +176,8 @@ TRANSITIONS = {
             Reservation.PAID: send_billet_to_mail
         },
         Reservation.PAID: {
-            LigneArticle.PAID: send_billet_to_mail,
+            Reservation.VALID: send_billet_to_mail,
+            Reservation.PAID: send_billet_to_mail,
             '_else_': error_regression,
         },
         Reservation.VALID: {
@@ -202,21 +214,26 @@ TRANSITIONS = {
     },
 }
 
+@receiver(pre_save)
+def pre_save_signal_status(sender, instance, **kwargs):
+    # if not create
+    if not instance._state.adding:
+        sender_str = sender.__name__.upper()
+        dict_transition = TRANSITIONS.get(sender_str)
+        if dict_transition:
+            old_instance = sender.objects.get(pk=instance.pk)
+            new_instance = instance
 
-def pre_save_signal_status(old_instance, new_instance):
-    sender_str = old_instance.__class__.__name__.upper()
-    dict_transition = TRANSITIONS.get(sender_str)
-    if dict_transition:
-        logger.info(f"dict_transition {sender_str} {new_instance} : {old_instance.status} to {new_instance.status}")
-        transitions = dict_transition.get(old_instance.status, None)
-        if transitions:
-            # Par ordre de préférence :
-            trigger_function = transitions.get('_all_', (
-                transitions.get(new_instance.status, (
-                    transitions.get('_else_', None)
-                ))))
+            logger.info(f"dict_transition {sender_str} {new_instance} : {old_instance.status} to {new_instance.status}")
+            transitions = dict_transition.get(old_instance.status, None)
+            if transitions:
+                # Par ordre de préférence :
+                trigger_function = transitions.get('_all_', (
+                    transitions.get(new_instance.status, (
+                        transitions.get('_else_', None)
+                    ))))
 
-            if trigger_function:
-                if not callable(trigger_function):
-                    raise Exception(f'Fonction {trigger_function} is not callable. Disdonc !?')
-                trigger_function(old_instance, new_instance)
+                if trigger_function:
+                    if not callable(trigger_function):
+                        raise Exception(f'Fonction {trigger_function} is not callable. Disdonc !?')
+                    trigger_function(old_instance, new_instance)

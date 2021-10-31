@@ -4,6 +4,8 @@ from django.urls import include, path, re_path
 from ApiBillet import views as api_view
 from rest_framework import routers
 
+from ApiBillet.views import TicketPdf
+
 router = routers.DefaultRouter()
 router.register(r'events', api_view.EventsViewSet, basename='event')
 router.register(r'products', api_view.ProductViewSet, basename='product')
@@ -13,4 +15,6 @@ router.register(r'reservations', api_view.ReservationViewset, basename='reservat
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('ticket/<uuid:pk_uuid>', TicketPdf.as_view()),
+
 ]

@@ -1,17 +1,25 @@
+from datetime import datetime
+
+from django.http import Http404
 from django.shortcuts import render
 
 # Create your views here.
+from django.utils import timezone
+from django_weasyprint import WeasyTemplateView
 from rest_framework.generics import get_object_or_404
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
     ReservationValidator
 from AuthBillet.models import TenantAdminPermission
 from Customers.models import Client, Domain
-from BaseBillet.models import Event, Price, Product, Reservation
+from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket
 from rest_framework import viewsets, permissions, status
 
 import os
+import logging
+logger = logging.getLogger(__name__)
 
 
 def new_tenants(schema_name):
@@ -130,7 +138,28 @@ class ReservationViewset(viewsets.ViewSet):
             return Response(validator.data, status=status.HTTP_201_CREATED)
         return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
     def get_permissions(self):
         permission_classes = [TenantAdminPermission]
         return [permission() for permission in permission_classes]
+
+
+class TicketPdf(WeasyTemplateView):
+    permission_classes = [AllowAny]
+    template_name = 'ticket/ticket.html'
+
+    def get_context_data(self, pk_uuid, **kwargs):
+        logger.info(f"{timezone.now()} création de pdf demandé. uuid : {pk_uuid}")
+        self.config = Configuration.get_solo()
+        ticket: Ticket = get_object_or_404(Ticket, uuid=pk_uuid)
+        kwargs['ticket'] = ticket
+        kwargs['config'] = self.config
+
+        self.nom_prenom = f"{ticket.first_name.upper()}_{ticket.last_name.capitalize()}"
+
+        return kwargs
+
+    def get_pdf_filename(self, **kwargs):
+        nom_prenom = self.nom_prenom
+        return f"Ticket_{nom_prenom}.pdf"
+
+#

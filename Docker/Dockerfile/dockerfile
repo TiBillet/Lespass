@@ -61,11 +61,17 @@ RUN pip install django-stdimage
 RUN pip install stripe
 
 
+RUN apt-get install -y fonts-font-awesome
+RUN apt-get install -y  libffi-dev
+RUN apt-get install -y  libgdk-pixbuf2.0-0
+RUN apt-get install -y  libpango1.0-0
+RUN apt-get install -y  python-dev
+# RUN apt-get install -y  python-lxml
+RUN apt-get install -y  shared-mime-info
+RUN apt-get install -y  libcairo2
+RUN pip install django-weasyprint
 
-
-
+RUN apt-get -y clean
 
 RUN python --version
 RUN django-admin --version
-
-

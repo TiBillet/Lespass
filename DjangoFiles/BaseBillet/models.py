@@ -3,6 +3,7 @@ import uuid
 import requests
 from django.contrib.auth import get_user_model
 from django.db import models
+from django.db.models.aggregates import Sum
 
 # Create your models here.
 from django.db.models import Q
@@ -314,8 +315,6 @@ class Event(models.Model):
         verbose_name_plural = _('Evenements')
 
 
-
-
 class Reservation(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
     datetime = models.DateTimeField(auto_now=True)
@@ -337,6 +336,7 @@ class Reservation(models.Model):
     status = models.CharField(max_length=3, choices=TYPE_CHOICES, default=UNPAID,
                               verbose_name=_("Status de la réservation"))
 
+    mail_send = models.BooleanField(default=False)
     # paiement = models.OneToOneField(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True,
     #                                 related_name='reservation')
 
@@ -348,9 +348,29 @@ class Reservation(models.Model):
     def user_mail(self):
         return self.user_commande.email
 
+    def paiements_paid(self):
+        return self.paiements.filter(
+            Q(status=Paiement_stripe.PAID) | Q(status=Paiement_stripe.VALID)
+        )
+
+    def articles_paid(self):
+        articles_paid = []
+        for paiement in self.paiements_paid():
+            for ligne in paiement.lignearticle_set.filter(
+                    Q(status=LigneArticle.PAID) | Q(status=LigneArticle.VALID)
+            ):
+                articles_paid.append(ligne)
+        return articles_paid
+
+    def total_paid(self):
+        total_paid = 0
+        for article in self.articles_paid():
+            article: LigneArticle
+            total_paid += article.price.prix * article.qty
+        return total_paid
+
     def __str__(self):
         return f"{str(self.uuid).partition('-')[0]} - {self.user_commande.email}"
-
 
     # def total_billet(self):
     #     total = 0
@@ -370,8 +390,6 @@ class Reservation(models.Model):
     # def _options_(self):
     #     return " - ".join([f"{option.name}" for option in self.options.all()])
     #
-
-
 
 
 class Ticket(models.Model):
@@ -410,7 +428,6 @@ class Ticket(models.Model):
         ordering = ('-datetime',)
 
 
-
 class Paiement_stripe(models.Model):
     """
     La commande
@@ -437,7 +454,8 @@ class Paiement_stripe(models.Model):
         (CANCELED, 'Annulée'),
     )
 
-    reservation = models.ForeignKey(Reservation, on_delete=models.PROTECT, blank=True, null=True)
+    reservation = models.ForeignKey(Reservation, on_delete=models.PROTECT, blank=True, null=True,
+                                    related_name="paiements")
 
     status = models.CharField(max_length=1, choices=STATUT_CHOICES, default=NON, verbose_name="Statut de la commande")
 
@@ -446,7 +464,8 @@ class Paiement_stripe(models.Model):
         (QRCODE, _('Depuis scan QR-Code')),
         (API_BILLETTERIE, _('Depuis billetterie')),
     )
-    source = models.CharField(max_length=1, choices=SOURCE_CHOICES, default=API_BILLETTERIE, verbose_name="Source de la commande")
+    source = models.CharField(max_length=1, choices=SOURCE_CHOICES, default=API_BILLETTERIE,
+                              verbose_name="Source de la commande")
 
     total = models.FloatField(default=0)
 
@@ -459,8 +478,6 @@ class Paiement_stripe(models.Model):
     def articles(self):
         return " - ".join(
             [f"{ligne.product.name} {ligne.qty * ligne.product.prix}€" for ligne in self.lignearticle_set.all()])
-
-
 
 
 class LigneArticle(models.Model):
@@ -494,4 +511,3 @@ class LigneArticle(models.Model):
             return self.paiement_stripe.status
         else:
             return _('no stripe send')
-
