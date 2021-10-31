@@ -93,7 +93,9 @@ https://documenter.getpostman.com/view/17519122/UV5agG58
 Jonas TURBEAUX & Nicolas DIJOUX pour 3Peaks2Prod.
 
 TiBillet is ( for the moment ) under the Server Side Public Licence ( SSPL )
+
 https://www.mongodb.com/licensing/server-side-public-license
+
 https://webassets.mongodb.com/_com_assets/legal/SSPL-compared-to-AGPL.pdf
 
 Credits:
