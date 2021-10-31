@@ -92,7 +92,7 @@ https://documenter.getpostman.com/view/17519122/UV5agG58
 
 Jonas TURBEAUX & Nicolas DIJOUX pour 3Peaks2Prod.
 
-Free for personal and commercial use under the AGPL-3.0 licence.
+TiBillet is ( for the moment ) under the Elastic License 2.0 (ELv2)
 
 Credits:
 
