@@ -150,11 +150,10 @@ class TicketPdf(WeasyTemplateView):
         kwargs['ticket'] = ticket
         kwargs['config'] = self.config
 
-        self.nom_prenom = f"{ticket.first_name.upper()}_{ticket.last_name.capitalize()}"
+        self.pdf_filename = ticket.pdf_filename()
         return kwargs
 
     def get_pdf_filename(self, **kwargs):
-        nom_prenom = self.nom_prenom
-        return f"Ticket_{nom_prenom}.pdf"
+        return self.pdf_filename
 
 #

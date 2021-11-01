@@ -9,6 +9,7 @@ from django.db.models.aggregates import Sum
 from django.db.models import Q
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
+from django.urls import reverse
 from django.utils import timezone
 from django.contrib.postgres.fields import JSONField
 from solo.models import SingletonModel
@@ -325,7 +326,7 @@ class Reservation(models.Model):
                               on_delete=models.PROTECT,
                               related_name="reservation")
 
-    CANCELED, CREATED, UNPAID, PAID, VALID, = 'C', 'R', 'N', 'P', 'V'
+    CANCELED, CREATED, UNPAID, PAID, VALID, = 'C', 'R', 'U', 'P', 'V'
     TYPE_CHOICES = [
         (CANCELED, _('Annulée')),
         (CREATED, _('Crée')),
@@ -356,7 +357,7 @@ class Reservation(models.Model):
 
     def articles_paid(self):
         articles_paid = []
-        for paiement in self.paiements_paid():
+        for paiement in self.paiements.all():
             for ligne in paiement.lignearticle_set.filter(
                     Q(status=LigneArticle.PAID) | Q(status=LigneArticle.VALID)
             ):
@@ -401,15 +402,38 @@ class Ticket(models.Model):
 
     reservation = models.ForeignKey(Reservation, on_delete=models.CASCADE, related_name="tickets")
 
-    NOT_ACTIV, NOT_SCANNED, SCANNED = 'N', 'K', 'S'
+    CREATED, NOT_ACTIV, NOT_SCANNED, SCANNED = 'C', 'N', 'K', 'S'
     SCAN_CHOICES = [
+        (CREATED, _('Crée')),
         (NOT_ACTIV, _('Non actif')),
         (NOT_SCANNED, _('Non scanné')),
         (SCANNED, _('scanné')),
     ]
 
-    status = models.CharField(max_length=1, choices=SCAN_CHOICES, default=NOT_ACTIV,
+    status = models.CharField(max_length=1, choices=SCAN_CHOICES, default=CREATED,
                               verbose_name=_("Status du scan"))
+
+    seat = models.CharField(max_length=20, default=_('Placement libre'))
+
+    def pdf_filename(self):
+        config = Configuration.get_solo()
+        return f"{config.organisation.upper()} " \
+               f"{self.reservation.event.datetime.astimezone().strftime('%d/%m/%Y')} " \
+               f"{self.first_name.upper()} " \
+               f"{self.last_name.capitalize()}" \
+               f".pdf"
+
+
+    def pdf_url(self):
+        domain = connection.tenant.domains.all().first().domain
+        api_pdf = reverse("ticket_uuid_to_pdf", args=[f"{self.uuid}"])
+        protocol = "https://"
+        port = ""
+        if settings.DEBUG:
+            protocol = "http://"
+            port = ":8002"
+        return f"{protocol}{domain}{port}{api_pdf}"
+
 
     def event(self):
         return self.reservation.event
@@ -454,11 +478,11 @@ class Paiement_stripe(models.Model):
         (VALID, 'Payée et validée'),  # envoyé sur serveur cashless
         (CANCELED, 'Annulée'),
     )
+    status = models.CharField(max_length=1, choices=STATUT_CHOICES, default=NON, verbose_name="Statut de la commande")
 
     reservation = models.ForeignKey(Reservation, on_delete=models.PROTECT, blank=True, null=True,
                                     related_name="paiements")
 
-    status = models.CharField(max_length=1, choices=STATUT_CHOICES, default=NON, verbose_name="Statut de la commande")
 
     QRCODE, API_BILLETTERIE = 'Q', 'B'
     SOURCE_CHOICES = (
@@ -493,15 +517,16 @@ class LigneArticle(models.Model):
 
     paiement_stripe = models.ForeignKey(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True)
 
-    CANCELED, UNPAID, PAID, VALID, = 'C', 'N', 'P', 'V'
+    CANCELED, CREATED, UNPAID, PAID, VALID, = 'C', 'O', 'U', 'P', 'V'
     TYPE_CHOICES = [
         (CANCELED, _('Annulée')),
+        (CREATED, _('Non envoyé en paiement')),
         (UNPAID, _('Non payée')),
         (PAID, _('Payée')),
         (VALID, _('Validée par serveur cashless')),
     ]
 
-    status = models.CharField(max_length=3, choices=TYPE_CHOICES, default=UNPAID,
+    status = models.CharField(max_length=3, choices=TYPE_CHOICES, default=CREATED,
                               verbose_name=_("Status de ligne article"))
 
     class Meta:

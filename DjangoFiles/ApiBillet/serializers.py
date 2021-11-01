@@ -5,10 +5,12 @@ import json
 from django.utils.translation import gettext, gettext_lazy as _
 from rest_framework.generics import get_object_or_404
 
-import PaiementStripe
 from AuthBillet.models import TibilletUser, HumanUser
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, Paiement_stripe
 from PaiementStripe.views import creation_paiement_stripe
+
+import logging
+logger = logging.getLogger(__name__)
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -265,9 +267,15 @@ class ReservationValidator(serializers.Serializer):
         )
 
         if new_paiement_stripe.is_valid():
-            reservation.paiement = new_paiement_stripe.paiement_stripe_db
+            paiement_stripe : Paiement_stripe  = new_paiement_stripe.paiement_stripe_db
+            paiement_stripe.lignearticle_set.all().update(status=LigneArticle.UNPAID)
+
+            reservation.tickets.all().update(status=Ticket.NOT_ACTIV)
+
+            reservation.paiement = paiement_stripe
             reservation.status = Reservation.UNPAID
             reservation.save()
+
             print(new_paiement_stripe.checkout_session.stripe_id)
             # return new_paiement_stripe.redirect_to_stripe()
             self.checkout_session = new_paiement_stripe.checkout_session
@@ -278,6 +286,7 @@ class ReservationValidator(serializers.Serializer):
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
+        logger.info(f"{self.checkout_session.url}")
         representation['checkout_url'] = self.checkout_session.url
         # import ipdb;ipdb.set_trace()
         return representation

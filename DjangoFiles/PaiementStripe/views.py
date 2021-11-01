@@ -229,9 +229,13 @@ class retour_stripe(View):
                         return HttpResponseRedirect(f"/qr/{ligne_article.carte.uuid}#erreurpaiement")
 
         elif paiement_stripe.source == Paiement_stripe.API_BILLETTERIE :
+            if paiement_stripe.status == Paiement_stripe.PAID :
+                return HttpResponse(
+                    'Paiement okay, on lance les process de validation.')
+
             if paiement_stripe.status == Paiement_stripe.VALID :
                 return HttpResponse(
-                    'Coucou')
+                    'Paiement validé !')
 
 
         raise Http404(f'{paiement_stripe.status}')

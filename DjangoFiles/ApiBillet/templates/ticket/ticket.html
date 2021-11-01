@@ -12,7 +12,7 @@
 <body>
 <section id="informations">
     <h1 id="name">{{ ticket.first_name }} {{ ticket.last_name }}</h1>
-    <h1 id="destination">CDG ✈ LFLL</h1>
+    <h1 id="destination">{{ ticket.reservation.event.name }}</h1>
     <dl>
         <dt>Flight</dt>
         <dd>DL31</dd>
@@ -33,7 +33,7 @@
 
 <section id="ticket">
     <p>1257797706706</p>
-    <h2>Théodore Marcelin</h2>
+    <h2>{{ ticket.first_name }} {{ ticket.last_name }}</h2>
     <dl>
         <dt>Flight</dt>
         <dd>DL31</dd>
@@ -45,7 +45,7 @@
         <dd>4</dd>
     </dl>
     <ul>
-        <li>CDG ✈ LFLL</li>
+        <li>{{ ticket.reservation.event.name }}</li>
         <li>5:10pm</li>
     </ul>
 </section>
