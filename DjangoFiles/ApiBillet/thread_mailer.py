@@ -68,10 +68,11 @@ class ThreadMaileur():
             )
             mail.attach_alternative(self.html, "text/html")
 
-            for filename, url in self.urls_for_attached_files.items():
-                response = requests.get(url)
-                if response.status_code == 200:
-                    mail.attach(filename, response.content, 'application/pdf')
+            if self.urls_for_attached_files:
+                for filename, url in self.urls_for_attached_files.items():
+                    response = requests.get(url)
+                    if response.status_code == 200:
+                        mail.attach(filename, response.content, 'application/pdf')
 
             mail_return = mail.send(fail_silently=False)
 
