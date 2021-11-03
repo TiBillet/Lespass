@@ -14,6 +14,11 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
 
+  redis:
+    image: redis:6-alpine
+    restart: always
+    container_name: redis
+    hostname: redis
 
   tibillet_django:
     container_name: tibillet_django
@@ -30,3 +35,17 @@ services:
     command: "bash /DjangoFiles/launch.sh"
     depends_on:
       - tibillet_postgres
+      - redis
+
+  tibillet_celery:
+    container_name: tibillet_celery
+    build: ../Dockerfile/
+    restart: always
+    env_file: .env
+    volumes:
+      - "../../DjangoFiles:/DjangoFiles"
+      - "../../Docker/bashrc:/root/.bashrc"
+    working_dir: /DjangoFiles
+    command: "bash /DjangoFiles/launch.sh"
+    depends_on:
+      - tibillet_django

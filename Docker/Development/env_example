@@ -6,6 +6,9 @@ POSTGRES_USER='tibillet_postgres_user'
 POSTGRES_PASSWORD='tibillet_postgres_password'
 POSTGRES_DB='tibillet'
 
+CELERY_BROKER='redis://redis:6379/0'
+CELERY_BACKEND='redis://redis:6379/0'
+
 DEBUG_DJANGO=True
 TIME_ZONE='Indian/Reunion'
 

@@ -212,6 +212,15 @@ EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', False)
 EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', True)
 
+# Celery Configuration Options
+CELERY_TIMEZONE=os.environ.get('TIME_ZONE', 'UTC')
+CELERY_TASK_TRACK_STARTED=True
+CELERY_TASK_TIME_LIMIT=30 * 60
+BROKER_URL=os.environ.get('CELERY_BROKER')
+# CELERY_BROKER=os.environ.get('CELERY_BROKER')
+# CELERY_BROKER_URL=os.environ.get('CELERY_BROKER')
+# DJANGO_CELERY_BEAT_TZ_AWARE=False
+# celery -A TiBillet worker -l INFO
 
 # Jet Menu
 # -------------------------------------/

@@ -7,19 +7,11 @@ from django.utils import timezone
 
 from ApiBillet.thread_mailer import ThreadMaileur
 from BaseBillet.models import Reservation, LigneArticle, Ticket, Product, Configuration, Paiement_stripe
-import logging
 
 from TiBillet import settings
 
+import logging
 logger = logging.getLogger(__name__)
-logger.info(f'import basebillet.signals')
-
-
-# @receiver(post_save, sender=Reservation)
-# def trigger_reservation(sender, instance: Reservation, created, **kwargs):
-#     if instance.status == Reservation.PAID:
-
-
 
 
 ########################################################################
