@@ -35,15 +35,9 @@ app.autodiscover_tasks(lambda: settings.INSTALLED_APPS)
 
 
 @app.task(bind=True)
-def debug_task(self):
-    print(f'Request: {self.request}')
-
-
-@app.task
 def add(x, y):
     return x + y
 
-
 @app.task
-def my_task():
-    print(connection.schema_name)
+def add2(x, y):
+    return x + y
