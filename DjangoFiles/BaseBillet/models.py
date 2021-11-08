@@ -449,6 +449,9 @@ class Ticket(models.Model):
     datetime.short_description = 'Date de reservation'
     datetime.admin_order_field = 'reservation__datetime'
 
+    def numero_uuid(self):
+        return f"{self.uuid}".split('-')[0]
+
     class meta:
         ordering = ('-datetime',)
 

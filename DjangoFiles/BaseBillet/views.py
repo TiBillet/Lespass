@@ -10,6 +10,9 @@ from BaseBillet.models import Configuration, Event, Ticket
 
 import base64
 import segno
+import barcode
+from djoser import utils
+
 from io import StringIO, BytesIO
 
 from django.template import engines
@@ -47,20 +50,31 @@ class Ticket_html_view(APIView):
 
         ticket = get_object_or_404(Ticket, uuid=pk_uuid)
 
-        qr = segno.make(f'{ticket.uuid}')
-
-        buffer_png = BytesIO()
-        qr.save(buffer_png, kind='PNG', scale=3)
+        qr = segno.make(f"{ticket.uuid}", micro=False)
 
         buffer_svg = BytesIO()
-        qr.save(buffer_svg, kind='svg', scale=10)
+        qr.save(buffer_svg, kind='svg', scale=8)
+
+        CODE128 = barcode.get_barcode_class('code128')
+        buffer_barcode_SVG = BytesIO()
+        bar_secret = utils.encode_uid(f"{ticket.uuid}".split('-')[4])
+
+        bar = CODE128(f"{bar_secret}")
+        options = {
+            'module_height': 30,
+            'module_width': 0.6,
+            'font_size': 10,
+        }
+        bar.write(buffer_barcode_SVG, options=options)
 
         context = {
             'ticket': ticket,
             'config': Configuration.get_solo(),
-            'img_str': base64.b64encode(buffer_png.getvalue()).decode('utf-8'),
             'img_svg': buffer_svg.getvalue().decode('utf-8'),
-            'img_svg64': base64.b64encode(buffer_svg.getvalue()).decode('utf-8'),
+            # 'img_svg64': base64.b64encode(buffer_svg.getvalue()).decode('utf-8'),
+            'bar_svg': buffer_barcode_SVG.getvalue().decode('utf-8'),
+            # 'bar_svg64': base64.b64encode(buffer_barcode_SVG.getvalue()).decode('utf-8'),
+
         }
 
         return render(request, 'ticket/ticket.html', context=context)

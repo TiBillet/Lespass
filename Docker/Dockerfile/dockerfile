@@ -75,6 +75,7 @@ RUN pip install redis
 RUN pip install tenant-schemas-celery
 
 RUN pip install segno
+RUN pip install python-barcode
 
 RUN apt-get -y clean
 
