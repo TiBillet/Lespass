@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from ApiBillet.thread_mailer import ThreadMaileur
 from BaseBillet.models import Reservation, LigneArticle, Ticket, Product, Configuration, Paiement_stripe
+from BaseBillet.tasks import ticket_celery_mailer
 
 from TiBillet import settings
 
@@ -127,7 +128,6 @@ def check_paid(old_instance, new_instance):
 # def send_billet_to_mail(sender, instance: Reservation, **kwargs):
 def send_billet_to_mail(old_instance, new_instance):
     # On active les tickets
-    urls_for_attached_files = {}
     if new_instance.tickets:
         # On prend aussi ceux qui sont déja activé ( avec les Q() )
         # pour pouvoir les envoyer par mail en cas de nouvelle demande
@@ -136,33 +136,16 @@ def send_billet_to_mail(old_instance, new_instance):
             ticket.status = Ticket.NOT_SCANNED
             ticket.save()
 
-            # on rajoute les urls du pdf pour le thread async
-            urls_for_attached_files[ticket.pdf_filename()] = ticket.pdf_url()
-
     # import ipdb; ipdb.set_trace()
     # On vérifie qu'on a pas déja envoyé le mail
     if not new_instance.mail_send :
         logger.info(f"    TRIGGER RESERVATION send_billet_to_mail {new_instance.status}")
         new_instance : Reservation
-        config = Configuration.get_solo()
 
         if new_instance.user_commande.email:
-            try:
-                mail = ThreadMaileur(
-                    new_instance.user_commande.email,
-                    f"Votre reservation pour {config.organisation}",
-                    template='mails/buy_confirmation.html',
-                    context={
-                        'config': config,
-                        'reservation': new_instance,
-                    },
-                    urls_for_attached_files = urls_for_attached_files,
-                )
-                # import ipdb; ipdb.set_trace()
-                mail.send_with_tread()
-            except Exception as e :
-                logger.error(f"{timezone.now()} Erreur envoie de mail pour reservation {new_instance} : {e}")
-
+            # import ipdb; ipdb.set_trace()
+            task = ticket_celery_mailer.delay(new_instance.pk)
+            # https://github.com/psf/requests/issues/5832
     else :
         logger.info(f"    TRIGGER RESERVATION mail déja envoyé {new_instance} : {new_instance.mail_send} - status : {new_instance.status}")
 

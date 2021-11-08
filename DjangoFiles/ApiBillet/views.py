@@ -150,6 +150,13 @@ class TicketPdf(WeasyTemplateView):
         kwargs['ticket'] = ticket
         kwargs['config'] = self.config
 
+        '''
+        context = {
+            'ticket': ticket,
+            'config': config,
+        }
+        '''
+
         self.pdf_filename = ticket.pdf_filename()
         return kwargs
 

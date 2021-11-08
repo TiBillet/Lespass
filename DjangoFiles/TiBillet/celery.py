@@ -34,10 +34,10 @@ app.config_from_object('django.conf:settings')
 app.autodiscover_tasks(lambda: settings.INSTALLED_APPS)
 
 
-@app.task(bind=True)
+@app.task
 def add(x, y):
     return x + y
 
 @app.task
-def add2(x, y):
-    return x + y
+def schema_name():
+    return connection.schema_name

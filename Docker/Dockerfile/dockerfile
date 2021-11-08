@@ -74,6 +74,8 @@ RUN pip install celery
 RUN pip install redis
 RUN pip install tenant-schemas-celery
 
+RUN pip install segno
+
 RUN apt-get -y clean
 
 RUN python --version
