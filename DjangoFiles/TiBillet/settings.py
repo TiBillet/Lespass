@@ -223,7 +223,6 @@ CELERY_RESULT_BACKEND=os.environ.get('CELERY_BACKEND', 'redis://redis:6379/0')
 
 # Jet Menu
 # -------------------------------------/
-
 JET_SIDE_MENU_COMPACT = True
 JET_CHANGE_FORM_SIBLING_LINKS = False
 
@@ -238,11 +237,11 @@ LOGGING = {
     },
     'handlers': {
         'console': {
-            'level': 'DEBUG',
+            'level': 'INFO',
             'class': 'logging.StreamHandler',
         },
         'logfile': {
-            'level': 'DEBUG',
+            'level': 'INFO',
             'class': 'logging.handlers.RotatingFileHandler',
             'filename': f"{BASE_DIR}/www/Djangologfile",
             'formatter': 'simple',
@@ -250,7 +249,7 @@ LOGGING = {
         },
     },
     'root': {
-        'level': 'DEBUG',
+        'level': 'INFO',
         'handlers': ['console', 'logfile']
     },
 }

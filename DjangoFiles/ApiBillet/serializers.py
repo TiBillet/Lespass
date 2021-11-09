@@ -141,7 +141,7 @@ class ReservationValidator(serializers.Serializer):
     def validate_email(self, value):
         User: TibilletUser = get_user_model()
         user_paiement, created = User.objects.get_or_create(
-            email=value)
+            email=value, username=value)
 
         if created:
             user_paiement: HumanUser
@@ -150,6 +150,7 @@ class ReservationValidator(serializers.Serializer):
             user_paiement.is_active = False
         else:
             user_paiement.client_achat.add(connection.tenant)
+
         user_paiement.save()
         self.user_commande = user_paiement
         return user_paiement.email

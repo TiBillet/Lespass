@@ -1,5 +1,6 @@
 # import base64
 import os
+import smtplib
 from io import BytesIO
 import segno
 import barcode
@@ -169,13 +170,25 @@ def ticket_celery_mailer(reservation_uuid: str):
             },
             attached_files=attached_files,
         )
-        mail.send()
+        try :
+            mail.send()
+            logger.info(f"mail.sended : {mail.sended}")
 
-        logger.info(f"mail.sended : {mail.sended}")
-        if mail.sended :
-            reservation.mail_send = True
-            reservation.status = Reservation.VALID
+            if mail.sended :
+                reservation.mail_send = True
+                reservation.status = Reservation.VALID
+                reservation.save()
+
+        except smtplib.SMTPRecipientsRefused as e:
+
+            logger.error(f"ERROR {timezone.now()} Erreur envoie de mail pour reservation {reservation} : {e}")
+            logger.error(f"mail.sended : {mail.sended}")
+            reservation.mail_send = False
+            reservation.mail_error = True
+
+            reservation.status = Reservation.PAID_ERROR
             reservation.save()
+
 
     except Exception as e:
         logger.error(f"{timezone.now()} Erreur envoie de mail pour reservation {reservation} : {e}")

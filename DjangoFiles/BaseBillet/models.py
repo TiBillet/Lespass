@@ -326,12 +326,13 @@ class Reservation(models.Model):
                               on_delete=models.PROTECT,
                               related_name="reservation")
 
-    CANCELED, CREATED, UNPAID, PAID, VALID, = 'C', 'R', 'U', 'P', 'V'
+    CANCELED, CREATED, UNPAID, PAID, PAID_ERROR, VALID, = 'C', 'R', 'U', 'P', 'PE', 'V'
     TYPE_CHOICES = [
         (CANCELED, _('Annulée')),
         (CREATED, _('Crée')),
         (UNPAID, _('Non payée')),
         (PAID, _('Payée')),
+        (PAID_ERROR, _('Payée mais mail non valide')),
         (VALID, _('Validée')),
     ]
 
@@ -339,6 +340,7 @@ class Reservation(models.Model):
                               verbose_name=_("Status de la réservation"))
 
     mail_send = models.BooleanField(default=False)
+    mail_error = models.BooleanField(default=False)
     # paiement = models.OneToOneField(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True,
     #                                 related_name='reservation')
 
@@ -482,6 +484,8 @@ class Paiement_stripe(models.Model):
         (CANCELED, 'Annulée'),
     )
     status = models.CharField(max_length=1, choices=STATUT_CHOICES, default=NON, verbose_name="Statut de la commande")
+
+    traitement_en_cours = models.BooleanField(default=False)
 
     reservation = models.ForeignKey(Reservation, on_delete=models.PROTECT, blank=True, null=True,
                                     related_name="paiements")

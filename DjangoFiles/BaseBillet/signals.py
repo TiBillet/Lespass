@@ -52,8 +52,6 @@ def expire_paiement_stripe(old_instance, new_instance):
 
 def valide_stripe_paiement(old_instance, new_instance):
     logger.info(f"    TRIGGER PAIEMENT STRIPE valide_stripe_paiement {old_instance.status} to {new_instance.status}")
-    pass
-
 
 ######################## TRIGGER LIGNE ARTICLE ########################
 
@@ -69,6 +67,7 @@ def set_paiement_and_reservation_valid(old_instance, new_instance):
         logger.info(f"    TRIGGER LIGNE ARTICLE set_paiement_and_reservation_valid {new_instance.price} "
                     f"paiement stripe {new_instance.paiement_stripe} {new_instance.paiement_stripe.status} à VALID")
         new_instance.paiement_stripe.status = Paiement_stripe.VALID
+        new_instance.paiement_stripe.traitement_en_cours = False
         new_instance.paiement_stripe.save()
 
 
@@ -148,7 +147,22 @@ def send_billet_to_mail(old_instance, new_instance):
             # https://github.com/psf/requests/issues/5832
     else :
         logger.info(f"    TRIGGER RESERVATION mail déja envoyé {new_instance} : {new_instance.mail_send} - status : {new_instance.status}")
+        set_paiement_valid(old_instance, new_instance)
 
+
+def set_paiement_valid(old_instance, new_instance):
+    new_instance: Reservation
+    if new_instance.mail_send :
+        logger.info(f"    TRIGGER RESERVATION set_paiement_valid Mail envoyé {new_instance.mail_send}, on valide les paiement payés")
+        for paiement in new_instance.paiements.filter(status=Paiement_stripe.PAID):
+            paiement.status = Paiement_stripe.VALID
+            paiement.traitement_en_cours = False
+            paiement.save()
+
+def error_in_mail(old_instance, new_instance):
+    logger.info(f"    TRIGGER RESERVATION error_in_mail")
+    new_instance.paiements.all().update(traitement_en_cours = False)
+    # TODO: Prévenir l'admin q'un billet a été acheté, mais pas envoyé
 
 ######################## MOTEUR TRIGGER ########################
 
@@ -168,6 +182,9 @@ TRANSITIONS = {
             Paiement_stripe.PAID: set_ligne_article_paid,
             Paiement_stripe.EXPIRE: expire_paiement_stripe,
             Paiement_stripe.CANCELED: expire_paiement_stripe,
+        },
+        Paiement_stripe.EXPIRE: {
+            Paiement_stripe.PAID: set_ligne_article_paid,
         },
         Paiement_stripe.PAID: {
             Paiement_stripe.PAID: set_ligne_article_paid,
@@ -198,8 +215,9 @@ TRANSITIONS = {
             Reservation.PAID: send_billet_to_mail,
         },
         Reservation.PAID: {
-            Reservation.VALID: send_billet_to_mail,
+            Reservation.PAID_ERROR: error_in_mail,
             Reservation.PAID: send_billet_to_mail,
+            Reservation.VALID: set_paiement_valid,
             '_else_': error_regression,
         },
         Reservation.VALID: {
