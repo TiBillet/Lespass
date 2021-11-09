@@ -1,15 +1,15 @@
 import requests
-from django.db import connection
+# from django.db import connection
 from django.db.models import Q
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
-from django.utils import timezone
+# from django.utils import timezone
 
-from ApiBillet.thread_mailer import ThreadMaileur
+# from ApiBillet.thread_mailer import ThreadMaileur
 from BaseBillet.models import Reservation, LigneArticle, Ticket, Product, Configuration, Paiement_stripe
 from BaseBillet.tasks import ticket_celery_mailer
 
-from TiBillet import settings
+# from TiBillet import settings
 
 import logging
 logger = logging.getLogger(__name__)

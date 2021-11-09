@@ -230,19 +230,27 @@ JET_CHANGE_FORM_SIBLING_LINKS = False
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'formatters': {
+        'simple': {
+            'format': '%(levelname)s %(message)s',
+            'datefmt': '%y %b %d, %H:%M:%S',
+        },
+    },
     'handlers': {
         'console': {
-            'level': 'INFO',
+            'level': 'DEBUG',
             'class': 'logging.StreamHandler',
         },
         'logfile': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
+            'level': 'DEBUG',
+            'class': 'logging.handlers.RotatingFileHandler',
             'filename': f"{BASE_DIR}/www/Djangologfile",
+            'formatter': 'simple',
+            'maxBytes': 1024 * 1024 * 100,  # 100 mb
         },
     },
     'root': {
-        'level': 'INFO',
+        'level': 'DEBUG',
         'handlers': ['console', 'logfile']
     },
 }

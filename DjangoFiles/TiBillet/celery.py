@@ -1,28 +1,6 @@
-'''
-
-import os
-from celery import Celery
-
-# setting the Django settings module.
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'TiBillet.settings')
-app = Celery('TiBillet')
-
-app.config_from_object('django.conf:settings', namespace='CELERY')
-# Looks up for task modules in Django applications and loads them
-app.autodiscover_tasks()
-
-
-'''
-
-'''
-celery -A TiBillet worker -l INFO
-from TiBillet.celery import my_task
-my_task.delay()
-'''
-
 import os
 from django.db import connection
-
+from celery.signals import setup_logging
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'TiBillet.settings')
 
 from django.conf import settings
@@ -33,6 +11,11 @@ app = TenantAwareCeleryApp()
 app.config_from_object('django.conf:settings')
 app.autodiscover_tasks(lambda: settings.INSTALLED_APPS)
 
+@setup_logging.connect
+def config_loggers(*args, **kwags):
+    from logging.config import dictConfig
+    from django.conf import settings
+    dictConfig(settings.LOGGING)
 
 @app.task
 def add(x, y):

@@ -1,4 +1,4 @@
-import base64
+# import base64
 import os
 from io import BytesIO
 import segno
@@ -14,8 +14,9 @@ from BaseBillet.models import Configuration, Reservation, Ticket
 from TiBillet.celery import app
 
 import logging
-
 logger = logging.getLogger(__name__)
+# from celery.utils.log import get_task_logger
+# logger = get_task_logger(__name__)
 
 
 class CeleryMailerClass():
@@ -55,7 +56,7 @@ class CeleryMailerClass():
 
     def send(self):
         if self.html and self.config_valid():
-            logger.info(f'  send_mail')
+            logger.info(f'  WORKDER CELERY : send_mail')
             mail = EmailMultiAlternatives(
                 self.title,
                 self.text,
@@ -72,9 +73,9 @@ class CeleryMailerClass():
 
             if mail_return == 1:
                 self.sended = True
-                logger.info(f'      mail envoyé : {mail_return} - {self.email}')
+                logger.info(f'      WORKDER CELERY mail envoyé : {mail_return} - {self.email}')
             else:
-                logger.error(f'     mail non envoyé : {mail_return} - {self.email}')
+                logger.error(f'     WORKDER CELERY mail non envoyé : {mail_return} - {self.email}')
 
             return mail_return
         else:
@@ -149,7 +150,7 @@ def create_ticket_pdf(ticket: Ticket):
 
 @app.task
 def ticket_celery_mailer(reservation_uuid: str):
-
+    logger.info(f'      WORKDER CELERY app.task ticket_celery_mailer : {reservation_uuid}')
     config = Configuration.get_solo()
     reservation = Reservation.objects.get(pk=reservation_uuid)
 
@@ -179,3 +180,11 @@ def ticket_celery_mailer(reservation_uuid: str):
     except Exception as e:
         logger.error(f"{timezone.now()} Erreur envoie de mail pour reservation {reservation} : {e}")
         raise Exception
+
+
+@app.task
+def test_logger():
+    logger.debug(f"{timezone.now()} debug")
+    logger.info(f"{timezone.now()} info")
+    logger.warning(f"{timezone.now()} warning")
+    logger.error(f"{timezone.now()} error")
