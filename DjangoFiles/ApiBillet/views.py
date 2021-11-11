@@ -137,6 +137,7 @@ class ReservationViewset(viewsets.ViewSet):
         permission_classes = [TenantAdminPermission]
         return [permission() for permission in permission_classes]
 
+# class Adhesion(viewsets.ViewSet):
 
 class TicketPdf(WeasyTemplateView):
     permission_classes = [AllowAny]

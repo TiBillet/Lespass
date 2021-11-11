@@ -46,6 +46,12 @@ class index(APIView):
         return render(request, 'arnaud_mvc/lieux.html', context=context)
 
 
+# class adhesion(APIView):
+#     permission_classes = [AllowAny]
+#
+#     def post(self, request):
+
+
 class event(APIView):
     permission_classes = [AllowAny]
 

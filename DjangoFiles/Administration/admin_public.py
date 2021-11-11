@@ -158,6 +158,6 @@ class CarteCashlessAdmin(admin.ModelAdmin):
     get_origin.short_description = 'Origine'
 
     search_fields = ('tag_id', 'uuid', 'number')
-    list_filter = ('tag_id', 'uuid', 'number')
+    list_filter = ('tag_id', 'uuid', 'number', 'detail__origine')
 
 public_admin_site.register(CarteCashless, CarteCashlessAdmin)

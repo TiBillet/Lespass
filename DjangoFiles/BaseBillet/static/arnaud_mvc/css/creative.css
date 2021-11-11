@@ -615,7 +615,7 @@ h4 {
 /* FORM */
 .search {
     display: none;
-    position: absolute;
+    position: fixed;
     width: 100%;
     height: 100vh;
     background-color: #000000e0;

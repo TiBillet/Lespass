@@ -4,6 +4,7 @@
     <!DOCTYPE html>
     <html lang="fr">
     <head>
+
         <meta charset="UTF-8">
         <title>TiBillet</title>
         <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -13,6 +14,10 @@
 
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta2/css/all.min.css">
         <link rel="stylesheet" href="{% static 'arnaud_mvc/css/creative.css' %}">
+        {#        <link rel="stylesheet" href="{% static 'abubaker_saeed_modal/modal.css' %}">#}
+        {#        <link rel="stylesheet" href="{% static 'html5up-dimension/assets/css/main.css' %}"/>#}
+        {#        <link rel="stylesheet" href="{% static 'html5up-dimension/assets/css/main.css' %}"/>#}
+
 
     </head>
 {% endblock header %}
@@ -38,14 +43,28 @@
         <ul id="menutb" class="menutb">
 
             <li class="m">
-                <a href="/"><img src="{% static 'arnaud_mvc/img/menu/home.svg' %}"
-                                 alt="logo billeterie Ti Billet" class="menutibillet  m1"></a></li>
+                <a href="#">
+                    <img src="{% static 'arnaud_mvc/img/menu/home.svg' %}"
+                         alt="logo billeterie Ti Billet" class="menutibillet  m1">
+                </a>
+            </li>
+
             {#            <li class="m"><a href="#Apropos"><img src="{% static 'arnaud_mvc/img/menu/like.svg' %}"#}
             {#                                                  alt="logo billeterie Ti Billet" class="menutibillet  m2"></a></li>#}
-            <li class="m"><a href="#calendar"><img src="{% static 'arnaud_mvc/img/menu/calendrier.svg' %}"
-                                                   alt="logo billeterie Ti Billet" class="menutibillet  m3"></a></li>
-            {#            <li class="m"><a href="#Contact"><img src="{% static 'arnaud_mvc/img/menu/search.svg' %}"#}
-            {#                                                  alt="logo billeterie Ti Billet" class="menutibillet  m4"></a></li>#}
+
+            <li class="m">
+                <a href="#calendar">
+                    <img src="{% static 'arnaud_mvc/img/menu/calendrier.svg' %}"
+                         alt="logo billeterie Ti Billet" class="menutibillet  m3">
+                </a>
+            </li>
+
+            <li class="m">
+                <a href="#search" title="search" onclick="asideswipe.call(this);">
+                    <img src="{% static 'arnaud_mvc/img/menu/search.svg' %}"
+                         alt="logo billeterie Ti Billet" class="menutibillet  m4">
+                </a>
+            </li>
 
             <!-- onClick="asideswipe()" -->
         </ul>
@@ -56,9 +75,11 @@
     <!-- END FILTER MENU -->
 
 
+
 {% endblock nav %}
 
 <body>
+{% include 'arnaud_mvc/modals.html' %}
 
 {% block content %}
 {% endblock content %}
@@ -68,6 +89,24 @@
     {% block footer %}
     {% endblock footer %}
 </footer>
+
+<!-- AFFICHER CACHER DIV SEARCHrecherche -->
+<script type="text/javascript">
+    function asideswipe() {
+        console.log('asideswipe : ', this.title);
+
+        var div = document.getElementById(this.title),
+            display = getComputedStyle(div, null).display;
+
+        console.log(display)
+
+        if (display == "flex") {
+            div.style.display = "none";
+        } else {
+            div.style.display = "flex";
+        }
+    }
+</script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.8.0/gsap.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.8.0/CSSRulePlugin.min.js"></script>

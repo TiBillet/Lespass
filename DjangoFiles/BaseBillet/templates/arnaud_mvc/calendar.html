@@ -3,18 +3,18 @@
 <!-- CARD PROGRAMME -->
 {% for block_calendrier in events|range_by:5 %}
     <div id="calendar" class="card card-meta card-programme">
-{#        <h2 class="title-programme">{{ configuration.organisation.upper }} </h2>#}
+        {#        <h2 class="title-programme">{{ configuration.organisation.upper }} </h2>#}
         {% for event in block_calendrier %}
             <div class="date-programme">
-                <a href="">
+                <a href="{% url 'show_event' event.slug %}">
                     <img src="{% static 'arnaud_mvc/img/meta/reserver.png' %}" alt="reserver" class="linkcard"
                          style="padding-right: 10px; padding-left:0px;">
                 </a>
                 <div class="date-programme-link">
-                    <a href="" style="text-decoration: none;">
+                    <a href="{% url 'show_event' event.slug %}" style="text-decoration: none;">
                         <h2 style="margin:0;">{{ event.datetime | date:"D d F Y" }}</h2>
                     </a>
-                    <a href="" style="color:#ffc801;">{{ event.name }}
+                    <a href="{% url 'show_event' event.slug %}" style="color:#ffc801;">{{ event.name }}
                         - {{ event.datetime | time }}</a>
                 </div>
             </div>

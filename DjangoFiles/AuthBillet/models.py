@@ -55,7 +55,6 @@ class TibilletManager(BaseUserManager):
         staff_group = Group.objects.get_or_create(name="staff")[0]
         user.groups.add(staff_group)
 
-
 class TibilletUser(AbstractUser):
 
     #TODO regarder du coté du dashboard de jet, ça plante avec uuid !
@@ -69,6 +68,13 @@ class TibilletUser(AbstractUser):
     email = models.EmailField(_('email'), unique=True)  # changes email to unique and blank to false
     username = models.CharField(max_length=200, unique=True)
     phone = models.CharField(max_length=20, null=True, blank=True)
+
+    last_see = models.DateTimeField(auto_now=True)
+    accept_newsletter = models.BooleanField(
+        default=True, verbose_name=_("J'accepte de recevoir la newsletter"))
+    postal_code = models.IntegerField(null=True, blank=True)
+    birth_date = models.DateField(null=True, blank=True)
+
 
     TYPE_TERM, TYPE_HUM, TYPE_ANDR = 'TE', 'HU', 'AN'
     ESPECE_CHOICES = (
@@ -204,6 +210,19 @@ class HumanUser(TibilletUser):
         self.email = self.email.lower()
 
         super().save(*args, **kwargs)
+
+
+
+
+class Membership(models.Model):
+    user = models.ForeignKey(TibilletUser, on_delete=models.PROTECT, related_name='membership')
+    tenant = models.ForeignKey(Client, on_delete=models.PROTECT)
+
+    date_added = models.DateTimeField(auto_now_add=True)
+    first_contribution = models.DateField(null=True, blank=True)
+    last_contribution = models.DateField(null=True, blank=True)
+
+
 
 
 # ---------------------------------------------------------------------------------------------------------------------

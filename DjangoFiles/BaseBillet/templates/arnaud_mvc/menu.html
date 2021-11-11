@@ -3,7 +3,7 @@
 
 <nav class="nav-responsive">
     {% if configuration.button_adhesion %}
-        <a href="" class="btn-responsive">
+        <a href="#adherer" class="btn-responsive" title="adhesion_one" onclick="asideswipe.call(this);">
             <img src="{% static 'arnaud_mvc/img/menu/adhesion_card.png' %}" alt="adhesion">
             <h4 style="font-size: 0.8rem;">Adhérer</h4>
         </a>
@@ -29,7 +29,7 @@
 <!-- MENU LIEUX -->
 <div class="menu-page">
     {% if configuration.button_adhesion %}
-        <a href="" class="btn-menu-page">
+        <a href="#adherer" class="btn-menu-page" title="adhesion_one" onclick="asideswipe.call(this);">
             <img src="{% static 'arnaud_mvc/img/menu/adhesion_card.png' %}" alt="billeterie Ti Billet">
             <h4 style="font-size: 0.8rem;">ADHERER</h4>
         </a>

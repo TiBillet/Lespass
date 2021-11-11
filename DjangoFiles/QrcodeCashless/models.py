@@ -21,7 +21,7 @@ class Detail(models.Model):
                     )
     img_url = models.URLField(null=True, blank=True)
     base_url = models.CharField(max_length=60, null=True, blank=True)
-    origine = models.ForeignKey(Customers_Client, on_delete=models.PROTECT, null=True, blank=True)
+    origine = models.ForeignKey(Customers_Client, on_delete=models.PROTECT, null=True, blank=True, related_name='origine')
     generation = models.SmallIntegerField()
 
     def __str__(self):
