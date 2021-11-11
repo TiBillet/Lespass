@@ -1,6 +1,6 @@
 {% block header %}
-{% load static %}
-{% load tz %}
+    {% load static %}
+    {% load tz %}
     <!DOCTYPE html>
     <html lang="fr">
     <head>
@@ -18,12 +18,20 @@
 {% endblock header %}
 
 {% block nav %}
+    {% get_media_prefix as MEDIA_PREFIX %}
+
     <!-- MENU -->
     <nav class="menu">
         <!-- START LOGO -->
-
-        <div><img src="{% static 'arnaud_mvc/img/logotibillet.png' %}" alt="TiBillet"
-                  class="logotibillet"></div>
+        <div>
+            {% if configuration.logo %}
+                <img src="{{ MEDIA_PREFIX }}{{ configuration.logo.thumbnail }}" alt="TiBillet"
+                     class="logotibillet">
+            {% else %}
+                <img src="{% static 'arnaud_mvc/img/logotibillet.png' %}" alt="TiBillet"
+                     class="logotibillet">
+            {% endif %}
+        </div>
         <!-- END LOGO -->
 
 
@@ -31,20 +39,20 @@
 
             <li class="m">
                 <a href="/"><img src="{% static 'arnaud_mvc/img/menu/home.svg' %}"
-                                                      alt="logo billeterie Ti Billet" class="menutibillet  m1"></a></li>
-{#            <li class="m"><a href="#Apropos"><img src="{% static 'arnaud_mvc/img/menu/like.svg' %}"#}
-{#                                                  alt="logo billeterie Ti Billet" class="menutibillet  m2"></a></li>#}
+                                 alt="logo billeterie Ti Billet" class="menutibillet  m1"></a></li>
+            {#            <li class="m"><a href="#Apropos"><img src="{% static 'arnaud_mvc/img/menu/like.svg' %}"#}
+            {#                                                  alt="logo billeterie Ti Billet" class="menutibillet  m2"></a></li>#}
             <li class="m"><a href="#calendar"><img src="{% static 'arnaud_mvc/img/menu/calendrier.svg' %}"
-                                                  alt="logo billeterie Ti Billet" class="menutibillet  m3"></a></li>
-{#            <li class="m"><a href="#Contact"><img src="{% static 'arnaud_mvc/img/menu/search.svg' %}"#}
-{#                                                  alt="logo billeterie Ti Billet" class="menutibillet  m4"></a></li>#}
+                                                   alt="logo billeterie Ti Billet" class="menutibillet  m3"></a></li>
+            {#            <li class="m"><a href="#Contact"><img src="{% static 'arnaud_mvc/img/menu/search.svg' %}"#}
+            {#                                                  alt="logo billeterie Ti Billet" class="menutibillet  m4"></a></li>#}
 
             <!-- onClick="asideswipe()" -->
         </ul>
     </nav>
 
     <!-- START FILTER MENU -->
-{#        {% include 'arnaud_mvc/nav_filter.html' %}#}
+    {#        {% include 'arnaud_mvc/nav_filter.html' %}#}
     <!-- END FILTER MENU -->
 
 

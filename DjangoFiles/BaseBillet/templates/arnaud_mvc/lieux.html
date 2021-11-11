@@ -1,7 +1,7 @@
 {% extends "arnaud_mvc/base.html" %}
 {% load static %}
 {% block content %}
-{% get_media_prefix as MEDIA_PREFIX %}
+    {% get_media_prefix as MEDIA_PREFIX %}
 
 
     <div class="meta">
@@ -30,9 +30,7 @@
                 <br/>
                 <span class="text-event">{{ configuration.long_description }}</span>
                 <div class="linksocial">
-                    {% if configuration.button_adhesion %}
-                        <a href="" class="btn-adherer">Adhérer à l'association</a>
-                    {% endif %}
+
 
                     {% if configuration.facebook %}
                         <a href="{{ configuration.facebook }}" style="padding: 5px; color: black;"><i
@@ -46,43 +44,17 @@
                     {% endif %}
 
                 </div>
+
                 <a href="{{ configuration.site_web }}" style="text-decoration:none; color:black;padding-left:5%;">
                     <i class="fas fa-globe fa-1x"></i>
                     {{ configuration.site_web }}
                 </a>
+
             </div>
             <!-- END DESCRIPTION -->
 
+        {% include 'arnaud_mvc/menu.html' %}
 
-            <!-- MENU LIEUX -->
-            <div class="menu-page">
-                <a href="#calendar" class="btn-menu-page">
-                    <img src="{% static 'arnaud_mvc/img/menu/calendriern.svg' %}" alt="billeterie Ti Billet">
-                    <h4 style="font-size: 0.8rem;">CALENDRIER</h4>
-                </a>
-                <a href="#events" class="btn-menu-page">
-                    <img src="{% static 'arnaud_mvc/img/menu/concerts.svg' %}" alt="billeterie Ti Billet">
-                    <h4 style="font-size: 0.8rem;">CONCERTS</h4>
-                </a>
-{#                <a href="" class="btn-menu-page">#}
-{#                    <img src="{% static 'arnaud_mvc/img/menu/photo.svg' %}" alt="billeterie Ti Billet">#}
-{#                    <h4 style="font-size: 0.8rem;">PHOTO</h4>#}
-{#                </a>#}
-{#                <a href="" class="btn-menu-page">#}
-{#                    <img src="{% static 'arnaud_mvc/img/menu/video.svg' %}" alt="billeterie Ti Billet">#}
-{#                    <h4 style="font-size: 0.8rem;">VIDEO</h4>#}
-{#                </a>#}
-{#                <a href="" class="btn-menu-page">#}
-{#                    <img src="{% static 'arnaud_mvc/img/menu/programme.svg' %}" alt="billeterie Ti Billet">#}
-{#                    <h4 style="font-size: 0.8rem;">PROGRAMME</h4>#}
-{#                </a>#}
-                <a href="{{ MEDIA_PREFIX }}{{ configuration.map_img }}" class="btn-menu-page"
-                   style="margin-right:0;">
-                    <img src="{% static 'arnaud_mvc/img/menu/map.svg' %}" alt="billeterie Ti Billet">
-                    <h4 style="font-size: 0.8rem;">MAP</h4>
-                </a>
-            </div>
-            <!-- END MENU LIEUX -->
 
         </div>
 

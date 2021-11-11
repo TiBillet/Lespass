@@ -111,6 +111,19 @@ class Configuration(SingletonModel):
                         verbose_name='Background'
                         )
 
+    logo = StdImageField(upload_to='images/',
+                        null=True, blank=True,
+                        # validators=[MaxSizeValidator(1920, 1920)],
+                        variations={
+                            'fhd': (1920, 1920),
+                            'hdr': (720, 720),
+                            'med': (480, 480),
+                            'thumbnail': (300, 120),
+                        },
+                        delete_orphans=True,
+                        verbose_name='Logo'
+                        )
+
     mollie_api_key = models.CharField(max_length=50,
                                       blank=True, null=True)
 

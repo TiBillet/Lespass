@@ -106,6 +106,7 @@ class ConfigurationAdmin(SingletonModelAdmin):
                 'organisation',
                 'short_description',
                 'long_description',
+                'logo',
                 'img',
                 'adress',
                 'phone',
