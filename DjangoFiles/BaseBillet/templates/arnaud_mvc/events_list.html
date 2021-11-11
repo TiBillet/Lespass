@@ -1,0 +1,48 @@
+<!-- START EVENTS LIST -->
+{% load static %}
+{% get_media_prefix as MEDIA_PREFIX %}
+
+<div id="events"></div>
+{% for event in events %}
+
+    {% if forloop.counter0|divisibleby:"4" %}
+        <div class="card card-meta-50">
+    {% else %}
+        <div class="card card-meta ">
+    {% endif %}
+
+<!-- PARTIE HAUTE DE LA DIV IMG ET CONTENT -->
+<a href="{% url 'show_event' event.slug %}" class="img-card-meta">
+    <div class="content-img">
+        <h1>{{ event.name }}</h1>
+        <div class="effetxt"></div>
+    </div>
+    <div class="effet"></div>
+    <div class="effetnoir"></div>
+    <img src="{{ MEDIA_PREFIX }}{{ event.img.crop }}" alt="event img" class="cover">
+</a>
+<!-- PARTIE BASSE INFO LIEUX / TARIFS -->
+<div class="info-card-meta">
+    <!-- <h2 class="card-title">MANAPANY FESTIVAL 2022</h2> -->
+    <div class="card-footer">
+        <span>{{ event.datetime | date:"D d F Y" }} {{ event.datetime | time }}</span>
+
+        <div class="card-footer-link">
+
+            {% for product in event.products.all %}
+                {% if product.categorie_article == categorie_billet %}
+                    {% for price in product.prices.all %}
+                        {% if forloop.first %}
+                            <a href="" class="linkcard">{{ price.prix | floatformat:"-2" }}€</a>
+                        {% else %}
+                            <a href="" class="linkcard">/ {{ price.prix | floatformat:"-2" }}€</a>
+                        {% endif %}
+                    {% endfor %}
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+</div>
+</div>
+{% endfor %}
+<!-- END EVENTS LIST -->

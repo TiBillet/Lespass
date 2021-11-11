@@ -105,20 +105,31 @@ class ConfigurationAdmin(SingletonModelAdmin):
             'fields': (
                 'organisation',
                 'short_description',
+                'long_description',
+                'img',
                 'adress',
                 'phone',
                 'email',
                 'site_web',
+                'map_img',
+            )
+        }),
+        ('Réstaurant', {
+            'fields': (
+                'carte_restaurant',
+            ),
+        }),
+        ('Social', {
+            'fields': (
                 'twitter',
                 'facebook',
                 'instagram',
-                'img',
-                'carte_restaurant',
-            )
+            ),
         }),
         ('Adhésions', {
             'fields': (
                 'adhesion_obligatoire',
+                'button_adhesion',
             ),
         }),
         ('Paiements', {

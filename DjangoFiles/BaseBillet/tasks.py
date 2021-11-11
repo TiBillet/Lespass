@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
 # from celery.utils.log import get_task_logger
 # logger = get_task_logger(__name__)
 
-
 class CeleryMailerClass():
 
     def __init__(self,
@@ -86,6 +85,14 @@ class CeleryMailerClass():
 
 
 def create_ticket_pdf(ticket: Ticket):
+    # logger_weasy = logging.getLogger("weasyprint")
+    # logger_weasy.addHandler(logging.NullHandler())
+    # logger_weasy.setLevel(50)  # Only show errors, use 50
+    #
+    # PROGRESS_LOGGER = logging.getLogger('weasyprint.progress')
+    # PROGRESS_LOGGER.addHandler(logging.NullHandler())
+    # PROGRESS_LOGGER.setLevel(50)  # Only show errors, use 50
+
     qr = segno.make(f"{ticket.uuid}", micro=False)
 
     buffer_svg = BytesIO()

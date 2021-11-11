@@ -29,6 +29,7 @@ class EventSerializer(serializers.ModelSerializer):
             'name',
             'short_description',
             'long_description',
+            'event_facebook_url',
             'datetime',
             'billets',
             # 'products',

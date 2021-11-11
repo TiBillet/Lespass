@@ -6,7 +6,7 @@ from django.shortcuts import render
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
-from BaseBillet.models import Configuration, Event, Ticket
+from BaseBillet.models import Configuration, Event, Ticket, Product
 
 import base64
 import segno
@@ -20,12 +20,13 @@ from django.http import HttpResponse
 
 from PIL import Image
 
+
 class index(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
         configuration = Configuration.get_solo()
-        if not configuration.activer_billetterie :
+        if not configuration.activer_billetterie:
             return HttpResponseRedirect('https://www.tibillet.re')
 
         events = Event.objects.filter(datetime__gt=datetime.now())
@@ -36,18 +37,34 @@ class index(APIView):
 
         context = {
             'configuration': configuration,
-            'events': events[1:],
-            'first_event': first_event,
+            'events': events,
+            'categorie_billet': Product.BILLET,
         }
 
-        return render(request, 'html5up-massively/index.html', context=context)
+        # return render(request, 'html5up-massively/index.html', context=context)
+        # return render(request, self.template_name , context=context)
+        return render(request, 'arnaud_mvc/lieux.html', context=context)
+
+
+class event(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, slug):
+        configuration = Configuration.get_solo()
+        event = get_object_or_404(Event, slug=slug)
+
+        context = {
+            'configuration': configuration,
+            'categorie_billet': Product.BILLET,
+            'event': event,
+        }
+        return render(request, 'arnaud_mvc/event.html', context=context)
 
 
 class Ticket_html_view(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, pk_uuid):
-
         ticket = get_object_or_404(Ticket, uuid=pk_uuid)
 
         qr = segno.make(f"{ticket.uuid}", micro=False)

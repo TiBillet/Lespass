@@ -1,0 +1,99 @@
+{% extends "arnaud_mvc/base.html" %}
+{% load static %}
+{% block content %}
+{% get_media_prefix as MEDIA_PREFIX %}
+
+
+    <div class="meta">
+
+        <!-- PAGE LIEUX -->
+        <!-- IMAGE BG -->
+        <div class="card card-meta-50">
+            <a href="" class="img-card-full">
+                <div class="effet"><h1 class="colW">LE BISIK</h1></div>
+                <img src="{{ MEDIA_PREFIX }}{{ configuration.img.fhd }}" alt="Image de la vignette" class="cover">
+            </a>
+        </div>
+        <!-- END IMAGE BG -->
+
+        <div class="card card-meta-50 artiste-bloc" style="background-color: #140f0c;">
+
+            <!-- DESCRIPTION -->
+            <div class="description">
+                <div class="arttop"
+                     style="display: flex; flex-direction: row; justify-content: space-between; width: 100%; align-items: center; margin-bottom: 20px;">
+                    <h1 class="title-artiste">{{ configuration.organisation }}</h1>
+                    {#                    <img src="{% static 'arnaud_mvc/img/aside/lieux.svg' %}" alt="billeterie Ti Billet"#}
+                    {#                         style="max-width: 30px; margin-right: 5%;">#}
+                </div>
+                <h2 class="text-event">{{ configuration.short_description }}</h2>
+                <br/>
+                <span class="text-event">{{ configuration.long_description }}</span>
+                <div class="linksocial">
+                    {% if configuration.button_adhesion %}
+                        <a href="" class="btn-adherer">Adhérer à l'association</a>
+                    {% endif %}
+
+                    {% if configuration.facebook %}
+                        <a href="{{ configuration.facebook }}" style="padding: 5px; color: black;"><i
+                                class="fab fa-facebook-square fa-2x"></i></a>
+                    {% endif %}
+
+                    {% if configuration.instagram %}
+
+                        <a href="{{ configuration.instagram }}" style="padding: 5px; color: black;"><i
+                                class="fab fa-instagram-square fa-2x"></i></a>
+                    {% endif %}
+
+                </div>
+                <a href="{{ configuration.site_web }}" style="text-decoration:none; color:black;padding-left:5%;">
+                    <i class="fas fa-globe fa-1x"></i>
+                    {{ configuration.site_web }}
+                </a>
+            </div>
+            <!-- END DESCRIPTION -->
+
+
+            <!-- MENU LIEUX -->
+            <div class="menu-page">
+                <a href="#calendar" class="btn-menu-page">
+                    <img src="{% static 'arnaud_mvc/img/menu/calendriern.svg' %}" alt="billeterie Ti Billet">
+                    <h4 style="font-size: 0.8rem;">CALENDRIER</h4>
+                </a>
+                <a href="#events" class="btn-menu-page">
+                    <img src="{% static 'arnaud_mvc/img/menu/concerts.svg' %}" alt="billeterie Ti Billet">
+                    <h4 style="font-size: 0.8rem;">CONCERTS</h4>
+                </a>
+{#                <a href="" class="btn-menu-page">#}
+{#                    <img src="{% static 'arnaud_mvc/img/menu/photo.svg' %}" alt="billeterie Ti Billet">#}
+{#                    <h4 style="font-size: 0.8rem;">PHOTO</h4>#}
+{#                </a>#}
+{#                <a href="" class="btn-menu-page">#}
+{#                    <img src="{% static 'arnaud_mvc/img/menu/video.svg' %}" alt="billeterie Ti Billet">#}
+{#                    <h4 style="font-size: 0.8rem;">VIDEO</h4>#}
+{#                </a>#}
+{#                <a href="" class="btn-menu-page">#}
+{#                    <img src="{% static 'arnaud_mvc/img/menu/programme.svg' %}" alt="billeterie Ti Billet">#}
+{#                    <h4 style="font-size: 0.8rem;">PROGRAMME</h4>#}
+{#                </a>#}
+                <a href="{{ MEDIA_PREFIX }}{{ configuration.map_img }}" class="btn-menu-page"
+                   style="margin-right:0;">
+                    <img src="{% static 'arnaud_mvc/img/menu/map.svg' %}" alt="billeterie Ti Billet">
+                    <h4 style="font-size: 0.8rem;">MAP</h4>
+                </a>
+            </div>
+            <!-- END MENU LIEUX -->
+
+        </div>
+
+        <!-- START EVENTS LIST -->
+        {% include 'arnaud_mvc/events_list.html' %}
+        <!-- END EVENTS LIST-->
+
+        <!-- START CELANDAR -->
+        {% include 'arnaud_mvc/calendar.html' %}
+        <!-- START CELANDAR -->
+
+    </div>
+
+{% endblock content %}

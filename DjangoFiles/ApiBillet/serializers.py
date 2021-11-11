@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.db import connection
+from django.utils.text import slugify
 from rest_framework import serializers
 import json
 from django.utils.translation import gettext, gettext_lazy as _
@@ -67,8 +68,10 @@ class EventSerializer(serializers.ModelSerializer):
         fields = [
             'uuid',
             'name',
+            'slug',
             'short_description',
             'long_description',
+            'event_facebook_url',
             'datetime',
             'products',
             'img',
@@ -79,6 +82,8 @@ class EventSerializer(serializers.ModelSerializer):
         depth = 1
 
     def validate(self, attrs):
+        # import ipdb; ipdb.set_trace()
+        # slug = slugify(f"{self.initial_data.get('name')} {self.initial_data.get('datetime').strftime('%D %R')}")
 
         products = self.initial_data.get('products')
         if products:

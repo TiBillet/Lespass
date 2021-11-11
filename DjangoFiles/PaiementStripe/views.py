@@ -193,10 +193,11 @@ class retour_stripe(View):
 
                 if checkout_session.payment_status == "unpaid":
                     paiement_stripe.status = Paiement_stripe.PENDING
-                    # import ipdb; ipdb.set_trace()
                     if datetime.now().timestamp() > checkout_session.expires_at :
                         paiement_stripe.status = Paiement_stripe.EXPIRE
                     paiement_stripe.save()
+                    return HttpResponse(
+                        f'stripe : {checkout_session.payment_status} - paiement : {paiement_stripe.status}')
 
                 elif checkout_session.payment_status == "paid":
 

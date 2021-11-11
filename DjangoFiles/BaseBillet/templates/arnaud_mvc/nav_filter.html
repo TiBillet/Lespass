@@ -1,0 +1,38 @@
+{% load static %}
+<nav class="aside " id="aside">
+    <div class="menu-aside">
+        <a href="#" class="btn-aside2">
+            <div class="btnside btnconcerts">
+                <img src="{% static 'arnaud_mvc/img/aside/concerts.svg' %}" alt="logo billeterie Ti Billet"
+                     class="imgaside-concert">
+                <h4 class="H41">CONCERTS</h4>
+            </div>
+        </a>
+        <a href="#" class="btn-aside3">
+            <div class="btnside btnlieux">
+                <img src="{% static 'arnaud_mvc/img/aside/lieux.svg' %}" alt="logo billeterie Ti Billet"
+                     class="imgaside-lieux">
+                <h4 class="H42">LIEUX</h4>
+            </div>
+        </a>
+        <a href="#" class="btn-aside4">
+            <div class="btnside btnartiste">
+                <img src="{% static 'arnaud_mvc/img/aside/artistes.svg' %}" alt="logo billeterie Ti Billet"
+                     class="imgaside-artiste">
+                <h4 class="H43">ARTISTES</h4>
+            </div>
+        </a>
+    </div>
+</nav>
+
+<script>
+    var ul = document.getElementById("menutb");
+    var li = document.createElement('li');
+    svg = "{% static 'arnaud_mvc/img/menu/filtrer.svg' %}"
+    li.innerHTML = '' +
+        '<li class="m">' +
+        '<a id="filter" class="filter">' +
+        '<img src="' +svg+
+        '" alt="logo billeterie Ti Billet" class="menutibillet filter  m5"></a></li>';
+    ul.appendChild(li);
+</script>

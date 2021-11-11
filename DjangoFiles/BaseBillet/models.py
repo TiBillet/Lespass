@@ -12,6 +12,7 @@ from django.dispatch import receiver
 from django.urls import reverse
 from django.utils import timezone
 from django.contrib.postgres.fields import JSONField
+from django.utils.text import slugify
 from solo.models import SingletonModel
 from django.utils.translation import ugettext_lazy as _
 from stdimage import StdImageField
@@ -54,6 +55,7 @@ def poids_option_generale(sender, instance: OptionGenerale, created, **kwargs):
 class Configuration(SingletonModel):
     organisation = models.CharField(max_length=50, verbose_name=_("Nom de l'organisation"))
     short_description = models.CharField(max_length=250, verbose_name=_("Description courte"))
+    long_description = models.TextField(blank=True, null=True)
 
     adress = models.CharField(max_length=250)
     phone = models.CharField(max_length=20)
@@ -66,8 +68,22 @@ class Configuration(SingletonModel):
     instagram = models.URLField(blank=True, null=True)
 
     adhesion_obligatoire = models.BooleanField(default=False)
+    button_adhesion = models.BooleanField(default=False)
 
     name_required_for_ticket = models.BooleanField(default=False, verbose_name=_("Billet nominatifs"))
+
+    map_img = StdImageField(upload_to='images/',
+                                     null=True, blank=True,
+                                     validators=[MaxSizeValidator(1920, 1920)],
+                                     variations={
+                                         'fhd': (1920, 1920),
+                                         'hdr': (720, 720),
+                                         'med': (480, 480),
+                                         'thumbnail': (150, 90),
+                                     },
+                                     delete_orphans=True,
+                                     verbose_name=_('Carte géorgraphique')
+                                     )
 
     carte_restaurant = StdImageField(upload_to='images/',
                                      null=True, blank=True,
@@ -267,10 +283,13 @@ class Event(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
 
     name = models.CharField(max_length=200)
+    slug = models.SlugField(unique=True, db_index=True, blank=True, null=True, max_length=250)
     datetime = models.DateTimeField()
 
     short_description = models.CharField(max_length=250)
     long_description = models.TextField(blank=True, null=True)
+
+    event_facebook_url = models.URLField(blank=True, null=True)
 
     products = models.ManyToManyField(Product, blank=True)
 
@@ -307,10 +326,16 @@ class Event(models.Model):
         else:
             return False
 
+    def save(self, *args, **kwargs):
+        # self.slug = slugify(f"{self.name} {self.datetime} {str(self.uuid).partition('-')[0]}")[:50]
+        self.slug = slugify(f"{self.name} {self.datetime.strftime('%D %R')}")
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.datetime.strftime('%d/%m')} {self.name}"
 
     class Meta:
+        unique_together = ('name','datetime')
         ordering = ('datetime',)
         verbose_name = _('Evenement')
         verbose_name_plural = _('Evenements')

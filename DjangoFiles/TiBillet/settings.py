@@ -239,6 +239,7 @@ LOGGING = {
         'console': {
             'level': 'INFO',
             'class': 'logging.StreamHandler',
+            'formatter': 'simple',
         },
         'logfile': {
             'level': 'INFO',
@@ -247,9 +248,16 @@ LOGGING = {
             'formatter': 'simple',
             'maxBytes': 1024 * 1024 * 100,  # 100 mb
         },
+        'weasyprint': {
+            'level': 'ERROR',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': f"{BASE_DIR}/www/weasyprint",
+            'formatter': 'simple',
+            'maxBytes': 1024 * 1024 * 100,  # 100 mb
+        },
     },
     'root': {
         'level': 'INFO',
-        'handlers': ['console', 'logfile']
+        'handlers': ['console', 'logfile', 'weasyprint']
     },
 }
