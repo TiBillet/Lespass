@@ -15,6 +15,7 @@ from AuthBillet.models import HumanUser
 from BaseBillet.models import Configuration, LigneArticle, Paiement_stripe, Reservation
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -48,7 +49,9 @@ class creation_paiement_stripe():
     def _user_paiement(self):
         User = get_user_model()
         user_paiement, created = User.objects.get_or_create(
-            email=self.email_paiement)
+            email=self.email_paiement,
+            username=self.email_paiement,
+        )
 
         # On ne lie pas tout de suite la carte a l'user,
         # on attendra  une réponse positive du serveur cashless.
@@ -163,18 +166,18 @@ class retour_stripe(View):
     def get(self, request, uuid_stripe):
         paiement_stripe = get_object_or_404(Paiement_stripe, uuid=uuid_stripe)
 
-        if paiement_stripe.traitement_en_cours :
+        if paiement_stripe.traitement_en_cours:
             return HttpResponse(
-                    'traitement_en_cours')
+                'traitement_en_cours')
 
-        if paiement_stripe.reservation.status == Reservation.PAID_ERROR :
-            return HttpResponse(
+        if paiement_stripe.reservation:
+            if paiement_stripe.reservation.status == Reservation.PAID_ERROR:
+                return HttpResponse(
                     "Erreur dans l'envoie du mail. Merci de vérifier l'adresse")
 
-        if paiement_stripe.status == Paiement_stripe.VALID or paiement_stripe.reservation.status == Reservation.VALID :
+            if paiement_stripe.status == Paiement_stripe.VALID or paiement_stripe.reservation.status == Reservation.VALID:
                 return HttpResponse(
                     'Paiement déja validé !')
-
 
         configuration = Configuration.get_solo()
         if configuration.stripe_mode_test:
@@ -183,8 +186,7 @@ class retour_stripe(View):
             stripe.api_key = configuration.stripe_api_key
 
         print(paiement_stripe.status)
-        if paiement_stripe.status != Paiement_stripe.VALID and \
-            paiement_stripe.reservation.status != Reservation.VALID :
+        if paiement_stripe.status != Paiement_stripe.VALID:
 
             checkout_session = stripe.checkout.Session.retrieve(paiement_stripe.id_stripe)
 
@@ -193,7 +195,7 @@ class retour_stripe(View):
 
                 if checkout_session.payment_status == "unpaid":
                     paiement_stripe.status = Paiement_stripe.PENDING
-                    if datetime.now().timestamp() > checkout_session.expires_at :
+                    if datetime.now().timestamp() > checkout_session.expires_at:
                         paiement_stripe.status = Paiement_stripe.EXPIRE
                     paiement_stripe.save()
                     return HttpResponse(
@@ -222,25 +224,24 @@ class retour_stripe(View):
             else:
                 raise Http404
 
-
         # on vérifie que le status n'ai pas changé
         paiement_stripe.refresh_from_db()
         # import ipdb; ipdb.set_trace()
 
         # si c'est depuis le qrcode, on renvoie vers la vue mobile :
-        if paiement_stripe.source == Paiement_stripe.QRCODE :
+        if paiement_stripe.source == Paiement_stripe.QRCODE:
 
             # SI le paiement est valide, c'est que les presave et postsave
             # ont validé la réponse du serveur cashless pour les recharges
 
-            if paiement_stripe.status == Paiement_stripe.VALID :
+            if paiement_stripe.status == Paiement_stripe.VALID:
                 # on boucle ici pour récuperer l'uuid de la carte.
                 for ligne_article in paiement_stripe.lignearticle_set.all():
                     if ligne_article.carte:
                         messages.success(request, f"Paiement validé. Merci !")
                         return HttpResponseRedirect(f"/qr/{ligne_article.carte.uuid}#success")
 
-            else :
+            else:
                 # on boucle ici pour récuperer l'uuid de la carte.
                 for ligne_article in paiement_stripe.lignearticle_set.all():
                     if ligne_article.carte:
@@ -249,17 +250,19 @@ class retour_stripe(View):
                                        f"Merci de vérifier votre moyen de paiement et/ou contactez un responsable.")
                         return HttpResponseRedirect(f"/qr/{ligne_article.carte.uuid}#erreurpaiement")
 
-        elif paiement_stripe.source == Paiement_stripe.API_BILLETTERIE :
-            if paiement_stripe.status == Paiement_stripe.VALID or paiement_stripe.reservation.status == Reservation.VALID :
+        elif paiement_stripe.source == Paiement_stripe.API_BILLETTERIE:
+            if paiement_stripe.reservation:
+                if paiement_stripe.reservation.status == Reservation.VALID:
+                    return HttpResponse(
+                        'Paiement déja validé !')
+            if paiement_stripe.status == Paiement_stripe.VALID:
                 return HttpResponse(
                     'Paiement déja validé !')
 
-            elif paiement_stripe.status == Paiement_stripe.PAID :
+            elif paiement_stripe.status == Paiement_stripe.PAID:
                 logger.info(f"Paiement_stripe.API_BILLETTERIE  : {paiement_stripe.status}")
                 return HttpResponse(
                     'Paiement okay, on lance les process de validation.')
-
-
 
         raise Http404(f'{paiement_stripe.status}')
 

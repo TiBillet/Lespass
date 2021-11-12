@@ -41,26 +41,3 @@
     </form>
 </div>
 <!-- END ADHESION MODAL MENU -->
-
-<h2>Adhésion</h2>
-<h2 class="major">{{ client_name }}</h2>
-<form method="post" action="#">
-    {% csrf_token %}
-    <div class="fields">
-
-        <div class="field">
-            {% if email %}
-                <label for="email">Vérifiez votre adresse Email</label>
-                <input type="email" name="email" id="Email" required="True" value="{{ email }}"
-                       style="text-transform: lowercase;"/>
-            {% else %}
-                <label for="email">Entrez votre adresse Email</label>
-                <input type="email" name="email" id="email" required="True"
-                       style="text-transform: lowercase;"/>
-            {% endif %}
-        </div>
-    </div>
-    <ul class="actions">
-        <li><input type="submit" value="continuer" class="primary"/></li>
-    </ul>
-</form>
