@@ -137,6 +137,34 @@ class ReservationSerializer(serializers.ModelSerializer):
         ]
         depth = 1
 
+class MembreshipValidator(serializers.Serializer):
+    email = serializers.EmailField()
+
+    first_name = serializers.CharField(max_length=200,)
+    last_name = serializers.CharField(max_length=200,)
+
+    phone = serializers.CharField(max_length=20, required=False)
+    postal_code = serializers.IntegerField(required=False)
+    birth_date = serializers.DateField(required=False)
+
+    contribution_value = serializers.FloatField()
+
+    def validate_email(self, value):
+        User: TibilletUser = get_user_model()
+        user_paiement, created = User.objects.get_or_create(
+            email=value, username=value)
+
+        if created:
+            user_paiement: HumanUser
+            user_paiement.client_source = connection.tenant
+            user_paiement.client_achat.add(connection.tenant)
+            user_paiement.is_active = False
+        else:
+            user_paiement.client_achat.add(connection.tenant)
+
+        user_paiement.save()
+        return user_paiement.email
+
 
 class ReservationValidator(serializers.Serializer):
     email = serializers.EmailField()
@@ -157,7 +185,6 @@ class ReservationValidator(serializers.Serializer):
             user_paiement.client_achat.add(connection.tenant)
 
         user_paiement.save()
-        self.user_commande = user_paiement
         return user_paiement.email
 
     def validate_prices(self, value):

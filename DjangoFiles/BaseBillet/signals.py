@@ -66,7 +66,7 @@ def set_paiement_and_reservation_valid(old_instance, new_instance):
         logger.info(
             f"    TRIGGER LIGNE ARTICLE set_paiement_and_reservation_valid {new_instance.price}. On test si toute les lignes sont validées")
 
-        # On exclu l'instance en cours car elle n'est pas encore validé en DB comme Valide.
+        # On exclu l'instance en cours car elle n'est pas encore validé en DB comme Valide : on est sur du signal pre_save
         # on test ici : Si toute les autre ligne sont valide et que celle ci l'est aussi.
         lignes_dans_paiement_stripe = new_instance.paiement_stripe.lignearticle_set.all().exclude(
             uuid=new_instance.uuid)

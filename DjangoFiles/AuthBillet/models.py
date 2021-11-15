@@ -67,6 +67,10 @@ class TibilletUser(AbstractUser):
 
     email = models.EmailField(_('email'), unique=True)  # changes email to unique and blank to false
     username = models.CharField(max_length=200, unique=True)
+
+    first_name = models.CharField(max_length=200, null=True, blank=True)
+    last_name = models.CharField(max_length=200, null=True, blank=True)
+
     phone = models.CharField(max_length=20, null=True, blank=True)
 
     last_see = models.DateTimeField(auto_now=True)
@@ -216,11 +220,13 @@ class HumanUser(TibilletUser):
 
 class Membership(models.Model):
     user = models.ForeignKey(TibilletUser, on_delete=models.PROTECT, related_name='membership')
+
     tenant = models.ForeignKey(Client, on_delete=models.PROTECT)
 
     date_added = models.DateTimeField(auto_now_add=True)
     first_contribution = models.DateField(null=True, blank=True)
     last_contribution = models.DateField(null=True, blank=True)
+    contribution_value = models.FloatField(null=True, blank=True)
 
 
 

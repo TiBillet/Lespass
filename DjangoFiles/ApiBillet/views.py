@@ -11,7 +11,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
-    ReservationValidator
+    ReservationValidator, MembreshipValidator
 from AuthBillet.models import TenantAdminPermission
 from Customers.models import Client, Domain
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket
@@ -143,54 +143,25 @@ class ReservationViewset(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
-class Membership(viewsets.ViewSet):
+class MembershipViewset(viewsets.ViewSet):
+    permission_classes = [AllowAny]
 
-    def send_mail_to_cashless_for_membership(request, data: dict, carte: any):
-        sess = requests.Session()
-        configuration = Configuration.get_solo()
+    def create(self, request):
+        print(request.data)
+        validator = MembreshipValidator(data=request.data, context={'request': request})
+        if validator.is_valid():
+            # serializer.save()
+            return Response(validator.data, status=status.HTTP_201_CREATED)
+        return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        r = sess.post(
-            f'{configuration.server_cashless}/api/billetterie_qrcode_adhesion',
-            headers={
-                'Authorization': f'Api-Key {configuration.key_cashless}'
-            },
-            data={
-                'prenom': data.get('prenom'),
-                'name': data.get('name'),
-                'email': data.get('email'),
-                'tel': data.get('tel'),
-                'uuid_carte': carte.uuid,
-            })
 
-        sess.close()
-
-        # nouveau membre crée avec uniquement l'email on demande la suite.
-        # HTTP_202_ACCEPTED
-        # HTTP_201_CREATED
-        if r.status_code in (201, 204):
-            messages.success(request, f"{data.get('email')}", extra_tags='email')
-            return HttpResponseRedirect(f'#demande_nom_prenom_tel')
-
-        # partial information :
-        elif r.status_code == 206:
-            partial = json.loads(r.text)
-            messages.success(request, f"{data.get('email')}", extra_tags='email')
-            if partial.get('name'):
-                messages.success(request, f"Email déja connu. Name déja connu", extra_tags='name')
-            if partial.get('prenom'):
-                messages.success(request, f"Email déja connu. prenom déja connu", extra_tags='prenom')
-            if partial.get('tel'):
-                messages.success(request, f"Email déja connu. tel déja connu", extra_tags='tel')
-            return HttpResponseRedirect(f'#demande_nom_prenom_tel')
-
-        # nouveau membre crée, on demande la suite.
-        elif r.status_code == 202:
-            messages.success(request, f"Carte liée au membre {data.get('email')}")
-            return HttpResponseRedirect(f'#adhesionsuccess')
-
+    def get_permissions(self):
+        if self.action in ['create']:
+            permission_classes = [permissions.AllowAny]
         else:
-            messages.error(request, f'Erreur {r.status_code} {r.text}')
-            return HttpResponseRedirect(f'#erreur')
+            permission_classes = [TenantAdminPermission]
+
+        return [permission() for permission in permission_classes]
 
 
 class TicketPdf(WeasyTemplateView):

@@ -6,19 +6,14 @@ from django.shortcuts import render
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
+
 from BaseBillet.models import Configuration, Event, Ticket, Product
 
-import base64
 import segno
 import barcode
 from djoser import utils
 
-from io import StringIO, BytesIO
-
-from django.template import engines
-from django.http import HttpResponse
-
-from PIL import Image
+from io import BytesIO
 
 
 class index(APIView):
@@ -29,11 +24,10 @@ class index(APIView):
         if not configuration.activer_billetterie:
             return HttpResponseRedirect('https://www.tibillet.re')
 
+        first_event = None
         events = Event.objects.filter(datetime__gt=datetime.now())
         if len(events) > 0:
             first_event = events[0]
-        else:
-            first_event = None
 
         context = {
             'configuration': configuration,

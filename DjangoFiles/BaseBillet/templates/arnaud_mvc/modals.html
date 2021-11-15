@@ -23,6 +23,7 @@
 <!-- START ADHESION MODAL MENU -->
 <div class="search" id="adhesion_one">
     <form method="post" action="#" class="form-search">
+        {% csrf_token %}
         <div class="div-label-search">
             <label for="msg" class="label-search">
                 <span href="pages/artiste.html" class="icone"
@@ -41,3 +42,87 @@
     </form>
 </div>
 <!-- END ADHESION MODAL MENU -->
+
+<!-- START NOM PRENOM TEL MODAL MENU -->
+<div class="search" id="demande_nom_prenom_tel">
+    <h2>Adhésion</h2>
+    <h2 class="major">{{ client_name }}</h2>
+    <h4 id="knew_text">Nous avons déja : </h4>
+    <h4>Il nous manque ces informations pour votre adhésion :</h4>
+    <form method="post" action="#" class="form-search">
+        {% csrf_token %}
+        {% csrf_token %}
+        <div class="fields">
+            <input id="adhesion_email" name="email" required="True" type="email" style="display: none"/>
+
+            <div id="adhesion_name" class="field half">
+                <label for="name">Nom</label>
+                <input id="name" name="name" required="True" type="text"/>
+            </div>
+            <div id="adhesion_prenom" class="field half">
+                <label for="prenom">Prénom</label>
+                <input id="prenom" name="prenom" required="True" type="text"/>
+            </div>
+            <div id="adhesion_tel" class="field half">
+                <label for="tel">Téléphone</label>
+                <input id="tel" name="tel" required="True" type="tel"/>
+            </div>
+        </div>
+        <ul class="actions">
+            <li><input type="submit" value="Adhérer" class="primary"/></li>
+        </ul>
+        <a href="#" class="btn-adherer" title="demande_nom_prenom_tel" onClick="asideswipe.call(this);">Fermer</a>
+    </form>
+</div>
+<!-- END NOM PRENOM TEL MODAL MENU -->
+
+
+<!-- START ERROR MODAL MENU -->
+<div class="search" id="demande_nom_prenom_tel">
+    <h2 class="major">ERREUR</h2>
+    <h3>Oups, Quelque chose s'est mal passé.</h3>
+    {% if messages %}
+        {% for message in messages %}
+            <h3>{{ message }}</h3>
+        {% endfor %}
+    {% endif %}
+</div>
+<!-- END ERROR MODAL MENU -->
+
+
+{# Script qui n'affiche que les champs dont nous avons besoin lors de l'adhésion #}
+<script type="text/javascript">
+    document.getElementById("knew_text").hidden = true;
+    {% if messages %}
+        {% for message in messages %}
+            {% if message.extra_tags == 'email' %}
+                document.getElementById("adhesion_email").value = "{{ message }}";
+            {% endif %}
+            {% if message.extra_tags == 'name' %}
+                document.getElementById("adhesion_name").hidden = true;
+                document.getElementById("name").readOnly = true;
+                document.getElementById("name").value = "connu";
+                document.getElementById("knew_text").textContent += "votre nom,";
+                document.getElementById("knew_text").hidden = false;
+
+            {% endif %}
+            {% if message.extra_tags == 'prenom' %}
+                document.getElementById("adhesion_prenom").hidden = true;
+                document.getElementById("prenom").readOnly = true;
+                document.getElementById("prenom").value = "connu";
+                document.getElementById("knew_text").textContent += "votre prénom,";
+                document.getElementById("knew_text").hidden = false;
+
+            {% endif %}
+            {% if message.extra_tags == 'tel' %}
+                document.getElementById("adhesion_tel").hidden = true;
+                document.getElementById("tel").readOnly = true;
+                document.getElementById("tel").value = "connu";
+                document.getElementById("knew_text").textContent += "votre numéro de téléphone,";
+                document.getElementById("knew_text").hidden = false;
+
+            {% endif %}
+        {% endfor %}
+    {% endif %}
+
+</script>

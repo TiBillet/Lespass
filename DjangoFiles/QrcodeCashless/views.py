@@ -3,7 +3,6 @@ from datetime import datetime
 import requests, json
 from django.contrib import messages
 from django.db import connection
-from django.db.models import Q
 from django.http import HttpResponseRedirect, HttpResponse, Http404
 from django.shortcuts import render
 from django.utils import timezone
@@ -11,13 +10,9 @@ from rest_framework.generics import get_object_or_404
 from django.views import View
 from rest_framework import status
 
-from ApiBillet.views import Membership
 from BaseBillet.models import Configuration, Product, LigneArticle, Price, Paiement_stripe
 from PaiementStripe.views import creation_paiement_stripe
 from QrcodeCashless.models import CarteCashless
-
-from django.db.models.signals import pre_save
-from django.dispatch import receiver
 
 import logging
 
@@ -214,49 +209,53 @@ class index_scan(View):
 
         # Email seul sans montant, c'est une adhésion
         elif data.get('email'):
-            return Membership.send_mail_to_cashless_for_membership(request, data, carte)
-            #
-            # sess = requests.Session()
-            # configuration = Configuration.get_solo()
-            # r = sess.post(
-            #     f'{configuration.server_cashless}/api/billetterie_qrcode_adhesion',
-            #     headers={
-            #         'Authorization': f'Api-Key {configuration.key_cashless}'
-            #     },
-            #     data={
-            #         'prenom': data.get('prenom'),
-            #         'name': data.get('name'),
-            #         'email': data.get('email'),
-            #         'tel': data.get('tel'),
-            #         'uuid_carte': carte.uuid,
-            #     })
-            #
-            # sess.close()
-            #
-            # # nouveau membre crée avec uniquement l'email on demande la suite.
-            # # HTTP_202_ACCEPTED
-            # # HTTP_201_CREATED
-            # if r.status_code in (201, 204):
-            #     messages.success(request, f"{data.get('email')}", extra_tags='email')
-            #     return HttpResponseRedirect(f'#demande_nom_prenom_tel')
-            #
-            # # partial information :
-            # elif r.status_code == 206:
-            #     partial = json.loads(r.text)
-            #     messages.success(request, f"{data.get('email')}", extra_tags='email')
-            #     if partial.get('name'):
-            #         messages.success(request, f"Email déja connu. Name déja connu", extra_tags='name')
-            #     if partial.get('prenom'):
-            #         messages.success(request, f"Email déja connu. prenom déja connu", extra_tags='prenom')
-            #     if partial.get('tel'):
-            #         messages.success(request, f"Email déja connu. tel déja connu", extra_tags='tel')
-            #     return HttpResponseRedirect(f'#demande_nom_prenom_tel')
-            #
-            # # nouveau membre crée, on demande la suite.
-            # elif r.status_code == 202:
-            #     messages.success(request, f"Carte liée au membre {data.get('email')}")
-            #     return HttpResponseRedirect(f'#adhesionsuccess')
-            #
-            # else:
-            #     messages.error(request, f'Erreur {r.status_code} {r.text}')
-            #     return HttpResponseRedirect(f'#erreur')
+            logger.info(f'send_mail_to_cashless_for_membership : {data}')
+            sess = requests.Session()
+            configuration = Configuration.get_solo()
+
+            uuid_carte = None
+            if carte:
+                uuid_carte = carte.uuid
+
+            r = sess.post(
+                f'{configuration.server_cashless}/api/billetterie_qrcode_adhesion',
+                headers={
+                    'Authorization': f'Api-Key {configuration.key_cashless}'
+                },
+                data={
+                    'prenom': data.get('prenom'),
+                    'name': data.get('name'),
+                    'email': data.get('email'),
+                    'tel': data.get('tel'),
+                    'uuid_carte': uuid_carte,
+                })
+
+            sess.close()
+
+            # nouveau membre crée avec uniquement l'email on demande la suite.
+            # HTTP_202_ACCEPTED
+            # HTTP_201_CREATED
+            if r.status_code in (201, 204):
+                messages.success(request, f"{data.get('email')}", extra_tags='email')
+                return HttpResponseRedirect(f'#demande_nom_prenom_tel')
+
+            # partial information :
+            elif r.status_code == 206:
+                partial = json.loads(r.text)
+                messages.success(request, f"{data.get('email')}", extra_tags='email')
+                if partial.get('name'):
+                    messages.success(request, f"Email déja connu. Name déja connu", extra_tags='name')
+                if partial.get('prenom'):
+                    messages.success(request, f"Email déja connu. prenom déja connu", extra_tags='prenom')
+                if partial.get('tel'):
+                    messages.success(request, f"Email déja connu. tel déja connu", extra_tags='tel')
+                return HttpResponseRedirect(f'#demande_nom_prenom_tel')
+
+            # nouveau membre crée, on demande la suite.
+            elif r.status_code == 202:
+                messages.success(request, f"Carte liée au membre {data.get('email')}")
+                return HttpResponseRedirect(f'#adhesionsuccess')
+
+            else:
+                messages.error(request, f'Erreur {r.status_code} {r.text}')
+                return HttpResponseRedirect(f'#erreur')
