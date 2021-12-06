@@ -192,7 +192,7 @@ class Product(models.Model):
                             'thumbnail': (150, 90),
                         },
                         delete_orphans=True,
-                        verbose_name='Image'
+                        verbose_name=_('Image du produit'),
                         )
 
     BILLET, PACK, RECHARGE_CASHLESS, VETEMENT, MERCH, ADHESION = 'B', 'P', 'R', 'T', 'M', 'A'
