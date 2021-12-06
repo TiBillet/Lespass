@@ -248,7 +248,6 @@ class Product(models.Model):
         self.save()
 
 
-
 class Price(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
 
