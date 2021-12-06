@@ -115,7 +115,7 @@ class ConfigurationAdmin(SingletonModelAdmin):
                 'map_img',
             )
         }),
-        ('Réstaurant', {
+        ('Restaurant', {
             'fields': (
                 'carte_restaurant',
             ),
@@ -144,6 +144,8 @@ class ConfigurationAdmin(SingletonModelAdmin):
         ('Billetterie', {
             'fields': (
                 'activer_billetterie',
+                'template_billetterie',
+                'template_meta',
                 'name_required_for_ticket',
                 'jauge_max',
                 'option_generale_radio',

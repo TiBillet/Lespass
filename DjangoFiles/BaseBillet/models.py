@@ -1,3 +1,4 @@
+import os
 import uuid
 
 import requests
@@ -73,17 +74,17 @@ class Configuration(SingletonModel):
     name_required_for_ticket = models.BooleanField(default=False, verbose_name=_("Billet nominatifs"))
 
     map_img = StdImageField(upload_to='images/',
-                                     null=True, blank=True,
-                                     validators=[MaxSizeValidator(1920, 1920)],
-                                     variations={
-                                         'fhd': (1920, 1920),
-                                         'hdr': (720, 720),
-                                         'med': (480, 480),
-                                         'thumbnail': (150, 90),
-                                     },
-                                     delete_orphans=True,
-                                     verbose_name=_('Carte géorgraphique')
-                                     )
+                            null=True, blank=True,
+                            validators=[MaxSizeValidator(1920, 1920)],
+                            variations={
+                                'fhd': (1920, 1920),
+                                'hdr': (720, 720),
+                                'med': (480, 480),
+                                'thumbnail': (150, 90),
+                            },
+                            delete_orphans=True,
+                            verbose_name=_('Carte géorgraphique')
+                            )
 
     carte_restaurant = StdImageField(upload_to='images/',
                                      null=True, blank=True,
@@ -112,17 +113,17 @@ class Configuration(SingletonModel):
                         )
 
     logo = StdImageField(upload_to='images/',
-                        null=True, blank=True,
-                        # validators=[MaxSizeValidator(1920, 1920)],
-                        variations={
-                            'fhd': (1920, 1920),
-                            'hdr': (720, 720),
-                            'med': (480, 480),
-                            'thumbnail': (300, 120),
-                        },
-                        delete_orphans=True,
-                        verbose_name='Logo'
-                        )
+                         null=True, blank=True,
+                         # validators=[MaxSizeValidator(1920, 1920)],
+                         variations={
+                             'fhd': (1920, 1920),
+                             'hdr': (720, 720),
+                             'med': (480, 480),
+                             'thumbnail': (300, 120),
+                         },
+                         delete_orphans=True,
+                         verbose_name='Logo'
+                         )
 
     mollie_api_key = models.CharField(max_length=50,
                                       blank=True, null=True)
@@ -155,6 +156,22 @@ class Configuration(SingletonModel):
         blank=True,
         null=True,
         verbose_name=_("Clé d'API du serveur cashless")
+    )
+
+    template_billetterie = models.CharField(
+        choices=[(folder, folder) for folder in os.listdir(f"{settings.BASE_DIR}/BaseBillet/templates")],
+        max_length=250,
+        blank=True,
+        null=True,
+        verbose_name=_("Template Billetterie")
+    )
+
+    template_meta = models.CharField(
+        choices=[(folder, folder) for folder in os.listdir(f"{settings.BASE_DIR}/MetaBillet/templates")],
+        max_length=250,
+        blank=True,
+        null=True,
+        verbose_name=_("Template Meta")
     )
 
 
@@ -348,7 +365,7 @@ class Event(models.Model):
         return f"{self.datetime.strftime('%d/%m')} {self.name}"
 
     class Meta:
-        unique_together = ('name','datetime')
+        unique_together = ('name', 'datetime')
         ordering = ('datetime',)
         verbose_name = _('Evenement')
         verbose_name_plural = _('Evenements')
@@ -463,7 +480,6 @@ class Ticket(models.Model):
                f"{self.last_name.capitalize()}" \
                f".pdf"
 
-
     def pdf_url(self):
         domain = connection.tenant.domains.all().first().domain
         api_pdf = reverse("ticket_uuid_to_pdf", args=[f"{self.uuid}"])
@@ -473,7 +489,6 @@ class Ticket(models.Model):
             protocol = "http://"
             port = ":8002"
         return f"{protocol}{domain}{port}{api_pdf}"
-
 
     def event(self):
         return self.reservation.event
@@ -527,7 +542,6 @@ class Paiement_stripe(models.Model):
 
     reservation = models.ForeignKey(Reservation, on_delete=models.PROTECT, blank=True, null=True,
                                     related_name="paiements")
-
 
     QRCODE, API_BILLETTERIE = 'Q', 'B'
     SOURCE_CHOICES = (
