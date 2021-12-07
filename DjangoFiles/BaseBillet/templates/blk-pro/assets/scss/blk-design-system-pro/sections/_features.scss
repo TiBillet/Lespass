@@ -1,0 +1,117 @@
+.phone-container{
+    img{
+        width: 100%;
+    }
+}
+
+.features-2,
+.features-1,
+.features-3{
+    text-align: center;
+}
+
+.features-2 {
+  .container {
+    .description {
+      margin-bottom: 20px;
+    }
+  }
+  .info {
+    padding: 30px 10px 30px;
+    margin: 30px auto 0;
+    opacity: .9;
+
+    &:hover {
+      opacity: 1;
+    }
+
+    &.info-raised {
+      margin-top: -5px;
+    }
+
+    .icon {
+      margin-left: 15px;
+
+      i {
+        font-size: 2.5em;
+      }
+    }
+
+    .info-title {
+      font-weight: bold;
+    }
+
+    .description {
+      color: $white;
+      opacity: .8;
+    }
+  }
+
+}
+
+
+.features-4{
+  .info {
+    text-align: left;
+    padding: 30px;
+
+    .info-title {
+      padding: 0;
+    }
+
+    .description {
+      padding-left: 0;
+    }
+
+    i {
+      font-size: 2.5em;
+    }
+
+    &:hover {
+      transition: all 300ms ease 0s;
+
+      .description {
+        color: $white;
+      }
+    }
+  }
+}
+
+.features-5 {
+  .title,
+  .category {
+    margin-left: 25px;
+  }
+
+  h6 {
+    text-transform: uppercase;
+  }
+
+  .info {
+    text-align: left;
+    padding: 10px;
+  }
+}
+
+.features-6 {
+  .info {
+    padding: 10px 10px 30px 10px;
+  }
+
+  .shape {
+    opacity: .02;
+    position: absolute;
+  }
+}
+
+@media screen and (max-width: 768px){
+  .features-2 .info{
+    margin-bottom: 25px;
+  }
+}
+
+@media screen and (max-width: 576px){
+  .features-6{
+    overflow: hidden;
+  }
+}

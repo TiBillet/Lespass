@@ -1,0 +1,60 @@
+.social-line-big-icons{
+    [class*="col-"]{
+        border-right: 1px solid $black;
+
+        &:last-child{
+            border: 0;
+        }
+    }
+
+    .btn{
+        margin: 0;
+        width: 100%;
+        padding-top: 30px !important;
+        padding-bottom: 30px !important;
+        height: auto;
+
+        i{
+            font-size: 25px;
+        }
+    }
+}
+
+.social-line{
+    padding: .85rem 0;
+}
+
+.subscribe-line{
+    padding: 15px * 2 0;
+
+    .card{
+        margin-top: 54px;
+
+        .card-block{
+            min-height: auto;
+        }
+
+        .input-group{
+          margin-bottom: 0px;
+        }
+    }
+
+
+    .btn{
+      margin: 0;
+    }
+}
+
+
+
+[data-background-color]{
+    .social-line{
+        h1,h2,h3,h4,h5,h6{
+            color: initial;
+        }
+
+        .btn.btn-simple{
+            border: 0;
+        }
+    }
+}

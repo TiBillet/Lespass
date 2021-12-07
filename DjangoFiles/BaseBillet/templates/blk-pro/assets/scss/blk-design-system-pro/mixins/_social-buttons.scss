@@ -1,0 +1,47 @@
+// for social buttons
+@mixin social-buttons-color ($color, $state-color){
+  @include diagonal-gradient($color, darken($color,20%));
+    //background-color: $color;
+    color: $white;
+    background-size: 210% 210%;
+    background-position: top right;
+    background-repeat: space;
+
+    &:focus,
+    &:active,
+    &:hover{
+        background-color: $state-color;
+        background-image: linear-gradient(to bottom left, $color, darken($color,20%), $color) !important;
+        background-image: -webkit-linear-gradient(to bottom left, $color, darken($color,20%), $color) !important;
+        background-image: -o-linear-gradient(to bottom left, $color, darken($color,20%), $color) !important;
+        background-image: -moz-linear-gradient(to bottom left, $color, darken($color,20%), $color) !important;
+        color: $white;
+    }
+
+    &.btn-simple{
+        color: $state-color;
+        background-color: $transparent-bg;
+        background-image: none !important;
+        box-shadow: none;
+        border-color: $state-color;
+
+        &:hover,
+        &:focus,
+        &:active{
+            color: $state-color;
+            border-color: $state-color;
+        }
+    }
+
+    &.btn-neutral{
+        color: $color;
+        background-color: $white;
+
+
+        &:hover,
+        &:focus,
+        &:active{
+            color: $state-color;
+        }
+    }
+}

@@ -1,0 +1,93 @@
+.projects-1{
+    .card-title{
+        margin-top: 10px
+    }
+}
+
+.projects-2{
+    h2.title{
+        margin-top: 5px;
+        margin-bottom: 15px;
+    }
+    .card-title{
+        margin-bottom: 5px;
+    }
+    .category{
+        color: $default;
+        margin-top: 5px;
+    }
+    .card-description{
+        margin-top: 20px;
+    }
+    .card{
+        text-align: center;
+    }
+}
+
+.projects-3{
+
+  .card.card-blog{
+    .card-header{
+      .title{
+        float: left;
+        margin-top: 0;
+        margin-right: 20px;
+      }
+
+      .badge:first-child{
+        margin-left: 20px;
+      }
+      .badge:not(:first-child){
+        margin-left: 5px;
+        margin-top: 8px;
+      }
+    }
+  }
+
+}
+
+.projects-4{
+  .card-background{
+    padding: 50px 65px;
+    .card-category {
+      margin-bottom: 35px;
+      i{
+        font-size: 30px;
+      }
+    }
+
+    .btn{
+      margin-top: 20px;
+    }
+  }
+}
+
+@media screen and (max-width:1200px){
+  .projects-4 .card-background {
+      padding: 50px 40px;
+  }
+}
+
+@media screen and (max-width:991px){
+  .projects-1 .navbar .navbar-translate{
+    margin-left: 15px;
+  }
+  .projects-1 .navbar-nav{
+    margin-left: 0 !important;
+  }
+
+  .projects-2 .card .card-footer .stats.stats-right{
+    margin-bottom: 10px;
+    float: left;
+  }
+}
+@media screen and (max-width:768px){
+  .nav-pills.nav-pills:not(.flex-column) .nav-item:not(:last-child) .nav-link{
+    margin-bottom: 15px;
+  }
+
+  .projects-2 .card .card-footer .stats.stats-right {
+    float: right;
+    margin-bottom: 0;
+  }
+}

@@ -1,0 +1,47 @@
+.card-login {
+  overflow: hidden;
+  text-align: left;
+  z-index: 2;
+
+  .card-header{
+    padding: 0 0 50px;
+    overflow: hidden;
+    img {
+      position: absolute;
+      margin-left: -50px;
+      margin-top: -220px;
+      border-radius: 20%;
+      width: 350px;
+    }
+
+    .card-title {
+      position: relative;
+      font-size: 5em;
+      font-weight: 900;
+      color: $black;
+      text-transform: lowercase;
+      margin-left: -5px;
+      z-index: 1;
+    }
+  }
+
+  .card-footer{
+    padding: 15px;
+  }
+}
+
+@include media-breakpoint-down(md){
+  .card.card-login .card-img {
+    margin-left: -45px;
+  }
+}
+
+@include media-breakpoint-down(xs){
+  .card.card-login {
+    margin-top: 50px;
+  }
+
+  .modal-content .card.card-login{
+    margin-top: 0;
+  }
+}

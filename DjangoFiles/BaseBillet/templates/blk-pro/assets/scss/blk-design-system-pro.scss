@@ -1,0 +1,152 @@
+/*!
+
+ =========================================================
+ * Black Kit Pro - v1.0.0
+ =========================================================
+
+ * Product Page: https://www.creative-tim.com/product/black-kit-pro
+ * Copyright 2019 Creative Tim (http://www.creative-tim.com)
+
+ * Designed by www.invisionapp.com Coded by www.creative-tim.com
+
+ =========================================================
+
+ * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+ */
+
+ @import "blk-design-system-pro/custom/functions";
+ @import "blk-design-system-pro/bootstrap/functions";
+
+ @import "blk-design-system-pro/variables";
+ @import "blk-design-system-pro/bootstrap/variables";
+
+ @import "blk-design-system-pro/custom/mixins";
+ @import "blk-design-system-pro/bootstrap/mixins";
+
+ // Bootstrap components
+
+@import "blk-design-system-pro/bootstrap/root";
+@import "blk-design-system-pro/bootstrap/reboot";
+@import "blk-design-system-pro/bootstrap/type";
+@import "blk-design-system-pro/bootstrap/images";
+@import "blk-design-system-pro/bootstrap/code";
+@import "blk-design-system-pro/bootstrap/grid";
+@import "blk-design-system-pro/bootstrap/tables";
+@import "blk-design-system-pro/bootstrap/forms";
+@import "blk-design-system-pro/bootstrap/buttons";
+@import "blk-design-system-pro/bootstrap/transitions";
+@import "blk-design-system-pro/bootstrap/dropdown";
+@import "blk-design-system-pro/bootstrap/button-group";
+@import "blk-design-system-pro/bootstrap/input-group";
+@import "blk-design-system-pro/bootstrap/custom-forms";
+@import "blk-design-system-pro/bootstrap/nav";
+@import "blk-design-system-pro/bootstrap/navbar";
+@import "blk-design-system-pro/bootstrap/card";
+@import "blk-design-system-pro/bootstrap/breadcrumb";
+@import "blk-design-system-pro/bootstrap/pagination";
+@import "blk-design-system-pro/bootstrap/badge";
+@import "blk-design-system-pro/bootstrap/jumbotron";
+@import "blk-design-system-pro/bootstrap/alert";
+@import "blk-design-system-pro/bootstrap/progress";
+@import "blk-design-system-pro/bootstrap/media";
+@import "blk-design-system-pro/bootstrap/list-group";
+@import "blk-design-system-pro/bootstrap/close";
+@import "blk-design-system-pro/bootstrap/modal";
+@import "blk-design-system-pro/bootstrap/tooltip";
+@import "blk-design-system-pro/bootstrap/popover";
+@import "blk-design-system-pro/bootstrap/carousel";
+@import "blk-design-system-pro/bootstrap/utilities";
+@import "blk-design-system-pro/bootstrap/print";
+
+// Custom components
+
+@import "blk-design-system-pro/custom/alerts";
+@import "blk-design-system-pro/custom/buttons";
+@import "blk-design-system-pro/custom/dropdown";
+@import "blk-design-system-pro/custom/footer";
+@import "blk-design-system-pro/custom/forms";
+@import "blk-design-system-pro/custom/images";
+@import "blk-design-system-pro/custom/modal";
+@import "blk-design-system-pro/custom/navbar";
+@import "blk-design-system-pro/custom/type";
+@import "blk-design-system-pro/custom/icons";
+@import "blk-design-system-pro/custom/checkboxes-radio";
+@import "blk-design-system-pro/custom/fixed-plugin";
+@import "blk-design-system-pro/custom/pagination";
+@import "blk-design-system-pro/custom/misc";
+@import "blk-design-system-pro/custom/rtl";
+@import "blk-design-system-pro/custom/input-group";
+@import "blk-design-system-pro/custom/progress";
+@import "blk-design-system-pro/custom/badge";
+@import "blk-design-system-pro/custom/pills";
+@import "blk-design-system-pro/custom/tabs";
+@import "blk-design-system-pro/info-areas";
+@import "blk-design-system-pro/misc-extend";
+@import "blk-design-system-pro/sections-extend";
+@import "blk-design-system-pro/footers";
+@import "blk-design-system-pro/tables";
+
+
+// Pro components
+
+@import "blk-design-system-pro/example-pages";
+@import "blk-design-system-pro/social-buttons";
+@import "blk-design-system-pro/media";
+@import "blk-design-system-pro/modals-extend";
+@import "blk-design-system-pro/navbar-extend";
+@import "blk-design-system-pro/buttons-extend";
+@import "blk-design-system-pro/pills-extend";
+@import "blk-design-system-pro/dropdown-extend";
+
+
+
+
+// Sections
+@import "blk-design-system-pro/custom/sections";
+
+
+
+ // Vendor / Plugins
+
+@import "blk-design-system-pro/custom/vendor/plugin-perfect-scrollbar";
+@import "blk-design-system-pro/custom/vendor/plugin-animate-bootstrap-notify";
+@import "blk-design-system-pro/custom/vendor/plugin-bootstrap-switch";
+@import "blk-design-system-pro/custom/vendor/plugin-nouislider";
+@import "blk-design-system-pro/custom/vendor/plugin-datetimepicker";
+@import "blk-design-system-pro/plugins/plugin-tagsinput";
+@import "blk-design-system-pro/plugins/plugin-bootstrap-select";
+@import "blk-design-system-pro/plugins/plugin-jasny-fileupload";
+@import "blk-design-system-pro/plugins/plugin-carousel-slick";
+
+
+
+// Cards
+
+@import 'blk-design-system-pro/custom/card';
+@import "blk-design-system-pro/custom/cards/card-chart";
+@import "blk-design-system-pro/custom/cards/card-map";
+@import "blk-design-system-pro/custom/cards/card-user";
+@import "blk-design-system-pro/custom/cards/card-task";
+@import "blk-design-system-pro/custom/cards/card-plain";
+@import "blk-design-system-pro/custom/cards/card-register";
+@import "blk-design-system-pro/custom/cards/card-stats";
+@import "blk-design-system-pro/custom/cards/card-chart";
+@import "blk-design-system-pro/cards/card-background";
+@import "blk-design-system-pro/cards/card-blog";
+@import "blk-design-system-pro/cards/card-profile";
+@import "blk-design-system-pro/cards/card-pricing";
+@import "blk-design-system-pro/cards/card-login";
+@import "blk-design-system-pro/cards/card-testimonials";
+@import "blk-design-system-pro/cards/card-product";
+
+
+// Avatars
+
+@import "blk-design-system-pro/avatars/avatar-group";
+@import "blk-design-system-pro/avatars/avatar";
+
+
+// Responsive
+
+@import "blk-design-system-pro/responsive";

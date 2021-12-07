@@ -1,0 +1,95 @@
+.table-pricing{
+  .btn{
+    margin-bottom: 25px !important;
+  }
+
+  .desc{
+    margin-bottom: 10px;
+  }
+
+  td{
+    border-top: none;
+
+  }
+  tbody tr:nth-child(odd){
+      background: $card-black-background;
+    }
+
+    .background{
+      width: 260px;
+    }
+
+    .man{
+      position: absolute;
+      width: 18%;
+      left: 18%;
+      top: 35%;
+
+    }
+
+    .girl{
+      position: absolute;
+      width: 18%;
+      left: 58%;
+      top: 29%;
+
+    }
+}
+
+.tables-2{
+
+  .card{
+    .card-body{
+      padding: 0;
+    }
+  }
+  .table-pricing{
+    margin-bottom: 0;
+    th{
+      border-right: 1px solid $default;
+      padding-bottom: 40px;
+      &:last-child{
+        border: none;
+      }
+    }
+
+    tr {
+      td{
+        border-right: 1px solid $default;
+        border-bottom: 1px solid $default;
+        padding: 15px 30px;
+      }
+
+      &.bg-primary{
+        td{
+          border: none;
+        }
+      }
+
+      &:last-child{
+        td{
+          border-bottom: none;
+        }
+      }
+    }
+   .btn{
+     display: block;
+      margin-left: 50%;
+      margin-top: 30px;
+      transform: translate(-50%);
+      position: relative;
+      width: 70%;
+    }
+
+  }
+
+  thead th{
+    position: relative;
+  }
+}
+@media screen and (max-width:768px){
+
+  .tables-2 .table-pricing .btn{
+    padding: 5px 0;
+  }
+}

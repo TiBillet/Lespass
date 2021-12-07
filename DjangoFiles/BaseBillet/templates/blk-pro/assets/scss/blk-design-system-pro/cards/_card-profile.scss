@@ -1,0 +1,194 @@
+%card-profile{
+    margin-top: 30px;
+    text-align: center;
+
+    .card-body .card-title{
+        margin-top: 0;
+    }
+
+     [class*=col-]{
+        .card-description{
+            margin-bottom: 0;
+
+            & + .card-footer{
+                margin-top: 8px;
+            }
+        }
+
+
+     }
+
+    .card-avatar{
+        max-width: 130px;
+        max-height: 130px;
+        margin: -60px auto 0;
+
+        img{
+            border-radius: 50% !important;
+        }
+
+        & + .card-body{
+            margin-top: 15px;
+        }
+    }
+
+    &.card-plain{
+        .card-avatar{
+            margin-top: 0;
+        }
+    }
+    .card-body{
+        .card-avatar{
+            margin: 0 auto 30px;
+        }
+    }
+}
+
+.card-profile {
+	@extend %card-profile;
+
+  &.card-horizontal {
+    .card-image {
+      .img {
+        border-top-right-radius: 0 !important;
+        border-bottom-right-radius: 0 !important;
+        border-bottom-left-radius: 0.2857rem !important;
+      }
+    }
+  }
+
+  .card-image {
+    position: relative;
+
+    .title {
+      position: absolute;
+      left: 20px;
+      top: -20px;
+    }
+
+    .dropdown {
+      position: absolute;
+      right: 10px;
+      top: 10px;
+    }
+
+    img {
+      border-bottom-left-radius: 0 !important;
+      border-bottom-right-radius: 0 !important;
+    }
+
+    .title,
+    .dropdown {
+      z-index: 2;
+
+      .btn {
+        color: $white;
+      }
+    }
+
+    &:after {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      height: 100%;
+      z-index: 1;
+      width: 100%;
+      display: block;
+      content: "";
+      background: rgba(0, 0, 0, .6);
+      border-top-left-radius: $border-radius !important;
+      border-top-right-radius: $border-radius !important;
+    }
+
+    &.no-mask {
+      &:after {
+        background: none;
+      }
+    }
+  }
+
+  hr {
+    margin-right: 0;
+    margin-left: auto;
+  }
+
+  .job-title {
+    text-align: right;
+    margin-bottom: 10px;
+  }
+
+  .table {
+    margin-bottom: 0;
+
+    td {
+      border: none;
+      padding: 7px;
+      padding-right: 0;
+
+      i {
+        margin-right: 5px;
+        font-size: 17px;
+        color: $primary;
+        margin-top: -3px;
+      }
+    }
+  }
+
+  &[data-background="full"] {
+    img {
+      height: 100%;
+      width: 100%;
+    }
+
+    .card-image {
+      position: absolute;
+      top: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .card-body {
+      position: absolute;
+      bottom: 15px;
+      background: white;
+      width: 88%;
+      margin: 0 20px;
+      z-index: 2;
+      border-radius: 6px;
+      opacity: .9;
+
+      .job-title,
+      .table td {
+        color: $default !important;
+      }
+    }
+  }
+
+  .card-footer {
+    padding: 15px;
+    margin-top: 0;
+  }
+
+  &.profile-bg {
+    .card-header {
+      background-position: center center;
+      background-size: cover;
+      margin-bottom: 60px;
+      width: 100%;
+      height: 150px;
+
+      .card-avatar {
+        margin: 70px auto 0;
+
+        .img {
+          border: 2px solid $white;
+        }
+      }
+    }
+
+    .card-body {
+      margin-top: 25px;
+    }
+  }
+}

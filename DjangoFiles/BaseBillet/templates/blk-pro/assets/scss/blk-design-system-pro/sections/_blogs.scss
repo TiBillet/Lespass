@@ -1,0 +1,29 @@
+[class*="blogs-"]{
+  padding: 50px 0;
+
+  .title {
+    margin-bottom: 70px;
+  }
+}
+
+.blogs-1 {
+  .card {
+    &.card-background {
+      .card-title,
+      .card-category {
+        bottom: 0;
+      }
+    }
+  }
+}
+
+.blogs-4 {
+  .card {
+    margin-bottom: 60px;
+    text-align: center;
+  }
+
+  [class^=col-] {
+    padding: 0;
+  }
+}

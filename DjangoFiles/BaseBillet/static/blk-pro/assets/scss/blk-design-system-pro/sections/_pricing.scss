@@ -1,0 +1,137 @@
+.pricing-1{
+    .card-pricing{
+      ul{
+        li{
+          text-align: left;
+        }
+      }
+    }
+}
+
+.pricing-2{
+  .card-pricing{
+    .card-header{
+      position: relative;
+    }
+  }
+}
+
+.pricing-3{
+    .card{
+      border-radius: 0px;
+      margin-bottom: 0px;
+      margin-top: 0;
+      .title{
+        margin-bottom: 10px;
+      }
+      .card{
+        &:not(.last-child){
+          border-right: 1px solid rgba($default,.3);
+
+        }
+      }
+    }
+
+    .card-header{
+      margin-bottom: 20px;
+    }
+
+    .card-body{
+      border-top: 1px solid rgba($default,.3);
+
+    }
+
+    .card-pricing ul li{
+      text-align: left;
+      border: none;
+    }
+
+}
+
+.pricing-4{
+  .card-pricing{
+    ul li{
+      text-align: left;
+      border: none;
+    }
+    .card-body{
+      .title, .description{
+        margin-left: 40px;
+        text-align: left;
+      }
+
+      .title{
+        margin-bottom: 5px;
+        .badge{
+          position: relative;
+          top: -5px;
+          margin-left: 10px;
+        }
+      }
+
+      .description{
+        font-weight: $font-weight-bold;
+        color: $white;
+        margin-bottom: 25px;
+      }
+
+      .btn{
+        margin-top: 20px;
+      }
+    }
+
+  }
+
+
+}
+
+.pricing-5{
+  .card-pricing{
+
+    .card-body{
+
+      .title{
+        .badge{
+          position: relative;
+          top: -5px;
+          margin-left: 10px;
+        }
+      }
+    }
+  }
+}
+
+.pricing-6{
+    .nav-pills{
+        margin-top: 50px;
+        margin-bottom: 50px;
+    }
+
+    .card-pricing ul li b{
+      color: $white;
+    }
+}
+
+@media screen and (max-width:991px){
+  .pricing-4{
+    .card ul li{
+      text-align: center;
+    }
+  }
+}
+
+@media screen and (max-width:768px){
+  .pricing-4{
+    .card{
+      &.card-pricing{
+        .card-body{
+          .title,
+          .description{
+            text-align: center;
+            margin-left: 0;
+          }
+        }
+      }
+    }
+  }
+}

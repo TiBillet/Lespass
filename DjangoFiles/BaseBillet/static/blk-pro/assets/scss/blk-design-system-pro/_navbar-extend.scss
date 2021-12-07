@@ -1,0 +1,53 @@
+.navbar {
+  p {
+    line-height: 1.8em;
+    font-size: 1em;
+    font-weight: 400;
+  }
+
+  &.navbar-absolute {
+	  position: absolute;
+	  width: 100%;
+	  z-index: 1029;
+  }
+
+  .navbar-toggler {
+    vertical-align: middle;
+
+    &.navbar-toggler-left {
+      top:0;
+    }
+
+    &.navbar-toggler-right {
+      padding-right: 0;
+      top: 8px;
+    }
+  }
+}
+
+
+@media screen and (max-width: 991px) {
+  .navbar .navbar-translate {
+    width: 100%;
+    position: relative;
+    display: flex;
+    justify-content: space-between !important;
+  }
+  .navbar-collapse {
+    position: absolute;
+    width: calc(100% - 1.4rem);
+    height: auto !important;
+    left: 0;
+    top: 0;
+    margin: 0.7rem;
+    background: #1f2251;
+    border-radius: 0.2857rem;
+    padding: 1.4rem;
+
+  }
+
+  .navbar.bg-white .navbar-nav .nav-item a.nav-link{
+    color: $white !important;
+  }
+
+}

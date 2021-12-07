@@ -1,0 +1,181 @@
+.testimonials-1{
+
+
+    .carousel-team .carousel-control-next,
+    .carousel-team .carousel-control-prev{
+      left: 35%;
+    }
+
+    .carousel-team .carousel-control-next{
+      left: 40%;
+    }
+
+    .carousel-inner img{
+      height: 100%;
+    }
+}
+
+.section-testimonials,
+.testimonials-2{
+
+  .info{
+    margin-bottom: 50px;
+    padding-top: 30px;
+
+    &:hover p{
+      color: $white;
+    }
+  }
+
+  .card-avatar{
+    max-height: 100px;
+    max-width: 100px;
+    margin: auto;
+    img.rounded{
+      border-radius: 50% !important;
+    }
+  }
+
+}
+
+.testimonials-3{
+  overflow: hidden;
+  .carousel{
+    width: 100%;
+
+    .carousel-inner{
+      overflow: visible;
+    }
+  }
+  .info {
+    max-width: 500px;
+    padding: 80px 40px;
+    margin-left: -50px;
+    position: relative;
+    z-index: 2;
+    .icon>i{
+      font-size: 1.5em;
+      margin-left: 40px;
+    }
+
+    .description{
+      padding: 30px 40px;
+      font-weight: 500;
+      line-height: 25px;
+    }
+    .author{
+      img{
+        width: 35px;
+        height: 35px;
+        margin-left: 40px;
+        border-radius: 50%;
+      }
+
+      span{
+        color: white;
+        margin-left: 10px;
+      }
+    }
+
+  }
+
+  .card-background.card-blog{
+    height: 400px;
+    margin-top: -260px;
+    margin-left: 50px;
+    .full-background{
+      height: 100%;
+    }
+
+    .card-body .content-bottom{
+      bottom: 60px;
+      right: 40px;
+    }
+  }
+}
+
+.testimonials-4{
+  .info {
+    max-width: 500px;
+    border: 1px solid white;
+    padding-top: 10px;
+
+    .description{
+      padding: 30px 40px;
+      font-weight: 500;
+      line-height: 25px;
+    }
+    .author{
+      img{
+        width: 35px;
+        height: 35px;
+        margin-left: 40px;
+        border-radius: 50%;
+        display: inline-block;
+      }
+
+      span{
+        color: white;
+        margin-left: 10px;
+      }
+    }
+
+  }
+
+  .positioned{
+    position: absolute;
+    left: 10%;
+    margin-top: 140px;
+  }
+
+  .slick-slide{
+    opacity: 0.1;
+    &.slick-current.slick-active{
+      opacity: 1;
+    }
+  }
+
+  .slick-arrow{
+    margin-left: 35%;
+  }
+}
+
+@media screen and (max-width:1200px){
+  .testimonials-4 .info .description {
+    padding: 30px 5px;
+  }
+
+  .testimonials-4 .info .author img{
+    margin-left: 5px;
+  }
+
+  .testimonials-3 .card-background.card-blog{
+    margin-left: 0;
+  }
+
+  .testimonials-4 .info .author span {
+    margin-left: 5px;
+  }
+}
+
+@media screen and (max-width:768px){
+  .testimonials-1 .carousel-team .carousel-control-next,
+  .testimonials-1 .carousel-team .carousel-control-prev{
+    .tim-icons{
+      border: 1px solid #fff;
+      border-radius: 50%;
+      padding: 5px;
+    }
+  }
+
+  .testimonials-4 .positioned{
+    margin-top: 0;
+  }
+}
+
+@media screen and (max-width:576px){
+
+  .slick-list, .slick-slider{
+    margin-top: 50px;
+  }
+}

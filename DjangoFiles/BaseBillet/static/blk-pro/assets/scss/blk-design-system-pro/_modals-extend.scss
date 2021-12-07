@@ -1,0 +1,39 @@
+.modal{
+  .modal-login{
+      max-width: 320px;
+      background: $card-black-background;
+      .card-login{
+          .logo-container{
+              width: 65px;
+              margin-bottom: 38px;
+              margin-top: 27px;
+          }
+      }
+  }
+
+  .card {
+    margin-bottom: 0;
+
+    .card-header .close{
+      position: absolute;
+      right: 5px;
+      color: white;
+      top: 5px;
+      font-size: 14px;
+      cursor: pointer;
+      z-index: 9;
+    }
+  }
+
+  &.modal-mini.show {
+    .modal-dialog {
+      transform: translate(0, 100%) !important;
+    }
+  }
+}
+
+@include media-breakpoint-down(xs){
+  .modal .modal-dialog.modal-login{
+    margin: 0.5rem auto;
+  }
+}

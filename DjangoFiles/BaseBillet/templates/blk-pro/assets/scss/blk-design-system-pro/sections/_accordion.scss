@@ -1,0 +1,34 @@
+.accordion-1{
+  .accordion{
+    margin-top: 80px;
+    margin-bottom: 100px;
+    .card{
+      margin-top: 0;
+      box-shadow: none;
+      border-bottom: 1px solid !important;
+      &:last-child{
+        border-bottom: none !important;
+      }
+      .card-header{
+        padding: 10px 15px;
+        .btn[aria-expanded="true"]{
+          .tim-icons{
+            transform: rotate(180deg);
+          }
+        }
+
+        .tim-icons{
+          transition: 0.1s ease;
+        }
+      }
+
+      .card-body{
+        padding: 10px 30px 30px;
+      }
+
+      .btn.btn-link{
+        color: rgba($white, 0.7);
+      }
+    }
+  }
+}

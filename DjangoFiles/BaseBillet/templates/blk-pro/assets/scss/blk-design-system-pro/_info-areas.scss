@@ -1,0 +1,222 @@
+.info {
+    max-width: 360px;
+    margin: 0 auto;
+    padding: 70px 10px 30px;
+    text-align: center;
+    border-radius: 3px;
+
+    &.info-default {
+      &:hover {
+        background-color: $default;
+        -webkit-box-shadow: $info-shadow $default;
+        -moz-box-shadow: $info-shadow $default;
+        box-shadow: $info-shadow $default;
+      }
+    }
+    &.info-primary {
+      &:hover {
+        background-color: $primary;
+        -webkit-box-shadow: $info-shadow $primary;
+        -moz-box-shadow: $info-shadow $primary;
+        box-shadow: $info-shadow $primary;
+      }
+    }
+    &.info-info {
+      &:hover {
+        background-color: $info;
+        -webkit-box-shadow: $info-shadow $info;
+        -moz-box-shadow: $info-shadow $info;
+        box-shadow: $info-shadow $info;
+      }
+    }
+    &.info-warning {
+      &:hover {
+        background-color: $warning;
+        -webkit-box-shadow: $info-shadow $warning;
+        -moz-box-shadow: $info-shadow $warning;
+        box-shadow: $info-shadow $warning;
+      }
+    }
+    &.info-danger {
+      &:hover {
+        background-color: $danger;
+        -webkit-box-shadow: $info-shadow $danger;
+        -moz-box-shadow: $info-shadow $danger;
+        box-shadow: $info-shadow $danger;
+      }
+    }
+    &.info-success {
+      &:hover {
+        background-color: $success;
+        -webkit-box-shadow: $info-shadow $success;
+        -moz-box-shadow: $info-shadow $success;
+        box-shadow: $info-shadow $success;
+      }
+    }
+
+    .icon {
+        color: $default;
+        transition: transform .4s, box-shadow .4s;
+
+        > i {
+            font-size: 3em;
+        }
+
+        &.icon-circle {
+            max-width: 80px;
+            width: 80px;
+            height: 80px;
+            margin: 0 auto;
+            border-radius: 50%;
+            box-shadow: 0px 9px 35px -6px rgba(0, 0, 0, 0.3);
+            font-size: $font-size-xs;
+            background-color: $white;
+            position: relative;
+
+            i{
+                line-height: 2.7;
+            }
+        }
+
+        .bg-blob {
+          position: absolute;
+          opacity: 0.2;
+          width: 56px;
+          margin-top: -30px;
+          margin-left: -8px;
+        }
+    }
+
+    .info-title {
+        margin: $margin-base-vertical + 10 0 $margin-base-vertical;
+        padding: 0 15px;
+        color: $white;
+    }
+    p {
+      color: $dark-gray;
+      padding: 0 15px;
+      font-size: 1.1em;
+    }
+
+    &.info-horizontal {
+      .bg-blob {
+        margin-left: -15px;
+      }
+    }
+
+    hr{
+      margin: 15px auto;
+    }
+}
+
+.info-horizontal {
+  max-width: 500px !important;
+  text-align: left !important;
+
+    .icon{
+      width: 40px;
+      height: 40px;
+      float: left;
+      margin: 30px 0 0 15px;
+
+      >i {
+        font-size: 2em;
+      }
+
+      &.icon-circle {
+        width: 65px;
+        height: 65px;
+        max-width: 65px;
+        margin-top: 8px;
+
+          i {
+            display: table;
+            margin: 0 auto;
+            line-height: 3.5;
+            font-size: 1.9em;
+          }
+      }
+    }
+    .description {
+      overflow: hidden;
+      text-align: justify;
+    }
+
+}
+
+.icon{
+    &.icon-primary{
+        color: $brand-primary;
+
+        &.icon-circle{
+            box-shadow: 0px 9px 30px -6px $primary-opacity;
+        }
+    }
+    &.icon-info{
+        color: $brand-info;
+
+        &.icon-circle{
+            box-shadow: 0px 9px 30px -6px $info-opacity;
+        }
+    }
+    &.icon-success{
+        color: $brand-success;
+
+        &.icon-circle{
+            box-shadow: 0px 9px 30px -6px $success-opacity;
+        }
+    }
+    &.icon-warning{
+        color: $brand-warning;
+
+        &.icon-circle{
+            box-shadow: 0px 9px 30px -6px $warning-opacity;
+        }
+    }
+    &.icon-danger{
+        color: $brand-danger;
+
+        &.icon-circle{
+            box-shadow: 0px 9px 30px -6px $danger-opacity;
+        }
+    }
+
+    &.icon-white{
+        color: $white;
+    }
+}
+
+.card {
+  .info {
+    padding: 40px 0;
+    text-align: center;
+    position: relative;
+  }
+}
+
+
+hr {
+  width: 10%;
+  height: 1px;
+  border-radius: 3px;
+  margin-left: 0;
+
+  &.line-primary {
+    background-color: $primary;
+  }
+  &.line-info {
+    background-color: $info;
+  }
+  &.line-success {
+    background-color: $success;
+  }
+  &.line-warning {
+    background-color: $warning;
+  }
+  &.line-danger {
+    background-color: $danger;
+  }
+  &.line-deafult {
+    background-color: $default;
+  }
+}
