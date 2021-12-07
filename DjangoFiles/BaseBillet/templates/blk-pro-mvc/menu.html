@@ -1,0 +1,54 @@
+{% load static %}
+{% get_media_prefix as MEDIA_PREFIX %}
+
+
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg  fixed-top navbar-transparent " color-on-scroll="300">
+    <div class="container">
+        <div class="navbar-translate">
+            <a class="navbar-brand" href="https://demos.creative-tim.com/blk-design-system-pro/index.html" rel="tooltip"
+               title="Designed and Coded by Creative Tim" data-placement="bottom" target="_blank">
+                <span>TiBillet •</span> Billetterie fédérée
+            </a>
+            <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navigation"
+                    aria-controls="navigation-index" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-bar bar1"></span>
+                <span class="navbar-toggler-bar bar2"></span>
+                <span class="navbar-toggler-bar bar3"></span>
+            </button>
+        </div>
+        <div class="collapse navbar-collapse" id="navigation">
+            <div class="navbar-collapse-header">
+                <div class="row">
+                    <div class="col-6 collapse-brand">
+                        <a>
+                            TiBillet
+                        </a>
+                    </div>
+                    <div class="col-6 collapse-close text-right">
+                        <button type="button" class="navbar-toggler" data-toggle="collapse" data-target="#navigation"
+                                aria-controls="navigation-index" aria-expanded="false" aria-label="Toggle navigation">
+                            <i class="tim-icons icon-simple-remove"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <ul class="navbar-nav ml-auto">
+
+                <li class="nav-item">
+                    <a href="./lieu.html" class="dropdown-item">
+                        <i class="tim-icons icon-calendar-60"></i> Calendrier
+                    </a>
+                </li>
+
+                <li class="nav-item">
+                    <a href="./lieu.html" class="dropdown-item">
+                        <i class="tim-icons icon-zoom-split"></i> Rechercher
+                    </a>
+                </li>
+
+            </ul>
+        </div>
+    </div>
+</nav>
+<!-- End Navbar -->

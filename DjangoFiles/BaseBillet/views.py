@@ -35,9 +35,6 @@ class index(APIView):
             'categorie_billet': Product.BILLET,
         }
 
-        # return render(request, 'html5up-massively/index.html', context=context)
-        # return render(request, self.template_name , context=context)
-
         if configuration.template_billetterie :
             return render(request, f'{configuration.template_billetterie}/lieu.html', context=context)
         else :
@@ -62,7 +59,12 @@ class event(APIView):
             'categorie_billet': Product.BILLET,
             'event': event,
         }
-        return render(request, 'arnaud_mvc/event.html', context=context)
+
+        if configuration.template_billetterie :
+            return render(request, f'{configuration.template_billetterie}/event.html', context=context)
+        else :
+            return render(request, 'arnaud_mvc/event.html', context=context)
+
 
 
 class Ticket_html_view(APIView):
