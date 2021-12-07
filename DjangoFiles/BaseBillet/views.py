@@ -39,9 +39,9 @@ class index(APIView):
         # return render(request, self.template_name , context=context)
 
         if configuration.template_billetterie :
-            return render(request, f'{configuration.template_billetterie}/index.html', context=context)
+            return render(request, f'{configuration.template_billetterie}/lieu.html', context=context)
         else :
-            return render(request, 'arnaud_mvc/index.html', context=context)
+            return render(request, 'arnaud_mvc/lieu.html', context=context)
 
 
 # class adhesion(APIView):
