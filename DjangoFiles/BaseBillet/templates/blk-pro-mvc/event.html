@@ -4,7 +4,8 @@
     {% get_media_prefix as MEDIA_PREFIX %}
     <body class="product-page">
 
-    <div class="wrapper" style="background-image: url('{% static 'blk-pro/assets/img/dots.png' %}');   background-size: contain;">
+    <div class="wrapper"
+         style="background-image: url('{% static 'blk-pro/assets/img/dots.png' %}');   background-size: contain;">
         <img src="{% static 'blk-pro/assets/img/shape-s.png' %}" class="path shape">
 
         <div class="cd-section" id="blogs">
@@ -49,17 +50,22 @@
                                             <div class="input-group">
 
                                                 <div class="input-group-btn">
-                                                    <button id="down" class="btn btn-warning btn-round btn-simple"
-                                                            onclick=" down('0')">
-                                                        <i class="tim-icons icon-simple-delete"></i></button>
+                                                    <button id="down_{{ price.pk }}"
+                                                            class="btn btn-warning btn-round btn-simple"
+                                                            onclick="down.call(this, '0')">
+                                                        <i class="tim-icons icon-simple-delete"></i>
+                                                    </button>
                                                 </div>
 
-                                                <input type="text" id="myNumber" class="form-control input-number"
+                                                <input type="text" id="inputqty_{{ price.pk }}"
+                                                       class="form-control input-number"
                                                        value="0"/>
                                                 <div class="input-group-btn">
-                                                    <button id="up" class="btn btn-warning btn-round btn-simple"
-                                                            onclick="up('8')"><i
-                                                            class="tim-icons icon-simple-add"></i></button>
+                                                    <button id="up_{{ price.pk }}"
+                                                            class="btn btn-warning btn-round btn-simple"
+                                                            onclick="up.call(this, {{ price.max_per_user }})">
+                                                        <i class="tim-icons icon-simple-add"></i>
+                                                    </button>
                                                 </div>
 
                                             </div>

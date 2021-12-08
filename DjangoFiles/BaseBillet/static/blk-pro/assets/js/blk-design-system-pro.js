@@ -244,16 +244,18 @@ $(document).ready(function() {
 // Add (+/-) Button Number Incrementers
 
 function up(max) {
-  document.getElementById("myNumber").value = parseInt(document.getElementById("myNumber").value) + 1;
-  if (document.getElementById("myNumber").value >= parseInt(max)) {
-    document.getElementById("myNumber").value = max;
+  let input_id = this.id.replace("up_", "inputqty_");
+  document.getElementById(input_id).value = parseInt(document.getElementById(input_id).value) + 1;
+  if (document.getElementById(input_id).value >= parseInt(max)) {
+    document.getElementById(input_id).value = max;
   }
 }
 
 function down(min) {
-  document.getElementById("myNumber").value = parseInt(document.getElementById("myNumber").value) - 1;
-  if (document.getElementById("myNumber").value <= parseInt(min)) {
-    document.getElementById("myNumber").value = min;
+  let input_id = this.id.replace("down_", "inputqty_");
+  document.getElementById(input_id).value = parseInt(document.getElementById(input_id).value) - 1;
+  if (document.getElementById(input_id).value <= parseInt(min)) {
+    document.getElementById(input_id).value = min;
   }
 }
 

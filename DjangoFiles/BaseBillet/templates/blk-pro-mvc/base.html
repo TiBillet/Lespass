@@ -37,36 +37,35 @@
 {% endblock footer %}
 
 <!--   Core JS Files   -->
-<script src="../../static/blk-pro/assets/js/core/jquery.min.js" type="text/javascript"></script>
-<script src="../../static/blk-pro/assets/js/core/popper.min.js" type="text/javascript"></script>
-<script src="../../static/blk-pro/assets/js/core/bootstrap.min.js" type="text/javascript"></script>
-<script src="../../static/blk-pro/assets/js/plugins/perfect-scrollbar.jquery.min.js"></script>
+<script src="{% static 'blk-pro/assets/js/core/jquery.min.js' %}" type="text/javascript"></script>
+<script src="{% static 'blk-pro/assets/js/core/popper.min.js' %}" type="text/javascript"></script>
+<script src="{% static 'blk-pro/assets/js/core/bootstrap.min.js' %}" type="text/javascript"></script>
+<script src="{% static 'blk-pro/assets/js/plugins/perfect-scrollbar.jquery.min.js' %}"></script>
 <!--  Plugin for Switches, full documentation here: http://www.jque.re/plugins/version3/bootstrap.switch/ -->
-<script src="../../static/blk-pro/assets/js/plugins/bootstrap-switch.js"></script>
+<script src="{% static 'blk-pro/assets/js/plugins/bootstrap-switch.js' %}"></script>
 <!--  Plugin for the Sliders, full documentation here: http://refreshless.com/nouislider/ -->
-<script src="../../static/blk-pro/assets/js/plugins/nouislider.min.js" type="text/javascript"></script>
+<script src="{% static 'blk-pro/assets/js/plugins/nouislider.min.js' %}" type="text/javascript"></script>
 <!--  Plugin for the Carousel, full documentation here: http://kenwheeler.github.io/slick/ -->
-<script src="../../static/blk-pro/assets/js/plugins/slick.js" type="text/javascript"></script>
+<script src="{% static 'blk-pro/assets/js/plugins/slick.js' %}" type="text/javascript"></script>
 <!--  Plugin for the blob animation -->
-<script src="../../static/blk-pro/assets/js/plugins/anime.min.js" type="text/javascript"></script>
+<script src="{% static 'blk-pro/assets/js/plugins/anime.min.js' %}" type="text/javascript"></script>
 <!-- Chart JS -->
-<script src="../../static/blk-pro/assets/js/plugins/chartjs.min.js"></script>
+<script src="{% static 'blk-pro/assets/js/plugins/chartjs.min.js' %}"></script>
 <!--  Plugin for the DatePicker, full documentation here: https://github.com/uxsolutions/bootstrap-datepicker -->
-<script src="../../static/blk-pro/assets/js/plugins/moment.min.js"></script>
+<script src="{% static 'blk-pro/assets/js/plugins/moment.min.js' %}"></script>
 <!--	Plugin for Tags, full documentation here: https://github.com/bootstrap-tagsinput/bootstrap-tagsinputs  -->
-<script src="../../static/blk-pro/assets/js/plugins/bootstrap-tagsinput.js"></script>
+<script src="{% static 'blk-pro/assets/js/plugins/bootstrap-tagsinput.js' %}"></script>
 <!--	Plugin for Select, full documentation here: http://silviomoreto.github.io/bootstrap-select -->
-<script src="../../static/blk-pro/assets/js/plugins/bootstrap-selectpicker.js" type="text/javascript"></script>
+<script src="{% static 'blk-pro/assets/js/plugins/bootstrap-selectpicker.js' %}" type="text/javascript"></script>
 <!--  Plugin for the DateTimePicker, full documentation here: https://eonasdan.github.io/bootstrap-datetimepicker/ -->
-<script src="../../static/blk-pro/assets/js/plugins/bootstrap-datetimepicker.js" type="text/javascript"></script>
+<script src="{% static 'blk-pro/assets/js/plugins/bootstrap-datetimepicker.js' %}" type="text/javascript"></script>
 <!-- Plugin for Fileupload, full documentation here: http://www.jasny.net/bootstrap/javascript/#fileinput -->
-<script src="../../static/blk-pro/assets/js/plugins/jasny-bootstrap.min.js"></script>
+<script src="{% static 'blk-pro/assets/js/plugins/jasny-bootstrap.min.js' %}"></script>
 <!-- Black Dashboard DEMO methods, don't include it in your project! -->
-<script src="../../static/blk-pro/assets/demo/demo.js"></script>
+<script src="{% static 'blk-pro/assets/demo/demo.js' %}"></script>
 <!-- Control Center for Black UI Kit: parallax effects, scripts for the example pages etc -->
-<!--  Google Maps Plugin    -->
-<script src="https://maps.googleapis.com/maps/api/js?key=YOUR_KEY_HERE"></script>
-<script src="../../static/blk-pro/assets/js/blk-design-system-pro.min.js?v=1.0.0" type="text/javascript"></script>
+<script src="{% static 'blk-pro/assets/js/blk-design-system-pro.js' %}" type="text/javascript"></script>
+
 <script>
     $(document).ready(function () {
         blackKit.initDatePicker();
