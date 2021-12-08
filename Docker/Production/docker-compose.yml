@@ -62,7 +62,7 @@ services:
       - traefik.enable=true
       - traefik.docker.network=frontend
       - traefik.http.routers.billeterie_nginx.tls.certresolver=myresolver
-      - traefik.http.routers.billeterie_nginx.rule=Host(`m.${DOMAIN}`) || Host(`www.${DOMAIN}`) || Host(`raffinerie.${DOMAIN}`) || Host(`bisik.${DOMAIN}`) || Host(`vavangart.${DOMAIN}`) || Host(`manapany.${DOMAIN}`) || Host(`${DOMAIN}`)
+      - traefik.http.routers.billeterie_nginx.rule=Host(`m.${DOMAIN}`) || Host(`www.${DOMAIN}`) || Host(`raffinerie.${DOMAIN}`) || Host(`bisik.${DOMAIN}`) || Host(`vavangart.${DOMAIN}`) || Host(`manapany.${DOMAIN}`) || Host(`demo.${DOMAIN}`) || Host(`${DOMAIN}`)
     networks:
       - frontend
 
