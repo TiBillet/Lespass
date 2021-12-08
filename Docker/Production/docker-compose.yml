@@ -66,6 +66,7 @@ services:
     networks:
       - frontend
 
+# pour demo : jturbeaux@pm.me / eiXom5mo
 
 networks:
   frontend:

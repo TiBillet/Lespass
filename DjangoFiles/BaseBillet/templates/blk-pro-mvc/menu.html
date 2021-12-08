@@ -8,7 +8,7 @@
         <div class="navbar-translate">
             <a class="navbar-brand" href="/" rel="tooltip"
                data-placement="bottom" target="_blank">
-                <span>TiBillet •</span> Billetterie fédérée
+                <span>{{ configuration.organisation }} •</span> TiBillet
             </a>
             <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navigation"
                     aria-controls="navigation-index" aria-expanded="false" aria-label="Toggle navigation">
@@ -22,7 +22,7 @@
                 <div class="row">
                     <div class="col-6 collapse-brand">
                         <a>
-                            TiBillet
+                            {{ configuration.organisation }}
                         </a>
                     </div>
                     <div class="col-6 collapse-close text-right">
@@ -36,13 +36,13 @@
             <ul class="navbar-nav ml-auto">
 
                 <li class="nav-item">
-                    <a href="./lieu.html" class="dropdown-item">
+                    <a href="/" class="dropdown-item">
                         <i class="tim-icons icon-calendar-60"></i> Calendrier
                     </a>
                 </li>
 
                 <li class="nav-item">
-                    <a href="./lieu.html" class="dropdown-item">
+                    <a href="/" class="dropdown-item">
                         <i class="tim-icons icon-zoom-split"></i> Rechercher
                     </a>
                 </li>
