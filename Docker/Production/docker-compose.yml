@@ -14,7 +14,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     networks:
-      - backend
+      - backend-tibillet
 
 
   billetterie_django:
@@ -34,7 +34,7 @@ services:
       - billetterie_postgres
     networks:
       - frontend
-      - backend
+      - backend-tibillet
 
   billeterie_nginx:
     container_name: billeterie_nginx
@@ -55,9 +55,17 @@ services:
     networks:
       - frontend
 
+  redis:
+    image: redis:6-alpine
+    restart: always
+    container_name: redis
+    hostname: redis
+    networks:
+      - backend-tibillet
 
 networks:
   frontend:
     external: true
-  backend:
-    external: true
+  backend-tibillet:
+    name: "backend-tibillet"
+
