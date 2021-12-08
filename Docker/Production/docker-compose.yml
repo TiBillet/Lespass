@@ -3,54 +3,61 @@ services:
   billetterie_postgres_demo:
     extends:
       file: ../compose/docker-compose-base.yml
-      service: tibillet_postgres
+      service: billetterie_postgres
+    env_file: .env
     networks:
-      - backend-tibillet
+      - backend-billeterie
 
   billetterie_redis_demo:
     extends:
       file: ../compose/docker-compose-base.yml
-      service: redis
+      service: billetterie_redis
     networks:
-      - backend-tibillet
+      - backend-billeterie
 
   billetterie_django_demo:
     extends:
       file: ../compose/docker-compose-base.yml
-      service: tibillet_django
+      service: billetterie_django
     command: "bash /DjangoFiles/launch_prod.sh"
+    env_file: .env
+
     depends_on:
       - billetterie_postgres_demo
     links:
-      - billetterie_postgres_demo:tibillet_postgres
+      - billetterie_postgres_demo:billetterie_postgres
+      - billetterie_redis_demo:redis
     networks:
       - frontend
-      - backend-tibillet
+      - backend-billeterie
 
   billetterie_celery_demo:
     extends:
       file: ../compose/docker-compose-base.yml
-      service: tibillet_celery
+      service: billetterie_celery
     command: "bash /DjangoFiles/launch_celery.sh"
+    env_file: .env
     depends_on:
       - billetterie_django_demo
     links:
-      - billetterie_postgres_demo:tibillet_postgres
+      - billetterie_postgres_demo:billetterie_postgres
+      - billetterie_redis_demo:redis
     networks:
       - frontend
-      - backend-tibillet
+      - backend-billeterie
 
 
-  billeterie_nginx:
+  billetterie_nginx_demo:
     extends:
       file: ../compose/docker-compose-base.yml
-      service: tibillet_nginx
-    #    ports:
-#      - 8008:80
+      service: billetterie_nginx
+    ports:
+      - 8002:80
+    env_file: .env
     depends_on:
-      - billetterie_django
+      - billetterie_django_demo
     links:
-      - billetterie_django:tibillet_django
+      - billetterie_django_demo:billetterie_django
     labels:
       - traefik.enable=true
       - traefik.docker.network=frontend
@@ -63,6 +70,6 @@ services:
 networks:
   frontend:
     external: true
-  backend-tibillet:
-    name: "backend-tibillet"
+  backend-billeterie:
+    name: "backend-billeterie"
 
