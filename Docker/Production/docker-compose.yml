@@ -1,40 +1,45 @@
 version: '3.7'
 services:
-  billetterie_postgres:
-    container_name: billetterie_postgres
-    image: postgres:11.5-alpine
-    restart: always
-#    ports:
-#      - 5432:5432
-    volumes:
-      - "../../Postgres/dbdata:/var/lib/postgresql/data"
-      - "/etc/localtime:/etc/localtime:ro"
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+  billetterie_postgres_demo:
+    extends:
+      file: ../compose/docker-compose-base.yml
+      service: tibillet_postgres
     networks:
       - backend-tibillet
 
+  billetterie_redis_demo:
+    extends:
+      file: ../compose/docker-compose-base.yml
+      service: redis
+    networks:
+      - backend-tibillet
 
-  billetterie_django:
-    container_name: billetterie_django
-    build: ../Dockerfile/
-    restart: always
-    env_file: .env
-#    ports:
-#      - 8002:8002
-    volumes:
-      - "../../DjangoFiles:/DjangoFiles"
-      - "../../Docker/bashrc:/root/.bashrc"
-      - "../../Backup:/Backup"
-    working_dir: /DjangoFiles
+  billetterie_django_demo:
+    extends:
+      file: ../compose/docker-compose-base.yml
+      service: tibillet_django
     command: "bash /DjangoFiles/launch_prod.sh"
     depends_on:
-      - billetterie_postgres
+      - billetterie_postgres_demo
+    links:
+      - billetterie_postgres_demo:tibillet_postgres
     networks:
       - frontend
       - backend-tibillet
+
+  billetterie_celery_demo:
+    extends:
+      file: ../compose/docker-compose-base.yml
+      service: tibillet_celery
+    command: "bash /DjangoFiles/launch_celery.sh"
+    depends_on:
+      - billetterie_django_demo
+    links:
+      - billetterie_postgres_demo:tibillet_postgres
+    networks:
+      - frontend
+      - backend-tibillet
+
 
   billeterie_nginx:
     container_name: billeterie_nginx
@@ -55,13 +60,6 @@ services:
     networks:
       - frontend
 
-  redis:
-    image: redis:6-alpine
-    restart: always
-    container_name: redis
-    hostname: redis
-    networks:
-      - backend-tibillet
 
 networks:
   frontend:
