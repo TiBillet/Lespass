@@ -42,16 +42,15 @@ services:
 
 
   billeterie_nginx:
-    container_name: billeterie_nginx
-    image: nginx
-    restart: always
-    volumes:
-      - ../../DjangoFiles:/DjangoFiles
-      - ../../Nginx:/etc/nginx/conf.d
+    extends:
+      file: ../compose/docker-compose-base.yml
+      service: tibillet_nginx
     #    ports:
 #      - 8008:80
     depends_on:
       - billetterie_django
+    links:
+      - billetterie_django:tibillet_django
     labels:
       - traefik.enable=true
       - traefik.docker.network=frontend
