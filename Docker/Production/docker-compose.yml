@@ -1,7 +1,7 @@
 version: '3.7'
 services:
-  billetterie_postgres:
-    container_name: billetterie_postgres
+  tibillet_postgres:
+    container_name: tibillet_postgres
     image: postgres:11.5-alpine
     restart: always
 #    ports:
@@ -17,8 +17,8 @@ services:
       - backend-tibillet
 
 
-  billetterie_django:
-    container_name: billetterie_django
+  tibillet_django:
+    container_name: tibillet_django
     build: ../Dockerfile/
     restart: always
     env_file: .env
@@ -31,12 +31,27 @@ services:
     working_dir: /DjangoFiles
     command: "bash /DjangoFiles/launch_prod.sh"
     depends_on:
-      - billetterie_postgres
+      - tibillet_postgres
     networks:
       - frontend
       - backend-tibillet
 
-  billeterie_nginx:
+  tibillet_celery:
+    container_name: tibillet_celery
+    build: ../Dockerfile/
+    restart: always
+    env_file: .env
+    volumes:
+      - "../../DjangoFiles:/DjangoFiles"
+      - "../../Docker/bashrc:/root/.bashrc"
+    working_dir: /DjangoFiles
+    command: "bash /DjangoFiles/launch.sh"
+    depends_on:
+      - tibillet_django
+    networks:
+      - backend-tibillet
+
+  tibillet_nginx:
     container_name: billeterie_nginx
     image: nginx
     restart: always
@@ -46,7 +61,7 @@ services:
     #    ports:
 #      - 8008:80
     depends_on:
-      - billetterie_django
+      - tibillet_django
     labels:
       - traefik.enable=true
       - traefik.docker.network=frontend
