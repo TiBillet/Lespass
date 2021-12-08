@@ -1,0 +1,80 @@
+{% load static %}
+{% get_media_prefix as MEDIA_PREFIX %}
+
+
+<div class="section" id="calendrier">
+    <div class="container">
+        <div id="contentAreas" class="cd-section">
+            <div id="tables">
+                <div class="row">
+                    <div class="col-md-8 ml-auto mr-auto">
+                        <h6>Calendrier</h6>
+                        <div class="card  card-plain">
+                            <div class="card-header">
+                                <h4 class="card-title"></h4>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table tablesorter" id="">
+                                        <thead class="">
+                                        <tr>
+                                            <th>
+                                                Date
+                                            </th>
+                                            <th>
+                                                Évenement
+                                            </th>
+                                            <th class="text-center">
+                                                Prix
+                                            </th>
+                                            <th class="text-right">
+                                                Réserver
+                                            </th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        {% for event in events %}
+                                            <tr>
+                                                <td>
+                                                    {{ event.datetime | date:"D d F Y" }} {{ event.datetime | time }}
+                                                </td>
+                                                <td>
+                                                    {{ event.name }}
+                                                </td>
+                                                <td class="text-center">
+                                                    {% for product in event.products.all %}
+                                                        {% if product.categorie_article == categorie_billet %}
+                                                            <h5 class="card-title">
+                                                                {% for price in product.prices.all %}
+                                                                    {% if forloop.first %}
+                                                                        {{ price.prix | floatformat:"-2" }}€
+                                                                    {% else %}
+                                                                        / {{ price.prix | floatformat:"-2" }}€
+                                                                    {% endif %}
+                                                                {% endfor %}
+                                                            </h5>
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                </td>
+                                                <td class="text-right">
+                                                    <a href="{% url 'show_event' event.slug %}">
+                                                        <button type="button" rel="tooltip"
+                                                                class="btn btn-warning btn-icon btn-sm ">
+                                                            <i class="tim-icons icon-cart"></i>
+                                                        </button>
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!--                 end tables -->
+        </div>
+    </div>
+</div>
