@@ -38,7 +38,33 @@
                     <div class="col-lg-6 col-md-12 mx-auto">
                         <h2 class="title">{{ event.datetime | date:"D d F Y" }} {{ event.datetime | time }}</h2>
                         <p class="description">{{ event.long_description }}</p>
-                        <br>
+                        <div class="space-70"></div>
+                        <h3>Entrez et vérifiez votre email pour reserver</h3>
+                        <div class="row">
+                            <div class="col-sm-12 col-lg-6">
+                                <div class="input-group">
+                                    <div class="input-group-prepend">
+                                                            <span class="input-group-text"><i
+                                                                    class="tim-icons icon-email-85"></i></span>
+                                    </div>
+                                    <input type="email" class="form-control"
+                                           placeholder="Votre email">
+                                </div>
+                            </div>
+
+                            <div class="col-sm-12 col-lg-6">
+                                <div class="input-group">
+                                    <div class="input-group-prepend">
+                                                            <span class="input-group-text"><i
+                                                                    class="tim-icons icon-email-85"></i></span>
+                                    </div>
+                                    <input type="email" class="form-control"
+                                           placeholder="Vérifiez votre email">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="space-50"></div>
+
                         <div class="row pick-size">
 
                             {% for product in event.products.all %}
@@ -46,7 +72,7 @@
                                     {% for price in product.prices.all %}
 
                                         <div class="col-lg-4 col-md-6">
-                                            <h6>Quantité {{ price.name }} - {{ price.prix }}€</h6>
+                                            <h6>{{ price.name }} - {{ price.prix }}€</h6>
                                             <div class="input-group">
 
                                                 <div class="input-group-btn">
@@ -76,7 +102,7 @@
                             {% endfor %}
 
                         </div>
-                        <br>
+                        <div class="space-50"></div>
                         <div class="row justify-content-start">
                             <button class="btn btn-warning ml-3">Reserver <i class="tim-icons icon-cart"></i>
                             </button>

@@ -2,7 +2,8 @@
 {% get_media_prefix as MEDIA_PREFIX %}
 
 
-<div class="section" id="calendrier">
+<div class="section" id="calendrier"
+     style="background-image: url('{% static 'blk-pro/assets/img/dots.png' %}');   background-size: contain;">
     <div class="container">
         <div id="contentAreas" class="cd-section">
             <div id="tables">
@@ -60,7 +61,7 @@
                                                     <a href="{% url 'show_event' event.slug %}">
                                                         <button type="button" rel="tooltip"
                                                                 class="btn btn-warning btn-icon btn-sm ">
-                                                            <i class="tim-icons icon-cart"></i>
+                                                            <i class="tim-icons icon-spaceship"></i>
                                                         </button>
                                                     </a>
                                                 </td>
