@@ -51,7 +51,6 @@
                                            placeholder="Votre email">
                                 </div>
                             </div>
-
                             <div class="col-sm-12 col-lg-6">
                                 <div class="input-group">
                                     <div class="input-group-prepend">
@@ -85,7 +84,9 @@
 
                                                 <input type="text" id="inputqty_{{ price.pk }}"
                                                        class="form-control input-number"
-                                                       value="0"/>
+                                                       value="0" readonly
+                                                       />
+
                                                 <div class="input-group-btn">
                                                     <button id="up_{{ price.pk }}"
                                                             class="btn btn-warning btn-round btn-simple"
@@ -96,13 +97,19 @@
 
                                             </div>
                                         </div>
-
+                                    <script>
+                                        {#remise à zero en cas de rechargement de page #}
+                                        document.getElementById('inputqty_{{ price.pk }}').value = 0
+                                    </script>
                                     {% endfor %}
                                 {% endif %}
                             {% endfor %}
 
                         </div>
                         <div class="space-50"></div>
+                        <div id="name_ticket"></div>
+                        <div class="space-50"></div>
+
                         <div class="row justify-content-start">
                             <button class="btn btn-warning ml-3">Reserver <i class="tim-icons icon-cart"></i>
                             </button>
