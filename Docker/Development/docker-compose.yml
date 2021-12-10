@@ -1,6 +1,6 @@
 version: '3.7'
 services:
-  billetterie_postgres_demo:
+  billetterie_postgres_dev:
     extends:
       file: ../compose/docker-compose-base.yml
       service: billetterie_postgres
@@ -10,14 +10,14 @@ services:
     networks:
       - backend-billeterie
 
-  billetterie_redis_demo:
+  billetterie_redis_dev:
     extends:
       file: ../compose/docker-compose-base.yml
       service: billetterie_redis
     networks:
       - backend-billeterie
 
-  billetterie_django_demo:
+  billetterie_django_dev:
     extends:
       file: ../compose/docker-compose-base.yml
       service: billetterie_django
@@ -26,40 +26,40 @@ services:
     ports:
       - 8002:8002
     depends_on:
-      - billetterie_postgres_demo
+      - billetterie_postgres_dev
     links:
-      - billetterie_postgres_demo:billetterie_postgres
-      - billetterie_redis_demo:redis
+      - billetterie_postgres_dev:billetterie_postgres
+      - billetterie_redis_dev:redis
     networks:
       - frontend
       - backend-billeterie
 
-  billetterie_celery_demo:
+  billetterie_celery_dev:
     extends:
       file: ../compose/docker-compose-base.yml
       service: billetterie_celery
     command: "bash /DjangoFiles/launch_celery.sh"
     env_file: .env
     depends_on:
-      - billetterie_django_demo
+      - billetterie_django_dev
     links:
-      - billetterie_postgres_demo:billetterie_postgres
-      - billetterie_redis_demo:redis
+      - billetterie_postgres_dev:billetterie_postgres
+      - billetterie_redis_dev:redis
     networks:
       - frontend
       - backend-billeterie
 
 
-  billetterie_nginx_demo:
+  billetterie_nginx_dev:
     extends:
       file: ../compose/docker-compose-base.yml
       service: billetterie_nginx
 
     env_file: .env
     depends_on:
-      - billetterie_django_demo
+      - billetterie_django_dev
     links:
-      - billetterie_django_demo:billetterie_django
+      - billetterie_django_dev:billetterie_django
     labels:
       - traefik.enable=true
       - traefik.docker.network=frontend
