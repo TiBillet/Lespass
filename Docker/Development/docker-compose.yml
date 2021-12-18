@@ -21,6 +21,7 @@ services:
     extends:
       file: ../compose/docker-compose-base.yml
       service: billetterie_django
+    image: registry.3peaks.re/billetterie_django:2.8-bullyeses_python38_prelog4s
     command: "bash /DjangoFiles/launch.sh"
     env_file: .env
     ports:
@@ -38,6 +39,7 @@ services:
     extends:
       file: ../compose/docker-compose-base.yml
       service: billetterie_celery
+    image: registry.3peaks.re/billetterie_django:2.8-bullyeses_python38_prelog4s
     command: "bash /DjangoFiles/launch_celery.sh"
     env_file: .env
     depends_on:

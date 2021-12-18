@@ -1,4 +1,4 @@
-from python:3.8-bullseye
+from python:3.7
 
 ## UPDATE
 RUN apt-get update 
@@ -83,3 +83,8 @@ RUN python --version
 RUN django-admin --version
 RUN pip freeze
 
+# docker build -t  production_billetterie_django_demo:2.8-bullyeses_python38 .
+# docker tag production_billetterie_django_demo registry.3peaks.re/billetterie_django:2.8-bullyeses_python38_prelog4s
+# docker push registry.3peaks.re/billetterie_django:2.8-bullyeses_python38_prelog4s
+
+# docker pull docker push registry.3peaks.re/billetterie_django:2.8-bullyeses_python38_prelog4s
