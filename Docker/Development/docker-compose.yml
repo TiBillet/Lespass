@@ -21,7 +21,7 @@ services:
     extends:
       file: ../compose/docker-compose-base.yml
       service: billetterie_django
-    command: "bash /DjangoFiles/launch.sh"
+    command: "sleep 30d"
     env_file: .env
     ports:
       - 8002:8002
@@ -50,23 +50,23 @@ services:
       - backend-billeterie
 
 
-  billetterie_nginx_dev:
-    extends:
-      file: ../compose/docker-compose-base.yml
-      service: billetterie_nginx
+  # billetterie_nginx_dev:
+  #   extends:
+  #     file: ../compose/docker-compose-base.yml
+  #     service: billetterie_nginx
 
-    env_file: .env
-    depends_on:
-      - billetterie_django_dev
-    links:
-      - billetterie_django_dev:billetterie_django
-    labels:
-      - traefik.enable=true
-      - traefik.docker.network=frontend
-      - traefik.http.routers.billeterie_nginx.tls.certresolver=myresolver
-      - traefik.http.routers.billeterie_nginx.rule=Host(`m.${DOMAIN}`) || Host(`www.${DOMAIN}`) || Host(`raffinerie.${DOMAIN}`) || Host(`bisik.${DOMAIN}`) || Host(`vavangart.${DOMAIN}`) || Host(`manapany.${DOMAIN}`) || Host(`demo.${DOMAIN}`) || Host(`${DOMAIN}`)
-    networks:
-      - frontend
+  #   env_file: .env
+  #   depends_on:
+  #     - billetterie_django_dev
+  #   links:
+  #     - billetterie_django_dev:billetterie_django
+  #   labels:
+  #     - traefik.enable=true
+  #     - traefik.docker.network=frontend
+  #     - traefik.http.routers.billeterie_nginx.tls.certresolver=myresolver
+  #     - traefik.http.routers.billeterie_nginx.rule=Host(`m.${DOMAIN}`) || Host(`www.${DOMAIN}`) || Host(`raffinerie.${DOMAIN}`) || Host(`bisik.${DOMAIN}`) || Host(`vavangart.${DOMAIN}`) || Host(`manapany.${DOMAIN}`) || Host(`demo.${DOMAIN}`) || Host(`${DOMAIN}`)
+  #   networks:
+  #     - frontend
 
 # pour demo : jturbeaux@pm.me / eiXom5mo
 
