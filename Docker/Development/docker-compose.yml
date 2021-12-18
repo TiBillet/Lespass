@@ -1,51 +1,78 @@
 version: '3.7'
 services:
-  tibillet_postgres:
-    container_name: tibillet_postgres
-    image: postgres:11.5-alpine
-    restart: always
+  billetterie_postgres_dev:
+    extends:
+      file: ../compose/docker-compose-base.yml
+      service: billetterie_postgres
+    env_file: .env
     ports:
       - 5432:5432
-    volumes:
-      - "../../Postgres/dbdata:/var/lib/postgresql/data"
-      - "/etc/localtime:/etc/localtime:ro"
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+    networks:
+      - backend-billeterie
 
-  redis:
-    image: redis:6-alpine
-    restart: always
-    container_name: redis
-    hostname: redis
+  billetterie_redis_dev:
+    extends:
+      file: ../compose/docker-compose-base.yml
+      service: billetterie_redis
+    networks:
+      - backend-billeterie
 
-  tibillet_django:
-    container_name: tibillet_django
-    build: ../Dockerfile/
-    restart: always
+  billetterie_django_dev:
+    extends:
+      file: ../compose/docker-compose-base.yml
+      service: billetterie_django
+    command: "bash /DjangoFiles/launch.sh"
     env_file: .env
     ports:
       - 8002:8002
-    volumes:
-      - "../../DjangoFiles:/DjangoFiles"
-      - "../../Backup:/Backup"
-      - "../../Docker/bashrc:/root/.bashrc"
-    working_dir: /DjangoFiles
-    command: "bash /DjangoFiles/launch.sh"
     depends_on:
-      - tibillet_postgres
-      - redis
+      - billetterie_postgres_dev
+    links:
+      - billetterie_postgres_dev:billetterie_postgres
+      - billetterie_redis_dev:redis
+    networks:
+      - frontend
+      - backend-billeterie
 
-  tibillet_celery:
-    container_name: tibillet_celery
-    build: ../Dockerfile/
-    restart: always
+  billetterie_celery_dev:
+    extends:
+      file: ../compose/docker-compose-base.yml
+      service: billetterie_celery
+    command: "bash /DjangoFiles/launch_celery.sh"
     env_file: .env
-    volumes:
-      - "../../DjangoFiles:/DjangoFiles"
-      - "../../Docker/bashrc:/root/.bashrc"
-    working_dir: /DjangoFiles
-    command: "bash /DjangoFiles/launch.sh"
     depends_on:
-      - tibillet_django
+      - billetterie_django_dev
+    links:
+      - billetterie_postgres_dev:billetterie_postgres
+      - billetterie_redis_dev:redis
+    networks:
+      - frontend
+      - backend-billeterie
+
+
+  billetterie_nginx_dev:
+    extends:
+      file: ../compose/docker-compose-base.yml
+      service: billetterie_nginx
+
+    env_file: .env
+    depends_on:
+      - billetterie_django_dev
+    links:
+      - billetterie_django_dev:billetterie_django
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=frontend
+      - traefik.http.routers.billeterie_nginx.tls.certresolver=myresolver
+      - traefik.http.routers.billeterie_nginx.rule=Host(`m.${DOMAIN}`) || Host(`www.${DOMAIN}`) || Host(`raffinerie.${DOMAIN}`) || Host(`bisik.${DOMAIN}`) || Host(`vavangart.${DOMAIN}`) || Host(`manapany.${DOMAIN}`) || Host(`demo.${DOMAIN}`) || Host(`${DOMAIN}`)
+    networks:
+      - frontend
+
+# pour demo : jturbeaux@pm.me / eiXom5mo
+
+networks:
+  frontend:
+    external: true
+  backend-billeterie:
+    name: "backend-billeterie"
+
