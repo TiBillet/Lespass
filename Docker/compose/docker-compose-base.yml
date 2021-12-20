@@ -21,6 +21,7 @@ services:
   billetterie_django:
     container_name: billetterie_django
     build: ../Dockerfile/
+#    image: registry.3peaks.re/billetterie_django:2.8-bullyeses_python38_prelog4s
     restart: always
 #    ports:
 #      - 8002:8002
@@ -34,12 +35,14 @@ services:
   billetterie_celery:
     container_name: billetterie_celery
     build: ../Dockerfile/
+#    image: registry.3peaks.re/billetterie_django:2.8-bullyeses_python38_prelog4s
     restart: always
     volumes:
       - "../../DjangoFiles:/DjangoFiles"
       - "../../Docker/bashrc:/root/.bashrc"
     working_dir: /DjangoFiles
 #    command: "bash /DjangoFiles/launch.sh"
+
 
 
   billetterie_nginx:

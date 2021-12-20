@@ -1,7 +1,7 @@
 # CHANGE ME
 DJANGO_SECRET='ingeci8ar6Ahr6aiBi!ghovezahs@eiNgai4eingaa1zaeRi7E'
 
-POSTGRES_HOST='tibillet_postgres'
+POSTGRES_HOST='billetterie_postgres'
 POSTGRES_USER='tibillet_postgres_user'
 POSTGRES_PASSWORD='tibillet_postgres_password'
 POSTGRES_DB='tibillet'
