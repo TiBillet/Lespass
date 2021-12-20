@@ -131,3 +131,7 @@ dmypy.json
 # postgres
 ./Postgres
 Postgres/*
+
+# Non libre / No Free
+DjangoFiles/BaseBillet/static/blk-pro
+DjangoFiles/BaseBillet/templates/blk-pro-mvc
