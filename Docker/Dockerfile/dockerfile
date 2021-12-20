@@ -1,4 +1,4 @@
-from python:3.7
+from python:3.8-bullseye
 
 ## UPDATE
 RUN apt-get update 
@@ -9,16 +9,16 @@ RUN pip install pip --upgrade
 
 ## PYTHON
 RUN pip install django==2.2
-RUN pip install djangorestframework==3.11
-RUN pip install requests
+RUN pip install django-admin-sortable2==1.0.2
+RUN pip install djangorestframework
 RUN pip install django-jet
+RUN pip install requests
 RUN pip install gunicorn
 RUN pip install django-admin-rangefilter
 RUN pip install sentry-sdk
 RUN pip install python-dateutil
 RUN pip install Werkzeug
 RUN pip install django-solo
-RUN pip install django-admin-sortable2
 RUN pip install admin-totals
 RUN pip install django-tenants
 RUN pip install mollie-api-python
