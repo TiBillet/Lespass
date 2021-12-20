@@ -49,10 +49,7 @@ ouvrir un terminal dans VSC :
 
 ```
 docker network create frontend
-docker login registry.3peaks.re
-docker pull registry.3peaks.re/billetterie_django:2.8-bullyeses_python38_prelog4s
 ```
-Demandez à Jonas en privé pour pull l'image :)
 
 
 Toujours dans le même terminal, notifiez à Git qui vous êtes :
@@ -65,9 +62,9 @@ git config --global user.name "Moi Windows VSC"
 ### Copier les variables d'environement utiles au projet
 Dans l'explorateur de gauche, ouvrir Docker/Development.
 
-Copier / coller env_example.
+Copier / coller env_example en env_example_copy
 
-renommer env_example copy en .env
+renommer env_example_copy en .env
 
 ### Construire et lancer les conteneurs 
 clic droit sur docker-compose.yml -> Compose Up
