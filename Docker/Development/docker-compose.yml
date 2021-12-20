@@ -49,6 +49,15 @@ services:
       - frontend
       - backend-billeterie
 
+  billetterie_front_node_dev:
+    extends:
+      file: ../compose/docker-compose-base.yml
+      service: billetterie_front_node
+    ports:
+      - 8080:8080
+    command: "sleep 30d"
+    networks:
+      - frontend
 
   # billetterie_nginx_dev:
   #   extends:
