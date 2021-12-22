@@ -24,14 +24,10 @@ class index(APIView):
         if not configuration.activer_billetterie:
             return HttpResponseRedirect('https://www.tibillet.re')
 
-        first_event = None
-        events = Event.objects.filter(datetime__gt=datetime.now())
-        if len(events) > 0:
-            first_event = events[0]
 
         context = {
             'configuration': configuration,
-            'events': events,
+            'events': Event.objects.filter(datetime__gt=datetime.now()),
             'categorie_billet': Product.BILLET,
         }
 
