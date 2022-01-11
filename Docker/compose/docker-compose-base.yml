@@ -43,15 +43,6 @@ services:
     working_dir: /DjangoFiles
 #    command: "bash /DjangoFiles/launch.sh"
 
-  billetterie_front_node:
-    container_name: billetterie_front_node
-    build: ../Dockerfile_Node
-    restart: always
-    volumes:
-      - "../../DjangoFiles:/DjangoFiles"
-      - "../../Docker/bashrc:/root/.bashrc"
-    working_dir: /DjangoFiles
-
   billetterie_nginx:
     container_name: billetterie_nginx
     image: nginx
