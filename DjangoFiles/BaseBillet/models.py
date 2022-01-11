@@ -158,8 +158,18 @@ class Configuration(SingletonModel):
         verbose_name=_("Clé d'API du serveur cashless")
     )
 
+    ARNAUD, MASSIVELY, BLK_MVC, BLK_VUE = 'arnaud_mvc', 'html5up-masseively', 'blk_mvc', 'blk_vue'
+    CHOICE_TEMPLATE = [
+        (ARNAUD, _('arnaud_mvc')),
+        (MASSIVELY, _("html5up-masseively")),
+        (BLK_MVC, _("blk_mvc")),
+        (BLK_VUE, _("blk_vue")),
+    ]
+    # choices=[(folder, folder) for folder in os.listdir(f"{settings.BASE_DIR}/BaseBillet/templates")],
+
     template_billetterie = models.CharField(
-        choices=[(folder, folder) for folder in os.listdir(f"{settings.BASE_DIR}/BaseBillet/templates")],
+        choices=CHOICE_TEMPLATE,
+        default=ARNAUD,
         max_length=250,
         blank=True,
         null=True,
@@ -167,7 +177,8 @@ class Configuration(SingletonModel):
     )
 
     template_meta = models.CharField(
-        choices=[(folder, folder) for folder in os.listdir(f"{settings.BASE_DIR}/MetaBillet/templates")],
+        choices=CHOICE_TEMPLATE,
+        default=MASSIVELY,
         max_length=250,
         blank=True,
         null=True,
