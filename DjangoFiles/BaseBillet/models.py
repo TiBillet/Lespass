@@ -162,7 +162,7 @@ class Configuration(SingletonModel):
     CHOICE_TEMPLATE = [
         (ARNAUD, _('arnaud_mvc')),
         (MASSIVELY, _("html5up-masseively")),
-        (BLK_MVC, _("blk_mvc")),
+        (BLK_MVC, _("blk-pro-mvc")),
         (BLK_VUE, _("blk_vue")),
     ]
     # choices=[(folder, folder) for folder in os.listdir(f"{settings.BASE_DIR}/BaseBillet/templates")],
