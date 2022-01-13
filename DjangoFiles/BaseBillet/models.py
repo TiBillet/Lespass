@@ -158,12 +158,11 @@ class Configuration(SingletonModel):
         verbose_name=_("Clé d'API du serveur cashless")
     )
 
-    ARNAUD, MASSIVELY, BLK_MVC, BLK_VUE = 'arnaud_mvc', 'html5up-masseively', 'blk-pro-mvc', 'blk_vue'
+    ARNAUD, MASSIVELY, BLK_MVC = 'arnaud_mvc', 'html5up-masseively', 'blk-pro-mvc'
     CHOICE_TEMPLATE = [
         (ARNAUD, _('arnaud_mvc')),
         (MASSIVELY, _("html5up-masseively")),
         (BLK_MVC, _("blk-pro-mvc")),
-        (BLK_VUE, _("blk_vue")),
     ]
     # choices=[(folder, folder) for folder in os.listdir(f"{settings.BASE_DIR}/BaseBillet/templates")],
 
