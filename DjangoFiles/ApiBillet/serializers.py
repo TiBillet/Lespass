@@ -185,6 +185,7 @@ class ReservationValidator(serializers.Serializer):
             user_paiement.client_achat.add(connection.tenant)
 
         user_paiement.save()
+        self.user_commande = user_paiement
         return user_paiement.email
 
     def validate_prices(self, value):
