@@ -139,8 +139,13 @@ class ReservationViewset(viewsets.ViewSet):
         return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_permissions(self):
-        permission_classes = [TenantAdminPermission]
+        if self.action in ['list']:
+            permission_classes = [TenantAdminPermission]
+        else:
+            permission_classes = [permissions.AllowAny]
         return [permission() for permission in permission_classes]
+
+
 
 
 class MembershipViewset(viewsets.ViewSet):
