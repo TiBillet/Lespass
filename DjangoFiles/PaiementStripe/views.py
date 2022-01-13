@@ -10,9 +10,11 @@ import stripe
 # Create your views here.
 from django.utils import timezone
 from django.views import View
+from rest_framework import serializers
 
 from AuthBillet.models import HumanUser
 from BaseBillet.models import Configuration, LigneArticle, Paiement_stripe, Reservation
+from django.utils.translation import gettext, gettext_lazy as _
 
 import logging
 
@@ -95,7 +97,10 @@ class creation_paiement_stripe():
         else:
             stripe.api_key = self.configuration.stripe_api_key
 
-        return stripe.api_key
+        if stripe.api_key :
+            return stripe.api_key
+        else :
+            raise serializers.ValidationError(_(f"No Stripe Api Key in configuration"))
 
     def _line_items(self):
         line_items = []
