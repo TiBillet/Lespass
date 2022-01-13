@@ -56,6 +56,29 @@ class PriceSerializer(serializers.ModelSerializer):
         ]
         depth = 1
 
+class ConfigurationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Configuration
+        fields = [
+            "organisation",
+            "short_description",
+            "long_description",
+            "adress",
+            "phone",
+            "email",
+            "site_web",
+            "twitter",
+            "facebook",
+            "instagram",
+            "adhesion_obligatoire",
+            "button_adhesion",
+            "name_required_for_ticket",
+            "map_img",
+            "carte_restaurant",
+            "img",
+            "logo",
+        ]
+        read_only_fields = fields
 
 class EventSerializer(serializers.ModelSerializer):
     products = ProductSerializer(

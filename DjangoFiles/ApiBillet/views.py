@@ -11,7 +11,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
-    ReservationValidator, MembreshipValidator
+    ReservationValidator, MembreshipValidator, ConfigurationSerializer
 from AuthBillet.models import TenantAdminPermission
 from Customers.models import Client, Domain
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket
@@ -83,8 +83,11 @@ class EventsViewSet(viewsets.ViewSet):
 
     def list(self, request):
         queryset = Event.objects.all().order_by('-datetime')
-        serializer = EventSerializer(queryset, many=True, context={'request': request})
-        return Response(serializer.data)
+        events_serialized = EventSerializer(queryset, many=True, context={'request': request})
+        place_serialized = ConfigurationSerializer(Configuration.get_solo() , context={'request': request})
+
+        dict_response = {"events": events_serialized.data, "place": place_serialized.data}
+        return Response(dict_response)
 
     def retrieve(self, request, pk=None):
         queryset = Event.objects.all().order_by('-datetime')
