@@ -17,17 +17,13 @@ TiBillet est en période de BETA et en expérimentation sur plusieurs lieux sur 
 Bisik, à la Raffinerie, à Vavang'Art et au Manapany Festival !
 
 Le présent dépot ne contient pas encore toutes les sources du projet. La billetterie est en cours de refactoring et les
-sources sont publiées petit à petit sous licence aGPLv3. Mise en production totale prévue fin 2021.
+sources sont publiées petit à petit sous licence libre.
 
-Le Cashless est en cours d'audit de sécurité et sera publié sous licence de type BSL : open-source et libre en dehors de
-toute utilisation commerciale type SaaS, avec mise en licence aGPLv3 progressive au fil des financements et des
-rentabilisations du développement.
+Le Cashless est en cours d'audit de sécurité et sera publié sous licence libre dès que possible.
 
-Inspirée par les expériences de Sentry, ElasticSearch, MongoDb, nous souhaitons que TiBillet soit libre d'utilisation
-pour toutes structures associatives ou entreprises coopératives à but non lucratif tout en encourageant les acteurs
-commerciaux à participer activement au développement.
+Pour l'expérimenter chez vous, n'hésitez pas à nous contacter :)
 
-TiBillet est construit par l'association des 3Peaks de Manapany. Créateurs du Manapany Surf Festival !
+TiBillet est construit par l'association des 3Peaks de Manapany : Créateurs du Manapany Surf Festival !
 
 ## Installation :
 
