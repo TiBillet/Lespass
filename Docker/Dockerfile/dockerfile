@@ -8,22 +8,22 @@ RUN apt install -y python3-pip
 RUN pip install pip --upgrade
 
 ## PYTHON
-RUN pip install django==2.2
-RUN pip install django-admin-sortable2==1.0.2
+RUN pip install django==3.2
+# RUN pip install django-admin-sortable2==1.0.2
 RUN pip install djangorestframework
-RUN pip install django-jet
+# RUN pip install django-jet
 RUN pip install requests
 RUN pip install gunicorn
-RUN pip install django-admin-rangefilter
+# RUN pip install django-admin-rangefilter
 RUN pip install sentry-sdk
 RUN pip install python-dateutil
 RUN pip install Werkzeug
 RUN pip install django-solo
-RUN pip install admin-totals
+# RUN pip install admin-totals
 RUN pip install django-tenants
 RUN pip install mollie-api-python
 RUN pip install markdown       # Markdown support for the browsable API.
-RUN pip install django-filter  # Filtering support
+# RUN pip install django-filter  # Filtering support
 RUN pip install djoser
 RUN pip install djangorestframework_simplejwt
 RUN pip install social-auth-app-django
@@ -45,7 +45,7 @@ RUN apt-get install -y --no-install-recommends postgresql-client
 
 ## LATER ?
 # RUN pip install mailchimp3
-RUN apt install cron -y
+# RUN apt install cron -y
 # RUN apt install curl -y
 RUN apt install borgbackup -y
 # RUN pip install inotify

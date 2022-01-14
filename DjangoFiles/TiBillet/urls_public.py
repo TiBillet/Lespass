@@ -20,8 +20,8 @@ from Administration.admin_public import public_admin_site
 # from AuthBillet.views import TokenCreateView_custom
 
 urlpatterns = [
-    path('jet/', include('jet.urls', 'jet')),  # Django JET URLS
-    re_path(r'^jet/dashboard/', include('jet.dashboard.urls', 'jet-dashboard')),  # Django JET dashboard URLS
+    # path('jet/', include('jet.urls', 'jet')),  # Django JET URLS
+    # re_path(r'^jet/dashboard/', include('jet.dashboard.urls', 'jet-dashboard')),  # Django JET dashboard URLS
     # on modifie la creation du token pour rajouter access_token dans la réponse pour Postman
     # re_path(r"^auth/token/login/?$", TokenCreateView_custom.as_view(), name="login"),
     re_path(r'^auth/', include('djoser.urls')),

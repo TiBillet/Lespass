@@ -23,8 +23,8 @@ from Administration.admin_tenant import staff_admin_site
 from AuthBillet.views import TokenCreateView_custom
 
 urlpatterns = [
-    path('jet/', include('jet.urls', 'jet')),  # Django JET URLS
-    re_path(r'^jet/dashboard/', include('jet.dashboard.urls', 'jet-dashboard')),  # Django JET dashboard URLS
+    # path('jet/', include('jet.urls', 'jet')),  # Django JET URLS
+    # re_path(r'^jet/dashboard/', include('jet.dashboard.urls', 'jet-dashboard')),  # Django JET dashboard URLS
     # path('admin/', staff_admin_site.urls, name="staff_admin_site"),
     re_path(r'^admin\/{0,}', staff_admin_site.urls, name="staff_admin_site"),
 

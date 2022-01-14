@@ -12,7 +12,10 @@ from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from django.urls import reverse
 from django.utils import timezone
-from django.contrib.postgres.fields import JSONField
+
+# from django.contrib.postgres.fields import JSONField
+from django.db.models import JSONField
+
 from django.utils.text import slugify
 from solo.models import SingletonModel
 from django.utils.translation import ugettext_lazy as _
@@ -71,7 +74,7 @@ class Configuration(SingletonModel):
     adhesion_obligatoire = models.BooleanField(default=False)
     button_adhesion = models.BooleanField(default=False)
 
-    name_required_for_ticket = models.BooleanField(default=False, verbose_name=_("Billet nominatifs"))
+    name_required_for_ticket = models.BooleanField(default=True, verbose_name=_("Billet nominatifs"))
 
     map_img = StdImageField(upload_to='images/',
                             null=True, blank=True,

@@ -29,13 +29,13 @@ else:
     DEBUG = False
 
 ALLOWED_HOSTS = ['*']
-
+DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 # Application definition
 
 SHARED_APPS = (
     'django_tenants',  # mandatory
-    'jet.dashboard',
-    'jet',
+    # 'jet.dashboard',
+    # 'jet',
     'Customers', # you must list the app where your tenant model resides in
 
     'django.contrib.contenttypes',
@@ -223,8 +223,8 @@ CELERY_RESULT_BACKEND=os.environ.get('CELERY_BACKEND', 'redis://redis:6379/0')
 
 # Jet Menu
 # -------------------------------------/
-JET_SIDE_MENU_COMPACT = True
-JET_CHANGE_FORM_SIBLING_LINKS = False
+# JET_SIDE_MENU_COMPACT = True
+# JET_CHANGE_FORM_SIBLING_LINKS = False
 
 LOGGING = {
     'version': 1,
