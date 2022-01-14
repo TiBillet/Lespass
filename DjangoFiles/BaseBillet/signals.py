@@ -169,7 +169,7 @@ def set_paiement_valid(old_instance, new_instance):
     new_instance: Reservation
     if new_instance.mail_send:
         logger.info(
-            f"    TRIGGER RESERVATION set_paiement_valid Mail envoyé {new_instance.mail_send}, on valide les paiement payés")
+            f"    TRIGGER RESERVATION set_paiement_valid Mail envoyé {new_instance.mail_send}, on valide les paiements payés")
         for paiement in new_instance.paiements.filter(status=Paiement_stripe.PAID):
             paiement.status = Paiement_stripe.VALID
             paiement.traitement_en_cours = False

@@ -23,6 +23,7 @@ from stdimage import StdImageField
 from stdimage.validators import MaxSizeValidator
 from django.db import connection
 
+import AuthBillet.models
 from QrcodeCashless.models import CarteCashless
 from TiBillet import settings
 import stripe
@@ -346,7 +347,7 @@ class Event(models.Model):
                         delete_orphans=True
                         )
 
-    reservations = models.PositiveSmallIntegerField(default=0)
+    # reservations = models.PositiveSmallIntegerField(default=0)
 
     CONCERT = "LIV"
     FESTIVAL = "FES"
@@ -362,9 +363,18 @@ class Event(models.Model):
     categorie = models.CharField(max_length=3, choices=TYPE_CHOICES, default=CONCERT,
                                  verbose_name=_("Catégorie d'évènement"))
 
+
+
+    def reservations(self):
+        return Ticket.objects.filter(reservation__event__pk=self.pk)\
+            .exclude(status=Ticket.CREATED)\
+            .exclude(status=Ticket.NOT_ACTIV)\
+            .count()
+
+
     def complet(self):
         # TODO: Benchmarker et tester si c'est pas mieux dans template
-        if self.reservations >= Configuration.get_solo().jauge_max:
+        if self.reservations() >= Configuration.get_solo().jauge_max:
             return True
         else:
             return False
@@ -388,7 +398,7 @@ class Reservation(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
     datetime = models.DateTimeField(auto_now=True)
 
-    user_commande = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    user_commande: AuthBillet.models.TibilletUser = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
 
     event = models.ForeignKey(Event,
                               on_delete=models.PROTECT,

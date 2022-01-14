@@ -291,10 +291,14 @@ class ReservationValidator(serializers.Serializer):
         if self.nbr_ticket == 0:
             raise serializers.ValidationError(_(f'pas de billet dans la reservation'))
 
+        event : Event = attrs.get('event')
+        if event.complet() :
+            raise serializers.ValidationError(_(f'Jauge atteinte : Evenement complet.'))
+
         config = Configuration.get_solo()
         reservation = Reservation.objects.create(
             user_commande=self.user_commande,
-            event=attrs.get('event'),
+            event=event,
         )
 
         lignes_article = []
