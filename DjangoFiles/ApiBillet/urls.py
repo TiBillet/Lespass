@@ -7,6 +7,7 @@ from rest_framework import routers
 from ApiBillet.views import TicketPdf
 
 router = routers.DefaultRouter()
+router.register(r'place', api_view.PlacesViewSet, basename='place')
 router.register(r'events', api_view.EventsViewSet, basename='event')
 router.register(r'products', api_view.ProductViewSet, basename='product')
 router.register(r'prices', api_view.TarifBilletViewSet, basename='price')

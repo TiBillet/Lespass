@@ -19,6 +19,7 @@ from rest_framework import viewsets, permissions, status
 
 import os
 import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -79,15 +80,26 @@ class ProductViewSet(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
+class PlacesViewSet(viewsets.ViewSet):
+
+    def list(self, request):
+        place_serialized = ConfigurationSerializer(Configuration.get_solo(), context={'request': request})
+        return Response(place_serialized.data)
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [permissions.AllowAny]
+        else:
+            permission_classes = [TenantAdminPermission]
+        return [permission() for permission in permission_classes]
+
+
 class EventsViewSet(viewsets.ViewSet):
 
     def list(self, request):
         queryset = Event.objects.all().order_by('-datetime')
         events_serialized = EventSerializer(queryset, many=True, context={'request': request})
-        place_serialized = ConfigurationSerializer(Configuration.get_solo() , context={'request': request})
-
-        dict_response = {"events": events_serialized.data, "place": place_serialized.data}
-        return Response(dict_response)
+        return Response(events_serialized.data)
 
     def retrieve(self, request, pk=None):
         queryset = Event.objects.all().order_by('-datetime')
@@ -149,8 +161,6 @@ class ReservationViewset(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
-
-
 class MembershipViewset(viewsets.ViewSet):
     permission_classes = [AllowAny]
 
@@ -161,7 +171,6 @@ class MembershipViewset(viewsets.ViewSet):
             # serializer.save()
             return Response(validator.data, status=status.HTTP_201_CREATED)
         return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
     def get_permissions(self):
         if self.action in ['create']:
