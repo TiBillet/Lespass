@@ -192,7 +192,7 @@ class Configuration(SingletonModel):
 class Product(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
 
-    name = models.CharField(max_length=50)
+    name = models.CharField(max_length=500)
 
     publish = models.BooleanField(default=False)
 
@@ -210,7 +210,7 @@ class Product(models.Model):
                         )
 
     BILLET, PACK, RECHARGE_CASHLESS, VETEMENT, MERCH, ADHESION = 'B', 'P', 'R', 'T', 'M', 'A'
-    TYPE_CHOICES = [
+    CATEGORIE_ARTICLE_CHOICES = [
         (BILLET, _('Billet')),
         (PACK, _("Pack d'objets")),
         (RECHARGE_CASHLESS, _('Recharge cashless')),
@@ -219,7 +219,7 @@ class Product(models.Model):
         (ADHESION, ('Adhésion')),
     ]
 
-    categorie_article = models.CharField(max_length=3, choices=TYPE_CHOICES, default=BILLET,
+    categorie_article = models.CharField(max_length=3, choices=CATEGORIE_ARTICLE_CHOICES, default=BILLET,
                                          verbose_name=_("Type d'article"))
 
     id_product_stripe = models.CharField(max_length=30, null=True, blank=True)
@@ -229,6 +229,8 @@ class Product(models.Model):
 
     def get_id_product_stripe(self):
         configuration = Configuration.get_solo()
+        domain_url = connection.tenant.domains.all()[0].domain
+
         if configuration.stripe_api_key and not self.id_product_stripe:
             if configuration.stripe_mode_test:
                 stripe.api_key = configuration.stripe_test_api_key
@@ -237,9 +239,9 @@ class Product(models.Model):
 
             if self.img:
                 # noinspection PyUnresolvedReferences
-                domain_url = connection.tenant.domains.all()[0].domain
-                # noinspection PyUnresolvedReferences
                 images = [f"https://{domain_url}{self.img.med.url}", ]
+            elif configuration.img :
+                images = [f"https://{domain_url}{configuration.img.med.url}", ]
             else:
                 images = []
 
@@ -373,7 +375,6 @@ class Event(models.Model):
 
 
     def complet(self):
-        # TODO: Benchmarker et tester si c'est pas mieux dans template
         if self.reservations() >= Configuration.get_solo().jauge_max:
             return True
         else:

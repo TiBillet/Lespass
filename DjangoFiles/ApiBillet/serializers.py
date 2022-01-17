@@ -11,6 +11,7 @@ from BaseBillet.models import Event, Price, Product, Reservation, Configuration,
 from PaiementStripe.views import creation_paiement_stripe
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -56,6 +57,7 @@ class PriceSerializer(serializers.ModelSerializer):
         ]
         depth = 1
 
+
 class ConfigurationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Configuration
@@ -79,6 +81,7 @@ class ConfigurationSerializer(serializers.ModelSerializer):
             "logo",
         ]
         read_only_fields = fields
+
 
 class EventSerializer(serializers.ModelSerializer):
     products = ProductSerializer(
@@ -160,11 +163,12 @@ class ReservationSerializer(serializers.ModelSerializer):
         ]
         depth = 1
 
+
 class MembreshipValidator(serializers.Serializer):
     email = serializers.EmailField()
 
-    first_name = serializers.CharField(max_length=200,)
-    last_name = serializers.CharField(max_length=200,)
+    first_name = serializers.CharField(max_length=200, )
+    last_name = serializers.CharField(max_length=200, )
 
     phone = serializers.CharField(max_length=20, required=False)
     postal_code = serializers.IntegerField(required=False)
@@ -227,7 +231,7 @@ class ReservationValidator(serializers.Serializer):
                     'qty': float(entry['qty']),
                 }
 
-                if price.product.categorie_article == Product.BILLET:
+                if price.product.categorie_article in [Product.BILLET]:
                     self.nbr_ticket += entry['qty']
 
                     # Si les noms sont requis pour la billetterie
@@ -291,8 +295,8 @@ class ReservationValidator(serializers.Serializer):
         if self.nbr_ticket == 0:
             raise serializers.ValidationError(_(f'pas de billet dans la reservation'))
 
-        event : Event = attrs.get('event')
-        if event.complet() :
+        event: Event = attrs.get('event')
+        if event.complet():
             raise serializers.ValidationError(_(f'Jauge atteinte : Evenement complet.'))
 
         config = Configuration.get_solo()
@@ -317,7 +321,7 @@ class ReservationValidator(serializers.Serializer):
                         last_name=customer.get('last_name'),
                     )
 
-        metadata = {'reservation':f'{reservation.uuid}'}
+        metadata = {'reservation': f'{reservation.uuid}'}
         new_paiement_stripe = creation_paiement_stripe(
             email_paiement=self.user_commande.email,
             liste_ligne_article=lignes_article,
@@ -328,7 +332,7 @@ class ReservationValidator(serializers.Serializer):
         )
 
         if new_paiement_stripe.is_valid():
-            paiement_stripe : Paiement_stripe  = new_paiement_stripe.paiement_stripe_db
+            paiement_stripe: Paiement_stripe = new_paiement_stripe.paiement_stripe_db
             paiement_stripe.lignearticle_set.all().update(status=LigneArticle.UNPAID)
 
             reservation.tickets.all().update(status=Ticket.NOT_ACTIV)
@@ -351,5 +355,3 @@ class ReservationValidator(serializers.Serializer):
         representation['checkout_url'] = self.checkout_session.url
         # import ipdb;ipdb.set_trace()
         return representation
-
-

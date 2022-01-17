@@ -137,7 +137,6 @@ class creation_paiement_stripe():
         if self.checkout_session.id and \
                 self.checkout_session.url:
             return True
-
         else:
             return False
 

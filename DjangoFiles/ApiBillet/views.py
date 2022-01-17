@@ -61,7 +61,9 @@ class TarifBilletViewSet(viewsets.ViewSet):
 class ProductViewSet(viewsets.ViewSet):
 
     def list(self, request):
-        serializer = ProductSerializer(Product.objects.all(), many=True, context={'request': request})
+        serializer = ProductSerializer(
+            Product.objects.all(),
+            many=True, context={'request': request})
         print(serializer.data)
         return Response(serializer.data)
 
