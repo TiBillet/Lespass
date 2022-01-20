@@ -7,7 +7,8 @@ from django.utils.translation import gettext, gettext_lazy as _
 from rest_framework.generics import get_object_or_404
 
 from AuthBillet.models import TibilletUser, HumanUser
-from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, Paiement_stripe
+from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, Paiement_stripe, \
+    PricesSold, ProductSold
 from PaiementStripe.views import creation_paiement_stripe
 
 import logging
@@ -307,15 +308,28 @@ class ReservationValidator(serializers.Serializer):
 
         lignes_article = []
         for price in self.prices_list:
-            ligne_article = LigneArticle.objects.create(
+
+            # on lie les articles vendus aux events
+            # pour générer la clé et afficher le bon nom sur stripe
+            productsold, created = ProductSold.objects.get_or_create(
+               event=event,
+               product=price.get('price').product
+            )
+
+            pricesold, created = PricesSold.objects.get_or_create(
+                productsold=productsold,
                 price=price.get('price'),
+            )
+
+            ligne_article = LigneArticle.objects.create(
+                pricesold=pricesold,
                 qty=price.get('qty'),
             )
             lignes_article.append(ligne_article)
 
             if config.name_required_for_ticket and price.get('customers'):
                 for customer in price.get('customers'):
-                    ticket = Ticket.objects.create(
+                    Ticket.objects.create(
                         reservation=reservation,
                         first_name=customer.get('first_name'),
                         last_name=customer.get('last_name'),

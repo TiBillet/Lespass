@@ -136,6 +136,13 @@ class Configuration(SingletonModel):
     stripe_test_api_key = models.CharField(max_length=110, blank=True, null=True)
     stripe_mode_test = models.BooleanField(default=True)
 
+    def get_stripe_api(self):
+        if self.stripe_mode_test :
+            return self.stripe_test_api_key
+        else:
+            return self.stripe_api_key
+
+
     activer_billetterie = models.BooleanField(default=True, verbose_name=_("Activer la billetterie"))
 
     jauge_max = models.PositiveSmallIntegerField(default=50, verbose_name=_("Jauge maximale"))
@@ -227,42 +234,6 @@ class Product(models.Model):
     def __str__(self):
         return f"{self.name}"
 
-    def get_id_product_stripe(self):
-        configuration = Configuration.get_solo()
-        domain_url = connection.tenant.domains.all()[0].domain
-
-        if configuration.stripe_api_key and not self.id_product_stripe:
-            if configuration.stripe_mode_test:
-                stripe.api_key = configuration.stripe_test_api_key
-            else:
-                stripe.api_key = configuration.stripe_api_key
-
-            if self.img:
-                # noinspection PyUnresolvedReferences
-                images = [f"https://{domain_url}{self.img.med.url}", ]
-            elif configuration.img :
-                images = [f"https://{domain_url}{configuration.img.med.url}", ]
-            else:
-                images = []
-
-            product = stripe.Product.create(
-                name=f"{self.name}",
-                images=images
-            )
-            self.id_product_stripe = product.id
-            self.save()
-
-            return self.id_product_stripe
-
-        elif self.id_product_stripe:
-            return self.id_product_stripe
-        else:
-            return False
-
-    def reset_id_stripe(self):
-        self.id_product_stripe = None
-        self.save()
-
 
 class Price(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
@@ -294,35 +265,7 @@ class Price(models.Model):
         return range(self.max_per_user + 1)
 
     def __str__(self):
-        return f"{self.product.name} {self.name}"
-
-    def get_id_price_stripe(self):
-        configuration = Configuration.get_solo()
-        if configuration.stripe_api_key and not self.id_price_stripe:
-            if configuration.stripe_mode_test:
-                stripe.api_key = configuration.stripe_test_api_key
-            else:
-                stripe.api_key = configuration.stripe_api_key
-
-            price = stripe.Price.create(
-                unit_amount=int("{0:.2f}".format(self.prix).replace('.', '')),
-                currency="eur",
-                product=self.product.get_id_product_stripe(),
-                nickname=self.name,
-            )
-
-            self.id_price_stripe = price.id
-            self.save()
-            return self.id_price_stripe
-
-        elif self.id_price_stripe:
-            return self.id_price_stripe
-        else:
-            return False
-
-    def reset_id_stripe(self):
-        self.id_price_stripe = None
-        self.save()
+        return f"{self.name}"
 
 
 class Event(models.Model):
@@ -344,6 +287,8 @@ class Event(models.Model):
                         variations={
                             'fhd': (1920, 1920),
                             'hdr': (1280, 1280),
+                            'med': (480, 480),
+                            'thumbnail': (150, 90),
                             'crop': (510, 310, True),
                         },
                         delete_orphans=True
@@ -365,14 +310,11 @@ class Event(models.Model):
     categorie = models.CharField(max_length=3, choices=TYPE_CHOICES, default=CONCERT,
                                  verbose_name=_("Catégorie d'évènement"))
 
-
-
     def reservations(self):
-        return Ticket.objects.filter(reservation__event__pk=self.pk)\
-            .exclude(status=Ticket.CREATED)\
-            .exclude(status=Ticket.NOT_ACTIV)\
+        return Ticket.objects.filter(reservation__event__pk=self.pk) \
+            .exclude(status=Ticket.CREATED) \
+            .exclude(status=Ticket.NOT_ACTIV) \
             .count()
-
 
     def complet(self):
         if self.reservations() >= Configuration.get_solo().jauge_max:
@@ -395,11 +337,100 @@ class Event(models.Model):
         verbose_name_plural = _('Evenements')
 
 
+class ProductSold(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
+
+    id_product_stripe = models.CharField(max_length=30, null=True, blank=True)
+    event = models.ForeignKey(Event, on_delete=models.PROTECT)
+
+    product = models.ForeignKey(Product, on_delete=models.PROTECT)
+
+    def __str__(self):
+        return self.product.name
+
+    def img(self):
+        if self.product.img:
+            return self.product.img
+        elif self.event.img:
+            return self.event.img
+        else:
+            return Configuration.get_solo().img
+
+    def nickname(self):
+        return f"{self.event.name} - {connection.tenant} - {self.event.datetime.strftime('%D')}"
+
+
+    def get_id_product_stripe(self):
+        if self.id_product_stripe:
+            return self.id_product_stripe
+
+        stripe.api_key = Configuration.get_solo().get_stripe_api()
+
+        domain_url = connection.tenant.domains.all()[0].domain
+        # noinspection PyUnresolvedReferences
+        images = [f"https://{domain_url}{self.img().med.url}", ]
+
+        product = stripe.Product.create(
+            name=f"{self.nickname()}",
+            images=images
+        )
+        self.id_product_stripe = product.id
+        self.save()
+
+        return self.id_product_stripe
+
+    def reset_id_stripe(self):
+        self.id_product_stripe = None
+        self.save()
+
+    # class meta:
+    #     unique_together = [['event', 'product']]
+
+
+class PricesSold(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
+
+    id_price_stripe = models.CharField(max_length=30, null=True, blank=True)
+
+    productsold = models.ForeignKey(ProductSold, on_delete=models.PROTECT)
+    price = models.ForeignKey(Price, on_delete=models.PROTECT)
+
+    qty = models.SmallIntegerField(default=0)
+
+    def __str__(self):
+        return self.price.name
+
+    def get_id_price_stripe(self):
+        if self.id_price_stripe:
+            return self.id_price_stripe
+
+        stripe.api_key = Configuration.get_solo().get_stripe_api()
+
+        price = stripe.Price.create(
+            unit_amount=int("{0:.2f}".format(self.price.prix).replace('.', '')),
+            currency="eur",
+            product=self.productsold.get_id_product_stripe(),
+            nickname=f"{self.price.name}",
+        )
+
+        self.id_price_stripe = price.id
+        self.save()
+        return self.id_price_stripe
+
+
+    def reset_id_stripe(self):
+        self.id_price_stripe = None
+        self.save()
+
+    # class meta:
+    #     unique_together = [['productsold', 'price']]
+
 class Reservation(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
     datetime = models.DateTimeField(auto_now=True)
 
-    user_commande: AuthBillet.models.TibilletUser = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    user_commande: AuthBillet.models.TibilletUser = models.ForeignKey(settings.AUTH_USER_MODEL,
+                                                                      on_delete=models.PROTECT)
 
     event = models.ForeignKey(Event,
                               on_delete=models.PROTECT,
@@ -592,7 +623,9 @@ class LigneArticle(models.Model):
     uuid = models.UUIDField(primary_key=True, db_index=True, default=uuid.uuid4)
     datetime = models.DateTimeField(auto_now=True)
 
-    price = models.ForeignKey(Price, on_delete=models.CASCADE)
+    #TODO: Retirer les blank et null true lors de la première install. Ils ne sont la que pour le dev et les migrations :/
+    price = models.ForeignKey(Price, on_delete=models.CASCADE, blank=True, null=True)
+    pricesold = models.ForeignKey(PricesSold, on_delete=models.CASCADE, blank=True, null=True)
 
     qty = models.SmallIntegerField()
 

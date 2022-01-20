@@ -71,7 +71,7 @@ class creation_paiement_stripe():
     def _total(self):
         total = 0
         for ligne in self.liste_ligne_article:
-            total += float(ligne.qty) * float(ligne.price.prix)
+            total += float(ligne.qty) * float(ligne.pricesold.price.prix)
         return total
 
     def _paiement_stripe_db(self):
@@ -108,7 +108,7 @@ class creation_paiement_stripe():
             ligne: LigneArticle
             line_items.append(
                 {
-                    "price": f"{ligne.price.get_id_price_stripe()}",
+                    "price": f"{ligne.pricesold.get_id_price_stripe()}",
                     "quantity": int(ligne.qty),
                 }
             )

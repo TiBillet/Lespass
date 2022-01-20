@@ -4,7 +4,8 @@ from django.contrib.auth.models import Group
 from solo.admin import SingletonModelAdmin
 
 from AuthBillet.models import HumanUser, SuperHumanUser, TermUser
-from BaseBillet.models import Configuration, Event, OptionGenerale, Product, Price, Reservation, LigneArticle, Ticket, Paiement_stripe
+from BaseBillet.models import Configuration, Event, OptionGenerale, Product, Price, Reservation, LigneArticle, Ticket, \
+    Paiement_stripe, ProductSold, PricesSold
 from django.contrib.auth.admin import UserAdmin
 
 from Customers.models import Client
@@ -74,7 +75,6 @@ staff_admin_site.register(HumanUser, HumanUserAdmin)
 
 class SuperHumanUserAdmin(UserAdminTibillet):
     def save_model(self, request, obj, form, change):
-
         super(SuperHumanUserAdmin, self).save_model(request, obj, form, change)
 
         staff_group = Group.objects.get_or_create(name="staff")[0]
@@ -164,7 +164,6 @@ class ConfigurationAdmin(SingletonModelAdmin):
 staff_admin_site.register(Configuration, ConfigurationAdmin)
 
 
-
 class EventAdmin(admin.ModelAdmin):
     list_display = (
         'name',
@@ -174,6 +173,7 @@ class EventAdmin(admin.ModelAdmin):
     readonly_fields = (
         'reservations',
     )
+
 
 staff_admin_site.register(Event, EventAdmin)
 
@@ -187,6 +187,19 @@ class OptionGeneraleAdmin(admin.ModelAdmin):
         'poids',
     )
 
+
+staff_admin_site.register(OptionGenerale, OptionGeneraleAdmin)
+
+
+# class QuantitiesSoldAdmin(admin.ModelAdmin):
+#     list_display = (
+#         'price',
+#         'event',
+#         'qty',
+#     )
+# staff_admin_site.register(QuantitiesSold, QuantitiesSoldAdmin)
+
+
 class ReservationAdmin(admin.ModelAdmin):
     list_display = (
         'datetime',
@@ -195,6 +208,7 @@ class ReservationAdmin(admin.ModelAdmin):
         'status',
     )
     # readonly_fields = list_display
+
 
 staff_admin_site.register(Reservation, ReservationAdmin)
 
@@ -209,6 +223,7 @@ class TicketAdmin(admin.ModelAdmin):
         'datetime',
     ]
     readonly_fields = list_display
+
 
 staff_admin_site.register(Ticket, TicketAdmin)
 
@@ -225,13 +240,34 @@ class ProductAdmin(admin.ModelAdmin):
         'publish',
     )
 
+
 staff_admin_site.register(Product, ProductAdmin)
 
-
-
-staff_admin_site.register(OptionGenerale, OptionGeneraleAdmin)
-
 staff_admin_site.register(Price, admin.ModelAdmin)
+
+
+class ProductSoldAdmin(admin.ModelAdmin):
+    list_display = (
+        'product',
+        'event',
+        'img',
+        'id_product_stripe',
+    )
+
+
+staff_admin_site.register(ProductSold, ProductSoldAdmin)
+
+
+class PricesSoldAdmin(admin.ModelAdmin):
+    list_display = (
+        'productsold',
+        'price',
+        'qty',
+        'id_price_stripe',
+    )
+
+
+staff_admin_site.register(PricesSold, PricesSoldAdmin)
 
 
 class PaiementStripeAdmin(admin.ModelAdmin):
@@ -261,5 +297,6 @@ class LigneArticleAdmin(admin.ModelAdmin):
         'status_stripe'
     )
     ordering = ('-datetime',)
+
 
 staff_admin_site.register(LigneArticle, LigneArticleAdmin)
