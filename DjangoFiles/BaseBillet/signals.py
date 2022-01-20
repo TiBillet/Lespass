@@ -93,10 +93,10 @@ def send_to_cashless(instance):
     data_for_cashless = {'uuid_commande': instance.paiement_stripe.uuid}
     data_for_cashless['uuid'] = instance.carte.uuid
 
-    if instance.price.product.categorie_article == Product.RECHARGE_CASHLESS:
+    if instance.pricesold.productsold.product.categorie_article == Product.RECHARGE_CASHLESS:
         data_for_cashless['recharge_qty'] = instance.price.prix
 
-    if instance.price.product.categorie_article == Product.ADHESION:
+    if instance.pricesold.productsold.product.categorie_article == Product.ADHESION:
         data_for_cashless['tarif_adhesion'] = instance.price.prix
 
     # si il y a des données a envoyer au serveur cashless :
@@ -127,7 +127,7 @@ def check_paid(old_instance, new_instance):
     new_instance: LigneArticle
     logger.info(f"    TRIGGER LIGNE ARTICLE check_paid {old_instance.price}")
 
-    if new_instance.price.product.categorie_article in \
+    if new_instance.pricesold.productsold.product.categorie_article in \
             [Product.RECHARGE_CASHLESS, Product.ADHESION]:
         if send_to_cashless(new_instance) == 200:
             new_instance.status = LigneArticle.VALID

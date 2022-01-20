@@ -206,6 +206,7 @@ class ReservationAdmin(admin.ModelAdmin):
         'user_commande',
         'event',
         'status',
+        'total_paid',
     )
     # readonly_fields = list_display
 
@@ -290,6 +291,7 @@ class LigneArticleAdmin(admin.ModelAdmin):
     list_display = (
         'datetime',
         'price',
+        'pricesold',
         'qty',
         'carte',
         'status',

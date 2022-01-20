@@ -478,9 +478,9 @@ class Reservation(models.Model):
 
     def total_paid(self):
         total_paid = 0
-        for article in self.articles_paid():
-            article: LigneArticle
-            total_paid += article.price.prix * article.qty
+        for ligne_article in self.articles_paid():
+            ligne_article: LigneArticle
+            total_paid += ligne_article.pricesold.price.prix * ligne_article.qty
         return total_paid
 
     def __str__(self):

@@ -217,8 +217,6 @@ class ReservationValidator(serializers.Serializer):
         return user_paiement.email
 
     def validate_prices(self, value):
-        print(value)
-
         # on vérifie que chaque article existe et a sa quantité.
         # et qu'il y ai au moins un billet pour la reservation.
         config = Configuration.get_solo()
