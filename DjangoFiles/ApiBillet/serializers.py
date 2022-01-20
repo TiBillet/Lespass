@@ -316,10 +316,18 @@ class ReservationValidator(serializers.Serializer):
                product=price.get('price').product
             )
 
+            if created :
+                productsold.get_id_product_stripe()
+            logger.info(f"productsold {productsold.nickname()} created : {created} - {productsold.get_id_product_stripe()}")
+
             pricesold, created = PricesSold.objects.get_or_create(
                 productsold=productsold,
                 price=price.get('price'),
             )
+
+            if created:
+                pricesold.get_id_price_stripe()
+            logger.info(f"pricesold {pricesold.price.name} created : {created} - {pricesold.get_id_price_stripe()}")
 
             ligne_article = LigneArticle.objects.create(
                 pricesold=pricesold,
