@@ -85,7 +85,7 @@ https://documenter.getpostman.com/view/17519122/UV5agG58
 # Crédits :
 
 ## Développement :
-Lead Dev : Jonas TURBEAUX & Nicolas DIJOUX
+#### Lead Dev : Jonas TURBEAUX & Nicolas DIJOUX
 
 TiBillet is ( for the moment ) under the Server Side Public Licence ( SSPL ), the anti-amazon GPL like licence.
 
