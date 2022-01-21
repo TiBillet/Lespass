@@ -20,21 +20,23 @@ class index(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        configuration = Configuration.get_solo()
-        if not configuration.activer_billetterie:
-            return HttpResponseRedirect('https://www.tibillet.re')
+        return HttpResponseRedirect('https://www.tibillet.re')
 
-
-        context = {
-            'configuration': configuration,
-            'events': Event.objects.filter(datetime__gt=datetime.now()),
-            'categorie_billet': Product.BILLET,
-        }
-
-        if configuration.template_billetterie :
-            return render(request, f'{configuration.template_billetterie}/lieu.html', context=context)
-        else :
-            return render(request, 'arnaud_mvc/lieu.html', context=context)
+        # configuration = Configuration.get_solo()
+        # if not configuration.activer_billetterie:
+        #     return HttpResponseRedirect('https://www.tibillet.re')
+        #
+        #
+        # context = {
+        #     'configuration': configuration,
+        #     'events': Event.objects.filter(datetime__gt=datetime.now()),
+        #     'categorie_billet': Product.BILLET,
+        # }
+        #
+        # if configuration.template_billetterie :
+        #     return render(request, f'{configuration.template_billetterie}/lieu.html', context=context)
+        # else :
+        #     return render(request, 'arnaud_mvc/lieu.html', context=context)
 
 
 # class adhesion(APIView):
@@ -47,19 +49,20 @@ class event(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, slug):
-        configuration = Configuration.get_solo()
-        event = get_object_or_404(Event, slug=slug)
-
-        context = {
-            'configuration': configuration,
-            'categorie_billet': Product.BILLET,
-            'event': event,
-        }
-
-        if configuration.template_billetterie :
-            return render(request, f'{configuration.template_billetterie}/event.html', context=context)
-        else :
-            return render(request, 'arnaud_mvc/event.html', context=context)
+        return HttpResponseRedirect('https://www.tibillet.re')
+    #     configuration = Configuration.get_solo()
+    #     event = get_object_or_404(Event, slug=slug)
+    #
+    #     context = {
+    #         'configuration': configuration,
+    #         'categorie_billet': Product.BILLET,
+    #         'event': event,
+    #     }
+    #
+    #     if configuration.template_billetterie :
+    #         return render(request, f'{configuration.template_billetterie}/event.html', context=context)
+    #     else :
+    #         return render(request, 'arnaud_mvc/event.html', context=context)
 
 
 

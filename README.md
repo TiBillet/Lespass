@@ -85,10 +85,9 @@ https://documenter.getpostman.com/view/17519122/UV5agG58
 # Crédits :
 
 ## Développement :
+Lead Dev : Jonas TURBEAUX & Nicolas DIJOUX
 
-Jonas TURBEAUX & Nicolas DIJOUX pour 3Peaks2Prod.
-
-TiBillet is ( for the moment ) under the Server Side Public Licence ( SSPL )
+TiBillet is ( for the moment ) under the Server Side Public Licence ( SSPL ), the anti-amazon GPL like licence.
 
 https://www.mongodb.com/licensing/server-side-public-license
 
@@ -111,4 +110,5 @@ Credits:
 		Scrollex (github.com/ajlkn/jquery.scrollex)
 		Responsive Tools (github.com/ajlkn/responsive-tools)
         Django-jet
+        And all the dependencies inside the dockerfile ! Many thanks to all.
         
