@@ -77,7 +77,7 @@ Don't forget to change your /etc/host if you are in localhost :)
 
 Enjoy !
 
-## API Documentation 
+# API Documentation 
 
 ### API Postman with example :
 https://documenter.getpostman.com/view/17519122/UV5agG58
