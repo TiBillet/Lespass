@@ -82,16 +82,19 @@ Enjoy !
 ### API Postman with example :
 https://documenter.getpostman.com/view/17519122/UV5agG58
 
-# Crédits :
-
-## Développement :
-#### Lead Dev : Jonas TURBEAUX & Nicolas DIJOUX
+# Licence :
 
 TiBillet is ( for the moment ) under the Server Side Public Licence ( SSPL ), the anti-amazon GPL like licence.
 
 https://www.mongodb.com/licensing/server-side-public-license
 
 https://webassets.mongodb.com/_com_assets/legal/SSPL-compared-to-AGPL.pdf
+
+# Crédits :
+
+## Développement :
+
+#### Lead Dev : Jonas TURBEAUX & Nicolas DIJOUX
 
 Credits:
 
