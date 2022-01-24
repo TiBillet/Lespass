@@ -34,7 +34,7 @@ def set_ligne_article_paid(old_instance, new_instance):
 
     lignes_article = new_instance.lignearticle_set.exclude(status=LigneArticle.VALID)
     for ligne_article in lignes_article:
-        logger.info(f"            {ligne_article.price} {ligne_article.status} to P")
+        logger.info(f"            {ligne_article.pricesold} {ligne_article.status} to P")
         ligne_article.status = LigneArticle.PAID
         ligne_article.save()
 
@@ -89,7 +89,7 @@ def send_to_cashless(instance):
     # Type :
     instance: LigneArticle
 
-    logger.info(f"        send_to_cashless {instance.price}")
+    logger.info(f"        send_to_cashless {instance.pricesold}")
     data_for_cashless = {'uuid_commande': instance.paiement_stripe.uuid}
     data_for_cashless['uuid'] = instance.carte.uuid
 
@@ -125,7 +125,7 @@ def check_paid(old_instance, new_instance):
     # Type :
     old_instance: LigneArticle
     new_instance: LigneArticle
-    logger.info(f"    TRIGGER LIGNE ARTICLE check_paid {old_instance.price}")
+    logger.info(f"    TRIGGER LIGNE ARTICLE check_paid {old_instance.pricesold}")
 
     if new_instance.pricesold.productsold.product.categorie_article in \
             [Product.RECHARGE_CASHLESS, Product.ADHESION]:
