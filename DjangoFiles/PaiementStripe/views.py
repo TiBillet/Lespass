@@ -19,12 +19,12 @@ from django.utils.translation import gettext, gettext_lazy as _
 import logging
 
 logger = logging.getLogger(__name__)
-
+User = get_user_model()
 
 class creation_paiement_stripe():
 
     def __init__(self,
-                 email_paiement: str,
+                 user: User,
                  liste_ligne_article: list,
                  metadata: dict,
                  reservation: (Reservation, None),
@@ -32,15 +32,15 @@ class creation_paiement_stripe():
                  absolute_domain: str
                  ) -> None:
 
+        self.user = user
+        self.email_paiement = user.email
         self.absolute_domain = absolute_domain
         self.liste_ligne_article = liste_ligne_article
-        self.email_paiement = email_paiement
         self.metadata = metadata
         self.reservation = reservation
         self.source = source
-
         self.configuration = Configuration.get_solo()
-        self.user = self._user_paiement()
+
         self.total = self._total()
         self.metadata_json = json.dumps(self.metadata)
         self.paiement_stripe_db = self._paiement_stripe_db()
@@ -48,30 +48,11 @@ class creation_paiement_stripe():
         self.line_items = self._line_items()
         self.checkout_session = self._checkout_session()
 
-    def _user_paiement(self):
-        User = get_user_model()
-        user_paiement, created = User.objects.get_or_create(
-            email=self.email_paiement,
-            username=self.email_paiement,
-        )
-
-        # On ne lie pas tout de suite la carte a l'user,
-        # on attendra  une réponse positive du serveur cashless.
-        if created:
-            user_paiement: HumanUser
-            user_paiement.client_source = connection.tenant
-            user_paiement.client_achat.add(connection.tenant)
-            user_paiement.is_active = False
-        else:
-            user_paiement.client_achat.add(connection.tenant)
-        user_paiement.save()
-
-        return user_paiement
 
     def _total(self):
         total = 0
         for ligne in self.liste_ligne_article:
-            total += float(ligne.qty) * float(ligne.pricesold.price.prix)
+            total += float(ligne.qty) * float(ligne.pricesold.prix)
         return total
 
     def _paiement_stripe_db(self):
@@ -92,12 +73,9 @@ class creation_paiement_stripe():
         return paiementStripeDb
 
     def _stripe_api_key(self):
-        if self.configuration.stripe_mode_test:
-            stripe.api_key = self.configuration.stripe_test_api_key
-        else:
-            stripe.api_key = self.configuration.stripe_api_key
-
-        if stripe.api_key :
+        api_key = self.configuration.get_stripe_api()
+        if api_key:
+            stripe.api_key = api_key
             return stripe.api_key
         else :
             raise serializers.ValidationError(_(f"No Stripe Api Key in configuration"))
@@ -184,10 +162,7 @@ class retour_stripe(View):
                     'Paiement déja validé !')
 
         configuration = Configuration.get_solo()
-        if configuration.stripe_mode_test:
-            stripe.api_key = configuration.stripe_test_api_key
-        else:
-            stripe.api_key = configuration.stripe_api_key
+        stripe.api_key = configuration.get_stripe_api()
 
         print(paiement_stripe.status)
         if paiement_stripe.status != Paiement_stripe.VALID:

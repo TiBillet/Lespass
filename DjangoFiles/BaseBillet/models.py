@@ -229,7 +229,7 @@ class Product(models.Model):
     categorie_article = models.CharField(max_length=3, choices=CATEGORIE_ARTICLE_CHOICES, default=BILLET,
                                          verbose_name=_("Type d'article"))
 
-    id_product_stripe = models.CharField(max_length=30, null=True, blank=True)
+    # id_product_stripe = models.CharField(max_length=30, null=True, blank=True)
 
     def __str__(self):
         return f"{self.name}"
@@ -237,7 +237,6 @@ class Product(models.Model):
 
 class Price(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
-
     product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="prices")
 
     name = models.CharField(max_length=50)
@@ -256,7 +255,7 @@ class Price(models.Model):
                            verbose_name=_("Taux TVA"),
                            )
 
-    id_price_stripe = models.CharField(max_length=30, null=True, blank=True)
+    # id_price_stripe = models.CharField(max_length=30, null=True, blank=True)
 
     stock = models.SmallIntegerField(blank=True, null=True)
     max_per_user = models.PositiveSmallIntegerField(default=10)
@@ -341,7 +340,7 @@ class ProductSold(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
 
     id_product_stripe = models.CharField(max_length=30, null=True, blank=True)
-    event = models.ForeignKey(Event, on_delete=models.PROTECT)
+    event = models.ForeignKey(Event, on_delete=models.PROTECT, null=True, blank=True)
 
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
 
@@ -351,14 +350,17 @@ class ProductSold(models.Model):
     def img(self):
         if self.product.img:
             return self.product.img
-        elif self.event.img:
-            return self.event.img
-        else:
-            return Configuration.get_solo().img
+        elif self.event:
+            if self.event.img:
+                return self.event.img
+
+        return Configuration.get_solo().img
 
     def nickname(self):
-        return f"{self.event.name} - {connection.tenant} - {self.event.datetime.strftime('%D')}"
-
+        if self.product.categorie_article == Product.BILLET :
+            return f"{self.event.name} - {connection.tenant} - {self.event.datetime.strftime('%D')}"
+        else :
+            return f"{self.product.name} - {connection.tenant}"
 
     def get_id_product_stripe(self):
         if self.id_product_stripe:
@@ -368,7 +370,9 @@ class ProductSold(models.Model):
 
         domain_url = connection.tenant.domains.all()[0].domain
         # noinspection PyUnresolvedReferences
-        images = [f"https://{domain_url}{self.img().med.url}", ]
+        images = []
+        if self.img():
+            images = [f"https://{domain_url}{self.img().med.url}", ]
 
         product = stripe.Product.create(
             name=f"{self.nickname()}",
@@ -387,7 +391,7 @@ class ProductSold(models.Model):
     #     unique_together = [['event', 'product']]
 
 
-class PricesSold(models.Model):
+class PriceSold(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
 
     id_price_stripe = models.CharField(max_length=30, null=True, blank=True)
@@ -395,7 +399,8 @@ class PricesSold(models.Model):
     productsold = models.ForeignKey(ProductSold, on_delete=models.PROTECT)
     price = models.ForeignKey(Price, on_delete=models.PROTECT)
 
-    qty = models.SmallIntegerField(default=0)
+    qty_solded = models.SmallIntegerField(default=0)
+    prix = models.FloatField()
 
     def __str__(self):
         return self.price.name
@@ -514,6 +519,9 @@ class Ticket(models.Model):
 
     reservation = models.ForeignKey(Reservation, on_delete=models.CASCADE, related_name="tickets")
 
+    #TODO : retirer blank et null lors d'un gros reset de la DB
+    pricesold = models.ForeignKey(PriceSold, on_delete=models.CASCADE, blank=True, null=True)
+
     CREATED, NOT_ACTIV, NOT_SCANNED, SCANNED = 'C', 'N', 'K', 'S'
     SCAN_CHOICES = [
         (CREATED, _('Crée')),
@@ -572,6 +580,7 @@ class Paiement_stripe(models.Model):
     """
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
     detail = models.CharField(max_length=50, blank=True, null=True)
+    datetime = models.DateTimeField(auto_now=True)
 
     id_stripe = models.CharField(max_length=80, blank=True, null=True)
     metadata_stripe = JSONField(blank=True, null=True)
@@ -625,7 +634,7 @@ class LigneArticle(models.Model):
 
     #TODO: Retirer les blank et null true lors de la première install. Ils ne sont la que pour le dev et les migrations :/
     price = models.ForeignKey(Price, on_delete=models.CASCADE, blank=True, null=True)
-    pricesold = models.ForeignKey(PricesSold, on_delete=models.CASCADE, blank=True, null=True)
+    pricesold = models.ForeignKey(PriceSold, on_delete=models.CASCADE, blank=True, null=True)
 
     qty = models.SmallIntegerField()
 

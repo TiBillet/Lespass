@@ -5,7 +5,7 @@ from solo.admin import SingletonModelAdmin
 
 from AuthBillet.models import HumanUser, SuperHumanUser, TermUser
 from BaseBillet.models import Configuration, Event, OptionGenerale, Product, Price, Reservation, LigneArticle, Ticket, \
-    Paiement_stripe, ProductSold, PricesSold
+    Paiement_stripe, ProductSold, PriceSold
 from django.contrib.auth.admin import UserAdmin
 
 from Customers.models import Client
@@ -235,7 +235,6 @@ class ProductAdmin(admin.ModelAdmin):
         'publish',
         'img',
         'categorie_article',
-        'id_product_stripe',
     )
     list_editable = (
         'publish',
@@ -244,7 +243,16 @@ class ProductAdmin(admin.ModelAdmin):
 
 staff_admin_site.register(Product, ProductAdmin)
 
-staff_admin_site.register(Price, admin.ModelAdmin)
+
+class PriceAdmin(admin.ModelAdmin):
+    list_display = (
+        'name',
+        'product',
+        'prix',
+    )
+    ordering = ('product','name')
+
+staff_admin_site.register(Price, PriceAdmin)
 
 
 class ProductSoldAdmin(admin.ModelAdmin):
@@ -263,12 +271,12 @@ class PricesSoldAdmin(admin.ModelAdmin):
     list_display = (
         'productsold',
         'price',
-        'qty',
+        'qty_solded',
         'id_price_stripe',
     )
 
 
-staff_admin_site.register(PricesSold, PricesSoldAdmin)
+staff_admin_site.register(PriceSold, PricesSoldAdmin)
 
 
 class PaiementStripeAdmin(admin.ModelAdmin):

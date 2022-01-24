@@ -1,3 +1,5 @@
+import datetime
+
 from django.contrib.auth import get_user_model
 from django.db import connection
 from django.utils.text import slugify
@@ -8,7 +10,7 @@ from rest_framework.generics import get_object_or_404
 
 from AuthBillet.models import TibilletUser, HumanUser
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, Paiement_stripe, \
-    PricesSold, ProductSold
+    PriceSold, ProductSold
 from PaiementStripe.views import creation_paiement_stripe
 
 import logging
@@ -193,6 +195,80 @@ class MembreshipValidator(serializers.Serializer):
         user_paiement.save()
         return user_paiement.email
 
+def get_near_event_by_date():
+    try:
+        return Event.objects.get(datetime__date=datetime.datetime.now().date())
+    except Event.MultipleObjectsReturned :
+        return Event.objects.filter(datetime__date=datetime.datetime.now().date()).first()
+    except Event.DoesNotExist :
+        return Event.objects.filter(datetime__gte=datetime.datetime.now()).first()
+    except:
+        return None
+
+def create_ticket(pricesold, customer, reservation):
+    ticket = Ticket.objects.create(
+        reservation=reservation,
+        pricesold=pricesold,
+        first_name=customer.get('first_name'),
+        last_name=customer.get('last_name'),
+    )
+    return ticket
+
+
+def get_or_create_price_sold(price: Price, event: Event):
+    """
+    Générateur des objets PriceSold pour envoi à Stripe.
+    Price + Event = PriceSold
+
+    On va chercher l'objets prix générique.
+    On lie le prix générique a l'event
+    pour générer la clé et afficher le bon nom sur stripe
+    """
+
+    productsold, created = ProductSold.objects.get_or_create(
+        event=event,
+        product=price.product
+    )
+
+    if created:
+        productsold.get_id_product_stripe()
+    logger.info(f"productsold {productsold.nickname()} created : {created} - {productsold.get_id_product_stripe()}")
+
+    pricesold, created = PriceSold.objects.get_or_create(
+        productsold=productsold,
+        prix=price.prix,
+        price=price,
+    )
+
+    if created:
+        pricesold.get_id_price_stripe()
+    logger.info(f"pricesold {pricesold.price.name} created : {created} - {pricesold.get_id_price_stripe()}")
+
+    return pricesold
+
+
+def validate_email_and_return_user(email):
+    """
+
+    :param email: email à vérifier
+    :type email: str
+    :return: TibilletUser
+    :rtype: TibilletUser
+    """
+    User: TibilletUser = get_user_model()
+    user, created = User.objects.get_or_create(
+        email=email, username=email)
+
+    if created:
+        user: HumanUser
+        user.client_source = connection.tenant
+        user.is_active = False
+
+    user.client_achat.add(connection.tenant)
+
+    user.save()
+    return user
+
 
 class ReservationValidator(serializers.Serializer):
     email = serializers.EmailField()
@@ -200,27 +276,21 @@ class ReservationValidator(serializers.Serializer):
     prices = serializers.JSONField(required=True)
 
     def validate_email(self, value):
-        User: TibilletUser = get_user_model()
-        user_paiement, created = User.objects.get_or_create(
-            email=value, username=value)
-
-        if created:
-            user_paiement: HumanUser
-            user_paiement.client_source = connection.tenant
-            user_paiement.client_achat.add(connection.tenant)
-            user_paiement.is_active = False
-        else:
-            user_paiement.client_achat.add(connection.tenant)
-
-        user_paiement.save()
-        self.user_commande = user_paiement
-        return user_paiement.email
+        self.user_commande = validate_email_and_return_user(value)
+        return self.user_commande.email
 
     def validate_prices(self, value):
-        # on vérifie que chaque article existe et a sa quantité.
-        # et qu'il y ai au moins un billet pour la reservation.
-        config = Configuration.get_solo()
-        self.nbr_ticket = 0
+        """
+        On vérifie ici :
+          que chaque article existe et a une quantité valide.
+          qu'il existe au moins un billet pour la reservation.
+          que chaque billet possède un nom/prenom
+
+        On remplace le json reçu par une liste de dictionnaire
+        qui comporte les objets de la db a la place des strings.
+        """
+
+        nbr_ticket = 0
         self.prices_list = []
         for entry in value:
             try:
@@ -231,16 +301,15 @@ class ReservationValidator(serializers.Serializer):
                 }
 
                 if price.product.categorie_article in [Product.BILLET]:
-                    self.nbr_ticket += entry['qty']
+                    nbr_ticket += entry['qty']
 
-                    # Si les noms sont requis pour la billetterie
-                    if config.name_required_for_ticket and entry['qty'] > 0:
-                        if not entry.get('customers'):
-                            raise serializers.ValidationError(_(f'customers non trouvés'))
-                        if len(entry.get('customers')) != entry['qty']:
-                            raise serializers.ValidationError(_(f'nombre customers non conforme'))
+                    # les noms sont requis pour la billetterie
+                    if not entry.get('customers'):
+                        raise serializers.ValidationError(_(f'customers name not find in ticket'))
+                    if len(entry.get('customers')) != entry['qty']:
+                        raise serializers.ValidationError(_(f'customers number not equal to ticket qty'))
 
-                        price_object['customers'] = entry.get('customers')
+                    price_object['customers'] = entry.get('customers')
 
                 self.prices_list.append(price_object)
 
@@ -249,102 +318,50 @@ class ReservationValidator(serializers.Serializer):
             except ValueError as e:
                 raise serializers.ValidationError(_(f'qty doit être un entier ou un flottant : {e}'))
 
-        '''
-        products = [
-                      {
-                        "uuid": "8c419d35-11a1-43b6-b500-b79db665d560",
-                        "qty": 2,
-                        "customers": [
-                          {
-                            "first_name": "Jean-Michel",
-                            "last_name": "Amoitié"
-                          },
-                          {
-                            "first_name": "Ellen",
-                            "last_name": "Ripley"
-                          }
-                        ]
-                      },
-                      {
-                        "uuid": "c6e847d4-baaa-4d21-a4f0-a572b8319615",
-                        "qty": 1,
-                        "customers": [
-                          {
-                            "first_name": "Douglas",
-                            "last_name": "Adams"
-                          }
-                        ]
-                      }
-                    ]
-                    
-                products = [
-                      {
-                        "uuid": "8c419d35-11a1-43b6-b500-b79db665d560",
-                        "qty": 2
-                      },
-                      {
-                        "uuid": "c6e847d4-baaa-4d21-a4f0-a572b8319615",
-                        "qty": 1
-                      }
-                    ]
-        '''
+        if nbr_ticket == 0:
+            raise serializers.ValidationError(_(f'pas de billet dans la reservation'))
+
         return value
 
     def validate(self, attrs):
-        if self.nbr_ticket == 0:
-            raise serializers.ValidationError(_(f'pas de billet dans la reservation'))
-
         event: Event = attrs.get('event')
         if event.complet():
             raise serializers.ValidationError(_(f'Jauge atteinte : Evenement complet.'))
 
-        config = Configuration.get_solo()
+        # Les articles semblent bon,
+        # on construit l'object reservation.
         reservation = Reservation.objects.create(
             user_commande=self.user_commande,
             event=event,
         )
 
-        lignes_article = []
-        for price in self.prices_list:
+        # Ici on construit :
+        #   price_sold pour lier l'event à la vente
+        #   ligne article pour envoie en paiement
+        #   Ticket nominatif
+        list_line_article_sold = []
+        for line_price in self.prices_list:
+            price_generique: Price = line_price['price']
+            qty = line_price.get('qty')
+            pricesold: PriceSold = get_or_create_price_sold(price_generique, event)
 
-            # on lie les articles vendus aux events
-            # pour générer la clé et afficher le bon nom sur stripe
-            productsold, created = ProductSold.objects.get_or_create(
-               event=event,
-               product=price.get('price').product
-            )
-
-            if created :
-                productsold.get_id_product_stripe()
-            logger.info(f"productsold {productsold.nickname()} created : {created} - {productsold.get_id_product_stripe()}")
-
-            pricesold, created = PricesSold.objects.get_or_create(
-                productsold=productsold,
-                price=price.get('price'),
-            )
-
-            if created:
-                pricesold.get_id_price_stripe()
-            logger.info(f"pricesold {pricesold.price.name} created : {created} - {pricesold.get_id_price_stripe()}")
-
-            ligne_article = LigneArticle.objects.create(
+            # les lignes articles pour la vente
+            line_article = LigneArticle.objects.create(
                 pricesold=pricesold,
-                qty=price.get('qty'),
+                qty=qty,
             )
-            lignes_article.append(ligne_article)
+            list_line_article_sold.append(line_article)
 
-            if config.name_required_for_ticket and price.get('customers'):
-                for customer in price.get('customers'):
-                    Ticket.objects.create(
-                        reservation=reservation,
-                        first_name=customer.get('first_name'),
-                        last_name=customer.get('last_name'),
-                    )
+            # import ipdb; ipdb.set_trace()
+            # Les Tickets si article est un billet
+            if price_generique.product.categorie_article == Product.BILLET:
+                for customer in line_price.get('customers'):
+                    create_ticket(pricesold, customer, reservation)
 
         metadata = {'reservation': f'{reservation.uuid}'}
         new_paiement_stripe = creation_paiement_stripe(
-            email_paiement=self.user_commande.email,
-            liste_ligne_article=lignes_article,
+            user=self.user_commande,
+            liste_ligne_article=list_line_article_sold,
             metadata=metadata,
             source=Paiement_stripe.API_BILLETTERIE,
             reservation=reservation,
@@ -364,6 +381,7 @@ class ReservationValidator(serializers.Serializer):
             print(new_paiement_stripe.checkout_session.stripe_id)
             # return new_paiement_stripe.redirect_to_stripe()
             self.checkout_session = new_paiement_stripe.checkout_session
+
             return super().validate(attrs)
 
         else:

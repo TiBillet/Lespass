@@ -94,10 +94,10 @@ def send_to_cashless(instance):
     data_for_cashless['uuid'] = instance.carte.uuid
 
     if instance.pricesold.productsold.product.categorie_article == Product.RECHARGE_CASHLESS:
-        data_for_cashless['recharge_qty'] = instance.price.prix
+        data_for_cashless['recharge_qty'] = instance.pricesold.prix
 
     if instance.pricesold.productsold.product.categorie_article == Product.ADHESION:
-        data_for_cashless['tarif_adhesion'] = instance.price.prix
+        data_for_cashless['tarif_adhesion'] = instance.pricesold.prix
 
     # si il y a des données a envoyer au serveur cashless :
     sess = requests.Session()
@@ -112,11 +112,11 @@ def send_to_cashless(instance):
 
     sess.close()
     logger.info(
-        f"        demande au serveur cashless pour {instance.price}. réponse : {r.status_code} ")
+        f"        demande au serveur cashless pour {instance.pricesold}. réponse : {r.status_code} ")
 
     if r.status_code != 200:
         logger.error(
-            f"erreur réponse serveur cashless {r.status_code} {r.text} pour paiement stripe {instance.price} uuid {instance.uuid}")
+            f"erreur réponse serveur cashless {r.status_code} {r.text} pour paiement stripe {instance.pricesold} uuid {instance.uuid}")
 
     return r.status_code
 

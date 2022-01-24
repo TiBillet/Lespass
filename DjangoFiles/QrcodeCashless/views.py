@@ -10,7 +10,8 @@ from rest_framework.generics import get_object_or_404
 from django.views import View
 from rest_framework import status
 
-from BaseBillet.models import Configuration, Product, LigneArticle, Price, Paiement_stripe
+from ApiBillet.serializers import validate_email_and_return_user, get_or_create_price_sold, get_near_event_by_date
+from BaseBillet.models import Configuration, Product, LigneArticle, Price, Paiement_stripe, ProductSold, Event
 from PaiementStripe.views import creation_paiement_stripe
 from QrcodeCashless.models import CarteCashless
 
@@ -98,6 +99,7 @@ class index_scan(View):
                 "Pas d'information de configuration pour paiement en ligne.")
 
         reponse_server_cashless = self.check_carte_serveur_cashless(carte.uuid)
+
         if reponse_server_cashless.status_code == 200:
             json_reponse = json.loads(reponse_server_cashless.json())
             email = json_reponse.get('email')
@@ -156,6 +158,7 @@ class index_scan(View):
         # c'est un paiement
         if (pk_adhesion or montant_recharge) and data.get('email'):
             # montant_recharge = data.get('montant_recharge')
+            user = validate_email_and_return_user(data.get('email'))
             ligne_articles = []
             metadata = {}
             metadata['recharge_carte_uuid'] = str(carte.uuid)
@@ -173,8 +176,9 @@ class index_scan(View):
                     prix=int(montant_recharge),
                 )
 
+                # noinspection PyTypeChecker
                 ligne_article_recharge = LigneArticle.objects.create(
-                    price=price,
+                    pricesold=get_or_create_price_sold(price, None),
                     qty=1,
                     carte=carte,
                 )
@@ -184,8 +188,9 @@ class index_scan(View):
 
             if pk_adhesion:
                 price_adhesion = Price.objects.get(pk=data.get('pk_adhesion'))
+                # noinspection PyTypeChecker
                 ligne_article_recharge = LigneArticle.objects.create(
-                    price=price_adhesion,
+                    pricesold=get_or_create_price_sold(price_adhesion, None),
                     qty=1,
                     carte=carte,
                 )
@@ -194,7 +199,7 @@ class index_scan(View):
 
             if len(ligne_articles) > 0:
                 new_paiement_stripe = creation_paiement_stripe(
-                    email_paiement=data.get('email'),
+                    user=user,
                     liste_ligne_article=ligne_articles,
                     metadata=metadata,
                     reservation=None,
