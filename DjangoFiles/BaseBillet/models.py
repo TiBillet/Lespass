@@ -519,8 +519,7 @@ class Ticket(models.Model):
 
     reservation = models.ForeignKey(Reservation, on_delete=models.CASCADE, related_name="tickets")
 
-    #TODO : retirer blank et null lors d'un gros reset de la DB
-    pricesold = models.ForeignKey(PriceSold, on_delete=models.CASCADE, blank=True, null=True)
+    pricesold = models.ForeignKey(PriceSold, on_delete=models.CASCADE)
 
     CREATED, NOT_ACTIV, NOT_SCANNED, SCANNED = 'C', 'N', 'K', 'S'
     SCAN_CHOICES = [
@@ -632,9 +631,7 @@ class LigneArticle(models.Model):
     uuid = models.UUIDField(primary_key=True, db_index=True, default=uuid.uuid4)
     datetime = models.DateTimeField(auto_now=True)
 
-    #TODO: Retirer les blank et null true lors de la première install. Ils ne sont la que pour le dev et les migrations :/
-    price = models.ForeignKey(Price, on_delete=models.CASCADE, blank=True, null=True)
-    pricesold = models.ForeignKey(PriceSold, on_delete=models.CASCADE, blank=True, null=True)
+    pricesold = models.ForeignKey(PriceSold, on_delete=models.CASCADE)
 
     qty = models.SmallIntegerField()
 
