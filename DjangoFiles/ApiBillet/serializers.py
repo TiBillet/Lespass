@@ -28,10 +28,12 @@ class ProductSerializer(serializers.ModelSerializer):
             "img",
             "categorie_article",
             "prices",
+            "id_product_stripe",
         ]
         depth = 1
         read_only_fields = [
             'uuid',
+            'id_product_stripe',
             'prices',
         ]
 
@@ -47,12 +49,14 @@ class PriceSerializer(serializers.ModelSerializer):
             'name',
             'prix',
             'vat',
+            'id_price_stripe',
             'stock',
             'max_per_user',
         ]
 
         read_only_fields = [
             'uuid',
+            'id_price_stripe',
         ]
         depth = 1
 

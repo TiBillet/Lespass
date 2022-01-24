@@ -298,6 +298,7 @@ staff_admin_site.register(Paiement_stripe, PaiementStripeAdmin)
 class LigneArticleAdmin(admin.ModelAdmin):
     list_display = (
         'datetime',
+        'price',
         'pricesold',
         'qty',
         'carte',
