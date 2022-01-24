@@ -51,11 +51,11 @@ docker exec -ti tibillet_django bash
   python manage.py migrate
   
   # Populate the database with example
-  python manage.py createdemo
+  python manage.py create_tenants
   
   # Create the root user 
   python manage.py create_tenant_superuser
-    -> public
+    ? -> public
     
   # Launch the http dev' server ( for production, see the Django & gunicorn doc ) 
   python /DjangoFiles/manage.py runserver_plus 0.0.0.0:8002

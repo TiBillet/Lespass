@@ -27,18 +27,20 @@ class Command(BaseCommand):
         for client in Client.objects.all():
             print (client.schema_name)
 
-        input_client = input('quel client ? \n')
-        client_tenant = Client.objects.get(schema_name=input_client)
+        # input_client = input('quel client ? \n')
+        # client_tenant = Client.objects.get(schema_name=input_client)
         print(' ')
+        client_tenant = Client.objects.get(schema_name='VavangArt')
 
-        input_generation = input('quelle génération ? \n')
-        print(' ')
+        # input_generation = input('quelle génération ? \n')
+        # print(' ')
+        input_generation = "1"
 
-        print('url, numéro imprimé len(8), fisrt tag id len(8)')
-        input_fichier_csv = input('path fichier csv ? \n')
-        file = open(input_fichier_csv)
+        # print('url, numéro imprimé len(8), fisrt tag id len(8)')
+        # input_fichier_csv = input('path fichier csv ? \n')
+        # file = open(input_fichier_csv)
 
-        # file = open('data/raffinerie_1_RETOUR_USINE.csv')
+        file = open('/DjangoFiles/data/csv/Vavangart_G1.csv')
 
 
         csv_parser = csv.reader(file)
@@ -65,9 +67,9 @@ class Command(BaseCommand):
                     print(f"uuid_url : {uuid_url}")
                     print(f"number : {line[1]}")
                     print(f"tag_id : {line[2]}")
-                    if str(uuid_url).partition('-')[0].upper() != line[1]:
-                        print('ERROR PRINT != uuid')
-                        break
+                    # if str(uuid_url).partition('-')[0].upper() != line[1]:
+                    #     print('ERROR PRINT != uuid')
+                    #     break
 
 
                     carte, created = CarteCashless.objects.get_or_create(

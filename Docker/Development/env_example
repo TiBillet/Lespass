@@ -1,23 +1,29 @@
-# CHANGE ME
-DJANGO_SECRET='ingeci8ar6Ahr6aiBi!ghovezahs@eiNgai4eingaa1zaeRi7E'
-
+DJANGO_SECRET='CHANGE_ME_OR_DANSE'
 POSTGRES_HOST='billetterie_postgres'
-POSTGRES_USER='tibillet_postgres_user'
-POSTGRES_PASSWORD='tibillet_postgres_password'
+POSTGRES_USER='ticket_postgres_user'
+POSTGRES_PASSWORD='CHANGE_ME_OR_DANSE'
 POSTGRES_DB='tibillet'
 
 CELERY_BROKER='redis://redis:6379/0'
 CELERY_BACKEND='redis://redis:6379/0'
 
+BORG_PASSPHRASE='CHANGE_ME_OR_DANSE'
+
 DEBUG_DJANGO=True
 TIME_ZONE='Indian/Reunion'
 
-DOMAIN='tibillet-local.me'
-EMAIL='me@me.me'
+API_TIBILLET_BILLETERIE_VERS_CASHLESS="CHANGE_ME_OR_DANSE"
 
-EMAIL_HOST=""
-EMAIL_PORT=""
-EMAIL_HOST_USER=""
-EMAIL_HOST_PASSWORD=""
+# Celui qui va servir a créer le public :
+PUBLIC='TiBillet Coop.'
+DOMAIN='django-local.org'
+# Les tenants suivants
+TENANTS='{"Bisik": ["bisik.django-local.org"], "VavangArt": ["vavangart.django-local.org"], "La Raffinerie": ["m.django-local.org", "raffinerie.django-local.org"], "Demo": ["demo.django-local.org"], "3Peaks": ["3peaks.django-local.org"]}'
 
-MOLLIE_API_KEY = ""
+EMAIL_HOST="SSL0.OVH.NET"
+EMAIL_PORT="465"
+EMAIL_HOST_USER="proutprout@proutprout.prout"
+EMAIL_HOST_PASSWORD="CHANGE_ME_OR_DANSE"
+
+
+
