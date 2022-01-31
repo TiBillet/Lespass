@@ -11,6 +11,10 @@ TiBillet permet la création d'une économie sociale et solidaire à l'échelle 
 
 Pour en savoir plus : https://www.tibillet.re & https://wiki.tibillet.re
 
+## Design 
+
+![](Presentation/Design_Front_Ticket.svg)
+
 ## Introduction.
 
 TiBillet est en période de BETA et en expérimentation sur plusieurs lieux sur l'ile de la Réunion. Venez nous voir au
