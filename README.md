@@ -69,12 +69,13 @@ docker exec -ti tibillet_django bash
 
 Test with ```www.$DOMAIN:8002/admin``` and ```demo.$DOMAIN:8002/admin```
 Don't forget to change your /etc/host if you are in localhost :)
+172.17.0.1 is the docker host network.
 
 ```
 #example /etc/hosts
-127.0.0.1       django-local.org
-127.0.0.1       www.django-local.org
-127.0.0.1       demo.django-local.org
+172.17.0.1       django-local.org
+172.17.0.1       www.django-local.org
+172.17.0.1       demo.django-local.org
 
 # go to demo.django-local.org:8002/admin to create an admin user for the tenant. 
 ```
@@ -116,6 +117,7 @@ Credits:
 		jQuery (jquery.com)
 		Scrollex (github.com/ajlkn/jquery.scrollex)
 		Responsive Tools (github.com/ajlkn/responsive-tools)
-        Django-jet
+        Django-jet*
+        Excalidraw
         And all the dependencies inside the dockerfile ! Many thanks to all.
         
