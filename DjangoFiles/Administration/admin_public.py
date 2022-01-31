@@ -124,8 +124,9 @@ class ClientAdmin(admin.ModelAdmin):
     list_display = (
         'schema_name',
         'name',
-        'paid_until',
-        'on_trial',
+        'categorie',
+        # 'paid_until',
+        # 'on_trial',
         'created_on',
     )
 

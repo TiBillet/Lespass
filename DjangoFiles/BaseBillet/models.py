@@ -63,6 +63,9 @@ class Configuration(SingletonModel):
     long_description = models.TextField(blank=True, null=True)
 
     adress = models.CharField(max_length=250)
+    postal_code = models.IntegerField()
+    city = models.CharField(max_length=250)
+
     phone = models.CharField(max_length=20)
     email = models.EmailField()
 
