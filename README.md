@@ -107,8 +107,9 @@ https://webassets.mongodb.com/_com_assets/legal/SSPL-compared-to-AGPL.pdf
 
 	D'après une idée originale de l'association des 3Peaks de Manapany et GDNA.
 	Merci à :
-		Christophe GONTHIER et Flavien BRANCHEREAU
-		Pierre MACQUART et Tous les bénévoles de l'association des 3Peaks, 
+		Christophe GONTHIER et Flavien BRANCHEREAU ( GDNA )
+		Pierre MACQUART
+		Tous les bénévoles de l'association des 3Peaks, 
 		du Manapany Festival, 
 		du Bisik et de la Raffinerie pour avoir essuyé les plâtres !		
 
