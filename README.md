@@ -48,13 +48,14 @@ docker-compose up -d
 ```shell
 
 # Go deeper inside the django container :
-docker exec -ti tibillet_django bash
+docker exec -ti billetterie_django bash
 
 # --> Inside the container :
-  # apply the db migration ( Django créate the table on postgres )
+  # apply the db migration ( tables creations )
   python manage.py migrate
   
   # Populate the database with example
+  # populate DjangoFiles/data/csv/domains_and_cards file with your own variables
   python manage.py create_tenants
   
   # Create the root user 
@@ -65,6 +66,8 @@ docker exec -ti tibillet_django bash
   python /DjangoFiles/manage.py runserver_plus 0.0.0.0:8002
   # or you can use the alias from the .bashrc : 
   rsp 
+  
+  # Login in /admin with email/password
 ```
 
 Test with ```www.$DOMAIN:8002/admin``` and ```demo.$DOMAIN:8002/admin```
@@ -103,7 +106,12 @@ https://webassets.mongodb.com/_com_assets/legal/SSPL-compared-to-AGPL.pdf
 
 Credits:
 
-    Graphical démo :
+	D'après une idée originale de l'association des 3Peaks de Manapany et GDNA.
+		Merci à :
+			Christophe GONTHIER et Flavien BRANCHEREAU
+			Tous les bénévoles de l'association des 3Peaks, du manapany festival, du Bisik et de la Raffinerie pour avoir essuyé les platres !
+			
+    Landing Page grapgical :
         Massively by HTML5 UP html5up.net | @ajlkn Free for personal and commercial use under the CCA 3.0 license (
         html5up.net/license)
         AJ aj@lkn.io | @ajlkn
@@ -114,10 +122,33 @@ Credits:
 		Font Awesome (fontawesome.io)
 
 	Other:
+		Creative-team
 		jQuery (jquery.com)
 		Scrollex (github.com/ajlkn/jquery.scrollex)
 		Responsive Tools (github.com/ajlkn/responsive-tools)
-        Django-jet*
+        Django-jet
         Excalidraw
-        And all the dependencies inside the dockerfile ! Many thanks to all.
-        
+        Bootstrap
+        django
+		djangorestframework
+		requests
+		gunicorn
+		sentry
+		python-dateutil
+		Werkzeug
+		django-solo
+		django-tenants
+		djoser
+		ipython
+		ipdb
+		django_debug_toolbar
+		django-extensions
+		borgbackup
+		Pillow
+		django-stdimage
+		django-weasyprint
+		segno
+		python-barcode
+		celery
+		redis
+		tenant-schemas-celery        
