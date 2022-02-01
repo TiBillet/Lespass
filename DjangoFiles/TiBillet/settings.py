@@ -241,20 +241,20 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'simple',
         },
-        # 'logfile': {
-        #     'level': 'INFO',
-        #     'class': 'logging.handlers.RotatingFileHandler',
-        #     'filename': f"{BASE_DIR}/www/Djangologfile",
-        #     'formatter': 'simple',
-        #     'maxBytes': 1024 * 1024 * 100,  # 100 mb
-        # },
-        # 'weasyprint': {
-        #     'level': 'ERROR',
-        #     'class': 'logging.handlers.RotatingFileHandler',
-        #     'filename': f"{BASE_DIR}/www/weasyprint",
-        #     'formatter': 'simple',
-        #     'maxBytes': 1024 * 1024 * 100,  # 100 mb
-        # },
+        'logfile': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': f"{BASE_DIR}/www/Djangologfile",
+            'formatter': 'simple',
+            'maxBytes': 1024 * 1024 * 100,  # 100 mb
+        },
+        'weasyprint': {
+            'level': 'ERROR',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': f"{BASE_DIR}/www/weasyprint",
+            'formatter': 'simple',
+            'maxBytes': 1024 * 1024 * 100,  # 100 mb
+        },
     },
     'root': {
         'level': 'INFO',

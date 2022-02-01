@@ -88,7 +88,7 @@ Enjoy !
 # API Documentation 
 
 ### API Postman with example :
-https://documenter.getpostman.com/view/17519122/UV5agG58
+https://documenter.getpostman.com/view/17519122/UVeDtTFC
 
 # Licence :
 

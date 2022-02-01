@@ -58,6 +58,8 @@ def poids_option_generale(sender, instance: OptionGenerale, created, **kwargs):
 
 
 class Configuration(SingletonModel):
+    def uuid(self):
+        return connection.tenant.pk
 
     organisation = models.CharField(max_length=50, verbose_name=_("Nom de l'organisation"))
     short_description = models.CharField(max_length=250, verbose_name=_("Description courte"))

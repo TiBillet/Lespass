@@ -5,6 +5,7 @@ import requests
 from django.contrib import messages
 from django.http import HttpResponseRedirect
 from django.utils import timezone
+from django_tenants.utils import schema_context, tenant_context
 from django_weasyprint import WeasyTemplateView
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
@@ -16,6 +17,7 @@ from AuthBillet.models import TenantAdminPermission
 from Customers.models import Client, Domain
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket
 from rest_framework import viewsets, permissions, status
+from django.db import connection
 
 import os
 import logging
@@ -23,18 +25,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def new_tenants(schema_name):
-    tenant = Client.objects.get_or_create(schema_name=schema_name,
-                                          name=schema_name,
-                                          paid_until='2200-12-05',
-                                          on_trial=False)[0]
 
-    tenant_domain = Domain.objects.get_or_create(domain=f'{schema_name}.{os.getenv("DOMAIN")}',
-                                                 tenant=tenant,
-                                                 is_primary=True,
-                                                 )
-
-    return tenant, tenant_domain
 
 
 class TarifBilletViewSet(viewsets.ViewSet):
@@ -85,8 +76,27 @@ class ProductViewSet(viewsets.ViewSet):
 class PlacesViewSet(viewsets.ViewSet):
 
     def list(self, request):
-        place_serialized = ConfigurationSerializer(Configuration.get_solo(), context={'request': request})
-        return Response(place_serialized.data)
+        places_serialized_with_uuid = []
+        configurations = []
+        for tenant in Client.objects.filter(categorie__in=['S','F']):
+            with tenant_context(tenant):
+                places_serialized_with_uuid.append({"uuid": f"{tenant.uuid}"})
+                configurations.append(Configuration.get_solo())
+
+        places_serialized = ConfigurationSerializer(configurations, context={'request': request}, many=True)
+
+        for key, value in enumerate(places_serialized.data):
+            places_serialized_with_uuid[key].update(value)
+
+        return Response(places_serialized_with_uuid)
+
+    def retrieve(self, request, pk=None):
+        tenant = get_object_or_404(Client.objects.filter(categorie__in=['S','F']), pk=pk)
+        with tenant_context(tenant):
+            place_serialized = ConfigurationSerializer(Configuration.get_solo(), context={'request': request})
+            place_serialized_with_uuid = {'uuid': f"{tenant.uuid}"}
+            place_serialized_with_uuid.update(place_serialized.data)
+        return Response(place_serialized_with_uuid)
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -94,6 +104,22 @@ class PlacesViewSet(viewsets.ViewSet):
         else:
             permission_classes = [TenantAdminPermission]
         return [permission() for permission in permission_classes]
+
+class HereViewSet(viewsets.ViewSet):
+
+    def list(self, request):
+        place_serialized = ConfigurationSerializer(Configuration.get_solo(), context={'request': request})
+        dict_with_uuid = {'uuid': f"{connection.tenant.uuid}"}
+        dict_with_uuid.update(place_serialized.data)
+        return Response(dict_with_uuid)
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [permissions.AllowAny]
+        else:
+            permission_classes = [TenantAdminPermission]
+        return [permission() for permission in permission_classes]
+
 
 
 class EventsViewSet(viewsets.ViewSet):
