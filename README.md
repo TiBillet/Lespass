@@ -104,7 +104,6 @@ https://webassets.mongodb.com/_com_assets/legal/SSPL-compared-to-AGPL.pdf
 
 #### Lead Dev : Jonas TURBEAUX & Nicolas DIJOUX
 
-Credits:
 
 	D'après une idée originale de l'association des 3Peaks de Manapany et GDNA.
 	Merci à :
