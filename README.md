@@ -127,9 +127,6 @@ https://webassets.mongodb.com/_com_assets/legal/SSPL-compared-to-AGPL.pdf
 
 	Other:
 		Creative-team
-		jQuery (jquery.com)
-		Scrollex (github.com/ajlkn/jquery.scrollex)
-		Responsive Tools (github.com/ajlkn/responsive-tools)
 		Django-jet
 		Excalidraw
 		Bootstrap
