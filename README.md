@@ -107,9 +107,11 @@ https://webassets.mongodb.com/_com_assets/legal/SSPL-compared-to-AGPL.pdf
 Credits:
 
 	D'après une idée originale de l'association des 3Peaks de Manapany et GDNA.
-		Merci à :
-			Christophe GONTHIER et Flavien BRANCHEREAU
-			Tous les bénévoles de l'association des 3Peaks, du Manapany Festival, du Bisik et de la Raffinerie pour avoir essuyé les plâtres !
+	Merci à :
+		Christophe GONTHIER et Flavien BRANCHEREAU
+		Tous les bénévoles de l'association des 3Peaks, 
+		du Manapany Festival, 
+		du Bisik et de la Raffinerie pour avoir essuyé les plâtres !
 			
     Landing Page :
         Massively by HTML5 UP html5up.net | @ajlkn Free for personal and commercial use under the CCA 3.0 license (
