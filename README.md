@@ -130,10 +130,10 @@ https://webassets.mongodb.com/_com_assets/legal/SSPL-compared-to-AGPL.pdf
 		jQuery (jquery.com)
 		Scrollex (github.com/ajlkn/jquery.scrollex)
 		Responsive Tools (github.com/ajlkn/responsive-tools)
-        Django-jet
-        Excalidraw
-        Bootstrap
-        django
+		Django-jet
+		Excalidraw
+		Bootstrap
+		django
 		djangorestframework
 		requests
 		gunicorn
