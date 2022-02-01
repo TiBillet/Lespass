@@ -8,11 +8,6 @@ import os, json
 class Command(BaseCommand):
 
     def handle(self, *args, **options):
-        # create your public tenant
-        assert os.environ.get('PUBLIC')
-        tenants_dict = json.loads(os.environ.get('TENANTS'))
-        assert tenants_dict
-
         tenant_public, created = Client.objects.get_or_create(
             schema_name='public',
             name=os.environ.get('PUBLIC'),
