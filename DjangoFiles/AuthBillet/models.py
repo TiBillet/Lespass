@@ -193,7 +193,7 @@ class HumanUserManager(TibilletManager):
         return super().get_queryset().filter(espece=TibilletUser.TYPE_HUM,
                                              is_staff=False,
                                              is_superuser=False,
-                                             client_achat__id__in=[connection.tenant.id, ],
+                                             client_achat__pk__in=[connection.tenant.pk, ],
                                              )
 
 
@@ -239,7 +239,7 @@ class SuperHumanUserManager(TibilletManager):
             espece=TibilletUser.TYPE_HUM,
             is_staff=True,
             is_superuser=False,
-            client_admin__id__in=[connection.tenant.id, ],
+            client_admin__pk__in=[connection.tenant.pk, ],
         )
 
 
