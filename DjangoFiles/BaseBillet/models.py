@@ -58,13 +58,15 @@ def poids_option_generale(sender, instance: OptionGenerale, created, **kwargs):
 
 
 class Configuration(SingletonModel):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
+
     organisation = models.CharField(max_length=50, verbose_name=_("Nom de l'organisation"))
     short_description = models.CharField(max_length=250, verbose_name=_("Description courte"))
     long_description = models.TextField(blank=True, null=True)
 
-    adress = models.CharField(max_length=250)
-    postal_code = models.IntegerField()
-    city = models.CharField(max_length=250)
+    adress = models.CharField(max_length=250, blank=True, null=True)
+    postal_code = models.IntegerField(blank=True, null=True)
+    city = models.CharField(max_length=250, blank=True, null=True)
 
     phone = models.CharField(max_length=20)
     email = models.EmailField()

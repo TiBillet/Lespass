@@ -61,6 +61,7 @@ class ConfigurationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Configuration
         fields = [
+            "uuid",
             "organisation",
             "short_description",
             "long_description",

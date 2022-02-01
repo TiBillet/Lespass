@@ -1,4 +1,5 @@
 import os
+from os.path import exists
 
 from django.core.management.base import BaseCommand
 from Customers.models import Client, Domain
@@ -27,7 +28,16 @@ class Command(BaseCommand):
         )
         domain_public.save()
 
-        tenants = json.loads(os.environ.get('TENANTS'))
+        input_file_find = False
+        tenants = {}
+        if exists("/DjangoFiles/data/csv/domains_and_cards.py"):
+            print("/DjangoFiles/data/csv/domains_and_cards.py existe. On charge depuis ce fichier ?")
+            input_file_find = input('Y ? \n')
+
+        if input_file_find == "Y":
+            from data.csv.domains_and_cards import domains
+            tenants = domains
+
         for tenant in tenants :
 
             tenant_db, created = Client.objects.get_or_create(schema_name=tenant,
