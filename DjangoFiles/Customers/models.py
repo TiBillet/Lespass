@@ -3,8 +3,11 @@ from django.utils import timezone
 from django.db import models
 from django_tenants.models import TenantMixin, DomainMixin
 from django.utils.translation import ugettext_lazy as _
+import uuid
 
 class Client(TenantMixin):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
+
     name = models.CharField(max_length=100, unique=True, db_index=True)
     paid_until =  models.DateField(default=timezone.now)
     on_trial = models.BooleanField(default=True)

@@ -58,7 +58,6 @@ def poids_option_generale(sender, instance: OptionGenerale, created, **kwargs):
 
 
 class Configuration(SingletonModel):
-    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
 
     organisation = models.CharField(max_length=50, verbose_name=_("Nom de l'organisation"))
     short_description = models.CharField(max_length=250, verbose_name=_("Description courte"))
