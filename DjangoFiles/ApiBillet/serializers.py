@@ -83,10 +83,11 @@ class ConfigurationSerializer(serializers.ModelSerializer):
 
 
 class EventSerializer(serializers.ModelSerializer):
-    products = ProductSerializer(
-        many=True,
-        read_only=True
-    )
+    products = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all(), many=True)
+    # products = ProductSerializer(
+    #     many=True,
+    #     read_only=True
+    # )
 
     class Meta:
         model = Event
@@ -107,19 +108,13 @@ class EventSerializer(serializers.ModelSerializer):
         depth = 1
 
     def validate(self, attrs):
-        # import ipdb; ipdb.set_trace()
-        # slug = slugify(f"{self.initial_data.get('name')} {self.initial_data.get('datetime').strftime('%D %R')}")
 
-        products = self.initial_data.get('products')
+        products = self.initial_data.getlist('products')
+
         if products:
-            try:
-                products_list = json.loads(products)
-            except json.decoder.JSONDecodeError as e:
-                raise serializers.ValidationError(_(f'products doit être un json valide : {e}'))
-
             self.products_to_db = []
-            for product in products_list:
-                self.products_to_db.append(get_object_or_404(Product, uuid=product.get('uuid')))
+            for product in products:
+                self.products_to_db.append(get_object_or_404(Product, uuid=product))
             return super().validate(attrs)
         else:
             raise serializers.ValidationError(_('products doit être un json valide'))

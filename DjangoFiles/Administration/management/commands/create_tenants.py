@@ -29,7 +29,7 @@ class Command(BaseCommand):
             print("/DjangoFiles/data/csv/domains_and_cards.py existe. On charge depuis ce fichier ?")
             input_file_find = input('Y ? \n')
 
-        if input_file_find == "Y":
+        if input_file_find in ["Y","y","yes","YES"]:
             from data.csv.domains_and_cards import domains
             tenants = domains
 
