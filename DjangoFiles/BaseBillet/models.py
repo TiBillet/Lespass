@@ -312,6 +312,18 @@ class Event(models.Model):
                         delete_orphans=True
                         )
 
+    # noinspection PyUnresolvedReferences
+    def img_variations(self):
+        if self.img:
+            return {
+                'fhd':self.img.fhd.url,
+                'hdr':self.img.hdr.url,
+                'med':self.img.med.url,
+                'thumbnail':self.img.thumbnail.url,
+                'crop':self.img.crop.url,
+            }
+        else :
+            return []
     # reservations = models.PositiveSmallIntegerField(default=0)
 
     CONCERT = "LIV"

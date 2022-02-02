@@ -11,6 +11,7 @@ from rest_framework.generics import get_object_or_404
 from AuthBillet.models import TibilletUser, HumanUser
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, Paiement_stripe, \
     PriceSold, ProductSold
+from Customers.models import Client
 from PaiementStripe.views import creation_paiement_stripe
 
 import logging
@@ -85,7 +86,23 @@ class ConfigurationSerializer(serializers.ModelSerializer):
         representation = super().to_representation(instance)
         # import ipdb;ipdb.set_trace()
         return representation
+'''
+class PlaceTenantSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    name = serializers.CharField(max_length=50)
+    short_description = serializers.CharField(max_length=250)
 
+    adress
+    postal_code
+    city
+    img
+    logo
+    phone = serializers.CharField(max_length=20, required=False)
+    postal_code = serializers.IntegerField(required=False)
+    birth_date = serializers.DateField(required=False)
+
+    contribution_value = serializers.FloatField()
+'''
 
 class EventSerializer(serializers.ModelSerializer):
     products = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all(), many=True)
@@ -105,7 +122,7 @@ class EventSerializer(serializers.ModelSerializer):
             'event_facebook_url',
             'datetime',
             'products',
-            'img',
+            'img_variations',
             'reservations',
             'complet',
         ]

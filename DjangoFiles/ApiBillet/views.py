@@ -75,6 +75,13 @@ class ProductViewSet(viewsets.ViewSet):
 
 class PlacesViewSet(viewsets.ViewSet):
 
+    # def create(self, request):
+    #     serializer = TenantSerializer(data=request.data)
+    #     if serializer.is_valid():
+    #         serializer.save()
+    #         return Response(serializer.data, status=status.HTTP_201_CREATED)
+    #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
     def list(self, request):
         places_serialized_with_uuid = []
         configurations = []
