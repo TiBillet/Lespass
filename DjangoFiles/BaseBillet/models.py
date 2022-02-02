@@ -88,8 +88,6 @@ class Configuration(SingletonModel):
     adhesion_obligatoire = models.BooleanField(default=False)
     button_adhesion = models.BooleanField(default=False)
 
-    name_required_for_ticket = models.BooleanField(default=True, verbose_name=_("Billet nominatifs"))
-
     map_img = StdImageField(upload_to='images/',
                             null=True, blank=True,
                             validators=[MaxSizeValidator(1920, 1920)],
