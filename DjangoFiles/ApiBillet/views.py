@@ -1,8 +1,6 @@
 # Create your views here.
 import json
-
 import requests
-from django.contrib import messages
 from django.http import HttpResponseRedirect
 from django.utils import timezone
 from django_tenants.utils import schema_context, tenant_context
@@ -14,8 +12,8 @@ from django.utils.translation import ugettext_lazy as _
 from django.utils.text import slugify
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
-    ReservationValidator, MembreshipValidator, ConfigurationSerializer, PlaceTenantSerializer
-from AuthBillet.models import TenantAdminPermission
+    ReservationValidator, MembreshipValidator, ConfigurationSerializer, PlaceTenantSerializer, ArtistTenantSerializer
+from AuthBillet.models import TenantAdminPermission, TibilletUser
 from Customers.models import Client, Domain
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket
 from rest_framework import viewsets, permissions, status
@@ -72,13 +70,15 @@ class ProductViewSet(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
-class PlacesViewSet(viewsets.ViewSet):
+class ArtistViewSet(viewsets.ViewSet):
 
     def create(self, request):
-        serializer = PlaceTenantSerializer(data=request.data, context={'request': request})
-        if not request.user.can_create_tenant:
-            return Response(_("Vous n'avez pas la permission de créer de nouveaux lieux"),
+        user: TibilletUser = request.user
+        if not user.can_create_tenant:
+            return Response(_("Vous n'avez pas la permission de créer de nouveaux artistes"),
                             status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+        serializer = ArtistTenantSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             futur_conf = serializer.validated_data
             with schema_context('public'):
@@ -86,16 +86,18 @@ class PlacesViewSet(viewsets.ViewSet):
                     tenant, created = Client.objects.get_or_create(
                         schema_name=slugify(futur_conf.get('organisation')),
                         name=futur_conf.get('organisation'),
-                        categorie=Client.SALLE_SPECTACLE,
+                        categorie=Client.ARTISTE,
                     )
-                    tenant.save()
+
+                    if not created:
+                        return Response(_(f"{futur_conf.get('organisation')} existe déja"),
+                                        status=status.HTTP_409_CONFLICT)
 
                     domain, created = Domain.objects.get_or_create(
                         domain=f"{slugify(futur_conf.get('organisation'))}.{os.getenv('DOMAIN')}",
                         tenant=tenant,
                         is_primary=True
                     )
-                    domain.save()
                 except IntegrityError as e:
                     return Response(_(f"{e}"), status=status.HTTP_409_CONFLICT)
                 except Exception as e:
@@ -106,7 +108,114 @@ class PlacesViewSet(viewsets.ViewSet):
                 conf = Configuration.get_solo()
                 serializer.update(instance=conf, validated_data=futur_conf)
 
+                user.client_admin.add(tenant)
+
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, pk=None):
+        tenant = get_object_or_404(Client, pk=pk)
+        user: TibilletUser = request.user
+        if tenant not in user.client_admin.all():
+            return Response(_(f"Not Allowed"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        with tenant_context(tenant):
+            conf = Configuration.get_solo()
+            serializer = PlaceTenantSerializer(conf, data=request.data, partial=True)
+
+            if serializer.is_valid(raise_exception=True):
+                serializer.update(conf, serializer.validated_data)
+                return Response(serializer.validated_data, status=status.HTTP_201_CREATED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def list(self, request):
+        places_serialized_with_uuid = []
+        configurations = []
+        for tenant in Client.objects.filter(categorie__in=['A',]):
+            with tenant_context(tenant):
+                places_serialized_with_uuid.append({"uuid": f"{tenant.uuid}"})
+                configurations.append(Configuration.get_solo())
+
+        places_serialized = ConfigurationSerializer(configurations, context={'request': request}, many=True)
+
+        for key, value in enumerate(places_serialized.data):
+            places_serialized_with_uuid[key].update(value)
+
+        return Response(places_serialized_with_uuid)
+
+    def retrieve(self, request, pk=None):
+        tenant = get_object_or_404(Client.objects.filter(categorie__in=['A']), pk=pk)
+        with tenant_context(tenant):
+            place_serialized = ConfigurationSerializer(Configuration.get_solo(), context={'request': request})
+            place_serialized_with_uuid = {'uuid': f"{tenant.uuid}"}
+            place_serialized_with_uuid.update(place_serialized.data)
+        return Response(place_serialized_with_uuid)
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [permissions.AllowAny]
+        else:
+            permission_classes = [TenantAdminPermission]
+        return [permission() for permission in permission_classes]
+
+
+
+class PlacesViewSet(viewsets.ViewSet):
+
+    def create(self, request):
+        user: TibilletUser = request.user
+        if not user.can_create_tenant:
+            return Response(_("Vous n'avez pas la permission de créer de nouveaux lieux"),
+                            status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+        serializer = PlaceTenantSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            futur_conf = serializer.validated_data
+            with schema_context('public'):
+                try:
+                    tenant, created = Client.objects.get_or_create(
+                        schema_name=slugify(futur_conf.get('organisation')),
+                        name=futur_conf.get('organisation'),
+                        categorie=Client.SALLE_SPECTACLE,
+                    )
+
+                    if not created:
+                        return Response(_(f"{futur_conf.get('organisation')} existe déja"),
+                                        status=status.HTTP_409_CONFLICT)
+
+                    domain, created = Domain.objects.get_or_create(
+                        domain=f"{slugify(futur_conf.get('organisation'))}.{os.getenv('DOMAIN')}",
+                        tenant=tenant,
+                        is_primary=True
+                    )
+                except IntegrityError as e:
+                    return Response(_(f"{e}"), status=status.HTTP_409_CONFLICT)
+                except Exception as e:
+                    return Response(_(f"{e}"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+            print(tenant)
+            with tenant_context(tenant):
+                conf = Configuration.get_solo()
+                serializer.update(instance=conf, validated_data=futur_conf)
+
+                user.client_admin.add(tenant)
+
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, pk=None):
+        tenant = get_object_or_404(Client, pk=pk)
+        user: TibilletUser = request.user
+        if tenant not in user.client_admin.all():
+            return Response(_(f"Not Allowed"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        with tenant_context(tenant):
+            conf = Configuration.get_solo()
+            serializer = PlaceTenantSerializer(conf, data=request.data, partial=True)
+
+            if serializer.is_valid(raise_exception=True):
+                serializer.update(conf, serializer.validated_data)
+                return Response(serializer.validated_data, status=status.HTTP_201_CREATED)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def list(self, request):
@@ -181,7 +290,7 @@ class EventsViewSet(viewsets.ViewSet):
         print(f"update : {pk}")
         event = get_object_or_404(queryset, pk=pk)
         print(event)
-        serializer = EventSerializer(event, data=request.data)
+        serializer = EventSerializer(event, data=request.data, partial=True)
         if serializer.is_valid(raise_exception=True):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)

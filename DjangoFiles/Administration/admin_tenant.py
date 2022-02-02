@@ -146,7 +146,6 @@ class ConfigurationAdmin(SingletonModelAdmin):
                 'activer_billetterie',
                 'template_billetterie',
                 'template_meta',
-                'name_required_for_ticket',
                 'jauge_max',
                 'option_generale_radio',
                 'option_generale_checkbox',
