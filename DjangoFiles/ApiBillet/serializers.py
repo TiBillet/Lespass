@@ -76,10 +76,15 @@ class ConfigurationSerializer(serializers.ModelSerializer):
             "name_required_for_ticket",
             "map_img",
             "carte_restaurant",
-            "img",
+            "img_variations",
             "logo",
         ]
         read_only_fields = fields
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        # import ipdb;ipdb.set_trace()
+        return representation
 
 
 class EventSerializer(serializers.ModelSerializer):

@@ -122,6 +122,18 @@ class Configuration(SingletonModel):
                         verbose_name='Background'
                         )
 
+    def img_variations(self):
+        if self.img:
+            return {
+                'fhd':self.img.fhd.url,
+                'hdr':self.img.hdr.url,
+                'med':self.img.med.url,
+                'thumbnail':self.img.thumbnail.url,
+            }
+        else :
+            return []
+
+
     logo = StdImageField(upload_to='images/',
                          null=True, blank=True,
                          # validators=[MaxSizeValidator(1920, 1920)],
