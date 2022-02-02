@@ -25,7 +25,7 @@ class Command(BaseCommand):
 
         base_url = "http://demo.django-local.org:8002"
         headers = {}
-        email = os.environ.get("EMAIL")
+        email = "admin@admin.admin"
         username = email
         password = 'proutprout123'
         ### Create User :
