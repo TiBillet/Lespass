@@ -122,6 +122,7 @@ class Configuration(SingletonModel):
                         verbose_name='Background'
                         )
 
+    # noinspection PyUnresolvedReferences
     def img_variations(self):
         if self.img:
             return {

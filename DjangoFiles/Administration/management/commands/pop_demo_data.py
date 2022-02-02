@@ -26,17 +26,20 @@ class Command(BaseCommand):
         base_url = "http://demo.django-local.org:8002"
         headers = {}
         email = os.environ.get("EMAIL")
-
+        username = email
+        password = 'proutprout123'
         ### Create User :
         print("************ Create User")
         url = f"{base_url}/auth/users/"
-        payload = {'email': email,
-                   'password': 'proutprout123',
-                   'username': 'Jojo'}
+        payload = {
+            'email': email,
+            'password': password,
+            'username': username
+        }
         response = requests.request("POST", url, data=payload)
         print(response.text)
         with schema_context('Demo'):
-            User: TibilletUser= get_user_model()
+            User: TibilletUser = get_user_model()
             admin = User.objects.get(email=email)
             admin.is_active = True
             admin.is_staff = True
@@ -50,7 +53,7 @@ class Command(BaseCommand):
         print("************ Create Get Token user")
         url = f"{base_url}/auth/token/login/"
         payload = {'username': email,
-                   'password': 'proutprout123'}
+                   'password': password}
         response = requests.request("POST", url, data=payload)
         auth_token = response.json().get("auth_token")
         assert auth_token
@@ -160,7 +163,7 @@ class Command(BaseCommand):
                    'datetime': '2023-10-01T10:20',
                    'short_description': 'Fête ses 40ans',
                    'long_description': 'Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum ',
-                   'products': [ uuid_tshirt_product, uuid_ticket_product ],
+                   'products': [uuid_tshirt_product, uuid_ticket_product],
                    'event_facebook_url': 'https://www.facebook.com/events/2251615698313858'}
         files = [
             ('img', ('Ziskakan.jpg', open('/DjangoFiles/www/demo_img/Ziskakan.jpg', 'rb'), 'image/jpeg'))
