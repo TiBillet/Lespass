@@ -63,9 +63,12 @@ class ConfigurationSerializer(serializers.ModelSerializer):
         model = Configuration
         fields = [
             "organisation",
+            "slug",
             "short_description",
             "long_description",
             "adress",
+            "postal_code",
+            "city",
             "phone",
             "email",
             "site_web",
@@ -86,23 +89,57 @@ class ConfigurationSerializer(serializers.ModelSerializer):
         representation = super().to_representation(instance)
         # import ipdb;ipdb.set_trace()
         return representation
-'''
-class PlaceTenantSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-    name = serializers.CharField(max_length=50)
-    short_description = serializers.CharField(max_length=250)
 
-    adress
-    postal_code
-    city
-    img
-    logo
-    phone = serializers.CharField(max_length=20, required=False)
-    postal_code = serializers.IntegerField(required=False)
-    birth_date = serializers.DateField(required=False)
 
-    contribution_value = serializers.FloatField()
-'''
+# class PlaceTenantSerializer(serializers.Serializer):
+#     email = serializers.EmailField()
+#     name = serializers.CharField(max_length=50)
+#     short_description = serializers.CharField(max_length=250)
+#
+#     adress = serializers.CharField(max_length=250)
+#     city = serializers.CharField(max_length=250)
+#     # img
+#     # logo
+#
+#     phone = serializers.CharField(max_length=20, required=True)
+#     postal_code = serializers.IntegerField(required=True)
+#
+#     contribution_value = serializers.FloatField()
+
+class PlaceTenantSerializer(serializers.ModelSerializer):
+    categorie = serializers.ChoiceField(choices=Client.CATEGORIE_CHOICES, read_only=True)
+
+    class Meta:
+        model = Configuration
+        fields = [
+            "categorie",
+            "organisation",
+            "slug",
+            "short_description",
+            "long_description",
+            "adress",
+            "postal_code",
+            "city",
+            "phone",
+            "email",
+            "site_web",
+            "twitter",
+            "facebook",
+            "instagram",
+            "adhesion_obligatoire",
+            "button_adhesion",
+            "name_required_for_ticket",
+            "map_img",
+            "carte_restaurant",
+            "img",
+            "logo",
+        ]
+        read_only_fields = ("slug", "categorie")
+
+    def validate_categorie(self, value):
+        if value in [Client.SALLE_SPECTACLE]:
+            return value
+        raise serializers.ValidationError(_("Doit être une salle de spectacle."))
 
 class EventSerializer(serializers.ModelSerializer):
     products = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all(), many=True)

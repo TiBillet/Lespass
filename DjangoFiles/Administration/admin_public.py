@@ -34,6 +34,7 @@ class UserAdminTibillet(UserAdmin):
         'is_active',
         'is_staff',
         'is_superuser',
+        'can_create_tenant',
         'client_source',
         'achat',
         'administre',
@@ -65,6 +66,7 @@ class UserAdminTibillet(UserAdmin):
                 'is_active',
                 'is_staff',
                 'is_superuser',
+                'can_create_tenant',
                 'groups',
                 'user_permissions',
             ),
@@ -132,6 +134,7 @@ class ClientAdmin(admin.ModelAdmin):
 
 public_admin_site.register(Client, ClientAdmin)
 
+public_admin_site.register(Domain, admin.ModelAdmin)
 
 class DetailAdmin(admin.ModelAdmin):
     list_display = (

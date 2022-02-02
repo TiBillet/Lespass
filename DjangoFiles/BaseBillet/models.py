@@ -20,7 +20,7 @@ from django.utils.text import slugify
 from solo.models import SingletonModel
 from django.utils.translation import ugettext_lazy as _
 from stdimage import StdImageField
-from stdimage.validators import MaxSizeValidator
+from stdimage.validators import MaxSizeValidator, MinSizeValidator
 from django.db import connection
 
 import AuthBillet.models
@@ -61,7 +61,14 @@ class Configuration(SingletonModel):
     def uuid(self):
         return connection.tenant.pk
 
-    organisation = models.CharField(max_length=50, verbose_name=_("Nom de l'organisation"))
+    organisation = models.CharField(unique=True, db_index=True, max_length=50, verbose_name=_("Nom de l'organisation"))
+
+    def slug(self):
+        if self.organisation:
+            return slugify(f"{self.organisation}")
+        else :
+            return None
+
     short_description = models.CharField(max_length=250, verbose_name=_("Description courte"))
     long_description = models.TextField(blank=True, null=True)
 
@@ -110,8 +117,7 @@ class Configuration(SingletonModel):
                                      )
 
     img = StdImageField(upload_to='images/',
-                        null=True, blank=True,
-                        # validators=[MaxSizeValidator(1920, 1920)],
+                        validators=[MaxSizeValidator(1920, 1920), MinSizeValidator(720,720)],
                         variations={
                             'fhd': (1920, 1920),
                             'hdr': (720, 720),
@@ -136,8 +142,7 @@ class Configuration(SingletonModel):
 
 
     logo = StdImageField(upload_to='images/',
-                         null=True, blank=True,
-                         # validators=[MaxSizeValidator(1920, 1920)],
+                         validators=[MaxSizeValidator(1920, 1920)],
                          variations={
                              'fhd': (1920, 1920),
                              'hdr': (720, 720),
@@ -226,6 +231,7 @@ class Configuration(SingletonModel):
         null=True,
         verbose_name=_("Template Meta")
     )
+
 
 
 class Product(models.Model):

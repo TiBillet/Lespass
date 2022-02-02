@@ -79,6 +79,7 @@ class TibilletUser(AbstractUser):
     postal_code = models.IntegerField(null=True, blank=True)
     birth_date = models.DateField(null=True, blank=True)
 
+    can_create_tenant = models.BooleanField(default=False, verbose_name=_("Peux créer des tenants"))
 
     TYPE_TERM, TYPE_HUM, TYPE_ANDR = 'TE', 'HU', 'AN'
     ESPECE_CHOICES = (

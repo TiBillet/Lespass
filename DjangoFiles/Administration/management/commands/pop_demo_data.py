@@ -38,6 +38,7 @@ class Command(BaseCommand):
             User: TibilletUser = get_user_model()
             admin = User.objects.get(email=email)
             admin.is_active = True
+            admin.can_create_tenant = True
             admin.is_staff = True
             admin.client_admin.add(Client.objects.get(name="Demo"))
             admin.save()

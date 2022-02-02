@@ -10,22 +10,21 @@ from django_weasyprint import WeasyTemplateView
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from django.utils.translation import ugettext_lazy as _
+from django.utils.text import slugify
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
-    ReservationValidator, MembreshipValidator, ConfigurationSerializer
+    ReservationValidator, MembreshipValidator, ConfigurationSerializer, PlaceTenantSerializer
 from AuthBillet.models import TenantAdminPermission
 from Customers.models import Client, Domain
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket
 from rest_framework import viewsets, permissions, status
-from django.db import connection
+from django.db import connection, IntegrityError
 
 import os
 import logging
 
 logger = logging.getLogger(__name__)
-
-
-
 
 
 class TarifBilletViewSet(viewsets.ViewSet):
@@ -75,17 +74,45 @@ class ProductViewSet(viewsets.ViewSet):
 
 class PlacesViewSet(viewsets.ViewSet):
 
-    # def create(self, request):
-    #     serializer = TenantSerializer(data=request.data)
-    #     if serializer.is_valid():
-    #         serializer.save()
-    #         return Response(serializer.data, status=status.HTTP_201_CREATED)
-    #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    def create(self, request):
+        serializer = PlaceTenantSerializer(data=request.data, context={'request': request})
+        if not request.user.can_create_tenant:
+            return Response(_("Vous n'avez pas la permission de créer de nouveaux lieux"),
+                            status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        if serializer.is_valid():
+            futur_conf = serializer.validated_data
+            with schema_context('public'):
+                try:
+                    tenant, created = Client.objects.get_or_create(
+                        schema_name=slugify(futur_conf.get('organisation')),
+                        name=futur_conf.get('organisation'),
+                        categorie=Client.SALLE_SPECTACLE,
+                    )
+                    tenant.save()
+
+                    domain, created = Domain.objects.get_or_create(
+                        domain=f"{slugify(futur_conf.get('organisation'))}.{os.getenv('DOMAIN')}",
+                        tenant=tenant,
+                        is_primary=True
+                    )
+                    domain.save()
+                except IntegrityError as e:
+                    return Response(_(f"{e}"), status=status.HTTP_409_CONFLICT)
+                except Exception as e:
+                    return Response(_(f"{e}"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+            print(tenant)
+            with tenant_context(tenant):
+                conf = Configuration.get_solo()
+                serializer.update(instance=conf, validated_data=futur_conf)
+
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def list(self, request):
         places_serialized_with_uuid = []
         configurations = []
-        for tenant in Client.objects.filter(categorie__in=['S','F']):
+        for tenant in Client.objects.filter(categorie__in=['S', 'F']):
             with tenant_context(tenant):
                 places_serialized_with_uuid.append({"uuid": f"{tenant.uuid}"})
                 configurations.append(Configuration.get_solo())
@@ -98,7 +125,7 @@ class PlacesViewSet(viewsets.ViewSet):
         return Response(places_serialized_with_uuid)
 
     def retrieve(self, request, pk=None):
-        tenant = get_object_or_404(Client.objects.filter(categorie__in=['S','F']), pk=pk)
+        tenant = get_object_or_404(Client.objects.filter(categorie__in=['S', 'F']), pk=pk)
         with tenant_context(tenant):
             place_serialized = ConfigurationSerializer(Configuration.get_solo(), context={'request': request})
             place_serialized_with_uuid = {'uuid': f"{tenant.uuid}"}
@@ -111,6 +138,7 @@ class PlacesViewSet(viewsets.ViewSet):
         else:
             permission_classes = [TenantAdminPermission]
         return [permission() for permission in permission_classes]
+
 
 class HereViewSet(viewsets.ViewSet):
 
@@ -126,7 +154,6 @@ class HereViewSet(viewsets.ViewSet):
         else:
             permission_classes = [TenantAdminPermission]
         return [permission() for permission in permission_classes]
-
 
 
 class EventsViewSet(viewsets.ViewSet):
