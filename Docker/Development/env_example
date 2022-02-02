@@ -14,11 +14,6 @@ TIME_ZONE='Indian/Reunion'
 
 API_TIBILLET_BILLETERIE_VERS_CASHLESS="CHANGE_ME_OR_DANSE"
 
-# Celui qui va servir a créer le public :
-PUBLIC='TiBillet Coop.'
-DOMAIN='django-local.org'
-# Les tenants suivants
-TENANTS='{"Bisik": ["bisik.django-local.org"], "VavangArt": ["vavangart.django-local.org"], "La Raffinerie": ["m.django-local.org", "raffinerie.django-local.org"], "Demo": ["demo.django-local.org"], "3Peaks": ["3peaks.django-local.org"]}'
 
 EMAIL_HOST="SSL0.OVH.NET"
 EMAIL_PORT="465"
@@ -27,3 +22,6 @@ EMAIL_HOST_PASSWORD="CHANGE_ME_OR_DANSE"
 
 
 
+# Celui qui va servir a créer le public :
+PUBLIC='TiBillet Coop.'
+DOMAIN='django-local.org'

@@ -11,11 +11,6 @@ from Customers.models import Client, Domain
 import os, json
 from django.core.management import call_command
 
-'''
-lancer un ./manage.py tenant_command flush
--> Demo
-'''
-
 
 class Command(BaseCommand):
 
@@ -25,7 +20,7 @@ class Command(BaseCommand):
 
         base_url = "http://demo.django-local.org:8002"
         headers = {}
-        email = "admin@admin.admin"
+        email = os.environ.get('EMAIL')
         username = email
         password = 'proutprout123'
         ### Create User :
