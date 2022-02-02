@@ -36,6 +36,7 @@ class Command(BaseCommand):
             'password': password,
             'username': username
         }
+
         response = requests.request("POST", url, data=payload)
         print(response.text)
         with schema_context('Demo'):
