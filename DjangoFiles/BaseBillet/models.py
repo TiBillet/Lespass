@@ -148,6 +148,19 @@ class Configuration(SingletonModel):
                          verbose_name='Logo'
                          )
 
+    # noinspection PyUnresolvedReferences
+    def logo_variations(self):
+        if self.logo:
+            return {
+                'fhd':self.img.fhd.url,
+                'hdr':self.img.hdr.url,
+                'med':self.img.med.url,
+                'thumbnail':self.img.thumbnail.url,
+            }
+        else :
+            return []
+
+
     mollie_api_key = models.CharField(max_length=50,
                                       blank=True, null=True)
 

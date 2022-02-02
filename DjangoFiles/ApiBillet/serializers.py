@@ -78,7 +78,7 @@ class ConfigurationSerializer(serializers.ModelSerializer):
             "map_img",
             "carte_restaurant",
             "img_variations",
-            "logo",
+            "logo_variations",
         ]
         read_only_fields = fields
 
