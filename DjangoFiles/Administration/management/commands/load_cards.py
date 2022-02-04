@@ -1,9 +1,8 @@
-import os
 from os.path import exists
 
 from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand
-from Customers.models import Client, Domain
+from Customers.models import Client
 from QrcodeCashless.models import Detail, CarteCashless
 from django.core.validators import URLValidator
 
@@ -32,7 +31,7 @@ class Command(BaseCommand):
             input_file_find = input('Y ? \n')
 
         if input_file_find == "Y":
-            from data.csv.domains_and_cards import cards
+            from data.domains_and_cards import cards
             cards_dict = cards
         else :
             for client in Client.objects.all():

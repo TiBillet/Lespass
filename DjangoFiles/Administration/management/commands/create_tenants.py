@@ -1,9 +1,9 @@
-import os
 from os.path import exists
 
 from django.core.management.base import BaseCommand
 from Customers.models import Client, Domain
-import os, json
+import os
+
 
 class Command(BaseCommand):
 
@@ -30,7 +30,7 @@ class Command(BaseCommand):
             input_file_find = input('Y ? \n')
 
         if input_file_find in ["Y","y","yes","YES"]:
-            from data.csv.domains_and_cards import domains
+            from data.domains_and_cards import domains
             tenants = domains
 
         for tenant in tenants :

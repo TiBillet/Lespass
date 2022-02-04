@@ -10,29 +10,63 @@ from AuthBillet.models import TibilletUser
 from Customers.models import Client, Domain
 import os, json
 from django.core.management import call_command
+from django.utils.text import slugify
 
 
 class Command(BaseCommand):
 
     def handle(self, *args, **options):
-        with schema_context('Demo'):
+        # Création du tenant principal public
+        tenant_public, created = Client.objects.get_or_create(
+            schema_name='public',
+            name=os.environ.get('PUBLIC'),
+            on_trial=False,
+            categorie=Client.META,
+        )
+        tenant_public.save()
+
+        domain_public, created = Domain.objects.get_or_create(
+            domain=f'{os.getenv("DOMAIN")}',
+            tenant=tenant_public,
+            is_primary=True
+        )
+        domain_public.save()
+
+        tenant_demo, created = Client.objects.get_or_create(
+            schema_name='demo',
+            name=os.environ.get('FIRST_TENANT'),
+            on_trial=False,
+            categorie=Client.META,
+        )
+        tenant_demo.save()
+
+        domain_demo, created = Domain.objects.get_or_create(
+            domain=f'{slugify(os.environ.get("FIRST_TENANT"))}.{os.getenv("DOMAIN")}',
+            tenant=tenant_demo,
+            is_primary=True
+        )
+        domain_demo.save()
+
+
+        with schema_context('demo'):
             call_command('flush')
 
         base_url = "http://demo.django-local.org:8002"
         headers = {}
         email = os.environ.get('EMAIL')
         username = email
-        password = 'proutprout123'
+        dummypassword = 'proutprout123'
+
         ### Create User :
         print("************ Create User")
         url = f"{base_url}/auth/users/"
-        payload = {
+        data_json = {
             'email': email,
-            'password': password,
+            'password': dummypassword,
             'username': username
         }
 
-        response = requests.request("POST", url, data=payload)
+        response = requests.request("POST", url, data=data_json)
         print(response.text)
         with schema_context('Demo'):
             User: TibilletUser = get_user_model()
@@ -49,9 +83,9 @@ class Command(BaseCommand):
         ### Get Token user :
         print("************ Create Get Token user")
         url = f"{base_url}/auth/token/login/"
-        payload = {'username': email,
-                   'password': password}
-        response = requests.request("POST", url, data=payload)
+        data_json = {'username': email,
+                     'password': dummypassword}
+        response = requests.request("POST", url, data=data_json)
         auth_token = response.json().get("auth_token")
         assert auth_token
 
@@ -62,7 +96,7 @@ class Command(BaseCommand):
         print("************ me")
 
         url = f"{base_url}/auth/users/me/"
-        response = requests.request("GET", url, headers=headers, data=payload)
+        response = requests.request("GET", url, headers=headers, data=data_json)
 
         print(response.text)
         assert response.status_code == 200
@@ -71,13 +105,13 @@ class Command(BaseCommand):
         ### Create product
         print("************ Create Ticket Product")
         url = f"{base_url}/api/products/"
-        payload = {'name': 'Billet',
-                   'publish': 'true',
-                   'categorie_article': 'B'}
+        data_json = {'name': 'Billet',
+                     'publish': 'true',
+                     'categorie_article': 'B'}
         files = [
             ('img', ('tickets_old.png', open('/DjangoFiles/www/demo_img/tickets.png', 'rb'), 'image/png'))
         ]
-        response = requests.request("POST", url, headers=headers, data=payload, files=files)
+        response = requests.request("POST", url, headers=headers, data=data_json, files=files)
         uuid_ticket_product = response.json().get("uuid")
         print(response.text)
         assert response.status_code == 201
@@ -87,24 +121,24 @@ class Command(BaseCommand):
         print("************ Create Ticket prices")
         url = f"{base_url}/api/prices/"
 
-        payload = {'name': 'Demi Tarif',
-                   'prix': '5',
-                   'vat': 'NA',
-                   'max_per_user': '10',
-                   'stock': '250',
-                   'product': uuid_ticket_product}
-        response = requests.request("POST", url, headers=headers, data=payload)
+        data_json = {'name': 'Demi Tarif',
+                     'prix': '5',
+                     'vat': 'NA',
+                     'max_per_user': '10',
+                     'stock': '250',
+                     'product': uuid_ticket_product}
+        response = requests.request("POST", url, headers=headers, data=data_json)
         uuid_price_demi = response.json().get("uuid")
         print(response.text)
         assert response.status_code == 201
 
-        payload = {'name': 'Plein Tarif',
-                   'prix': '10',
-                   'vat': 'NA',
-                   'max_per_user': '10',
-                   'stock': '250',
-                   'product': uuid_ticket_product}
-        response = requests.request("POST", url, headers=headers, data=payload)
+        data_json = {'name': 'Plein Tarif',
+                     'prix': '10',
+                     'vat': 'NA',
+                     'max_per_user': '10',
+                     'stock': '250',
+                     'product': uuid_ticket_product}
+        response = requests.request("POST", url, headers=headers, data=data_json)
         uuid_price_plein = response.json().get("uuid")
         print(response.text)
         assert response.status_code == 201
@@ -113,13 +147,13 @@ class Command(BaseCommand):
         ### Create TShirt product
         print("************ Create TShirt Product")
         url = f"{base_url}/api/products/"
-        payload = {'name': 'TShirt',
-                   'publish': 'true',
-                   'categorie_article': 'T'}
+        data_json = {'name': 'TShirt',
+                     'publish': 'true',
+                     'categorie_article': 'T'}
         files = [
             ('img', ('tshirt.png', open('/DjangoFiles/www/demo_img/tshirt.png', 'rb'), 'image/png'))
         ]
-        response = requests.request("POST", url, headers=headers, data=payload, files=files)
+        response = requests.request("POST", url, headers=headers, data=data_json, files=files)
         uuid_tshirt_product = response.json().get("uuid")
         print(response.text)
         assert response.status_code == 201
@@ -129,42 +163,64 @@ class Command(BaseCommand):
         print("************ Create TShirt prices")
         url = f"{base_url}/api/prices/"
 
-        payload = {'name': 'S',
-                   'prix': '5',
-                   'vat': 'NA',
-                   'max_per_user': '10',
-                   'stock': '250',
-                   'product': uuid_tshirt_product}
-        response = requests.request("POST", url, headers=headers, data=payload)
+        data_json = {'name': 'S',
+                     'prix': '5',
+                     'vat': 'NA',
+                     'max_per_user': '10',
+                     'stock': '250',
+                     'product': uuid_tshirt_product}
+        response = requests.request("POST", url, headers=headers, data=data_json)
         uuid_tshirt_s = response.json().get("uuid")
         print(response.text)
         assert response.status_code == 201
 
-        payload = {'name': 'L',
-                   'prix': '5',
-                   'vat': 'NA',
-                   'max_per_user': '10',
-                   'stock': '250',
-                   'product': uuid_tshirt_product}
-        response = requests.request("POST", url, headers=headers, data=payload)
+        data_json = {'name': 'L',
+                     'prix': '5',
+                     'vat': 'NA',
+                     'max_per_user': '10',
+                     'stock': '250',
+                     'product': uuid_tshirt_product}
+        response = requests.request("POST", url, headers=headers, data=data_json)
         uuid_tshirt_l = response.json().get("uuid")
         print(response.text)
         assert response.status_code == 201
         print("************ Create TShirt prices OK")
 
-        ### Create Event
-        print("************ Create Event prices")
-        url = f"{base_url}/api/events/"
 
-        payload = {'name': 'Ziskakan',
-                   'datetime': '2023-10-01T10:20',
-                   'short_description': 'Fête ses 40ans',
-                   'long_description': 'Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum ',
-                   'products': [uuid_tshirt_product, uuid_ticket_product],
-                   'event_facebook_url': 'https://www.facebook.com/events/2251615698313858'}
-        files = [
-            ('img', ('Ziskakan.jpg', open('/DjangoFiles/www/demo_img/Ziskakan.jpg', 'rb'), 'image/jpeg'))
-        ]
+        ## create tenant from demo file
+        input_file_find = False
+        places = {}
+        if exists("/DjangoFiles/data/domains_and_cards.py"):
+            print("/DjangoFiles/data/domains_and_cards.py existe. On charge depuis ce fichier ?")
+            input_file_find = input('Y ? \n')
 
-        response = requests.request("POST", url, headers=headers, data=payload, files=files)
-        print(response.text)
+        if input_file_find in ["Y", "y", "yes", "YES"]:
+            from data.domains_and_cards import places
+
+        for place in places :
+            print(f"************ Create Place {place}")
+
+            domains = [ slugify(place), ]
+            if place.get('domains'):
+                domains = [domain for domain in place.get('domains') ],
+
+            url = f"http://django-local.org:8002/api/place/"
+            data_json = {
+                'organisation': place,
+                'domains': domains,
+                'short_description': place.get('short_description'),
+                'long_description': place.get('long_description'),
+            }
+
+            files = []
+            if place.get('img'):
+                files.append(
+                    ('img', (place.get('img'), open(f"/DjangoFiles/data/demo_img/{place.get('img')}", 'rb'), 'image/png'))
+                )
+            if place.get('logo'):
+                files.append(
+                    ('logo', (place.get('logo'), open(f"/DjangoFiles/data/demo_img/{place.get('logo')}", 'rb'), 'image/png'))
+                )
+
+            response = requests.request("POST", url, headers=headers, data=data_json, files=files)
+            print(response.text)
