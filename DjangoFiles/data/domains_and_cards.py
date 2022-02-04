@@ -8,6 +8,7 @@ places = {
         'email': "demo@demo.com",
         'postal_code': '97480',
         'img':'old_place.jpg',
+        'logo':'pic03.jpg',
     },
     "Bisik": {
         'short_description': 'Le café culturel de Saint-Benoit.',
@@ -15,6 +16,9 @@ places = {
         'email': "demo@demo.com",
         'postal_code': '97480',
         'phone': "0612451245",
+        'logo':'bisik2_300.jpg',
+        'img':'project9.jpg',
+
     },
     "Vavang'Art": {
         'short_description': "Restaurant Tiers lieux de L'entre deux.",
@@ -23,7 +27,7 @@ places = {
         'postal_code': '97480',
         'phone': "0612451245",
         'img':'vavangart.jpg',
-        'logo':'vavangart_logo.jpg',
+        'logo':'vavangart_logo.png',
 
     },
     "La Raffinerie": {
@@ -34,7 +38,7 @@ places = {
         'postal_code': '97480',
         'phone': "0612451245",
         'img': 'raffinerie.jpg',
-        'logo': 'raffinerie.jpg',
+        'logo': 'raffinerie.png',
     },
     "3Peaks": {
         'short_description': "L'asso qui n'a plus de Manapany Festival",

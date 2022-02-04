@@ -110,7 +110,7 @@ class Command(BaseCommand):
                      'publish': 'true',
                      'categorie_article': 'B'}
         files = [
-            ('img', ('tickets_old.png', open('/DjangoFiles/www/demo_img/tickets.png', 'rb'), 'image/png'))
+            ('img', ('tickets_old.png', open('/DjangoFiles/data/demo_img/tickets.png', 'rb'), 'image/png'))
         ]
         response = requests.request("POST", url, headers=headers, data=data_json, files=files)
         uuid_ticket_product = response.json().get("uuid")
@@ -152,7 +152,7 @@ class Command(BaseCommand):
                      'publish': 'true',
                      'categorie_article': 'T'}
         files = [
-            ('img', ('tshirt.png', open('/DjangoFiles/www/demo_img/tshirt.png', 'rb'), 'image/png'))
+            ('img', ('tshirt.png', open('/DjangoFiles/data/demo_img/tshirt.png', 'rb'), 'image/png'))
         ]
         response = requests.request("POST", url, headers=headers, data=data_json, files=files)
         uuid_tshirt_product = response.json().get("uuid")
@@ -217,6 +217,7 @@ class Command(BaseCommand):
                 'phone': place.get("phone"),
                 'email': place.get("email"),
                 'postal_code': place.get("postal_code"),
+                'categorie':'S',
             }
 
             files = []
