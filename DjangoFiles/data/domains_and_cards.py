@@ -56,6 +56,8 @@ artists = {
     "Sly Sugar": {
         'short_description': "Raggae Dub Electro, vous reprendrez bien un peu de dub ?",
         'long_description': 'Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum ',
+        'img': 'sly-sugar.jpg',
+        'logo': 'sly-sugar-logo.jpg',
     },
     "Ziskakan": {
         'short_description': "Maloya Rock depuis 40ans !",
@@ -65,6 +67,8 @@ artists = {
     "Sabouk": {
         'short_description': "Jazz y sabouk dans mon tête",
         'long_description': 'Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum ',
+        'img':'sabouk.jpg,'
+
     },
 }
 
