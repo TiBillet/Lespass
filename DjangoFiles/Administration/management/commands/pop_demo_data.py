@@ -33,15 +33,15 @@ class Command(BaseCommand):
         domain_public.save()
 
         tenant_demo, created = Client.objects.get_or_create(
-            schema_name='demo',
-            name=os.environ.get('FIRST_TENANT'),
+            schema_name="demo",
+            name="Demo",
             on_trial=False,
             categorie=Client.META,
         )
         tenant_demo.save()
 
         domain_demo, created = Domain.objects.get_or_create(
-            domain=f'{slugify(os.environ.get("FIRST_TENANT"))}.{os.getenv("DOMAIN")}',
+            domain=f'demo.{os.getenv("DOMAIN")}',
             tenant=tenant_demo,
             is_primary=True
         )
@@ -197,20 +197,26 @@ class Command(BaseCommand):
 
         if input_file_find in ["Y", "y", "yes", "YES"]:
             from data.domains_and_cards import places
+        else :
+            print("Tant pis !")
 
-        for place in places :
-            print(f"************ Create Place {place}")
 
-            domains = [ slugify(place), ]
+        for organisation, place in places.items() :
+            place: dict
+            print(f"************ Create Place {organisation}")
+            domains = [ slugify(organisation), ]
             if place.get('domains'):
-                domains = [domain for domain in place.get('domains') ],
+                domains = place.get('domains')
 
-            url = f"http://django-local.org:8002/api/place/"
+            url = f"http://demo.django-local.org:8002/api/place/"
             data_json = {
-                'organisation': place,
+                'organisation': organisation,
                 'domains': domains,
                 'short_description': place.get('short_description'),
                 'long_description': place.get('long_description'),
+                'phone': place.get("phone"),
+                'email': place.get("email"),
+                'postal_code': place.get("postal_code"),
             }
 
             files = []

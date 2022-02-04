@@ -4,25 +4,47 @@ places = {
     "Demo": {
         'short_description': 'Le bar en Beta Test.',
         'long_description': 'Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum ',
+        'phone': "0612451245",
+        'email': "demo@demo.com",
+        'postal_code': '97480',
         'img':'old_place.jpg',
     },
     "Bisik": {
         'short_description': 'Le café culturel de Saint-Benoit.',
         'long_description': 'Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum ',
+        'email': "demo@demo.com",
+        'postal_code': '97480',
+        'phone': "0612451245",
     },
     "Vavang'Art": {
         'short_description': "Restaurant Tiers lieux de L'entre deux.",
         'long_description': 'Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum ',
+        'email': "demo@demo.com",
+        'postal_code': '97480',
+        'phone': "0612451245",
+        'img':'vavangart.jpg',
+        'logo':'vavangart_logo.jpg',
+
     },
     "La Raffinerie": {
         'domains' : ["m","raffinerie"],
         'short_description': "Friche éco-cultruelle de Savannah",
         'long_description': 'Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum ',
+        'email': "demo@demo.com",
+        'postal_code': '97480',
+        'phone': "0612451245",
+        'img': 'raffinerie.jpg',
+        'logo': 'raffinerie.jpg',
     },
     "3Peaks": {
         'short_description': "L'asso qui n'a plus de Manapany Festival",
         'long_description': 'Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum ',
+        'email': "demo@demo.com",
+        'phone': "0612451245",
+        'postal_code': '97480',
         'logo':"3peaksLogo.png",
+        'img': 'manapanyfestival.jpg',
+
     },
 }
 
