@@ -57,6 +57,7 @@ class Command(BaseCommand):
         username = email
         dummypassword = 'proutprout123'
 
+
         ### Create User :
         print("************ Create User")
         url = f"{base_url}/auth/users/"
