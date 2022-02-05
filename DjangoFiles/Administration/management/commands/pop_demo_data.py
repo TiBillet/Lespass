@@ -189,16 +189,20 @@ class Command(BaseCommand):
 
 
         ## create tenant from demo file
-        from data.domains_and_cards import places
+        from data.domains_and_cards import tenants
 
-        for organisation, place in places.items() :
+        for organisation, place in tenants.items() :
             place: dict
             print(f"************ Create Place {organisation}")
             domains = [ slugify(organisation), ]
             if place.get('domains'):
                 domains = place.get('domains')
 
-            url = f"http://demo.django-local.org:8002/api/place/"
+            if place.get("categorie") == "S":
+                url = f"http://demo.django-local.org:8002/api/place/"
+            elif place.get("categorie") == "A":
+                url = f"http://demo.django-local.org:8002/api/artist/"
+
             data_json = {
                 'organisation': organisation,
                 'domains': domains,
@@ -207,7 +211,7 @@ class Command(BaseCommand):
                 'phone': place.get("phone"),
                 'email': place.get("email"),
                 'postal_code': place.get("postal_code"),
-                'categorie':'S',
+                'categorie':place.get("categorie"),
             }
 
             files = []

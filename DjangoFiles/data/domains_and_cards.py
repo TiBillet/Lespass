@@ -1,14 +1,15 @@
 # For example :
 
-places = {
+tenants = {
     "Demo": {
         'short_description': 'Le bar en Beta Test.',
         'long_description': 'Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum ',
         'phone': "0612451245",
         'email': "demo@demo.com",
         'postal_code': '97480',
-        'img':'old_place.jpg',
-        'logo':'pic03.jpg',
+        'img': 'old_place.jpg',
+        'logo': 'pic03.jpg',
+        'categorie': 'S',
     },
     "Bisik": {
         'short_description': 'Le café culturel de Saint-Benoit.',
@@ -16,9 +17,9 @@ places = {
         'email': "demo@demo.com",
         'postal_code': '97480',
         'phone': "0612451245",
-        'logo':'bisik2_300.jpg',
-        'img':'project9.jpg',
-
+        'logo': 'bisik2_300.jpg',
+        'img': 'project9.jpg',
+        'categorie': 'S',
     },
     "Vavang'Art": {
         'short_description': "Restaurant Tiers lieux de L'entre deux.",
@@ -26,12 +27,12 @@ places = {
         'email': "demo@demo.com",
         'postal_code': '97480',
         'phone': "0612451245",
-        'img':'vavangart.jpg',
-        'logo':'vavangart_logo.png',
-
+        'img': 'vavangart.jpg',
+        'logo': 'vavangart_logo.png',
+        'categorie': 'S',
     },
     "La Raffinerie": {
-        'domains' : ["m","raffinerie"],
+        'domains': ["m", "raffinerie"],
         'short_description': "Friche éco-cultruelle de Savannah",
         'long_description': 'Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum ',
         'email': "demo@demo.com",
@@ -39,6 +40,7 @@ places = {
         'phone': "0612451245",
         'img': 'raffinerie.jpg',
         'logo': 'raffinerie.png',
+        'categorie': 'S',
     },
     "3Peaks": {
         'short_description': "L'asso qui n'a plus de Manapany Festival",
@@ -46,39 +48,49 @@ places = {
         'email': "demo@demo.com",
         'phone': "0612451245",
         'postal_code': '97480',
-        'logo':"3peaksLogo.png",
+        'logo': "3peaksLogo.png",
         'img': 'manapanyfestival.jpg',
-
+        'categorie': 'S',
     },
-}
 
-artists = {
     "Balaphonic Sound System": {
         'short_description': "L'éléphant du balafond",
         'long_description': 'Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum ',
-        'logo':"bala.jpg",
+        'email': "demo@demo.com",
+        'phone': "0612451245",
+        'logo': "bala.jpg",
         'img': 'balafonik-1.jpg',
+        'categorie': 'A',
+
     },
     "Sly Sugar": {
         'short_description': "Raggae Dub Electro, vous reprendrez bien un peu de dub ?",
         'long_description': 'Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum ',
         'img': 'sly-sugar.jpg',
         'logo': 'sly-sugar-logo.jpg',
+        'email': "demo@demo.com",
+        'phone': "0612451245",
+        'categorie': 'A',
     },
     "Ziskakan": {
         'short_description': "Maloya Rock depuis 40ans !",
         'long_description': 'Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum ',
-        'img':'Ziskakan.jpg',
-        'logo':'Ziskakan-gilbert.jpg',
+        'img': 'Ziskakan.jpg',
+        'logo': 'ziskakan-gilbert.jpg',
+        'email': "demo@demo.com",
+        'phone': "0612451245",
+        'categorie': 'A',
     },
     "Sabouk": {
         'short_description': "Jazz y sabouk dans mon tête",
         'long_description': 'Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum ',
-        'img':'sabouk.jpg',
-        'logo':'sabouk.jpg',
+        'img': 'sabouk.jpg',
+        'email': "demo@demo.com",
+        'phone': "0612451245",
+        'logo': 'sabouk.jpg',
+        'categorie': 'A',
     },
 }
-
 
 dir_path = "/DjangoFiles/data/csv"
 
