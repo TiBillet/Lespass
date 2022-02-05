@@ -180,7 +180,7 @@ class PlacesViewSet(viewsets.ViewSet):
                     )
 
                     if not created:
-                        return Response(_(f"{futur_conf.get('organisation')} existe déja"),
+                        return Response(_(json.dumps({"uuid": f"{tenant.uuid}", "msg":f"{futur_conf.get('organisation')} existe déja"})),
                                         status=status.HTTP_409_CONFLICT)
 
                     domain, created = Domain.objects.get_or_create(
@@ -211,9 +211,9 @@ class PlacesViewSet(viewsets.ViewSet):
         with tenant_context(tenant):
             conf = Configuration.get_solo()
             serializer = PlaceTenantSerializer(conf, data=request.data, partial=True)
-
             if serializer.is_valid(raise_exception=True):
                 serializer.update(conf, serializer.validated_data)
+                # import ipdb; ipdb.set_trace()
                 return Response(serializer.validated_data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

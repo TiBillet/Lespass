@@ -36,7 +36,7 @@ class Command(BaseCommand):
             schema_name="demo",
             name="Demo",
             on_trial=False,
-            categorie=Client.META,
+            categorie=Client.SALLE_SPECTACLE,
         )
         tenant_demo.save()
 
@@ -48,8 +48,8 @@ class Command(BaseCommand):
         domain_demo.save()
 
 
-        with schema_context('demo'):
-            call_command('flush')
+        # with schema_context('demo'):
+        #     call_command('flush')
 
         base_url = "http://demo.django-local.org:8002"
         headers = {}
@@ -189,17 +189,7 @@ class Command(BaseCommand):
 
 
         ## create tenant from demo file
-        input_file_find = False
-        places = {}
-        if exists("/DjangoFiles/data/domains_and_cards.py"):
-            print("/DjangoFiles/data/domains_and_cards.py existe. On charge depuis ce fichier ?")
-            input_file_find = input('Y ? \n')
-
-        if input_file_find in ["Y", "y", "yes", "YES"]:
-            from data.domains_and_cards import places
-        else :
-            print("Tant pis !")
-
+        from data.domains_and_cards import places
 
         for organisation, place in places.items() :
             place: dict
@@ -230,10 +220,11 @@ class Command(BaseCommand):
                     ('logo', (place.get('logo'), open(f"/DjangoFiles/data/demo_img/{place.get('logo')}", 'rb'), 'image/png'))
                 )
 
-
-            if organisation == "Demo":
-                # Ici, on ne crée par, on mets à jour :)
-                response = requests.request("PUT", url, headers=headers, data=data_json, files=files)
-            else :
-                response = requests.request("POST", url, headers=headers, data=data_json, files=files)
+            response = requests.request("POST", url, headers=headers, data=data_json, files=files)
             print(response.text)
+
+            if response.status_code == 409:
+                # Conflict : Existe déja, on lance un put
+                uuid = json.loads(response.json()).get("uuid")
+                print(uuid)
+                response = requests.request("PUT", f"{url}{uuid}/", headers=headers, data=data_json, files=files)
