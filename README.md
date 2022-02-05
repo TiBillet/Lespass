@@ -58,7 +58,7 @@ docker exec -ti billetterie_django bash
   python manage.py create_public
   
   # Create the root user
-  # Use VERY STRONG PASSWORD AND DON'T USE THE .env EMAIL !
+  # Use VERY STRONG PASSWORD AND DON'T USE THE SAME EMAIL as .env !
   python manage.py create_tenant_superuser
     ? -> public
 
@@ -81,10 +81,12 @@ docker exec -ti billetterie_django bash
 
 
 ```shell
-
-# Go deeper inside the django container :
-docker exec -ti billetterie_django bash
-
+# Run the server :
+  python /DjangoFiles/manage.py runserver_plus 0.0.0.0:8002
+# or
+  rsp
+  
+  
 # Pop data inside the TiBillet-Ticket/DjangoFiles/data/domains_and_cards.py
 # Change the file if you want !
 # --> Inside the container :
