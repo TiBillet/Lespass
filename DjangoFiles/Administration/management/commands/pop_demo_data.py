@@ -230,5 +230,10 @@ class Command(BaseCommand):
                     ('logo', (place.get('logo'), open(f"/DjangoFiles/data/demo_img/{place.get('logo')}", 'rb'), 'image/png'))
                 )
 
-            response = requests.request("POST", url, headers=headers, data=data_json, files=files)
+
+            if organisation == "Demo":
+                # Ici, on ne crée par, on mets à jour :)
+                response = requests.request("PUT", url, headers=headers, data=data_json, files=files)
+            else :
+                response = requests.request("POST", url, headers=headers, data=data_json, files=files)
             print(response.text)

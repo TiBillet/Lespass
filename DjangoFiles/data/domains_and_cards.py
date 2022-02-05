@@ -53,9 +53,11 @@ places = {
 }
 
 artists = {
-    "Mové Zerb": {
-        'short_description': 'Maloya Rebelle de Saint-Joseph',
+    "Balaphonic Sound System": {
+        'short_description': "L'éléphant du balafond",
         'long_description': 'Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum ',
+        'logo':"bala.jpg",
+        'img': 'balafonik-1.jpg',
     },
     "Sly Sugar": {
         'short_description': "Raggae Dub Electro, vous reprendrez bien un peu de dub ?",
@@ -66,13 +68,14 @@ artists = {
     "Ziskakan": {
         'short_description': "Maloya Rock depuis 40ans !",
         'long_description': 'Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum ',
-        'img':'Ziskakan.jpg,'
+        'img':'Ziskakan.jpg',
+        'logo':'Ziskakan-gilbert.jpg',
     },
     "Sabouk": {
         'short_description': "Jazz y sabouk dans mon tête",
         'long_description': 'Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum ',
-        'img':'sabouk.jpg,'
-
+        'img':'sabouk.jpg',
+        'logo':'sabouk.jpg',
     },
 }
 
