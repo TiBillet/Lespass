@@ -92,7 +92,7 @@ class ArtistViewSet(viewsets.ViewSet):
                     tenant, created = Client.objects.get_or_create(
                         schema_name=slugify(futur_conf.get('organisation')),
                         name=futur_conf.get('organisation'),
-                        categorie=Client.ARTISTE,
+                        categorie=request.data.get('categorie'),
                     )
 
                     if not created:
@@ -105,11 +105,10 @@ class ArtistViewSet(viewsets.ViewSet):
                         is_primary=True
                     )
                 except IntegrityError as e:
-                    return Response(_(f"{e}"), status=status.HTTP_409_CONFLICT)
+                    return Response(_(f"{e}"), status=status.HTTP_400_BAD_REQUEST)
                 except Exception as e:
                     return Response(_(f"{e}"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
-            print(tenant)
             with tenant_context(tenant):
                 conf = Configuration.get_solo()
                 serializer.update(instance=conf, validated_data=futur_conf)
@@ -117,7 +116,7 @@ class ArtistViewSet(viewsets.ViewSet):
                 user.client_admin.add(tenant)
 
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
     def update(self, request, pk=None):
         tenant = get_object_or_404(Client, pk=pk)
@@ -128,6 +127,7 @@ class ArtistViewSet(viewsets.ViewSet):
             conf = Configuration.get_solo()
             serializer = NewConfigSerializer(conf, data=request.data, partial=True)
             if serializer.is_valid():
+                print(serializer.validated_data)
                 serializer.update(conf, serializer.validated_data)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
 
@@ -176,7 +176,6 @@ class PlacesViewSet(viewsets.ViewSet):
         if request.data.get('categorie') not in [Client.SALLE_SPECTACLE, ]:
             raise serializers.ValidationError(_("categorie doit être une salle de spectacle"))
 
-
         serializer = NewConfigSerializer(data=request.data, context={'request': request})
 
         if serializer.is_valid():
@@ -188,6 +187,7 @@ class PlacesViewSet(viewsets.ViewSet):
                         name=futur_conf.get('organisation'),
                         categorie=request.data.get('categorie'),
                     )
+
                     if not created:
                         # raise serializers.ValidationError(_("Vous n'avez pas la permission de créer de nouveaux lieux"))
                         return Response(_(json.dumps({"uuid": f"{tenant.uuid}", "msg":f"{futur_conf.get('organisation')} existe déja"})),
