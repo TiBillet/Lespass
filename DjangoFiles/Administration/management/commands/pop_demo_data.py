@@ -232,3 +232,4 @@ class Command(BaseCommand):
                 uuid = json.loads(response.json()).get("uuid")
                 print(uuid)
                 response = requests.request("PUT", f"{url}{uuid}/", headers=headers, data=data_json, files=files)
+                print(response.text)
