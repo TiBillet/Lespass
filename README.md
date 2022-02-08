@@ -61,24 +61,9 @@ docker exec -ti billetterie_django bash
   # Use VERY STRONG PASSWORD AND DON'T USE THE SAME EMAIL as .env !
   python manage.py create_tenant_superuser
     ? -> public
-
-  # stop here if you want some demo data and see above.
-  
-  
-  # Create the first tenant
-  python manage.py create_tenant
-    
-  # Launch the http dev' server ( for production, see the Django & gunicorn doc ) 
-  python /DjangoFiles/manage.py runserver_plus 0.0.0.0:8002
-  # or you can use the alias from the .bashrc : 
-  rsp 
-  
-  # Login in http://www.$DOMAIN:8002/admin with the root email/password
-  # Login in http://$first_tenant.$DOMAIN:8002/admin with the root email/password
 ```
 
 ## POP demo data, for dev' or just take a look :)
-
 
 ```shell
 # Run the server :
@@ -89,7 +74,7 @@ docker exec -ti billetterie_django bash
   
 # Pop data inside the TiBillet-Ticket/DjangoFiles/data/domains_and_cards.py
 # Change the file if you want !
-# --> Inside the container :
+# --> Open a seconde shell inside the container :
 	python manage.py pop_demo_data
 
 

@@ -24,6 +24,7 @@ from stdimage.validators import MaxSizeValidator, MinSizeValidator
 from django.db import connection
 
 import AuthBillet.models
+from Customers.models import Client
 from QrcodeCashless.models import CarteCashless
 from TiBillet import settings
 import stripe
@@ -310,7 +311,7 @@ class Event(models.Model):
     slug = models.SlugField(unique=True, db_index=True, blank=True, null=True, max_length=250)
     datetime = models.DateTimeField()
 
-    short_description = models.CharField(max_length=250)
+    short_description = models.CharField(max_length=250, blank=True, null=True)
     long_description = models.TextField(blank=True, null=True)
 
     event_facebook_url = models.URLField(blank=True, null=True)
@@ -382,6 +383,12 @@ class Event(models.Model):
         ordering = ('datetime',)
         verbose_name = _('Evenement')
         verbose_name_plural = _('Evenements')
+
+
+class artist_on_events(models.Model):
+    artist = models.ForeignKey(Client, on_delete=models.PROTECT)
+    datetime = models.DateTimeField()
+    event = models.ForeignKey(Event, on_delete=models.CASCADE)
 
 
 class ProductSold(models.Model):

@@ -178,6 +178,48 @@ class PlaceTenantSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         return super().validate(attrs)
 
+
+class ArtistEventCreateSerializer(serializers.Serializer):
+    uuid = serializers.UUIDField()
+    datetime = serializers.DateTimeField()
+
+    def validate_uuid(self, value):
+        self.artiste_event_db = {}
+        try:
+            artist = Client.objects.get(pk=value, categorie=Client.ARTISTE)
+            self.artiste_event_db['artist'] = artist
+        except Client.DoesNotExist as e :
+            raise serializers.ValidationError(_(f'{value} Artiste non trouvé'))
+        return value
+
+    def validate_datetime(self, value):
+        self.artiste_event_db['datetime'] = value
+        return value
+
+    def validate(self, attrs):
+        return self.artiste_event_db
+
+class EventCreateSerializer(serializers.Serializer):
+    date = serializers.DateField()
+    artists = ArtistEventCreateSerializer(many=True)
+    products = serializers.ListField()
+
+    def validate_products(self, value):
+        self.products_db = []
+        for uuid in value :
+            try:
+                product = Product.objects.get(pk=uuid)
+                self.products_db.append(product)
+            except Product.DoesNotExist as e :
+                raise serializers.ValidationError(_(f'{uuid} Produit non trouvé'))
+        return value
+
+    def validate(self, attrs):
+        import ipdb; ipdb.set_trace()
+        print(attrs)
+        return attrs
+
+
 class EventSerializer(serializers.ModelSerializer):
     products = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all(), many=True)
     # products = ProductSerializer(

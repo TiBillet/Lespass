@@ -12,7 +12,8 @@ from django.utils.translation import ugettext_lazy as _
 from django.utils.text import slugify
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
-    ReservationValidator, MembreshipValidator, ConfigurationSerializer, PlaceTenantSerializer, ArtistTenantSerializer
+    ReservationValidator, MembreshipValidator, ConfigurationSerializer, PlaceTenantSerializer, ArtistTenantSerializer, \
+    EventCreateSerializer
 from AuthBillet.models import TenantAdminPermission, TibilletUser
 from Customers.models import Client, Domain
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket
@@ -75,7 +76,7 @@ class ArtistViewSet(viewsets.ViewSet):
     def create(self, request):
         user: TibilletUser = request.user
         if not user.can_create_tenant:
-            return Response(_("Vous n'avez pas la permission de créer de nouveaux artistes"),
+            return Response(_("Vous n'avez pas la permission de créer de nouveaux artistes, mais vous pouvez en faire la demande !"),
                             status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
         serializer = ArtistTenantSerializer(data=request.data, context={'request': request})
@@ -279,10 +280,12 @@ class EventsViewSet(viewsets.ViewSet):
         return Response(serializer.data)
 
     def create(self, request):
-        serializer = EventSerializer(data=request.data)
+        serializer = EventCreateSerializer(data=request.data, partial=True)
         if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            print(request.data)
+            return Response(serializer.validated_data, status=status.HTTP_205_RESET_CONTENT)
+        #     serializer.save()
+        #     return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def update(self, request, pk=None):
