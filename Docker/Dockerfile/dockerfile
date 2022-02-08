@@ -77,6 +77,8 @@ RUN pip install tenant-schemas-celery
 RUN pip install segno
 RUN pip install python-barcode
 
+RUN pip install django-cors-headers
+
 RUN apt-get -y clean
 
 RUN python --version
