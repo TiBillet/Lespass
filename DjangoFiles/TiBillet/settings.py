@@ -73,11 +73,9 @@ TENANT_APPS = (
     # The following Django contrib apps must be in TENANT_APPS
     'django.contrib.contenttypes',
     # your tenant-specific apps
-
     'BaseBillet',
     'ApiBillet',
     'PaiementStripe',
-
 )
 
 INSTALLED_APPS = list(SHARED_APPS) + [app for app in TENANT_APPS if app not in SHARED_APPS]
