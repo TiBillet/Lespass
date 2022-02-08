@@ -32,12 +32,11 @@ ALLOWED_HOSTS = ['*']
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 # Application definition
 
-# CORS_ORIGIN_WHITELIST = [
-#     'localhost:3000',
-#     'django-local.org:3000',
-#     'http://demo.django-local.org:3000/',
-#     os.environ.get('FRONT_DEV'),
-# ]
+CORS_ORIGIN_WHITELIST = [
+    'http://localhost',
+    'http://localhost:3000',
+    'http://django-local.org:3000',
+]
 
 SHARED_APPS = (
     'django_tenants',  # mandatory
@@ -69,7 +68,7 @@ SHARED_APPS = (
 
     'solo',
     'stdimage',
-    # 'corsheaders',
+    'corsheaders',
 )
 
 TENANT_APPS = (
