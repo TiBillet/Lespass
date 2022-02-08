@@ -5,14 +5,16 @@ from django.http import HttpResponseRedirect
 from django.utils import timezone
 from django_tenants.utils import schema_context, tenant_context
 from django_weasyprint import WeasyTemplateView
+from rest_framework import serializers
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+
 from django.utils.translation import ugettext_lazy as _
 from django.utils.text import slugify
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
-    ReservationValidator, MembreshipValidator, ConfigurationSerializer, PlaceTenantSerializer, ArtistTenantSerializer, \
+    ReservationValidator, MembreshipValidator, ConfigurationSerializer, NewConfigSerializer, \
     EventCreateSerializer
 from AuthBillet.models import TenantAdminPermission, TibilletUser
 from Customers.models import Client, Domain
@@ -76,10 +78,13 @@ class ArtistViewSet(viewsets.ViewSet):
     def create(self, request):
         user: TibilletUser = request.user
         if not user.can_create_tenant:
-            return Response(_("Vous n'avez pas la permission de créer de nouveaux artistes, mais vous pouvez en faire la demande !"),
-                            status=status.HTTP_405_METHOD_NOT_ALLOWED)
+            raise serializers.ValidationError(_("Vous n'avez pas la permission de créer de nouveaux lieux"))
+        if not request.data.get('categorie'):
+            raise serializers.ValidationError(_("categorie est obligatoire"))
+        if request.data.get('categorie') not in [Client.ARTISTE, ]:
+            raise serializers.ValidationError(_("categorie doit être une salle de spectacle"))
 
-        serializer = ArtistTenantSerializer(data=request.data, context={'request': request})
+        serializer = NewConfigSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             futur_conf = serializer.validated_data
             with schema_context('public'):
@@ -121,11 +126,10 @@ class ArtistViewSet(viewsets.ViewSet):
             return Response(_(f"Not Allowed"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
         with tenant_context(tenant):
             conf = Configuration.get_solo()
-            serializer = PlaceTenantSerializer(conf, data=request.data, partial=True)
-
-            if serializer.is_valid(raise_exception=True):
+            serializer = NewConfigSerializer(conf, data=request.data, partial=True)
+            if serializer.is_valid():
                 serializer.update(conf, serializer.validated_data)
-                return Response(serializer.validated_data, status=status.HTTP_201_CREATED)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -166,10 +170,15 @@ class PlacesViewSet(viewsets.ViewSet):
     def create(self, request):
         user: TibilletUser = request.user
         if not user.can_create_tenant:
-            return Response(_("Vous n'avez pas la permission de créer de nouveaux lieux"),
-                            status=status.HTTP_405_METHOD_NOT_ALLOWED)
+            raise serializers.ValidationError(_("Vous n'avez pas la permission de créer de nouveaux lieux"))
+        if not request.data.get('categorie'):
+            raise serializers.ValidationError(_("categorie est obligatoire"))
+        if request.data.get('categorie') not in [Client.SALLE_SPECTACLE, ]:
+            raise serializers.ValidationError(_("categorie doit être une salle de spectacle"))
 
-        serializer = PlaceTenantSerializer(data=request.data, context={'request': request})
+
+        serializer = NewConfigSerializer(data=request.data, context={'request': request})
+
         if serializer.is_valid():
             futur_conf = serializer.validated_data
             with schema_context('public'):
@@ -177,10 +186,10 @@ class PlacesViewSet(viewsets.ViewSet):
                     tenant, created = Client.objects.get_or_create(
                         schema_name=slugify(futur_conf.get('organisation')),
                         name=futur_conf.get('organisation'),
-                        categorie=Client.SALLE_SPECTACLE,
+                        categorie=request.data.get('categorie'),
                     )
-
                     if not created:
+                        # raise serializers.ValidationError(_("Vous n'avez pas la permission de créer de nouveaux lieux"))
                         return Response(_(json.dumps({"uuid": f"{tenant.uuid}", "msg":f"{futur_conf.get('organisation')} existe déja"})),
                                         status=status.HTTP_409_CONFLICT)
 
@@ -190,7 +199,7 @@ class PlacesViewSet(viewsets.ViewSet):
                         is_primary=True
                     )
                 except IntegrityError as e:
-                    return Response(_(f"{e}"), status=status.HTTP_409_CONFLICT)
+                    return Response(_(f"{e}"), status=status.HTTP_400_BAD_REQUEST)
                 except Exception as e:
                     return Response(_(f"{e}"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
@@ -211,11 +220,15 @@ class PlacesViewSet(viewsets.ViewSet):
             return Response(_(f"Not Allowed"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
         with tenant_context(tenant):
             conf = Configuration.get_solo()
-            serializer = PlaceTenantSerializer(conf, data=request.data, partial=True)
-            if serializer.is_valid(raise_exception=True):
+            print(type(request.data.get('img')))
+            print(request.data)
+            print(request.headers)
+            serializer = NewConfigSerializer(conf, data=request.data, partial=True)
+            if serializer.is_valid():
+                print(serializer.validated_data)
+                # serializer.save()
                 serializer.update(conf, serializer.validated_data)
-                # import ipdb; ipdb.set_trace()
-                return Response(serializer.validated_data, status=status.HTTP_201_CREATED)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

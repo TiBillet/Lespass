@@ -228,8 +228,25 @@ class Command(BaseCommand):
             print(response.text)
 
             if response.status_code == 409:
-                # Conflict : Existe déja, on lance un put
+                print("Conflict : Existe déja, on lance un put")
                 uuid = json.loads(response.json()).get("uuid")
-                print(uuid)
-                response = requests.request("PUT", f"{url}{uuid}/", headers=headers, data=data_json, files=files)
-                print(response.text)
+                url_put = f"{url}{uuid}/"
+                # on envoie le txt avec requests
+                response = requests.request("PUT", url_put, headers=headers, data=data_json)
+
+                # requests ne sachant pas envoye de fichier en PUT, on passe par curl
+                if place.get('img') :
+                    command = f"curl --location " \
+                              f"-H 'Authorization: Token {auth_token}' " \
+                              f"--request PUT 'demo.django-local.org:8002/api/place/{uuid}/' " \
+                              f"--form 'img=@\"/DjangoFiles/data/demo_img/{place.get('img')}\"'"
+                    os.system(command)
+
+                if place.get('logo'):
+                    command = f"curl --location " \
+                              f"-H 'Authorization: Token {auth_token}' " \
+                              f"--request PUT 'demo.django-local.org:8002/api/place/{uuid}/' " \
+                              f"--form 'logo=@\"/DjangoFiles/data/demo_img/{place.get('logo')}\"'"
+                    os.system(command)
+            else :
+                break

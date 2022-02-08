@@ -62,7 +62,7 @@ class Configuration(SingletonModel):
     def uuid(self):
         return connection.tenant.pk
 
-    organisation = models.CharField(unique=True, db_index=True, max_length=50, verbose_name=_("Nom de l'organisation"))
+    organisation = models.CharField(db_index=True, max_length=50, verbose_name=_("Nom de l'organisation"))
 
     def slug(self):
         if self.organisation:
@@ -117,6 +117,7 @@ class Configuration(SingletonModel):
 
     img = StdImageField(upload_to='images/',
                         validators=[MaxSizeValidator(1920, 1920), MinSizeValidator(720,720)],
+                        blank=False, null=False,
                         variations={
                             'fhd': (1920, 1920),
                             'hdr': (720, 720),
@@ -142,6 +143,7 @@ class Configuration(SingletonModel):
 
     logo = StdImageField(upload_to='images/',
                          validators=[MaxSizeValidator(1920, 1920)],
+                         blank=False, null=False,
                          variations={
                              'fhd': (1920, 1920),
                              'hdr': (720, 720),

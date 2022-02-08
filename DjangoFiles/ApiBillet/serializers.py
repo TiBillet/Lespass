@@ -90,7 +90,7 @@ class ConfigurationSerializer(serializers.ModelSerializer):
         return representation
 
 
-# class PlaceTenantSerializer(serializers.Serializer):
+# class NewConfigSerializer(serializers.Serializer):
 #     email = serializers.EmailField()
 #     name = serializers.CharField(max_length=50)
 #     short_description = serializers.CharField(max_length=250)
@@ -106,13 +106,11 @@ class ConfigurationSerializer(serializers.ModelSerializer):
 #     contribution_value = serializers.FloatField()
 
 
-class ArtistTenantSerializer(serializers.ModelSerializer):
-    categorie = serializers.ChoiceField(choices=Client.CATEGORIE_CHOICES)
+class NewConfigSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Configuration
         fields = [
-            "categorie",
             "organisation",
             "slug",
             "short_description",
@@ -133,50 +131,8 @@ class ArtistTenantSerializer(serializers.ModelSerializer):
             "img",
             "logo",
         ]
-        read_only_fields = ("slug", "categorie")
+        read_only_fields = ("slug", )
 
-    def validate_categorie(self, value):
-        if value in [Client.ARTISTE,]:
-            return value
-        raise serializers.ValidationError(_("Doit être un artiste"))
-
-class PlaceTenantSerializer(serializers.ModelSerializer):
-    categorie = serializers.ChoiceField(choices=Client.CATEGORIE_CHOICES)
-
-    class Meta:
-        model = Configuration
-        fields = [
-            "categorie",
-            "organisation",
-            "slug",
-            "short_description",
-            "long_description",
-            "adress",
-            "postal_code",
-            "city",
-            "phone",
-            "email",
-            "site_web",
-            "twitter",
-            "facebook",
-            "instagram",
-            "adhesion_obligatoire",
-            "button_adhesion",
-            "map_img",
-            "carte_restaurant",
-            "img",
-            "logo",
-        ]
-        read_only_fields = ("slug", "categorie")
-
-
-    def validate_categorie(self, value):
-        if value in [Client.SALLE_SPECTACLE,]:
-            return value
-        raise serializers.ValidationError(_("Doit être une salle de spectacle."))
-
-    def validate(self, attrs):
-        return super().validate(attrs)
 
 
 class ArtistEventCreateSerializer(serializers.Serializer):
