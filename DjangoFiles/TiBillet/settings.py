@@ -32,6 +32,10 @@ ALLOWED_HOSTS = ['*']
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 # Application definition
 
+CORS_ORIGIN_WHITELIST = [
+    os.environ.get('FRONT_DEV'),
+]
+
 SHARED_APPS = (
     'django_tenants',  # mandatory
     # 'jet.dashboard',
@@ -62,7 +66,7 @@ SHARED_APPS = (
 
     'solo',
     'stdimage',
-
+    'corsheaders',
 )
 
 TENANT_APPS = (
@@ -86,6 +90,7 @@ AUTH_USER_MODEL = 'AuthBillet.TibilletUser'
 
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django_tenants.middleware.main.TenantMainMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
