@@ -63,6 +63,9 @@ class ProductViewSet(viewsets.ViewSet):
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+        for error in [serializer.errors[error][0] for error in serializer.errors] :
+            if error.code == "unique":
+                return Response(serializer.errors, status=status.HTTP_409_CONFLICT)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_permissions(self):
@@ -96,7 +99,8 @@ class ArtistViewSet(viewsets.ViewSet):
                     )
 
                     if not created:
-                        return Response(_(json.dumps({"uuid": f"{tenant.uuid}", "msg":f"{futur_conf.get('organisation')} existe déja"})),
+                        return Response(_(json.dumps(
+                            {"uuid": f"{tenant.uuid}", "msg": f"{futur_conf.get('organisation')} existe déja"})),
                                         status=status.HTTP_409_CONFLICT)
 
                     domain, created = Domain.objects.get_or_create(
@@ -117,7 +121,6 @@ class ArtistViewSet(viewsets.ViewSet):
 
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-
     def update(self, request, pk=None):
         tenant = get_object_or_404(Client, pk=pk)
         user: TibilletUser = request.user
@@ -136,7 +139,7 @@ class ArtistViewSet(viewsets.ViewSet):
     def list(self, request):
         places_serialized_with_uuid = []
         configurations = []
-        for tenant in Client.objects.filter(categorie__in=['A',]):
+        for tenant in Client.objects.filter(categorie__in=['A', ]):
             with tenant_context(tenant):
                 places_serialized_with_uuid.append({"uuid": f"{tenant.uuid}"})
                 configurations.append(Configuration.get_solo())
@@ -164,7 +167,6 @@ class ArtistViewSet(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
-
 class PlacesViewSet(viewsets.ViewSet):
 
     def create(self, request):
@@ -190,7 +192,8 @@ class PlacesViewSet(viewsets.ViewSet):
 
                     if not created:
                         # raise serializers.ValidationError(_("Vous n'avez pas la permission de créer de nouveaux lieux"))
-                        return Response(_(json.dumps({"uuid": f"{tenant.uuid}", "msg":f"{futur_conf.get('organisation')} existe déja"})),
+                        return Response(_(json.dumps(
+                            {"uuid": f"{tenant.uuid}", "msg": f"{futur_conf.get('organisation')} existe déja"})),
                                         status=status.HTTP_409_CONFLICT)
 
                     domain, created = Domain.objects.get_or_create(

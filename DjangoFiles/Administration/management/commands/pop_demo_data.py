@@ -115,35 +115,36 @@ class Command(BaseCommand):
         response = requests.request("POST", url, headers=headers, data=data_json, files=files)
         uuid_ticket_product = response.json().get("uuid")
         print(response.text)
-        assert response.status_code == 201
+        assert response.status_code in [201, 409]
         print("************ Create Ticket Product OK")
 
-        ### Create Ticket prices
-        print("************ Create Ticket prices")
-        url = f"{base_url}/api/prices/"
+        if response.status_code == 201 :
+            ### Create Ticket prices
+            print("************ Create Ticket prices")
+            url = f"{base_url}/api/prices/"
 
-        data_json = {'name': 'Demi Tarif',
-                     'prix': '5',
-                     'vat': 'NA',
-                     'max_per_user': '10',
-                     'stock': '250',
-                     'product': uuid_ticket_product}
-        response = requests.request("POST", url, headers=headers, data=data_json)
-        uuid_price_demi = response.json().get("uuid")
-        print(response.text)
-        assert response.status_code == 201
+            data_json = {'name': 'Demi Tarif',
+                         'prix': '5',
+                         'vat': 'NA',
+                         'max_per_user': '10',
+                         'stock': '250',
+                         'product': uuid_ticket_product}
+            response = requests.request("POST", url, headers=headers, data=data_json)
+            uuid_price_demi = response.json().get("uuid")
+            print(response.text)
+            assert response.status_code == 201
 
-        data_json = {'name': 'Plein Tarif',
-                     'prix': '10',
-                     'vat': 'NA',
-                     'max_per_user': '10',
-                     'stock': '250',
-                     'product': uuid_ticket_product}
-        response = requests.request("POST", url, headers=headers, data=data_json)
-        uuid_price_plein = response.json().get("uuid")
-        print(response.text)
-        assert response.status_code == 201
-        print("************ Create Ticket prices OK")
+            data_json = {'name': 'Plein Tarif',
+                         'prix': '10',
+                         'vat': 'NA',
+                         'max_per_user': '10',
+                         'stock': '250',
+                         'product': uuid_ticket_product}
+            response = requests.request("POST", url, headers=headers, data=data_json)
+            uuid_price_plein = response.json().get("uuid")
+            print(response.text)
+            assert response.status_code == 201
+            print("************ Create Ticket prices OK")
 
         ### Create TShirt product
         print("************ Create TShirt Product")
@@ -157,35 +158,37 @@ class Command(BaseCommand):
         response = requests.request("POST", url, headers=headers, data=data_json, files=files)
         uuid_tshirt_product = response.json().get("uuid")
         print(response.text)
-        assert response.status_code == 201
+        assert response.status_code in [201, 409]
         print("************ Create TShirt Product OK")
 
-        ### Create Ticket prices
-        print("************ Create TShirt prices")
-        url = f"{base_url}/api/prices/"
+        if response.status_code == 201 :
 
-        data_json = {'name': 'S',
-                     'prix': '5',
-                     'vat': 'NA',
-                     'max_per_user': '10',
-                     'stock': '250',
-                     'product': uuid_tshirt_product}
-        response = requests.request("POST", url, headers=headers, data=data_json)
-        uuid_tshirt_s = response.json().get("uuid")
-        print(response.text)
-        assert response.status_code == 201
+            ### Create Ticket prices
+            print("************ Create TShirt prices")
+            url = f"{base_url}/api/prices/"
 
-        data_json = {'name': 'L',
-                     'prix': '5',
-                     'vat': 'NA',
-                     'max_per_user': '10',
-                     'stock': '250',
-                     'product': uuid_tshirt_product}
-        response = requests.request("POST", url, headers=headers, data=data_json)
-        uuid_tshirt_l = response.json().get("uuid")
-        print(response.text)
-        assert response.status_code == 201
-        print("************ Create TShirt prices OK")
+            data_json = {'name': 'S',
+                         'prix': '5',
+                         'vat': 'NA',
+                         'max_per_user': '10',
+                         'stock': '250',
+                         'product': uuid_tshirt_product}
+            response = requests.request("POST", url, headers=headers, data=data_json)
+            uuid_tshirt_s = response.json().get("uuid")
+            print(response.text)
+            assert response.status_code == 201
+
+            data_json = {'name': 'L',
+                         'prix': '5',
+                         'vat': 'NA',
+                         'max_per_user': '10',
+                         'stock': '250',
+                         'product': uuid_tshirt_product}
+            response = requests.request("POST", url, headers=headers, data=data_json)
+            uuid_tshirt_l = response.json().get("uuid")
+            print(response.text)
+            assert response.status_code == 201
+            print("************ Create TShirt prices OK")
 
 
         ## create tenant from demo file
@@ -248,5 +251,3 @@ class Command(BaseCommand):
                               f"--request PUT 'demo.django-local.org:8002/api/place/{uuid}/' " \
                               f"--form 'logo=@\"/DjangoFiles/data/demo_img/{place.get('logo')}\"'"
                     os.system(command)
-            else :
-                break
