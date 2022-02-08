@@ -31,7 +31,7 @@ tenants = {
         'logo': 'vavangart_logo.png',
         'categorie': 'S',
     },
-    "La Raffinerie": {
+    "Raffinerie": {
         'domains': ["m", "raffinerie"],
         'short_description': "Friche éco-cultruelle de Savannah",
         'long_description': 'Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum ',

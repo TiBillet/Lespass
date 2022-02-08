@@ -296,13 +296,17 @@ class EventsViewSet(viewsets.ViewSet):
         return Response(serializer.data)
 
     def create(self, request):
-        serializer = EventCreateSerializer(data=request.data, partial=True)
-        if serializer.is_valid():
-            print(request.data)
-            return Response(serializer.validated_data, status=status.HTTP_205_RESET_CONTENT)
-        #     serializer.save()
-        #     return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        # import ipdb; ipdb.set_trace()
+        print(request.data)
+        serializer_create = EventCreateSerializer(data=request.data)
+        if serializer_create.is_valid():
+            # import ipdb; ipdb.set_trace()
+            event: Event = serializer_create.validated_data
+            serializer = EventSerializer(event)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        print(serializer_create.errors)
+        return Response(serializer_create.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def update(self, request, pk=None):
         queryset = Event.objects.all().order_by('-datetime')

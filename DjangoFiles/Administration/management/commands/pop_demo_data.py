@@ -1,11 +1,12 @@
 import os
+from datetime import timedelta, datetime
 from os.path import exists
 import requests
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.db import connection
-from django_tenants.utils import schema_context
-
+from django_tenants.utils import schema_context, tenant_context
+from random import randrange
 from AuthBillet.models import TibilletUser
 from Customers.models import Client, Domain
 import os, json
@@ -47,7 +48,6 @@ class Command(BaseCommand):
         )
         domain_demo.save()
 
-
         # with schema_context('demo'):
         #     call_command('flush')
 
@@ -56,7 +56,6 @@ class Command(BaseCommand):
         email = os.environ.get('EMAIL')
         username = email
         dummypassword = 'proutprout123'
-
 
         ### Create User :
         print("************ Create User")
@@ -103,101 +102,13 @@ class Command(BaseCommand):
         assert response.status_code == 200
         print("************ me OK")
 
-        ### Create product
-        print("************ Create Ticket Product")
-        url = f"{base_url}/api/products/"
-        data_json = {'name': 'Billet',
-                     'publish': 'true',
-                     'categorie_article': 'B'}
-        files = [
-            ('img', ('tickets_old.png', open('/DjangoFiles/data/demo_img/tickets.png', 'rb'), 'image/png'))
-        ]
-        response = requests.request("POST", url, headers=headers, data=data_json, files=files)
-        uuid_ticket_product = response.json().get("uuid")
-        print(response.text)
-        assert response.status_code in [201, 409]
-        print("************ Create Ticket Product OK")
-
-        if response.status_code == 201 :
-            ### Create Ticket prices
-            print("************ Create Ticket prices")
-            url = f"{base_url}/api/prices/"
-
-            data_json = {'name': 'Demi Tarif',
-                         'prix': '5',
-                         'vat': 'NA',
-                         'max_per_user': '10',
-                         'stock': '250',
-                         'product': uuid_ticket_product}
-            response = requests.request("POST", url, headers=headers, data=data_json)
-            uuid_price_demi = response.json().get("uuid")
-            print(response.text)
-            assert response.status_code == 201
-
-            data_json = {'name': 'Plein Tarif',
-                         'prix': '10',
-                         'vat': 'NA',
-                         'max_per_user': '10',
-                         'stock': '250',
-                         'product': uuid_ticket_product}
-            response = requests.request("POST", url, headers=headers, data=data_json)
-            uuid_price_plein = response.json().get("uuid")
-            print(response.text)
-            assert response.status_code == 201
-            print("************ Create Ticket prices OK")
-
-        ### Create TShirt product
-        print("************ Create TShirt Product")
-        url = f"{base_url}/api/products/"
-        data_json = {'name': 'TShirt',
-                     'publish': 'true',
-                     'categorie_article': 'T'}
-        files = [
-            ('img', ('tshirt.png', open('/DjangoFiles/data/demo_img/tshirt.png', 'rb'), 'image/png'))
-        ]
-        response = requests.request("POST", url, headers=headers, data=data_json, files=files)
-        uuid_tshirt_product = response.json().get("uuid")
-        print(response.text)
-        assert response.status_code in [201, 409]
-        print("************ Create TShirt Product OK")
-
-        if response.status_code == 201 :
-
-            ### Create Ticket prices
-            print("************ Create TShirt prices")
-            url = f"{base_url}/api/prices/"
-
-            data_json = {'name': 'S',
-                         'prix': '5',
-                         'vat': 'NA',
-                         'max_per_user': '10',
-                         'stock': '250',
-                         'product': uuid_tshirt_product}
-            response = requests.request("POST", url, headers=headers, data=data_json)
-            uuid_tshirt_s = response.json().get("uuid")
-            print(response.text)
-            assert response.status_code == 201
-
-            data_json = {'name': 'L',
-                         'prix': '5',
-                         'vat': 'NA',
-                         'max_per_user': '10',
-                         'stock': '250',
-                         'product': uuid_tshirt_product}
-            response = requests.request("POST", url, headers=headers, data=data_json)
-            uuid_tshirt_l = response.json().get("uuid")
-            print(response.text)
-            assert response.status_code == 201
-            print("************ Create TShirt prices OK")
-
-
         ## create tenant from demo file
         from data.domains_and_cards import tenants
 
-        for organisation, place in tenants.items() :
+        for organisation, place in tenants.items():
             place: dict
             print(f"************ Create Place {organisation}")
-            domains = [ slugify(organisation), ]
+            domains = [slugify(organisation), ]
             if place.get('domains'):
                 domains = place.get('domains')
 
@@ -214,17 +125,19 @@ class Command(BaseCommand):
                 'phone': place.get("phone"),
                 'email': place.get("email"),
                 'postal_code': place.get("postal_code"),
-                'categorie':place.get("categorie"),
+                'categorie': place.get("categorie"),
             }
 
             files = []
             if place.get('img'):
                 files.append(
-                    ('img', (place.get('img'), open(f"/DjangoFiles/data/demo_img/{place.get('img')}", 'rb'), 'image/png'))
+                    ('img',
+                     (place.get('img'), open(f"/DjangoFiles/data/demo_img/{place.get('img')}", 'rb'), 'image/png'))
                 )
             if place.get('logo'):
                 files.append(
-                    ('logo', (place.get('logo'), open(f"/DjangoFiles/data/demo_img/{place.get('logo')}", 'rb'), 'image/png'))
+                    ('logo',
+                     (place.get('logo'), open(f"/DjangoFiles/data/demo_img/{place.get('logo')}", 'rb'), 'image/png'))
                 )
 
             response = requests.request("POST", url, headers=headers, data=data_json, files=files)
@@ -238,7 +151,7 @@ class Command(BaseCommand):
                 response = requests.request("PUT", url_put, headers=headers, data=data_json)
 
                 # requests ne sachant pas envoye de fichier en PUT, on passe par curl
-                if place.get('img') :
+                if place.get('img'):
                     command = f"curl --location " \
                               f"-H 'Authorization: Token {auth_token}' " \
                               f"--request PUT 'demo.django-local.org:8002/api/place/{uuid}/' " \
@@ -251,3 +164,174 @@ class Command(BaseCommand):
                               f"--request PUT 'demo.django-local.org:8002/api/place/{uuid}/' " \
                               f"--form 'logo=@\"/DjangoFiles/data/demo_img/{place.get('logo')}\"'"
                     os.system(command)
+
+
+        salles = requests.request("GET", f"{base_url}/api/place/").json()
+        artists = requests.request("GET", f"{base_url}/api/artist/").json()
+
+        for salle in salles :
+            base_url = f"http://{salle.get('slug')}.django-local.org:8002"
+            url = f"{base_url}/auth/token/login/"
+            data_json = {'username': email,
+                         'password': dummypassword}
+            response = requests.request("POST", url, data=data_json)
+            auth_token = response.json().get("auth_token")
+            headers['Authorization'] = f"Token {auth_token}"
+
+            ### Create product
+            print("************ Create Ticket Product")
+            url = f"{base_url}/api/products/"
+            data_json = {'name': 'Billet',
+                         'publish': 'true',
+                         'categorie_article': 'B'}
+            files = [
+                ('img', ('tickets_old.png', open('/DjangoFiles/data/demo_img/tickets.png', 'rb'), 'image/png'))
+            ]
+            response = requests.request("POST", url, headers=headers, data=data_json, files=files)
+            uuid_ticket_product = response.json().get("uuid")
+            print(response.text)
+            assert response.status_code in [201, 409]
+            print("************ Create Ticket Product OK")
+
+            if response.status_code == 201:
+                ### Create Ticket prices
+                print("************ Create Ticket prices")
+                url = f"{base_url}/api/prices/"
+
+                data_json = {'name': 'Demi Tarif',
+                             'prix': '5',
+                             'vat': 'NA',
+                             'max_per_user': '10',
+                             'stock': '250',
+                             'product': uuid_ticket_product}
+                response = requests.request("POST", url, headers=headers, data=data_json)
+                uuid_price_demi = response.json().get("uuid")
+                print(response.text)
+                assert response.status_code == 201
+
+                data_json = {'name': 'Plein Tarif',
+                             'prix': '10',
+                             'vat': 'NA',
+                             'max_per_user': '10',
+                             'stock': '250',
+                             'product': uuid_ticket_product}
+                response = requests.request("POST", url, headers=headers, data=data_json)
+                uuid_price_plein = response.json().get("uuid")
+                print(response.text)
+                assert response.status_code == 201
+                print("************ Create Ticket prices OK")
+
+            ### Create TShirt product
+            print("************ Create TShirt Product")
+            url = f"{base_url}/api/products/"
+            data_json = {'name': 'TShirt',
+                         'publish': 'true',
+                         'categorie_article': 'T'}
+            files = [
+                ('img', ('tshirt.png', open('/DjangoFiles/data/demo_img/tshirt.png', 'rb'), 'image/png'))
+            ]
+            response = requests.request("POST", url, headers=headers, data=data_json, files=files)
+            uuid_tshirt_product = response.json().get("uuid")
+            print(response.text)
+            assert response.status_code in [201, 409]
+            print("************ Create TShirt Product OK")
+
+            if response.status_code == 201:
+                ### Create Ticket prices
+                print("************ Create TShirt prices")
+                url = f"{base_url}/api/prices/"
+
+                data_json = {'name': 'S',
+                             'prix': '5',
+                             'vat': 'NA',
+                             'max_per_user': '10',
+                             'stock': '250',
+                             'product': uuid_tshirt_product}
+                response = requests.request("POST", url, headers=headers, data=data_json)
+                uuid_tshirt_s = response.json().get("uuid")
+                print(response.text)
+                assert response.status_code == 201
+
+                data_json = {'name': 'L',
+                             'prix': '5',
+                             'vat': 'NA',
+                             'max_per_user': '10',
+                             'stock': '250',
+                             'product': uuid_tshirt_product}
+                response = requests.request("POST", url, headers=headers, data=data_json)
+                uuid_tshirt_l = response.json().get("uuid")
+                print(response.text)
+                assert response.status_code == 201
+                print("************ Create TShirt prices OK")
+
+
+
+            print("************ Event Générator")
+
+
+            products = requests.request("GET", f"{base_url}/api/products/").json()
+            products_uuid = [product.get('uuid') for product in products]
+
+            def random_date():
+                """
+                This function will return a random datetime between two datetime
+                objects.
+                """
+                delta = timedelta(days=360)
+                int_delta = (delta.days * 24 * 60 * 60) + delta.seconds
+                random_second = randrange(int_delta)
+                return datetime.now() + timedelta(seconds=random_second)
+
+            for artist in artists:
+                r_date = random_date()
+                headers["Content_type"] = "application/json"
+                data_json = {
+                    'date': r_date.date().strftime("%Y-%m-%d"),
+                    'artists': [
+                        {
+                            "uuid": artist.get('uuid'),
+                            "datetime": r_date.strftime("%Y-%m-%dT%H:%M")
+                        },
+                    ],
+                    "products": products_uuid
+                }
+                response = requests.request("POST", f"{base_url}/api/events/", headers=headers, data=json.dumps(data_json))
+                print(response.text)
+
+            r_date = random_date()
+            headers["Content_type"] = "application/json"
+            data_json = {
+                'date': r_date.date().strftime("%Y-%m-%d"),
+                'artists': [
+                    {
+                        "uuid": artists[0].get('uuid'),
+                        "datetime": r_date.strftime("%Y-%m-%dT%H:%M")
+                    },
+                    {
+                        "uuid": artists[1].get('uuid'),
+                        "datetime": (r_date + timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M")
+                    },
+                ],
+                "products": products_uuid
+            }
+            response = requests.request("POST", f"{base_url}/api/events/", headers=headers, data=json.dumps(data_json))
+            print(response.text)
+
+            r_date = random_date()
+            headers["Content_type"] = "application/json"
+            data_json = {
+                'date': r_date.date().strftime("%Y-%m-%d"),
+                'artists': [
+                    {
+                        "uuid": artists[2].get('uuid'),
+                        "datetime": r_date.strftime("%Y-%m-%dT%H:%M")
+                    },
+                    {
+                        "uuid": artists[3].get('uuid'),
+                        "datetime": (r_date + timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M")
+                    },
+                ],
+                "products": products_uuid
+            }
+            response = requests.request("POST", f"{base_url}/api/events/", headers=headers, data=json.dumps(data_json))
+            print(response.text)

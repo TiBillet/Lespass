@@ -17,6 +17,7 @@ from django.utils import timezone
 from django.db.models import JSONField
 
 from django.utils.text import slugify
+from django_tenants.utils import tenant_context
 from solo.models import SingletonModel
 from django.utils.translation import ugettext_lazy as _
 from stdimage import StdImageField
@@ -170,8 +171,8 @@ class Configuration(SingletonModel):
     mollie_api_key = models.CharField(max_length=50,
                                       blank=True, null=True)
 
-    stripe_api_key = models.CharField(max_length=110, blank=True, null=True)
-    stripe_test_api_key = models.CharField(max_length=110, blank=True, null=True)
+    stripe_api_key = models.CharField(max_length=110, blank=True, null=True, default=os.environ.get('SRIPE_KEY'))
+    stripe_test_api_key = models.CharField(max_length=110, blank=True, null=True, default=os.environ.get('SRIPE_KEY_TEST'))
     stripe_mode_test = models.BooleanField(default=True)
 
     def get_stripe_api(self):
@@ -314,16 +315,19 @@ class Event(models.Model):
     name = models.CharField(max_length=200)
     slug = models.SlugField(unique=True, db_index=True, blank=True, null=True, max_length=250)
     datetime = models.DateTimeField()
+    created = models.DateTimeField(auto_now=True)
 
     short_description = models.CharField(max_length=250, blank=True, null=True)
     long_description = models.TextField(blank=True, null=True)
 
     event_facebook_url = models.URLField(blank=True, null=True)
+    published = models.BooleanField(default=False)
 
     products = models.ManyToManyField(Product, blank=True)
 
     img = StdImageField(upload_to='images/',
                         validators=[MaxSizeValidator(1920, 1920)],
+                        blank=True, null=True,
                         variations={
                             'fhd': (1920, 1920),
                             'hdr': (1280, 1280),
@@ -333,6 +337,7 @@ class Event(models.Model):
                         },
                         delete_orphans=True
                         )
+
 
     # noinspection PyUnresolvedReferences
     def img_variations(self):
@@ -389,11 +394,14 @@ class Event(models.Model):
         verbose_name_plural = _('Evenements')
 
 
-class artist_on_events(models.Model):
+class Artist_on_event(models.Model):
     artist = models.ForeignKey(Client, on_delete=models.PROTECT)
     datetime = models.DateTimeField()
-    event = models.ForeignKey(Event, on_delete=models.CASCADE)
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="artists")
 
+    def configuration(self):
+        with tenant_context(self.artist):
+            return Configuration.get_solo()
 
 class ProductSold(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)

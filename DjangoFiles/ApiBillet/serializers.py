@@ -7,10 +7,11 @@ from rest_framework import serializers
 import json
 from django.utils.translation import gettext, gettext_lazy as _
 from rest_framework.generics import get_object_or_404
+from django_tenants.utils import schema_context, tenant_context
 
 from AuthBillet.models import TibilletUser, HumanUser
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, Paiement_stripe, \
-    PriceSold, ProductSold
+    PriceSold, ProductSold, Artist_on_event
 from Customers.models import Client
 from PaiementStripe.views import creation_paiement_stripe
 
@@ -107,7 +108,6 @@ class ConfigurationSerializer(serializers.ModelSerializer):
 
 
 class NewConfigSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = Configuration
         fields = [
@@ -131,8 +131,7 @@ class NewConfigSerializer(serializers.ModelSerializer):
             "img",
             "logo",
         ]
-        read_only_fields = ("slug", )
-
+        read_only_fields = ("slug",)
 
 
 class ArtistEventCreateSerializer(serializers.Serializer):
@@ -142,9 +141,11 @@ class ArtistEventCreateSerializer(serializers.Serializer):
     def validate_uuid(self, value):
         self.artiste_event_db = {}
         try:
-            artist = Client.objects.get(pk=value, categorie=Client.ARTISTE)
-            self.artiste_event_db['artist'] = artist
-        except Client.DoesNotExist as e :
+            tenant = Client.objects.get(pk=value, categorie=Client.ARTISTE)
+            self.artiste_event_db['tenant'] = tenant
+            with tenant_context(tenant):
+                self.artiste_event_db['config'] = Configuration.get_solo()
+        except Client.DoesNotExist as e:
             raise serializers.ValidationError(_(f'{value} Artiste non trouvé'))
         return value
 
@@ -155,6 +156,15 @@ class ArtistEventCreateSerializer(serializers.Serializer):
     def validate(self, attrs):
         return self.artiste_event_db
 
+class Artist_on_eventSerializer(serializers.ModelSerializer):
+    configuration = ConfigurationSerializer()
+    class Meta:
+        model = Artist_on_event
+        fields = [
+            'datetime',
+            'configuration',
+        ]
+
 class EventCreateSerializer(serializers.Serializer):
     date = serializers.DateField()
     artists = ArtistEventCreateSerializer(many=True)
@@ -162,26 +172,48 @@ class EventCreateSerializer(serializers.Serializer):
 
     def validate_products(self, value):
         self.products_db = []
-        for uuid in value :
+        for uuid in value:
             try:
                 product = Product.objects.get(pk=uuid)
                 self.products_db.append(product)
-            except Product.DoesNotExist as e :
+            except Product.DoesNotExist as e:
                 raise serializers.ValidationError(_(f'{uuid} Produit non trouvé'))
-        return value
+        return self.products_db
 
     def validate(self, attrs):
-        import ipdb; ipdb.set_trace()
+        # import ipdb; ipdb.set_trace()
+        names = [artist.get('config').organisation for artist in attrs.get('artists')]
+        print(names)
+        list_datetime = [artist.get('datetime') for artist in attrs.get('artists')]
+        list_datetime.sort()
+        first_datetime = list_datetime[0]
+
+        event, created = Event.objects.get_or_create(
+            name=(" & ").join(names),
+            datetime=first_datetime,
+            categorie=Event.CONCERT,
+        )
+
+        # import ipdb; ipdb.set_trace()
+
+        event.products.clear()
+        for product in attrs.get('products'):
+            event.products.add(product)
+
+        for artist_input in attrs.get('artists'):
+            prog, created = Artist_on_event.objects.get_or_create(
+                artist=artist_input.get('tenant'),
+                datetime=artist_input.get('datetime'),
+                event=event
+            )
+
         print(attrs)
-        return attrs
+        return event
 
 
 class EventSerializer(serializers.ModelSerializer):
     products = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all(), many=True)
-    # products = ProductSerializer(
-    #     many=True,
-    #     read_only=True
-    # )
+    artists = Artist_on_eventSerializer(many=True)
 
     class Meta:
         model = Event
@@ -197,12 +229,12 @@ class EventSerializer(serializers.ModelSerializer):
             'img_variations',
             'reservations',
             'complet',
+            'artists',
         ]
         read_only_fields = ['uuid', 'reservations']
         depth = 1
 
     def validate(self, attrs):
-
         products = self.initial_data.getlist('products')
 
         if products:
@@ -280,15 +312,17 @@ class MembreshipValidator(serializers.Serializer):
         user_paiement.save()
         return user_paiement.email
 
+
 def get_near_event_by_date():
     try:
         return Event.objects.get(datetime__date=datetime.datetime.now().date())
-    except Event.MultipleObjectsReturned :
+    except Event.MultipleObjectsReturned:
         return Event.objects.filter(datetime__date=datetime.datetime.now().date()).first()
-    except Event.DoesNotExist :
+    except Event.DoesNotExist:
         return Event.objects.filter(datetime__gte=datetime.datetime.now()).first()
     except:
         return None
+
 
 def create_ticket(pricesold, customer, reservation):
     ticket = Ticket.objects.create(
