@@ -1,8 +1,8 @@
-mkdir -p /DjangoFiles/www
-touch /DjangoFiles/www/nginxAccess.log
-touch /DjangoFiles/www/nginxError.log
-touch /DjangoFiles/www/gunicorn.logs
-touch /DjangoFiles/www/Djangologfile
+mkdir -p /DjangoFiles/logs
+touch /DjangoFiles/logs/nginxAccess.log
+touch /DjangoFiles/logs/nginxError.log
+touch /DjangoFiles/logs/gunicorn.logs
+touch /DjangoFiles/logs/Djangologfile
 
 
 sleep 30d
