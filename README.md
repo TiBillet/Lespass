@@ -90,6 +90,13 @@ Don't forget to change your /etc/host if you are in localhost :)
 172.17.0.1       django-local.org
 172.17.0.1       www.django-local.org
 172.17.0.1       demo.django-local.org
+172.17.0.1       m.django-local.org
+172.17.0.1       bisik.django-local.org
+172.17.0.1       raffinerie.django-local.org
+172.17.0.1       vavangart.django-local.org
+172.17.0.1       3peaks.django-local.org
+172.17.0.1       manap.django-local.org
+
 
 # go to demo.django-local.org:8002/admin to create an admin user for the tenant. 
 ```
