@@ -252,14 +252,14 @@ LOGGING = {
         'logfile': {
             'level': 'INFO',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': f"{BASE_DIR}/www/Djangologfile",
+            'filename': f"{BASE_DIR}/logs/Djangologfile",
             'formatter': 'simple',
             'maxBytes': 1024 * 1024 * 100,  # 100 mb
         },
         'weasyprint': {
             'level': 'ERROR',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': f"{BASE_DIR}/www/weasyprint",
+            'filename': f"{BASE_DIR}/logs/weasyprint",
             'formatter': 'simple',
             'maxBytes': 1024 * 1024 * 100,  # 100 mb
         },
