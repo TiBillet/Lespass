@@ -1,6 +1,6 @@
 version: '3.7'
 services:
-  billetterie_postgres_demo:
+  billetterie_postgres_prod:
     extends:
       file: ../compose/docker-compose-base.yml
       service: billetterie_postgres
@@ -10,14 +10,14 @@ services:
     networks:
       - backend-billeterie
 
-  billetterie_redis_demo:
+  billetterie_redis_prod:
     extends:
       file: ../compose/docker-compose-base.yml
       service: billetterie_redis
     networks:
       - backend-billeterie
 
-  billetterie_django_demo:
+  billetterie_django_prod:
     extends:
       file: ../compose/docker-compose-base.yml
       service: billetterie_django
@@ -25,46 +25,46 @@ services:
     env_file: .env
 
     depends_on:
-      - billetterie_postgres_demo
+      - billetterie_postgres_prod
     links:
-      - billetterie_postgres_demo:billetterie_postgres
-      - billetterie_redis_demo:redis
+      - billetterie_postgres_prod:billetterie_postgres
+      - billetterie_redis_prod:redis
     networks:
       - frontend
       - backend-billeterie
 
-  billetterie_celery_demo:
+  billetterie_celery_prod:
     extends:
       file: ../compose/docker-compose-base.yml
       service: billetterie_celery
     command: "bash /DjangoFiles/launch_celery.sh"
     env_file: .env
     depends_on:
-      - billetterie_django_demo
+      - billetterie_django_prod
     links:
-      - billetterie_postgres_demo:billetterie_postgres
-      - billetterie_redis_demo:redis
+      - billetterie_postgres_prod:billetterie_postgres
+      - billetterie_redis_prod:redis
     networks:
       - frontend
       - backend-billeterie
 
 
-  billetterie_nginx_demo:
+  billetterie_nginx_prod:
     extends:
       file: ../compose/docker-compose-base.yml
       service: billetterie_nginx
-#    ports:
-#      - 8002:80
+    ports:
+      - 80:80
     env_file: .env
     depends_on:
-      - billetterie_django_demo
+      - billetterie_django_prod
     links:
-      - billetterie_django_demo:billetterie_django
+      - billetterie_django_prod:billetterie_django
     labels:
       - traefik.enable=true
       - traefik.docker.network=frontend
       - traefik.http.routers.billeterie_nginx.tls.certresolver=myresolver
-      - traefik.http.routers.billeterie_nginx.rule=Host(`m.${DOMAIN}`) || Host(`www.${DOMAIN}`) || Host(`raffinerie.${DOMAIN}`) || Host(`bisik.${DOMAIN}`) || Host(`vavangart.${DOMAIN}`) || Host(`manapany.${DOMAIN}`) || Host(`demo.${DOMAIN}`) || Host(`${DOMAIN}`)
+      - traefik.http.routers.billeterie_nginx.rule=Host(`m.${DOMAIN}`) || Host(`www.${DOMAIN}`) || Host(`raffinerie.${DOMAIN}`) || Host(`bisik.${DOMAIN}`) || Host(`vavangart.${DOMAIN}`) || Host(`3peaks.${DOMAIN}`) || Host(`demo.${DOMAIN}`) || Host(`${DOMAIN}`)
     networks:
       - frontend
 

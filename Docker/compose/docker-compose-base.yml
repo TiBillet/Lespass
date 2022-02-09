@@ -48,5 +48,6 @@ services:
     image: nginx
     restart: always
     volumes:
+      - ../../Front/dist:/usr/share/nginx/html
       - ../../DjangoFiles:/DjangoFiles
       - ../../Nginx:/etc/nginx/conf.d

@@ -35,8 +35,10 @@ DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 CORS_ORIGIN_WHITELIST = [
     'http://localhost',
     'http://localhost:3000',
+    'http://localhost:3001',
     'http://django-local.org:3000',
     'http://demo.django-local.org:3000',
+    'http://demo.django-local.org',
 ]
 
 SHARED_APPS = (
