@@ -36,6 +36,7 @@ CORS_ORIGIN_WHITELIST = [
     'http://localhost',
     'http://localhost:3000',
     'http://django-local.org:3000',
+    'http://demo.django-local.org:3000',
 ]
 
 SHARED_APPS = (
@@ -89,11 +90,11 @@ SITE_ID = 1
 AUTH_USER_MODEL = 'AuthBillet.TibilletUser'
 
 
-    # 'corsheaders.middleware.CorsMiddleware',
 MIDDLEWARE = [
     'django_tenants.middleware.main.TenantMainMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',

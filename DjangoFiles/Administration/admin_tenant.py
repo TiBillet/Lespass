@@ -286,6 +286,7 @@ class PaiementStripeAdmin(admin.ModelAdmin):
         'order_date',
         'status',
         'traitement_en_cours',
+        'source_traitement',
         'source',
     )
     ordering = ('-order_date',)

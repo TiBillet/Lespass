@@ -495,6 +495,12 @@ def paiment_stripe_validator(request, paiement_stripe):
                 paiement_stripe.status = Paiement_stripe.PAID
                 paiement_stripe.last_action = timezone.now()
                 paiement_stripe.traitement_en_cours = True
+
+                if request.method == 'GET':
+                    paiement_stripe.source_traitement = Paiement_stripe.GET
+                else:
+                    paiement_stripe.source_traitement = Paiement_stripe.WEBHOOK
+
                 paiement_stripe.save()
                 logger.info("*" * 30)
                 logger.info(

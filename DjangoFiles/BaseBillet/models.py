@@ -673,6 +673,7 @@ class Paiement_stripe(models.Model):
 
     traitement_en_cours = models.BooleanField(default=False)
     NA, WEBHOOK, GET = 'N', 'W', 'G'
+    
     SOURCE_CHOICES = (
         (NA, _('Pas de traitement en cours')),
         (WEBHOOK, _('Depuis webhook post stripe')),
