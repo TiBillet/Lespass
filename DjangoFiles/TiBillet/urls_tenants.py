@@ -20,6 +20,7 @@ from django.conf import settings
 from Administration.admin_tenant import staff_admin_site
 
 # on modifie la creation du token pour rajouter access_token dans la réponse pour Postman
+from ApiBillet.views import Webhook_stripe
 from AuthBillet.views import TokenCreateView_custom
 
 urlpatterns = [
@@ -42,8 +43,8 @@ urlpatterns = [
     # pour carte GEN1 Bisik
     re_path(r'(?P<numero_carte>^\w{5}$)', include('QrcodeCashless.urls')),
 
-    re_path(r'stripe/', include('PaiementStripe.urls')),
-
+    # catché par le front node JS, a supprimer prochainement
+    path('stripe/return/<uuid:uuid_paiement>', Webhook_stripe.as_view()),
 
     path('', include('BaseBillet.urls')),
 

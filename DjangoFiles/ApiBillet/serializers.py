@@ -283,6 +283,22 @@ class ReservationSerializer(serializers.ModelSerializer):
         ]
         depth = 1
 
+class TicketSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Ticket
+        fields = [
+            'uuid',
+            'first_name',
+            'last_name',
+            'reservation',
+            'pricesold',
+            'status',
+            'seat',
+            'event_name',
+            'pdf_url',
+        ]
+        read_only_fields = fields
+
 
 class MembreshipValidator(serializers.Serializer):
     email = serializers.EmailField()
@@ -387,6 +403,7 @@ def validate_email_and_return_user(email):
 
     user.save()
     return user
+
 
 
 class ReservationValidator(serializers.Serializer):

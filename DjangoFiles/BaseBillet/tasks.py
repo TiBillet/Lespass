@@ -208,3 +208,4 @@ def test_logger():
     logger.info(f"{timezone.now()} info")
     logger.warning(f"{timezone.now()} warning")
     logger.error(f"{timezone.now()} error")
+

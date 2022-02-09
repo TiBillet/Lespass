@@ -4,7 +4,7 @@ from django.urls import include, path, re_path
 from ApiBillet import views as api_view
 from rest_framework import routers
 
-from ApiBillet.views import TicketPdf
+from ApiBillet.views import TicketPdf, Webhook_stripe
 
 router = routers.DefaultRouter()
 router.register(r'place', api_view.PlacesViewSet, basename='place')
@@ -22,5 +22,6 @@ urlpatterns = [
 
     #download ticket :
     path('ticket/pdf/<uuid:pk_uuid>', TicketPdf.as_view(), name='ticket_uuid_to_pdf'),
-
+    path('webhook_stripe/', Webhook_stripe.as_view()),
+    path('webhook_stripe/<uuid:uuid_paiement>', Webhook_stripe.as_view()),
 ]

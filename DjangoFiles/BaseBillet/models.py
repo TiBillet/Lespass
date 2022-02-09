@@ -68,7 +68,7 @@ class Configuration(SingletonModel):
     def slug(self):
         if self.organisation:
             return slugify(f"{self.organisation}")
-        else :
+        else:
             return None
 
     short_description = models.CharField(max_length=250, verbose_name=_("Description courte"))
@@ -117,7 +117,7 @@ class Configuration(SingletonModel):
                                      )
 
     img = StdImageField(upload_to='images/',
-                        validators=[MaxSizeValidator(1920, 1920), MinSizeValidator(720,720)],
+                        validators=[MaxSizeValidator(1920, 1920), MinSizeValidator(720, 720)],
                         blank=False, null=False,
                         variations={
                             'fhd': (1920, 1920),
@@ -133,14 +133,13 @@ class Configuration(SingletonModel):
     def img_variations(self):
         if self.img:
             return {
-                'fhd':self.img.fhd.url,
-                'hdr':self.img.hdr.url,
-                'med':self.img.med.url,
-                'thumbnail':self.img.thumbnail.url,
+                'fhd': self.img.fhd.url,
+                'hdr': self.img.hdr.url,
+                'med': self.img.med.url,
+                'thumbnail': self.img.thumbnail.url,
             }
-        else :
+        else:
             return []
-
 
     logo = StdImageField(upload_to='images/',
                          validators=[MaxSizeValidator(1920, 1920)],
@@ -159,28 +158,27 @@ class Configuration(SingletonModel):
     def logo_variations(self):
         if self.logo:
             return {
-                'fhd':self.img.fhd.url,
-                'hdr':self.img.hdr.url,
-                'med':self.img.med.url,
-                'thumbnail':self.img.thumbnail.url,
+                'fhd': self.img.fhd.url,
+                'hdr': self.img.hdr.url,
+                'med': self.img.med.url,
+                'thumbnail': self.img.thumbnail.url,
             }
-        else :
+        else:
             return []
-
 
     mollie_api_key = models.CharField(max_length=50,
                                       blank=True, null=True)
 
     stripe_api_key = models.CharField(max_length=110, blank=True, null=True, default=os.environ.get('SRIPE_KEY'))
-    stripe_test_api_key = models.CharField(max_length=110, blank=True, null=True, default=os.environ.get('SRIPE_KEY_TEST'))
+    stripe_test_api_key = models.CharField(max_length=110, blank=True, null=True,
+                                           default=os.environ.get('SRIPE_KEY_TEST'))
     stripe_mode_test = models.BooleanField(default=True)
 
     def get_stripe_api(self):
-        if self.stripe_mode_test :
+        if self.stripe_mode_test:
             return self.stripe_test_api_key
         else:
             return self.stripe_api_key
-
 
     activer_billetterie = models.BooleanField(default=True, verbose_name=_("Activer la billetterie"))
 
@@ -233,7 +231,6 @@ class Configuration(SingletonModel):
         null=True,
         verbose_name=_("Template Meta")
     )
-
 
 
 class Product(models.Model):
@@ -309,6 +306,7 @@ class Price(models.Model):
     class Meta:
         unique_together = ('name', 'product')
 
+
 class Event(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
 
@@ -338,19 +336,19 @@ class Event(models.Model):
                         delete_orphans=True
                         )
 
-
     # noinspection PyUnresolvedReferences
     def img_variations(self):
         if self.img:
             return {
-                'fhd':self.img.fhd.url,
-                'hdr':self.img.hdr.url,
-                'med':self.img.med.url,
-                'thumbnail':self.img.thumbnail.url,
-                'crop':self.img.crop.url,
+                'fhd': self.img.fhd.url,
+                'hdr': self.img.hdr.url,
+                'med': self.img.med.url,
+                'thumbnail': self.img.thumbnail.url,
+                'crop': self.img.crop.url,
             }
-        else :
+        else:
             return []
+
     # reservations = models.PositiveSmallIntegerField(default=0)
 
     CONCERT = "LIV"
@@ -403,6 +401,7 @@ class Artist_on_event(models.Model):
         with tenant_context(self.artist):
             return Configuration.get_solo()
 
+
 class ProductSold(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
 
@@ -424,9 +423,9 @@ class ProductSold(models.Model):
         return Configuration.get_solo().img
 
     def nickname(self):
-        if self.product.categorie_article == Product.BILLET :
+        if self.product.categorie_article == Product.BILLET:
             return f"{self.event.name} - {connection.tenant} - {self.event.datetime.strftime('%D')}"
-        else :
+        else:
             return f"{self.product.name} - {connection.tenant}"
 
     def get_id_product_stripe(self):
@@ -489,13 +488,13 @@ class PriceSold(models.Model):
         self.save()
         return self.id_price_stripe
 
-
     def reset_id_stripe(self):
         self.id_price_stripe = None
         self.save()
 
     # class meta:
     #     unique_together = [['productsold', 'price']]
+
 
 class Reservation(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
@@ -619,6 +618,9 @@ class Ticket(models.Model):
             port = ":8002"
         return f"{protocol}{domain}{port}{api_pdf}"
 
+    def event_name(self):
+        return self.reservation.event.name
+
     def event(self):
         return self.reservation.event
 
@@ -648,7 +650,8 @@ class Paiement_stripe(models.Model):
     detail = models.CharField(max_length=50, blank=True, null=True)
     datetime = models.DateTimeField(auto_now=True)
 
-    id_stripe = models.CharField(max_length=80, blank=True, null=True)
+    checkout_session_id_stripe = models.CharField(max_length=80, blank=True, null=True)
+    payment_intent_id = models.CharField(max_length=80, blank=True, null=True)
     metadata_stripe = JSONField(blank=True, null=True)
 
     order_date = models.DateTimeField(auto_now_add=True, verbose_name="Date")
@@ -669,6 +672,14 @@ class Paiement_stripe(models.Model):
     status = models.CharField(max_length=1, choices=STATUT_CHOICES, default=NON, verbose_name="Statut de la commande")
 
     traitement_en_cours = models.BooleanField(default=False)
+    NA, WEBHOOK, GET = 'N', 'W', 'G'
+    SOURCE_CHOICES = (
+        (NA, _('Pas de traitement en cours')),
+        (WEBHOOK, _('Depuis webhook post stripe')),
+        (GET, _('Depuis Get')),
+    )
+    source_traitement = models.CharField(max_length=1, choices=SOURCE_CHOICES, default=NA,
+                                         verbose_name="Source de la commande")
 
     reservation = models.ForeignKey(Reservation, on_delete=models.PROTECT, blank=True, null=True,
                                     related_name="paiements")

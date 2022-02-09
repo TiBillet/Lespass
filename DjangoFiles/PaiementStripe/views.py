@@ -3,16 +3,13 @@ from datetime import datetime
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
-from django.db import connection
 from django.http import HttpResponse, Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 import stripe
-# Create your views here.
 from django.utils import timezone
 from django.views import View
 from rest_framework import serializers
 
-from AuthBillet.models import HumanUser
 from BaseBillet.models import Configuration, LigneArticle, Paiement_stripe, Reservation
 from django.utils.translation import gettext, gettext_lazy as _
 
@@ -103,9 +100,12 @@ class creation_paiement_stripe():
             metadata=self.metadata,
             client_reference_id=f"{self.user.uuid}",
         )
-
-        print(checkout_session.id)
-        self.paiement_stripe_db.id_stripe = checkout_session.id
+        print("-"*40)
+        print(f"Création d'un nouveau paiment stripe. Metadata : {self.metadata}")
+        print(f"checkout_session.id {checkout_session.id} payment_intent : {checkout_session.payment_intent}")
+        print("-"*40)
+        self.paiement_stripe_db.payment_intent_id = checkout_session.payment_intent
+        self.paiement_stripe_db.checkout_session_id_stripe = checkout_session.id
         self.paiement_stripe_db.status = Paiement_stripe.PENDING
         self.paiement_stripe_db.save()
 
@@ -121,7 +121,7 @@ class creation_paiement_stripe():
     def redirect_to_stripe(self):
         return HttpResponseRedirect(self.checkout_session.url)
 
-
+'''
 # On vérifie que les métatada soient les meme dans la DB et chez Stripe.
 def metatadata_valid(paiement_stripe_db: Paiement_stripe, checkout_session):
     metadata_stripe_json = checkout_session.metadata
@@ -167,7 +167,7 @@ class retour_stripe(View):
         print(paiement_stripe.status)
         if paiement_stripe.status != Paiement_stripe.VALID:
 
-            checkout_session = stripe.checkout.Session.retrieve(paiement_stripe.id_stripe)
+            checkout_session = stripe.checkout.Session.retrieve(paiement_stripe.checkout_session_id_stripe)
 
             # on vérfie que les metatada soient cohérentes. #NTUI !
             if metatadata_valid(paiement_stripe, checkout_session):
@@ -246,7 +246,6 @@ class retour_stripe(View):
         raise Http404(f'{paiement_stripe.status}')
 
 
-'''
 
 class webhook_stripe(View):
     def get(self, request):
