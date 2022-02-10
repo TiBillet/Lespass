@@ -1,0 +1,30 @@
+version: '3.3'
+services:
+
+  front_tibillet_ticket:
+    image: node:16-bullseye
+
+    container_name: front_tibillet
+    hostname: front_tibillet
+    
+    networks:
+      - frontend
+    ports:
+      - "3000:3000"
+
+    environment:
+      DEV: 1
+      TIMEZONE: Indian/Reunion
+    restart: on-failure
+
+    volumes:
+      - ../:/tibillet-gestion-lieu-vue
+    working_dir: /tibillet-gestion-lieu-vue/
+
+#    command: "npm install"
+    # command: "npm run dev"
+    command: "bash /tibillet-gestion-lieu-vue/start.sh"
+
+networks:
+  frontend:
+    external: True

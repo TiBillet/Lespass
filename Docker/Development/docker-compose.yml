@@ -46,27 +46,49 @@ services:
       - billetterie_postgres_dev:billetterie_postgres
       - billetterie_redis_dev:redis
     networks:
-      - frontend
+#      - frontend
       - backend-billeterie
 
+  billetterie_nodejs_dev:
+    image: node:16-bullseye
+    container_name: billetterie_nodejs_dev
+    hostname: billetterie_nodejs_dev
+    ports:
+      - "3000:3000"
+    environment:
+      DEV: 1
+      TIMEZONE: Indian/Reunion
+    restart: on-failure
+    depends_on:
+      - billetterie_django_dev
+    volumes:
+      - ../:/tibillet-gestion-lieu-vue
+    working_dir: /tibillet-gestion-lieu-vue/
+    command: "bash /tibillet-gestion-lieu-vue/start.sh"
+    networks:
+      - frontend
 
-  # billetterie_nginx_dev:
-  #   extends:
-  #     file: ../compose/docker-compose-base.yml
-  #     service: billetterie_nginx
-
-  #   env_file: .env
-  #   depends_on:
-  #     - billetterie_django_dev
-  #   links:
-  #     - billetterie_django_dev:billetterie_django
-  #   labels:
-  #     - traefik.enable=true
-  #     - traefik.docker.network=frontend
-  #     - traefik.http.routers.billeterie_nginx.tls.certresolver=myresolver
-  #     - traefik.http.routers.billeterie_nginx.rule=Host(`m.${DOMAIN}`) || Host(`www.${DOMAIN}`) || Host(`raffinerie.${DOMAIN}`) || Host(`bisik.${DOMAIN}`) || Host(`vavangart.${DOMAIN}`) || Host(`manapany.${DOMAIN}`) || Host(`demo.${DOMAIN}`) || Host(`${DOMAIN}`)
-  #   networks:
-  #     - frontend
+  billetterie_nginx_dev:
+    extends:
+      file: ../compose/docker-compose-base.yml
+      service: billetterie_nginx
+#    ports:
+#      - 80:80
+    env_file: .env
+    depends_on:
+      - billetterie_django_dev
+    links:
+      - billetterie_django_dev:billetterie_django
+      - billetterie_nodejs_dev:billetterie_nodejs
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=frontend
+      - traefik.http.routers.billeterie_nginx.tls.certresolver=myresolver
+      - traefik.http.routers.billeterie_nginx.rule=Host(`m.${DOMAIN}`) || Host(`www.${DOMAIN}`) || Host(`raffinerie.${DOMAIN}`) || Host(`bisik.${DOMAIN}`) || Host(`vavangart.${DOMAIN}`) || Host(`3peaks.${DOMAIN}`) || Host(`demo.${DOMAIN}`) || Host(`${DOMAIN}`)
+    networks:
+      - frontend
+    volumes:
+      - ./nginx:/etc/nginx/conf.d
 
 # pour demo : jturbeaux@pm.me / eiXom5mo
 
