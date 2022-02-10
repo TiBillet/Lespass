@@ -1,3 +1,2 @@
-#npm install
-#npm run dev
-sleep 30d
+npm install
+npm run dev
