@@ -1,6 +1,5 @@
 <template>
   <div class="card card-blog card-plain" :id="`event${ index }`">
-    <!-- media/images/xxxxx.fhd/hdr/med/thumbnail.ext image -->
     <div v-if="infos.img_variations.length > 0">
       <a class="d-block">
         <img class="img-fluid shadow border-radius-lg" :src="infos.img_variations.thumbnail" loading="lazy"
@@ -17,7 +16,6 @@
       <div lass="d-flex flex-column" v-for="uuidProd in infos.products" :key="index">
         <div v-for="produit in produits.filter(prod => prod.uuid === uuidProd)" :key="produit.uuid">
           <div v-if="produit.categorie_article === 'B'">
-            <!-- <div class="fw-bold">{{ produit.name }} :</div> -->
             <div v-for="price in produit.prices" :key="produit.uuid">
               {{ price.name }} - {{ price.prix }}€
             </div>
@@ -33,19 +31,22 @@
     </div>
 
   </div>
-
 </template>
 
 <script setup>
 console.log('-> CardEvent.vue')
 import {useStore} from 'vuex'
 
+// asset
 const img = import('../assets/img/loading.svg')
+
+const store = useStore()
 const props = defineProps({
   infos: Object,
   index: Number
 })
-const store = useStore()
+
+console.log('props =', props)
 
 // convertion du proxy en array
 let produits = JSON.parse(JSON.stringify(store.state.products))
@@ -59,9 +60,7 @@ function goEvenement(slug) {
   // console.log('-> evenement, slug =', slug)
   emitter.emit("goEvenement", slug)
 }
-
 </script>
 
-<style scoped>
-
+<style>
 </style>

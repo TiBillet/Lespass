@@ -4,7 +4,7 @@
   <section class="pt-5 pb-0">
     <div class="container">
       <div class="row">
-        <div class="col-lg-4 col-md-6 mb-2" v-for="(item, index) in this.$store.state.events" :key="index">
+        <div class="col-lg-4 col-md-6 mb-2" v-for="(item, index) in store.state.events" :key="index">
           <CardEvent :infos="item" :index="index"/>
         </div>
       </div>
@@ -19,6 +19,7 @@
 </template>
 
 <script setup>
+console.log('-> Accueil.vue')
 // composants
 import Navbar from '../components/Navbar.vue'
 import Header from '../components/Header.vue'
@@ -46,7 +47,7 @@ const dataHeader = {
 
 // aller à la page évènement (lien défini si-dessous et dans le store) => /views/Event.vue
 emitter.on('goEvenement', (slug) => {
-  // console.log('-> Emmiter, écoute, slug =', slug, '  --  type =', typeof(slug))
+  console.log('-> Emmiter, écoute, slug =', slug, '  --  type =', typeof(slug))
   router.push({name: 'Event', params: {slug: slug}})
 })
 </script>

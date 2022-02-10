@@ -20,9 +20,8 @@
             </a>
           </li>
         </ul>
-
         <!-- déconnexion -->
-        <ul v-if="this.$store.state.token !== ''" class="navbar-nav ms-auto">
+        <ul v-if="store.state.token !== ''" class="navbar-nav ms-auto">
           <button class="btn bg-gradient-success mb-0" data-bs-toggle="modal" data-bs-target="#modal-form-logout">
             Déconnexion
           </button>
@@ -43,12 +42,18 @@
 </template>
 
 <script setup>
+console.log('-> Navbar.vue')
+// composants
 import Modallogin from './Modallogin.vue'
 
-console.log('-> Navbar.vue')
+// vue
+import {useStore} from 'vuex'
+
+const store = useStore()
 const props = defineProps({
   dataHeader: Object
 })
+
 
 // si pas d'image
 const getLogo = () => {
@@ -57,12 +62,6 @@ const getLogo = () => {
     return `${props.dataHeader.domain + props.dataHeader.logo}`
   }
   return `${props.dataHeader.domain}/media/images/image_non_disponible.svg`
-}
-
-
-// connexion/déconnexion
-function etatConnexion() {
-
 }
 
 </script>

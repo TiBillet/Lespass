@@ -1,6 +1,6 @@
 <template>
   <!-- login -->
-  <div v-if="this.$store.state.token === ''" id="modal-form-login" aria-hidden="true" aria-labelledby="modal-form-login"
+  <div v-if="store.state.token === ''" id="modal-form-login" aria-hidden="true" aria-labelledby="modal-form-login"
        class="modal fade" role="dialog"
        tabindex="-1">
     <div class="modal-dialog modal-dialog-centered modal-sm" role="document">
@@ -35,7 +35,7 @@
   </div>
 
   <!-- logout -->
-  <div v-if="this.$store.state.token !== ''" id="modal-form-logout" class="modal fade" tabindex="-1" role="dialog"
+  <div v-if="store.state.token !== ''" id="modal-form-logout" class="modal fade" tabindex="-1" role="dialog"
        aria-labelledby="modal-notification" aria-hidden="true">
     <div class="modal-dialog modal-danger modal-dialog-centered modal-" role="document">
       <div class="modal-content">

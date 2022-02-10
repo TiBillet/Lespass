@@ -1,7 +1,7 @@
 version: '3.3'
 services:
 
-  front_tibillet_ticket:
+  cdexi:
     image: node:16-bullseye
 
     container_name: front_tibillet

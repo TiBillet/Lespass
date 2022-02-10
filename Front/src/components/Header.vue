@@ -33,7 +33,6 @@
 
 <script setup>
   console.log('-> Header.vue')
-
   const props = defineProps({
     dataHeader: Object
   })

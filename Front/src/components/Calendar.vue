@@ -16,7 +16,7 @@
             </thead>
             <tbody>
 
-            <tr v-for="item in this.$store.state.events">
+            <tr v-for="item in store.state.events">
               <td>
                 <p class="text-xs font-weight-bold mb-0">{{ formateDate(item.datetime) }}</p>
               </td>

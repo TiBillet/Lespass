@@ -7,7 +7,7 @@ window.emitter = mitt()
 
 
 
-const app = createApp(App)
+let app = createApp(App)
 // ajout de variable au scope de vue3
 // app.config.globalProperties.emitter = emitter
 app.use(store).use(router).mount('#app')
