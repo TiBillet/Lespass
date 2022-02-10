@@ -51,8 +51,9 @@ class Command(BaseCommand):
         # with schema_context('demo'):
         #     call_command('flush')
 
-        base_url = f"https://demo.{os.environ.get('DOMAIN')}"
-        demo_base_url = f"https://demo.{os.environ.get('DOMAIN')}"
+        # base_url = f"https://demo.{os.environ.get('DOMAIN')}"
+        base_url = f"http://demo.{os.environ.get('DOMAIN')}:8002"
+        # demo_base_url = f"https://demo.{os.environ.get('DOMAIN')}"
         headers = {}
         email = os.environ.get('EMAIL')
         username = email
