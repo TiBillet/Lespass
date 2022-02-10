@@ -1,5 +1,5 @@
 <template>
-  <div class="card card-blog card-plain" :id="`event${ index }`">
+  <div class="card card-blog card-plain">
     <div v-if="infos.img_variations.length > 0">
       <a class="d-block">
         <img class="img-fluid shadow border-radius-lg" :src="infos.img_variations.thumbnail" loading="lazy"
@@ -13,7 +13,7 @@
       <p v-if="infos.long_description !== null">{{ infos.long_description }}</p>
       <p v-if="infos.long_description === null && infos.short_description !== null">{{ infos.short_description }}</p>
 
-      <div lass="d-flex flex-column" v-for="uuidProd in infos.products" :key="index">
+      <div lass="d-flex flex-column" v-for="(uuidProd, index) in infos.products" :key="index">
         <div v-for="produit in produits.filter(prod => prod.uuid === uuidProd)" :key="produit.uuid">
           <div v-if="produit.categorie_article === 'B'">
             <div v-for="price in produit.prices" :key="produit.uuid">
@@ -41,15 +41,17 @@ import {useStore} from 'vuex'
 const img = import('../assets/img/loading.svg')
 
 const store = useStore()
+
 const props = defineProps({
-  infos: Object,
-  index: Number
+  infos: Object
 })
 
 console.log('props =', props)
 
 // convertion du proxy en array
 let produits = JSON.parse(JSON.stringify(store.state.products))
+
+console.log('produits =', produits)
 
 function formateDate(dateString) {
   const date = new Date(dateString)
