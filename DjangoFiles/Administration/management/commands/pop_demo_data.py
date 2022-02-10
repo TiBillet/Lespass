@@ -52,7 +52,11 @@ class Command(BaseCommand):
         #     call_command('flush')
 
         # base_url = f"https://demo.{os.environ.get('DOMAIN')}"
-        base_url = f"http://demo.{os.environ.get('DOMAIN')}:8002"
+        sub_domain = "demo"
+        protocol = "http://"
+        port = ":8002"
+        base_url = f"{protocol}{sub_domain}.{os.environ.get('DOMAIN')}{port}"
+
         # demo_base_url = f"https://demo.{os.environ.get('DOMAIN')}"
         headers = {}
         email = os.environ.get('EMAIL')
@@ -69,7 +73,7 @@ class Command(BaseCommand):
         }
 
         response = requests.request("POST", url, data=data_json, verify=False)
-        print(response.text)
+        # print(response.text)
         with schema_context('Demo'):
             User: TibilletUser = get_user_model()
             admin = User.objects.get(email=email)
@@ -100,7 +104,7 @@ class Command(BaseCommand):
         url = f"{base_url}/auth/users/me/"
         response = requests.request("GET", url, headers=headers, data=data_json, verify=False)
 
-        print(response.text)
+        # print(response.text)
         assert response.status_code == 200
         print("************ me OK")
 
@@ -109,7 +113,7 @@ class Command(BaseCommand):
 
         for organisation, place in tenants.items():
             place: dict
-            print(f"************ Create Place {organisation}")
+            print(f"************ Create TENANT {organisation}")
             domains = [slugify(organisation), ]
             if place.get('domains'):
                 domains = place.get('domains')
@@ -145,7 +149,7 @@ class Command(BaseCommand):
             print(f'on lance la requete : {url}')
             print('*'*30)
             response = requests.request("POST", url, headers=headers, data=data_json, files=files, verify=False)
-            print(response.text)
+            # print(response.text)
 
             if response.status_code == 409:
                 print("Conflict : Existe déja, on lance un put")
@@ -169,12 +173,18 @@ class Command(BaseCommand):
                               f"--form 'logo=@\"/DjangoFiles/data/demo_img/{place.get('logo')}\"'"
                     os.system(command)
 
+            print(f"\n")
+            print(f"************ Create TENANT {organisation} OK")
+            print(f"\n")
+
 
         salles = requests.request("GET", f"{base_url}/api/place/").json()
         artists = requests.request("GET", f"{base_url}/api/artist/").json()
 
         for salle in salles :
-            base_url = f"http://{salle.get('slug')}.{os.environ.get('DOMAIN')}"
+            sub_domain = f"{salle.get('slug')}"
+            base_url = f"{protocol}{sub_domain}.{os.environ.get('DOMAIN')}{port}"
+
             url = f"{base_url}/auth/token/login/"
             data_json = {'username': email,
                          'password': dummypassword}
@@ -183,7 +193,9 @@ class Command(BaseCommand):
             headers['Authorization'] = f"Token {auth_token}"
 
             ### Create product
+            print("\n")
             print("************ Create Ticket Product")
+
             url = f"{base_url}/api/products/"
             data_json = {'name': 'Billet',
                          'publish': 'true',
@@ -193,12 +205,14 @@ class Command(BaseCommand):
             ]
             response = requests.request("POST", url, headers=headers, data=data_json, files=files, verify=False)
             uuid_ticket_product = response.json().get("uuid")
-            print(response.text)
+            # print(response.text)
             assert response.status_code in [201, 409]
             print("************ Create Ticket Product OK")
+            print("\n")
 
             if response.status_code == 201:
                 ### Create Ticket prices
+                print("\n")
                 print("************ Create Ticket prices")
                 url = f"{base_url}/api/prices/"
 
@@ -210,7 +224,7 @@ class Command(BaseCommand):
                              'product': uuid_ticket_product}
                 response = requests.request("POST", url, headers=headers, data=data_json, verify=False)
                 uuid_price_demi = response.json().get("uuid")
-                print(response.text)
+                # print(response.text)
                 assert response.status_code == 201
 
                 data_json = {'name': 'Plein Tarif',
@@ -221,11 +235,13 @@ class Command(BaseCommand):
                              'product': uuid_ticket_product}
                 response = requests.request("POST", url, headers=headers, data=data_json, verify=False)
                 uuid_price_plein = response.json().get("uuid")
-                print(response.text)
+                # print(response.text)
                 assert response.status_code == 201
                 print("************ Create Ticket prices OK")
+                print("\n")
 
             ### Create TShirt product
+            print("\n")
             print("************ Create TShirt Product")
             url = f"{base_url}/api/products/"
             data_json = {'name': 'TShirt',
@@ -236,12 +252,14 @@ class Command(BaseCommand):
             ]
             response = requests.request("POST", url, headers=headers, data=data_json, files=files, verify=False)
             uuid_tshirt_product = response.json().get("uuid")
-            print(response.text)
+            # print(response.text)
             assert response.status_code in [201, 409]
             print("************ Create TShirt Product OK")
+            print("\n")
 
             if response.status_code == 201:
                 ### Create Ticket prices
+                print("\n")
                 print("************ Create TShirt prices")
                 url = f"{base_url}/api/prices/"
 
@@ -253,7 +271,7 @@ class Command(BaseCommand):
                              'product': uuid_tshirt_product}
                 response = requests.request("POST", url, headers=headers, data=data_json, verify=False)
                 uuid_tshirt_s = response.json().get("uuid")
-                print(response.text)
+                # print(response.text)
                 assert response.status_code == 201
 
                 data_json = {'name': 'L',
@@ -264,17 +282,21 @@ class Command(BaseCommand):
                              'product': uuid_tshirt_product}
                 response = requests.request("POST", url, headers=headers, data=data_json, verify=False)
                 uuid_tshirt_l = response.json().get("uuid")
-                print(response.text)
+                # print(response.text)
                 assert response.status_code == 201
                 print("************ Create TShirt prices OK")
+                print("\n")
 
 
-
+            print("\n")
             print("************ Event Générator")
 
-
-            products = requests.request("GET", f"{base_url}/api/products/").json()
+            url = f"{base_url}/api/products/"
+            print('*' * 30)
+            print(f'on lance la requete : {url}')
+            products = requests.request("GET", url).json()
             products_uuid = [product.get('uuid') for product in products]
+            print('*' * 30)
 
             def random_date():
                 """
@@ -299,10 +321,15 @@ class Command(BaseCommand):
                     ],
                     "products": products_uuid
                 }
-                response = requests.request("POST", f"{base_url}/api/events/", headers=headers, data=json.dumps(data_json), verify=False)
+
+                url = f"{base_url}/api/events/"
+                print('*' * 30)
+                print(f'on lance la requete : {url}')
+                response = requests.request("POST", url, headers=headers, data=json.dumps(data_json), verify=False)
+                print('*' * 30)
                 if response.status_code == 415:
                     import ipdb; ipdb.set_trace()
-                print(response.text)
+                # print(response.text)
 
             r_date = random_date()
             headers["Content_type"] = "application/json"
@@ -321,7 +348,7 @@ class Command(BaseCommand):
                 "products": products_uuid
             }
             response = requests.request("POST", f"{base_url}/api/events/", headers=headers, data=json.dumps(data_json), verify=False)
-            print(response.text)
+            # print(response.text)
 
             r_date = random_date()
             headers["Content_type"] = "application/json"
@@ -340,4 +367,4 @@ class Command(BaseCommand):
                 "products": products_uuid
             }
             response = requests.request("POST", f"{base_url}/api/events/", headers=headers, data=json.dumps(data_json), verify=False)
-            print(response.text)
+            # print(response.text)
