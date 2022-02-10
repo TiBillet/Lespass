@@ -52,6 +52,7 @@ class Command(BaseCommand):
         #     call_command('flush')
 
         base_url = f"https://demo.{os.environ.get('DOMAIN')}"
+        demo_base_url = f"https://demo.{os.environ.get('DOMAIN')}"
         headers = {}
         email = os.environ.get('EMAIL')
         username = email
@@ -113,9 +114,9 @@ class Command(BaseCommand):
                 domains = place.get('domains')
 
             if place.get("categorie") == "S":
-                url = f"http://demo.django-local.org:8002/api/place/"
+                url = f"{base_url}/api/place/"
             elif place.get("categorie") == "A":
-                url = f"http://demo.django-local.org:8002/api/artist/"
+                url = f"{base_url}/api/artist/"
 
             data_json = {
                 'organisation': organisation,
@@ -139,7 +140,9 @@ class Command(BaseCommand):
                     ('logo',
                      (place.get('logo'), open(f"/DjangoFiles/data/demo_img/{place.get('logo')}", 'rb'), 'image/png'))
                 )
-
+            print('*'*30)
+            print(f'on lance la requete : {url}')
+            print('*'*30)
             response = requests.request("POST", url, headers=headers, data=data_json, files=files)
             print(response.text)
 
@@ -154,14 +157,14 @@ class Command(BaseCommand):
                 if place.get('img'):
                     command = f"curl --location " \
                               f"-H 'Authorization: Token {auth_token}' " \
-                              f"--request PUT 'demo.django-local.org:8002/api/place/{uuid}/' " \
+                              f"--request PUT '{base_url}/api/place/{uuid}/' " \
                               f"--form 'img=@\"/DjangoFiles/data/demo_img/{place.get('img')}\"'"
                     os.system(command)
 
                 if place.get('logo'):
                     command = f"curl --location " \
                               f"-H 'Authorization: Token {auth_token}' " \
-                              f"--request PUT 'demo.django-local.org:8002/api/place/{uuid}/' " \
+                              f"--request PUT '{base_url}/api/place/{uuid}/' " \
                               f"--form 'logo=@\"/DjangoFiles/data/demo_img/{place.get('logo')}\"'"
                     os.system(command)
 
@@ -170,7 +173,7 @@ class Command(BaseCommand):
         artists = requests.request("GET", f"{base_url}/api/artist/").json()
 
         for salle in salles :
-            base_url = f"http://{salle.get('slug')}.django-local.org:8002"
+            base_url = f"http://{salle.get('slug')}.{os.environ.get('DOMAIN')}"
             url = f"{base_url}/auth/token/login/"
             data_json = {'username': email,
                          'password': dummypassword}
