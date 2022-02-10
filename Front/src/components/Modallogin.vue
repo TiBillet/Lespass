@@ -70,9 +70,11 @@ const form = ref({
 })
 
 const store = useStore()
+const domain = `${location.protocol}//${location.host}`
 
 function validerLogout() {
   console.log('Valider logout !')
+
   let api = `/auth/token/logout/`
   fetch(domain + api, {
     method: 'POST',
