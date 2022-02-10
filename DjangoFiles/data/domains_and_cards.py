@@ -21,6 +21,17 @@ tenants = {
         'img': 'project9.jpg',
         'categorie': 'S',
     },
+    # "Vavang'Art": {
+    #     'domains': ["vavangart", ],
+    #     'short_description': "Restaurant Tiers lieux de L'entre deux.",
+    #     'long_description': 'Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum ',
+    #     'email': "demo@demo.com",
+    #     'postal_code': '97480',
+    #     'phone': "0612451245",
+    #     'img': 'vavangart.jpg',
+    #     'logo': 'vavangart_logo.png',
+    #     'categorie': 'S',
+    # },
     "Raffinerie": {
         'domains': ["m", "raffinerie"],
         'short_description': "Friche éco-cultruelle de Savannah",
