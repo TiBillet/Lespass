@@ -51,7 +51,7 @@ class Command(BaseCommand):
         # with schema_context('demo'):
         #     call_command('flush')
 
-        base_url = "http://demo.django-local.org:8002"
+        base_url = f"https://demo.{os.environ.get('DOMAIN')}"
         headers = {}
         email = os.environ.get('EMAIL')
         username = email

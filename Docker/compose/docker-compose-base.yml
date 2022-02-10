@@ -50,3 +50,4 @@ services:
     volumes:
       - ../../Front/dist:/usr/share/nginx/html
       - ../../DjangoFiles/www:/DjangoFiles/www
+      - ../../DjangoFiles/logs:/DjangoFiles/logs

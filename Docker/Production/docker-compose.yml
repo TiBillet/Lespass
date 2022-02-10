@@ -45,7 +45,7 @@ services:
       - billetterie_postgres_prod:billetterie_postgres
       - billetterie_redis_prod:redis
     networks:
-      - frontend
+#      - frontend
       - backend-billeterie
 
 

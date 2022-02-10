@@ -62,9 +62,9 @@ services:
     depends_on:
       - billetterie_django_dev
     volumes:
-      - ../:/tibillet-gestion-lieu-vue
-    working_dir: /tibillet-gestion-lieu-vue/
-    command: "bash /tibillet-gestion-lieu-vue/start.sh"
+      - ../../Front:/Front
+    working_dir: /Front
+    command: "bash /Front/start.sh"
     networks:
       - frontend
 
@@ -84,7 +84,7 @@ services:
       - traefik.enable=true
       - traefik.docker.network=frontend
       - traefik.http.routers.billeterie_nginx.tls.certresolver=myresolver
-      - traefik.http.routers.billeterie_nginx.rule=Host(`m.${DOMAIN}`) || Host(`www.${DOMAIN}`) || Host(`raffinerie.${DOMAIN}`) || Host(`bisik.${DOMAIN}`) || Host(`vavangart.${DOMAIN}`) || Host(`3peaks.${DOMAIN}`) || Host(`demo.${DOMAIN}`) || Host(`${DOMAIN}`)
+      - traefik.http.routers.billeterie_nginx.rule=Host(`m.${DOMAIN}`) || Host(`www.${DOMAIN}`) || Host(`raffinerie.${DOMAIN}`) || Host(`bisik.${DOMAIN}`) || Host(`vavangart.${DOMAIN}`) || Host(`3peaks.${DOMAIN}`) || Host(`demo.${DOMAIN}`)
     networks:
       - frontend
     volumes:

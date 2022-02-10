@@ -20,10 +20,8 @@ services:
     volumes:
       - ../:/tibillet-gestion-lieu-vue
     working_dir: /tibillet-gestion-lieu-vue/
-
-#    command: "npm install"
-    # command: "npm run dev"
-    command: "bash /tibillet-gestion-lieu-vue/start.sh"
+#    command: "bash /tibillet-gestion-lieu-vue/start.sh"
+    command: "bash /tibillet-gestion-lieu-vue/build.sh"
 
 networks:
   frontend:
