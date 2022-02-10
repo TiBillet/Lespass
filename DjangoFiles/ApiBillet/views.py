@@ -302,7 +302,6 @@ class EventsViewSet(viewsets.ViewSet):
         return Response(serializer.data)
 
     def create(self, request):
-        # import ipdb; ipdb.set_trace()
         print(request.data)
         serializer_create = EventCreateSerializer(data=request.data)
         if serializer_create.is_valid():

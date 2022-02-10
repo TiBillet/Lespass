@@ -53,12 +53,16 @@ class Command(BaseCommand):
 
         # base_url = f"https://demo.{os.environ.get('DOMAIN')}"
         sub_domain = "demo"
-        protocol = "http://"
-        port = ":8002"
+
+        # protocol = "http://"
+        # port = ":8002"
+        protocol = "https://"
+        port = ""
         base_url = f"{protocol}{sub_domain}.{os.environ.get('DOMAIN')}{port}"
 
         # demo_base_url = f"https://demo.{os.environ.get('DOMAIN')}"
-        headers = {}
+        headers = {"charset": "utf-8"}
+
         email = os.environ.get('EMAIL')
         username = email
         dummypassword = 'proutprout123'
@@ -72,7 +76,7 @@ class Command(BaseCommand):
             'username': username
         }
 
-        response = requests.request("POST", url, data=data_json, verify=False)
+        response = requests.request("POST", url, data=data_json)
         # print(response.text)
         with schema_context('Demo'):
             User: TibilletUser = get_user_model()
@@ -91,7 +95,7 @@ class Command(BaseCommand):
         url = f"{base_url}/auth/token/login/"
         data_json = {'username': email,
                      'password': dummypassword}
-        response = requests.request("POST", url, data=data_json, verify=False)
+        response = requests.request("POST", url, data=data_json)
         auth_token = response.json().get("auth_token")
         assert auth_token
 
@@ -102,7 +106,7 @@ class Command(BaseCommand):
         print("************ me")
 
         url = f"{base_url}/auth/users/me/"
-        response = requests.request("GET", url, headers=headers, data=data_json, verify=False)
+        response = requests.request("GET", url, headers=headers, data=data_json)
 
         # print(response.text)
         assert response.status_code == 200
@@ -145,10 +149,10 @@ class Command(BaseCommand):
                     ('logo',
                      (place.get('logo'), open(f"/DjangoFiles/data/demo_img/{place.get('logo')}", 'rb'), 'image/png'))
                 )
-            print('*'*30)
+            print('*' * 30)
             print(f'on lance la requete : {url}')
-            print('*'*30)
-            response = requests.request("POST", url, headers=headers, data=data_json, files=files, verify=False)
+            print('*' * 30)
+            response = requests.request("POST", url, headers=headers, data=data_json, files=files)
             # print(response.text)
 
             if response.status_code == 409:
@@ -156,7 +160,7 @@ class Command(BaseCommand):
                 uuid = json.loads(response.json()).get("uuid")
                 url_put = f"{url}{uuid}/"
                 # on envoie le txt avec requests
-                response = requests.request("PUT", url_put, headers=headers, data=data_json, verify=False)
+                response = requests.request("PUT", url_put, headers=headers, data=data_json)
 
                 # requests ne sachant pas envoye de fichier en PUT, on passe par curl
                 if place.get('img'):
@@ -177,20 +181,19 @@ class Command(BaseCommand):
             print(f"************ Create TENANT {organisation} OK")
             print(f"\n")
 
-
         salles = requests.request("GET", f"{base_url}/api/place/").json()
         artists = requests.request("GET", f"{base_url}/api/artist/").json()
 
-        for salle in salles :
+        for salle in salles:
             sub_domain = f"{salle.get('slug')}"
             base_url = f"{protocol}{sub_domain}.{os.environ.get('DOMAIN')}{port}"
 
             url = f"{base_url}/auth/token/login/"
             data_json = {'username': email,
                          'password': dummypassword}
-            response = requests.request("POST", url, data=data_json, verify=False)
+            response = requests.request("POST", url, data=data_json)
             auth_token = response.json().get("auth_token")
-            headers['Authorization'] = f"Token {auth_token}"
+            headers = { 'Authorization': f"Token {auth_token}" }
 
             ### Create product
             print("\n")
@@ -203,10 +206,16 @@ class Command(BaseCommand):
             files = [
                 ('img', ('tickets_old.png', open('/DjangoFiles/data/demo_img/tickets.png', 'rb'), 'image/png'))
             ]
-            response = requests.request("POST", url, headers=headers, data=data_json, files=files, verify=False)
+            print('*' * 30)
+            print(f'on lance la requete : {url}')
+            response = requests.request("POST", url, headers=headers, data=data_json, files=files)
+            print('*' * 30)
+
             uuid_ticket_product = response.json().get("uuid")
             # print(response.text)
-            assert response.status_code in [201, 409]
+            if response.status_code not in [201, 409]:
+                import ipdb; ipdb.set_trace()
+
             print("************ Create Ticket Product OK")
             print("\n")
 
@@ -222,7 +231,7 @@ class Command(BaseCommand):
                              'max_per_user': '10',
                              'stock': '250',
                              'product': uuid_ticket_product}
-                response = requests.request("POST", url, headers=headers, data=data_json, verify=False)
+                response = requests.request("POST", url, headers=headers, data=data_json)
                 uuid_price_demi = response.json().get("uuid")
                 # print(response.text)
                 assert response.status_code == 201
@@ -233,7 +242,7 @@ class Command(BaseCommand):
                              'max_per_user': '10',
                              'stock': '250',
                              'product': uuid_ticket_product}
-                response = requests.request("POST", url, headers=headers, data=data_json, verify=False)
+                response = requests.request("POST", url, headers=headers, data=data_json)
                 uuid_price_plein = response.json().get("uuid")
                 # print(response.text)
                 assert response.status_code == 201
@@ -250,7 +259,7 @@ class Command(BaseCommand):
             files = [
                 ('img', ('tshirt.png', open('/DjangoFiles/data/demo_img/tshirt.png', 'rb'), 'image/png'))
             ]
-            response = requests.request("POST", url, headers=headers, data=data_json, files=files, verify=False)
+            response = requests.request("POST", url, headers=headers, data=data_json, files=files)
             uuid_tshirt_product = response.json().get("uuid")
             # print(response.text)
             assert response.status_code in [201, 409]
@@ -269,7 +278,7 @@ class Command(BaseCommand):
                              'max_per_user': '10',
                              'stock': '250',
                              'product': uuid_tshirt_product}
-                response = requests.request("POST", url, headers=headers, data=data_json, verify=False)
+                response = requests.request("POST", url, headers=headers, data=data_json)
                 uuid_tshirt_s = response.json().get("uuid")
                 # print(response.text)
                 assert response.status_code == 201
@@ -280,13 +289,12 @@ class Command(BaseCommand):
                              'max_per_user': '10',
                              'stock': '250',
                              'product': uuid_tshirt_product}
-                response = requests.request("POST", url, headers=headers, data=data_json, verify=False)
+                response = requests.request("POST", url, headers=headers, data=data_json)
                 uuid_tshirt_l = response.json().get("uuid")
                 # print(response.text)
                 assert response.status_code == 201
                 print("************ Create TShirt prices OK")
                 print("\n")
-
 
             print("\n")
             print("************ Event Générator")
@@ -310,7 +318,7 @@ class Command(BaseCommand):
 
             for artist in artists:
                 r_date = random_date()
-                headers["Content_type"] = "application/json"
+                headers["Content-type"] = "application/json"
                 data_json = {
                     'date': r_date.date().strftime("%Y-%m-%d"),
                     'artists': [
@@ -325,10 +333,11 @@ class Command(BaseCommand):
                 url = f"{base_url}/api/events/"
                 print('*' * 30)
                 print(f'on lance la requete : {url}')
-                response = requests.request("POST", url, headers=headers, data=json.dumps(data_json), verify=False)
+                response = requests.request("POST", url, headers=headers, data=json.dumps(data_json))
                 print('*' * 30)
                 if response.status_code == 415:
-                    import ipdb; ipdb.set_trace()
+                    import ipdb;
+                    ipdb.set_trace()
                 # print(response.text)
 
             r_date = random_date()
@@ -347,7 +356,7 @@ class Command(BaseCommand):
                 ],
                 "products": products_uuid
             }
-            response = requests.request("POST", f"{base_url}/api/events/", headers=headers, data=json.dumps(data_json), verify=False)
+            response = requests.request("POST", f"{base_url}/api/events/", headers=headers, data=json.dumps(data_json))
             # print(response.text)
 
             r_date = random_date()
@@ -366,5 +375,5 @@ class Command(BaseCommand):
                 ],
                 "products": products_uuid
             }
-            response = requests.request("POST", f"{base_url}/api/events/", headers=headers, data=json.dumps(data_json), verify=False)
+            response = requests.request("POST", f"{base_url}/api/events/", headers=headers, data=json.dumps(data_json))
             # print(response.text)
