@@ -67,7 +67,7 @@ class Command(BaseCommand):
             'username': username
         }
 
-        response = requests.request("POST", url, data=data_json)
+        response = requests.request("POST", url, data=data_json, verify=False)
         print(response.text)
         with schema_context('Demo'):
             User: TibilletUser = get_user_model()
@@ -86,7 +86,7 @@ class Command(BaseCommand):
         url = f"{base_url}/auth/token/login/"
         data_json = {'username': email,
                      'password': dummypassword}
-        response = requests.request("POST", url, data=data_json)
+        response = requests.request("POST", url, data=data_json, verify=False)
         auth_token = response.json().get("auth_token")
         assert auth_token
 
@@ -97,7 +97,7 @@ class Command(BaseCommand):
         print("************ me")
 
         url = f"{base_url}/auth/users/me/"
-        response = requests.request("GET", url, headers=headers, data=data_json)
+        response = requests.request("GET", url, headers=headers, data=data_json, verify=False)
 
         print(response.text)
         assert response.status_code == 200
@@ -143,7 +143,7 @@ class Command(BaseCommand):
             print('*'*30)
             print(f'on lance la requete : {url}')
             print('*'*30)
-            response = requests.request("POST", url, headers=headers, data=data_json, files=files)
+            response = requests.request("POST", url, headers=headers, data=data_json, files=files, verify=False)
             print(response.text)
 
             if response.status_code == 409:
@@ -151,7 +151,7 @@ class Command(BaseCommand):
                 uuid = json.loads(response.json()).get("uuid")
                 url_put = f"{url}{uuid}/"
                 # on envoie le txt avec requests
-                response = requests.request("PUT", url_put, headers=headers, data=data_json)
+                response = requests.request("PUT", url_put, headers=headers, data=data_json, verify=False)
 
                 # requests ne sachant pas envoye de fichier en PUT, on passe par curl
                 if place.get('img'):
@@ -177,7 +177,7 @@ class Command(BaseCommand):
             url = f"{base_url}/auth/token/login/"
             data_json = {'username': email,
                          'password': dummypassword}
-            response = requests.request("POST", url, data=data_json)
+            response = requests.request("POST", url, data=data_json, verify=False)
             auth_token = response.json().get("auth_token")
             headers['Authorization'] = f"Token {auth_token}"
 
@@ -190,7 +190,7 @@ class Command(BaseCommand):
             files = [
                 ('img', ('tickets_old.png', open('/DjangoFiles/data/demo_img/tickets.png', 'rb'), 'image/png'))
             ]
-            response = requests.request("POST", url, headers=headers, data=data_json, files=files)
+            response = requests.request("POST", url, headers=headers, data=data_json, files=files, verify=False)
             uuid_ticket_product = response.json().get("uuid")
             print(response.text)
             assert response.status_code in [201, 409]
@@ -207,7 +207,7 @@ class Command(BaseCommand):
                              'max_per_user': '10',
                              'stock': '250',
                              'product': uuid_ticket_product}
-                response = requests.request("POST", url, headers=headers, data=data_json)
+                response = requests.request("POST", url, headers=headers, data=data_json, verify=False)
                 uuid_price_demi = response.json().get("uuid")
                 print(response.text)
                 assert response.status_code == 201
@@ -218,7 +218,7 @@ class Command(BaseCommand):
                              'max_per_user': '10',
                              'stock': '250',
                              'product': uuid_ticket_product}
-                response = requests.request("POST", url, headers=headers, data=data_json)
+                response = requests.request("POST", url, headers=headers, data=data_json, verify=False)
                 uuid_price_plein = response.json().get("uuid")
                 print(response.text)
                 assert response.status_code == 201
@@ -233,7 +233,7 @@ class Command(BaseCommand):
             files = [
                 ('img', ('tshirt.png', open('/DjangoFiles/data/demo_img/tshirt.png', 'rb'), 'image/png'))
             ]
-            response = requests.request("POST", url, headers=headers, data=data_json, files=files)
+            response = requests.request("POST", url, headers=headers, data=data_json, files=files, verify=False)
             uuid_tshirt_product = response.json().get("uuid")
             print(response.text)
             assert response.status_code in [201, 409]
@@ -250,7 +250,7 @@ class Command(BaseCommand):
                              'max_per_user': '10',
                              'stock': '250',
                              'product': uuid_tshirt_product}
-                response = requests.request("POST", url, headers=headers, data=data_json)
+                response = requests.request("POST", url, headers=headers, data=data_json, verify=False)
                 uuid_tshirt_s = response.json().get("uuid")
                 print(response.text)
                 assert response.status_code == 201
@@ -261,7 +261,7 @@ class Command(BaseCommand):
                              'max_per_user': '10',
                              'stock': '250',
                              'product': uuid_tshirt_product}
-                response = requests.request("POST", url, headers=headers, data=data_json)
+                response = requests.request("POST", url, headers=headers, data=data_json, verify=False)
                 uuid_tshirt_l = response.json().get("uuid")
                 print(response.text)
                 assert response.status_code == 201
@@ -298,7 +298,9 @@ class Command(BaseCommand):
                     ],
                     "products": products_uuid
                 }
-                response = requests.request("POST", f"{base_url}/api/events/", headers=headers, data=json.dumps(data_json))
+                response = requests.request("POST", f"{base_url}/api/events/", headers=headers, data=json.dumps(data_json), verify=False)
+                if response.status_code == 415:
+                    import ipdb; ipdb.set_trace()
                 print(response.text)
 
             r_date = random_date()
@@ -317,7 +319,7 @@ class Command(BaseCommand):
                 ],
                 "products": products_uuid
             }
-            response = requests.request("POST", f"{base_url}/api/events/", headers=headers, data=json.dumps(data_json))
+            response = requests.request("POST", f"{base_url}/api/events/", headers=headers, data=json.dumps(data_json), verify=False)
             print(response.text)
 
             r_date = random_date()
@@ -336,5 +338,5 @@ class Command(BaseCommand):
                 ],
                 "products": products_uuid
             }
-            response = requests.request("POST", f"{base_url}/api/events/", headers=headers, data=json.dumps(data_json))
+            response = requests.request("POST", f"{base_url}/api/events/", headers=headers, data=json.dumps(data_json), verify=False)
             print(response.text)
