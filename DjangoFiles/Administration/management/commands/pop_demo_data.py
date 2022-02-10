@@ -58,6 +58,7 @@ class Command(BaseCommand):
         port = ":8002"
         # protocol = "https://"
         # port = ""
+        # domain = os.environ.get('DOMAIN')
 
         base_url = f"{protocol}{sub_domain}.{os.environ.get('DOMAIN')}{port}"
 
