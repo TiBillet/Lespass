@@ -126,6 +126,8 @@ class ArtistViewSet(viewsets.ViewSet):
                 user.client_admin.add(tenant)
 
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
     def update(self, request, pk=None):
         tenant = get_object_or_404(Client, pk=pk)
@@ -360,8 +362,16 @@ class ReservationViewset(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
+class MeViewset(viewsets.ViewSet):
+    def list(self, request):
+        return Response(f"{request.user.email}")
+
+    def get_permissions(self):
+        permission_classes = [permissions.IsAuthenticated]
+        return [permission() for permission in permission_classes]
+
+
 class MembershipViewset(viewsets.ViewSet):
-    permission_classes = [AllowAny]
 
     def create(self, request):
         print(request.data)
