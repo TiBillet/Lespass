@@ -362,13 +362,6 @@ class ReservationViewset(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
-class MeViewset(viewsets.ViewSet):
-    def list(self, request):
-        return Response(f"{request.user.email}")
-
-    def get_permissions(self):
-        permission_classes = [permissions.IsAuthenticated]
-        return [permission() for permission in permission_classes]
 
 
 class MembershipViewset(viewsets.ViewSet):

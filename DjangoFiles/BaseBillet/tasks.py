@@ -185,7 +185,7 @@ def connexion_celery_mailer(user_email, base_url):
     User = get_user_model()
     user = User.objects.get(email=user_email)
 
-    uid = encode_uid(user.pk)
+    uid = encode_uid(user.uuid)
     token = default_token_generator.make_token(user)
     connexion_url = f"{base_url}/api/user/activate/{uid}/{token}"
 

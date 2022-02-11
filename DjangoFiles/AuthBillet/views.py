@@ -3,7 +3,7 @@ from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.shortcuts import render
 
 # Create your views here.
-from rest_framework import status, permissions
+from rest_framework import status, permissions, viewsets
 from rest_framework.decorators import permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -19,6 +19,7 @@ from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 
 User = get_user_model()
+
 
 def decode_uid(pk):
     return force_str(urlsafe_base64_decode(pk))
@@ -51,18 +52,19 @@ class TokenCreateView_custom(TokenCreateView):
             )
 '''
 
+
 class activate(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, uid, token):
-        user = User.objects.get(pk=decode_uid(uid))
+        user = User.objects.get(uuid=decode_uid(uid))
         if user.email_error:
             return Response('Mail non valide', status=status.HTTP_406_NOT_ACCEPTABLE)
 
         PR = PasswordResetTokenGenerator()
-        is_token_valid = PR.check_token( user, token )
+        is_token_valid = PR.check_token(user, token)
 
-        if is_token_valid :
+        if is_token_valid:
             user.is_active = True
             refresh = RefreshToken.for_user(user)
 
@@ -72,7 +74,7 @@ class activate(APIView):
             }
             return Response(data, status=status.HTTP_200_OK)
 
-        else :
+        else:
             return Response('Token non valide', status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -81,24 +83,27 @@ class create_user(APIView):
     def post(self, request):
         email = request.data.get('email')
         password = request.data.get('password')
-        if not email :
+        if not email:
             return Response("email required", status=status.HTTP_400_BAD_REQUEST)
-        else :
+        else:
             email = email.lower()
 
         User: TibilletUser = get_user_model()
         user, created = User.objects.get_or_create(email=email, username=email)
 
-        if not created :
-            if user.is_active :
-                return Response(_("email de connection envoyé. Verifiez vos spam si non reçu."), status=status.HTTP_202_ACCEPTED)
-            else :
+        if not created:
+            if user.is_active:
+                return Response(_("email de connection envoyé. Verifiez vos spam si non reçu."),
+                                status=status.HTTP_202_ACCEPTED)
+            else:
                 if user.email_error:
-                    return Response("Email non valide", status=status.HTTP_406_NOT_ACCEPTABLE)
+                    return Response(_("Email non valide"), status=status.HTTP_406_NOT_ACCEPTABLE)
                 else:
                     task = connexion_celery_mailer.delay(user.email, f"https://{request.get_host()}")
-                    return Response("Merci de valider l'email de confirmation envoyé. Pensez à regarder dans les spams !", status=status.HTTP_401_UNAUTHORIZED)
-        else :
+                    return Response(
+                        _("Merci de valider l'email de confirmation envoyé. Pensez à regarder dans les spams !"),
+                        status=status.HTTP_401_UNAUTHORIZED)
+        else:
             if password:
                 user.set_password(password)
 
@@ -109,5 +114,14 @@ class create_user(APIView):
             user.save()
             task = connexion_celery_mailer.delay(user.email, f"https://{request.get_host()}")
 
-            return Response('User Créé, merci de valider votre adresse email. Pensez à regarder dans les spams !', status=status.HTTP_201_CREATED)
+            return Response(_('User Créé, merci de valider votre adresse email. Pensez à regarder dans les spams !'),
+                            status=status.HTTP_201_CREATED)
 
+
+class MeViewset(viewsets.ViewSet):
+    def list(self, request):
+        return Response(f"{request.user.email}")
+
+    def get_permissions(self):
+        permission_classes = [permissions.IsAuthenticated]
+        return [permission() for permission in permission_classes]
