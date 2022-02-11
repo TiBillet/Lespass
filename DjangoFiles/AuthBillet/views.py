@@ -13,6 +13,8 @@ from django.utils.translation import ugettext_lazy as _
 
 from AuthBillet.models import TibilletUser
 from rest_framework_simplejwt.tokens import RefreshToken
+
+from AuthBillet.serializers import MeSerializer
 from BaseBillet.tasks import connexion_celery_mailer
 
 from django.utils.encoding import force_str
@@ -120,7 +122,8 @@ class create_user(APIView):
 
 class MeViewset(viewsets.ViewSet):
     def list(self, request):
-        return Response(f"{request.user.email}")
+        serializer = MeSerializer(request.user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def get_permissions(self):
         permission_classes = [permissions.IsAuthenticated]

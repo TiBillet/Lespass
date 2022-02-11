@@ -24,11 +24,15 @@ class MeSerializer(serializers.ModelSerializer):
     class Meta:
         model = TibilletUser
         fields = [
-            "uuid",
-            "name",
-            "publish",
-            "img",
-            "categorie_article",
-            "prices",
+            'email',
+            'first_name',
+            'last_name',
+            'phone',
+            'accept_newsletter',
+            'postal_code',
+            'birth_date',
+            'can_create_tenant',
+            'espece',
+            'is_staff',
         ]
-        depth = 1
+        read_only_fields = fields
