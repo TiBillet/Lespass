@@ -8,22 +8,26 @@ from rest_framework.decorators import permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-import requests
 from django.db import connection
 from django.utils.translation import ugettext_lazy as _
 
 from AuthBillet.models import TibilletUser
-from TiBillet import settings
-from djoser.conf import settings as djoser_settings
 from rest_framework_simplejwt.tokens import RefreshToken
 from BaseBillet.tasks import connexion_celery_mailer
 
+from django.utils.encoding import force_str
+from django.utils.http import urlsafe_base64_decode
+
 User = get_user_model()
+
+def decode_uid(pk):
+    return force_str(urlsafe_base64_decode(pk))
 
 
 '''
-from djoser.views import UserViewSet, TokenCreateView
+from djoser.conf import settings as djoser_settings
 from djoser import utils
+from djoser.views import UserViewSet, TokenCreateView
 EX DJOSER MODEL
 class TokenCreateView_custom(TokenCreateView):
     """
@@ -51,7 +55,7 @@ class activate(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, uid, token):
-        user = User.objects.get(pk=utils.decode_uid(uid))
+        user = User.objects.get(pk=decode_uid(uid))
         if user.email_error:
             return Response('Mail non valide', status=status.HTTP_406_NOT_ACCEPTABLE)
 
@@ -92,7 +96,8 @@ class create_user(APIView):
                 if user.email_error:
                     return Response("Email non valide", status=status.HTTP_406_NOT_ACCEPTABLE)
                 else:
-                    return Response("Merci de valider l'email de confirmation envoyé. Pensez à regarder dans les spam !", status=status.HTTP_401_UNAUTHORIZED)
+                    task = connexion_celery_mailer.delay(user.email, f"https://{request.get_host()}")
+                    return Response("Merci de valider l'email de confirmation envoyé. Pensez à regarder dans les spams !", status=status.HTTP_401_UNAUTHORIZED)
         else :
             if password:
                 user.set_password(password)
@@ -102,7 +107,7 @@ class create_user(APIView):
             user.espece = TibilletUser.TYPE_HUM
             user.client_achat.add(connection.tenant)
             user.save()
-            task = connexion_celery_mailer.delay(user, request)
+            task = connexion_celery_mailer.delay(user.email, f"https://{request.get_host()}")
 
-            return Response('User Créé, merci de valider votre adresse email.', status=status.HTTP_201_CREATED)
+            return Response('User Créé, merci de valider votre adresse email. Pensez à regarder dans les spams !', status=status.HTTP_201_CREATED)
 

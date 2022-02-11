@@ -6,7 +6,9 @@ import segno
 import barcode
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
-from djoser import utils
+
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 
 from weasyprint import HTML, CSS
 from weasyprint.text.fonts import FontConfiguration
@@ -27,6 +29,9 @@ logger = logging.getLogger(__name__)
 
 # from celery.utils.log import get_task_logger
 # logger = get_task_logger(__name__)
+def encode_uid(pk):
+    return force_str(urlsafe_base64_encode(force_bytes(pk)))
+
 
 class CeleryMailerClass():
 
@@ -108,7 +113,10 @@ def create_ticket_pdf(ticket: Ticket):
 
     CODE128 = barcode.get_barcode_class('code128')
     bar_svg = BytesIO()
-    bar_secret = utils.encode_uid(f"{ticket.uuid}".split('-')[4])
+
+
+
+    bar_secret = encode_uid(f"{ticket.uuid}".split('-')[4])
 
     bar = CODE128(f"{bar_secret}")
     options = {
@@ -177,7 +185,7 @@ def connexion_celery_mailer(user_email, base_url):
     User = get_user_model()
     user = User.objects.get(email=user_email)
 
-    uid = utils.encode_uid(user.pk)
+    uid = encode_uid(user.pk)
     token = default_token_generator.make_token(user)
     connexion_url = f"{base_url}/api/user/activate/{uid}/{token}"
 
