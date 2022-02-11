@@ -21,7 +21,6 @@ from Administration.admin_tenant import staff_admin_site
 
 # on modifie la creation du token pour rajouter access_token dans la réponse pour Postman
 from ApiBillet.views import Webhook_stripe
-from AuthBillet.views import TokenCreateView_custom
 
 urlpatterns = [
     # path('jet/', include('jet.urls', 'jet')),  # Django JET URLS
@@ -29,17 +28,10 @@ urlpatterns = [
     # path('admin/', staff_admin_site.urls, name="staff_admin_site"),
     re_path(r'^admin\/{0,}', staff_admin_site.urls, name="staff_admin_site"),
 
-    # on modifie la creation du token pour rajouter access_token dans la réponse pour Postman
-    re_path(r"^auth/token/login/?$", TokenCreateView_custom.as_view(), name="login"),
-
-    re_path(r'^auth/', include('djoser.urls')),
-    re_path(r'^auth/', include('djoser.urls.authtoken')),
-    re_path(r'^auth/', include('djoser.urls.jwt')),
-
-    re_path(r'^user/', include('AuthBillet.urls')),
-
+    re_path(r'api/user/', include('AuthBillet.urls')),
     re_path(r'api/', include('ApiBillet.urls')),
     re_path(r'qr/', include('QrcodeCashless.urls')),
+
     # pour carte GEN1 Bisik
     re_path(r'(?P<numero_carte>^\w{5}$)', include('QrcodeCashless.urls')),
 

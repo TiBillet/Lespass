@@ -65,16 +65,14 @@ class Command(BaseCommand):
         headers = {"charset": "utf-8"}
 
         email = os.environ.get('EMAIL')
-        username = email
         dummypassword = 'proutprout123'
 
         ### Create User :
         print("************ Create User")
-        url = f"{base_url}/auth/users/"
+        url = f"{base_url}/api/user/create/"
         data_json = {
             'email': email,
             'password': dummypassword,
-            'username': username
         }
 
         response = requests.request("POST", url, data=data_json)
@@ -93,20 +91,19 @@ class Command(BaseCommand):
 
         ### Get Token user :
         print("************ Create Get Token user")
-        url = f"{base_url}/auth/token/login/"
+        url = f"{base_url}/api/user/token/"
         data_json = {'username': email,
                      'password': dummypassword}
         response = requests.request("POST", url, data=data_json)
-        auth_token = response.json().get("auth_token")
+        auth_token = response.json().get("access")
         assert auth_token
 
-        headers['Authorization'] = f"Token {auth_token}"
+        headers['Authorization'] = f"Bearer {auth_token}"
         print("************ Create Get Token user OK")
 
-        ### me :
         print("************ me")
 
-        url = f"{base_url}/auth/users/me/"
+        url = f"{base_url}/api/me/"
         response = requests.request("GET", url, headers=headers, data=data_json)
 
         # print(response.text)
@@ -166,14 +163,14 @@ class Command(BaseCommand):
                 # requests ne sachant pas envoye de fichier en PUT, on passe par curl
                 if place.get('img'):
                     command = f"curl --location " \
-                              f"-H 'Authorization: Token {auth_token}' " \
+                              f"-H 'Authorization: Bearer {auth_token}' " \
                               f"--request PUT '{base_url}/api/place/{uuid}/' " \
                               f"--form 'img=@\"/DjangoFiles/data/demo_img/{place.get('img')}\"'"
                     os.system(command)
 
                 if place.get('logo'):
                     command = f"curl --location " \
-                              f"-H 'Authorization: Token {auth_token}' " \
+                              f"-H 'Authorization: Bearer {auth_token}' " \
                               f"--request PUT '{base_url}/api/place/{uuid}/' " \
                               f"--form 'logo=@\"/DjangoFiles/data/demo_img/{place.get('logo')}\"'"
                     os.system(command)
@@ -189,12 +186,12 @@ class Command(BaseCommand):
             sub_domain = f"{salle.get('slug')}"
             base_url = f"{protocol}{sub_domain}.{os.environ.get('DOMAIN')}{port}"
 
-            url = f"{base_url}/auth/token/login/"
+            url = f"{base_url}/api/user/token/"
             data_json = {'username': email,
                          'password': dummypassword}
             response = requests.request("POST", url, data=data_json)
-            auth_token = response.json().get("auth_token")
-            headers = { 'Authorization': f"Token {auth_token}" }
+            auth_token = response.json().get("access")
+            headers = { 'Authorization': f"Bearer {auth_token}" }
 
             ### Create product
             print("\n")

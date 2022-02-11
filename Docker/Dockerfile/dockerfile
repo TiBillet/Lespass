@@ -24,7 +24,7 @@ RUN pip install django-tenants
 RUN pip install mollie-api-python
 RUN pip install markdown       # Markdown support for the browsable API.
 # RUN pip install django-filter  # Filtering support
-RUN pip install djoser
+# RUN pip install djoser
 RUN pip install djangorestframework_simplejwt
 RUN pip install social-auth-app-django
 

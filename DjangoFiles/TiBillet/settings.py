@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.1/ref/settings/
 """
 import os
+from datetime import timedelta
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -56,7 +57,7 @@ SHARED_APPS = (
 
     'rest_framework',
     'rest_framework.authtoken',
-    'djoser',
+    # 'djoser',
 
     'django.contrib.sessions',
     'django.contrib.sites',
@@ -162,33 +163,62 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
-        "rest_framework.authentication.TokenAuthentication",
+        # "rest_framework.authentication.TokenAuthentication",
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10
 }
 
+
 SIMPLE_JWT = {
-   'AUTH_HEADER_TYPES': ('JWT',),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': False,
+    'UPDATE_LAST_LOGIN': False,
+
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'VERIFYING_KEY': None,
+    'AUDIENCE': None,
+    'ISSUER': None,
+    'JWK_URL': None,
+    'LEEWAY': 0,
+
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',
+
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+    'TOKEN_USER_CLASS': 'rest_framework_simplejwt.models.TokenUser',
+
+    'JTI_CLAIM': 'jti',
+
+    'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
+    'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
+    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
 }
 
-DJOSER = {
-    "SEND_ACTIVATION_EMAIL": True,
-    "PASSWORD_CHANGED_EMAIL_CONFIRMATION": True,
-    "PASSWORD_RESET_CONFIRM_URL": "password/reset/confirm/{uid}/{token}",
-    "USERNAME_RESET_CONFIRM_URL": "username/reset/confirm/{uid}/{token}",
-    # "ACTIVATION_URL": "activate/{uid}/{token}",
-    "ACTIVATION_URL": "user/activate/{uid}/{token}",
-    # "SOCIAL_AUTH_ALLOWED_REDIRECT_URIS": ["http://manap.django-local.org:8002/"],
-    'EMAIL': {
-        'activation': 'AuthBillet.email.ActivationEmail',
-        'confirmation': 'AuthBillet.email.ConfirmationEmail',
-        'password_reset': 'AuthBillet.email.PasswordResetEmail',
-        'password_changed_confirmation': 'AuthBillet.email.PasswordChangedConfirmationEmail',
-        'username_changed_confirmation': 'AuthBillet.email.UsernameChangedConfirmationEmail',
-        'username_reset': 'AuthBillet.email.UsernameResetEmail',
-    },
-}
+# DJOSER = {
+#     "SEND_ACTIVATION_EMAIL": True,
+#     "PASSWORD_CHANGED_EMAIL_CONFIRMATION": True,
+#     "PASSWORD_RESET_CONFIRM_URL": "password/reset/confirm/{uid}/{token}",
+#     "USERNAME_RESET_CONFIRM_URL": "username/reset/confirm/{uid}/{token}",
+#     # "ACTIVATION_URL": "activate/{uid}/{token}",
+#     "ACTIVATION_URL": "user/activate/{uid}/{token}",
+#     # "SOCIAL_AUTH_ALLOWED_REDIRECT_URIS": ["http://manap.django-local.org:8002/"],
+#     'EMAIL': {
+#         'activation': 'AuthBillet.email.ActivationEmail',
+#         'confirmation': 'AuthBillet.email.ConfirmationEmail',
+#         'password_reset': 'AuthBillet.email.PasswordResetEmail',
+#         'password_changed_confirmation': 'AuthBillet.email.PasswordChangedConfirmationEmail',
+#         'username_changed_confirmation': 'AuthBillet.email.UsernameChangedConfirmationEmail',
+#         'username_reset': 'AuthBillet.email.UsernameResetEmail',
+#     },
+# }
 
 # Internationalization
 # https://docs.djangoproject.com/en/3.1/topics/i18n/

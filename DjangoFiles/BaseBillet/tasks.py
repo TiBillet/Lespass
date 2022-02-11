@@ -4,20 +4,34 @@ import smtplib
 from io import BytesIO
 import segno
 import barcode
-from djoser import utils
+from django.contrib.auth import get_user_model
+from django.contrib.auth.tokens import default_token_generator
+
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 
 from weasyprint import HTML, CSS
 from weasyprint.text.fonts import FontConfiguration
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string, get_template
 from django.utils import timezone
+
+from AuthBillet.models import TibilletUser
 from BaseBillet.models import Configuration, Reservation, Ticket
 from TiBillet.celery import app
 
 import logging
+
+from TiBillet.settings import DEBUG
+
 logger = logging.getLogger(__name__)
+
+
 # from celery.utils.log import get_task_logger
 # logger = get_task_logger(__name__)
+def encode_uid(pk):
+    return force_str(urlsafe_base64_encode(force_bytes(pk)))
+
 
 class CeleryMailerClass():
 
@@ -83,7 +97,6 @@ class CeleryMailerClass():
             raise ValueError('Pas de contenu HTML ou de configuration email valide')
 
 
-
 def create_ticket_pdf(ticket: Ticket):
     # logger_weasy = logging.getLogger("weasyprint")
     # logger_weasy.addHandler(logging.NullHandler())
@@ -100,7 +113,10 @@ def create_ticket_pdf(ticket: Ticket):
 
     CODE128 = barcode.get_barcode_class('code128')
     bar_svg = BytesIO()
-    bar_secret = utils.encode_uid(f"{ticket.uuid}".split('-')[4])
+
+
+
+    bar_secret = encode_uid(f"{ticket.uuid}".split('-')[4])
 
     bar = CODE128(f"{bar_secret}")
     options = {
@@ -108,7 +124,7 @@ def create_ticket_pdf(ticket: Ticket):
         'module_width': 0.6,
         'font_size': 10,
     }
-    bar.write(bar_svg, options = options)
+    bar.write(bar_svg, options=options)
 
     context = {
         'ticket': ticket,
@@ -123,7 +139,6 @@ def create_ticket_pdf(ticket: Ticket):
     font_config = FontConfiguration()
     template = get_template(template_name)
     html = template.render(context)
-
 
     css = CSS(string=
               '''
@@ -157,6 +172,51 @@ def create_ticket_pdf(ticket: Ticket):
 
 
 @app.task
+def connexion_celery_mailer(user_email, base_url):
+    """
+
+    :type user_email: str
+    :type url: str
+    :type tenant_name: str
+
+    """
+    logger.info(f'      WORKDER CELERY app.task connexion_celery_mailer : {user_email}')
+    config = Configuration.get_solo()
+    User = get_user_model()
+    user = User.objects.get(email=user_email)
+
+    uid = encode_uid(user.uuid)
+    token = default_token_generator.make_token(user)
+    connexion_url = f"{base_url}/api/user/activate/{uid}/{token}"
+
+    try:
+        mail = CeleryMailerClass(
+            user.email,
+            f"{config.organisation} : Confirmer votre connexion à l'espace TiBillet.",
+            template='mails/connexion.html',
+            context={
+                'config': config,
+                'connexion_url': connexion_url,
+                'base_url': base_url,
+            },
+        )
+        try:
+            mail.send()
+            logger.info(f"mail.sended : {mail.sended}")
+
+        except smtplib.SMTPRecipientsRefused as e:
+            logger.error(f"ERROR {timezone.now()} Erreur envoie de mail pour connexion {user.email} : {e}")
+            logger.error(f"mail.sended : {mail.sended}")
+            user.is_active = False
+            user.email_error = True
+            user.save()
+
+    except Exception as e:
+        logger.error(f"{timezone.now()} Erreur envoie de mail pour connexion {user.email} : {e}")
+        raise Exception
+
+
+@app.task
 def ticket_celery_mailer(reservation_uuid: str):
     logger.info(f'      WORKDER CELERY app.task ticket_celery_mailer : {reservation_uuid}')
     config = Configuration.get_solo()
@@ -177,11 +237,11 @@ def ticket_celery_mailer(reservation_uuid: str):
             },
             attached_files=attached_files,
         )
-        try :
+        try:
             mail.send()
             logger.info(f"mail.sended : {mail.sended}")
 
-            if mail.sended :
+            if mail.sended:
                 reservation.mail_send = True
                 reservation.status = Reservation.VALID
                 reservation.save()
@@ -208,4 +268,3 @@ def test_logger():
     logger.info(f"{timezone.now()} info")
     logger.warning(f"{timezone.now()} warning")
     logger.error(f"{timezone.now()} error")
-
