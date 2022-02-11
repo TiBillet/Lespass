@@ -16,6 +16,8 @@ from django.utils.translation import ugettext_lazy as _
 from AuthBillet.models import TibilletUser
 from TiBillet import settings
 from djoser.conf import settings as djoser_settings
+from rest_framework_simplejwt.tokens import RefreshToken
+from BaseBillet.tasks import connexion_celery_mailer
 
 from djoser import utils
 User = get_user_model()
@@ -45,31 +47,25 @@ class activate(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, uid, token):
-        print(uid)
-        print(token)
-
-        # import ipdb; ipdb.set_trace()
         user = User.objects.get(pk=utils.decode_uid(uid))
+        if user.email_error:
+            return Response('Mail non valide', status=status.HTTP_406_NOT_ACCEPTABLE)
 
         PR = PasswordResetTokenGenerator()
         is_token_valid = PR.check_token( user, token )
 
-        # if is_token_valid :
-            #TODO POUR DEMAIN JOJO : DEMANDER LE MOT DE PASSE ICI !
+        if is_token_valid :
+            user.is_active = True
+            refresh = RefreshToken.for_user(user)
 
-        domain = self.request.tenant.domain_url
-        protocol = "https"
+            data = {
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+            }
+            return Response(data, status=status.HTTP_200_OK)
 
-        if settings.DEBUG :
-            domain += ":8002"
-            protocol = "http"
-
-        post_url = f"{protocol}://{domain}/auth/users/activation/"
-        post_data = {"uid": uid, "token": token}
-        result = requests.post(post_url, data=post_data)
-        content = result.text
-
-        return Response(f'{uid} {token} {result.text} {result.status_code}')
+        else :
+            return Response('Token non valide', status=status.HTTP_400_BAD_REQUEST)
 
 
 @permission_classes([permissions.AllowAny])
@@ -89,7 +85,10 @@ class create_user(APIView):
             if user.is_active :
                 return Response(_("email de connection envoyé. Verifiez vos spam si non reçu."), status=status.HTTP_202_ACCEPTED)
             else :
-                return Response("Not Active", status=status.HTTP_401_UNAUTHORIZED)
+                if user.email_error:
+                    return Response("Email non valide", status=status.HTTP_406_NOT_ACCEPTABLE)
+                else:
+                    return Response("Merci de valider l'email de confirmation envoyé. Pensez à regarder dans les spam !", status=status.HTTP_401_UNAUTHORIZED)
         else :
             if password:
                 user.set_password(password)
@@ -99,5 +98,7 @@ class create_user(APIView):
             user.espece = TibilletUser.TYPE_HUM
             user.client_achat.add(connection.tenant)
             user.save()
+            task = connexion_celery_mailer.delay(user, request)
+
             return Response('User Créé, merci de valider votre adresse email.', status=status.HTTP_201_CREATED)
 

@@ -58,7 +58,6 @@ class Command(BaseCommand):
         port = ":8002"
         # protocol = "https://"
         # port = ""
-        # domain = os.environ.get('DOMAIN')
 
         base_url = f"{protocol}{sub_domain}.{os.environ.get('DOMAIN')}{port}"
 
@@ -102,10 +101,9 @@ class Command(BaseCommand):
         headers['Authorization'] = f"Bearer {auth_token}"
         print("************ Create Get Token user OK")
 
-        ### me :
         print("************ me")
 
-        url = f"{base_url}/auth/users/me/"
+        url = f"{base_url}/api/me/"
         response = requests.request("GET", url, headers=headers, data=data_json)
 
         # print(response.text)
@@ -192,7 +190,7 @@ class Command(BaseCommand):
             data_json = {'username': email,
                          'password': dummypassword}
             response = requests.request("POST", url, data=data_json)
-            auth_token = response.json().get("auth_token")
+            auth_token = response.json().get("access")
             headers = { 'Authorization': f"Bearer {auth_token}" }
 
             ### Create product

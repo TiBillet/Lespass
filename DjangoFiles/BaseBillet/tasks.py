@@ -4,6 +4,7 @@ import smtplib
 from io import BytesIO
 import segno
 import barcode
+from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from djoser import utils
 
@@ -163,22 +164,22 @@ def create_ticket_pdf(ticket: Ticket):
 
 
 @app.task
-def connexion_celery_mailer(user: TibilletUser, request):
+def connexion_celery_mailer(user_email, base_url):
     """
 
-    :type user: TibilletUser
-    :type request: Django Request
+    :type user_email: str
+    :type url: str
+    :type tenant_name: str
 
     """
-    logger.info(f'      WORKDER CELERY app.task connexion_celery_mailer : {user.email}')
+    logger.info(f'      WORKDER CELERY app.task connexion_celery_mailer : {user_email}')
     config = Configuration.get_solo()
-
-    site_name = request.tenant.name
-    domain = request.tenant.domain_url
+    User = get_user_model()
+    user = User.objects.get(email=user_email)
 
     uid = utils.encode_uid(user.pk)
     token = default_token_generator.make_token(user)
-    connexion_url = f"https://{domain}/api/user/connexion/{uid}/{token}"
+    connexion_url = f"{base_url}/api/user/activate/{uid}/{token}"
 
     try:
         mail = CeleryMailerClass(
@@ -188,6 +189,7 @@ def connexion_celery_mailer(user: TibilletUser, request):
             context={
                 'config': config,
                 'connexion_url': connexion_url,
+                'base_url': base_url,
             },
         )
         try:
@@ -198,6 +200,7 @@ def connexion_celery_mailer(user: TibilletUser, request):
             logger.error(f"ERROR {timezone.now()} Erreur envoie de mail pour connexion {user.email} : {e}")
             logger.error(f"mail.sended : {mail.sended}")
             user.is_active = False
+            user.email_error = True
             user.save()
 
     except Exception as e:

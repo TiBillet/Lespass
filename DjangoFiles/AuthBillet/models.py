@@ -66,6 +66,8 @@ class TibilletUser(AbstractUser):
     # REQUIRED_FIELDS = []  # removes email from REQUIRED_FIELDS
 
     email = models.EmailField(_('email'), unique=True)  # changes email to unique and blank to false
+    email_error = models.BooleanField(default=False)
+
     username = models.CharField(max_length=200, unique=True)
 
     first_name = models.CharField(max_length=200, null=True, blank=True)
@@ -264,3 +266,4 @@ class SuperHumanUser(TibilletUser):
         super().save(*args, **kwargs)
 
 # ---------------------------------------------------------------------------------------------------------------------
+
