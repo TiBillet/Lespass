@@ -30,14 +30,15 @@ urlpatterns = [
     re_path(r'^admin\/{0,}', staff_admin_site.urls, name="staff_admin_site"),
 
     # on modifie la creation du token pour rajouter access_token dans la réponse pour Postman
-    re_path(r"^auth/token/login/?$", TokenCreateView_custom.as_view(), name="login"),
+    # re_path(r"^auth/token/login/?$", TokenCreateView_custom.as_view(), name="login"),
 
-    re_path(r'^auth/', include('djoser.urls')),
-    re_path(r'^auth/', include('djoser.urls.authtoken')),
-    re_path(r'^auth/', include('djoser.urls.jwt')),
+    # re_path(r'^auth/', include('djoser.urls')),
+    # re_path(r'^auth/', include('djoser.urls.authtoken')),
+    # re_path(r'^auth/', include('djoser.urls.jwt')),
 
-    re_path(r'^user/', include('AuthBillet.urls')),
+    # re_path(r'^user/', include('AuthBillet.urls')),
 
+    re_path(r'api/user/', include('AuthBillet.urls')),
     re_path(r'api/', include('ApiBillet.urls')),
     re_path(r'qr/', include('QrcodeCashless.urls')),
     # pour carte GEN1 Bisik

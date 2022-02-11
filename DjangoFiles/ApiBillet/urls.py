@@ -2,7 +2,6 @@ from django.urls import include, path, re_path
 from ApiBillet import views as api_view
 from rest_framework import routers
 from ApiBillet.views import TicketPdf, Webhook_stripe
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView, TokenVerifyView
 
 router = routers.DefaultRouter()
 router.register(r'place', api_view.PlacesViewSet, basename='place')
@@ -17,9 +16,6 @@ router.register(r'me', api_view.MeViewset, basename='me')
 
 urlpatterns = [
     path('', include(router.urls)),
-    path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('token/verify/', TokenVerifyView.as_view(), name='token_verify'),
     # download ticket :
     path('ticket/pdf/<uuid:pk_uuid>', TicketPdf.as_view(), name='ticket_uuid_to_pdf'),
     path('webhook_stripe/', Webhook_stripe.as_view()),

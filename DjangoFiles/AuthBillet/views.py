@@ -3,13 +3,17 @@ from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.shortcuts import render
 
 # Create your views here.
-from rest_framework import status
+from rest_framework import status, permissions
+from rest_framework.decorators import permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from djoser.views import UserViewSet, TokenCreateView
 import requests
 from django.db import connection
+from django.utils.translation import ugettext_lazy as _
+
+from AuthBillet.models import TibilletUser
 from TiBillet import settings
 from djoser.conf import settings as djoser_settings
 
@@ -40,7 +44,6 @@ class TokenCreateView_custom(TokenCreateView):
 class activate(APIView):
     permission_classes = [AllowAny]
 
-
     def get(self, request, uid, token):
         print(uid)
         print(token)
@@ -67,4 +70,34 @@ class activate(APIView):
         content = result.text
 
         return Response(f'{uid} {token} {result.text} {result.status_code}')
+
+
+@permission_classes([permissions.AllowAny])
+class create_user(APIView):
+    def post(self, request):
+        email = request.data.get('email')
+        password = request.data.get('password')
+        if not email :
+            return Response("email required", status=status.HTTP_400_BAD_REQUEST)
+        else :
+            email = email.lower()
+
+        User: TibilletUser = get_user_model()
+        user, created = User.objects.get_or_create(email=email, username=email)
+
+        if not created :
+            if user.is_active :
+                return Response(_("email de connection envoyé. Verifiez vos spam si non reçu."), status=status.HTTP_202_ACCEPTED)
+            else :
+                return Response("Not Active", status=status.HTTP_401_UNAUTHORIZED)
+        else :
+            if password:
+                user.set_password(password)
+
+            user.is_active = False
+
+            user.espece = TibilletUser.TYPE_HUM
+            user.client_achat.add(connection.tenant)
+            user.save()
+            return Response('User Créé, merci de valider votre adresse email.', status=status.HTTP_201_CREATED)
 
