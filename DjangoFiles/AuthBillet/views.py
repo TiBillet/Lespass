@@ -8,7 +8,6 @@ from rest_framework.decorators import permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from djoser.views import UserViewSet, TokenCreateView
 import requests
 from django.db import connection
 from django.utils.translation import ugettext_lazy as _
@@ -19,9 +18,13 @@ from djoser.conf import settings as djoser_settings
 from rest_framework_simplejwt.tokens import RefreshToken
 from BaseBillet.tasks import connexion_celery_mailer
 
-from djoser import utils
 User = get_user_model()
 
+
+'''
+from djoser.views import UserViewSet, TokenCreateView
+from djoser import utils
+EX DJOSER MODEL
 class TokenCreateView_custom(TokenCreateView):
     """
     Use this endpoint to obtain user authentication token.
@@ -42,6 +45,7 @@ class TokenCreateView_custom(TokenCreateView):
         return Response(
                 data=data_response, status=status.HTTP_200_OK
             )
+'''
 
 class activate(APIView):
     permission_classes = [AllowAny]
