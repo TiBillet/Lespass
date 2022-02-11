@@ -19,8 +19,9 @@
       </div>
       <!-- artistes -->
       <div class="row mt-5">
-        <div v-for="artist in currentEvent.artists" class="col-lg-4 mb-lg-0 mb-4">
-          <CardArtiste :data-artist="artist" />
+        <div v-for="(artist, index) in currentEvent.artists" :key="index" class="col-lg-4 mb-lg-0 mb-4">
+          <CardArtist :data-artist="artist" />
+          <hr>
         </div>
       </div>
     </div>
@@ -35,6 +36,7 @@
 </template>
 
 <script setup>
+// vue
 import {ref} from 'vue'
 import {useStore} from 'vuex'
 import {useRoute} from 'vue-router'
@@ -42,7 +44,7 @@ import {useRoute} from 'vue-router'
 // composants
 import Header from '../components/Header.vue'
 import CardPlace from '../components/CardPlace.vue'
-import CardArtiste from '../components/CardArtiste.vue'
+import CardArtist from '../components/CardArtist.vue'
 
 let chargement = ref(true)
 
@@ -55,6 +57,9 @@ const uuidEvent = store.state.events.find(evt => evt.slug === slug).uuid
 
 // récupère l'évènement à jour
 let currentEvent = store.getters.getEventBySlug(slug)
+
+
+console.log('artists = ', currentEvent.artists)
 
 const domain = `${location.protocol}//${location.host}`
 
@@ -97,38 +102,6 @@ function getDataCardPlace() {
   }
 
 }
-
-/*
-// composants
-import Header from '../components/Header.vue'
-
-
-import ProductsList from '../components/ProductsList.vue'
-
-const emitter = mitt()
-
-let place = store.state.place
-
-// reset emitter
-// emitter.all.clear()
-
-// charge l'évènemet et le met à jour dans le state
-store.dispatch('loadEventBySlug', slug)
-
-// récupère l'évènement à jour
-let currentEvent = store.getters.getEventBySlug(slug)
-
-let dataHeader = {
-  urlImage: currentEvent.img,
-  shortDescription: currentEvent.short_description
-}
-
-let dataCardPlace = {
-  urlImage: place.img,
-  titre: place.organisation,
-  lonDescription: place.long_description
-}
-*/
 </script>
 
 <style scoped>

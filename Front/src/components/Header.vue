@@ -32,7 +32,7 @@
 </template>
 
 <script setup>
-  console.log('-> Header.vue')
+  // console.log('-> Header.vue')
   const props = defineProps({
     dataHeader: Object
   })
@@ -44,5 +44,5 @@
       return `url('${ props.dataHeader.domain + props.dataHeader.urlImage }')`
     }
   }
-  console.log('props =', props)
+
 </script>
