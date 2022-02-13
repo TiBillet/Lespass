@@ -11,7 +11,7 @@ from BaseBillet.models import Configuration, Event, Ticket, Product
 
 import segno
 import barcode
-from djoser import utils
+# from djoser import utils
 
 from io import BytesIO
 

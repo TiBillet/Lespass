@@ -24,7 +24,7 @@ urlpatterns = [
     # re_path(r'^jet/dashboard/', include('jet.dashboard.urls', 'jet-dashboard')),  # Django JET dashboard URLS
     # on modifie la creation du token pour rajouter access_token dans la réponse pour Postman
     # re_path(r"^auth/token/login/?$", TokenCreateView_custom.as_view(), name="login"),
-    re_path(r'^auth/', include('djoser.urls')),
+    # re_path(r'^auth/', include('djoser.urls')),
     path('admin/', public_admin_site.urls, name="public_admin_url"),
 
     path('', include('MetaBillet.urls')),
