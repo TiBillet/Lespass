@@ -528,7 +528,15 @@ def paiment_stripe_validator(request, paiement_stripe):
             for ligne_article in paiement_stripe.lignearticle_set.all():
                 if ligne_article.carte:
                     if request.method == 'GET':
+                        metadata_stripe_json = paiement_stripe.metadata_stripe
+                        metadata_stripe = json.loads(str(metadata_stripe_json))
+                        if metadata_stripe.get('pk_adhesion'):
+                            price = Price.objects.get(uuid = metadata_stripe.get('pk_adhesion'))
+                            messages.success(request, f"{price} : {price.prix}€")
+                        if metadata_stripe.get('recharge_carte_montant'):
+                            messages.success(request, f"Recharge {metadata_stripe.get('recharge_carte_montant')}€")
                         messages.success(request, f"Paiement validé. Merci !")
+
                         return HttpResponseRedirect(f"/qr/{ligne_article.carte.uuid}#success")
                     else:
                         return Response('paiement_stripe.status == Paiement_stripe.VALID', status=status.HTTP_200_OK)
