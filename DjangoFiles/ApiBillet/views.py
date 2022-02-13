@@ -527,8 +527,12 @@ def paiment_stripe_validator(request, paiement_stripe):
             # on boucle ici pour récuperer l'uuid de la carte.
             for ligne_article in paiement_stripe.lignearticle_set.all():
                 if ligne_article.carte:
-                    messages.success(request, f"Paiement validé. Merci !")
-                    return HttpResponseRedirect(f"/qr/{ligne_article.carte.uuid}#success")
+                    if request.method == 'GET':
+                        messages.success(request, f"Paiement validé. Merci !")
+                        return HttpResponseRedirect(f"/qr/{ligne_article.carte.uuid}#success")
+                    else:
+                        return Response('paiement_stripe.status == Paiement_stripe.VALID', status=status.HTTP_200_OK)
+
 
         else:
             # on boucle ici pour récuperer l'uuid de la carte.
