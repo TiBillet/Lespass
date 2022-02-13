@@ -218,7 +218,13 @@ class PlacesViewSet(viewsets.ViewSet):
             with tenant_context(tenant):
                 conf = Configuration.get_solo()
                 serializer.update(instance=conf, validated_data=futur_conf)
-
+                conf.stripe_api_key = os.environ.get('SRIPE_KEY')
+                conf.stripe_test_api_key = os.environ.get('SRIPE_KEY_TEST')
+                if os.environ.get('STRIPE_TEST') == "False":
+                    conf.stripe_mode_test = False
+                if os.environ.get('STRIPE_TEST') == "True":
+                    conf.stripe_mode_test = True
+                conf.save()
                 user.client_admin.add(tenant)
 
             return Response(serializer.data, status=status.HTTP_201_CREATED)
