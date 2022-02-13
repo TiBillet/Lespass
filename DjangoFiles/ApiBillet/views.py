@@ -538,7 +538,7 @@ def paiment_stripe_validator(request, paiement_stripe):
 
                         return HttpResponseRedirect(f"/qr/{ligne_article.carte.uuid}#success")
                     else:
-                        return Response('paiement_stripe.status == Paiement_stripe.VALID', status=status.HTTP_200_OK)
+                        return Response(f'VALID', status=status.HTTP_200_OK)
 
 
         else:
