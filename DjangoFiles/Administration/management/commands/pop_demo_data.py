@@ -66,7 +66,7 @@ class Command(BaseCommand):
         headers = {"charset": "utf-8"}
 
         email = os.environ.get('EMAIL')
-        dummypassword = 'proutprout123'
+        dummypassword = os.environ.get('DEMODATA_PASSWORD')
 
         ### Create User :
         print("************ Create User")

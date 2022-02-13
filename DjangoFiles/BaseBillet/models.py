@@ -169,9 +169,8 @@ class Configuration(SingletonModel):
     mollie_api_key = models.CharField(max_length=50,
                                       blank=True, null=True)
 
-    stripe_api_key = models.CharField(max_length=110, blank=True, null=True, default=os.environ.get('SRIPE_KEY'))
-    stripe_test_api_key = models.CharField(max_length=110, blank=True, null=True,
-                                           default=os.environ.get('SRIPE_KEY_TEST'))
+    stripe_api_key = models.CharField(max_length=110, blank=True, null=True)
+    stripe_test_api_key = models.CharField(max_length=110, blank=True, null=True)
     stripe_mode_test = models.BooleanField(default=True)
 
     def get_stripe_api(self):
