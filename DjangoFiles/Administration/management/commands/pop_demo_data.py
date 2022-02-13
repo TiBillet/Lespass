@@ -1,4 +1,5 @@
 import os
+import time
 from datetime import timedelta, datetime
 from os.path import exists
 import requests
@@ -54,10 +55,10 @@ class Command(BaseCommand):
         # base_url = f"https://demo.{os.environ.get('DOMAIN')}"
         sub_domain = "demo"
 
-        protocol = "http://"
-        port = ":8002"
-        # protocol = "https://"
-        # port = ""
+        # protocol = "http://"
+        # port = ":8002"
+        protocol = "https://"
+        port = ""
 
         base_url = f"{protocol}{sub_domain}.{os.environ.get('DOMAIN')}{port}"
 
@@ -101,9 +102,9 @@ class Command(BaseCommand):
         headers['Authorization'] = f"Bearer {auth_token}"
         print("************ Create Get Token user OK")
 
-        print("************ me")
 
-        url = f"{base_url}/api/me/"
+        url = f"{base_url}/api/user/me/"
+        print(f"************ me : {url}")
         response = requests.request("GET", url, headers=headers, data=data_json)
 
         # print(response.text)
@@ -149,9 +150,16 @@ class Command(BaseCommand):
                 )
             print('*' * 30)
             print(f'on lance la requete : {url}')
-            print('*' * 30)
+            # if slugify(organisation) == "vavangart":
+            #     import ipdb; ipdb.set_trace()
+
             response = requests.request("POST", url, headers=headers, data=data_json, files=files)
-            # print(response.text)
+
+            # try:
+            #     response = requests.request("POST", url, headers=headers, data=data_json, files=files)
+            # except:
+            #     import ipdb; ipdb.set_trace()
+            print('*' * 30)
 
             if response.status_code == 409:
                 print("Conflict : Existe déja, on lance un put")
@@ -187,13 +195,16 @@ class Command(BaseCommand):
             base_url = f"{protocol}{sub_domain}.{os.environ.get('DOMAIN')}{port}"
 
             url = f"{base_url}/api/user/token/"
+            print("\n")
+            print(f"************ Get auth token {url}")
+
             data_json = {'username': email,
                          'password': dummypassword}
             response = requests.request("POST", url, data=data_json)
             auth_token = response.json().get("access")
             headers = { 'Authorization': f"Bearer {auth_token}" }
 
-            ### Create product
+            ### Create Ticket product
             print("\n")
             print("************ Create Ticket Product")
 
@@ -246,6 +257,75 @@ class Command(BaseCommand):
                 assert response.status_code == 201
                 print("************ Create Ticket prices OK")
                 print("\n")
+
+
+
+            ### Create Adhesion product
+            print("\n")
+            print("************ Create Adhesion Product")
+
+            url = f"{base_url}/api/products/"
+            data_json = {'name': 'Adhesion',
+                         'publish': 'true',
+                         'categorie_article': 'A'}
+            files = [
+                ('img', ('adhesion_tampon.png', open('/DjangoFiles/data/demo_img/adhesion_tampon.png', 'rb'), 'image/png'))
+            ]
+            print('*' * 30)
+            print(f'on lance la requete : {url}')
+            response = requests.request("POST", url, headers=headers, data=data_json, files=files)
+            print('*' * 30)
+
+            uuid_adhesion_prodcut = response.json().get("uuid")
+            # print(response.text)
+            if response.status_code not in [201, 409]:
+                import ipdb; ipdb.set_trace()
+
+            print("************ Create Adhesion Product OK")
+            print("\n")
+
+            if response.status_code == 201:
+                ### Create Ticket prices
+                print("\n")
+                print("************ Create Adhesion prices")
+                url = f"{base_url}/api/prices/"
+
+                data_json = {'name': 'Tarif solidaire',
+                             'prix': '10',
+                             'vat': 'NA',
+                             'max_per_user': '10',
+                             'stock': '250',
+                             'product': uuid_adhesion_prodcut}
+                response = requests.request("POST", url, headers=headers, data=data_json)
+                uuid_price_demi = response.json().get("uuid")
+                # print(response.text)
+                assert response.status_code == 201
+
+                data_json = {'name': 'Plein Tarif',
+                             'prix': '20',
+                             'vat': 'NA',
+                             'max_per_user': '10',
+                             'stock': '250',
+                             'product': uuid_adhesion_prodcut}
+                response = requests.request("POST", url, headers=headers, data=data_json)
+                uuid_price_plein = response.json().get("uuid")
+                # print(response.text)
+                assert response.status_code == 201
+
+                data_json = {'name': 'Tarif Famille',
+                             'prix': '40',
+                             'vat': 'NA',
+                             'max_per_user': '10',
+                             'stock': '250',
+                             'product': uuid_adhesion_prodcut}
+                response = requests.request("POST", url, headers=headers, data=data_json)
+                uuid_price_plein = response.json().get("uuid")
+                # print(response.text)
+                assert response.status_code == 201
+
+                print("************ Create Adhesion prices OK")
+                print("\n")
+
 
             ### Create TShirt product
             print("\n")

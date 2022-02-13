@@ -55,7 +55,8 @@ class Command(BaseCommand):
         # file = open('/DjangoFiles/data/csv/Vavangart_G1.csv')
 
         for client, gens in cards_dict.items():
-            client_tenant = Client.objects.get(schema_name=client)
+            print(client, gens)
+            client_tenant = Client.objects.get(schema_name=client.lower())
             print(client)
             for gen, file in gens.items():
                 print(gen,file)

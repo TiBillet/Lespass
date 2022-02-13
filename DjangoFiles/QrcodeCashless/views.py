@@ -80,6 +80,8 @@ class index_scan(View):
         return reponse
 
     def get(self, request, uuid):
+        logger.info(f'index_scan : {uuid}')
+
         carte = check_carte_local(uuid)
         # dette technique ...
         # pour rediriger les premières générations de qrcode
@@ -94,7 +96,7 @@ class index_scan(View):
         if not configuration.server_cashless:
             return HttpResponse(
                 "L'adress du serveur cashless n'est pas renseignée dans la configuration de la billetterie.")
-        if not configuration.stripe_api_key or not configuration.stripe_test_api_key:
+        if not configuration.get_stripe_api():
             return HttpResponse(
                 "Pas d'information de configuration pour paiement en ligne.")
 
