@@ -1,7 +1,7 @@
 # For example :
 
 tenants = {
-    "Demo": {
+    "Meta": {
         'short_description': 'Le bar en Beta Test.',
         'long_description': 'Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum ',
         'phone': "0612451245",
