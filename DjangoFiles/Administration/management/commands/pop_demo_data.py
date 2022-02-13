@@ -1,3 +1,4 @@
+import logging
 import os
 import time
 from datetime import timedelta, datetime
@@ -69,16 +70,17 @@ class Command(BaseCommand):
         dummypassword = os.environ.get('DEMODATA_PASSWORD')
 
         ### Create User :
-        print("************ Create User")
-        url = f"{base_url}/api/user/create/"
         data_json = {
             'email': email,
             'password': dummypassword,
         }
+        url = f"{base_url}/api/user/create/"
+        print(f"************ Create User - {url} - data : {data_json}")
 
         response = requests.request("POST", url, data=data_json)
-        # print(response.text)
-        with schema_context('Demo'):
+        print(response.text)
+
+        with tenant_context(tenant_demo):
             User: TibilletUser = get_user_model()
             admin = User.objects.get(email=email)
             admin.is_active = True
