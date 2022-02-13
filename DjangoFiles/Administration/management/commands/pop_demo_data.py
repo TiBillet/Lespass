@@ -35,26 +35,26 @@ class Command(BaseCommand):
         )
         domain_public.save()
 
-        tenant_meta, created = Client.objects.get_or_create(
-            schema_name="meta",
-            name="Meta",
+        tenant_m, created = Client.objects.get_or_create(
+            schema_name="m",
+            name="m",
             on_trial=False,
             categorie=Client.SALLE_SPECTACLE,
         )
-        tenant_meta.save()
+        tenant_m.save()
 
-        domain_meta, created = Domain.objects.get_or_create(
-            domain=f'meta.{os.getenv("DOMAIN")}',
-            tenant=tenant_meta,
+        domain_m, created = Domain.objects.get_or_create(
+            domain=f'm.{os.getenv("DOMAIN")}',
+            tenant=tenant_m,
             is_primary=True
         )
-        domain_meta.save()
+        domain_m.save()
 
         # with schema_context('demo'):
         #     call_command('flush')
 
         # base_url = f"https://demo.{os.environ.get('DOMAIN')}"
-        sub_domain = "meta"
+        sub_domain = "m"
 
         # protocol = "http://"
         # port = ":8002"
@@ -80,7 +80,7 @@ class Command(BaseCommand):
         response = requests.request("POST", url, data=data_json)
         print(response.text)
 
-        with tenant_context(tenant_meta):
+        with tenant_context(tenant_m):
             User: TibilletUser = get_user_model()
             admin = User.objects.get(email=email)
             admin.is_active = True

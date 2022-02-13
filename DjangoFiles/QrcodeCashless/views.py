@@ -43,7 +43,7 @@ def check_carte_local(uuid):
 
 class gen_one_bisik(View):
     def get(self, request, numero_carte):
-        print(numero_carte)
+        print(f"gen_one_bisik : {numero_carte}")
         carte = get_object_or_404(CarteCashless, number=numero_carte)
         address = request.build_absolute_uri()
         return HttpResponseRedirect(
@@ -82,7 +82,6 @@ class index_scan(View):
     def get(self, request, uuid):
         logger.info(f'index_scan : {uuid}')
 
-        carte = check_carte_local(uuid)
         # dette technique ...
         # pour rediriger les premières générations de qrcode
         # m.tibillet.re et raffinerie
@@ -91,6 +90,7 @@ class index_scan(View):
         sub_addr = host.partition('.')[0]
         if sub_addr == "m":
             return HttpResponseRedirect(address.replace("://m.", "://raffinerie."))
+        carte = check_carte_local(uuid)
 
         configuration = Configuration.get_solo()
         if not configuration.server_cashless:
