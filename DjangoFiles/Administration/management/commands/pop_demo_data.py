@@ -35,26 +35,26 @@ class Command(BaseCommand):
         )
         domain_public.save()
 
-        tenant_demo, created = Client.objects.get_or_create(
-            schema_name="demo",
-            name="Demo",
+        tenant_meta, created = Client.objects.get_or_create(
+            schema_name="meta",
+            name="Meta",
             on_trial=False,
             categorie=Client.SALLE_SPECTACLE,
         )
-        tenant_demo.save()
+        tenant_meta.save()
 
-        domain_demo, created = Domain.objects.get_or_create(
-            domain=f'demo.{os.getenv("DOMAIN")}',
-            tenant=tenant_demo,
+        domain_meta, created = Domain.objects.get_or_create(
+            domain=f'meta.{os.getenv("DOMAIN")}',
+            tenant=tenant_meta,
             is_primary=True
         )
-        domain_demo.save()
+        domain_meta.save()
 
         # with schema_context('demo'):
         #     call_command('flush')
 
         # base_url = f"https://demo.{os.environ.get('DOMAIN')}"
-        sub_domain = "demo"
+        sub_domain = "meta"
 
         # protocol = "http://"
         # port = ":8002"
@@ -80,13 +80,13 @@ class Command(BaseCommand):
         response = requests.request("POST", url, data=data_json)
         print(response.text)
 
-        with tenant_context(tenant_demo):
+        with tenant_context(tenant_meta):
             User: TibilletUser = get_user_model()
             admin = User.objects.get(email=email)
             admin.is_active = True
             admin.can_create_tenant = True
             admin.is_staff = True
-            admin.client_admin.add(Client.objects.get(name="Demo"))
+            admin.client_admin.add(Client.objects.get(name="Meta"))
             admin.save()
 
         # assert response.status_code == 200
