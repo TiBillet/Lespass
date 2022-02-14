@@ -120,11 +120,42 @@ class create_user(APIView):
                             status=status.HTTP_201_CREATED)
 
 
+def a_jour_adhesion(user: TibilletUser=None):
+    data = {
+        'a_jour':False,
+        'next':None,
+    }
+    if not user:
+        return data
+    if user.email_error or not user.email:
+        return data
+    return data
+
+
 class MeViewset(viewsets.ViewSet):
     def list(self, request):
         serializer = MeSerializer(request.user)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+
+        retour = serializer.data.copy()
+        retour['adhesion'] = a_jour_adhesion(request.user)
+
+        return Response(retour, status=status.HTTP_200_OK)
+
+    def retrieve(self, request, pk=None):
+        email = force_str(urlsafe_base64_decode(pk))
+        print(f"retrieve ! {email}")
+        User = get_user_model()
+        data = a_jour_adhesion(User.objects.filter(email=email).first())
+        data.get('a_jour')
+        if data.get('a_jour') :
+            return Response(data.get('a_jour'), status=status.HTTP_200_OK)
+        else :
+            return Response(data.get('a_jour'), status=status.HTTP_402_PAYMENT_REQUIRED)
 
     def get_permissions(self):
-        permission_classes = [permissions.IsAuthenticated]
+        if self.action in ['list', ]:
+            permission_classes = [permissions.IsAuthenticated]
+        else:
+            permission_classes = [permissions.AllowAny]
         return [permission() for permission in permission_classes]
+

@@ -4,6 +4,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+
 class MeSerializer(serializers.ModelSerializer):
     class Meta:
         model = TibilletUser

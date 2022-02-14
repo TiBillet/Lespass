@@ -1,0 +1,1747 @@
+{
+	"info": {
+		"_postman_id": "cff3e713-8091-4ad6-991d-ab5f994c81c6",
+		"name": "TiBillet Ticket",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Activate user",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "uid",
+							"value": "MTA",
+							"type": "text"
+						},
+						{
+							"key": "token",
+							"value": "5v3-7906371de69e86255f04",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{url}}/api/user/activate/{{id}}/{{token}}/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"user",
+						"activate",
+						"{{id}}",
+						"{{token}}",
+						""
+					]
+				},
+				"description": "Confirmation envoyé par mail.\nPossible de l'activer par POST."
+			},
+			"response": []
+		},
+		{
+			"name": "Create User",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "email",
+							"value": "jturbeaux+prout@pm.me",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{url}}/api/user/create/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"user",
+						"create",
+						""
+					],
+					"query": [
+						{
+							"key": "",
+							"value": "",
+							"disabled": true
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get JWT Token w email/pass",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							""
+						],
+						"type": "text/javascript"
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"    const jsonResponse = pm.response.json();",
+							"    console.log(jsonResponse.access)",
+							"    pm.collectionVariables.set(\"jwt_token\", jsonResponse.access);",
+							"    pm.collectionVariables.set(\"jwt_token_refresh\", jsonResponse.refresh);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "username",
+							"value": "jturbeaux@pm.me",
+							"type": "text"
+						},
+						{
+							"key": "password",
+							"value": "proutprout123",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{url}}/api/user/token/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"user",
+						"token",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "JWT Token Refresh",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							""
+						],
+						"type": "text/javascript"
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"    const jsonResponse = pm.response.json();",
+							"    console.log(jsonResponse.access)",
+							"    pm.collectionVariables.set(\"jwt_token\", jsonResponse.access);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "refresh",
+							"value": "{{jwt_token_refresh}}",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{url}}/api/user/token/refresh/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"user",
+						"token",
+						"refresh",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Verify JWT Token",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							""
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "token",
+							"value": "{{jwt_token}}",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{url}}/api/user/token/verify/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"user",
+						"token",
+						"verify",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "me",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{jwt_token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"url": {
+					"raw": "{{url}}/api/user/me/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"user",
+						"me",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Here",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"url": {
+					"raw": "{{url}}/api/here/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"here",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Places List",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"url": {
+					"raw": "{{url}}/api/place/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"place",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Places Retrieve",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"url": {
+					"raw": "{{url}}/api/place/994013db-e7b6-43eb-924e-cbe46281070e",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"place",
+						"994013db-e7b6-43eb-924e-cbe46281070e"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Place Create",
+			"protocolProfileBehavior": {
+				"disabledSystemHeaders": {}
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "organisation",
+							"value": "La Lunerie2345",
+							"type": "text"
+						},
+						{
+							"key": "short_description",
+							"value": "Tiers Lieux de la Lune",
+							"type": "text"
+						},
+						{
+							"key": "phone",
+							"value": "0692929292",
+							"type": "text"
+						},
+						{
+							"key": "email",
+							"value": "jonas@3peaks.fr",
+							"type": "text"
+						},
+						{
+							"key": "site_web",
+							"value": "https://www.laraffinerie.re",
+							"type": "text"
+						},
+						{
+							"key": "postal_code",
+							"value": "97440",
+							"type": "text"
+						},
+						{
+							"key": "img",
+							"type": "file",
+							"src": "/home/slaan/Billetterie/DjangoFiles/data/demo_img/sly-sugar.jpg"
+						},
+						{
+							"key": "logo",
+							"type": "file",
+							"src": "/home/slaan/Billetterie/DjangoFiles/data/demo_img/sly-sugar.jpg"
+						},
+						{
+							"key": "categorie",
+							"value": "S",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{url}}/api/place/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"place",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Place Update",
+			"protocolProfileBehavior": {
+				"disabledSystemHeaders": {}
+			},
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "organisation",
+							"value": "Demo",
+							"type": "text"
+						},
+						{
+							"key": "short_description",
+							"value": "Tiers-Lieu on the Moon !",
+							"type": "text"
+						},
+						{
+							"key": "phone",
+							"value": "0692929292",
+							"type": "text"
+						},
+						{
+							"key": "email",
+							"value": "jonas@3peaks.fr",
+							"type": "text"
+						},
+						{
+							"key": "site_web",
+							"value": "https://www.laraffinerie.re",
+							"type": "text"
+						},
+						{
+							"key": "postal_code",
+							"value": "97440",
+							"type": "text"
+						},
+						{
+							"key": "img",
+							"type": "file",
+							"src": "/home/slaan/Images/media/images/project9.jpg"
+						},
+						{
+							"key": "logo",
+							"type": "file",
+							"src": "/home/slaan/Images/MF19.jpg"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{url}}/api/place/216997cc-1384-4275-9a1c-f369a94f023b/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"place",
+						"216997cc-1384-4275-9a1c-f369a94f023b",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Artist List",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"url": {
+					"raw": "{{url}}/api/artist/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"artist",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Artist Retrieve",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"url": {
+					"raw": "{{url}}/api/artist/74329315-057b-4500-9b55-4d7f7507d2e4/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"artist",
+						"74329315-057b-4500-9b55-4d7f7507d2e4",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Artist Create",
+			"protocolProfileBehavior": {
+				"disabledSystemHeaders": {}
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "organisation",
+							"value": "Jojo La Frite",
+							"type": "text"
+						},
+						{
+							"key": "short_description",
+							"value": "40 ans de Maloya Rock",
+							"type": "text"
+						},
+						{
+							"key": "phone",
+							"value": "0692929292",
+							"type": "text"
+						},
+						{
+							"key": "email",
+							"value": "jonas@3peaks.fr",
+							"type": "text"
+						},
+						{
+							"key": "site_web",
+							"value": "https://www.ziskakan.re",
+							"type": "text"
+						},
+						{
+							"key": "postal_code",
+							"value": "97440",
+							"type": "text"
+						},
+						{
+							"key": "img",
+							"type": "file",
+							"src": "/home/slaan/Billetterie/DjangoFiles/data/demo_img/project9.jpg"
+						},
+						{
+							"key": "logo",
+							"type": "file",
+							"src": "/home/slaan/Billetterie/DjangoFiles/data/demo_img/project9.jpg"
+						},
+						{
+							"key": "categorie",
+							"value": "A",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{url}}/api/artist/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"artist",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Artist Update",
+			"protocolProfileBehavior": {
+				"disabledSystemHeaders": {}
+			},
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "organisation",
+							"value": "Ziskakan",
+							"type": "text"
+						},
+						{
+							"key": "short_description",
+							"value": "40 ans de Maloya !",
+							"type": "text"
+						},
+						{
+							"key": "phone",
+							"value": "0692929292",
+							"type": "text"
+						},
+						{
+							"key": "email",
+							"value": "jonas@3peaks.fr",
+							"type": "text"
+						},
+						{
+							"key": "site_web",
+							"value": "https://www.ziskakan.re",
+							"type": "text"
+						},
+						{
+							"key": "postal_code",
+							"value": "97440",
+							"type": "text"
+						},
+						{
+							"key": "img",
+							"type": "file",
+							"src": "Ziskakan.jpg",
+							"disabled": true
+						},
+						{
+							"key": "logo",
+							"type": "file",
+							"src": "Ziskakan.jpg",
+							"disabled": true
+						},
+						{
+							"key": "categorie",
+							"value": "A",
+							"type": "text",
+							"disabled": true
+						}
+					]
+				},
+				"url": {
+					"raw": "{{url}}/api/artist/74329315-057b-4500-9b55-4d7f7507d2e4/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"artist",
+						"74329315-057b-4500-9b55-4d7f7507d2e4",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "membership list",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "email",
+							"value": "douglas@adams.h2",
+							"type": "text"
+						},
+						{
+							"key": "first_name",
+							"value": "Douglas",
+							"type": "text"
+						},
+						{
+							"key": "last_name",
+							"value": "Adams",
+							"type": "text"
+						},
+						{
+							"key": "contribution_value",
+							"value": "15",
+							"type": "text"
+						},
+						{
+							"key": "phone",
+							"value": "424242424242",
+							"type": "text"
+						},
+						{
+							"key": "postal_code",
+							"value": "4244242",
+							"type": "text"
+						},
+						{
+							"key": "birth_date",
+							"value": "1952-03-11",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{url}}/api/membership/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"membership",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "membershp Create",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "email",
+							"value": "douglas@adams.h2",
+							"type": "text"
+						},
+						{
+							"key": "first_name",
+							"value": "Douglas",
+							"type": "text"
+						},
+						{
+							"key": "last_name",
+							"value": "Adams",
+							"type": "text"
+						},
+						{
+							"key": "contribution_value",
+							"value": "15",
+							"type": "text"
+						},
+						{
+							"key": "phone",
+							"value": "424242424242",
+							"type": "text"
+						},
+						{
+							"key": "postal_code",
+							"value": "4244242",
+							"type": "text"
+						},
+						{
+							"key": "birth_date",
+							"value": "1952-03-11",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{url}}/api/membership/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"membership",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Products List",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"    const jsonResponse = pm.response.json();",
+							"    for(var i=0;i<jsonResponse.length;i++){",
+							"        product = jsonResponse[i];",
+							"        if (product.categorie_article == \"B\"){",
+							"            pm.collectionVariables.set(\"product_billet_uuid\", product.uuid);",
+							"        };",
+							"        if (product.categorie_article == \"A\"){",
+							"            pm.collectionVariables.set(\"product_adhesion_uuid\", product.uuid);",
+							"        };",
+							"        if (product.categorie_article == \"T\"){",
+							"            pm.collectionVariables.set(\"product_tshirt_uuid\", product.uuid);",
+							"        };",
+							"}",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"url": {
+					"raw": "{{url}}/api/products/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"products",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Prices List",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"    const jsonResponse = pm.response.json();",
+							"",
+							"    const product_billet_uuid = pm.collectionVariables.get(\"product_billet_uuid\");",
+							"",
+							"    for(var i=0;i<jsonResponse.length;i++){",
+							"        price = jsonResponse[i];",
+							"        if (price.product == product_billet_uuid ){",
+							"            if (price.name == \"Demi Tarif\" ){",
+							"                pm.collectionVariables.set(\"price_billet_demi_tarif_uuid\", price.uuid);",
+							"            };",
+							"            if (price.name == \"Plein Tarif\" ){",
+							"                pm.collectionVariables.set(\"price_billet_plein_tarif_uuid\", price.uuid);",
+							"            };",
+							"        };",
+							"}",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"url": {
+					"raw": "{{url}}/api/prices/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"prices",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Product Billet Create",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "name",
+							"value": "Reservation",
+							"type": "text"
+						},
+						{
+							"key": "publish",
+							"value": "false",
+							"type": "text"
+						},
+						{
+							"key": "img",
+							"type": "file",
+							"src": "/home/slaan/Images/bisik2 300.jpg"
+						},
+						{
+							"key": "categorie_article",
+							"value": "B",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{url}}/api/products/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"products",
+						""
+					]
+				},
+				"description": "```python\n    BILLET, PACK, RECHARGE_CASHLESS, VETEMENT, MERCH, ADHESION = 'B', 'P', 'R', 'T', 'M', 'A'\n\n    TYPE_CHOICES = [\n        (BILLET, _('Billet')),\n        (PACK, _(\"Pack d'objets\")),\n        (RECHARGE_CASHLESS, _('Recharge cashless')),\n        (VETEMENT, _('Vetement')),\n        (MERCH, _('Merchandasing')),\n        (ADHESION, ('Adhésion')),\n    ]\n```"
+			},
+			"response": []
+		},
+		{
+			"name": "Prices Billet demi tarif Create",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "name",
+							"value": "Demi Tarif",
+							"type": "text"
+						},
+						{
+							"key": "prix",
+							"value": "5",
+							"type": "text"
+						},
+						{
+							"key": "vat",
+							"value": "NA",
+							"type": "text"
+						},
+						{
+							"key": "max_per_user",
+							"value": "10",
+							"type": "text"
+						},
+						{
+							"key": "stock",
+							"value": "1500",
+							"type": "text"
+						},
+						{
+							"key": "product",
+							"value": "49af790a-c1e9-4fcf-bdfe-3edccc7eb4b2",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{url}}/api/prices/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"prices",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Prices Billet plein tarif Create Copy",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "name",
+							"value": "Plein Tarif",
+							"type": "text"
+						},
+						{
+							"key": "prix",
+							"value": "10",
+							"type": "text"
+						},
+						{
+							"key": "vat",
+							"value": "NA",
+							"type": "text"
+						},
+						{
+							"key": "max_per_user",
+							"value": "10",
+							"type": "text"
+						},
+						{
+							"key": "stock",
+							"value": "",
+							"type": "text"
+						},
+						{
+							"key": "product",
+							"value": "49af790a-c1e9-4fcf-bdfe-3edccc7eb4b2",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{url}}/api/prices/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"prices",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Product TShirt Create",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "name",
+							"value": "T-Shirt",
+							"type": "text"
+						},
+						{
+							"key": "publish",
+							"value": "false",
+							"type": "text"
+						},
+						{
+							"key": "img",
+							"type": "file",
+							"src": []
+						},
+						{
+							"key": "categorie_article",
+							"value": "T",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{url}}/api/products/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"products",
+						""
+					]
+				},
+				"description": "```python\n    BILLET, PACK, RECHARGE_CASHLESS, VETEMENT, MERCH, ADHESION = 'B', 'P', 'R', 'T', 'M', 'A'\n\n    TYPE_CHOICES = [\n        (BILLET, _('Billet')),\n        (PACK, _(\"Pack d'objets\")),\n        (RECHARGE_CASHLESS, _('Recharge cashless')),\n        (VETEMENT, _('Vetement')),\n        (MERCH, _('Merchandasing')),\n        (ADHESION, ('Adhésion')),\n    ]\n```"
+			},
+			"response": []
+		},
+		{
+			"name": "Prices TShirt Rouge Create",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "name",
+							"value": "Rouge",
+							"type": "text"
+						},
+						{
+							"key": "prix",
+							"value": "10",
+							"type": "text"
+						},
+						{
+							"key": "vat",
+							"value": "NA",
+							"type": "text"
+						},
+						{
+							"key": "max_per_user",
+							"value": "10",
+							"type": "text"
+						},
+						{
+							"key": "stock",
+							"value": "",
+							"type": "text"
+						},
+						{
+							"key": "product",
+							"value": "5367972f-a38e-45d3-a2c5-f3011cea852a",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{url}}/api/prices/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"prices",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Options on Ticket LIST",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"url": {
+					"raw": "{{url}}/api/optionticket/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"optionticket",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Options on Ticket CREATE",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "name",
+							"value": "Balcon",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{url}}/api/optionticket/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"optionticket",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Events List",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"    const jsonResponse = pm.response.json();",
+							"    first_event = jsonResponse[0]",
+							"    pm.collectionVariables.set(\"first_event_uuid\", first_event.uuid);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"url": {
+					"raw": "{{url}}/api/events/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"events",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Event Retrieve",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"url": {
+					"raw": "{{url}}/api/events/6ebec87a-711a-480a-9013-43e0fe0fdeea",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"events",
+						"6ebec87a-711a-480a-9013-43e0fe0fdeea"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Events Create",
+			"protocolProfileBehavior": {
+				"disabledSystemHeaders": {}
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"date\": \"2022-04-18\",\n    \"artists\": [\n        {\n            \"uuid\": \"d18d2200-4d71-4149-a721-0f229fc70499\",\n            \"datetime\": \"2022-10-01T19:30\"\n        }\n    ],\n    \"products\": [\n        \"452be2f2-d1c9-41ae-99ea-4213e05d7796\",\n        \"62de56d4-3e56-4a19-b675-f044f343a184\",\n        \"bed9a391-7f55-4c8c-b1fa-6032ce7da884\"\n    ],\n    \"options_checkbox\": [\n        \"81f2bb0d-73c1-4863-b1f4-60cad59c4aec\",\n        \"6dfad09d-2f2e-4fbd-9e06-7d735ce8cb8f\"\n    ],\n    \"options_radio\": [\n        \"0a48ba8d-ca4d-49be-a437-392253f1644c\",\n        \"81f2bb0d-73c1-4863-b1f4-60cad59c4aec\"\n    ]\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{url}}/api/events/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"events",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Events Update",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "name",
+							"value": "Pataterie géante sur Mars",
+							"type": "text"
+						},
+						{
+							"key": "short_description",
+							"value": "Detterer les patates sur mars",
+							"type": "text"
+						},
+						{
+							"key": "datetime",
+							"value": "2022-05-12T21:20",
+							"type": "text"
+						},
+						{
+							"key": "img",
+							"type": "file",
+							"src": "/home/slaan/Images/piqsels.com-id-skvuh.jpg"
+						},
+						{
+							"key": "long_description",
+							"value": "Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum ",
+							"type": "text"
+						},
+						{
+							"key": "products",
+							"value": "[\n    {\"uuid\":\"9340a9a1-1b90-488e-ab68-7b358b213dd7\"},\n    {\"uuid\":\"60db1531-fd0a-4d92-a785-f384e77cd213\"}\n]",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{url}}/api/events/0b4d9c10-b032-4bee-90e1-9c44aa2661d8/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"events",
+						"0b4d9c10-b032-4bee-90e1-9c44aa2661d8",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Event Delete",
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"url": {
+					"raw": "{{url}}/api/events/f1f4da45-48bb-45a0-b6b7-0be38fabe6db/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"events",
+						"f1f4da45-48bb-45a0-b6b7-0be38fabe6db",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Reservation List",
+			"request": {
+				"auth": {
+					"type": "oauth2",
+					"oauth2": [
+						{
+							"key": "tokenType",
+							"value": "",
+							"type": "string"
+						},
+						{
+							"key": "headerPrefix",
+							"value": "Token ",
+							"type": "string"
+						},
+						{
+							"key": "addTokenTo",
+							"value": "header",
+							"type": "string"
+						},
+						{
+							"key": "accessTokenUrl",
+							"value": "demo.django-local.org:8002/auth/token/login/",
+							"type": "string"
+						},
+						{
+							"key": "client_authentication",
+							"value": "body",
+							"type": "string"
+						},
+						{
+							"key": "password",
+							"value": "proutprout123",
+							"type": "string"
+						},
+						{
+							"key": "username",
+							"value": "jturbeaux@pm.me",
+							"type": "string"
+						},
+						{
+							"key": "tokenName",
+							"value": "test",
+							"type": "string"
+						},
+						{
+							"key": "grant_type",
+							"value": "password_credentials",
+							"type": "string"
+						},
+						{
+							"key": "authUrl",
+							"value": "demo.django-local.org:8002/auth/token/login/",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"url": {
+					"raw": "{{url}}/api/reservations/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"reservations",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Reservation Create",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"event\": \"{{first_event_uuid}}\",\n    \"email\": \"jturbeaux@pm.me\",\n    \"prices\": [\n        {\n            \"uuid\": \"{{price_billet_plein_tarif_uuid}}\",\n            \"qty\": 2,\n            \"customers\": [\n                {\n                    \"first_name\": \"{{$randomFirstName}}\",\n                    \"last_name\": \"{{$randomLastName}}\"\n                },\n                {\n                    \"first_name\": \"{{$randomFirstName}}\",\n                    \"last_name\": \"{{$randomLastName}}\"\n                }\n            ]\n        },\n        {\n            \"uuid\": \"{{price_billet_demi_tarif_uuid}}\",\n            \"qty\": 1,\n            \"customers\": [\n                {\n                    \"first_name\": \"{{$randomFirstName}}\",\n                    \"last_name\": \"{{$randomLastName}}\"\n                }\n            ]\n        }\n    ]\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{url}}/api/reservations/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"reservations",
+						""
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{jwt_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "url",
+			"value": "http://demo.django-local.org:8002"
+		},
+		{
+			"key": "jwt_token",
+			"value": "jtw_token"
+		},
+		{
+			"key": "jwt_token_refresh",
+			"value": "jwt_token_refresh"
+		},
+		{
+			"key": "product_billet_uuid",
+			"value": "product_billet_uuid"
+		},
+		{
+			"key": "product_adhesion_uuid",
+			"value": "product_adhesion_uuid"
+		},
+		{
+			"key": "product_tshirt_uuid",
+			"value": "product_tshirt_uuid"
+		},
+		{
+			"key": "first_event_uuid",
+			"value": "first_event_uuid"
+		},
+		{
+			"key": "price_billet_plein_tarif_uuid",
+			"value": "price_billet_plein_tarif_uuid"
+		},
+		{
+			"key": "price_billet_demi_tarif_uuid",
+			"value": "price_billet_plein_tarif_uuid"
+		}
+	]
+}
