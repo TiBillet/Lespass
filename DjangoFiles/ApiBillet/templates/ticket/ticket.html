@@ -2,19 +2,18 @@
 <head>
     <meta charset="utf-8">
     <title>Boarding ticket</title>
-    <meta name="description" content="Boarding ticket">
-
+    <meta name="description" content="{{ ticket.reservation.event.name }}">
 </head>
 
 <body>
-<section id="informations">
+<section id="informations" style="align-content: center; align-items: center; display: flex">
 
-    <h1>{{ ticket.first_name }} {{ ticket.last_name }}</h1>
-    <h1>{{ config.organisation }}</h1>
     <h1>{{ ticket.reservation.event.name }}</h1>
-    <h1>{{ ticket.reservation.event.datetime }}</h1>
-    <h1>Siège : {{ ticket.seat }}</h1>
-    <h1>Numéro de billet : {{ ticket.numero_uuid }}</h1>
+    <h2>Lieux : {{ config.organisation }}</h2>
+    <h2>{{ ticket.reservation.event.datetime }}</h2>
+    <h3>{{ ticket.first_name }} {{ ticket.last_name }}</h3>
+    <h4>Siège : {{ ticket.seat }}</h4>
+    <h4>Numéro de billet : {{ ticket.numero_uuid }}</h4>
 
     <div>{{ img_svg | safe }}</div>
     <div>{{ bar_svg | safe }}</div>

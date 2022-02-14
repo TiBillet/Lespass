@@ -15,6 +15,8 @@ import barcode
 
 from io import BytesIO
 
+from BaseBillet.tasks import encode_uid
+
 
 class index(APIView):
     permission_classes = [AllowAny]
@@ -71,7 +73,6 @@ class Ticket_html_view(APIView):
 
     def get(self, request, pk_uuid):
         ticket = get_object_or_404(Ticket, uuid=pk_uuid)
-
         qr = segno.make(f"{ticket.uuid}", micro=False)
 
         buffer_svg = BytesIO()
@@ -79,7 +80,7 @@ class Ticket_html_view(APIView):
 
         CODE128 = barcode.get_barcode_class('code128')
         buffer_barcode_SVG = BytesIO()
-        bar_secret = utils.encode_uid(f"{ticket.uuid}".split('-')[4])
+        bar_secret = encode_uid(f"{ticket.uuid}".split('-')[4])
 
         bar = CODE128(f"{bar_secret}")
         options = {

@@ -134,6 +134,7 @@ def create_ticket_pdf(ticket: Ticket):
         # 'bar_svg64': base64.b64encode(bar_svg.getvalue()).decode('utf-8'),
     }
 
+    # template_name = 'report/report.html'
     template_name = 'ticket/ticket.html'
     # template_name = 'ticket/example_flight_ticket.html'
     font_config = FontConfiguration()

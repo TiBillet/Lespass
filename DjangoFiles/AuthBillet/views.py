@@ -144,7 +144,6 @@ def a_jour_adhesion(user: TibilletUser = None):
     if response.status_code != 200 :
         return data
     membre = json.loads(response.content)
-    print(membre)
     data['a_jour_cotisation'] = membre.get('a_jour_cotisation')
     data['date_derniere_cotisation'] = membre.get('date_derniere_cotisation')
     return data

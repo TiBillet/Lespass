@@ -5,7 +5,7 @@ from datetime import datetime
 import requests
 import stripe
 from django.contrib import messages
-from django.http import HttpResponseRedirect, Http404
+from django.http import HttpResponseRedirect, Http404, HttpResponse
 from django.utils import timezone
 from django_tenants.utils import schema_context, tenant_context
 from django_weasyprint import WeasyTemplateView
@@ -23,6 +23,7 @@ from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSeria
     ReservationValidator, MembreshipValidator, ConfigurationSerializer, NewConfigSerializer, \
     EventCreateSerializer, TicketSerializer, OptionTicketSerializer
 from AuthBillet.models import TenantAdminPermission, TibilletUser
+from BaseBillet.tasks import create_ticket_pdf
 from Customers.models import Client, Domain
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe, OptionGenerale
 from rest_framework import viewsets, permissions, status
@@ -415,30 +416,41 @@ class MembershipViewset(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
-class TicketPdf(WeasyTemplateView):
+
+class TicketPdf(APIView):
     permission_classes = [AllowAny]
-    template_name = 'ticket/ticket.html'
 
-    def get_context_data(self, pk_uuid, **kwargs):
-        logger.info(f"{timezone.now()} création de pdf demandé. uuid : {pk_uuid}")
+    def get(self, request, pk_uuid):
+        ticket = get_object_or_404(Ticket, uuid=pk_uuid)
+        pdf_binary = create_ticket_pdf(ticket)
+        response = HttpResponse(pdf_binary, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{ticket.pdf_filename()}"'
+        return response
 
-        self.config = Configuration.get_solo()
-        ticket: Ticket = get_object_or_404(Ticket, uuid=pk_uuid)
-        kwargs['ticket'] = ticket
-        kwargs['config'] = self.config
-
-        '''
-        context = {
-            'ticket': ticket,
-            'config': config,
-        }
-        '''
-
-        self.pdf_filename = ticket.pdf_filename()
-        return kwargs
-
-    def get_pdf_filename(self, **kwargs):
-        return self.pdf_filename
+# class TicketPdf(WeasyTemplateView):
+#     permission_classes = [AllowAny]
+#     template_name = 'ticket/ticket.html'
+#
+#     def get_context_data(self, pk_uuid, **kwargs):
+#         logger.info(f"{timezone.now()} création de pdf demandé. uuid : {pk_uuid}")
+#
+#         self.config = Configuration.get_solo()
+#         ticket: Ticket = get_object_or_404(Ticket, uuid=pk_uuid)
+#         kwargs['ticket'] = ticket
+#         kwargs['config'] = self.config
+#
+#         '''
+#         context = {
+#             'ticket': ticket,
+#             'config': config,
+#         }
+#         '''
+#
+#         self.pdf_filename = ticket.pdf_filename()
+#         return kwargs
+#
+#     def get_pdf_filename(self, **kwargs):
+#         return self.pdf_filename
 
 
 # On vérifie que les métatada soient les meme dans la DB et chez Stripe.
