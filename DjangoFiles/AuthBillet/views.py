@@ -142,8 +142,10 @@ class MeViewset(viewsets.ViewSet):
         return Response(retour, status=status.HTTP_200_OK)
 
     def retrieve(self, request, pk=None):
-        email = force_str(urlsafe_base64_decode(pk))
-        print(f"retrieve ! {email}")
+        try:
+            email = force_str(urlsafe_base64_decode(pk))
+        except:
+            return Response("base64 email only", status=status.HTTP_406_NOT_ACCEPTABLE)
         User = get_user_model()
         data = a_jour_adhesion(User.objects.filter(email=email).first())
         data.get('a_jour')

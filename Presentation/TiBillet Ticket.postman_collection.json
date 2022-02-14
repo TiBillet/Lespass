@@ -63,7 +63,7 @@
 					"formdata": [
 						{
 							"key": "email",
-							"value": "jturbeaux+prout@pm.me",
+							"value": "{{email}}",
 							"type": "text"
 						}
 					]
@@ -129,12 +129,12 @@
 					"formdata": [
 						{
 							"key": "username",
-							"value": "jturbeaux@pm.me",
+							"value": "{{email}}",
 							"type": "text"
 						},
 						{
 							"key": "password",
-							"value": "proutprout123",
+							"value": "{{password}}",
 							"type": "text"
 						}
 					]
@@ -289,6 +289,51 @@
 						"api",
 						"user",
 						"me",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "user email adhesion a jour",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"email = pm.collectionVariables.get(\"email\");",
+							"let encodedString = btoa(email);",
+							"pm.collectionVariables.set(\"email_base64\", encodedString);",
+							""
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"url": {
+					"raw": "{{url}}/api/user/me/{{email_base64}}/",
+					"host": [
+						"{{url}}"
+					],
+					"path": [
+						"api",
+						"user",
+						"me",
+						"{{email_base64}}",
 						""
 					]
 				}
@@ -1742,6 +1787,18 @@
 		{
 			"key": "price_billet_demi_tarif_uuid",
 			"value": "price_billet_plein_tarif_uuid"
+		},
+		{
+			"key": "email",
+			"value": "email"
+		},
+		{
+			"key": "password",
+			"value": "password"
+		},
+		{
+			"key": "email_base64",
+			"value": "email_base64"
 		}
 	]
 }
