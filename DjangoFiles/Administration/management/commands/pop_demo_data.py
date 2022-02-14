@@ -19,6 +19,8 @@ from django.utils.text import slugify
 class Command(BaseCommand):
 
     def handle(self, *args, **options):
+
+
         # Création du tenant principal public
         tenant_public, created = Client.objects.get_or_create(
             schema_name='public',
@@ -205,6 +207,37 @@ class Command(BaseCommand):
             auth_token = response.json().get("access")
             headers = { 'Authorization': f"Bearer {auth_token}" }
 
+            ### Create Options pour tickets
+            print("\n")
+            print("************ Create Options pour tickets")
+
+            url = f"{base_url}/api/optionticket/"
+            data_json = {'name': 'Balcon'}
+            print('*' * 30)
+            print(f'on lance la requete : {url}')
+            response = requests.request("POST", url, headers=headers, data=data_json)
+            print('*' * 30)
+
+            # print(response.text)
+            if response.status_code not in [201, 409]:
+                import ipdb; ipdb.set_trace()
+
+            url = f"{base_url}/api/optionticket/"
+            data_json = {'name': 'Place assise'}
+            print('*' * 30)
+            print(f'on lance la requete : {url}')
+            response = requests.request("POST", url, headers=headers, data=data_json)
+            print('*' * 30)
+
+            # print(response.text)
+            if response.status_code not in [201, 409]:
+                import ipdb; ipdb.set_trace()
+
+
+
+            print("************ Create Options pour tickets OK")
+            print("\n")
+
             ### Create Ticket product
             print("\n")
             print("************ Create Ticket Product")
@@ -383,6 +416,10 @@ class Command(BaseCommand):
             print(f'on lance la requete : {url}')
             products = requests.request("GET", url).json()
             products_uuid = [product.get('uuid') for product in products]
+
+            req_options = requests.request("GET", f"{base_url}/api/optionticket/").json()
+            options_uuid = [option.get('uuid') for option in req_options]
+
             print('*' * 30)
 
             def random_date():
@@ -406,7 +443,8 @@ class Command(BaseCommand):
                             "datetime": r_date.strftime("%Y-%m-%dT%H:%M")
                         },
                     ],
-                    "products": products_uuid
+                    "products": products_uuid,
+                    "options": options_uuid,
                 }
 
                 url = f"{base_url}/api/events/"

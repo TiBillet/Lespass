@@ -11,7 +11,7 @@ from django_tenants.utils import schema_context, tenant_context
 
 from AuthBillet.models import TibilletUser, HumanUser
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, Paiement_stripe, \
-    PriceSold, ProductSold, Artist_on_event
+    PriceSold, ProductSold, Artist_on_event, OptionGenerale
 from Customers.models import Client
 from PaiementStripe.views import creation_paiement_stripe
 
@@ -165,10 +165,22 @@ class Artist_on_eventSerializer(serializers.ModelSerializer):
             'configuration',
         ]
 
+class OptionTicketSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OptionGenerale
+        fields = [
+            'uuid',
+            'name',
+            'poids',
+        ]
+        read_only_fields = ('uuid','poids')
+
+
 class EventCreateSerializer(serializers.Serializer):
     date = serializers.DateField()
     artists = ArtistEventCreateSerializer(many=True)
     products = serializers.ListField()
+    options = serializers.ListField()
 
     def validate_products(self, value):
         self.products_db = []
@@ -179,6 +191,16 @@ class EventCreateSerializer(serializers.Serializer):
             except Product.DoesNotExist as e:
                 raise serializers.ValidationError(_(f'{uuid} Produit non trouvé'))
         return self.products_db
+
+    def validate_options(self, value):
+        self.options_db = []
+        for uuid in value:
+            try:
+                option = OptionGenerale.objects.get(pk=uuid)
+                self.options_db.append(option)
+            except Product.DoesNotExist as e:
+                raise serializers.ValidationError(_(f'{uuid} Option non trouvé'))
+        return self.options_db
 
     def validate(self, attrs):
         # import ipdb; ipdb.set_trace()
@@ -200,6 +222,10 @@ class EventCreateSerializer(serializers.Serializer):
         for product in attrs.get('products'):
             event.products.add(product)
 
+        event.options.clear()
+        for option in attrs.get('options'):
+            event.options.add(option)
+
         for artist_input in attrs.get('artists'):
             prog, created = Artist_on_event.objects.get_or_create(
                 artist=artist_input.get('tenant'),
@@ -212,7 +238,9 @@ class EventCreateSerializer(serializers.Serializer):
 
 
 class EventSerializer(serializers.ModelSerializer):
-    products = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all(), many=True)
+    # products = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all(), many=True)
+    products = ProductSerializer(many=True)
+    options = OptionTicketSerializer(many=True)
     artists = Artist_on_eventSerializer(many=True)
 
     class Meta:
@@ -226,6 +254,7 @@ class EventSerializer(serializers.ModelSerializer):
             'event_facebook_url',
             'datetime',
             'products',
+            'options',
             'img_variations',
             'reservations',
             'complet',
@@ -282,6 +311,7 @@ class ReservationSerializer(serializers.ModelSerializer):
             'status',
         ]
         depth = 1
+
 
 class TicketSerializer(serializers.ModelSerializer):
     class Meta:
@@ -403,6 +433,7 @@ def validate_email_and_return_user(email):
 
     user.save()
     return user
+
 
 
 

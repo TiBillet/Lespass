@@ -21,10 +21,10 @@ from rest_framework.views import APIView
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
     ReservationValidator, MembreshipValidator, ConfigurationSerializer, NewConfigSerializer, \
-    EventCreateSerializer, TicketSerializer
+    EventCreateSerializer, TicketSerializer, OptionTicketSerializer
 from AuthBillet.models import TenantAdminPermission, TibilletUser
 from Customers.models import Client, Domain
-from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe
+from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe, OptionGenerale
 from rest_framework import viewsets, permissions, status
 from django.db import connection, IntegrityError
 
@@ -299,7 +299,7 @@ class HereViewSet(viewsets.ViewSet):
 class EventsViewSet(viewsets.ViewSet):
 
     def list(self, request):
-        queryset = Event.objects.all().order_by('-datetime')
+        queryset = Event.objects.filter(datetime__gte=datetime.now()).order_by('datetime')
         events_serialized = EventSerializer(queryset, many=True, context={'request': request})
         return Response(events_serialized.data)
 
@@ -365,6 +365,32 @@ class ReservationViewset(viewsets.ViewSet):
             permission_classes = [TenantAdminPermission]
         else:
             permission_classes = [permissions.AllowAny]
+        return [permission() for permission in permission_classes]
+
+
+class OptionTicket(viewsets.ViewSet):
+    def list(self, request):
+        queryset = OptionGenerale.objects.all()
+        serializer = OptionTicketSerializer(queryset, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    def create(self, request):
+        print(request.data)
+        validator = OptionTicketSerializer(data=request.data, context={'request': request})
+        if validator.is_valid():
+            validator.save()
+            return Response(validator.data, status=status.HTTP_201_CREATED)
+        else :
+            for error in [validator.errors[error][0] for error in validator.errors]:
+                if error.code == "unique":
+                    return Response(validator.errors, status=status.HTTP_409_CONFLICT)
+        return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def get_permissions(self):
+        if self.action in ['list']:
+            permission_classes = [permissions.AllowAny]
+        else:
+            permission_classes = [TenantAdminPermission]
         return [permission() for permission in permission_classes]
 
 

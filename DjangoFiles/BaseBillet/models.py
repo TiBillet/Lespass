@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 class OptionGenerale(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
-    name = models.CharField(max_length=30)
+    name = models.CharField(max_length=30, unique=True)
     poids = models.PositiveSmallIntegerField(default=0, verbose_name=_("Poids"))
 
     def __str__(self):
@@ -45,8 +45,8 @@ class OptionGenerale(models.Model):
 
     class Meta:
         ordering = ('poids',)
-        verbose_name = _('Options Generales')
-        verbose_name_plural = _('Options Generales')
+        verbose_name = _('Option Ticket')
+        verbose_name_plural = _('Options Tickets')
 
 
 @receiver(post_save, sender=OptionGenerale)
@@ -321,6 +321,7 @@ class Event(models.Model):
     published = models.BooleanField(default=False)
 
     products = models.ManyToManyField(Product, blank=True)
+    options = models.ManyToManyField(OptionGenerale, blank=True)
 
     img = StdImageField(upload_to='images/',
                         validators=[MaxSizeValidator(1920, 1920)],
