@@ -86,9 +86,8 @@ class Command(BaseCommand):
             admin.is_active = True
             admin.can_create_tenant = True
             admin.is_staff = True
-            admin.client_admin.add(Client.objects.get(name="Meta"))
+            admin.client_admin.add(tenant_m)
             admin.save()
-
         # assert response.status_code == 200
         print("************ Create User OK")
 
