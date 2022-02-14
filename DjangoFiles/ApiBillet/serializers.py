@@ -156,14 +156,17 @@ class ArtistEventCreateSerializer(serializers.Serializer):
     def validate(self, attrs):
         return self.artiste_event_db
 
+
 class Artist_on_eventSerializer(serializers.ModelSerializer):
     configuration = ConfigurationSerializer()
+
     class Meta:
         model = Artist_on_event
         fields = [
             'datetime',
             'configuration',
         ]
+
 
 class OptionTicketSerializer(serializers.ModelSerializer):
     class Meta:
@@ -173,14 +176,15 @@ class OptionTicketSerializer(serializers.ModelSerializer):
             'name',
             'poids',
         ]
-        read_only_fields = ('uuid','poids')
+        read_only_fields = ('uuid', 'poids')
 
 
 class EventCreateSerializer(serializers.Serializer):
     date = serializers.DateField()
     artists = ArtistEventCreateSerializer(many=True)
     products = serializers.ListField()
-    options = serializers.ListField()
+    options_radio = serializers.ListField(required=False)
+    options_checkbox = serializers.ListField(required=False)
 
     def validate_products(self, value):
         self.products_db = []
@@ -192,15 +196,25 @@ class EventCreateSerializer(serializers.Serializer):
                 raise serializers.ValidationError(_(f'{uuid} Produit non trouvé'))
         return self.products_db
 
-    def validate_options(self, value):
-        self.options_db = []
+    def validate_options_radio(self, value):
+        self.options_radio = []
         for uuid in value:
             try:
                 option = OptionGenerale.objects.get(pk=uuid)
-                self.options_db.append(option)
+                self.options_radio.append(option)
             except Product.DoesNotExist as e:
                 raise serializers.ValidationError(_(f'{uuid} Option non trouvé'))
-        return self.options_db
+        return self.options_radio
+
+    def validate_options_checkbox(self, value):
+        self.options_checkbox = []
+        for uuid in value:
+            try:
+                option = OptionGenerale.objects.get(pk=uuid)
+                self.options_checkbox.append(option)
+            except Product.DoesNotExist as e:
+                raise serializers.ValidationError(_(f'{uuid} Option non trouvé'))
+        return self.options_checkbox
 
     def validate(self, attrs):
         # import ipdb; ipdb.set_trace()
@@ -216,15 +230,17 @@ class EventCreateSerializer(serializers.Serializer):
             categorie=Event.CONCERT,
         )
 
-        # import ipdb; ipdb.set_trace()
-
         event.products.clear()
         for product in attrs.get('products'):
             event.products.add(product)
 
-        event.options.clear()
-        for option in attrs.get('options'):
-            event.options.add(option)
+        event.options_radio.clear()
+        for option in attrs.get('options_radio'):
+            event.options_radio.add(option)
+
+        event.options_checkbox.clear()
+        for option in attrs.get('options_checkbox'):
+            event.options_checkbox.add(option)
 
         for artist_input in attrs.get('artists'):
             prog, created = Artist_on_event.objects.get_or_create(
@@ -240,7 +256,8 @@ class EventCreateSerializer(serializers.Serializer):
 class EventSerializer(serializers.ModelSerializer):
     # products = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all(), many=True)
     products = ProductSerializer(many=True)
-    options = OptionTicketSerializer(many=True)
+    options_radio = OptionTicketSerializer(many=True)
+    options_checkbox = OptionTicketSerializer(many=True)
     artists = Artist_on_eventSerializer(many=True)
 
     class Meta:
@@ -254,7 +271,8 @@ class EventSerializer(serializers.ModelSerializer):
             'event_facebook_url',
             'datetime',
             'products',
-            'options',
+            'options_radio',
+            'options_checkbox',
             'img_variations',
             'reservations',
             'complet',
@@ -433,8 +451,6 @@ def validate_email_and_return_user(email):
 
     user.save()
     return user
-
-
 
 
 class ReservationValidator(serializers.Serializer):

@@ -229,6 +229,23 @@ class Command(BaseCommand):
             response = requests.request("POST", url, headers=headers, data=data_json)
             print('*' * 30)
 
+            url = f"{base_url}/api/optionticket/"
+            data_json = {'name': 'Vegetarien'}
+            print('*' * 30)
+            print(f'on lance la requete : {url}')
+            response = requests.request("POST", url, headers=headers, data=data_json)
+            print('*' * 30)
+
+            # print(response.text)
+            if response.status_code not in [201, 409]:
+                import ipdb; ipdb.set_trace()
+
+            url = f"{base_url}/api/optionticket/"
+            data_json = {'name': 'Carnivore'}
+            print('*' * 30)
+            print(f'on lance la requete : {url}')
+            response = requests.request("POST", url, headers=headers, data=data_json)
+            print('*' * 30)
             # print(response.text)
             if response.status_code not in [201, 409]:
                 import ipdb; ipdb.set_trace()
@@ -444,7 +461,8 @@ class Command(BaseCommand):
                         },
                     ],
                     "products": products_uuid,
-                    "options": options_uuid,
+                    "options_radio": options_uuid[:2],
+                    "options_checkbox": options_uuid[2:],
                 }
 
                 url = f"{base_url}/api/events/"

@@ -321,7 +321,8 @@ class Event(models.Model):
     published = models.BooleanField(default=False)
 
     products = models.ManyToManyField(Product, blank=True)
-    options = models.ManyToManyField(OptionGenerale, blank=True)
+    options_radio = models.ManyToManyField(OptionGenerale, blank=True, related_name="options_radio", verbose_name="Option choix unique")
+    options_checkbox = models.ManyToManyField(OptionGenerale, blank=True, related_name="options_checkbox", verbose_name="Options choix multiple")
 
     img = StdImageField(upload_to='images/',
                         validators=[MaxSizeValidator(1920, 1920)],
@@ -613,9 +614,9 @@ class Ticket(models.Model):
         api_pdf = reverse("ticket_uuid_to_pdf", args=[f"{self.uuid}"])
         protocol = "https://"
         port = ""
-        if settings.DEBUG:
-            protocol = "http://"
-            port = ":8002"
+        # if settings.DEBUG:
+        #     protocol = "http://"
+        #     port = ":8002"
         return f"{protocol}{domain}{port}{api_pdf}"
 
     def event_name(self):
