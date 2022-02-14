@@ -2,9 +2,9 @@ TiBillet was an original idéa from GDNA and designed and developed by 3Peaks, M
 
 # Current Team
 
-- Jonas TURBEAUX ( Django Backend & DevOps Maintainer )
-- Nicolas DIJOUX ( Vue.js Maintainer )
+- Nicolas DIJOUX ( Vue.js and Hardware Maintainer )
 - Axel CHABRAN ( Administrator Lead Project )
+- Jonas TURBEAUX ( Django Backend & DevOps Maintainer )
 
 # GDNA
 
