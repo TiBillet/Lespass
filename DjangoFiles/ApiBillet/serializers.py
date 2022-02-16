@@ -541,7 +541,10 @@ class ReservationValidator(serializers.Serializer):
                 for customer in line_price.get('customers'):
                     create_ticket(pricesold, customer, reservation)
 
-        metadata = {'reservation': f'{reservation.uuid}'}
+        metadata = {
+            'reservation': f'{reservation.uuid}',
+            'tenant': f'{connection.tenant.uuid}',
+        }
         new_paiement_stripe = creation_paiement_stripe(
             user=self.user_commande,
             liste_ligne_article=list_line_article_sold,

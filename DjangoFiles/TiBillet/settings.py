@@ -263,14 +263,24 @@ CELERY_RESULT_BACKEND=os.environ.get('CELERY_BACKEND', 'redis://redis:6379/0')
 # -------------------------------------/
 # JET_SIDE_MENU_COMPACT = True
 # JET_CHANGE_FORM_SIBLING_LINKS = False
+# settings.py
 
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'filters': {
+        'tenant_context': {
+            '()': 'django_tenants.log.TenantContextFilter'
+        },
+    },
     'formatters': {
         'simple': {
             'format': '%(levelname)s %(message)s',
             'datefmt': '%y %b %d, %H:%M:%S',
+        },
+        'tenant_context': {
+            'format': '[%(schema_name)s:%(domain_url)s] '
+                      '%(levelname)-7s %(asctime)s %(message)s',
         },
     },
     'handlers': {
@@ -278,6 +288,7 @@ LOGGING = {
             'level': 'INFO',
             'class': 'logging.StreamHandler',
             'formatter': 'simple',
+            'filters': ['tenant_context'],
         },
         'logfile': {
             'level': 'INFO',
@@ -285,6 +296,7 @@ LOGGING = {
             'filename': f"{BASE_DIR}/logs/Djangologfile",
             'formatter': 'simple',
             'maxBytes': 1024 * 1024 * 100,  # 100 mb
+            'filters': ['tenant_context'],
         },
         'weasyprint': {
             'level': 'ERROR',
@@ -292,6 +304,7 @@ LOGGING = {
             'filename': f"{BASE_DIR}/logs/weasyprint",
             'formatter': 'simple',
             'maxBytes': 1024 * 1024 * 100,  # 100 mb
+            'filters': ['tenant_context'],
         },
     },
     'root': {

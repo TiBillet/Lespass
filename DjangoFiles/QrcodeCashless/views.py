@@ -162,7 +162,10 @@ class index_scan(View):
             # montant_recharge = data.get('montant_recharge')
             user = validate_email_and_return_user(data.get('email'))
             ligne_articles = []
-            metadata = {}
+            metadata = {
+                'tenant': f'{connection.tenant.uuid}'
+            }
+
             metadata['recharge_carte_uuid'] = str(carte.uuid)
 
             if montant_recharge:

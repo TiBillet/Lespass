@@ -13,6 +13,8 @@ from BaseBillet.tasks import ticket_celery_mailer
 
 import logging
 
+from BaseBillet.triggers import action_article_paid_by_categorie
+
 logger = logging.getLogger(__name__)
 
 
@@ -61,7 +63,7 @@ def valide_stripe_paiement(old_instance, new_instance):
 # si toutes les lignes articles sont save en VALID.
 # @receiver(post_save, sender=LigneArticle)
 
-def set_paiement_and_reservation_valid(old_instance, new_instance):
+def set_paiement_and_reservation_valid(old_instance: LigneArticle, new_instance: LigneArticle):
     if new_instance.status == LigneArticle.VALID:
         logger.info(
             f"    TRIGGER LIGNE ARTICLE set_paiement_and_reservation_valid {new_instance.pricesold}. On test si toute les lignes sont validées")
@@ -85,10 +87,7 @@ def set_paiement_and_reservation_valid(old_instance, new_instance):
                 f"         len(lignes_dans_paiement_stripe) {len(lignes_dans_paiement_stripe)} != len(lignes_valide_dans_paiement_stripe) {len(lignes_valide_dans_paiement_stripe)} ")
 
 
-def send_to_cashless(instance):
-    # Type :
-    instance: LigneArticle
-
+def send_to_cashless(instance: LigneArticle):
     logger.info(f"        send_to_cashless {instance.pricesold}")
     data_for_cashless = {'uuid_commande': instance.paiement_stripe.uuid}
     data_for_cashless['uuid'] = instance.carte.uuid
@@ -121,17 +120,18 @@ def send_to_cashless(instance):
     return r.status_code
 
 
-def check_paid(old_instance, new_instance):
-    # Type :
-    old_instance: LigneArticle
-    new_instance: LigneArticle
-    logger.info(f"    TRIGGER LIGNE ARTICLE check_paid {old_instance.pricesold}")
 
+def check_paid(old_instance: LigneArticle, new_instance: LigneArticle):
+    logger.info(f"    TRIGGER LIGNE ARTICLE check_paid {old_instance.pricesold}")
+    action_article_paid_by_categorie(new_instance)
+
+    '''
     if new_instance.pricesold.productsold.product.categorie_article in \
             [Product.RECHARGE_CASHLESS, Product.ADHESION]:
         if send_to_cashless(new_instance) == 200:
             new_instance.status = LigneArticle.VALID
             set_paiement_and_reservation_valid(old_instance, new_instance)
+    '''
 
 
 ######################## TRIGGER RESERVATION ########################

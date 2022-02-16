@@ -23,7 +23,7 @@ from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSeria
     ReservationValidator, MembreshipValidator, ConfigurationSerializer, NewConfigSerializer, \
     EventCreateSerializer, TicketSerializer, OptionTicketSerializer
 from AuthBillet.models import TenantAdminPermission, TibilletUser
-from BaseBillet.tasks import create_ticket_pdf
+from BaseBillet.tasks import create_ticket_pdf, redirect_post_webhook_stripe_from_public
 from Customers.models import Client, Domain
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe, OptionGenerale
 from rest_framework import viewsets, permissions, status
@@ -128,7 +128,6 @@ class ArtistViewSet(viewsets.ViewSet):
 
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
     def update(self, request, pk=None):
         tenant = get_object_or_404(Client, pk=pk)
@@ -381,7 +380,7 @@ class OptionTicket(viewsets.ViewSet):
         if validator.is_valid():
             validator.save()
             return Response(validator.data, status=status.HTTP_201_CREATED)
-        else :
+        else:
             for error in [validator.errors[error][0] for error in validator.errors]:
                 if error.code == "unique":
                     return Response(validator.errors, status=status.HTTP_409_CONFLICT)
@@ -393,8 +392,6 @@ class OptionTicket(viewsets.ViewSet):
         else:
             permission_classes = [TenantAdminPermission]
         return [permission() for permission in permission_classes]
-
-
 
 
 class MembershipViewset(viewsets.ViewSet):
@@ -416,7 +413,6 @@ class MembershipViewset(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
-
 class TicketPdf(APIView):
     permission_classes = [AllowAny]
 
@@ -426,6 +422,7 @@ class TicketPdf(APIView):
         response = HttpResponse(pdf_binary, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{ticket.pdf_filename()}"'
         return response
+
 
 # class TicketPdf(WeasyTemplateView):
 #     permission_classes = [AllowAny]
@@ -576,7 +573,8 @@ def paiment_stripe_validator(request, paiement_stripe):
                         metadata_stripe = json.loads(str(metadata_stripe_json))
                         # import ipdb; ipdb.set_trace()
                         for ligne_article in paiement_stripe.lignearticle_set.all():
-                            messages.success(request, f"{ligne_article.pricesold.price.product.name} : {ligne_article.pricesold.price.name}")
+                            messages.success(request,
+                                             f"{ligne_article.pricesold.price.product.name} : {ligne_article.pricesold.price.name}")
 
                         messages.success(request, f"Paiement validé. Merci !")
 
@@ -637,13 +635,25 @@ def paiment_stripe_validator(request, paiement_stripe):
 class Webhook_stripe(APIView):
     def post(self, request):
         payload = request.data
+        tenant_uuid_in_metadata = payload["data"]["object"]["metadata"]["tenant"]
+        # if connection.tenant.schema_name == "public":
+        if f"{connection.tenant.uuid}" != tenant_uuid_in_metadata:
+            with tenant_context(Client.objects.get(uuid=tenant_uuid_in_metadata)):
+                paiement_stripe = get_object_or_404(Paiement_stripe,
+                                                    checkout_session_id_stripe=payload['data']['object']['id'])
+                
+            tenant = Client.objects.get(uuid=tenant_uuid_in_metadata)
+            url_redirect = f"https://{tenant.domains.all().first().domain}{request.path}"
+            task = redirect_post_webhook_stripe_from_public.delay(url_redirect, request.data)
+            return Response(f"redirect to {url_redirect} with celery", status=status.HTTP_200_OK)
 
-        # import ipdb; ipdb.set_trace()
         logger.info("*" * 30)
-        logger.info(f"{datetime.now()} - Webhook_stripe POST : {payload['type']}")
+        logger.info(f"{datetime.now()} - {request.get_host()} - Webhook_stripe POST : {payload['type']}")
         logger.info("*" * 30)
 
         if payload.get('type') == "checkout.session.completed":
+            logger.info(f"checkout.session.completed : {payload}")
+
             paiement_stripe = get_object_or_404(Paiement_stripe,
                                                 checkout_session_id_stripe=payload['data']['object']['id'])
             return paiment_stripe_validator(request, paiement_stripe)
