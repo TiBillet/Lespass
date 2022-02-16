@@ -635,23 +635,23 @@ def paiment_stripe_validator(request, paiement_stripe):
 class Webhook_stripe(APIView):
     def post(self, request):
         payload = request.data
-        tenant_uuid_in_metadata = payload["data"]["object"]["metadata"]["tenant"]
-        # if connection.tenant.schema_name == "public":
-        if f"{connection.tenant.uuid}" != tenant_uuid_in_metadata:
-            with tenant_context(Client.objects.get(uuid=tenant_uuid_in_metadata)):
-                paiement_stripe = get_object_or_404(Paiement_stripe,
-                                                    checkout_session_id_stripe=payload['data']['object']['id'])
-                
-            tenant = Client.objects.get(uuid=tenant_uuid_in_metadata)
-            url_redirect = f"https://{tenant.domains.all().first().domain}{request.path}"
-            task = redirect_post_webhook_stripe_from_public.delay(url_redirect, request.data)
-            return Response(f"redirect to {url_redirect} with celery", status=status.HTTP_200_OK)
-
-        logger.info("*" * 30)
-        logger.info(f"{datetime.now()} - {request.get_host()} - Webhook_stripe POST : {payload['type']}")
-        logger.info("*" * 30)
-
         if payload.get('type') == "checkout.session.completed":
+            tenant_uuid_in_metadata = payload["data"]["object"]["metadata"]["tenant"]
+            # if connection.tenant.schema_name == "public":
+            if f"{connection.tenant.uuid}" != tenant_uuid_in_metadata:
+                with tenant_context(Client.objects.get(uuid=tenant_uuid_in_metadata)):
+                    paiement_stripe = get_object_or_404(Paiement_stripe,
+                                                        checkout_session_id_stripe=payload['data']['object']['id'])
+
+                tenant = Client.objects.get(uuid=tenant_uuid_in_metadata)
+                url_redirect = f"https://{tenant.domains.all().first().domain}{request.path}"
+                task = redirect_post_webhook_stripe_from_public.delay(url_redirect, request.data)
+                return Response(f"redirect to {url_redirect} with celery", status=status.HTTP_200_OK)
+
+            logger.info("*" * 30)
+            logger.info(f"{datetime.now()} - {request.get_host()} - Webhook_stripe POST : {payload['type']}")
+            logger.info("*" * 30)
+
             logger.info(f"checkout.session.completed : {payload}")
 
             paiement_stripe = get_object_or_404(Paiement_stripe,
