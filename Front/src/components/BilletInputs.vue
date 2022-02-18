@@ -1,9 +1,9 @@
 <template>
-  <fieldset class="col-md-12 mb-4 shadow-sm p-3 mb-5 bg-body rounded" v-for="price in prices">
+  <fieldset class="col-md-12 col-lg-9 mb-4 shadow-sm p-3 mb-5 bg-body rounded" v-for="price in dataProduct.prices" :key="price.uuid">
     <legend>
       <div class="d-flex flex-row">
         <div>{{ obtenirNombreBilletParTarif(price.uuid) }}</div>
-        <div class="ms-3"> {{ productName }} - {{ price.name }} {{ price.prix }}€ - Total
+        <div class="ms-3"> {{ dataProduct.name }} - {{ price.name }} {{ price.prix }}€ - Total
           {{ obtenirPrixParNombreBilletParTarif(price.uuid, price.prix)  }}€
         </div>
         <button class="btn btn-primary ms-3" type="button"
@@ -12,7 +12,7 @@
         </button>
       </div>
     </legend>
-    <div class="d-flex flex-row" v-for="(identifiant, index) in this.$store.state.formulaire[uuidEvent].identifiants" :key="index">
+    <div class="d-flex flex-row" v-for="(identifiant, index) in store.state.formulaireBillet[uuidEvent].identifiants" :key="index">
       <div v-if="identifiant.uuidTarif === price.uuid" class="input-group mb-2">
         <input type="text" :value="identifiant.nom" placeholder="Nom" aria-label="Nom" class="form-control"
                @keyup="majIdentifiant(uuidEvent,$event,'nom', identifiant.id)" required>
@@ -25,28 +25,32 @@
       </div>
     </div>
   </fieldset>
+
 </template>
 
 <script setup>
-console.log('-> BilletsInputs.vue')
-import { ref, computed } from 'vue'
+console.log('-> BilletInputs.vue')
+
+// vue
 import {useStore} from 'vuex'
 
 const store = useStore()
-
+// attributs/props
 const props = defineProps({
-  prices: Object,
-  productName: String,
+  dataProduct: Object,
   uuidEvent: String
 })
+console.log('props =', props)
 
 function obtenirNombreBilletParTarif(uuidTarif) {
-  return store.state.formulaire[props.uuidEvent].identifiants.filter(iden => iden.uuidTarif === uuidTarif).length
+  return store.state.formulaireBillet[props.uuidEvent].identifiants.filter(iden => iden.uuidTarif === uuidTarif).length
+  return 0
 }
 
 function obtenirPrixParNombreBilletParTarif(uuidTarif, prix) {
-  const nbBillet = store.state.formulaire[props.uuidEvent].identifiants.filter(iden => iden.uuidTarif === uuidTarif).length
+  const nbBillet = store.state.formulaireBillet[props.uuidEvent].identifiants.filter(iden => iden.uuidTarif === uuidTarif).length
   return nbBillet * prix
+
 }
 
 // créer les champs nom/prénom dans identifiants
@@ -63,9 +67,8 @@ function majIdentifiant(uuidEvent, event, champ, id) {
 function supprimerIdentifiant(uuidEvent, id) {
   store.commit('supprimerIdentifiant', { uuidEvent: uuidEvent, id: id })
 }
-
-// let prix = computed(prixArticle => nombreBillet * prixArticle)
 </script>
 
-<style>
+<style scoped>
+
 </style>

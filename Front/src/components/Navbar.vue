@@ -14,7 +14,7 @@
       </button>
       <div class="collapse navbar-collapse" id="navigation">
         <ul class="navbar-nav navbar-nav-hover mx-auto">
-          <li class="nav-item px-3">
+          <li v-if="router.currentRoute.value.name === 'Accueil'" class="nav-item px-3">
             <a href="#calendar" class="nav-link text-white opacity-8">
               Calendrier
             </a>
@@ -47,17 +47,20 @@ console.log('-> Navbar.vue')
 import Modallogin from './Modallogin.vue'
 
 // vue
+import {useRouter} from 'vue-router'
 import {useStore} from 'vuex'
 
+const router = useRouter()
 const store = useStore()
 const props = defineProps({
   dataHeader: Object
 })
 
+console.log('route =', router.currentRoute.value.name)
 
 // si pas d'image
 const getLogo = () => {
-  console.log('-> getLogo, props.dataHeader.logo =', props.dataHeader.logo)
+  // console.log('-> getLogo, props.dataHeader.logo =', props.dataHeader.logo)
   if (props.dataHeader.logo !== undefined) {
     return `${props.dataHeader.domain + props.dataHeader.logo}`
   }

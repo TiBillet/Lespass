@@ -140,7 +140,7 @@
         <div class="col-12">
           <div class="text-center">
             <p class="my-4 text-sm">
-              All rights reserved. Copyright © 2022 Now UI Design System by <a href="https://www.creative-tim.com" target="_blank">Creative Tim</a>.
+              All rights reserved. Copyright © 2022 <a href="#" target="_blank">Tibillet</a>.
             </p>
           </div>
         </div>

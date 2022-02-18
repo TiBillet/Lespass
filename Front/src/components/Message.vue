@@ -45,7 +45,7 @@ function initEffacerMessage(id, tmp) {
 #conteneur-message {
   position: fixed;
   left: 0;
-  top: 0;
+  top: 72px;
   width: 100%;
   z-index: 1000;
 }

@@ -5,7 +5,7 @@ export default createStore({
   state: {
     token: '',
     chargement: false,
-    formulaire: {},
+    formulaireBillet: {},
     events: [],
     place: {},
     products: []
@@ -34,8 +34,8 @@ export default createStore({
     resetFormulaires(state) {
       state.formulaire = {}
     },
-    initFormulaire(state, uuidEvent) {
-      state.formulaire[uuidEvent] = {
+    initFormulaireBillet(state, uuidEvent) {
+      state.formulaireBillet[uuidEvent] = {
         email: '',
         confirmeEmail: '',
         attentionEmail: false,
@@ -45,22 +45,22 @@ export default createStore({
         identifiants: []
       }
     },
-    majFormulaireAdhesionActive(state, data) {
-      state.formulaire[data.uuidEvent].adhesion = data.valeur
+    majFormulaireBilletAdhesionActive(state, data) {
+      state.formulaireBillet[data.uuidEvent].adhesion = data.valeur
     },
-    majFormulaire(state, data) {
+    majFormulaireBillet(state, data) {
       console.log('-> store, majFormulaire, data =', data)
       if (data.sujet.indexOf('.') === -1) {
-        state.formulaire[data.uuidEvent][data.sujet] = data.valeur
+        state.formulaireBillet[data.uuidEvent][data.sujet] = data.valeur
       } else {
         // le sujet se trouve après le point
         const sujet = data.sujet.split('.')[1]
         // adhésion
         if (data.sujet.includes('adhesion') === true) {
-          state.formulaire[data.uuidEvent].adhesionInfos[sujet] = data.valeur
+          state.formulaireBillet[data.uuidEvent].adhesionInfos[sujet] = data.valeur
         }
       }
-      // console.log('formulaire = ', state.formulaire)
+      // console.log('formulaire = ', state.formulaireBillet)
     },
     alerteReseau(state, data) {
       state.erreurReseau = data
@@ -76,13 +76,13 @@ export default createStore({
       }
     },
     supprimerIdentifiant(state, data) {
-      state.formulaire[data.uuidEvent].identifiants = state.formulaire[data.uuidEvent].identifiants.filter(ele => ele.id !== data.id)
+      state.formulaireBillet[data.uuidEvent].identifiants = state.formulaireBillet[data.uuidEvent].identifiants.filter(ele => ele.id !== data.id)
     },
     ajouterIdentiant(state, data) {
       // console.log('store, ajouterIdentiant, data =', data)
-      const tarifs = state.formulaire[data.uuidEvent].identifiants.filter(iden => iden.uuidTarif === data.uuidTarif)
+      const tarifs = state.formulaireBillet[data.uuidEvent].identifiants.filter(iden => iden.uuidTarif === data.uuidTarif)
       if (tarifs.length + 1 <= data.max) {
-        state.formulaire[data.uuidEvent].identifiants.push({
+        state.formulaireBillet[data.uuidEvent].identifiants.push({
           id: Date.now(),
           uuidTarif: data.uuidTarif,
           nom: '',
@@ -92,7 +92,7 @@ export default createStore({
     },
     majIdentifiant(state, data) {
       // console.log('store, majIdentifiant, data =', data)
-      state.formulaire[data.uuidEvent].identifiants.find(ele => (ele.id === data.id))[data.champ] = data.valeur
+      state.formulaireBillet[data.uuidEvent].identifiants.find(ele => (ele.id === data.id))[data.champ] = data.valeur
     }
   },
   getters: {

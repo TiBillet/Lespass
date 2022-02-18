@@ -24,7 +24,6 @@ const props = defineProps({
 const router = useRouter()
 const domain = `${location.protocol}//${location.host}`
 const artist = props.dataArtist.configuration
-console.log('artist =', artist)
 
 const getBackgroundImage = () => {
   if (artist.img_variations.med === undefined) {
@@ -35,12 +34,10 @@ const getBackgroundImage = () => {
 }
 
 function goArtistPage(slugArtist) {
-  console.log('-> goArtistPage, slugArtist =', slugArtist)
+  // console.log('-> goArtistPage, slugArtist =', slugArtist)
   router.push({name: 'Artist', params: {slug: slugArtist}})
 }
-
 </script>
 
 <style scoped>
-
 </style>
