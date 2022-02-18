@@ -1,4 +1,6 @@
+import logging
 import os
+import time
 from datetime import timedelta, datetime
 from os.path import exists
 import requests
@@ -17,6 +19,8 @@ from django.utils.text import slugify
 class Command(BaseCommand):
 
     def handle(self, *args, **options):
+
+
         # Création du tenant principal public
         tenant_public, created = Client.objects.get_or_create(
             schema_name='public',
@@ -33,31 +37,31 @@ class Command(BaseCommand):
         )
         domain_public.save()
 
-        tenant_demo, created = Client.objects.get_or_create(
-            schema_name="demo",
-            name="Demo",
+        tenant_m, created = Client.objects.get_or_create(
+            schema_name="m",
+            name="m",
             on_trial=False,
             categorie=Client.SALLE_SPECTACLE,
         )
-        tenant_demo.save()
+        tenant_m.save()
 
-        domain_demo, created = Domain.objects.get_or_create(
-            domain=f'demo.{os.getenv("DOMAIN")}',
-            tenant=tenant_demo,
+        domain_m, created = Domain.objects.get_or_create(
+            domain=f'm.{os.getenv("DOMAIN")}',
+            tenant=tenant_m,
             is_primary=True
         )
-        domain_demo.save()
+        domain_m.save()
 
         # with schema_context('demo'):
         #     call_command('flush')
 
         # base_url = f"https://demo.{os.environ.get('DOMAIN')}"
-        sub_domain = "demo"
+        sub_domain = "m"
 
-        protocol = "http://"
-        port = ":8002"
-        # protocol = "https://"
-        # port = ""
+        # protocol = "http://"
+        # port = ":8002"
+        protocol = "https://"
+        port = ""
 
         base_url = f"{protocol}{sub_domain}.{os.environ.get('DOMAIN')}{port}"
 
@@ -65,27 +69,27 @@ class Command(BaseCommand):
         headers = {"charset": "utf-8"}
 
         email = os.environ.get('EMAIL')
-        dummypassword = 'proutprout123'
+        dummypassword = os.environ.get('DEMODATA_PASSWORD')
 
         ### Create User :
-        print("************ Create User")
-        url = f"{base_url}/api/user/create/"
         data_json = {
             'email': email,
             'password': dummypassword,
         }
+        url = f"{base_url}/api/user/create/"
+        print(f"************ Create User - {url} - data : {data_json}")
 
         response = requests.request("POST", url, data=data_json)
-        # print(response.text)
-        with schema_context('Demo'):
+        print(response.text)
+
+        with tenant_context(tenant_m):
             User: TibilletUser = get_user_model()
             admin = User.objects.get(email=email)
             admin.is_active = True
             admin.can_create_tenant = True
             admin.is_staff = True
-            admin.client_admin.add(Client.objects.get(name="Demo"))
+            admin.client_admin.add(tenant_m)
             admin.save()
-
         # assert response.status_code == 200
         print("************ Create User OK")
 
@@ -101,9 +105,9 @@ class Command(BaseCommand):
         headers['Authorization'] = f"Bearer {auth_token}"
         print("************ Create Get Token user OK")
 
-        print("************ me")
 
-        url = f"{base_url}/api/me/"
+        url = f"{base_url}/api/user/me/"
+        print(f"************ me : {url}")
         response = requests.request("GET", url, headers=headers, data=data_json)
 
         # print(response.text)
@@ -149,9 +153,16 @@ class Command(BaseCommand):
                 )
             print('*' * 30)
             print(f'on lance la requete : {url}')
-            print('*' * 30)
+            # if slugify(organisation) == "vavangart":
+            #     import ipdb; ipdb.set_trace()
+
             response = requests.request("POST", url, headers=headers, data=data_json, files=files)
-            # print(response.text)
+
+            # try:
+            #     response = requests.request("POST", url, headers=headers, data=data_json, files=files)
+            # except:
+            #     import ipdb; ipdb.set_trace()
+            print('*' * 30)
 
             if response.status_code == 409:
                 print("Conflict : Existe déja, on lance un put")
@@ -187,13 +198,64 @@ class Command(BaseCommand):
             base_url = f"{protocol}{sub_domain}.{os.environ.get('DOMAIN')}{port}"
 
             url = f"{base_url}/api/user/token/"
+            print("\n")
+            print(f"************ Get auth token {url}")
+
             data_json = {'username': email,
                          'password': dummypassword}
             response = requests.request("POST", url, data=data_json)
             auth_token = response.json().get("access")
             headers = { 'Authorization': f"Bearer {auth_token}" }
 
-            ### Create product
+            ### Create Options pour tickets
+            print("\n")
+            print("************ Create Options pour tickets")
+
+            url = f"{base_url}/api/optionticket/"
+            data_json = {'name': 'Balcon'}
+            print('*' * 30)
+            print(f'on lance la requete : {url}')
+            response = requests.request("POST", url, headers=headers, data=data_json)
+            print('*' * 30)
+
+            # print(response.text)
+            if response.status_code not in [201, 409]:
+                import ipdb; ipdb.set_trace()
+
+            url = f"{base_url}/api/optionticket/"
+            data_json = {'name': 'Place assise'}
+            print('*' * 30)
+            print(f'on lance la requete : {url}')
+            response = requests.request("POST", url, headers=headers, data=data_json)
+            print('*' * 30)
+
+            url = f"{base_url}/api/optionticket/"
+            data_json = {'name': 'Vegetarien'}
+            print('*' * 30)
+            print(f'on lance la requete : {url}')
+            response = requests.request("POST", url, headers=headers, data=data_json)
+            print('*' * 30)
+
+            # print(response.text)
+            if response.status_code not in [201, 409]:
+                import ipdb; ipdb.set_trace()
+
+            url = f"{base_url}/api/optionticket/"
+            data_json = {'name': 'Carnivore'}
+            print('*' * 30)
+            print(f'on lance la requete : {url}')
+            response = requests.request("POST", url, headers=headers, data=data_json)
+            print('*' * 30)
+            # print(response.text)
+            if response.status_code not in [201, 409]:
+                import ipdb; ipdb.set_trace()
+
+
+
+            print("************ Create Options pour tickets OK")
+            print("\n")
+
+            ### Create Ticket product
             print("\n")
             print("************ Create Ticket Product")
 
@@ -246,6 +308,75 @@ class Command(BaseCommand):
                 assert response.status_code == 201
                 print("************ Create Ticket prices OK")
                 print("\n")
+
+
+
+            ### Create Adhesion product
+            print("\n")
+            print("************ Create Adhesion Product")
+
+            url = f"{base_url}/api/products/"
+            data_json = {'name': 'Adhesion',
+                         'publish': 'true',
+                         'categorie_article': 'A'}
+            files = [
+                ('img', ('adhesion_tampon.png', open('/DjangoFiles/data/demo_img/adhesion_tampon.png', 'rb'), 'image/png'))
+            ]
+            print('*' * 30)
+            print(f'on lance la requete : {url}')
+            response = requests.request("POST", url, headers=headers, data=data_json, files=files)
+            print('*' * 30)
+
+            uuid_adhesion_prodcut = response.json().get("uuid")
+            # print(response.text)
+            if response.status_code not in [201, 409]:
+                import ipdb; ipdb.set_trace()
+
+            print("************ Create Adhesion Product OK")
+            print("\n")
+
+            if response.status_code == 201:
+                ### Create Ticket prices
+                print("\n")
+                print("************ Create Adhesion prices")
+                url = f"{base_url}/api/prices/"
+
+                data_json = {'name': 'Tarif solidaire',
+                             'prix': '10',
+                             'vat': 'NA',
+                             'max_per_user': '10',
+                             'stock': '250',
+                             'product': uuid_adhesion_prodcut}
+                response = requests.request("POST", url, headers=headers, data=data_json)
+                uuid_price_demi = response.json().get("uuid")
+                # print(response.text)
+                assert response.status_code == 201
+
+                data_json = {'name': 'Plein Tarif',
+                             'prix': '20',
+                             'vat': 'NA',
+                             'max_per_user': '10',
+                             'stock': '250',
+                             'product': uuid_adhesion_prodcut}
+                response = requests.request("POST", url, headers=headers, data=data_json)
+                uuid_price_plein = response.json().get("uuid")
+                # print(response.text)
+                assert response.status_code == 201
+
+                data_json = {'name': 'Tarif Famille',
+                             'prix': '40',
+                             'vat': 'NA',
+                             'max_per_user': '10',
+                             'stock': '250',
+                             'product': uuid_adhesion_prodcut}
+                response = requests.request("POST", url, headers=headers, data=data_json)
+                uuid_price_plein = response.json().get("uuid")
+                # print(response.text)
+                assert response.status_code == 201
+
+                print("************ Create Adhesion prices OK")
+                print("\n")
+
 
             ### Create TShirt product
             print("\n")
@@ -302,6 +433,10 @@ class Command(BaseCommand):
             print(f'on lance la requete : {url}')
             products = requests.request("GET", url).json()
             products_uuid = [product.get('uuid') for product in products]
+
+            req_options = requests.request("GET", f"{base_url}/api/optionticket/").json()
+            options_uuid = [option.get('uuid') for option in req_options]
+
             print('*' * 30)
 
             def random_date():
@@ -325,7 +460,9 @@ class Command(BaseCommand):
                             "datetime": r_date.strftime("%Y-%m-%dT%H:%M")
                         },
                     ],
-                    "products": products_uuid
+                    "products": products_uuid,
+                    "options_radio": options_uuid[:2],
+                    "options_checkbox": options_uuid[2:],
                 }
 
                 url = f"{base_url}/api/events/"

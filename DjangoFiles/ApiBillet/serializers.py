@@ -11,7 +11,7 @@ from django_tenants.utils import schema_context, tenant_context
 
 from AuthBillet.models import TibilletUser, HumanUser
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, Paiement_stripe, \
-    PriceSold, ProductSold, Artist_on_event
+    PriceSold, ProductSold, Artist_on_event, OptionGenerale
 from Customers.models import Client
 from PaiementStripe.views import creation_paiement_stripe
 
@@ -156,8 +156,10 @@ class ArtistEventCreateSerializer(serializers.Serializer):
     def validate(self, attrs):
         return self.artiste_event_db
 
+
 class Artist_on_eventSerializer(serializers.ModelSerializer):
     configuration = ConfigurationSerializer()
+
     class Meta:
         model = Artist_on_event
         fields = [
@@ -165,10 +167,24 @@ class Artist_on_eventSerializer(serializers.ModelSerializer):
             'configuration',
         ]
 
+
+class OptionTicketSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OptionGenerale
+        fields = [
+            'uuid',
+            'name',
+            'poids',
+        ]
+        read_only_fields = ('uuid', 'poids')
+
+
 class EventCreateSerializer(serializers.Serializer):
     date = serializers.DateField()
     artists = ArtistEventCreateSerializer(many=True)
     products = serializers.ListField()
+    options_radio = serializers.ListField(required=False)
+    options_checkbox = serializers.ListField(required=False)
 
     def validate_products(self, value):
         self.products_db = []
@@ -179,6 +195,26 @@ class EventCreateSerializer(serializers.Serializer):
             except Product.DoesNotExist as e:
                 raise serializers.ValidationError(_(f'{uuid} Produit non trouvé'))
         return self.products_db
+
+    def validate_options_radio(self, value):
+        self.options_radio = []
+        for uuid in value:
+            try:
+                option = OptionGenerale.objects.get(pk=uuid)
+                self.options_radio.append(option)
+            except Product.DoesNotExist as e:
+                raise serializers.ValidationError(_(f'{uuid} Option non trouvé'))
+        return self.options_radio
+
+    def validate_options_checkbox(self, value):
+        self.options_checkbox = []
+        for uuid in value:
+            try:
+                option = OptionGenerale.objects.get(pk=uuid)
+                self.options_checkbox.append(option)
+            except Product.DoesNotExist as e:
+                raise serializers.ValidationError(_(f'{uuid} Option non trouvé'))
+        return self.options_checkbox
 
     def validate(self, attrs):
         # import ipdb; ipdb.set_trace()
@@ -194,11 +230,17 @@ class EventCreateSerializer(serializers.Serializer):
             categorie=Event.CONCERT,
         )
 
-        # import ipdb; ipdb.set_trace()
-
         event.products.clear()
         for product in attrs.get('products'):
             event.products.add(product)
+
+        event.options_radio.clear()
+        for option in attrs.get('options_radio'):
+            event.options_radio.add(option)
+
+        event.options_checkbox.clear()
+        for option in attrs.get('options_checkbox'):
+            event.options_checkbox.add(option)
 
         for artist_input in attrs.get('artists'):
             prog, created = Artist_on_event.objects.get_or_create(
@@ -212,7 +254,10 @@ class EventCreateSerializer(serializers.Serializer):
 
 
 class EventSerializer(serializers.ModelSerializer):
-    products = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all(), many=True)
+    # products = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all(), many=True)
+    products = ProductSerializer(many=True)
+    options_radio = OptionTicketSerializer(many=True)
+    options_checkbox = OptionTicketSerializer(many=True)
     artists = Artist_on_eventSerializer(many=True)
 
     class Meta:
@@ -226,6 +271,8 @@ class EventSerializer(serializers.ModelSerializer):
             'event_facebook_url',
             'datetime',
             'products',
+            'options_radio',
+            'options_checkbox',
             'img_variations',
             'reservations',
             'complet',
@@ -282,6 +329,7 @@ class ReservationSerializer(serializers.ModelSerializer):
             'status',
         ]
         depth = 1
+
 
 class TicketSerializer(serializers.ModelSerializer):
     class Meta:
@@ -405,7 +453,6 @@ def validate_email_and_return_user(email):
     return user
 
 
-
 class ReservationValidator(serializers.Serializer):
     email = serializers.EmailField()
     event = serializers.PrimaryKeyRelatedField(queryset=Event.objects.all())
@@ -494,7 +541,10 @@ class ReservationValidator(serializers.Serializer):
                 for customer in line_price.get('customers'):
                     create_ticket(pricesold, customer, reservation)
 
-        metadata = {'reservation': f'{reservation.uuid}'}
+        metadata = {
+            'reservation': f'{reservation.uuid}',
+            'tenant': f'{connection.tenant.uuid}',
+        }
         new_paiement_stripe = creation_paiement_stripe(
             user=self.user_commande,
             liste_ligne_article=list_line_article_sold,

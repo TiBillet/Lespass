@@ -5,7 +5,7 @@ from datetime import datetime
 import requests
 import stripe
 from django.contrib import messages
-from django.http import HttpResponseRedirect, Http404
+from django.http import HttpResponseRedirect, Http404, HttpResponse
 from django.utils import timezone
 from django_tenants.utils import schema_context, tenant_context
 from django_weasyprint import WeasyTemplateView
@@ -21,10 +21,11 @@ from rest_framework.views import APIView
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
     ReservationValidator, MembreshipValidator, ConfigurationSerializer, NewConfigSerializer, \
-    EventCreateSerializer, TicketSerializer
+    EventCreateSerializer, TicketSerializer, OptionTicketSerializer
 from AuthBillet.models import TenantAdminPermission, TibilletUser
+from BaseBillet.tasks import create_ticket_pdf, redirect_post_webhook_stripe_from_public
 from Customers.models import Client, Domain
-from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe
+from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe, OptionGenerale
 from rest_framework import viewsets, permissions, status
 from django.db import connection, IntegrityError
 
@@ -128,7 +129,6 @@ class ArtistViewSet(viewsets.ViewSet):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
     def update(self, request, pk=None):
         tenant = get_object_or_404(Client, pk=pk)
         user: TibilletUser = request.user
@@ -218,7 +218,13 @@ class PlacesViewSet(viewsets.ViewSet):
             with tenant_context(tenant):
                 conf = Configuration.get_solo()
                 serializer.update(instance=conf, validated_data=futur_conf)
-
+                conf.stripe_api_key = os.environ.get('SRIPE_KEY')
+                conf.stripe_test_api_key = os.environ.get('SRIPE_KEY_TEST')
+                if os.environ.get('STRIPE_TEST') == "False":
+                    conf.stripe_mode_test = False
+                if os.environ.get('STRIPE_TEST') == "True":
+                    conf.stripe_mode_test = True
+                conf.save()
                 user.client_admin.add(tenant)
 
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -293,7 +299,7 @@ class HereViewSet(viewsets.ViewSet):
 class EventsViewSet(viewsets.ViewSet):
 
     def list(self, request):
-        queryset = Event.objects.all().order_by('-datetime')
+        queryset = Event.objects.filter(datetime__gte=datetime.now()).order_by('datetime')
         events_serialized = EventSerializer(queryset, many=True, context={'request': request})
         return Response(events_serialized.data)
 
@@ -362,6 +368,30 @@ class ReservationViewset(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
+class OptionTicket(viewsets.ViewSet):
+    def list(self, request):
+        queryset = OptionGenerale.objects.all()
+        serializer = OptionTicketSerializer(queryset, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    def create(self, request):
+        print(request.data)
+        validator = OptionTicketSerializer(data=request.data, context={'request': request})
+        if validator.is_valid():
+            validator.save()
+            return Response(validator.data, status=status.HTTP_201_CREATED)
+        else:
+            for error in [validator.errors[error][0] for error in validator.errors]:
+                if error.code == "unique":
+                    return Response(validator.errors, status=status.HTTP_409_CONFLICT)
+        return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def get_permissions(self):
+        if self.action in ['list']:
+            permission_classes = [permissions.AllowAny]
+        else:
+            permission_classes = [TenantAdminPermission]
+        return [permission() for permission in permission_classes]
 
 
 class MembershipViewset(viewsets.ViewSet):
@@ -383,30 +413,41 @@ class MembershipViewset(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
-class TicketPdf(WeasyTemplateView):
+class TicketPdf(APIView):
     permission_classes = [AllowAny]
-    template_name = 'ticket/ticket.html'
 
-    def get_context_data(self, pk_uuid, **kwargs):
-        logger.info(f"{timezone.now()} création de pdf demandé. uuid : {pk_uuid}")
+    def get(self, request, pk_uuid):
+        ticket = get_object_or_404(Ticket, uuid=pk_uuid)
+        pdf_binary = create_ticket_pdf(ticket)
+        response = HttpResponse(pdf_binary, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{ticket.pdf_filename()}"'
+        return response
 
-        self.config = Configuration.get_solo()
-        ticket: Ticket = get_object_or_404(Ticket, uuid=pk_uuid)
-        kwargs['ticket'] = ticket
-        kwargs['config'] = self.config
 
-        '''
-        context = {
-            'ticket': ticket,
-            'config': config,
-        }
-        '''
-
-        self.pdf_filename = ticket.pdf_filename()
-        return kwargs
-
-    def get_pdf_filename(self, **kwargs):
-        return self.pdf_filename
+# class TicketPdf(WeasyTemplateView):
+#     permission_classes = [AllowAny]
+#     template_name = 'ticket/ticket.html'
+#
+#     def get_context_data(self, pk_uuid, **kwargs):
+#         logger.info(f"{timezone.now()} création de pdf demandé. uuid : {pk_uuid}")
+#
+#         self.config = Configuration.get_solo()
+#         ticket: Ticket = get_object_or_404(Ticket, uuid=pk_uuid)
+#         kwargs['ticket'] = ticket
+#         kwargs['config'] = self.config
+#
+#         '''
+#         context = {
+#             'ticket': ticket,
+#             'config': config,
+#         }
+#         '''
+#
+#         self.pdf_filename = ticket.pdf_filename()
+#         return kwargs
+#
+#     def get_pdf_filename(self, **kwargs):
+#         return self.pdf_filename
 
 
 # On vérifie que les métatada soient les meme dans la DB et chez Stripe.
@@ -527,8 +568,20 @@ def paiment_stripe_validator(request, paiement_stripe):
             # on boucle ici pour récuperer l'uuid de la carte.
             for ligne_article in paiement_stripe.lignearticle_set.all():
                 if ligne_article.carte:
-                    messages.success(request, f"Paiement validé. Merci !")
-                    return HttpResponseRedirect(f"/qr/{ligne_article.carte.uuid}#success")
+                    if request.method == 'GET':
+                        metadata_stripe_json = paiement_stripe.metadata_stripe
+                        metadata_stripe = json.loads(str(metadata_stripe_json))
+                        # import ipdb; ipdb.set_trace()
+                        for ligne_article in paiement_stripe.lignearticle_set.all():
+                            messages.success(request,
+                                             f"{ligne_article.pricesold.price.product.name} : {ligne_article.pricesold.price.name}")
+
+                        messages.success(request, f"Paiement validé. Merci !")
+
+                        return HttpResponseRedirect(f"/qr/{ligne_article.carte.uuid}#success")
+                    else:
+                        return Response(f'VALID', status=status.HTTP_200_OK)
+
 
         else:
             # on boucle ici pour récuperer l'uuid de la carte.
@@ -582,13 +635,25 @@ def paiment_stripe_validator(request, paiement_stripe):
 class Webhook_stripe(APIView):
     def post(self, request):
         payload = request.data
-
-        # import ipdb; ipdb.set_trace()
-        logger.info("*" * 30)
-        logger.info(f"{datetime.now()} - Webhook_stripe POST : {payload['type']}")
-        logger.info("*" * 30)
-
         if payload.get('type') == "checkout.session.completed":
+            tenant_uuid_in_metadata = payload["data"]["object"]["metadata"]["tenant"]
+            # if connection.tenant.schema_name == "public":
+            if f"{connection.tenant.uuid}" != tenant_uuid_in_metadata:
+                with tenant_context(Client.objects.get(uuid=tenant_uuid_in_metadata)):
+                    paiement_stripe = get_object_or_404(Paiement_stripe,
+                                                        checkout_session_id_stripe=payload['data']['object']['id'])
+
+                tenant = Client.objects.get(uuid=tenant_uuid_in_metadata)
+                url_redirect = f"https://{tenant.domains.all().first().domain}{request.path}"
+                task = redirect_post_webhook_stripe_from_public.delay(url_redirect, request.data)
+                return Response(f"redirect to {url_redirect} with celery", status=status.HTTP_200_OK)
+
+            logger.info("*" * 30)
+            logger.info(f"{datetime.now()} - {request.get_host()} - Webhook_stripe POST : {payload['type']}")
+            logger.info("*" * 30)
+
+            logger.info(f"checkout.session.completed : {payload}")
+
             paiement_stripe = get_object_or_404(Paiement_stripe,
                                                 checkout_session_id_stripe=payload['data']['object']['id'])
             return paiment_stripe_validator(request, paiement_stripe)

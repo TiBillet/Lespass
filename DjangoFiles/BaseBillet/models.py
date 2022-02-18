@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 class OptionGenerale(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
-    name = models.CharField(max_length=30)
+    name = models.CharField(max_length=30, unique=True)
     poids = models.PositiveSmallIntegerField(default=0, verbose_name=_("Poids"))
 
     def __str__(self):
@@ -45,8 +45,8 @@ class OptionGenerale(models.Model):
 
     class Meta:
         ordering = ('poids',)
-        verbose_name = _('Options Generales')
-        verbose_name_plural = _('Options Generales')
+        verbose_name = _('Option Ticket')
+        verbose_name_plural = _('Options Tickets')
 
 
 @receiver(post_save, sender=OptionGenerale)
@@ -169,9 +169,8 @@ class Configuration(SingletonModel):
     mollie_api_key = models.CharField(max_length=50,
                                       blank=True, null=True)
 
-    stripe_api_key = models.CharField(max_length=110, blank=True, null=True, default=os.environ.get('SRIPE_KEY'))
-    stripe_test_api_key = models.CharField(max_length=110, blank=True, null=True,
-                                           default=os.environ.get('SRIPE_KEY_TEST'))
+    stripe_api_key = models.CharField(max_length=110, blank=True, null=True)
+    stripe_test_api_key = models.CharField(max_length=110, blank=True, null=True)
     stripe_mode_test = models.BooleanField(default=True)
 
     def get_stripe_api(self):
@@ -322,6 +321,8 @@ class Event(models.Model):
     published = models.BooleanField(default=False)
 
     products = models.ManyToManyField(Product, blank=True)
+    options_radio = models.ManyToManyField(OptionGenerale, blank=True, related_name="options_radio", verbose_name="Option choix unique")
+    options_checkbox = models.ManyToManyField(OptionGenerale, blank=True, related_name="options_checkbox", verbose_name="Options choix multiple")
 
     img = StdImageField(upload_to='images/',
                         validators=[MaxSizeValidator(1920, 1920)],
@@ -613,9 +614,9 @@ class Ticket(models.Model):
         api_pdf = reverse("ticket_uuid_to_pdf", args=[f"{self.uuid}"])
         protocol = "https://"
         port = ""
-        if settings.DEBUG:
-            protocol = "http://"
-            port = ":8002"
+        # if settings.DEBUG:
+        #     protocol = "http://"
+        #     port = ":8002"
         return f"{protocol}{domain}{port}{api_pdf}"
 
     def event_name(self):

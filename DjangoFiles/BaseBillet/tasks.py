@@ -1,7 +1,10 @@
 # import base64
+import json
 import os
 import smtplib
 from io import BytesIO
+
+import requests
 import segno
 import barcode
 from django.contrib.auth import get_user_model
@@ -134,6 +137,7 @@ def create_ticket_pdf(ticket: Ticket):
         # 'bar_svg64': base64.b64encode(bar_svg.getvalue()).decode('utf-8'),
     }
 
+    # template_name = 'report/report.html'
     template_name = 'ticket/ticket.html'
     # template_name = 'ticket/example_flight_ticket.html'
     font_config = FontConfiguration()
@@ -169,6 +173,17 @@ def create_ticket_pdf(ticket: Ticket):
     )
 
     return pdf_binary
+
+@app.task
+def redirect_post_webhook_stripe_from_public(url, data):
+    headers = {"Content-type": "application/json"}
+    redirect_to_tenant = requests.request(
+        "POST",
+        f"{url}",
+        headers={"Content-type": "application/json"},
+        data=json.dumps(data),
+    )
+    logger.info(redirect_to_tenant.content)
 
 
 @app.task

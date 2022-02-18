@@ -26,8 +26,8 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         cards_dict = {}
         input_file_find = False
-        if exists("/DjangoFiles/data/csv/domains_and_cards.py"):
-            print("/DjangoFiles/data/csv/domains_and_cards.py existe. On charge depuis ce fichier ?")
+        if exists("/DjangoFiles/data/domains_and_cards.py"):
+            print("/DjangoFiles/data/domains_and_cards.py existe. On charge depuis ce fichier ?")
             input_file_find = input('Y ? \n')
 
         if input_file_find == "Y":
@@ -55,7 +55,8 @@ class Command(BaseCommand):
         # file = open('/DjangoFiles/data/csv/Vavangart_G1.csv')
 
         for client, gens in cards_dict.items():
-            client_tenant = Client.objects.get(schema_name=client)
+            print(client, gens)
+            client_tenant = Client.objects.get(schema_name=client.lower())
             print(client)
             for gen, file in gens.items():
                 print(gen,file)

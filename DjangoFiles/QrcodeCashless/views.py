@@ -43,7 +43,7 @@ def check_carte_local(uuid):
 
 class gen_one_bisik(View):
     def get(self, request, numero_carte):
-        print(numero_carte)
+        print(f"gen_one_bisik : {numero_carte}")
         carte = get_object_or_404(CarteCashless, number=numero_carte)
         address = request.build_absolute_uri()
         return HttpResponseRedirect(
@@ -80,7 +80,8 @@ class index_scan(View):
         return reponse
 
     def get(self, request, uuid):
-        carte = check_carte_local(uuid)
+        logger.info(f'index_scan : {uuid}')
+
         # dette technique ...
         # pour rediriger les premières générations de qrcode
         # m.tibillet.re et raffinerie
@@ -89,12 +90,13 @@ class index_scan(View):
         sub_addr = host.partition('.')[0]
         if sub_addr == "m":
             return HttpResponseRedirect(address.replace("://m.", "://raffinerie."))
+        carte = check_carte_local(uuid)
 
         configuration = Configuration.get_solo()
         if not configuration.server_cashless:
             return HttpResponse(
                 "L'adress du serveur cashless n'est pas renseignée dans la configuration de la billetterie.")
-        if not configuration.stripe_api_key or not configuration.stripe_test_api_key:
+        if not configuration.get_stripe_api():
             return HttpResponse(
                 "Pas d'information de configuration pour paiement en ligne.")
 
@@ -160,7 +162,10 @@ class index_scan(View):
             # montant_recharge = data.get('montant_recharge')
             user = validate_email_and_return_user(data.get('email'))
             ligne_articles = []
-            metadata = {}
+            metadata = {
+                'tenant': f'{connection.tenant.uuid}'
+            }
+
             metadata['recharge_carte_uuid'] = str(carte.uuid)
 
             if montant_recharge:
