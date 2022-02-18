@@ -149,11 +149,12 @@ def a_jour_adhesion(user: TibilletUser = None):
     return data
 
 class MeViewset(viewsets.ViewSet):
+
     def list(self, request):
         serializer = MeSerializer(request.user)
 
         retour = serializer.data.copy()
-        retour['adhesion'] = a_jour_adhesion(request.user)
+#         retour['adhesion'] = a_jour_adhesion(request.user)
 
         return Response(retour, status=status.HTTP_200_OK)
 

@@ -9,7 +9,8 @@
     </div>
   </section>
   <!-- après chargement -->
-  <section v-if="!chargement">
+<!--  <section v-if="!chargement">-->
+    <section v-else>
     <Message/>
     <div class="espace-navbar"></div>
     <Navbar :data-header="getDataHeader()"/>
@@ -69,7 +70,7 @@ function verifierEtatChargement() {
 
 // chargement infos lieu
 let apiLieu = `/api/here/`
-// console.log(`1 -> charge le lieu ${domain + apiLieu}`)
+console.log(`1 -> charge le lieu ${domain + apiLieu}`)
 fetch(domain + apiLieu)
     .then(response => {
       if (!response.ok) {

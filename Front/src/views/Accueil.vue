@@ -4,8 +4,8 @@
     <section class="pt-5 pb-0">
       <div class="container">
         <div class="row">
-          <div class="col-lg-4 col-md-6 mb-2" v-for="(item, index) in store.state.events" :key="index">
-            <CardEvent :infos="item"/>
+          <div class="col-lg-4 col-md-6 mb-2" v-for="(event, index) in store.state.events" :key="index">
+            <CardEvent :event="event"/>
           </div>
         </div>
       </div>

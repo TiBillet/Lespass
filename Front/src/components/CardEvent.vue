@@ -1,19 +1,19 @@
 <template>
   <div class="card card-blog card-plain">
-    <div v-if="infos.img_variations.length > 0">
+    <div v-if="event.img_variations.length > 0">
       <a class="d-block">
-        <img class="img-fluid shadow border-radius-lg" :src="infos.img_variations.thumbnail" loading="lazy"
+        <img class="img-fluid shadow border-radius-lg" :src="event.img_variations.thumbnail" loading="lazy"
              alt="Image de l'évènement !"/>
       </a>
     </div>
 
     <div class="card-body px-1 pt-3">
-      <h5>{{ infos.name }}</h5>
+      <h5>{{ event.name }}</h5>
 
-      <p v-if="infos.long_description !== null">{{ infos.long_description }}</p>
-      <p v-if="infos.long_description === null && infos.short_description !== null">{{ infos.short_description }}</p>
+      <p v-if="event.long_description !== null">{{ event.long_description }}</p>
+      <p v-if="event.long_description === null && event.short_description !== null">{{ event.short_description }}</p>
 
-      <div class="d-flex flex-column" v-for="(uuidProd, index) in infos.products" :key="index">
+      <div class="d-flex flex-column" v-for="(uuidProd, index) in event.products" :key="index">
         <div v-for="produit in produits.filter(prod => prod.uuid === uuidProd)" :key="produit.uuid">
           <div v-if="produit.categorie_article === 'B'">
             <div v-for="price in produit.prices" :key="produit.uuid">
@@ -23,9 +23,9 @@
         </div>
       </div>
 
-      <p class="text-dark">{{ formateDate(infos.datetime) }}</p>
+      <p class="text-dark">{{ formateDate(event.datetime) }}</p>
 
-      <button type="button" class="btn btn-outline-primary btn-sm" @click="goEvenement(infos.slug)">
+      <button type="button" class="btn btn-outline-primary btn-sm" @click="goEvenement(event.slug)">
         Réserver
       </button>
     </div>
@@ -43,7 +43,7 @@ const img = import('../assets/img/loading.svg')
 const store = useStore()
 
 const props = defineProps({
-  infos: Object
+  event: Object
 })
 
 // convertion du proxy en array
