@@ -124,7 +124,7 @@ class create_user(APIView):
                             status=status.HTTP_201_CREATED)
 
 
-def data_cashless(user: TibilletUser):
+def request_for_data_cashless(user: TibilletUser):
     if user.email_error or not user.email:
         return { 'erreur': f"user.email_error {user.email_error}" }
 
@@ -154,7 +154,7 @@ class MeViewset(viewsets.ViewSet):
 
         configuration = Configuration.get_solo()
         if configuration.server_cashless and configuration.key_cashless:
-            serializer_copy['cashless'] = data_cashless(request.user)
+            serializer_copy['cashless'] = request_for_data_cashless(request.user)
 
         return Response(serializer_copy, status=status.HTTP_200_OK)
 
@@ -169,7 +169,7 @@ class MeViewset(viewsets.ViewSet):
         if user:
             configuration = Configuration.get_solo()
             if configuration.server_cashless and configuration.key_cashless:
-                data = data_cashless(user)
+                data = request_for_data_cashless(user)
                 if data.get('a_jour_cotisation'):
                     return Response(data.get('a_jour_cotisation'), status=status.HTTP_200_OK)
 

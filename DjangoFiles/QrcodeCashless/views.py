@@ -194,12 +194,12 @@ class index_scan(View):
             if pk_adhesion:
                 price_adhesion = Price.objects.get(pk=data.get('pk_adhesion'))
                 # noinspection PyTypeChecker
-                ligne_article_recharge = LigneArticle.objects.create(
+                ligne_article_adhesion = LigneArticle.objects.create(
                     pricesold=get_or_create_price_sold(price_adhesion, None),
                     qty=1,
                     carte=carte,
                 )
-                ligne_articles.append(ligne_article_recharge)
+                ligne_articles.append(ligne_article_adhesion)
                 metadata['pk_adhesion'] = str(price_adhesion.pk)
 
             if len(ligne_articles) > 0:
@@ -213,7 +213,11 @@ class index_scan(View):
                 )
 
                 if new_paiement_stripe.is_valid():
+                    paiement_stripe: Paiement_stripe = new_paiement_stripe.paiement_stripe_db
+                    paiement_stripe.lignearticle_set.all().update(status=LigneArticle.UNPAID)
+
                     print(new_paiement_stripe.checkout_session.stripe_id)
+
                     return new_paiement_stripe.redirect_to_stripe()
 
 

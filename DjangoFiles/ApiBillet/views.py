@@ -346,6 +346,7 @@ class EventsViewSet(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
+
 class ChargeCashless(viewsets.ViewSet):
     def create(self, request):
         print(request.data)
@@ -356,10 +357,7 @@ class ChargeCashless(viewsets.ViewSet):
         return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_permissions(self):
-        if self.action in ['list']:
-            permission_classes = [TenantAdminPermission]
-        else:
-            permission_classes = [permissions.AllowAny]
+        permission_classes = [permissions.IsAuthenticated]
         return [permission() for permission in permission_classes]
 
 

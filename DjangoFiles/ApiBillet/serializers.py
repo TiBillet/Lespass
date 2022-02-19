@@ -1,6 +1,7 @@
 import datetime
 
 from django.contrib.auth import get_user_model
+from django.contrib.sites import requests
 from django.db import connection
 from django.utils.text import slugify
 from rest_framework import serializers
@@ -16,6 +17,8 @@ from Customers.models import Client
 from PaiementStripe.views import creation_paiement_stripe
 
 import logging
+
+from QrcodeCashless.models import CarteCashless
 
 logger = logging.getLogger(__name__)
 
@@ -230,14 +233,13 @@ class EventCreateSerializer(serializers.Serializer):
             categorie=Event.CONCERT,
         )
 
-
         event.products.clear()
-        if attrs.get('products') :
+        if attrs.get('products'):
             for product in attrs.get('products'):
                 event.products.add(product)
 
         event.options_radio.clear()
-        if attrs.get('options_radio') :
+        if attrs.get('options_radio'):
             for option in attrs.get('options_radio'):
                 event.options_radio.add(option)
 
@@ -352,33 +354,85 @@ class TicketSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+def validate_email_and_return_user(email):
+    """
+
+    :param email: email à vérifier
+    :type email: str
+    :return: TibilletUser
+    :rtype: TibilletUser
+    """
+    User: TibilletUser = get_user_model()
+    user, created = User.objects.get_or_create(
+        email=email, username=email)
+
+    if created:
+        user: HumanUser
+        user.client_source = connection.tenant
+        user.is_active = False
+
+    user.client_achat.add(connection.tenant)
+
+    user.save()
+    return user
+
+
 class MembreshipValidator(serializers.Serializer):
     email = serializers.EmailField()
 
-    first_name = serializers.CharField(max_length=200, )
-    last_name = serializers.CharField(max_length=200, )
+    first_name = serializers.CharField(max_length=200)
+    last_name = serializers.CharField(max_length=200)
 
     phone = serializers.CharField(max_length=20, required=False)
     postal_code = serializers.IntegerField(required=False)
     birth_date = serializers.DateField(required=False)
 
-    contribution_value = serializers.FloatField()
+    adhesion = serializers.PrimaryKeyRelatedField(
+        queryset=Price.objects.filter(product__categorie_article=Product.ADHESION))
 
     def validate_email(self, value):
-        User: TibilletUser = get_user_model()
-        user_paiement, created = User.objects.get_or_create(
-            email=value, username=value)
-
-        if created:
-            user_paiement: HumanUser
-            user_paiement.client_source = connection.tenant
-            user_paiement.client_achat.add(connection.tenant)
-            user_paiement.is_active = False
-        else:
-            user_paiement.client_achat.add(connection.tenant)
-
-        user_paiement.save()
+        user_paiement: TibilletUser = validate_email_and_return_user(value)
+        self.user = user_paiement
         return user_paiement.email
+
+    def validate(self, attrs):
+        price_adhesion: Price = attrs.get('adhesion')
+        user: TibilletUser = self.user
+
+        metadata = {
+            'tenant': f'{connection.tenant.uuid}',
+            'pk_adhesion': f"{price_adhesion.pk}",
+        }
+        self.metadata = metadata
+
+        ligne_article_adhesion = LigneArticle.objects.create(
+            pricesold=get_or_create_price_sold(price_adhesion, None),
+            qty=1,
+        )
+
+        new_paiement_stripe = creation_paiement_stripe(
+            user=user,
+            liste_ligne_article=[ligne_article_adhesion, ],
+            metadata=metadata,
+            reservation=None,
+            source=Paiement_stripe.API_BILLETTERIE,
+            absolute_domain=self.context.get('request').build_absolute_uri().partition('/api')[0],
+        )
+
+        if new_paiement_stripe.is_valid():
+            paiement_stripe: Paiement_stripe = new_paiement_stripe.paiement_stripe_db
+            paiement_stripe.lignearticle_set.all().update(status=LigneArticle.UNPAID)
+            self.checkout_session = new_paiement_stripe.checkout_session
+
+            return super().validate(attrs)
+
+        raise serializers.ValidationError(_(f'new_paiement_stripe not valid'))
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        logger.info(f"{self.checkout_session.url}")
+        representation['checkout_url'] = self.checkout_session.url
+        return representation
 
 
 def get_near_event_by_date():
@@ -434,32 +488,76 @@ def get_or_create_price_sold(price: Price, event: Event):
     return pricesold
 
 
-def validate_email_and_return_user(email):
-    """
+def line_article_recharge(carte, qty):
+    product, created = Product.objects.get_or_create(
+        name=f"Recharge Carte {carte.detail.origine.name} v{carte.detail.generation}",
+        categorie_article=Product.RECHARGE_CASHLESS,
+        img=carte.detail.img,
+    )
 
-    :param email: email à vérifier
-    :type email: str
-    :return: TibilletUser
-    :rtype: TibilletUser
-    """
-    User: TibilletUser = get_user_model()
-    user, created = User.objects.get_or_create(
-        email=email, username=email)
+    price, created = Price.objects.get_or_create(
+        product=product,
+        name=f"{qty}€",
+        prix=int(qty),
+    )
 
-    if created:
-        user: HumanUser
-        user.client_source = connection.tenant
-        user.is_active = False
-
-    user.client_achat.add(connection.tenant)
-
-    user.save()
-    return user
+    # noinspection PyTypeChecker
+    ligne_article_recharge = LigneArticle.objects.create(
+        pricesold=get_or_create_price_sold(price, None),
+        qty=1,
+        carte=carte,
+    )
+    return ligne_article_recharge
 
 
 class ChargeCashlessValidator(serializers.Serializer):
-    carte = serializers.UUIDField()
+    uuid = serializers.UUIDField()
     qty = serializers.IntegerField()
+
+    def validate_uuid(self, value):
+        self.card = get_object_or_404(CarteCashless, uuid=f"{value}")
+        return self.card.uuid
+
+    def validate(self, attrs):
+        request = self.context.get('request')
+        qty = attrs.get('qty')
+        if not request:
+            raise serializers.ValidationError(_(f'No request'))
+            # noinspection PyUnreachableCode
+            if not request.user:
+                raise serializers.ValidationError(_(f'No user. Auth first.'))
+        user: TibilletUser = request.user
+
+        metadata = {
+            'tenant': f'{connection.tenant.uuid}',
+            'recharge_carte_uuid': f"{self.card.uuid}",
+            'recharge_carte_montant': f"{qty}",
+        }
+        self.metadata = metadata
+
+        new_paiement_stripe = creation_paiement_stripe(
+            user=user,
+            liste_ligne_article=[line_article_recharge(self.card, qty)],
+            metadata=metadata,
+            reservation=None,
+            source=Paiement_stripe.API_BILLETTERIE,
+            absolute_domain=self.context.get('request').build_absolute_uri().partition('/api')[0],
+        )
+
+        if new_paiement_stripe.is_valid():
+            paiement_stripe: Paiement_stripe = new_paiement_stripe.paiement_stripe_db
+            paiement_stripe.lignearticle_set.all().update(status=LigneArticle.UNPAID)
+            self.checkout_session = new_paiement_stripe.checkout_session
+
+            return super().validate(attrs)
+
+        raise serializers.ValidationError(_(f'new_paiement_stripe not valid'))
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        logger.info(f"{self.checkout_session.url}")
+        representation['checkout_url'] = self.checkout_session.url
+        return representation
 
 
 class ReservationValidator(serializers.Serializer):
@@ -519,7 +617,6 @@ class ReservationValidator(serializers.Serializer):
         event: Event = attrs.get('event')
         if event.complet():
             raise serializers.ValidationError(_(f'Jauge atteinte : Evenement complet.'))
-
         # Les articles semblent bon,
         # on construit l'object reservation.
         reservation = Reservation.objects.create(
