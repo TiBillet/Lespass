@@ -78,6 +78,8 @@ class action_article_paid_by_categorie:
     def trigger_R(self):
         self.data_for_cashless['recharge_qty'] = self.ligne_article.pricesold.prix
         self.data_for_cashless['uuid'] = self.ligne_article.carte.uuid
+        statuts_code = request_to_cashless_server(self.data_for_cashless)
+
         logger.info(f"TRIGGER RECHARGE_CASHLESS")
 
     # Categorie ADHESION

@@ -124,40 +124,39 @@ class create_user(APIView):
                             status=status.HTTP_201_CREATED)
 
 
-def a_jour_adhesion(user: TibilletUser = None):
-    data = {
-        'a_jour_cotisation': False,
-        'date_derniere_cotisation': None,
-    }
-    if not user:
-        return data
+def data_cashless(user: TibilletUser):
     if user.email_error or not user.email:
-        return data
+        return { 'erreur': f"user.email_error {user.email_error}" }
 
     sess = requests.Session
     configuration = Configuration.get_solo()
-    if configuration.server_cashless and configuration.key_cashless :
-        response = requests.request("POST",
-                                    f"{configuration.server_cashless}/api/membre_check",
-                                    headers={"Authorization": f"Api-Key {configuration.key_cashless}"},
-                                    data={"email": user.email})
+    if configuration.server_cashless and configuration.key_cashless:
+        try:
+            response = requests.request("POST",
+                                        f"{configuration.server_cashless}/api/membre_check",
+                                        headers={"Authorization": f"Api-Key {configuration.key_cashless}"},
+                                        data={"email": user.email})
 
-        if response.status_code != 200 :
-            return data
-        membre = json.loads(response.content)
-        data['a_jour_cotisation'] = membre.get('a_jour_cotisation')
-        data['date_derniere_cotisation'] = membre.get('date_derniere_cotisation')
-    return data
+            if response.status_code != 200:
+                return { 'erreur': f"{response.status_code} : {response.text}" }
+            return json.loads(response.content)
+        except Exception as e:
+            return { 'erreur': f"{e}" }
+
+    return { 'erreur': f"pas de configuration server_cashless" }
+
 
 class MeViewset(viewsets.ViewSet):
 
     def list(self, request):
         serializer = MeSerializer(request.user)
+        serializer_copy = serializer.data.copy()
 
-        retour = serializer.data.copy()
-        retour['adhesion'] = a_jour_adhesion(request.user)
+        configuration = Configuration.get_solo()
+        if configuration.server_cashless and configuration.key_cashless:
+            serializer_copy['cashless'] = data_cashless(request.user)
 
-        return Response(retour, status=status.HTTP_200_OK)
+        return Response(serializer_copy, status=status.HTTP_200_OK)
 
     def retrieve(self, request, pk=None):
         try:
@@ -167,11 +166,15 @@ class MeViewset(viewsets.ViewSet):
         User = get_user_model()
         user = User.objects.filter(email=email, username=email).first()
 
-        data = a_jour_adhesion(user)
-        if data.get('a_jour_cotisation'):
-            return Response(data, status=status.HTTP_200_OK)
-        else:
-            return Response(data, status=status.HTTP_402_PAYMENT_REQUIRED)
+        if user:
+            configuration = Configuration.get_solo()
+            if configuration.server_cashless and configuration.key_cashless:
+                data = data_cashless(user)
+                if data.get('a_jour_cotisation'):
+                    return Response(data.get('a_jour_cotisation'), status=status.HTTP_200_OK)
+
+            return Response('no cashless server', status=status.HTTP_404_NOT_FOUND)
+        return Response('no User', status=status.HTTP_402_PAYMENT_REQUIRED)
 
     def get_permissions(self):
         if self.action in ['list', ]:

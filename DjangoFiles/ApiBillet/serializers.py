@@ -457,6 +457,11 @@ def validate_email_and_return_user(email):
     return user
 
 
+class ChargeCashlessValidator(serializers.Serializer):
+    carte = serializers.UUIDField()
+    qty = serializers.IntegerField()
+
+
 class ReservationValidator(serializers.Serializer):
     email = serializers.EmailField()
     event = serializers.PrimaryKeyRelatedField(queryset=Event.objects.all())

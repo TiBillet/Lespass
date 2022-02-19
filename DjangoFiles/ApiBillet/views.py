@@ -21,7 +21,7 @@ from rest_framework.views import APIView
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
     ReservationValidator, MembreshipValidator, ConfigurationSerializer, NewConfigSerializer, \
-    EventCreateSerializer, TicketSerializer, OptionTicketSerializer
+    EventCreateSerializer, TicketSerializer, OptionTicketSerializer, ChargeCashlessValidator
 from AuthBillet.models import TenantAdminPermission, TibilletUser
 from BaseBillet.tasks import create_ticket_pdf, redirect_post_webhook_stripe_from_public
 from Customers.models import Client, Domain
@@ -344,6 +344,24 @@ class EventsViewSet(viewsets.ViewSet):
         else:
             permission_classes = [TenantAdminPermission]
         return [permission() for permission in permission_classes]
+
+
+class ChargeCashless(viewsets.ViewSet):
+    def create(self, request):
+        print(request.data)
+        validator = ChargeCashlessValidator(data=request.data, context={'request': request})
+        if validator.is_valid():
+            # serializer.save()
+            return Response(validator.data, status=status.HTTP_201_CREATED)
+        return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def get_permissions(self):
+        if self.action in ['list']:
+            permission_classes = [TenantAdminPermission]
+        else:
+            permission_classes = [permissions.AllowAny]
+        return [permission() for permission in permission_classes]
+
 
 
 class ReservationViewset(viewsets.ViewSet):
