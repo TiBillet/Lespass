@@ -123,7 +123,7 @@ def send_to_cashless(instance: LigneArticle):
 
 def check_paid(old_instance: LigneArticle, new_instance: LigneArticle):
     logger.info(f"    TRIGGER LIGNE ARTICLE check_paid {old_instance.pricesold}")
-    # action_article_paid_by_categorie(new_instance)
+    action_article_paid_by_categorie(new_instance)
 
     if new_instance.pricesold.productsold.product.categorie_article in \
             [Product.RECHARGE_CASHLESS, Product.ADHESION]:

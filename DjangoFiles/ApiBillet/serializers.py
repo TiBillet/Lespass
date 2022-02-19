@@ -230,17 +230,21 @@ class EventCreateSerializer(serializers.Serializer):
             categorie=Event.CONCERT,
         )
 
+
         event.products.clear()
-        for product in attrs.get('products'):
-            event.products.add(product)
+        if attrs.get('products') :
+            for product in attrs.get('products'):
+                event.products.add(product)
 
         event.options_radio.clear()
-        for option in attrs.get('options_radio'):
-            event.options_radio.add(option)
+        if attrs.get('options_radio') :
+            for option in attrs.get('options_radio'):
+                event.options_radio.add(option)
 
         event.options_checkbox.clear()
-        for option in attrs.get('options_checkbox'):
-            event.options_checkbox.add(option)
+        if attrs.get('options_checkbox'):
+            for option in attrs.get('options_checkbox'):
+                event.options_checkbox.add(option)
 
         for artist_input in attrs.get('artists'):
             prog, created = Artist_on_event.objects.get_or_create(

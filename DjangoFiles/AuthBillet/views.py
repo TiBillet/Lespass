@@ -136,16 +136,17 @@ def a_jour_adhesion(user: TibilletUser = None):
 
     sess = requests.Session
     configuration = Configuration.get_solo()
-    response = requests.request("POST",
-                                f"{configuration.server_cashless}/api/membre_check",
-                                headers={"Authorization": f"Api-Key {configuration.key_cashless}"},
-                                data={"email": user.email})
+    if configuration.server_cashless and configuration.key_cashless :
+        response = requests.request("POST",
+                                    f"{configuration.server_cashless}/api/membre_check",
+                                    headers={"Authorization": f"Api-Key {configuration.key_cashless}"},
+                                    data={"email": user.email})
 
-    if response.status_code != 200 :
-        return data
-    membre = json.loads(response.content)
-    data['a_jour_cotisation'] = membre.get('a_jour_cotisation')
-    data['date_derniere_cotisation'] = membre.get('date_derniere_cotisation')
+        if response.status_code != 200 :
+            return data
+        membre = json.loads(response.content)
+        data['a_jour_cotisation'] = membre.get('a_jour_cotisation')
+        data['date_derniere_cotisation'] = membre.get('date_derniere_cotisation')
     return data
 
 class MeViewset(viewsets.ViewSet):
@@ -154,7 +155,7 @@ class MeViewset(viewsets.ViewSet):
         serializer = MeSerializer(request.user)
 
         retour = serializer.data.copy()
-#         retour['adhesion'] = a_jour_adhesion(request.user)
+        retour['adhesion'] = a_jour_adhesion(request.user)
 
         return Response(retour, status=status.HTTP_200_OK)
 
