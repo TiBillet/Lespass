@@ -1,3 +1,7 @@
+####################
+# ACTIVE BETA NOT READY FOR PRODUCTION YET
+####################
+
 # TiBillet-Ticket
 
 Réseau événementiel et coopératif.
@@ -117,55 +121,4 @@ https://www.mongodb.com/licensing/server-side-public-license
 
 https://webassets.mongodb.com/_com_assets/legal/SSPL-compared-to-AGPL.pdf
 
-# Crédits :
-
-## Développement :
-
-#### Lead Dev : Jonas TURBEAUX & Nicolas DIJOUX
-
-
-	D'après une idée originale de l'association des 3Peaks de Manapany et GDNA.
-	Merci à :
-		Christophe GONTHIER et Flavien BRANCHEREAU ( GDNA )
-		Pierre MACQUART
-		Tous les bénévoles de l'association des 3Peaks, 
-		du Manapany Festival, 
-		du Bisik et de la Raffinerie pour avoir essuyé les plâtres !		
-
-    Landing Page :
-        Massively by HTML5 UP html5up.net | @ajlkn Free for personal and commercial use under the CCA 3.0 license (
-        html5up.net/license)
-        AJ aj@lkn.io | @ajlkn
-	Demo Images:
-		Unsplash (unsplash.com)
-		Creative-tim
-	Icons:
-		Font Awesome (fontawesome.io)
-	Other:
-		Creative-tim
-		Django-jet
-		Excalidraw
-		Bootstrap
-		django
-		djangorestframework
-		requests
-		gunicorn
-		sentry
-		python-dateutil
-		Werkzeug
-		django-solo
-		django-tenants
-		djoser
-		ipython
-		ipdb
-		django_debug_toolbar
-		django-extensions
-		borgbackup
-		Pillow
-		django-stdimage
-		django-weasyprint
-		segno
-		python-barcode
-		celery
-		redis
-		tenant-schemas-celery        
+# Crédits and développement within the AUTHORS.md file

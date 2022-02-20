@@ -34,3 +34,43 @@ TiBillet was an original idéa from GDNA and designed and developed by 3Peaks, M
     - Guillaume TUNG-LUNG
   - Communnecter.org
     - Tibor KATELBACH & Co !
+
+# Dependencies thanks :
+
+- Landing Page :
+  - Massively by HTML5 UP html5up.net | @ajlkn Free for personal and commercial use under the CCA 3.0 license (
+      html5up.net/license)
+  - AJ aj@lkn.io | @ajlkn 
+- Demo Images:
+  - Unsplash (unsplash.com)
+  - Creative-tim 
+- Icons:
+  - Font Awesome (fontawesome.io)
+- Other:
+  - Creative-tim
+  - Django-jet
+  - Excalidraw
+  - Bootstrap
+  - django
+  - djangorestframework
+  - requests
+  - gunicorn
+  - sentry
+  - python-dateutil
+  - Werkzeug
+  - django-solo
+  - django-tenants
+  - djoser
+  - ipython
+  - ipdb
+  - django_debug_toolbar
+  - django-extensions
+  - borgbackup
+  - Pillow
+  - django-stdimage
+  - django-weasyprint
+  - segno
+  - python-barcode
+  - celery
+  - redis
+  - tenant-schemas-celery        
