@@ -3,6 +3,7 @@ from django.db import models
 from django.utils.translation import ugettext_lazy as _
 import uuid
 from django.contrib.auth.models import AbstractUser, Group, Permission
+
 from Customers.models import Client
 from django.db import connection
 from rest_framework import permissions
@@ -217,19 +218,6 @@ class HumanUser(TibilletUser):
         self.email = self.email.lower()
 
         super().save(*args, **kwargs)
-
-
-
-
-class Membership(models.Model):
-    user = models.ForeignKey(TibilletUser, on_delete=models.PROTECT, related_name='membership')
-
-    tenant = models.ForeignKey(Client, on_delete=models.PROTECT)
-
-    date_added = models.DateTimeField(auto_now_add=True)
-    first_contribution = models.DateField(null=True, blank=True)
-    last_contribution = models.DateField(null=True, blank=True)
-    contribution_value = models.FloatField(null=True, blank=True)
 
 
 

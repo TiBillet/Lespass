@@ -12,7 +12,7 @@ from django_tenants.utils import schema_context, tenant_context
 
 from AuthBillet.models import TibilletUser, HumanUser
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, Paiement_stripe, \
-    PriceSold, ProductSold, Artist_on_event, OptionGenerale
+    PriceSold, ProductSold, Artist_on_event, OptionGenerale, Membership
 from Customers.models import Client
 from PaiementStripe.views import creation_paiement_stripe
 
@@ -380,12 +380,13 @@ def validate_email_and_return_user(email):
 class MembreshipValidator(serializers.Serializer):
     email = serializers.EmailField()
 
-    first_name = serializers.CharField(max_length=200)
-    last_name = serializers.CharField(max_length=200)
+    first_name = serializers.CharField(max_length=200, required=False)
+    last_name = serializers.CharField(max_length=200, required=False)
 
     phone = serializers.CharField(max_length=20, required=False)
     postal_code = serializers.IntegerField(required=False)
     birth_date = serializers.DateField(required=False)
+    newsletter = serializers.BooleanField(required=False)
 
     adhesion = serializers.PrimaryKeyRelatedField(
         queryset=Price.objects.filter(product__categorie_article=Product.ADHESION))
@@ -393,7 +394,44 @@ class MembreshipValidator(serializers.Serializer):
     def validate_email(self, value):
         user_paiement: TibilletUser = validate_email_and_return_user(value)
         self.user = user_paiement
-        return user_paiement.email
+
+        self.fiche_membre, created =  Membership.objects.get_or_create(
+            user=user_paiement
+        )
+
+        if not self.fiche_membre.first_name :
+            if not self.initial_data.get('first_name'):
+                raise serializers.ValidationError(_(f'first_name est obligatoire'))
+            self.fiche_membre.first_name = self.initial_data.get('first_name')
+        if not self.fiche_membre.last_name :
+            if not self.initial_data.get('last_name'):
+                raise serializers.ValidationError(_(f'last_name est obligatoire'))
+            self.fiche_membre.last_name = self.initial_data.get('last_name')
+        if not self.fiche_membre.phone :
+            if not self.initial_data.get('phone'):
+                raise serializers.ValidationError(_(f'phone est obligatoire'))
+            self.fiche_membre.phone = self.initial_data.get('phone')
+        if not self.fiche_membre.birth_date :
+            self.fiche_membre.birth_date = self.initial_data.get('birth_date')
+        if not self.fiche_membre.newsletter :
+            self.fiche_membre.newsletter = self.initial_data.get('newsletter')
+
+        self.fiche_membre.save()
+
+        return self.fiche_membre.user.email
+
+        # if self.fiche_membre.first_name:
+        #     return self.fiche_membre.first_name
+        # else :
+        #     raise serializers.ValidationError(_(f'first_name est obligatoire'))
+
+    # def validate_last_name(self, value):
+    #     return value
+        # if self.fiche_membre.last_name:
+        #     return self.fiche_membre.last_name
+        # else :
+        #     raise serializers.ValidationError(_(f'last_name est obligatoire'))
+
 
     def validate(self, attrs):
         price_adhesion: Price = attrs.get('adhesion')
