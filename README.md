@@ -105,13 +105,17 @@ Don't forget to change your /etc/host if you are in localhost :)
 # go to demo.django-local.org:8002/admin to create an admin user for the tenant. 
 ```
 
-Enjoy !
 
-# API Documentation 
+# BACKEND API Documentation 
 
 ### API Postman with example :
 
 https://documenter.getpostman.com/view/17519122/UVeDtTFC
+
+# FRONTEND
+
+Le frontend basé sur le framework Vue.js est en cours de développement.
+N'hésitez pas à nous contacter pour contribuer.
 
 # Licence :
 
