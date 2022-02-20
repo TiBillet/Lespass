@@ -14,6 +14,7 @@ from rest_framework.views import APIView
 from django.db import connection
 from django.utils.translation import ugettext_lazy as _
 
+from ApiBillet.views import request_for_data_cashless
 from AuthBillet.models import TibilletUser
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -124,26 +125,6 @@ class create_user(APIView):
                             status=status.HTTP_201_CREATED)
 
 
-def request_for_data_cashless(user: TibilletUser):
-    if user.email_error or not user.email:
-        return { 'erreur': f"user.email_error {user.email_error}" }
-
-    sess = requests.Session
-    configuration = Configuration.get_solo()
-    if configuration.server_cashless and configuration.key_cashless:
-        try:
-            response = requests.request("POST",
-                                        f"{configuration.server_cashless}/api/membre_check",
-                                        headers={"Authorization": f"Api-Key {configuration.key_cashless}"},
-                                        data={"email": user.email})
-
-            if response.status_code != 200:
-                return { 'erreur': f"{response.status_code} : {response.text}" }
-            return json.loads(response.content)
-        except Exception as e:
-            return { 'erreur': f"{e}" }
-
-    return { 'erreur': f"pas de configuration server_cashless" }
 
 
 class MeViewset(viewsets.ViewSet):
@@ -158,23 +139,7 @@ class MeViewset(viewsets.ViewSet):
 
         return Response(serializer_copy, status=status.HTTP_200_OK)
 
-    def retrieve(self, request, pk=None):
-        try:
-            email = force_str(urlsafe_base64_decode(pk))
-        except:
-            return Response("base64 email only", status=status.HTTP_406_NOT_ACCEPTABLE)
-        User = get_user_model()
-        user = User.objects.filter(email=email, username=email).first()
 
-        if user:
-            configuration = Configuration.get_solo()
-            if configuration.server_cashless and configuration.key_cashless:
-                data = request_for_data_cashless(user)
-                if data.get('a_jour_cotisation'):
-                    return Response(data.get('a_jour_cotisation'), status=status.HTTP_200_OK)
-
-            return Response('no cashless server', status=status.HTTP_404_NOT_FOUND)
-        return Response('no User', status=status.HTTP_402_PAYMENT_REQUIRED)
 
     def get_permissions(self):
         if self.action in ['list', ]:

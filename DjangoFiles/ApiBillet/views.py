@@ -5,8 +5,11 @@ from datetime import datetime
 import requests
 import stripe
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.http import HttpResponseRedirect, Http404, HttpResponse
 from django.utils import timezone
+from django.utils.encoding import force_str
+from django.utils.http import urlsafe_base64_decode
 from django_tenants.utils import schema_context, tenant_context
 from django_weasyprint import WeasyTemplateView
 from rest_framework import serializers
@@ -410,6 +413,28 @@ class OptionTicket(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
+def request_for_data_cashless(user: TibilletUser):
+    if user.email_error or not user.email:
+        return { 'erreur': f"user.email_error {user.email_error}" }
+
+    sess = requests.Session
+    configuration = Configuration.get_solo()
+    if configuration.server_cashless and configuration.key_cashless:
+        try:
+            response = requests.request("POST",
+                                        f"{configuration.server_cashless}/api/membre_check",
+                                        headers={"Authorization": f"Api-Key {configuration.key_cashless}"},
+                                        data={"email": user.email})
+
+            if response.status_code != 200:
+                return { 'erreur': f"{response.status_code} : {response.text}" }
+            return json.loads(response.content)
+        except Exception as e:
+            return { 'erreur': f"{e}" }
+
+    return { 'erreur': f"pas de configuration server_cashless" }
+
+
 class MembershipViewset(viewsets.ViewSet):
 
     def create(self, request):
@@ -420,8 +445,32 @@ class MembershipViewset(viewsets.ViewSet):
             return Response(validator.data, status=status.HTTP_201_CREATED)
         return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    def retrieve(self, request, pk=None):
+        try:
+            email = force_str(urlsafe_base64_decode(pk))
+        except:
+            return Response("base64 email only", status=status.HTTP_406_NOT_ACCEPTABLE)
+        User = get_user_model()
+        user = User.objects.filter(email=email, username=email).first()
+
+        if user:
+            configuration = Configuration.get_solo()
+            if configuration.server_cashless and configuration.key_cashless:
+                data = request_for_data_cashless(user)
+                data_retrieve = {
+                    'a_jour_cotisation': data.get('a_jour_cotisation'),
+                    'date_derniere_cotisation': data.get('date_derniere_cotisation'),
+                    'prochaine_echeance': data.get('prochaine_echeance')
+                }
+                return Response(data_retrieve, status=status.HTTP_200_OK)
+
+            return Response('no cashless server', status=status.HTTP_404_NOT_FOUND)
+        return Response('no User', status=status.HTTP_402_PAYMENT_REQUIRED)
+
+
+
     def get_permissions(self):
-        if self.action in ['create']:
+        if self.action in ['create', 'retrieve']:
             permission_classes = [permissions.AllowAny]
         else:
             permission_classes = [TenantAdminPermission]
