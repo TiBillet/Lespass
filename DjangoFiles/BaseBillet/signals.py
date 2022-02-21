@@ -123,13 +123,15 @@ def send_to_cashless(instance: LigneArticle):
 
 def check_paid(old_instance: LigneArticle, new_instance: LigneArticle):
     logger.info(f"    TRIGGER LIGNE ARTICLE check_paid {old_instance.pricesold}")
-    # action_article_paid_by_categorie(new_instance)
+    action_article_paid_by_categorie(new_instance)
 
+    '''
     if new_instance.pricesold.productsold.product.categorie_article in \
             [Product.RECHARGE_CASHLESS, Product.ADHESION]:
         if send_to_cashless(new_instance) == 200:
             new_instance.status = LigneArticle.VALID
             set_paiement_and_reservation_valid(old_instance, new_instance)
+    '''
 
 
 ######################## TRIGGER RESERVATION ########################
