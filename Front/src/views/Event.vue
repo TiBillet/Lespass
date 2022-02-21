@@ -26,9 +26,26 @@
       </div>
     </div>
     <!-- achats -->
-    <div class="container mt-5" v-for="produit in tabProduits" :key="produit.uuid">
+    <div class="container mt-5">
       <div class="row">
-        <CardBillet v-if="produit.categorie_article === 'B'" :data-product="produit" :uuid-event="currentEvent.uuid"/>
+        <form @submit.prevent="goValiderAchats($event)" class="needs-validation" novalidate>
+
+          <CardProfil v-model:profil="profil"/>
+
+          <div v-for="produit in currentEvent.products" :key="produit.uuid">
+            <CardAdhesion :data-product="produit" :uuid-event="currentEvent.uuid"/>
+          </div>
+
+          <div v-for="produit in currentEvent.products" :key="produit.uuid">
+            <CardBillet v-if="produit.categorie_article === 'B' && produit.publish === true" :data-product="produit"
+                        :uuid-event="currentEvent.uuid"/>
+          </div>
+
+          <div class="col-md-12 col-lg-9">
+            <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
+          </div>
+
+        </form>
       </div>
     </div>
   </section>
@@ -37,7 +54,7 @@
 
 <script setup>
 // vue
-import {ref} from 'vue'
+import {ref, reactive} from 'vue'
 import {useStore} from 'vuex'
 import {useRoute} from 'vue-router'
 
@@ -46,8 +63,11 @@ import Header from '../components/Header.vue'
 import CardPlace from '../components/CardPlace.vue'
 import CardArtist from '../components/CardArtist.vue'
 import CardBillet from '../components/CardBillet.vue'
+import CardAdhesion from "../components/CardAdhesion.vue"
+import CardProfil from "../components/CardProfil.vue"
 
 let chargement = ref(true)
+let currentEvent = ref({})
 
 const store = useStore()
 const route = useRoute()
@@ -56,39 +76,37 @@ const slug = route.params.slug
 // récupération du uuid évènement à partir du slug
 const uuidEvent = store.state.events.find(evt => evt.slug === slug).uuid
 
-// init formulaire si n'existe pas
-if (store.state.formulaireBillet[uuidEvent] === undefined) {
-  store.commit('initFormulaireBillet', uuidEvent)
-}
-
-// récupère l'évènement à jour
-let currentEvent = store.getters.getEventBySlug(slug)
-
 const domain = `${location.protocol}//${location.host}`
+const urlApi = `/api/events/${uuidEvent}`
 
-// convertion du proxy en array
-let produits = JSON.parse(JSON.stringify(store.state.products))
-
-let tabProduits = []
-for (let index in currentEvent.products) {
-  let uuidProd = currentEvent.products[index]
-  let produit = produits.find(prod => prod.uuid === uuidProd)
-  tabProduits.push(produit)
-}
+let profil = reactive({
+  attentionEmail: store.state.profil.attentionEmail,
+  email: store.state.profil.email,
+  confirmeEmail: store.state.profil.confirmeEmail
+})
 
 // chargement de l'évènement
-const urlApi = `/api/events/${uuidEvent}`
-// console.log('urlApi =', urlApi)
+// console.log(`-> chargement de l'évènement urlApi =`, urlApi)
 fetch(domain + urlApi).then(response => {
   if (!response.ok) {
     throw new Error(`${response.status} - ${response.statusText}`)
   }
   return response.json()
 }).then(retour => {
-  // console.log('retour event =', retour)
+  console.log('retour =', JSON.stringify(retour, null, 2))
+  // maj store events
   store.commit('updateEvent', retour)
-  chargement.value = false
 
+  // init formulaire si n'existe pas
+  if (store.state.formulaireBillet[uuidEvent] === undefined) {
+    store.commit('initFormulaireBillet', uuidEvent)
+  }
+
+  // actualise les données
+  currentEvent.value = store.getters.getEventBySlug(slug)
+
+  // mode chargement terminé
+  chargement.value = false
 }).catch(function (erreur) {
   emitter.emit('message', {
     tmp: 4,
@@ -99,10 +117,10 @@ fetch(domain + urlApi).then(response => {
 
 function getDataHeader() {
   return {
-    urlImage: currentEvent.img_variations.med,
-    shortDescription: currentEvent.short_description,
-    longDescription: currentEvent.long_description,
-    titre: currentEvent.name,
+    urlImage: currentEvent.value.img_variations.med,
+    shortDescription: currentEvent.value.short_description,
+    longDescription: currentEvent.value.long_description,
+    titre: currentEvent.value.name,
     domain: domain
   }
 }
@@ -116,6 +134,7 @@ function getDataCardPlace() {
   }
 }
 
+/*
 emitter.on('goValiderAchat', (form) => {
   console.log('-> goValiderAchat form =', form)
   console.clear()
@@ -197,7 +216,7 @@ emitter.on('goValiderAchat', (form) => {
 
         console.log(`-> achète le(s) prodruit(s), ${urlApi} !`)
         console.log('options =', JSON.stringify(options, null, 2))
-         fetch(urlApi, options).then((reponse) => {
+        fetch(urlApi, options).then((reponse) => {
           if (reponse.ok === true) {
             return reponse.json()
           } else {
@@ -215,6 +234,13 @@ emitter.on('goValiderAchat', (form) => {
     }
   }
 })
+*/
+function goValiderAchats(event) {
+  console.log('-> fonc goValiderAchats !')
+  console.log('event =', event)
+  console.log('profil =', profil)
+  store.commit('updateProfil', profil)
+}
 
 
 </script>

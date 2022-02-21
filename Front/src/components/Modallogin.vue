@@ -14,14 +14,9 @@
             <div class="card-body">
               <form role="form text-left" @submit.prevent="validerLogin()">
                 <div class="input-group mb-3">
-                  <input v-model="form.username" laria-describedby="email-addon" aria-label="Email" class="form-control"
+                  <input v-model="email" laria-describedby="email-addon" aria-label="Email" class="form-control"
                          placeholder="Email"
                          type="email" pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$" required>
-                </div>
-                <label>Password</label>
-                <div class="input-group mb-3">
-                  <input v-model="form.password" aria-describedby="password" aria-label="Password" class="form-control"
-                         placeholder="Password" type="password" required>
                 </div>
                 <div class="text-center">
                   <button class="btn btn-round bg-gradient-info btn-lg w-100 mt-4 mb-0" type="submit">Valider</button>
@@ -64,10 +59,7 @@
 import {useStore} from 'vuex'
 import {ref} from 'vue'
 
-const form = ref({
-  username: '',
-  password: ''
-})
+const email = ref('')
 
 const store = useStore()
 const domain = `${location.protocol}//${location.host}`
@@ -107,7 +99,37 @@ function validerLogout() {
 }
 
 function validerLogin() {
-  console.log('Valider login !')
+  console.log('fonc validerLogin, email =', email.value)
+
+  // test membre
+  const emailB64 = btoa(email.value)
+  let api = `/api/membership/${emailB64}/`
+
+  console.log('url =', domain + api )
+  fetch(domain + api + emailB64 + '/', {
+    method: 'GET',
+    cache: 'no-cache', // *default, no-cache, reload, force-cache, only-if-cached
+    headers: {
+      'Content-Type': 'application/json'
+      // 'Authorization': 'Bearer ${inMemoryToken}'
+    }
+  }).then(response => {
+    if (!response.ok) {
+      throw new Error(`${response.status} - ${response.statusText}`)
+    }
+    return response.json()
+  }).then(retour => {
+    console.log('Retour =', JSON.stringify(retour, null, 2))
+  }).catch(function (erreur) {
+    // chargement.value = false
+    emitter.emit('message', {
+      tmp: 6,
+      typeMsg: 'warning',
+      contenu: `Erreur, ${domain + api} : ${erreur}`
+    })
+  })
+
+  /*
   let api = `/auth/token/login/`
   console.log(`-> Obtenir le token ${domain + api}`)
   console.log('data =', JSON.stringify(form.value))
@@ -145,7 +167,7 @@ function validerLogin() {
       contenu: `Impossible de se connecter avec les informations d'identification fournies.`
     })
   })
-
+*/
 }
 </script>
 <style>

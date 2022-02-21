@@ -8,7 +8,17 @@ export default createStore({
     formulaireBillet: {},
     events: [],
     place: {},
-    products: []
+    profil: {
+      email: '',
+      confirmeEmail: '',
+      attentionEmail: false
+    },
+    adhesion: {
+      nom: '',
+      prenom: '',
+      adresse: '',
+      tel: null
+    }
   },
   plugins: [createPersistedState()],
   mutations: {
@@ -93,6 +103,9 @@ export default createStore({
     majIdentifiant(state, data) {
       // console.log('store, majIdentifiant, data =', data)
       state.formulaireBillet[data.uuidEvent].identifiants.find(ele => (ele.id === data.id))[data.champ] = data.valeur
+    },
+    updateProfil(state, data) {
+      state.profil = data
     }
   },
   getters: {

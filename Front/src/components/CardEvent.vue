@@ -55,7 +55,7 @@ function formateDate(dateString) {
 }
 
 function goEvenement(slug) {
-  // console.log('-> evenement, slug =', slug)
+  console.log('-> goEvenement, slug =', slug)
   emitter.emit("goEvenement", slug)
 }
 </script>

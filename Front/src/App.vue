@@ -99,6 +99,7 @@ fetch(domain + apiEvents).then(response => {
   }
   return response.json()
 }).then(json => {
+  // console.log('events =', JSON.stringify(json, null, 2))
   store.commit('initEvents', json)
   verifierEtatChargement()
 }).catch(function (erreur) {
