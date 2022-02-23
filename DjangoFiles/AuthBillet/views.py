@@ -70,11 +70,11 @@ class activate(APIView):
 
         PR = PasswordResetTokenGenerator()
         is_token_valid = PR.check_token(user, token)
-
+        # print(user)
         if is_token_valid:
             user.is_active = True
             refresh = RefreshToken.for_user(user)
-
+            user.save()
             data = {
                 'refresh': str(refresh),
                 'access': str(refresh.access_token),

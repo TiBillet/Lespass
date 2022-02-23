@@ -5,7 +5,7 @@ from solo.admin import SingletonModelAdmin
 
 from AuthBillet.models import HumanUser, SuperHumanUser, TermUser
 from BaseBillet.models import Configuration, Event, OptionGenerale, Product, Price, Reservation, LigneArticle, Ticket, \
-    Paiement_stripe, ProductSold, PriceSold
+    Paiement_stripe, ProductSold, PriceSold, Membership
 from django.contrib.auth.admin import UserAdmin
 
 from Customers.models import Client
@@ -249,7 +249,8 @@ class PriceAdmin(admin.ModelAdmin):
         'product',
         'prix',
     )
-    ordering = ('product','name')
+    ordering = ('product', 'name')
+
 
 staff_admin_site.register(Price, PriceAdmin)
 
@@ -309,3 +310,24 @@ class LigneArticleAdmin(admin.ModelAdmin):
 
 
 staff_admin_site.register(LigneArticle, LigneArticleAdmin)
+
+
+class MembershipAdmin(admin.ModelAdmin):
+    list_display = (
+        'last_name',
+        'first_name',
+        'user',
+        'date_added',
+        'first_contribution',
+        'last_contribution',
+        'contribution_value',
+        'last_action',
+        'postal_code',
+        'birth_date',
+        'phone',
+        'commentaire',
+    )
+    ordering = ('-date_added',)
+
+
+staff_admin_site.register(Membership, MembershipAdmin)

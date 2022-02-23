@@ -15,30 +15,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def request_to_cashless_server(data):
-    configuration = Configuration.get_solo()
-    if not configuration.server_cashless or not configuration.key_cashless :
-        raise Exception(f'Pas de configuration cashless')
-
-    sess = requests.Session()
-    r = sess.post(
-        f'{configuration.server_cashless}/api/billetterie_endpoint',
-        headers={
-            'Authorization': f'Api-Key {configuration.key_cashless}'
-        },
-        data=data,
-    )
-
-    sess.close()
-    logger.info(
-        f"        demande au serveur cashless pour {data}. réponse : {r.status_code} ")
-
-    if r.status_code != 200:
-        logger.error(
-            f"            erreur réponse serveur cashless {r.status_code} {r.text}")
-
-    return r.status_code
-
 class action_article_paid_by_categorie:
     '''
     BILLET, PACK, RECHARGE_CASHLESS, VETEMENT, MERCH, ADHESION = 'B', 'P', 'R', 'T', 'M', 'A'
@@ -57,7 +33,7 @@ class action_article_paid_by_categorie:
     def __init__(self, ligne_article:LigneArticle, **kwargs):
         self.ligne_article = ligne_article
         self.categorie = self.ligne_article.pricesold.productsold.product.categorie_article
-        self.data_for_cashless = {}
+        self.data_for_cashless = {'uuid_commande': ligne_article.paiement_stripe.uuid }
 
         try:
             # on mets en majuscule et on rajoute _ au début du nom de la catégorie.
@@ -76,11 +52,35 @@ class action_article_paid_by_categorie:
 
     # Categorie RECHARGE_CASHLESS
     def trigger_R(self):
-        self.data_for_cashless['recharge_qty'] = self.ligne_article.pricesold.prix
-        self.data_for_cashless['uuid'] = self.ligne_article.carte.uuid
-        statuts_code = request_to_cashless_server(self.data_for_cashless)
-
         logger.info(f"TRIGGER RECHARGE_CASHLESS")
+        configuration = Configuration.get_solo()
+        if not configuration.server_cashless or not configuration.key_cashless:
+            raise Exception(f'Pas de configuration cashless')
+
+        self.data_for_cashless['card_uuid'] = self.ligne_article.carte.uuid
+        self.data_for_cashless['qty'] = self.ligne_article.pricesold.prix
+
+        data = self.data_for_cashless
+
+        sess = requests.Session()
+        r = sess.post(
+            f'{configuration.server_cashless}/api/chargecard',
+            headers={
+                'Authorization': f'Api-Key {configuration.key_cashless}'
+            },
+            data=data,
+        )
+
+        sess.close()
+        logger.info(
+            f"        demande au serveur cashless pour {data}. réponse : {r.status_code} ")
+
+        if r.status_code == 202:
+            self.ligne_article.status = LigneArticle.VALID
+            # set_paiement_and_reservation_valid(None, self.ligne_article)
+        else :
+            logger.error(
+                f"erreur réponse serveur cashless {r.status_code} {r.text}")
 
     # Categorie ADHESION
     def trigger_A(self):
