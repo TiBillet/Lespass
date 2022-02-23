@@ -411,6 +411,8 @@ class MembreshipValidator(serializers.Serializer):
             if not self.initial_data.get('phone'):
                 raise serializers.ValidationError(_(f'phone est obligatoire'))
             self.fiche_membre.phone = self.initial_data.get('phone')
+        if not self.fiche_membre.postal_code :
+            self.fiche_membre.postal_code = self.initial_data.get('postal_code')
         if not self.fiche_membre.birth_date :
             self.fiche_membre.birth_date = self.initial_data.get('birth_date')
         if not self.fiche_membre.newsletter :
