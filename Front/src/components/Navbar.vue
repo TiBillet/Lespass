@@ -21,16 +21,19 @@
           </li>
         </ul>
         <!-- déconnexion -->
-        <ul v-if="store.state.token !== ''" class="navbar-nav ms-auto">
-          <button class="btn bg-gradient-success mb-0" data-bs-toggle="modal" data-bs-target="#modal-form-logout">
-            Déconnexion
-          </button>
+        <ul v-if="store.state.refreshToken !== ''" class="navbar-nav ms-auto">
+          <li class="nav-item text-success d-flex flex-row align-items-center">
+            <i class="ni ni-world-2 m"></i>
+            <span class="ms-1">Connecté</span>
+          </li>
         </ul>
         <!-- connexion -->
         <ul v-else class="navbar-nav ms-auto">
+          <li>
           <button class="btn bg-gradient-info mb-0" data-bs-toggle="modal" data-bs-target="#modal-form-login">
             Connexion
           </button>
+          </li>
         </ul>
 
       </div>

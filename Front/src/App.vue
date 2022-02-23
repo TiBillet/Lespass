@@ -46,7 +46,7 @@ import Footer from './components/Footer.vue'
 const store = useStore()
 
 const chargement = ref(true)
-const nbMaxChargement = 3
+let nbMaxChargement = 0
 let nbChargement = 0
 const domain = `${location.protocol}//${location.host}`
 
@@ -69,6 +69,7 @@ function verifierEtatChargement() {
 }
 
 // chargement infos lieu
+nbMaxChargement++
 let apiLieu = `/api/here/`
 console.log(`1 -> charge le lieu ${domain + apiLieu}`)
 fetch(domain + apiLieu)
@@ -91,6 +92,7 @@ fetch(domain + apiLieu)
     })
 
 // chargement infos évènements
+nbMaxChargement++
 let apiEvents = `/api/events/`
 // console.log(`2 -> charge les évènements ${domain + apiEvents}`)
 fetch(domain + apiEvents).then(response => {
@@ -111,6 +113,7 @@ fetch(domain + apiEvents).then(response => {
 })
 
 // chargement des prix
+nbMaxChargement++
 let apiProducts = `/api/products/`
 // console.log(`3 -> charge les produits ${domain + apiProducts}`)
 fetch(domain + apiProducts).then(response => {
@@ -128,6 +131,29 @@ fetch(domain + apiProducts).then(response => {
     contenu: `Chargement des prix, erreur: ${erreur}`
   })
 })
+
+// verification du refresh token
+nbMaxChargement++
+let apiProducts = `/api/user/token/verify/`
+console.log(`4 -> verification du refresh token ${domain + apiProducts}`)
+fetch(domain + apiProducts).then(response => {
+  if (!response.ok) {
+    throw new Error(`${response.status} - ${response.statusText}`)
+  }
+  return response.json()
+}).then(json => {
+  store.commit('initProducts', json)
+  verifierEtatChargement()
+}).catch(function (erreur) {
+  emitter.emit('message', {
+    tmp: 4,
+    typeMsg: 'danger',
+    contenu: `Chargement des prix, erreur: ${erreur}`
+  })
+})
+
+
+
 </script>
 <style>
 .espace-navbar {

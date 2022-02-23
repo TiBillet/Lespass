@@ -22,6 +22,11 @@ const routes = [
     path: '/artist/:slug',
     name: 'Artist',
     component: () => import(/* webpackChunkName: "Artist" */ '../views/ArtistPage.vue')
+  },
+  {
+    path: '/emailconfirmation/:id/:token',
+    name: 'EmailConfirmation',
+    component: () => import(/* webpackChunkName: "EmailConfirmation" */ '../views/EmailConfirmation.vue')
   }
 ]
 

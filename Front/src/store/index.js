@@ -3,7 +3,7 @@ import createPersistedState from 'vuex-persistedstate'
 
 export default createStore({
   state: {
-    token: '',
+    refreshToken: '',
     chargement: false,
     formulaireBillet: {},
     events: [],
@@ -38,8 +38,13 @@ export default createStore({
     initProducts(state, data) {
       state.products = data
     },
-    updateToken(state, data) {
-      state.token = data
+    updateRefreshToken(state, token) {
+      state.refreshToken = token
+    },
+    updateProfilEmail(state, email) {
+      state.profil.email = email
+      state.profil.confirmeEmail = email
+      state.profil.attentionEmail = true
     },
     resetFormulaires(state) {
       state.formulaire = {}
