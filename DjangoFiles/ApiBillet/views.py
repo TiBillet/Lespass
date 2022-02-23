@@ -353,6 +353,21 @@ class EventsViewSet(viewsets.ViewSet):
 class ChargeCashless(viewsets.ViewSet):
     def create(self, request):
         print(request.data)
+        configuration = Configuration.get_solo()
+        if not configuration.key_cashless or not configuration.server_cashless :
+            return Response(_("Serveur cashless non présent dans configuration"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+        try:
+            response = requests.request("GET",
+                                        f"{configuration.server_cashless}/api/checkcarteqruuid/{request.data.get('uuid')}/",
+                                        headers={"Authorization": f"Api-Key {configuration.key_cashless}"},
+                                        )
+
+            if response.status_code != 200:
+                return Response(_(f"Requete non comprise : {response.status_code}"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        except Exception as e :
+            return Response(_(f"Serveur cashless ne répond pas : {e}"), status=status.HTTP_408_REQUEST_TIMEOUT)
+
         validator = ChargeCashlessValidator(data=request.data, context={'request': request})
         if validator.is_valid():
             # serializer.save()
