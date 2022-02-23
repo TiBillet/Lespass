@@ -751,17 +751,18 @@ class Membership(models.Model):
     first_contribution = models.DateField(null=True, blank=True)
     last_contribution = models.DateField(null=True, blank=True)
     contribution_value = models.FloatField(null=True, blank=True)
+    last_action = models.DateTimeField(auto_now=True, verbose_name="Présence")
 
     first_name = models.CharField(
         db_index=True,
         max_length=200,
-        verbose_name=_("Nom"),
+        verbose_name=_("Prénom"),
         null=True, blank=True
     )
 
     last_name = models.CharField(
         max_length=200,
-        verbose_name=_("Prénom"),
+        verbose_name=_("Nom"),
         null=True, blank=True
     )
 
@@ -769,19 +770,10 @@ class Membership(models.Model):
 
     newsletter = models.BooleanField(
         default=True, verbose_name=_("J'accepte de recevoir la newsletter de l'association"))
-
-    # numero_adherant = models.CharField(max_length=50, unique=True, null=True, blank=True)
     postal_code = models.IntegerField(null=True, blank=True)
     birth_date = models.DateField(null=True, blank=True)
     phone = models.CharField(max_length=20, null=True, blank=True)
     commentaire = models.TextField(null=True, blank=True)
-
-    date_inscription = models.DateField(null=True, blank=True)
-    date_derniere_cotisation = models.DateField(null=True, blank=True)
-    date_ajout = models.DateTimeField(auto_now_add=True)
-    last_action = models.DateTimeField(auto_now=True, verbose_name="Présence")
-
-    cotisation = models.ForeignKey(PriceSold, null=True, blank=True, on_delete=models.PROTECT)
 
     def email(self):
         return self.user.email
