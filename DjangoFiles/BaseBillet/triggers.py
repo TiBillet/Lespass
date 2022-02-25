@@ -1,12 +1,15 @@
 import requests
 # from django.db import connection
+from django.contrib.auth import get_user_model
 from django.db.models import Q
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 # from django.utils import timezone
 
 # from ApiBillet.thread_mailer import ThreadMaileur
-from BaseBillet.models import Reservation, LigneArticle, Ticket, Product, Configuration, Paiement_stripe
+from django.utils import timezone
+
+from BaseBillet.models import Reservation, LigneArticle, Ticket, Product, Configuration, Paiement_stripe, Membership
 from BaseBillet.tasks import ticket_celery_mailer
 
 # from TiBillet import settings
@@ -84,5 +87,47 @@ class action_article_paid_by_categorie:
 
     # Categorie ADHESION
     def trigger_A(self):
-        self.data_for_cashless['tarif_adhesion'] = self.ligne_article.pricesold.prix
         logger.info(f"TRIGGER ADHESION")
+        configuration = Configuration.get_solo()
+        if not configuration.server_cashless or not configuration.key_cashless:
+            raise Exception(f'Pas de configuration cashless')
+
+        membre = Membership.objects.get(user=self.ligne_article.paiement_stripe.user)
+        tarif_adhesion = self.ligne_article.pricesold.prix
+
+        if not membre.first_contribution:
+            membre.first_contribution = timezone.now().date()
+        membre.last_contribution = timezone.now().date()
+        membre.contribution_value = tarif_adhesion
+        membre.save()
+
+        data = {
+            "email": membre.email(),
+            "adhesion": tarif_adhesion,
+            "uuid_commande": self.ligne_article.paiement_stripe.uuid,
+            "first_name": membre.first_name,
+            "last_name": membre.last_name,
+            "phone": membre.phone,
+            "postal_code": membre.postal_code,
+            "birth_date": membre.birth_date,
+        }
+
+        sess = requests.Session()
+        r = sess.post(
+            f'{configuration.server_cashless}/api/membership',
+            headers={
+                'Authorization': f'Api-Key {configuration.key_cashless}'
+            },
+            data=data,
+        )
+
+        sess.close()
+        logger.info(
+            f"        demande au serveur cashless pour {data}. réponse : {r.status_code} ")
+
+        if r.status_code in [200, 201, 202]:
+            self.ligne_article.status = LigneArticle.VALID
+            # set_paiement_and_reservation_valid(None, self.ligne_article)
+        else :
+            logger.error(
+                f"erreur réponse serveur cashless {r.status_code} {r.text}")
