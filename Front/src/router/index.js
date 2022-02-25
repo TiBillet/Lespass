@@ -1,8 +1,9 @@
 // gère les routes(pages)
 import {createRouter, createWebHistory} from 'vue-router'
-
 import Accueil from '../views/Accueil.vue'
-// import Buy from '../views/Buy.vue'
+
+// common
+import {emailActivation} from '@/common'
 
 const routes = [
   {
@@ -24,9 +25,10 @@ const routes = [
     component: () => import(/* webpackChunkName: "Artist" */ '../views/ArtistPage.vue')
   },
   {
+    // route intercepté
     path: '/emailconfirmation/:id/:token',
     name: 'EmailConfirmation',
-    component: () => import(/* webpackChunkName: "EmailConfirmation" */ '../views/EmailConfirmation.vue')
+    component: {}
   }
 ]
 
@@ -34,5 +36,30 @@ const router = createRouter({
   history: createWebHistory(),
   routes
 })
+
+router.beforeEach((to, from, next) => {
+  // console.log('from =', from)
+  // console.log('to =', to)
+  // intercepte la route "EmailConfirmation" et active l'email
+  if (to.name === "EmailConfirmation") {
+    const id = to.params.id
+    const token = to.params.token
+    // console.log('id =', id, '  --  token =', token)
+    if (id !== undefined && token !== undefined) {
+      emailActivation(id, token)
+    }
+    let nouvelleRoute = '/'
+    if (from.name !== undefined) {
+      nouvelleRoute === from.name
+    }
+    next({
+      path: nouvelleRoute,
+      replace: true
+    })
+  } else {
+    next()
+  }
+})
+
 
 export default router

@@ -4,7 +4,7 @@ import router from './router'
 import App from './App.vue'
 import mitt from 'mitt'
 window.emitter = mitt()
-
+window.accessToken = ''
 
 
 let app = createApp(App)

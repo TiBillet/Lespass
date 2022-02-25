@@ -4,7 +4,6 @@ import createPersistedState from 'vuex-persistedstate'
 export default createStore({
   state: {
     refreshToken: '',
-    chargement: false,
     formulaireBillet: {},
     events: [],
     place: {},
@@ -14,10 +13,12 @@ export default createStore({
       attentionEmail: false
     },
     adhesion: {
+      activation: false,
       nom: '',
       prenom: '',
       adresse: '',
-      tel: null
+      tel: null,
+      uuidPrice: ''
     }
   },
   plugins: [createPersistedState()],
@@ -38,6 +39,9 @@ export default createStore({
     initProducts(state, data) {
       state.products = data
     },
+    updateAdhesion(state, data) {
+      state.adhesion[data.key] = data.value
+    },
     updateRefreshToken(state, token) {
       state.refreshToken = token
     },
@@ -51,17 +55,9 @@ export default createStore({
     },
     initFormulaireBillet(state, uuidEvent) {
       state.formulaireBillet[uuidEvent] = {
-        email: '',
-        confirmeEmail: '',
-        attentionEmail: false,
         position: 'fosse',
-        adhesion: false,
-        adhesionInfos: {},
         identifiants: []
       }
-    },
-    majFormulaireBilletAdhesionActive(state, data) {
-      state.formulaireBillet[data.uuidEvent].adhesion = data.valeur
     },
     majFormulaireBillet(state, data) {
       console.log('-> store, majFormulaire, data =', data)

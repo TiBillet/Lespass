@@ -32,15 +32,12 @@
 
           <CardProfil v-model:profil="profil"/>
 
-          <div v-for="produit in currentEvent.products" :key="produit.uuid">
-            <CardAdhesion :data-product="produit" :uuid-event="currentEvent.uuid"/>
-          </div>
+          <CardAdhesion v-model:adhesion="adhesion"/>
 
           <div v-for="produit in currentEvent.products" :key="produit.uuid">
             <CardBillet v-if="produit.categorie_article === 'B' && produit.publish === true" :data-product="produit"
                         :uuid-event="currentEvent.uuid"/>
           </div>
-
           <div class="col-md-12 col-lg-9">
             <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
           </div>
@@ -85,15 +82,17 @@ let profil = reactive({
   confirmeEmail: store.state.profil.confirmeEmail
 })
 
+let adhesion = reactive({})
+
 // chargement de l'évènement
-// console.log(`-> chargement de l'évènement urlApi =`, urlApi)
+console.log(`-> chargement de l'évènement urlApi =`, urlApi)
 fetch(domain + urlApi).then(response => {
   if (!response.ok) {
     throw new Error(`${response.status} - ${response.statusText}`)
   }
   return response.json()
 }).then(retour => {
-  console.log('retour =', JSON.stringify(retour, null, 2))
+  // console.log('retour =', JSON.stringify(retour, null, 2))
   // maj store events
   store.commit('updateEvent', retour)
 
@@ -104,6 +103,19 @@ fetch(domain + urlApi).then(response => {
 
   // actualise les données
   currentEvent.value = store.getters.getEventBySlug(slug)
+
+  // init l'adhésion
+  let dataAdhesion = JSON.parse(JSON.stringify(currentEvent.value.products)).filter(obj => obj.categorie_article === "A")[0]
+  dataAdhesion['nom'] = store.state.adhesion.nom
+  dataAdhesion['prenom'] = store.state.adhesion.prenom
+  dataAdhesion['adresse'] = store.state.adhesion.adresse
+  dataAdhesion['tel'] = store.state.adhesion.tel
+  dataAdhesion['uuidEvent'] = uuidEvent
+  dataAdhesion['activation'] = store.state.adhesion.activation
+  dataAdhesion['uuidPrice'] = store.state.adhesion.uuidPrice
+
+  console.log('dataAdhesion =', dataAdhesion, '  --  type =', typeof (dataAdhesion))
+  adhesion.value = dataAdhesion
 
   // mode chargement terminé
   chargement.value = false
@@ -239,7 +251,44 @@ function goValiderAchats(event) {
   console.log('-> fonc goValiderAchats !')
   console.log('event =', event)
   console.log('profil =', profil)
+  console.log('adhesion =', adhesion)
+  console.log('adhesion.value.uuidPrice =', adhesion.value.uuidPrice)
   store.commit('updateProfil', profil)
+
+  if (event.target.checkValidity() === false) {
+    // lance le test de validation du formulaire (méthode bootstrap)
+    event.target.classList.add('was-validated')
+  } else {
+    // rendre le cham input '#email-confirmation' invalid si les emails sont différents
+    if (profil.email !== profil.confirmeEmail) {
+      document.querySelector('#email-confirmation').classList.add('is-invalid')
+    } else {
+      document.querySelector('#email-confirmation').classList.remove('is-invalid')
+      console.log('email ok')
+    }
+
+    // rendre le cham input '#uuidPriceRadio0' invalid si aucun prix d'adhésion sélectionné
+    let eles = document.querySelectorAll('.input-uuid-price')
+    if (adhesion.value.uuidPrice === '') {
+      for (let i = 0; i < eles.length; i++) {
+        eles[i].classList.add('is-invalid')
+      }
+      document.querySelector('#uuid-price-error').style.display = 'block'
+    } else {
+      for (let i = 0; i < eles.length; i++) {
+        eles[i].classList.remove('is-invalid')
+      }
+      document.querySelector('#uuid-price-error').style.display = 'none'
+    }
+
+    if (profil.email === profil.confirmeEmail && adhesion.value.uuidPrice !== '') {
+      // Validation du formulaire ok
+      console.log('formulaire ok !')
+      event.target.classList.remove('was-validated')
+      console.log('uuidEvent =', uuidEvent)
+      console.log('billets :', JSON.stringify(store.state.formulaireBillet[uuidEvent],null,2))
+    }
+  }
 }
 
 

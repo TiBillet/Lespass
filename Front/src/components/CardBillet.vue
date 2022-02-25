@@ -44,12 +44,7 @@ const props = defineProps({
   uuidEvent: String
 })
 
-console.log('-> props =', JSON.stringify(props, null, 2))
 
-
-console.log('props.dataProduct =', props.dataProduct)
-
-/*
 function majFormulaireBillet(event, sujet) {
   console.log('-> majFormulaireBillet')
   let valeur = event.target.value
@@ -62,12 +57,6 @@ function majFormulaireBillet(event, sujet) {
   store.commit('majFormulaireBillet', {uuidEvent: props.uuidEvent, sujet: sujet, valeur: valeur})
 }
 
-
-function goValiderAchats(event) {
-  emitter.emit("goValiderAchat", event.target)
-}
-
- */
 </script>
 
 <style scoped>

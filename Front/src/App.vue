@@ -9,8 +9,8 @@
     </div>
   </section>
   <!-- après chargement -->
-<!--  <section v-if="!chargement">-->
-    <section v-else>
+  <!--  <section v-if="!chargement">-->
+  <section v-else>
     <Message/>
     <div class="espace-navbar"></div>
     <Navbar :data-header="getDataHeader()"/>
@@ -39,6 +39,7 @@ import {ref} from 'vue'
 import Message from './components/Message.vue'
 import {useStore} from 'vuex'
 
+
 // composants
 import Navbar from './components/Navbar.vue'
 import Footer from './components/Footer.vue'
@@ -63,6 +64,7 @@ function getDataHeader() {
 
 function verifierEtatChargement() {
   nbChargement++
+  console.log('-> verifierEtatChargement, nbChargement =', nbChargement, '  --  nbMaxChargement =', nbMaxChargement)
   if (nbChargement === nbMaxChargement) {
     chargement.value = false
   }
@@ -132,27 +134,10 @@ fetch(domain + apiProducts).then(response => {
   })
 })
 
-// verification du refresh token
-nbMaxChargement++
-let apiProducts = `/api/user/token/verify/`
-console.log(`4 -> verification du refresh token ${domain + apiProducts}`)
-fetch(domain + apiProducts).then(response => {
-  if (!response.ok) {
-    throw new Error(`${response.status} - ${response.statusText}`)
-  }
-  return response.json()
-}).then(json => {
-  store.commit('initProducts', json)
-  verifierEtatChargement()
-}).catch(function (erreur) {
-  emitter.emit('message', {
-    tmp: 4,
-    typeMsg: 'danger',
-    contenu: `Chargement des prix, erreur: ${erreur}`
-  })
+emitter.on('updateRefreshToken', (refreshToken) => {
+  console.log('-> emitter écoute "updateRefreshToken" !')
+  store.commit('updateRefreshToken', refreshToken)
 })
-
-
 
 </script>
 <style>

@@ -33,18 +33,26 @@
 import {useStore} from 'vuex'
 import {ref} from 'vue'
 
-const email = ref('dijouxnicolas@sfr.fr')
+// common
+import {refreshAccessToken} from '@/common'
+
 const store = useStore()
+const email = ref(store.state.profil.email)
+// dev dijouxnicolas@sfr.fr
 const domain = `${location.protocol}//${location.host}`
+
 
 async function validerLogin() {
   console.log('fonc validerLogin, email =', email.value)
 
-  // test si adhérant et utilisateur
+  // 1 - utilisateur exsite ?
   const emailB64 = btoa(email.value)
   let api = `/api/membership/${emailB64}/`
-  let aJourCotisation = null
-  let user = false
+  let userExist = false
+  let accessTokenValide = false
+
+  // enregistrer email dans le store
+  store.commit('updateProfilEmail', email.value)
 
   console.log('url =', domain + api)
   try {
@@ -63,15 +71,8 @@ async function validerLogin() {
     // console.log('retour =', JSON.stringify(retour, null, 2))
     // console.log('retour.a_jour_cotisation =', retour.a_jour_cotisation)
     if (retour.a_jour_cotisation !== undefined) {
-      aJourCotisation = retour.a_jour_cotisation
-      user = true
-      store.commit('updateProfilEmail', email.value)
+      userExist = true
     }
-    // 402
-    if (retour === 'no User' || response.status === 402) {
-      user = false
-    }
-
   } catch (erreur) {
     emitter.emit('message', {
       tmp: 6,
@@ -80,10 +81,68 @@ async function validerLogin() {
     })
   }
 
-  console.log('aJourCotisation =', aJourCotisation, '  --  user =', user)
+  // vérifier la validité du access token
+  if (userExist === true) {
+    let apiTest = `/api/user/token/verify/`
+    // 200=ok / 401=pas authorisé ou expiré / 400= refresh token = ''
+    console.log(`verification du refresh token ${domain + apiTest}, refresh =${store.state.refreshToken}`)
+    try {
+      const response = await fetch(domain + apiTest, {
+        method: 'POST',
+        cache: 'no-cache', // *default, no-cache, reload, force-cache, only-if-cached
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({token: accessToken})
+        // test
+        // body: JSON.stringify({token: 'ghdgkjdjkhgkhjhjdk4454dkjhhkjhsghfhgshvsvhgg'})
+      })
+
+      console.log('response =', response)
+      if (response.status !== 200 && response.status !== 401 && response.status !== 400) {
+        throw new Error(`${response.status} - ${response.statusText}`)
+      }
+      if (response.status === 400 || response.status === 401) {
+        // reset refresh token
+        window.accessToken = ''
+        accessTokenValide = false
+      }
+
+      if (response.status === 200) {
+        accessTokenValide = true
+      }
+
+    } catch (erreur) {
+      emitter.emit('message', {
+        tmp: 4,
+        typeMsg: 'danger',
+        contenu: `Verification de la validité du access token: ${erreur}`
+      })
+    }
+
+  }
+
+  // TODO: si userExist === true && accessTokenValide === false && store.state.refreshToken === 'vide' => demander nouveau acces et refresh token (sans création d'utilisateur)/ email
+  // informe refresh vide
+  if (userExist === true && accessTokenValide === false && store.state.refreshToken === '') {
+    emitter.emit('message', {
+      tmp: 4,
+      typeMsg: 'warning',
+      contenu: `Utilisateur ok, access token non valide, refresh token vide; informer l'administrateur !`
+    })
+  }
+
+
+  // demander nouveau access / refresh token (api= /api/user/token/refresh/)
+  if (userExist === true && accessTokenValide === false && store.state.refreshToken !== '') {
+    accessTokenValide = refreshAccessToken(store.state.refreshToken)
+  }
+
+  console.log('userExist =', userExist)
+  console.log('accessTokenValide =', accessTokenValide)
 
   // créer l'utilisateur
-  if (user === false) {
+  if (userExist === false) {
     api = `/api/user/create/`
     try {
       const response = await fetch(domain + api, {
