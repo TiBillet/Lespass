@@ -45,6 +45,9 @@ Une société coopérative ( SCIC ) est en création pour porter juridiquement u
 Developpeurs, utilisateurs, organisateurs, tiers-lieux et collectivités locales seront réunis autour d'une coopérative
 d'interet commun.
 
+Venez discuter avec nous :
+- Discord : https://discord.gg/7FJvtYx
+
 ## Installation :
 
 We need Docker & docker-compose. See https://docs.docker.com/ for installation.
