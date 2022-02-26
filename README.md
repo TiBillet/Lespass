@@ -1,8 +1,10 @@
-###### ##############
+######  ##############
 
 # ACTIVE BETA NOT READY FOR PRODUCTION YET
 
-###### ##############
+## Nous cherchons activement toute forme d'aide pour construire TiBillet ! N'hésitez pas à nous contacter :)
+
+######  ##############
 
 # TiBillet-Ticket
 
@@ -23,7 +25,7 @@ Pour en savoir plus : https://www.tibillet.re & https://wiki.tibillet.re
 
 ## Ticketing Design.
 
-Soon.
+Soon. Need help :)
 
 ## Introduction.
 
