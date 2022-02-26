@@ -23,7 +23,7 @@ Pour en savoir plus : https://www.tibillet.re & https://wiki.tibillet.re
 
 ![](Presentation/Design_Front_Ticket.svg)
 
-## Ticketing Design.
+## Cashless Design.
 
 Soon. Need help :)
 
