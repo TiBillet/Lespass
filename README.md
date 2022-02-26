@@ -1,10 +1,6 @@
-######  ##############
-
 # ACTIVE BETA NOT READY FOR PRODUCTION YET
 
 ## Nous cherchons activement toute forme d'aide pour construire TiBillet ! N'hésitez pas à nous contacter :)
-
-######  ##############
 
 # TiBillet
 
