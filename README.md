@@ -33,8 +33,6 @@ Clic above or open ./ Presentation / "Front Cashless.excalidraw"  on https://exc
 
 ### Démonstration :
 
-Un espace de présentation du cashless est disponible :
-
 https://demo.tibillet.re
 - login : adminou
 - password : miaoumiaou
