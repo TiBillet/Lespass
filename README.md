@@ -122,24 +122,15 @@ docker exec -ti billetterie_django bash
 Test with ```www.$DOMAIN/admin``` and ```raffinerie.$DOMAIN/admin```
 ```
 
-Don't forget to change your /etc/host if you are in localhost :)
-172.17.0.1 is the docker host network.
+if you are in localhost, change your /etc/host in order to simulate a real adress for the request :
+172.17.0.1
 I use djang-local.org as $DOMAIN. Use yours !
 
 ```
 #example /etc/hosts
 172.17.0.1       django-local.org
 172.17.0.1       www.django-local.org
-172.17.0.1       demo.django-local.org
-172.17.0.1       m.django-local.org
-172.17.0.1       bisik.django-local.org
 172.17.0.1       raffinerie.django-local.org
-172.17.0.1       vavangart.django-local.org
-172.17.0.1       3peaks.django-local.org
-172.17.0.1       manap.django-local.org
-
-
-# go to demo.django-local.org:8002/admin to create an admin user for the tenant. 
 ```
 
 # BACKEND API Documentation
