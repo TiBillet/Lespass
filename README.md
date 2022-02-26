@@ -116,7 +116,7 @@ docker exec -ti billetterie_django bash
   
 # Pop data inside the TiBillet-Ticket/DjangoFiles/data/domains_and_cards.py
 # Change the file if you want !
-# --> Open a seconde shell inside the container :
+# --> With a second shell inside the container :
 	python manage.py pop_demo_data
 
 Test with ```www.$DOMAIN/admin``` and ```raffinerie.$DOMAIN/admin```
