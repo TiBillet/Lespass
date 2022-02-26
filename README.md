@@ -32,8 +32,8 @@ Soon. Need help :)
 Un espace de présentation du cashless est disponible :
 
 https://demo.tibillet.re
-login : adminou
-password : miaoumiaou
+- login : adminou
+- password : miaoumiaou
 
 Une fois sur la page d'administration, aller sur "Voir le site" pour découvrir l'interface cashless.
 Ou aller sur : 
