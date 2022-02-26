@@ -14,7 +14,7 @@ TiBillet was an original idéa from GDNA and designed and developed by 3Peaks, M
 # Many Thanks to  :
 
 - The PRMA ( Pôle régional des musiques actuelles de la Réunion )
-  - Laurent BURMAULT
+  - Laurent BOURMAULT
   - Emmanuelle SYNDRAYE
   - Cathy DUMOUX
   - Jean-François Cadet
