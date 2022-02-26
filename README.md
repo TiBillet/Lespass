@@ -15,6 +15,10 @@ TiBillet permet la création d'une économie circulaire, sociale et solidaire à
 
 Pour en savoir plus : https://www.tibillet.re & https://wiki.tibillet.re
 
+## Mindmap VF
+
+![](Presentation/carte_heuristique.png)
+
 ## Ticketing frontend design.
 
 Open [Front Billetterie.excalidraw](https://github.com/TiBillet/TiBillet/blob/main/Presentation/Front%20Billetterie.excalidraw) on https://excalidraw.com/
