@@ -41,7 +41,7 @@ boulot avant :)
 Mais ceci dit, si vous souhaitez l'expérimenter chez vous, n'hésitez pas à nous contacter :)
 
 TiBillet est originalement construit par l'association des 3Peaks de Manapany : Créateurs du Manapany Surf Festival.
-Nous sommes en cours de création d'un SCIC pour porter juridiquement une fédération autour des acteurs de la solution :
+Une société coopérative ( SCIC ) est en création pour porter juridiquement une fédération autour des acteurs de la solution :
 Developpeurs, utilisateurs, organisateurs, tiers-lieux et collectivités locales seront réunis autour d'une coopérative
 d'interet commun.
 
