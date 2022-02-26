@@ -17,7 +17,7 @@ TiBillet was an original idéa from GDNA and designed and developed by 3Peaks, M
   - Laurent BOURMAULT
   - Emmanuelle SYNDRAYE
   - Cathy DUMOUX
-  - Jean-François Cadet
+  - Jean-François CADET
 - Arnaud HEUVRAR ( UX Design, Template design basebillet/templates/arnaud_mvc )
 - Old and new Beta Tester :
   - 3Peaks
