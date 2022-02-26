@@ -6,7 +6,7 @@
 
 ######  ##############
 
-# TiBillet-Ticket
+# TiBillet
 
 Réseau événementiel et coopératif.
 
