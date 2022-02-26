@@ -44,13 +44,11 @@ https://demo.tibillet.re/wv/
 TiBillet est en période de BETA et en expérimentation sur plusieurs lieux sur l'ile de la Réunion. Venez nous voir au
 Bisik, à la Raffinerie, et au Manapany Festival !
 
-Le présent dépot ne contient pas encore toutes les sources du projet. La billetterie est en cours de refactoring et les
-sources sont publiées petit à petit sous licence libre.
+Le présent dépot ne contient pas encore toutes les sources du projet en cours d'expérimentation : 
+La billetterie est en cours de publication.
+Le Cashless est en cours d'audit de sécurité et sera publié sous licence libre ASAP.
 
-Le Cashless est en cours d'audit de sécurité et sera publié sous licence libre dès que possible. On a encore pas mal de
-boulot avant :)
-
-Mais ceci dit, si vous souhaitez l'expérimenter chez vous, n'hésitez pas à nous contacter :)
+Mais ceci dit, si vous souhaitez l'expérimenter chez vous, n'hésitez pas à nous contacter. Toute aide et retour d'expérience sont les bienvenus.
 
 TiBillet est originalement construit par l'association des 3Peaks de Manapany : Créateurs du Manapany Surf Festival.
 Une société coopérative ( SCIC ) est en création pour porter juridiquement une fédération autour des acteurs de la solution :
