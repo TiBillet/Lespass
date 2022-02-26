@@ -19,13 +19,13 @@ TiBillet permet la création d'une économie circulaire, sociale et solidaire à
 
 Pour en savoir plus : https://www.tibillet.re & https://wiki.tibillet.re
 
-## Ticketing Design.
+## Ticketing frontend design.
 
 ![](Presentation/Design_Front_Ticket.svg)
 
-## Cashless Design.
+## Cashless frontend design.
 
-Soon. Need help :)
+![](Presentation/Design_Front_Cashless_APP.svg)
 
 ### Démonstration :
 
