@@ -152,7 +152,7 @@ Le frontend basé sur le framework Vue.js est en cours de développement. N'hés
 
 # Licence :
 
-TiBillet is ( for the moment ) under the Server Side Public Licence ( SSPL ), the anti-amazon GPL like licence.
+TiBillet is ( for the moment ) under the Server Side Public Licence ( SSPL ).
 
 https://www.mongodb.com/licensing/server-side-public-license
 
