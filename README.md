@@ -71,12 +71,14 @@ We need Docker & docker-compose. See https://docs.docker.com/ for installation.
 
 ```shell
 cd Docker/Development
-# populate .env file with your own variables and copy it.
+# Copy the example environement file 
 cp env_example .env
+# populate .env file with your own variables.
+nano .env
 # build docker image
 docker-compose build
 # launch 
-docker-compose up -d
+docker-compose up
 ```
 
 ## First time launch
@@ -93,7 +95,7 @@ docker exec -ti billetterie_django bash
   # Populate the database with the public tenant ( the first one : www. )
   python manage.py create_public
   
-  # Create the root user
+  # Create the root user on the "public" tenant
   # Use VERY STRONG PASSWORD AND DON'T USE THE SAME EMAIL as .env !
   python manage.py create_tenant_superuser
     ? -> public
@@ -107,12 +109,10 @@ docker exec -ti billetterie_django bash
 # or
   rsp
   
-  
 # Pop data inside the TiBillet-Ticket/DjangoFiles/data/domains_and_cards.py
 # Change the file if you want !
 # --> Open a seconde shell inside the container :
 	python manage.py pop_demo_data
-
 
 Test with ```www.$DOMAIN:8002/admin``` and ```demo.$DOMAIN:8002/admin```
 ```

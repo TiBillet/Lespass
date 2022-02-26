@@ -3070,8 +3070,8 @@
       "groupIds": [],
       "strokeSharpness": "round",
       "seed": 112158595,
-      "version": 49,
-      "versionNonce": 533768803,
+      "version": 50,
+      "versionNonce": 290821571,
       "isDeleted": false,
       "boundElements": [
         {
@@ -3079,8 +3079,8 @@
           "type": "arrow"
         }
       ],
-      "updated": 1645867813747,
-      "link": null,
+      "updated": 1645869313173,
+      "link": "",
       "status": "saved",
       "fileId": "e8701b395ea69671db85ce1e263df3f0380f54eb",
       "scale": [
