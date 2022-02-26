@@ -156,4 +156,6 @@ https://www.mongodb.com/licensing/server-side-public-license
 
 https://webassets.mongodb.com/_com_assets/legal/SSPL-compared-to-AGPL.pdf
 
-# Crédits and développement within the AUTHORS.md file
+# Crédits and développement :
+[AUTHORS.md](https://github.com/TiBillet/TiBillet/blob/main/AUTHORS.md)
+
