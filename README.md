@@ -63,7 +63,7 @@ Venez discuter avec nous :
 - Discord : https://discord.gg/7FJvtYx
 
 
-## Installation :
+## Install :
 
 ### Dependency
 - Traefik. 
