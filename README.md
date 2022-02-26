@@ -27,6 +27,19 @@ Pour en savoir plus : https://www.tibillet.re & https://wiki.tibillet.re
 
 Soon. Need help :)
 
+### Démonstration :
+
+Un espace de présentation du cashless est disponible :
+
+https://demo.tibillet.re
+login : adminou
+password : miaoumiaou
+
+Une fois sur la page d'administration, aller sur "Voir le site" pour découvrir l'interface cashless.
+Ou aller sur : 
+https://demo.tibillet.re/wv/
+
+
 ## Introduction.
 
 TiBillet est en période de BETA et en expérimentation sur plusieurs lieux sur l'ile de la Réunion. Venez nous voir au
@@ -47,6 +60,7 @@ d'interet commun.
 
 Venez discuter avec nous :
 - Discord : https://discord.gg/7FJvtYx
+
 
 ## Installation :
 
