@@ -37,7 +37,7 @@ on https://excalidraw.com/
 
 ![](Presentation/Design_Front_Cashless_APP.svg)
 
-### Démonstration :
+### Cashless démo :
 
 https://demo.tibillet.re
 
