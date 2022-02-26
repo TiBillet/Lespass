@@ -1,6 +1,8 @@
-####################
+###### ##############
+
 # ACTIVE BETA NOT READY FOR PRODUCTION YET
-####################
+
+###### ##############
 
 # TiBillet-Ticket
 
@@ -11,27 +13,35 @@ de restauration, d'engagement associatif et d'achat de billets en ligne … mais
 
 C'est aussi un outil de mise en réseau et de gestion d'une monnaie locale et commune à plusieurs lieux.
 
-TiBillet permet la création d'une économie sociale et solidaire à l'échelle d'un territoire.
+TiBillet permet la création d'une économie circulaire, sociale et solidaire à l'échelle d'un territoire.
 
 Pour en savoir plus : https://www.tibillet.re & https://wiki.tibillet.re
 
-## Design 
+## Ticketing Design.
 
 ![](Presentation/Design_Front_Ticket.svg)
+
+## Ticketing Design.
+
+Soon.
 
 ## Introduction.
 
 TiBillet est en période de BETA et en expérimentation sur plusieurs lieux sur l'ile de la Réunion. Venez nous voir au
-Bisik, à la Raffinerie, à Vavang'Art et au Manapany Festival !
+Bisik, à la Raffinerie, et au Manapany Festival !
 
 Le présent dépot ne contient pas encore toutes les sources du projet. La billetterie est en cours de refactoring et les
 sources sont publiées petit à petit sous licence libre.
 
-Le Cashless est en cours d'audit de sécurité et sera publié sous licence libre dès que possible.
+Le Cashless est en cours d'audit de sécurité et sera publié sous licence libre dès que possible. On a encore pas mal de
+boulot avant :)
 
-Pour l'expérimenter chez vous, n'hésitez pas à nous contacter :)
+Mais ceci dit, si vous souhaitez l'expérimenter chez vous, n'hésitez pas à nous contacter :)
 
-TiBillet est construit par l'association des 3Peaks de Manapany : Créateurs du Manapany Surf Festival !
+TiBillet est originalement construit par l'association des 3Peaks de Manapany : Créateurs du Manapany Surf Festival.
+Nous sommes en cours de création d'un SCIC pour porter juridiquement une fédération autour des acteurs de la solution :
+Developpeurs, utilisateurs, organisateurs, tiers-lieux et collectivités locales seront réunis autour d'une coopérative
+d'interet commun.
 
 ## Installation :
 
@@ -85,7 +95,6 @@ docker exec -ti billetterie_django bash
 Test with ```www.$DOMAIN:8002/admin``` and ```demo.$DOMAIN:8002/admin```
 ```
 
-
 Don't forget to change your /etc/host if you are in localhost :)
 172.17.0.1 is the docker host network.
 
@@ -105,8 +114,7 @@ Don't forget to change your /etc/host if you are in localhost :)
 # go to demo.django-local.org:8002/admin to create an admin user for the tenant. 
 ```
 
-
-# BACKEND API Documentation 
+# BACKEND API Documentation
 
 ### API Postman with example :
 
@@ -114,8 +122,7 @@ https://documenter.getpostman.com/view/17519122/UVeDtTFC
 
 # FRONTEND
 
-Le frontend basé sur le framework Vue.js est en cours de développement.
-N'hésitez pas à nous contacter pour contribuer.
+Le frontend basé sur le framework Vue.js est en cours de développement. N'hésitez pas à nous contacter pour contribuer.
 
 # Licence :
 
