@@ -67,7 +67,14 @@ Venez discuter avec nous :
 
 ## Installation :
 
-We need Docker & docker-compose. See https://docs.docker.com/ for installation.
+### Dependency
+- Traefik. 
+Example here :
+https://github.com/TiBillet/Traefik-reverse-proxy
+
+- Docker & docker-compose
+See https://docs.docker.com/ for installation.
+
 
 ```shell
 cd Docker/Development
@@ -114,11 +121,12 @@ docker exec -ti billetterie_django bash
 # --> Open a seconde shell inside the container :
 	python manage.py pop_demo_data
 
-Test with ```www.$DOMAIN:8002/admin``` and ```demo.$DOMAIN:8002/admin```
+Test with ```www.$DOMAIN/admin``` and ```raffinerie.$DOMAIN/admin```
 ```
 
 Don't forget to change your /etc/host if you are in localhost :)
 172.17.0.1 is the docker host network.
+I use djang-local.org as $DOMAIN. Use yours !
 
 ```
 #example /etc/hosts
