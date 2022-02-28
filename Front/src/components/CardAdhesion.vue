@@ -15,11 +15,11 @@
       <div class="row has-validation">
         <div class="col form-check mb-3" v-for="(price, index) in data.prices" :key="index">
           <input v-if="index === 0" v-model="data.uuidPrice" :value="price.uuid" class="form-check-input input-uuid-price" type="radio"
-                 name="prixAdhesion" :id="`uuidPriceRadio${index}`">
+                 name="prixAdhesion" :id="`uuidPriceRadio${index}`" @change="majAdhesion('uuidPrice', $event.target.value)">
           <input v-else v-model="data.uuidPrice" :value="price.uuid" class="form-check-input input-uuid-price" type="radio"
-                 name="prixAdhesion" :id="`uuidPriceRadio${index}`">
+                 name="prixAdhesion" :id="`uuidPriceRadio${index}`" @change="majAdhesion('uuidPrice', $event.target.value)">
           <label class="form-check-label" :for="`customRadio${index}`">{{ price.name }} - {{ price.prix }}€</label>
-          <div v-if="index === 0" id="uuid-price-error" class="invalid-feedback">Sélectionner une adhésion svp !</div>
+          <div v-if="index === 0" id="uuid-price-error" class="invalid-feedback">Sélectionner un tarif d'adhésion svp !</div>
         </div>
       </div>
 

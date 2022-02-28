@@ -134,6 +134,37 @@ fetch(domain + apiProducts).then(response => {
   })
 })
 
+// obtenir le "access token"
+if (store.state.refreshToken !== '') {
+  nbMaxChargement++
+  let apiTokenRefresh = `/api/user/token/refresh/`
+  // options de la requête
+  const options = {
+    method: 'POST',
+    body: JSON.stringify({refresh: store.state.refreshToken}),
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  }
+
+  console.log(`${nbMaxChargement} -> obtenir le "access token" ${domain + apiTokenRefresh}`)
+  fetch(domain + apiTokenRefresh, options).then(response => {
+    if (response.status !== 200) {
+      throw new Error(`${response.status} - ${response.statusText}`)
+    }
+    return response.json()
+  }).then(retour => {
+    window.accessToken = retour.access
+    verifierEtatChargement()
+  }).catch(function (erreur) {
+    emitter.emit('message', {
+      tmp: 4,
+      typeMsg: 'danger',
+      contenu: `Obtention du jeton d'accès, erreur: ${erreur}`
+    })
+  })
+}
+
 emitter.on('updateRefreshToken', (refreshToken) => {
   console.log('-> emitter écoute "updateRefreshToken" !')
   store.commit('updateRefreshToken', refreshToken)

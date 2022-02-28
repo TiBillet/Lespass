@@ -71,3 +71,34 @@ export async function refreshAccessToken(refreshToken) {
     return false
   }
 }
+
+export async function getReservations() {
+  console.log(`-> charge getReservations !`)
+  const apiReservations = `/api/reservations/`
+  const options = {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'Token': window.accessToken
+    }
+  }
+  fetch(domain + apiReservations, options).then(response => {
+    console.log('response =', response)
+    /*
+    if (response.status !== 200) {
+      throw new Error(`${response.status} - ${response.statusText}`)
+    }
+
+     */
+    return response.json()
+  }).then(retour => {
+    console.log('retour =', retour)
+  }).catch(function (erreur) {
+    emitter.emit('message', {
+      tmp: 6,
+      typeMsg: 'danger',
+      contenu: `Liste des réservations, erreur: ${erreur}`
+    })
+  })
+
+}

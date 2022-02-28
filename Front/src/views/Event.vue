@@ -247,6 +247,72 @@ emitter.on('goValiderAchat', (form) => {
   }
 })
 */
+function jsonReservation() {
+  let data = {
+    event: currentEvent.value.uuid,
+    email: store.state.profil.email,
+    position: store.state.formulaireBillet[currentEvent.value.uuid].position
+  }
+  // données adhésion
+  if (store.state.formulaireBillet[currentEvent.value.uuid].adhesion === true) {
+    data.adhesion = {
+      nom: store.state.formulaireBillet[currentEvent.value.uuid].adhesionInfos.nom,
+      prenom: store.state.formulaireBillet[currentEvent.value.uuid].adhesionInfos.prenom,
+      adresse: store.state.formulaireBillet[currentEvent.value.uuid].adhesionInfos.adresse,
+      tel: store.state.formulaireBillet[currentEvent.value.uuid].adhesionInfos.tel
+    }
+  }
+  let identifiants = store.state.formulaireBillet[currentEvent.value.uuid].identifiants
+  // console.log('identifiants =', identifiants)
+  let groupes = {}
+  for (let i = 0; i < identifiants.length; i++) {
+    const uuidTarif = identifiants[i].uuidTarif
+    if (identifiants[i].uuidTarif === uuidTarif) {
+      if (groupes[uuidTarif] === undefined) {
+        groupes[uuidTarif] = []
+      }
+      groupes[uuidTarif].push({
+        first_name: identifiants[i].prenom,
+        last_name: identifiants[i].nom
+      })
+    }
+  }
+  console.log('groupes =', groupes)
+  // composition des "data prices"
+  let prices = []
+  for (let uuidTarif in groupes) {
+    // console.log('uuidTarif =', uuidTarif, '  --  qty =', groupes[uuidTarif].length)
+    let tabIdentifiants = []
+    for (let i = 0; i < groupes[uuidTarif].length; i++) {
+      const identifiant = groupes[uuidTarif][i]
+      tabIdentifiants.push(identifiant)
+    }
+    prices.push({
+      uuid: uuidTarif,
+      qty: groupes[uuidTarif].length,
+      customers: tabIdentifiants
+    })
+  }
+
+  // ajout de l'adhésion si activée
+  if (store.state.adhesion.activation === true) {
+    prices.push({
+      uuid: store.state.adhesion.uuidPrice,
+      qty: 1,
+      customers: [{
+        first_name: store.state.adhesion.prenom,
+        last_name: store.state.adhesion.nom,
+        phone: store.state.adhesion.tel,
+        postal_code: "en attente de codage",
+        birth_date: "en attente de codage",
+      }]
+    })
+  }
+
+  data.prices = prices
+  return JSON.stringify(data)
+}
+
 function goValiderAchats(event) {
   console.log('-> fonc goValiderAchats !')
   console.log('event =', event)
@@ -259,34 +325,94 @@ function goValiderAchats(event) {
     // lance le test de validation du formulaire (méthode bootstrap)
     event.target.classList.add('was-validated')
   } else {
-    // rendre le cham input '#email-confirmation' invalid si les emails sont différents
+    // rendre le cham input '#email-confirmation' invalide si les emails sont différents
     if (profil.email !== profil.confirmeEmail) {
       document.querySelector('#email-confirmation').classList.add('is-invalid')
     } else {
+      // rendre le champ input '#email-confirmation' valide
       document.querySelector('#email-confirmation').classList.remove('is-invalid')
       console.log('email ok')
     }
 
-    // rendre le cham input '#uuidPriceRadio0' invalid si aucun prix d'adhésion sélectionné
-    let eles = document.querySelectorAll('.input-uuid-price')
-    if (adhesion.value.uuidPrice === '') {
-      for (let i = 0; i < eles.length; i++) {
-        eles[i].classList.add('is-invalid')
+    // adhésion active (gestion de validation bootstrap suite à un non fonction ou une non compréhention de celui-si)
+    if (store.state.adhesion.activation === true) {
+      // rendre le champ input '#uuidPriceRadio0' invalide si aucun prix d'adhésion sélectionné
+      let eles = document.querySelectorAll('.input-uuid-price')
+      if (adhesion.value.uuidPrice === '') {
+        for (let i = 0; i < eles.length; i++) {
+          eles[i].classList.add('is-invalid')
+        }
+        document.querySelector('#uuid-price-error').style.display = 'block'
+      } else {
+        // rendre le champ input '#uuidPriceRadio0' valide
+        for (let i = 0; i < eles.length; i++) {
+          eles[i].classList.remove('is-invalid')
+        }
+        document.querySelector('#uuid-price-error').style.display = 'none'
       }
-      document.querySelector('#uuid-price-error').style.display = 'block'
-    } else {
-      for (let i = 0; i < eles.length; i++) {
-        eles[i].classList.remove('is-invalid')
-      }
-      document.querySelector('#uuid-price-error').style.display = 'none'
     }
 
-    if (profil.email === profil.confirmeEmail && adhesion.value.uuidPrice !== '') {
+    // valide l'achat(s) si achat(s)
+    let achats = true
+    if (store.state.adhesion.activation === false && store.state.formulaireBillet[uuidEvent].identifiants.length === 0) {
+      emitter.emit('message', {
+        tmp: 4,
+        typeMsg: 'warning',
+        contenu: `Aucun achat !`
+      })
+      achats = false
+    }
+
+    // vérifie la sélection du prix de l'adhésion
+    if (store.state.adhesion.activation === true && store.state.adhesion.uuidPrice === '') {
+      emitter.emit('message', {
+        tmp: 4,
+        typeMsg: 'warning',
+        contenu: `Aucun prix sélectionné pour l'adhésion !`
+      })
+      achats = false
+    }
+
+
+    // email ok et achat(s)
+    if (profil.email === profil.confirmeEmail && achats === true) {
       // Validation du formulaire ok
       console.log('formulaire ok !')
       event.target.classList.remove('was-validated')
       console.log('uuidEvent =', uuidEvent)
-      console.log('billets :', JSON.stringify(store.state.formulaireBillet[uuidEvent],null,2))
+      console.log('billets :', JSON.stringify(store.state.formulaireBillet[uuidEvent], null, 2))
+      // mise en forme du body pour le fecth POST "/api/reservations/"
+      const body = jsonReservation()
+      console.clear()
+      console.log('body =', body)
+
+      // POST
+      const urlApi = `/api/reservations/`
+      // options de la requête
+      const options = {
+        method: 'POST',
+        body: body,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      }
+      fetch(urlApi, options).then(response => {
+        if (response.status !== 201) {
+          throw new Error(`${response.status} - ${response.statusText}`)
+        }
+        return response.json()
+      }).then(retour => {
+        console.log('retour =', retour)
+        // redirection vers stripe en conservant l'historique de navigation
+        window.location.assign(retour.checkout_url)
+      }).catch(function (erreur) {
+        emitter.emit('message', {
+          tmp: 6,
+          typeMsg: 'danger',
+          contenu: `Store, réservation produits erreur: ${erreur}`
+        })
+      })
+
     }
   }
 }
