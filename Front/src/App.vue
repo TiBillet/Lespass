@@ -11,12 +11,13 @@
   <!-- après chargement -->
   <!--  <section v-if="!chargement">-->
   <section v-else>
-    <Message/>
     <div class="espace-navbar"></div>
     <Navbar :data-header="getDataHeader()"/>
     <router-view></router-view>
     <Footer :data-header="getDataHeader()"/>
   </section>
+  <Message/>
+  <ModalMessage/>
 </template>
 
 <script setup>
@@ -34,15 +35,15 @@ import './assets/css/nucleo-svg.css'
 // css (ui)
 import './assets/css/now-design-system-pro.min.css'
 
-// vue
-import {ref} from 'vue'
-import Message from './components/Message.vue'
-import {useStore} from 'vuex'
-
-
 // composants
 import Navbar from './components/Navbar.vue'
 import Footer from './components/Footer.vue'
+import Message from './components/Message.vue'
+import ModalMessage from './components/ModalMessage.vue'
+
+// vue
+import {ref} from 'vue'
+import {useStore} from 'vuex'
 
 const store = useStore()
 

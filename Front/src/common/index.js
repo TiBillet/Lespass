@@ -29,9 +29,12 @@ export async function emailActivation(id, token) {
       window.accessToken = retour.access
       // maj navbar
       emitter.emit('majNavBar')
+      // message confirmation email
+      emitter.emit('modalMessage', {
+        titre: 'Succès',
+        contenu: 'Utilisateur activé / connecté !'
+      })
     } else {
-      // efface l'émail si pas confirmé
-      // emitter.emit('updateProfilEmail', '')
       throw new Error(`Erreur conrfirmation mail !`)
     }
   } catch (erreur) {
@@ -100,5 +103,38 @@ export async function getReservations() {
       contenu: `Liste des réservations, erreur: ${erreur}`
     })
   })
+}
 
+export async function getStripeReturn(uuidStripe) {
+  console.log(`-> charge getReservations !`)
+  const apiStripe = `/api/webhook_stripe/`
+  const options = {
+    method: 'Post',
+    headers: {
+      'Content-Type': 'application/json',
+      'Token': window.accessToken
+    },
+    body: JSON.stringify({uuid: uuidStripe})
+  }
+  fetch(domain + apiStripe, options).then(response => {
+    console.log('response =', response)
+    if (response.status !== 200) {
+      throw new Error(`${response.status} - ${response.statusText}`)
+    }
+    return response.json()
+  }).then(retour => {
+    console.log('retour =', retour)
+    // TODO: modal = achat(s) ok !
+    // message achat(s) ok
+      emitter.emit('modalMessage', {
+        titre: 'Succès',
+        contenu: 'Réservation OK !'
+      })
+  }).catch(function (erreur) {
+    emitter.emit('message', {
+      tmp: 6,
+      typeMsg: 'danger',
+      contenu: `Retour achat(s) stripe, erreur: ${erreur}`
+    })
+  })
 }

@@ -1,5 +1,5 @@
 <template>
-  <div id="conteneur-message" v-if="messages.length > 0">
+  <div v-if="messages.length > 0" id="conteneur-message">
     <div :id="`message-${ msg.id }`" v-for="msg in messages" :key="msg.id" v-bind="initEffacerMessage(msg.id, msg.tmp)"
          :class="`alert alert-${ msg.typeMsg} alert-dismissible fade show mt-2`" role="alert">
       <span class="alert-text text-white fw-bold text-wrap">{{ msg.contenu }}</span>
@@ -11,7 +11,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import {ref, onUnmounted} from 'vue'
 
 let messages = ref([])
 let repMessages = []
@@ -23,6 +23,8 @@ emitter.on('message', (data) => {
   messages.value.push(data)
 })
 
+
+// si messages existent, les effacer
 onUnmounted(() => {
   for (let i = 0; i < repMessages.length; i++) {
     const message = repMessages[i]

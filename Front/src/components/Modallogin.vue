@@ -38,7 +38,6 @@ import {refreshAccessToken} from '@/common'
 
 const store = useStore()
 const email = ref(store.state.profil.email)
-// dev dijouxnicolas@sfr.fr
 const domain = `${location.protocol}//${location.host}`
 
 
@@ -94,8 +93,6 @@ async function validerLogin() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({token: accessToken})
-        // test
-        // body: JSON.stringify({token: 'ghdgkjdjkhgkhjhjdk4454dkjhhkjhsghfhgshvsvhgg'})
       })
 
       console.log('response =', response)
@@ -163,9 +160,8 @@ async function validerLogin() {
         const modal = bootstrap.Modal.getInstance(elementModal) // Returns a Bootstrap modal instance
         modal.hide()
         // message de succès
-        emitter.emit('message', {
-          tmp: 6,
-          typeMsg: 'success',
+        emitter.emit('modalMessage', {
+          titre: 'Création utilisateur OK !',
           contenu: retour
         })
       }
@@ -177,63 +173,7 @@ async function validerLogin() {
       })
     }
   }
-  /*
-     .then(response => {
-   if (!response.ok) {
-     throw new Error(`${response.status} - ${response.statusText}`)
-   }
-   return response.json()
- }).then(retour => {
-   console.log('Retour =', JSON.stringify(retour, null, 2))
- }).catch(function (erreur) {
-   // chargement.value = false
-   emitter.emit('message', {
-     tmp: 6,
-     typeMsg: 'warning',
-     contenu: `Erreur, ${domain + api} : ${erreur}`
-   })
- })
-*/
 
-  /*
-  let api = `/auth/token/login/`
-  console.log(`-> Obtenir le token ${domain + api}`)
-  console.log('data =', JSON.stringify(form.value))
-
-  fetch(domain + api, {
-    method: 'POST',
-    cache: 'no-cache', // *default, no-cache, reload, force-cache, only-if-cached
-    headers: {
-      'Content-Type': 'application/json'
-      // 'Authorization': 'Bearer ${inMemoryToken}'
-    },
-    body: JSON.stringify(form.value)
-  }).then(response => {
-    if (!response.ok) {
-      throw new Error(`${response.status} - ${response.statusText}`)
-    }
-    return response.json()
-  }).then(retour => {
-    console.log('resultat =', retour)
-    // enregistre le token dans le state
-    store.commit('updateToken', retour.access_token)
-    // ferme le modal
-    const elementModal = document.querySelector('#modal-form-login')
-    const modal = bootstrap.Modal.getInstance(elementModal) // Returns a Bootstrap modal instance
-    modal.hide()
-    // password et username vidés
-    form.value.username = ''
-    form.value.password = ''
-  }).catch(function (erreur) {
-    // chargement.value = false
-    emitter.emit('message', {
-      tmp: 6,
-      typeMsg: 'warning',
-      // contenu: `Erreur, ${domain + api} : ${erreur}`
-      contenu: `Impossible de se connecter avec les informations d'identification fournies.`
-    })
-  })
-*/
 }
 </script>
 <style>

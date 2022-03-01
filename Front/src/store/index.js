@@ -1,5 +1,15 @@
 import {createStore} from 'vuex'
-import createPersistedState from 'vuex-persistedstate'
+import VuexPersistence from 'vuex-persist'
+
+// données conservées en local
+const vuexLocal = new VuexPersistence({
+  storage: window.localStorage
+})
+/*
+Attention, vérifier que votre navigateur est bien configuré.
+Exemples, pour firefox, le paramètre de sécurité "Supprimer les cookies et les données des sites à la fermeture de Firefox"
+ne doit pas être coché pour pouvoir conserver vos données
+ */
 
 export default createStore({
   state: {
@@ -21,7 +31,6 @@ export default createStore({
       uuidPrice: ''
     }
   },
-  plugins: [createPersistedState()],
   mutations: {
     resetState(state) {
       state = {
@@ -116,5 +125,6 @@ export default createStore({
     }
   },
   actions: {},
-  modules: {}
+  modules: {},
+  plugins: [vuexLocal.plugin]
 })
