@@ -133,6 +133,7 @@ if you are in localhost, change your /etc/host in order to simulate a real adres
 #example /etc/hosts
 172.17.0.1       django-local.org
 172.17.0.1       www.django-local.org
+172.17.0.1       m.django-local.org
 172.17.0.1       raffinerie.django-local.org
 ```
 
