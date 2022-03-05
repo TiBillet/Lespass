@@ -110,6 +110,20 @@ docker exec -ti billetterie_django bash
     ? -> public
 ```
 
+If you want use the demonstration data above, add this to your /etc/hosts :
+```
+#example /etc/hosts
+172.17.0.1       django-local.org
+172.17.0.1       www.django-local.org
+172.17.0.1       m.django-local.org
+172.17.0.1       raffinerie.django-local.org
+172.17.0.1       bisik.django-local.org
+172.17.0.1       vavangart.django-local.org
+172.17.0.1       3peaks.django-local.org
+
+```
+
+
 ## POP demo data, for dev' or just take a look :)
 
 ```shell
@@ -126,16 +140,6 @@ docker exec -ti billetterie_django bash
 Test with ```www.$DOMAIN/admin``` and ```raffinerie.$DOMAIN/admin```
 ```
 
-if you are in localhost, change your /etc/host in order to simulate a real adress for the request :
-172.17.0.1 I use djang-local.org as $DOMAIN. Use yours !
-
-```
-#example /etc/hosts
-172.17.0.1       django-local.org
-172.17.0.1       www.django-local.org
-172.17.0.1       m.django-local.org
-172.17.0.1       raffinerie.django-local.org
-```
 
 # BACKEND API Documentation
 
