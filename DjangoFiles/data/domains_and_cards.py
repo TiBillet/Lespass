@@ -22,7 +22,7 @@ tenants = {
         'categorie': 'S',
     },
     "Vavang'Art": {
-        'short_description': "Friche éco-cultruelle de Savannah",
+        'short_description': "Le Tiers Lieux de l'entre-deux.",
         'long_description': 'Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum Lorem Ispum ',
         'email': "demo@demo.com",
         'postal_code': '97480',
