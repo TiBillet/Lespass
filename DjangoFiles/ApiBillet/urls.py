@@ -20,5 +20,5 @@ urlpatterns = [
     # download ticket :
     path('ticket/pdf/<uuid:pk_uuid>', TicketPdf.as_view(), name='ticket_uuid_to_pdf'),
     path('webhook_stripe/', Webhook_stripe.as_view()),
-    path('webhook_stripe/<uuid:uuid_paiement>', Webhook_stripe.as_view()),
+    path('webhook_stripe/<uuid:uuid_paiement>/', Webhook_stripe.as_view()),
 ]

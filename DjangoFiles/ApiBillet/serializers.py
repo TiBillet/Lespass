@@ -713,7 +713,7 @@ class ReservationValidator(serializers.Serializer):
             print(new_paiement_stripe.checkout_session.stripe_id)
             # return new_paiement_stripe.redirect_to_stripe()
             self.checkout_session = new_paiement_stripe.checkout_session
-
+            self.paiement_stripe_uuid = paiement_stripe.uuid
             return super().validate(attrs)
 
         else:
@@ -723,5 +723,6 @@ class ReservationValidator(serializers.Serializer):
         representation = super().to_representation(instance)
         logger.info(f"{self.checkout_session.url}")
         representation['checkout_url'] = self.checkout_session.url
+        representation['paiement_stripe_uuid'] = self.paiement_stripe_uuid
         # import ipdb;ipdb.set_trace()
         return representation

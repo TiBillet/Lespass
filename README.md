@@ -120,7 +120,6 @@ If you want use the demonstration data above, add this to your /etc/hosts :
 172.17.0.1       bisik.django-local.org
 172.17.0.1       vavangart.django-local.org
 172.17.0.1       3peaks.django-local.org
-
 ```
 
 
