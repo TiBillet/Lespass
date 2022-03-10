@@ -260,7 +260,6 @@ class EventCreateSerializer(serializers.Serializer):
 
 
 class EventSerializer(serializers.ModelSerializer):
-    # products = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all(), many=True)
     products = ProductSerializer(many=True)
     options_radio = OptionTicketSerializer(many=True)
     options_checkbox = OptionTicketSerializer(many=True)
@@ -304,6 +303,19 @@ class EventSerializer(serializers.ModelSerializer):
         for product in self.products_to_db:
             instance.products.add(product)
         return instance
+
+    def to_representation(self, instance):
+        tarif_payant = False
+        for product in instance.products.all():
+            for price in product.prices.all():
+                if price.prix > 0 :
+                    tarif_payant = True
+        if tarif_payant :
+            gift_product, created = Product.objects.get_or_create(categorie_article=Product.DON, name="Don")
+            gift_price, created = Price.objects.get_or_create(product=gift_product, prix=1, name="Don")
+            instance.products.add(gift_product)
+        representation = super().to_representation(instance)
+        return representation
 
     '''
     
