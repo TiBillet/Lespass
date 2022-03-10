@@ -141,7 +141,7 @@ class Configuration(SingletonModel):
                 'thumbnail': self.img.thumbnail.url,
             }
         else:
-            return []
+            return {}
 
     logo = StdImageField(upload_to='images/',
                          validators=[MaxSizeValidator(1920, 1920)],
