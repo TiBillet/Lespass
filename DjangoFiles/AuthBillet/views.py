@@ -18,7 +18,7 @@ from ApiBillet.views import request_for_data_cashless
 from AuthBillet.models import TibilletUser
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from AuthBillet.serializers import MeSerializer
+from AuthBillet.serializers import MeSerializer, CreateUserValidator
 from BaseBillet.models import Configuration
 from BaseBillet.tasks import connexion_celery_mailer
 
@@ -88,6 +88,10 @@ class activate(APIView):
 @permission_classes([permissions.AllowAny])
 class create_user(APIView):
     def post(self, request):
+        validator = CreateUserValidator(data=request.data)
+        if not validator.is_valid():
+            return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
+        
         email = request.data.get('email')
         password = request.data.get('password')
         if not email:

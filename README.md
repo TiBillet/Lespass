@@ -1,4 +1,7 @@
-# ACTIVE BETA NOT READY FOR PRODUCTION YET
+# ACTIVE BETA V2 NOT READY FOR PRODUCTION YET
+
+V1 ( deprecated ) here :
+https://github.com/Nasjoe/TiBillet-Cashless-V1-DEPRECATED
 
 ## Nous cherchons activement toute forme d'aide pour construire TiBillet ! N'hésitez pas à nous contacter :)
 
