@@ -108,6 +108,10 @@ docker exec -ti billetterie_django bash
   # Use VERY STRONG PASSWORD AND DON'T USE THE SAME EMAIL as .env !
   python manage.py create_tenant_superuser
     ? -> public
+    
+  # Collect Static :
+  python /DjangoFiles/manage.py collectstatic
+  
 ```
 
 If you want use the demonstration data above, add this to your /etc/hosts :
