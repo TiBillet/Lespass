@@ -286,10 +286,18 @@ class PlacesViewSet(viewsets.ViewSet):
 class HereViewSet(viewsets.ViewSet):
 
     def list(self, request):
-        place_serialized = ConfigurationSerializer(Configuration.get_solo(), context={'request': request})
-        dict_with_uuid = {'uuid': f"{connection.tenant.uuid}"}
-        dict_with_uuid.update(place_serialized.data)
-        return Response(dict_with_uuid)
+        config = Configuration.get_solo()
+        place_serialized = ConfigurationSerializer(config, context={'request': request})
+
+        dict_return = {'uuid': f"{connection.tenant.uuid}"}
+        dict_return.update(place_serialized.data)
+
+        if config.button_adhesion :
+            products_adhesion = Product.objects.filter(categorie_article=Product.ADHESION)
+            if len( products_adhesion ) > 0 :
+                products_serializer = ProductSerializer(products_adhesion, many=True)
+                dict_return['membership_products'] = products_serializer.data
+        return Response(dict_return)
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
