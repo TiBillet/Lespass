@@ -292,7 +292,7 @@ class HereViewSet(viewsets.ViewSet):
         dict_return = {'uuid': f"{connection.tenant.uuid}"}
         dict_return.update(place_serialized.data)
 
-        if config.button_adhesion :
+        if config.button_adhesion or config.adhesion_obligatoire :
             products_adhesion = Product.objects.filter(categorie_article=Product.ADHESION)
             if len( products_adhesion ) > 0 :
                 products_serializer = ProductSerializer(products_adhesion, many=True)
