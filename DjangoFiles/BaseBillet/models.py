@@ -350,7 +350,7 @@ class Event(models.Model):
                 'crop': self.img.crop.url,
             }
         else:
-            return []
+            return {}
 
     # reservations = models.PositiveSmallIntegerField(default=0)
 
