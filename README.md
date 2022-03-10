@@ -1,4 +1,4 @@
-# ACTIVE BETA V2 NOT READY FOR PRODUCTION YET
+# V2 IN ACTIVE BETA
 
 V1 ( deprecated ) here :
 https://github.com/Nasjoe/TiBillet-Cashless-V1-DEPRECATED
