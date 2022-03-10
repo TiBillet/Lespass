@@ -512,3 +512,18 @@ class Command(BaseCommand):
             }
             response = requests.request("POST", f"{base_url}/api/events/", headers=headers, data=json.dumps(data_json))
             # print(response.text)
+
+            # et un évènement gratuit, sans produits
+            r_date = random_date()
+            headers["Content_type"] = "application/json"
+            data_json = {
+                'date': r_date.date().strftime("%Y-%m-%d"),
+                'artists': [
+                    {
+                        "uuid": artists[2].get('uuid'),
+                        "datetime": r_date.strftime("%Y-%m-%dT%H:%M")
+                    }
+                ],
+            }
+            response = requests.request("POST", f"{base_url}/api/events/", headers=headers, data=json.dumps(data_json))
+            # print(response.text)

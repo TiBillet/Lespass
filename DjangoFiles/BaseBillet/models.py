@@ -254,7 +254,7 @@ class Product(models.Model):
                         verbose_name=_('Image du produit'),
                         )
 
-    BILLET, PACK, RECHARGE_CASHLESS, VETEMENT, MERCH, ADHESION, DON = 'B', 'P', 'R', 'T', 'M', 'A', 'D'
+    BILLET, PACK, RECHARGE_CASHLESS, VETEMENT, MERCH, ADHESION, DON, FREERES = 'B', 'P', 'R', 'T', 'M', 'A', 'D', 'F'
     CATEGORIE_ARTICLE_CHOICES = [
         (BILLET, _('Billet')),
         (PACK, _("Pack d'objets")),
@@ -263,6 +263,7 @@ class Product(models.Model):
         (MERCH, _('Merchandasing')),
         (ADHESION, _('Adhésion')),
         (DON, _('Don')),
+        (FREERES, _('Reservation gratuite'))
     ]
 
     categorie_article = models.CharField(max_length=3, choices=CATEGORIE_ARTICLE_CHOICES, default=BILLET,

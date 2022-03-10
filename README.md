@@ -117,7 +117,9 @@ docker exec -ti billetterie_django bash
   
 ```
 
-If you want use the demonstration data above, add this to your /etc/hosts :
+## POP demo data, for dev' or just take a look :)
+
+If you want to use the demonstration data, add this to your /etc/hosts :
 ```
 #example /etc/hosts
 172.17.0.1       django-local.org
@@ -130,21 +132,22 @@ If you want use the demonstration data above, add this to your /etc/hosts :
 ```
 
 
-## POP demo data, for dev' or just take a look :)
-
 ```shell
+# Go deeper inside the django container :
+docker exec -ti billetterie_django bash
+
 # Run the server :
-  python /DjangoFiles/manage.py runserver_plus 0.0.0.0:8002
+python /DjangoFiles/manage.py runserver_plus 0.0.0.0:8002
 # or
-  rsp
+rsp
   
 # Pop data inside the TiBillet-Ticket/DjangoFiles/data/domains_and_cards.py
 # Change the file if you want !
 # --> With a second shell inside the container :
-	python manage.py pop_demo_data
+  python manage.py pop_demo_data
+```
 
 Test with ```www.$DOMAIN/admin``` and ```raffinerie.$DOMAIN/admin```
-```
 
 
 # BACKEND API Documentation
