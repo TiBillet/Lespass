@@ -4,7 +4,7 @@
     <div class="container">
       <img :src="getLogo()" class="me-2"
            style="width: auto; height: 26px;">
-      <router-link to="/" class="navbar-brand text-white">{{ store.place.titre }}</router-link>
+      <router-link to="/" class="navbar-brand text-white">{{ place.organisation }}</router-link>
       <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navigation"
               aria-controls="navigation" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
@@ -56,10 +56,10 @@ import Modallogin from './Modallogin.vue'
 import Adhesion from './Adhesion.vue'
 
 // vue
-import {ref,computed} from 'vue'
+import {ref, computed} from 'vue'
 import {useRouter} from 'vue-router'
 // commun
-import {refreshAccessToken} from '@/common'
+import {refreshAccessToken} from '@/api'
 // store
 import {useStore} from '@/store'
 
@@ -68,8 +68,8 @@ const store = useStore()
 const props = defineProps({
   place: Object
 })
+const domain = `${location.protocol}//${location.host}`
 
-console.log('place =', props.place)
 
 // actualiser le accessToken
 if (store.user.refreshToken !== '' && window.accessToken === '') {
@@ -87,14 +87,14 @@ const adhesion = {
   adhesion: store.user.adhesion,
   uuidPrice: store.user.uuidPrice,
 }
+console.log()
 
 // si pas d'image
 const getLogo = () => {
-  // console.log('-> getLogo, props.dataHeader.logo =', props.dataHeader.logo)
-  if (props.place.logo !== undefined) {
-    return `${props.place.domain + props.place.logo}`
+  if (props.place.logo_variations.med === undefined) {
+    return `${domain}/media/images/image_non_disponible.svg`
   }
-  return `${props.place.domain}/media/images/image_non_disponible.svg`
+  return `${domain + props.place.logo_variations.med}`
 }
 
 const isConnected = computed(() => {

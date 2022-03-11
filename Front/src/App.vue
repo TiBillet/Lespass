@@ -2,7 +2,7 @@
   <Navbar :place="store.place"/>
   <div class="espace-navbar"></div>
   <router-view/>
-  <!-- <Footer :data-header="getDataHeader()"/> -->
+  <Footer :place="store.place"/>
   <Message/>
   <ModalMessage/>
 </template>

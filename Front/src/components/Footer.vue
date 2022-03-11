@@ -6,7 +6,7 @@
       <div class=" row">
         <div class="col-md-3 mb-4 ms-auto">
           <div>
-            <h6 class="font-weight-bolder">{{ dataHeader.titre }}</h6>
+            <h6 class="font-weight-bolder">{{ place.organisation }}</h6>
           </div>
           <div>
             <h6 class="mt-3 mb-2 opacity-8">Social</h6>
@@ -154,6 +154,6 @@
   // console.log('-> Footer.vue')
 
   const props = defineProps({
-    dataHeader: Object
+    place: Object
   })
 </script>

@@ -1,5 +1,6 @@
 <template>
-  <Header :data-header="getDataHeader()"/>
+  <Header :header-event="getHeaderEvent()"/>
+  <button @click="testMe()">Test '/api/user/me/'</button>
   <div class="container mt-7">
     <!-- lieu -->
     <div class="row">
@@ -15,15 +16,14 @@
       </div>
     </div>
   </div>
-{{ currentEvent }}
   <!-- achats -->
   <div class="container mt-5">
     <div class="row">
       <form @submit.prevent="goValiderAchats($event)" class="needs-validation" novalidate>
 
-        <!-- <CardProfil :infos="store.formulaireBillet[uuidEvent]"/> -->
+         <CardProfil :infos="store.formulaireBillet[uuidEvent]"/>
+ <!--
 
-        <!--
         <Adhesion :adhesion="adhesion"/>
 
         <div v-for="produit in currentEvent.products" :key="produit.uuid">
@@ -37,10 +37,12 @@
       </form>
     </div>
   </div>
+
 </template>
 
 <script setup>
 console.log('-> Event.vue !')
+
 
 // vue
 import {ref} from 'vue'
@@ -52,6 +54,10 @@ import CardPlace from '@/components/CardPlace.vue'
 import CardArtist from '@/components/CardArtist.vue'
 import CardProfil from "@/components/CardProfil.vue"
 
+// test dev
+import {getMe} from '@/api'
+import {fakeEvent} from "../../tempo/fakeCurrentEventsTest"
+
 // store
 import {useStore} from '@/store'
 
@@ -59,8 +65,6 @@ const route = useRoute()
 const slug = route.params.slug
 const store = useStore()
 const domain = `${location.protocol}//${location.host}`
-// const chargement = ref(true)
-let currentEvent = {}
 
 // récupération du uuid évènement à partir du slug
 const uuidEventBrut = store.events.find(evt => evt.slug === slug).uuid
@@ -71,56 +75,67 @@ if (typeof (uuidEventBrut) === 'object') {
   uuidEvent = JSON.parse(JSON.stringify(uuidEventBrut)).uuid
 }
 
-const urlApi = `/api/events/${uuidEvent}`
-// chargement de l'évènement
-console.log(`-> chargement de l'évènement urlApi =`, urlApi)
-try {
-  const response = await fetch(domain + urlApi)
-  if (response.status !== 200) {
-    throw new Error(`${response.status} - ${response.statusText}`)
-  }
-  const retour = await response.json()
-  console.log('retour =', retour)
-  // maj store events
-  for (const key in store.events) {
-    if (store.events[key].uuid === uuidEvent) {
-      store.events[key] = retour
-      currentEvent = retour
-      break
-    }
-  }
-} catch (erreur) {
-  emitter.emit('message', {
-    tmp: 4,
-    typeMsg: 'danger',
-    contenu: `Chargement de l'évènement ${uuidEvent}, erreur: ${erreur}`
-  })
-}
-console.log('3 - currentEvent =', currentEvent)
+// currentEvent production
+// const currentEvent = store.events.find(evt => evt.uuid === uuidEvent)
 
-function getDataHeader() {
-  let urlImage
-  try {
-    urlImage = currentEvent.value.img_variations.med
-  } catch (e) {
-    urlImage = `${domain}/media/images/image_non_disponible.svg`
+// currentEvent test dev
+const currentEvent = fakeEvent
+console.log('currentEvent =', currentEvent)
+
+// init persisted form
+console.log('formulaireBillet[uuidEvent] =', store.formulaireBillet[uuidEvent])
+if (store.formulaireBillet[uuidEvent] === undefined) {
+  store.formulaireBillet[uuidEvent] = {
+    attentionEmail: false,
+    email: '',
+    confirmeEmail: '',
+    position: 'fosse',
+    identifiants: [],
   }
+  console.log('test après formulaireBillet =', store.formulaireBillet[uuidEvent])
+}
+
+// populate profil card if user connected
+console.log('store.user.refreshToken =', store.user.refreshToken)
+if (store.user.refreshToken !== '') {
+  store.formulaireBillet[uuidEvent].attentionEmail = true
+  store.formulaireBillet[uuidEvent].email = store.user.email
+  store.formulaireBillet[uuidEvent].confirmeEmail = store.user.email
+}
+
+async function testMe() {
+  const token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNjQ3MDg3Mzk4LCJpYXQiOjE2NDcwMDA5OTgsImp0aSI6IjA4MDIyMzM4NDUyOTRmMTZhMTVjOWNkNjExZjdhYjllIiwidXNlcl9pZCI6MTI5fQ.8EZJH4o_6GL0lg8H2jNMWkL-PqFXUh99ND4p13h_swY'
+  console.log('token =', token)
+  // console.log('window.accessToken =', window.accessToken)
+  const retour = await getMe(token)
+  console.log('retour =', retour)
+}
+
+function getHeaderEvent() {
+  let urlImage
+  if (currentEvent.img_variations.med === undefined) {
+    urlImage = `${domain}/media/images/image_non_disponible.svg`
+  } else {
+    urlImage = currentEvent.img_variations.med
+  }
+  // console.log('urlImage =', urlImage)
   return {
     urlImage: urlImage,
-    shortDescription: currentEvent.value.short_description,
-    longDescription: currentEvent.value.long_description,
-    titre: currentEvent.value.name,
-    domain: domain
+    shortDescription: currentEvent.short_description,
+    longDescription: currentEvent.long_description,
+    titre: currentEvent.name
   }
 }
+
 
 function getDataCardPlace() {
   let urlImage
-  try {
-    urlImage = store.place.img_variations.med
-  } catch (e) {
+  if (store.place.img_variations.med === undefined) {
     urlImage = `${domain}/media/images/image_non_disponible.svg`
+  } else {
+    urlImage = store.place.img_variations.med
   }
+
   return {
     urlImage: urlImage,
     titre: store.place.organisation,
@@ -130,27 +145,7 @@ function getDataCardPlace() {
 }
 
 /*
-// ---- gestion des évènements "emitter" ----
-// écoute la fin du chargement de l'évènement
-emitter.on('loading', (etat) => {
-  if (etat === false) {
-    // chargement.value = false
-    // init formulaire si n'existe pas
-    console.log('test init formulaireBillet =', store.formulaireBillet[uuidEvent])
-    if (store.formulaireBillet[uuidEvent] === undefined) {
-      store.formulaireBillet[uuidEvent] = {
-        attentionEmail: false,
-        email: '',
-        confirmeEmail: '',
-        position: 'fosse',
-        identifiants: []
-      }
-      console.log('test après formulaireBillet =', store.formulaireBillet[uuidEvent])
-    }
-    // actualise les données
-    currentEvent.value = store.events.find(evt => evt.slug === slug)
-  }
-})
+
 
 // mise à jour du profil
 emitter.on('emitUpdateProfil', (data) => {

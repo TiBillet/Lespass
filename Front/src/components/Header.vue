@@ -1,13 +1,13 @@
 <template>
   <header>
-    <div class="page-header min-vh-50" :style="{ backgroundImage: getBackgroundImage(), maxHeight: `365px` }">
+    <div class="page-header min-vh-50" :style="{ backgroundImage: `url('${headerEvent.urlImage}')`, maxHeight: `365px` }">
       <span class="mask bg-dark opacity-8"></span>
       <div class="container">
         <div class="row">
           <div class="col-lg-8 mx-auto text-white text-center">
-            <h2 class="text-white">{{ dataHeader.titre }}</h2>
-            <p v-if="dataHeader.longDescription === null && dataHeader.shortDescription !== null" class="lead">{{ dataHeader.shortDescription }}</p>
-            <p v-if="dataHeader.longDescription !== null" class="lead">{{ dataHeader.longDescription }}</p>
+            <h2 class="text-white">{{ headerEvent.titre }}</h2>
+            <p v-if="headerEvent.longDescription === null && headerEvent.shortDescription !== null" class="lead">{{ headerEvent.shortDescription }}</p>
+            <p v-if="headerEvent.longDescription !== null" class="lead">{{ headerEvent.longDescription }}</p>
           </div>
         </div>
       </div>
@@ -32,17 +32,10 @@
 </template>
 
 <script setup>
-  // console.log('-> Header.vue')
+  console.log('-> Header.vue')
   const props = defineProps({
-    dataHeader: Object
+    headerEvent: Object
   })
-
-  const getBackgroundImage = () => {
-    if (props.dataHeader.urlImage === undefined) {
-      return `url('${props.dataHeader.domain}/media/images/image_non_disponible.svg')`
-    } else {
-      return `url('${ props.dataHeader.domain + props.dataHeader.urlImage }')`
-    }
-  }
+console.log('props.headerEvent =', JSON.stringify(props.headerEvent, null, 2))
 
 </script>

@@ -1,5 +1,5 @@
 <template>
-  <Header :data-header="dataHeader"/>
+  <Header :header-event="getHeaderEvent()"/>
   <section class="pt-5 pb-0">
     <div class="container">
       <div class="row">
@@ -35,25 +35,30 @@ const store = useStore()
 const router = useRouter()
 const domain = `${location.protocol}//${location.host}`
 
-let urlImage, urlLogo
-  try {
-    urlImage = store.place.img_variations.med
-  } catch (e) {
+function getHeaderEvent() {
+  let urlImage, urlLogo
+  if (store.place.img_variations.med === undefined) {
     urlImage = `${domain}/media/images/image_non_disponible.svg`
+  } else {
+    urlImage = store.place.img_variations.med
   }
-  try {
-    urlLogo = store.place.logo_variations.med
-  } catch (e) {
+
+  if (store.place.logo_variations.med === undefined) {
     urlLogo = `${domain}/media/images/image_non_disponible.svg`
+  } else {
+    urlLogo = store.place.logo_variations.med
   }
-const dataHeader = {
-  urlImage: urlImage,
-  shortDescription: store.place.short_description,
-  longDescription: store.place.long_description,
-  logo: urlLogo,
-  titre: store.place.organisation,
-  domain: `${location.protocol}//${location.host}`
+  return {
+    urlImage: urlImage,
+    logo: urlLogo,
+    shortDescription: store.place.short_description,
+    longDescription: store.place.long_description,
+    titre: store.place.organisation,
+    domain: domain
+  }
 }
+
+
 
 
 // aller à la page évènement (lien défini si-dessous et dans le store) => /views/Event.vue

@@ -50,11 +50,19 @@
 
 <script setup>
 console.log('-> CardProfil.vue !')
+// vue
 import {computed} from 'vue'
+
+// store
+import {useStore} from '@/store'
 
 const props = defineProps({
   infos: Object
 })
+
+console.log('props.infos =', props.infos)
+
+const store = useStore()
 
 const isUnderstood = computed(() => {
   if (store.user.refreshToken !== '') {
