@@ -2,14 +2,25 @@
 import {createRouter, createWebHistory} from 'vue-router'
 import Accueil from '../views/Accueil.vue'
 
+// store
+import {useStore} from '@/store'
+
 // common
 import {emailActivation, getStripeReturn} from '@/common'
+
+const domain = `${location.protocol}//${location.host}`
 
 const routes = [
   {
     path: '/',
     name: 'Accueil',
     component: Accueil
+  },
+  {
+    // route interceptée
+    path: '/emailconfirmation/:id/:token',
+    name: 'EmailConfirmation',
+    component: {}
   },
   {
     path: '/event/:slug',
@@ -23,18 +34,6 @@ const routes = [
     path: '/artist/:slug',
     name: 'Artist',
     component: () => import(/* webpackChunkName: "Artist" */ '../views/ArtistPage.vue')
-  },
-  {
-    // route interceptée
-    path: '/emailconfirmation/:id/:token',
-    name: 'EmailConfirmation',
-    component: {}
-  },
-  {
-    // route interceptée
-    path: '/stripe/return/:id',
-    name: 'StripeReturn',
-    component: {}
   }
 ]
 
@@ -43,7 +42,7 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   console.log('from =', from)
   console.log('to =', to)
 
@@ -54,12 +53,58 @@ router.beforeEach((to, from, next) => {
     nouvelleRoute === from.name
   }
 
+  if (to.name === "Accueil") {
+    console.log('-> bien avant !!')
+    const store = useStore()
+    console.log('1 - place =', store.place)
+    const apiLieu = `/api/here/`
+    try {
+      const response = await fetch(domain + apiLieu)
+      if (response.status !== 200) {
+        throw new Error(`${response.status} - ${response.statusText}`)
+      }
+      const retour = await response.json()
+      store.place = retour
+    } catch (erreur) {
+      console.log('Store, place, erreur:', erreur)
+      emitter.emit('message', {
+        tmp: 4,
+        typeMsg: 'danger',
+        contenu: `Chargement lieu, erreur: ${erreur}`
+      })
+    }
+    console.log('2 - place =', store.place)
+
+    console.log('1 -> events =', store.events)
+    const apiEvents = `/api/events/`
+    // console.log(` -> charge les évènements ${domain + apiEvents}`)
+    try {
+      const response = await fetch(domain + apiEvents)
+      if (response.status !== 200) {
+        throw new Error(`${response.status} - ${response.statusText}`)
+      }
+      const retour = await response.json()
+      store.events = retour
+    } catch (erreur) {
+      // console.log('Store, events, erreur:', erreur)
+      emitter.emit('message', {
+        tmp: 4,
+        typeMsg: 'danger',
+        contenu: `Chargement des évènements, erreur: ${erreur}`
+      })
+    }
+    console.log('2 -> events =', store.events)
+
+
+  }
+
   // intercepte la route "EmailConfirmation" et active l'email
   // https://m.django-local.org:8002/emailconfirmation/M2M2YjcxYzAtZGRlNy00MWNiLTk1ZjUtNTViZmUyYTVmZjgy/b1k88g-d7fca49b197cc5f471c1f255819c5f58
   if (to.name === "EmailConfirmation") {
+    console.log(`-> Interception de la route "EmailConfirmation" et activation de l'email !`)
     const id = to.params.id
     const token = to.params.token
-    // console.log('id =', id, '  --  token =', token)
+    console.log('id =', id, '  --  token =', token)
     if (id !== undefined && token !== undefined) {
       emailActivation(id, token)
     } else {

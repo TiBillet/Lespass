@@ -1,130 +1,123 @@
-import {createStore} from 'vuex'
-import VuexPersistence from 'vuex-persist'
+import {defineStore} from 'pinia'
 
-// données conservées en local
-const vuexLocal = new VuexPersistence({
-  storage: window.localStorage
-})
-/*
-Attention, vérifier que votre navigateur est bien configuré.
-Exemples, pour firefox, le paramètre de sécurité "Supprimer les cookies et les données des sites à la fermeture de Firefox"
-ne doit pas être coché pour pouvoir conserver vos données
- */
+const domain = `${location.protocol}//${location.host}`
 
-export default createStore({
-  state: {
-    refreshToken: '',
-    formulaireBillet: {},
-    events: [],
-    place: {},
-    profil: {
+export const useStore = defineStore('store', {
+  state: () => ({
+    dataLoading: true,
+    user: {
+      refreshToken: '',
       email: '',
-      confirmeEmail: '',
-      attentionEmail: false
-    },
-    adhesion: {
-      activation: false,
       nom: '',
       prenom: '',
       adresse: '',
       tel: null,
-      uuidPrice: ''
-    }
-  },
-  mutations: {
-    resetState(state) {
-      state = {
-        formulaire: {},
-        events: [],
-        place: {}
-      }
+      adhesion: false,
+      uuidPrice: '',
     },
-    initPlace(state, data) {
-      state.place = data
-    },
-    initEvents(state, data) {
-      state.events = data
-    },
-    initProducts(state, data) {
-      state.products = data
-    },
-    updateAdhesion(state, data) {
-      state.adhesion[data.key] = data.value
-    },
-    updateRefreshToken(state, token) {
-      state.refreshToken = token
-    },
-    updateProfilEmail(state, email) {
-      state.profil.email = email
-      state.profil.confirmeEmail = email
-      state.profil.attentionEmail = true
-    },
-    resetFormulaires(state) {
-      state.formulaire = {}
-    },
-    initFormulaireBillet(state, uuidEvent) {
-      state.formulaireBillet[uuidEvent] = {
-        position: 'fosse',
-        identifiants: []
-      }
-    },
-    majFormulaireBillet(state, data) {
-      console.log('-> store, majFormulaire, data =', data)
-      if (data.sujet.indexOf('.') === -1) {
-        state.formulaireBillet[data.uuidEvent][data.sujet] = data.valeur
-      } else {
-        // le sujet se trouve après le point
-        const sujet = data.sujet.split('.')[1]
-        // adhésion
-        if (data.sujet.includes('adhesion') === true) {
-          state.formulaireBillet[data.uuidEvent].adhesionInfos[sujet] = data.valeur
+    place: {},
+    events: {},
+    formulaireBillet: {}
+  }),
+  persist: true,
+  actions: {
+    async loadPlace(stopViewLoading) {
+      const apiLieu = `/api/here/`
+      try {
+        const response = await fetch(domain + apiLieu)
+        if (response.status !== 200) {
+          throw new Error(`${response.status} - ${response.statusText}`)
         }
-      }
-      // console.log('formulaire = ', state.formulaireBillet)
-    },
-    alerteReseau(state, data) {
-      state.erreurReseau = data
-    },
-    updateEvent(state, data) {
-      const uuidEvent = data.uuid
-      for (const key in state.events) {
-        // maj de l'évènement avec "data"
-        if (state.events[key].uuid === uuidEvent) {
-          state.events[key] = data
-          break
-        }
-      }
-    },
-    supprimerIdentifiant(state, data) {
-      state.formulaireBillet[data.uuidEvent].identifiants = state.formulaireBillet[data.uuidEvent].identifiants.filter(ele => ele.id !== data.id)
-    },
-    ajouterIdentiant(state, data) {
-      // console.log('store, ajouterIdentiant, data =', data)
-      const tarifs = state.formulaireBillet[data.uuidEvent].identifiants.filter(iden => iden.uuidTarif === data.uuidTarif)
-      if (tarifs.length + 1 <= data.max) {
-        state.formulaireBillet[data.uuidEvent].identifiants.push({
-          id: Date.now(),
-          uuidTarif: data.uuidTarif,
-          nom: '',
-          prenom: ''
+        const retour = await response.json()
+        this.place = retour
+      } catch (erreur) {
+        console.log('Store, place, erreur:', erreur)
+        emitter.emit('message', {
+          tmp: 4,
+          typeMsg: 'danger',
+          contenu: `Chargement lieu, erreur: ${erreur}`
         })
       }
+      /*
+      this.dataLoading = true
+      const apiLieu = `/api/here/`
+      // console.log(`1 -> charge le lieu ${domain + apiLieu}`)
+      fetch(domain + apiLieu).then((response) => {
+        if (response.status !== 200) {
+          throw new Error(`${response.status} - ${response.statusText}`)
+        }
+        return response.json()
+      }).then((retour) => {
+        this.place = retour
+        console.log('stopViewLoading =', stopViewLoading)
+        if (stopViewLoading === 'stopViewLoading') {
+          this.dataLoading = false
+        }
+      }).catch((erreur) => {
+        // console.log('Store, place, erreur:', erreur)
+        emitter.emit('message', {
+          tmp: 4,
+          typeMsg: 'danger',
+          contenu: `Chargement lieu, erreur: ${erreur}`
+        })
+      })
+       */
     },
-    majIdentifiant(state, data) {
-      // console.log('store, majIdentifiant, data =', data)
-      state.formulaireBillet[data.uuidEvent].identifiants.find(ele => (ele.id === data.id))[data.champ] = data.valeur
+    loadEvents(stopViewLoading) {
+      this.dataLoading = true
+      const apiEvents = `/api/events/`
+      // console.log(`2 -> charge les évènements ${domain + apiEvents}`)
+      fetch(domain + apiEvents).then((response) => {
+        if (response.status !== 200) {
+          throw new Error(`${response.status} - ${response.statusText}`)
+        }
+        return response.json()
+      }).then((retour) => {
+        this.events = retour
+        if (stopViewLoading === 'stopViewLoading') {
+          this.dataLoading = false
+        }
+      }).catch((erreur) => {
+        // console.log('Store, events, erreur:', erreur)
+        emitter.emit('message', {
+          tmp: 4,
+          typeMsg: 'danger',
+          contenu: `Chargement des évènements, erreur: ${erreur}`
+        })
+      })
     },
-    updateProfil(state, data) {
-      state.profil = data
+    loadEvent(uuidEvent, stopViewLoading) {
+      console.log('-> loadEvent !')
+      this.dataLoading = true
+      const urlApi = `/api/events/${uuidEvent}`
+      // chargement de l'évènement
+      console.log(`-> chargement de l'évènement urlApi =`, urlApi)
+      fetch(domain + urlApi).then((response) => {
+        if (response.status !== 200) {
+          throw new Error(`${response.status} - ${response.statusText}`)
+        }
+        return response.json()
+      }).then((retour) => {
+        console.log('retour =', retour)
+        // maj store events
+        for (const key in this.events) {
+          if (this.events[key].uuid === uuidEvent) {
+            this.events[key].uuid = retour
+            break
+          }
+        }
+
+        if (stopViewLoading === 'stopViewLoading') {
+          this.dataLoading = false
+        }
+
+      }).catch((erreur) => {
+        emitter.emit('message', {
+          tmp: 4,
+          typeMsg: 'danger',
+          contenu: `Chargement de l'évènement ${uuidEvent}, erreur: ${erreur}`
+        })
+      })
     }
-  },
-  getters: {
-    getEventBySlug: (state) => (slug) => {
-      // console.log('--- getEventBySlug ---')
-      return state.events.find(evt => evt.slug === slug)
-    }
-  },
-  actions: {},
-  modules: {},
-  plugins: [vuexLocal.plugin]
+  }
 })

@@ -151,7 +151,7 @@
 </template>
 
 <script setup>
-  console.log('-> Footer.vue')
+  // console.log('-> Footer.vue')
 
   const props = defineProps({
     dataHeader: Object

@@ -4,7 +4,8 @@
     <legend>Email</legend>
     <div class="mb-2">
       <div class="input-group has-validation">
-        <input v-model="data.email" type="email"
+        <input :value="infos.email" type="email"
+               @change="emitUpdateProfil('email', $event.target.value)"
                pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$"
                class="form-control" placeholder="Adresse" required>
         <div class="invalid-feedback">
@@ -15,8 +16,8 @@
 
     <div class="mb-2">
       <div class="input-group has-validation">
-        <input id="email-confirmation" v-model="data.confirmeEmail"
-               type="email"
+        <input id="email-confirmation" :value="infos.confirmeEmail" type="email"
+               @change="emitUpdateProfil('confirmeEmail', $event.target.value)"
                pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$" class="form-control"
                placeholder="Confirmer adresse" required>
         <div class="invalid-feedback">
@@ -36,8 +37,8 @@
 
         <input class="form-check-input"
                type="checkbox" id="valid-email"
-               :checked="attentionEmail"
-               @change="setAttentionEmail($event.target.checked)"
+               :checked="isUnderstood"
+               @change="emitUpdateProfil('attentionEmail', $event.target.checked)"
                required>
         <label class="form-check-label text-dark" for="valid-email">Prise en compte du message
           si-dessus.</label>
@@ -49,15 +50,29 @@
 
 <script setup>
 console.log('-> CardProfil.vue !')
-
-import {computed, ref} from 'vue'
+import {computed} from 'vue'
 
 const props = defineProps({
-  profil: {
-    type: Object,
-    default: () => ({})
-  }
+  infos: Object
 })
+
+const isUnderstood = computed(() => {
+  if (store.user.refreshToken !== '') {
+    return true
+  }
+  return false
+})
+
+
+function emitUpdateProfil(key, value) {
+  emitter.emit('emitUpdateProfil', {key: key, value: value})
+}
+
+
+/*
+import {computed, ref} from 'vue'
+
+
 const emit = defineEmits(['update:profil'])
 let attentionEmail = ref(props.profil.attentionEmail)
 
@@ -72,6 +87,8 @@ function setAttentionEmail(etat) {
   props.profil.attentionEmail = etat
   emit('update:profil', props.profil)
 }
+
+ */
 </script>
 
 <style scoped>

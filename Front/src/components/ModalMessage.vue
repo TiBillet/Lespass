@@ -36,10 +36,7 @@ emitter.on('modalMessage', (data) => {
   const modalMessage = bootstrap.Modal.getOrCreateInstance(elementModal)
   modalMessage.show()
 })
-
-
 </script>
 
 <style scoped>
-
 </style>

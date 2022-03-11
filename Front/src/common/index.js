@@ -1,15 +1,20 @@
 import {getCurrentInstance} from 'vue'
+// store
+import {useStore} from '@/store'
 
 const domain = `${location.protocol}//${location.host}`
 
+/*
 export function getVueGlobal() {
   return getCurrentInstance().appContext.config.globalProperties
 }
+*/
 
 export async function emailActivation(id, token) {
+  // console.log('-> emailActivation')
+  const store = useStore()
   // attention pas de "/" à la fin de "api"
   const api = `/api/user/activate/${id}/${token}`
-  let etape = 0
   try {
     const response = await fetch(domain + api, {
       method: 'GET',
@@ -18,22 +23,18 @@ export async function emailActivation(id, token) {
         'Content-Type': 'application/json'
       }
     })
-    console.log('response =', response)
+    // console.log('-> response =', response)
     if (response.status === 200) {
       const retour = await response.json()
-      console.log('retour =', JSON.stringify(retour, null, 2))
-      etape = 1
-      // maj du refresh token dans le store
-      emitter.emit('updateRefreshToken', retour.refresh)
-      // maj token d'accès
-      window.accessToken = retour.access
-      // maj navbar
-      emitter.emit('majNavBar')
       // message confirmation email
       emitter.emit('modalMessage', {
         titre: 'Succès',
         contenu: 'Utilisateur activé / connecté !'
       })
+      // maj du refresh token dans le storeUser
+      store.user.refreshToken = retour.refresh
+      // maj token d'accès
+      window.accessToken = retour.access
     } else {
       throw new Error(`Erreur conrfirmation mail !`)
     }
@@ -41,12 +42,13 @@ export async function emailActivation(id, token) {
     emitter.emit('message', {
       tmp: 6,
       typeMsg: 'warning',
-      contenu: `Erreur, ${domain + api} : ${erreur}`
+      contenu: `${domain + api} : ${erreur}`
     })
   }
 }
 
 export async function refreshAccessToken(refreshToken) {
+  // console.log('-> refreshAccessToken, refreshToken =', refreshToken)
   const api = `/api/user/token/refresh/`
   try {
     const response = await fetch(domain + api, {
@@ -57,21 +59,19 @@ export async function refreshAccessToken(refreshToken) {
       },
       body: JSON.stringify({refresh: refreshToken})
     })
-    if (response.status !== 200) {
-      throw new Error(`Erreur obtention nouvel "access token" !`)
-    }
     const retour = await response.json()
     if (response.status === 200) {
-      window.accessToken = retour.accesss
-      return true
+      window.accessToken = retour.access
+    } else {
+      throw new Error(`Erreur obtention nouvel "access token" !`)
     }
   } catch (erreur) {
     emitter.emit('message', {
       tmp: 8,
       typeMsg: 'warning',
-      contenu: `Erreur, ${domain + api} : ${erreur}`
+      contenu: `${domain + api} : ${erreur}`
     })
-    return false
+    window.accessToken = ''
   }
 }
 
@@ -126,10 +126,10 @@ export async function getStripeReturn(uuidStripe) {
     console.log('retour =', retour)
     // TODO: modal = achat(s) ok !
     // message achat(s) ok
-      emitter.emit('modalMessage', {
-        titre: 'Succès',
-        contenu: 'Réservation OK !'
-      })
+    emitter.emit('modalMessage', {
+      titre: 'Succès',
+      contenu: 'Réservation OK !'
+    })
   }).catch(function (erreur) {
     emitter.emit('message', {
       tmp: 6,

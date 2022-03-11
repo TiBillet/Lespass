@@ -41,7 +41,7 @@ npm run dev
 ### Comment créer un projet vue3 avec vite
 - Installation
 ````
-npm init vite@latest tibillet-billetterie-vue -- --template vue
+npm create vite@latest tibillet-billetterie-vue --template vue
 cd tibillet-billetterie-vue
 npm install
 ````
