@@ -1,4 +1,7 @@
-# ACTIVE BETA NOT READY FOR PRODUCTION YET
+# V2 IN ACTIVE BETA
+
+V1 ( deprecated ) here :
+https://github.com/Nasjoe/TiBillet-Cashless-V1-DEPRECATED
 
 ## Nous cherchons activement toute forme d'aide pour construire TiBillet ! N'hésitez pas à nous contacter :)
 
@@ -9,10 +12,10 @@ Réseau événementiel et coopératif.
 TiBillet est un système de paiement sans contact Zéro Espèce ( Cashless ), de gestion d'évènements, de gestion de salles
 de restauration, d'engagement associatif et d'achat de billets en ligne … mais pas uniquement !
 
-C'est aussi un outil de mise en réseau et de gestion d'une monnaie locale et commune à plusieurs lieux.
+C'est aussi un outil de mise en réseau et de gestion d'une carte cashless locale et commune à plusieurs lieux.
 
 L’idée de TiBillet est de se réapproprier des outils qui n’existent tout simplement pas en libre, et de les mutualiser
-pour en faire un réseau de musiciens, de lieux et même une monnaie locale dédiée à la culture.
+pour en faire un réseau de musiciens, de lieux et pourquoi pas une monnaie locale dédiée à la culture.
 
 La richesse de TiBillet, c’est de chercher à créer des zones d’échange, de créer une économie circulaire, sociale et
 solidaire, décentralisée et non spéculative à l'échelle d'un territoire.
@@ -108,33 +111,44 @@ docker exec -ti billetterie_django bash
   # Use VERY STRONG PASSWORD AND DON'T USE THE SAME EMAIL as .env !
   python manage.py create_tenant_superuser
     ? -> public
+    
+  # Collect Static :
+  python /DjangoFiles/manage.py collectstatic
+  
 ```
 
 ## POP demo data, for dev' or just take a look :)
 
-```shell
-# Run the server :
-  python /DjangoFiles/manage.py runserver_plus 0.0.0.0:8002
-# or
-  rsp
-  
-# Pop data inside the TiBillet-Ticket/DjangoFiles/data/domains_and_cards.py
-# Change the file if you want !
-# --> With a second shell inside the container :
-	python manage.py pop_demo_data
-
-Test with ```www.$DOMAIN/admin``` and ```raffinerie.$DOMAIN/admin```
-```
-
-if you are in localhost, change your /etc/host in order to simulate a real adress for the request :
-172.17.0.1 I use djang-local.org as $DOMAIN. Use yours !
-
+If you want to use the demonstration data, add this to your /etc/hosts :
 ```
 #example /etc/hosts
 172.17.0.1       django-local.org
 172.17.0.1       www.django-local.org
+172.17.0.1       m.django-local.org
 172.17.0.1       raffinerie.django-local.org
+172.17.0.1       bisik.django-local.org
+172.17.0.1       vavangart.django-local.org
+172.17.0.1       3peaks.django-local.org
 ```
+
+
+```shell
+# Go deeper inside the django container :
+docker exec -ti billetterie_django bash
+
+# Run the server :
+python /DjangoFiles/manage.py runserver_plus 0.0.0.0:8002
+# or
+rsp
+  
+# Pop data inside the TiBillet-Ticket/DjangoFiles/data/domains_and_cards.py
+# Change the file if you want !
+# --> With a second shell inside the container :
+  python manage.py pop_demo_data
+```
+
+Test with ```www.$DOMAIN/admin``` and ```raffinerie.$DOMAIN/admin```
+
 
 # BACKEND API Documentation
 

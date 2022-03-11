@@ -36,10 +36,13 @@ class action_article_paid_by_categorie:
     def __init__(self, ligne_article:LigneArticle, **kwargs):
         self.ligne_article = ligne_article
         self.categorie = self.ligne_article.pricesold.productsold.product.categorie_article
-        self.data_for_cashless = {'uuid_commande': ligne_article.paiement_stripe.uuid }
+
+        self.data_for_cashless = {}
+        if ligne_article.paiement_stripe :
+            self.data_for_cashless = {'uuid_commande': ligne_article.paiement_stripe.uuid }
 
         try:
-            # on mets en majuscule et on rajoute _ au début du nom de la catégorie.
+            # on met en majuscule et on rajoute _ au début du nom de la catégorie.
             trigger_name = f"_{self.categorie.upper()}"
             logger.info(f"category_trigger launched - ligne_article : {self.ligne_article} - trigger_name : {trigger_name}")
             trigger = getattr(self, f"trigger{trigger_name}")
@@ -49,11 +52,15 @@ class action_article_paid_by_categorie:
         except Exception as exc:
             logger.error(f"category_trigger ERROR : {exc} - {type(exc)}")
 
-    # Categorie BILLET
+    # Category BILLET
     def trigger_B(self):
         logger.info(f"TRIGGER BILLET")
 
-    # Categorie RECHARGE_CASHLESS
+    # Category Free Reservation
+    def trigger_F(self):
+        logger.info(f"TRIGGER FREERES")
+
+    # Category RECHARGE_CASHLESS
     def trigger_R(self):
         logger.info(f"TRIGGER RECHARGE_CASHLESS")
         configuration = Configuration.get_solo()

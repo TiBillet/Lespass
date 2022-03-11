@@ -141,7 +141,7 @@ class Configuration(SingletonModel):
                 'thumbnail': self.img.thumbnail.url,
             }
         else:
-            return []
+            return {}
 
     logo = StdImageField(upload_to='images/',
                          validators=[MaxSizeValidator(1920, 1920)],
@@ -254,14 +254,16 @@ class Product(models.Model):
                         verbose_name=_('Image du produit'),
                         )
 
-    BILLET, PACK, RECHARGE_CASHLESS, VETEMENT, MERCH, ADHESION = 'B', 'P', 'R', 'T', 'M', 'A'
+    BILLET, PACK, RECHARGE_CASHLESS, VETEMENT, MERCH, ADHESION, DON, FREERES = 'B', 'P', 'R', 'T', 'M', 'A', 'D', 'F'
     CATEGORIE_ARTICLE_CHOICES = [
         (BILLET, _('Billet')),
         (PACK, _("Pack d'objets")),
         (RECHARGE_CASHLESS, _('Recharge cashless')),
         (VETEMENT, _('Vetement')),
         (MERCH, _('Merchandasing')),
-        (ADHESION, ('Adhésion')),
+        (ADHESION, _('Adhésion')),
+        (DON, _('Don')),
+        (FREERES, _('Reservation gratuite'))
     ]
 
     categorie_article = models.CharField(max_length=3, choices=CATEGORIE_ARTICLE_CHOICES, default=BILLET,
@@ -350,7 +352,7 @@ class Event(models.Model):
                 'crop': self.img.crop.url,
             }
         else:
-            return []
+            return {}
 
     # reservations = models.PositiveSmallIntegerField(default=0)
 

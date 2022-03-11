@@ -185,7 +185,7 @@ class OptionTicketSerializer(serializers.ModelSerializer):
 class EventCreateSerializer(serializers.Serializer):
     date = serializers.DateField()
     artists = ArtistEventCreateSerializer(many=True)
-    products = serializers.ListField()
+    products = serializers.ListField(required=False)
     options_radio = serializers.ListField(required=False)
     options_checkbox = serializers.ListField(required=False)
 
@@ -260,7 +260,6 @@ class EventCreateSerializer(serializers.Serializer):
 
 
 class EventSerializer(serializers.ModelSerializer):
-    # products = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all(), many=True)
     products = ProductSerializer(many=True)
     options_radio = OptionTicketSerializer(many=True)
     options_checkbox = OptionTicketSerializer(many=True)
@@ -304,6 +303,31 @@ class EventSerializer(serializers.ModelSerializer):
         for product in self.products_to_db:
             instance.products.add(product)
         return instance
+
+    def to_representation(self, instance):
+        article_payant = False
+        reservation_free = True
+        for product in instance.products.all():
+            if product.categorie_article == Product.BILLET:
+                reservation_free = False
+            for price in product.prices.all():
+                if price.prix > 0:
+                    article_payant = True
+
+        if article_payant:
+            gift_product, created = Product.objects.get_or_create(categorie_article=Product.DON, name="Don")
+            gift_price, created = Price.objects.get_or_create(product=gift_product, prix=1, name="Don")
+            instance.products.add(gift_product)
+
+        if reservation_free:
+            free_reservation, created = Product.objects.get_or_create(categorie_article=Product.FREERES,
+                                                                      name="Reservation")
+            free_reservation_price, created = Price.objects.get_or_create(product=free_reservation, prix=0,
+                                                                          name="Reservation")
+            instance.products.add(free_reservation)
+
+        representation = super().to_representation(instance)
+        return representation
 
     '''
     
@@ -395,27 +419,27 @@ class MembreshipValidator(serializers.Serializer):
         user_paiement: TibilletUser = validate_email_and_return_user(value)
         self.user = user_paiement
 
-        self.fiche_membre, created =  Membership.objects.get_or_create(
+        self.fiche_membre, created = Membership.objects.get_or_create(
             user=user_paiement
         )
 
-        if not self.fiche_membre.first_name :
+        if not self.fiche_membre.first_name:
             if not self.initial_data.get('first_name'):
                 raise serializers.ValidationError(_(f'first_name est obligatoire'))
             self.fiche_membre.first_name = self.initial_data.get('first_name')
-        if not self.fiche_membre.last_name :
+        if not self.fiche_membre.last_name:
             if not self.initial_data.get('last_name'):
                 raise serializers.ValidationError(_(f'last_name est obligatoire'))
             self.fiche_membre.last_name = self.initial_data.get('last_name')
-        if not self.fiche_membre.phone :
+        if not self.fiche_membre.phone:
             if not self.initial_data.get('phone'):
                 raise serializers.ValidationError(_(f'phone est obligatoire'))
             self.fiche_membre.phone = self.initial_data.get('phone')
-        if not self.fiche_membre.postal_code :
+        if not self.fiche_membre.postal_code:
             self.fiche_membre.postal_code = self.initial_data.get('postal_code')
-        if not self.fiche_membre.birth_date :
+        if not self.fiche_membre.birth_date:
             self.fiche_membre.birth_date = self.initial_data.get('birth_date')
-        if not self.fiche_membre.newsletter :
+        if not self.fiche_membre.newsletter:
             self.fiche_membre.newsletter = self.initial_data.get('newsletter')
 
         self.fiche_membre.save()
@@ -429,11 +453,10 @@ class MembreshipValidator(serializers.Serializer):
 
     # def validate_last_name(self, value):
     #     return value
-        # if self.fiche_membre.last_name:
-        #     return self.fiche_membre.last_name
-        # else :
-        #     raise serializers.ValidationError(_(f'last_name est obligatoire'))
-
+    # if self.fiche_membre.last_name:
+    #     return self.fiche_membre.last_name
+    # else :
+    #     raise serializers.ValidationError(_(f'last_name est obligatoire'))
 
     def validate(self, attrs):
         price_adhesion: Price = attrs.get('adhesion')
@@ -487,7 +510,11 @@ def get_near_event_by_date():
 
 
 def create_ticket(pricesold, customer, reservation):
+    statut = Ticket.CREATED
+    if pricesold.price.product.categorie_article == Product.FREERES :
+        statut = Ticket.NOT_ACTIV
     ticket = Ticket.objects.create(
+        status=statut,
         reservation=reservation,
         pricesold=pricesold,
         first_name=customer.get('first_name'),
@@ -630,7 +657,7 @@ class ReservationValidator(serializers.Serializer):
                     'qty': float(entry['qty']),
                 }
 
-                if price.product.categorie_article in [Product.BILLET]:
+                if price.product.categorie_article in [Product.BILLET, Product.FREERES]:
                     nbr_ticket += entry['qty']
 
                     # les noms sont requis pour la billetterie
@@ -657,6 +684,11 @@ class ReservationValidator(serializers.Serializer):
         event: Event = attrs.get('event')
         if event.complet():
             raise serializers.ValidationError(_(f'Jauge atteinte : Evenement complet.'))
+
+        for line_price in self.prices_list:
+            if line_price['price'].product not in event.products.all():
+                raise serializers.ValidationError(_(f'Article non disponible'))
+
         # Les articles semblent bon,
         # on construit l'object reservation.
         reservation = Reservation.objects.create(
@@ -666,12 +698,16 @@ class ReservationValidator(serializers.Serializer):
 
         # Ici on construit :
         #   price_sold pour lier l'event à la vente
-        #   ligne article pour envoie en paiement
+        #   ligne article pour envoi en paiement
         #   Ticket nominatif
+
         list_line_article_sold = []
+        total_checkout = 0
         for line_price in self.prices_list:
             price_generique: Price = line_price['price']
             qty = line_price.get('qty')
+            total_checkout += qty * price_generique.prix
+
             pricesold: PriceSold = get_or_create_price_sold(price_generique, event)
 
             # les lignes articles pour la vente
@@ -683,45 +719,67 @@ class ReservationValidator(serializers.Serializer):
 
             # import ipdb; ipdb.set_trace()
             # Les Tickets si article est un billet
-            if price_generique.product.categorie_article == Product.BILLET:
+            if price_generique.product.categorie_article in [Product.BILLET, Product.FREERES]:
                 for customer in line_price.get('customers'):
                     create_ticket(pricesold, customer, reservation)
 
-        metadata = {
-            'reservation': f'{reservation.uuid}',
-            'tenant': f'{connection.tenant.uuid}',
-        }
-        new_paiement_stripe = creation_paiement_stripe(
-            user=self.user_commande,
-            liste_ligne_article=list_line_article_sold,
-            metadata=metadata,
-            source=Paiement_stripe.API_BILLETTERIE,
-            reservation=reservation,
-            absolute_domain=self.context.get('request').build_absolute_uri().partition('/api')[0],
-        )
+        print(f"total_checkout : {total_checkout}")
+        self.checkout_session = None
+        if total_checkout > 0:
 
-        if new_paiement_stripe.is_valid():
-            paiement_stripe: Paiement_stripe = new_paiement_stripe.paiement_stripe_db
-            paiement_stripe.lignearticle_set.all().update(status=LigneArticle.UNPAID)
+            metadata = {
+                'reservation': f'{reservation.uuid}',
+                'tenant': f'{connection.tenant.uuid}',
+            }
 
-            reservation.tickets.all().update(status=Ticket.NOT_ACTIV)
+            new_paiement_stripe = creation_paiement_stripe(
+                user=self.user_commande,
+                liste_ligne_article=list_line_article_sold,
+                metadata=metadata,
+                source=Paiement_stripe.API_BILLETTERIE,
+                reservation=reservation,
+                absolute_domain=self.context.get('request').build_absolute_uri().partition('/api')[0],
+            )
 
-            reservation.paiement = paiement_stripe
-            reservation.status = Reservation.UNPAID
-            reservation.save()
+            if new_paiement_stripe.is_valid():
+                paiement_stripe: Paiement_stripe = new_paiement_stripe.paiement_stripe_db
+                paiement_stripe.lignearticle_set.all().update(status=LigneArticle.UNPAID)
 
-            print(new_paiement_stripe.checkout_session.stripe_id)
-            # return new_paiement_stripe.redirect_to_stripe()
-            self.checkout_session = new_paiement_stripe.checkout_session
+                reservation.tickets.all().update(status=Ticket.NOT_ACTIV)
+
+                reservation.paiement = paiement_stripe
+                reservation.status = Reservation.UNPAID
+                reservation.save()
+
+                print(new_paiement_stripe.checkout_session.stripe_id)
+                # return new_paiement_stripe.redirect_to_stripe()
+                self.checkout_session = new_paiement_stripe.checkout_session
+                self.paiement_stripe_uuid = paiement_stripe.uuid
+
+                return super().validate(attrs)
+            else:
+                raise serializers.ValidationError(_(f'checkout strip not valid'))
+
+        elif total_checkout == 0:
+            # On passe les reservations gratuites en payées automatiquement :
+            for line_price in list_line_article_sold:
+                line_price: LigneArticle
+                if line_price.pricesold.productsold.product.categorie_article == Product.FREERES:
+                    if line_price.status != LigneArticle.VALID :
+                        line_price.status = LigneArticle.PAID
+                        line_price.save()
+
+            if reservation:
+                reservation.status = Reservation.PAID
+                reservation.save()
 
             return super().validate(attrs)
 
-        else:
-            raise serializers.ValidationError(_(f'checkout strip not valid'))
-
     def to_representation(self, instance):
         representation = super().to_representation(instance)
-        logger.info(f"{self.checkout_session.url}")
-        representation['checkout_url'] = self.checkout_session.url
+        if self.checkout_session :
+            logger.info(f"{self.checkout_session.url}")
+            representation['checkout_url'] = self.checkout_session.url
+            representation['paiement_stripe_uuid'] = self.paiement_stripe_uuid
         # import ipdb;ipdb.set_trace()
         return representation

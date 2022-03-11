@@ -58,10 +58,10 @@ class Command(BaseCommand):
         # base_url = f"https://demo.{os.environ.get('DOMAIN')}"
         sub_domain = "m"
 
-        # protocol = "http://"
-        # port = ":8002"
-        protocol = "https://"
-        port = ""
+        protocol = "http://"
+        port = ":8002"
+        # protocol = "https://"
+        # port = ""
 
         base_url = f"{protocol}{sub_domain}.{os.environ.get('DOMAIN')}{port}"
 
@@ -509,6 +509,21 @@ class Command(BaseCommand):
                     },
                 ],
                 "products": products_uuid
+            }
+            response = requests.request("POST", f"{base_url}/api/events/", headers=headers, data=json.dumps(data_json))
+            # print(response.text)
+
+            # et un évènement gratuit, sans produits
+            r_date = random_date()
+            headers["Content_type"] = "application/json"
+            data_json = {
+                'date': r_date.date().strftime("%Y-%m-%d"),
+                'artists': [
+                    {
+                        "uuid": artists[2].get('uuid'),
+                        "datetime": r_date.strftime("%Y-%m-%dT%H:%M")
+                    }
+                ],
             }
             response = requests.request("POST", f"{base_url}/api/events/", headers=headers, data=json.dumps(data_json))
             # print(response.text)

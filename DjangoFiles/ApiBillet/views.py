@@ -286,10 +286,18 @@ class PlacesViewSet(viewsets.ViewSet):
 class HereViewSet(viewsets.ViewSet):
 
     def list(self, request):
-        place_serialized = ConfigurationSerializer(Configuration.get_solo(), context={'request': request})
-        dict_with_uuid = {'uuid': f"{connection.tenant.uuid}"}
-        dict_with_uuid.update(place_serialized.data)
-        return Response(dict_with_uuid)
+        config = Configuration.get_solo()
+        place_serialized = ConfigurationSerializer(config, context={'request': request})
+
+        dict_return = {'uuid': f"{connection.tenant.uuid}"}
+        dict_return.update(place_serialized.data)
+
+        if config.button_adhesion or config.adhesion_obligatoire:
+            products_adhesion = Product.objects.filter(categorie_article=Product.ADHESION)
+            if len(products_adhesion) > 0:
+                products_serializer = ProductSerializer(products_adhesion, many=True)
+                dict_return['membership_products'] = products_serializer.data
+        return Response(dict_return)
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -304,6 +312,7 @@ class EventsViewSet(viewsets.ViewSet):
     def list(self, request):
         queryset = Event.objects.filter(datetime__gte=datetime.now()).order_by('datetime')
         events_serialized = EventSerializer(queryset, many=True, context={'request': request})
+
         return Response(events_serialized.data)
 
     def retrieve(self, request, pk=None):
@@ -349,13 +358,13 @@ class EventsViewSet(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
-
 class ChargeCashless(viewsets.ViewSet):
     def create(self, request):
         print(request.data)
         configuration = Configuration.get_solo()
-        if not configuration.key_cashless or not configuration.server_cashless :
-            return Response(_("Serveur cashless non présent dans configuration"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        if not configuration.key_cashless or not configuration.server_cashless:
+            return Response(_("Serveur cashless non présent dans configuration"),
+                            status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
         try:
             response = requests.request("GET",
@@ -364,8 +373,9 @@ class ChargeCashless(viewsets.ViewSet):
                                         )
 
             if response.status_code != 200:
-                return Response(_(f"Requete non comprise : {response.status_code}"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
-        except Exception as e :
+                return Response(_(f"Requete non comprise : {response.status_code}"),
+                                status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        except Exception as e:
             return Response(_(f"Serveur cashless ne répond pas : {e}"), status=status.HTTP_408_REQUEST_TIMEOUT)
 
         validator = ChargeCashlessValidator(data=request.data, context={'request': request})
@@ -377,7 +387,6 @@ class ChargeCashless(viewsets.ViewSet):
     def get_permissions(self):
         permission_classes = [permissions.IsAuthenticated]
         return [permission() for permission in permission_classes]
-
 
 
 class ReservationViewset(viewsets.ViewSet):
@@ -430,7 +439,7 @@ class OptionTicket(viewsets.ViewSet):
 
 def request_for_data_cashless(user: TibilletUser):
     if user.email_error or not user.email:
-        return { 'erreur': f"user.email_error {user.email_error}" }
+        return {'erreur': f"user.email_error {user.email_error}"}
 
     sess = requests.Session
     configuration = Configuration.get_solo()
@@ -442,12 +451,12 @@ def request_for_data_cashless(user: TibilletUser):
                                         data={"email": user.email})
 
             if response.status_code != 200:
-                return { 'erreur': f"{response.status_code} : {response.text}" }
+                return {'erreur': f"{response.status_code} : {response.text}"}
             return json.loads(response.content)
         except Exception as e:
-            return { 'erreur': f"{e}" }
+            return {'erreur': f"{e}"}
 
-    return { 'erreur': f"pas de configuration server_cashless" }
+    return {'erreur': f"pas de configuration server_cashless"}
 
 
 class MembershipViewset(viewsets.ViewSet):
@@ -481,8 +490,6 @@ class MembershipViewset(viewsets.ViewSet):
 
             return Response('no cashless server', status=status.HTTP_404_NOT_FOUND)
         return Response('no User', status=status.HTTP_402_PAYMENT_REQUIRED)
-
-
 
     def get_permissions(self):
         if self.action in ['create', 'retrieve']:

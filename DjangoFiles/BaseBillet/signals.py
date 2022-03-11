@@ -40,8 +40,7 @@ def set_ligne_article_paid(old_instance, new_instance):
         ligne_article.status = LigneArticle.PAID
         ligne_article.save()
 
-    # si ya une reservation, on la met aussi en payée :
-    # try :
+    # s'il y a une réservation, on la met aussi en payée :
     if new_instance.reservation:
         new_instance.reservation.status = Reservation.PAID
         new_instance.reservation.save()
@@ -63,28 +62,31 @@ def valide_stripe_paiement(old_instance, new_instance):
 # si toutes les lignes articles sont save en VALID.
 # @receiver(post_save, sender=LigneArticle)
 
-def set_paiement_and_reservation_valid(old_instance: LigneArticle, new_instance: LigneArticle):
+def set_paiement_stripe_valid(old_instance: LigneArticle, new_instance: LigneArticle):
     if new_instance.status == LigneArticle.VALID:
-        logger.info(
-            f"    TRIGGER LIGNE ARTICLE set_paiement_and_reservation_valid {new_instance.pricesold}. On test si toute les lignes sont validées")
-
-        # On exclu l'instance en cours car elle n'est pas encore validé en DB comme Valide : on est sur du signal pre_save
-        # on test ici : Si toute les autre ligne sont valide et que celle ci l'est aussi.
-        lignes_dans_paiement_stripe = new_instance.paiement_stripe.lignearticle_set.all().exclude(
-            uuid=new_instance.uuid)
-        lignes_valide_dans_paiement_stripe = lignes_dans_paiement_stripe.filter(status=LigneArticle.VALID).exclude(
-            uuid=new_instance.uuid)
-
-        if len(lignes_dans_paiement_stripe) == len(lignes_valide_dans_paiement_stripe):
-            # on passe le status du paiement stripe en VALID
+        # Si paiement stripe :
+        if new_instance.paiement_stripe :
             logger.info(
-                f"         paiement stripe {new_instance.paiement_stripe} {new_instance.paiement_stripe.status} à VALID")
-            new_instance.paiement_stripe.status = Paiement_stripe.VALID
-            new_instance.paiement_stripe.traitement_en_cours = False
-            new_instance.paiement_stripe.save()
-        else:
-            logger.info(
-                f"         len(lignes_dans_paiement_stripe) {len(lignes_dans_paiement_stripe)} != len(lignes_valide_dans_paiement_stripe) {len(lignes_valide_dans_paiement_stripe)} ")
+                f"    TRIGGER LIGNE ARTICLE set_paiement_and_reservation_valid {new_instance.pricesold}. On test si toute les lignes sont validées")
+
+            # On exclut l'instance en cours, car elle n'est pas encore validée en DB : on est sur du signal pre_save
+            # on teste ici : Si toutes les autres lignes sont valides et que celle ci l'est aussi.
+            lignes_meme_panier = new_instance.paiement_stripe.lignearticle_set.all().exclude(
+                uuid=new_instance.uuid)
+            lignes_meme_panier_valide = lignes_meme_panier.filter(status=LigneArticle.VALID).exclude(
+                uuid=new_instance.uuid)
+
+            # Si toutes les lignes du même panier sont validés
+            if len(lignes_meme_panier) == len(lignes_meme_panier_valide):
+                # on passe le status du paiement stripe en VALID
+                logger.info(
+                    f"         paiement stripe {new_instance.paiement_stripe} {new_instance.paiement_stripe.status} à VALID")
+                new_instance.paiement_stripe.status = Paiement_stripe.VALID
+                new_instance.paiement_stripe.traitement_en_cours = False
+                new_instance.paiement_stripe.save()
+            else:
+                logger.info(
+                    f"         len(lignes_meme_panier) {len(lignes_meme_panier)} != len(lignes_meme_panier_valide) {len(lignes_meme_panier_valide)} ")
 
 
 def send_to_cashless(instance: LigneArticle):
@@ -98,7 +100,7 @@ def send_to_cashless(instance: LigneArticle):
     if instance.pricesold.productsold.product.categorie_article == Product.ADHESION:
         data_for_cashless['tarif_adhesion'] = instance.pricesold.prix
 
-    # si il y a des données a envoyer au serveur cashless :
+    # s'il y a des données à envoyer au serveur cashless :
     sess = requests.Session()
     configuration = Configuration.get_solo()
     r = sess.post(
@@ -125,7 +127,7 @@ def check_paid(old_instance: LigneArticle, new_instance: LigneArticle):
     logger.info(f"    TRIGGER LIGNE ARTICLE check_paid {old_instance.pricesold} new_instance status : {new_instance.status}")
     action_article_paid_by_categorie(new_instance)
     logger.info(f"    TRIGGER LIGNE ARTICLE check_paid {old_instance.pricesold} new_instance status : {new_instance.status}")
-    set_paiement_and_reservation_valid(old_instance, new_instance)
+    set_paiement_stripe_valid(old_instance, new_instance)
 
 
 
@@ -142,7 +144,7 @@ def check_paid(old_instance: LigneArticle, new_instance: LigneArticle):
 
 # @receiver(post_save, sender=Reservation)
 # def send_billet_to_mail(sender, instance: Reservation, **kwargs):
-def send_billet_to_mail(old_instance, new_instance):
+def send_billet_to_mail(old_instance:Reservation, new_instance:Reservation):
     # On active les tickets
     if new_instance.tickets:
         # On prend aussi ceux qui sont déja activé ( avec les Q() )
@@ -153,10 +155,9 @@ def send_billet_to_mail(old_instance, new_instance):
             ticket.save()
 
     # import ipdb; ipdb.set_trace()
-    # On vérifie qu'on a pas déja envoyé le mail
+    # On vérifie que le mail n'a pas déja été envoyé
     if not new_instance.mail_send:
         logger.info(f"    TRIGGER RESERVATION send_billet_to_mail {new_instance.status}")
-        new_instance: Reservation
 
         if new_instance.user_commande.email:
             # import ipdb; ipdb.set_trace()
@@ -168,8 +169,7 @@ def send_billet_to_mail(old_instance, new_instance):
         set_paiement_valid(old_instance, new_instance)
 
 
-def set_paiement_valid(old_instance, new_instance):
-    new_instance: Reservation
+def set_paiement_valid(old_instance:Reservation, new_instance:Reservation):
     if new_instance.mail_send:
         logger.info(
             f"    TRIGGER RESERVATION set_paiement_valid Mail envoyé {new_instance.mail_send}, on valide les paiements payés")
@@ -179,7 +179,7 @@ def set_paiement_valid(old_instance, new_instance):
             paiement.save()
 
 
-def error_in_mail(old_instance, new_instance):
+def error_in_mail(old_instance:Reservation, new_instance:Reservation):
     logger.info(f"    TRIGGER RESERVATION error_in_mail")
     new_instance.paiements.all().update(traitement_en_cours=False)
     # TODO: Prévenir l'admin q'un billet a été acheté, mais pas envoyé
@@ -226,7 +226,7 @@ TRANSITIONS = {
         },
         LigneArticle.PAID: {
             LigneArticle.PAID: check_paid,
-            LigneArticle.VALID: set_paiement_and_reservation_valid,
+            LigneArticle.VALID: set_paiement_stripe_valid,
             '_else_': error_regression,
         },
         LigneArticle.VALID: {
