@@ -1,6 +1,5 @@
 <template>
   <Header :header-event="getHeaderEvent()"/>
-  <button @click="testMe()">Test '/api/user/me/'</button>
   <div class="container mt-7">
     <!-- lieu -->
     <div class="row">
@@ -21,19 +20,20 @@
     <div class="row">
       <form @submit.prevent="goValiderAchats($event)" class="needs-validation" novalidate>
 
-         <CardProfil :infos="store.formulaireBillet[uuidEvent]"/>
- <!--
+        <CardProfil :infos="store.formulaireBillet[uuidEvent]"/>
+        <CardProduct :products="currentEvent.products" :categories="['A', 'D', 'B']"/>
+        <!--
 
-        <Adhesion :adhesion="adhesion"/>
+               <Adhesion :adhesion="adhesion"/>
 
-        <div v-for="produit in currentEvent.products" :key="produit.uuid">
-          <CardBillet v-if="produit.categorie_article === 'B' && produit.publish === true" :data-product="produit"
-                      :uuid-event="currentEvent.uuid"/>
-        </div>
-        <div class="col-md-12 col-lg-9">
-          <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
-        </div>
--->
+               <div v-for="produit in currentEvent.products" :key="produit.uuid">
+                 <CardBillet v-if="produit.categorie_article === 'B' && produit.publish === true" :data-product="produit"
+                             :uuid-event="currentEvent.uuid"/>
+               </div>
+               <div class="col-md-12 col-lg-9">
+                 <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
+               </div>
+       -->
       </form>
     </div>
   </div>
@@ -42,7 +42,6 @@
 
 <script setup>
 console.log('-> Event.vue !')
-
 
 // vue
 import {ref} from 'vue'
@@ -53,6 +52,7 @@ import Header from '@/components/Header.vue'
 import CardPlace from '@/components/CardPlace.vue'
 import CardArtist from '@/components/CardArtist.vue'
 import CardProfil from "@/components/CardProfil.vue"
+import CardProduct from "@/components/CardProduct.vue"
 
 // test dev
 import {getMe} from '@/api'
@@ -80,19 +80,18 @@ if (typeof (uuidEventBrut) === 'object') {
 
 // currentEvent test dev
 const currentEvent = fakeEvent
+
 console.log('currentEvent =', currentEvent)
 
-// init persisted form
-console.log('formulaireBillet[uuidEvent] =', store.formulaireBillet[uuidEvent])
-if (store.formulaireBillet[uuidEvent] === undefined) {
-  store.formulaireBillet[uuidEvent] = {
+store.currentUuidEvent = uuidEvent
+
+// init mémoristation formulaire en fonction de l'évènement en cours
+if (store.formulaireBillet[store.currentUuidEvent] === undefined) {
+  store.formulaireBillet[store.currentUuidEvent] = {
     attentionEmail: false,
     email: '',
-    confirmeEmail: '',
-    position: 'fosse',
-    identifiants: [],
+    confirmeEmail: ''
   }
-  console.log('test après formulaireBillet =', store.formulaireBillet[uuidEvent])
 }
 
 // populate profil card if user connected
@@ -101,14 +100,6 @@ if (store.user.refreshToken !== '') {
   store.formulaireBillet[uuidEvent].attentionEmail = true
   store.formulaireBillet[uuidEvent].email = store.user.email
   store.formulaireBillet[uuidEvent].confirmeEmail = store.user.email
-}
-
-async function testMe() {
-  const token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNjQ3MDg3Mzk4LCJpYXQiOjE2NDcwMDA5OTgsImp0aSI6IjA4MDIyMzM4NDUyOTRmMTZhMTVjOWNkNjExZjdhYjllIiwidXNlcl9pZCI6MTI5fQ.8EZJH4o_6GL0lg8H2jNMWkL-PqFXUh99ND4p13h_swY'
-  console.log('token =', token)
-  // console.log('window.accessToken =', window.accessToken)
-  const retour = await getMe(token)
-  console.log('retour =', retour)
 }
 
 function getHeaderEvent() {
@@ -144,15 +135,23 @@ function getDataCardPlace() {
   }
 }
 
-/*
-
-
-// mise à jour du profil
+// mise à jour données du profil
 emitter.on('emitUpdateProfil', (data) => {
   console.log('réception "emitUpdateProfil", data=', JSON.stringify(data, null, 2))
-  store.formulaireBillet[uuidEvent][data.key] = data.value
+  store.formulaireBillet[store.currentUuidEvent][data.key] = data.value
 })
-*/
+
+// mise à jour données de l'adhésion
+emitter.on('majAdhesion', (data) => {
+  console.log('réception "majAdhesion", data=', JSON.stringify(data, null, 2))
+  store.formulaireBillet[store.currentUuidEvent].adhesion[data.key] = data.value
+})
+
+emitter.on('majActiveSimpleProduct', (data) => {
+  console.log('réception "majActiveSimpleProduct", data=', JSON.stringify(data, null, 2))
+  store.formulaireBillet[store.currentUuidEvent].activeSimpleProduct[data.uuidProduct][data.key] = data.value
+})
+
 </script>
 
 <style>

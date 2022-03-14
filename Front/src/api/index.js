@@ -104,8 +104,10 @@ export async function emailActivation(id, token) {
       })
       // maj token d'accès
       window.accessToken = retour.access
+      // get infos user
+      store.user = await this.getMe(retour.access)
       // maj du refresh token dans le storeUser
-      store.user.refreshToken = retour.refresh
+      store.user['refreshToken'] = retour.refresh
     } else {
       throw new Error(`Erreur conrfirmation mail !`)
     }
@@ -120,8 +122,6 @@ export async function emailActivation(id, token) {
 
 export async function getMe(token) {
   const apiMe = `/api/user/me/`
-  console.log('-> GET =', apiMe)
-  console.log('-> token =', token)
   const options = {
     method: 'GET',
     cache: 'no-cache',
@@ -130,11 +130,8 @@ export async function getMe(token) {
       'Authorization' : `Bearer ${token}`
     }
   }
-
-  console.log('options =', options)
   try {
     const response = await fetch(domain + apiMe, options)
-    console.log('-> response =', response)
     if (response.status === 200) {
       const retour = await response.json()
       return retour
@@ -148,7 +145,6 @@ export async function getMe(token) {
       contenu: `${domain + apiMe} : ${erreur}`
     })
   }
-
 }
 
 export function getStripeReturn(uuidStripe) {

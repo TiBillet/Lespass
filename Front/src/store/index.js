@@ -2,11 +2,10 @@ import {defineStore} from 'pinia'
 
 export const useStore = defineStore('store', {
   state: () => ({
+    currentUuidEvent: '',
     user: {
       refreshToken: '',
       email: '',
-      adhesion: false,
-      adhesionUuidPrice: '',
       first_name: '',
       last_name: '',
       phone: null,

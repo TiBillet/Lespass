@@ -1,27 +1,31 @@
 <template>
   <!-- pour formulaire -->
-  <fieldset v-if="adhesion.form === true" class="col-md-12 col-lg-9 mb-4 shadow-sm p-3 mb-5 bg-body rounded">
+  <fieldset v-if="form === true" class="col-md-12 col-lg-9 mb-4 shadow-sm p-3 mb-5 bg-body rounded">
     <legend>Adhésion</legend>
 
     <div class="form-check form-switch">
-      <input v-if="adhesion.adhesionObligatoire === true" class="form-check-input" type="checkbox"
+      <!-- <input v-if="adhesionActivation === true" class="form-check-input" type="checkbox"
+             id="etat-adhesion" checked disabled> -->
+      <input v-if="store.place.adhesion_obligatoire === true" class="form-check-input" type="checkbox"
              id="etat-adhesion" checked disabled>
       <input v-else class="form-check-input" type="checkbox" id="etat-adhesion"
-             @change="emitMajAdhesion('activation', $event.target.checked)" :checked="adhesionActivation">
+             @change="emitMajAdhesion('activation', $event.target.checked)" :checked="adhesion.activation">
       <label class="form-check-label text-dark" for="etat-adhesion">Prendre une adhésion
         associative.</label>
     </div>
 
-    <div v-if="adhesionActivation === true">
+    <!-- <div v-if="adhesionActivation === true"> -->
+    <div v-if="adhesion.activation === true || store.place.adhesion_obligatoire === true">
+
       <!-- prix -->
-      <div class="row has-validation">
-        <div class="col form-check mb-3" v-for="(price, index) in adhesion.prices" :key="index">
-          <input v-if="index === 0" :value="price.uuid" class="form-check-input input-uuid-price" type="radio"
+      <div class="input-group mb-2 has-validation">
+        <div class="col form-check mb-3" v-for="(price, index) in prices" :key="index">
+          <input v-if="price.uuid === adhesion.adhesion" :value="price.uuid" class="form-check-input input-uuid-price" type="radio"
                  name="prixAdhesion" :id="`uuidPriceRadio${index}`"
-                 @change="emitMajAdhesion('uuidPrice', $event.target.value)">
+                 @change="emitMajAdhesion('adhesion', $event.target.value)" checked>
           <input v-else :value="price.uuid" class="form-check-input input-uuid-price" type="radio"
                  name="prixAdhesion" :id="`uuidPriceRadio${index}`"
-                 @change="emitMajAdhesion('uuidPrice', $event.target.value)">
+                 @change="emitMajAdhesion('adhesion', $event.target.value)">
           <label class="form-check-label" :for="`customRadio${index}`">{{ price.name }} - {{ price.prix }}€</label>
           <div v-if="index === 0" id="uuid-price-error" class="invalid-feedback">
             Sélectionner un tarif d'adhésion svp !
@@ -31,123 +35,95 @@
 
       <!-- nom -->
       <div class="input-group mb-2 has-validation">
-        <input :value="adhesion.nom" type="text"
-               class="form-control"
-               placeholder="Nom" aria-label="Nom pour l'adhésion" required
-               @keyup="emitMajAdhesion('nom', $event.target.value)">
+        <span class="input-group-text" id="basic-addon1">Nom</span>
+        <input :value="adhesion.lastName" type="text"
+               class="form-control" aria-label="Nom pour l'adhésion" required
+               @keyup="emitMajAdhesion('lastName', $event.target.value)">
         <div class="invalid-feedback">Un nom svp !</div>
       </div>
       <!-- prénom -->
       <div class="input-group mb-2 has-validation">
-        <input :value="adhesion.prenom" type="text"
-               id="adhesion-prenom" class="form-control"
-               placeholder="Prénom" aria-label="Prénom pour l'adhésion" required
-               @keyup="emitMajAdhesion('prenom', $event.target.value)">
+        <span class="input-group-text" id="basic-addon1">Prénom</span>
+        <input :value="adhesion.firstName" type="text"
+               id="adhesion-prenom" class="form-control" aria-label="Prénom pour l'adhésion" required
+               @keyup="emitMajAdhesion('firstName', $event.target.value)">
         <div class="invalid-feedback">Un prénom svp !</div>
       </div>
       <!-- adresse -->
       <div class="input-group mb-2 has-validation">
-        <input :value="adhesion.adresse" id="adhesion-adresse"
+        <span class="input-group-text" id="basic-addon1">Code postal</span>
+        <input :value="adhesion.postalCode" id="adhesion-adresse"
                type="text"
-               class="form-control" placeholder="Adresse" aria-label="Adresse pour l'adhésion" required
-               @keyup="emitMajAdhesion('adresse', $event.target.value)">
-        <div class="invalid-feedback">Une adresse svp !</div>
+               class="form-control" aria-label="Code postal" required
+               @keyup="emitMajAdhesion('postalCode', $event.target.value)">
+        <div class="invalid-feedback">Code postal svp !</div>
       </div>
       <!-- téléphone -->
       <div class="input-group mb-2 has-validation">
-        <input :value="adhesion.tel" type="tel"
-               class="form-control"
-               placeholder="Fixe ou Mobile" pattern="^[0-9-+\s()]*$"
-               aria-label="Adresse pour l'adhésion" required
-               @keyup="emitMajAdhesion('tel', $event.target.value)">
+        <span class="input-group-text" id="basic-addon1">Fixe ou Mobile</span>
+        <input :value="adhesion.phone" type="tel"
+               class="form-control" pattern="^[0-9-+\s()]*$"
+               aria-label="Fixe ou Mobile" required
+               @keyup="emitMajAdhesion('phone', $event.target.value)">
         <div class="invalid-feedback">Un numéro de téléphone svp !</div>
       </div>
-    </div>
-
-  </fieldset>
-
-  <!-- modal adhésion -->
-  <div v-if="adhesion.form === false" class="modal fade" id="modal-form-adhesion" tabindex="-1" role="dialog"
-       aria-labelledby="modal-form-adhesion"
-       aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-" role="document">
-      <div class="modal-content">
-        <div class="modal-body p-0">
-          <div class="card card-plain">
-            <div class="card-header pb-0 text-left">
-              <h3 class="font-weight-bolder text-info text-gradient">Adhésion</h3>
-            </div>
-            <div class="card-body">
-              <form @submit.prevent="emitValiderAdhesion($event)" role="form text-left">
-
-                <!-- nom -->
-                <div class="input-group mb-2 has-validation">
-                  <input :value="adhesion.nom" type="text"
-                         class="form-control"
-                         placeholder="Nom" aria-label="Nom pour l'adhésion" required
-                         @keyup="emitMajAdhesion('nom', $event.target.value)">
-                  <div class="invalid-feedback">Un nom svp !</div>
-                </div>
-                <!-- prénom -->
-                <div class="input-group mb-2 has-validation">
-                  <input :value="adhesion.prenom" type="text"
-                         id="adhesion-prenom" class="form-control"
-                         placeholder="Prénom" aria-label="Prénom pour l'adhésion" required
-                         @keyup="emitMajAdhesion('prenom', $event.target.value)">
-                  <div class="invalid-feedback">Un prénom svp !</div>
-                </div>
-                <!-- adresse -->
-                <div class="input-group mb-2 has-validation">
-                  <input :value="adhesion.adresse" id="adhesion-adresse"
-                         type="text"
-                         class="form-control" placeholder="Adresse" aria-label="Adresse pour l'adhésion" required
-                         @keyup="emitMajAdhesion('adresse', $event.target.value)">
-                  <div class="invalid-feedback">Une adresse svp !</div>
-                </div>
-                <!-- téléphone -->
-                <div class="input-group mb-2 has-validation">
-                  <input :value="adhesion.tel" type="tel"
-                         class="form-control"
-                         placeholder="Fixe ou Mobile" pattern="^[0-9-+\s()]*$"
-                         aria-label="Adresse pour l'adhésion" required
-                         @keyup="emitMajAdhesion('tel', $event.target.value)">
-                  <div class="invalid-feedback">Un numéro de téléphone svp !</div>
-                </div>
-
-
-                <div class="text-center">
-                  <button type="submit" class="btn btn-round bg-gradient-info btn-lg w-100 mt-4 mb-0">Valider</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
+      <!-- date de naissance -->
+      <div class="input-group mb-2 has-validation">
+        <span class="input-group-text" id="basic-addon1">Date de naissance</span>
+        <input :value="adhesion.birthDate" type="text"
+               class="form-control datepicker"
+               placeholder="Date de naissance" pattern="^[0-9-+\s()]*$"
+               aria-label="Date de naissance" required
+               @change="emitMajAdhesion('birthDate', $event.target.value)" @click="$event.target.type='date'; $event.target.click()">
+        <div class="invalid-feedback">Un numéro de téléphone svp !</div>
       </div>
+
+
     </div>
-  </div>
-
-
+  </fieldset>
 </template>
 
 <script setup>
 console.log('-> Adhesion.vue !')
+
 // vue
 import {ref} from 'vue'
 
-/*
 // store
 import {useStore} from '@/store'
 
 const store = useStore()
- */
+
 // attributs/props
 const props = defineProps({
-  adhesion: Object
+  prices: Object,
+  form: Boolean
 })
 
-const adhesionActivation = ref(props.adhesion.activation)
+let adhesion = {}
+// si formulaire
+if (props.form === true) {
+// init mémorisation formulaire adhésion de l'évènement courant
+  if (store.formulaireBillet[store.currentUuidEvent]['adhesion'] === undefined) {
+    store.formulaireBillet[store.currentUuidEvent]['adhesion'] = {
+      email: store.user.email,
+      firstName: store.user.first_name,
+      lastName: store.user.last_name,
+      phone: store.user.phone,
+      postalCode: store.user.postal_code,
+      birthDate: store.user.birth_date,
+      adhesion: store.user.adhesion,
+      activation: false
+    }
+  }
 
-console.log('props.adhesion =', props.adhesion)
+  // maj
+  adhesion = store.formulaireBillet[store.currentUuidEvent]['adhesion']
+}
+
+let adhesionActivation = ref(adhesion.activation)
+console.log('store.place.adhesion_obligatoire =', store.place.adhesion_obligatoire)
+// store.place.adhesion_obligatoirestore === true
 
 function emitMajAdhesion(key, value) {
   console.log(key + " = " + value)
