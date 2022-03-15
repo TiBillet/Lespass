@@ -21,7 +21,9 @@
       <form @submit.prevent="goValiderAchats($event)" class="needs-validation" novalidate>
 
         <CardProfil :infos="store.formulaireBillet[uuidEvent]"/>
-        <CardProduct :products="currentEvent.products" :categories="['A', 'D', 'B']"/>
+        <CardProducts :products="currentEvent.products" :categories="['A', 'D']"/>
+        <CardOptions :options="options"/>
+        <CardProducts :products="currentEvent.products" :categories="['B']"/>
         <!--
 
                <Adhesion :adhesion="adhesion"/>
@@ -52,7 +54,8 @@ import Header from '@/components/Header.vue'
 import CardPlace from '@/components/CardPlace.vue'
 import CardArtist from '@/components/CardArtist.vue'
 import CardProfil from "@/components/CardProfil.vue"
-import CardProduct from "@/components/CardProduct.vue"
+import CardProducts from "@/components/CardProducts.vue"
+import CardOptions from "@/components/CardOptions.vue"
 
 // test dev
 import {getMe} from '@/api'
@@ -76,10 +79,10 @@ if (typeof (uuidEventBrut) === 'object') {
 }
 
 // currentEvent production
-// const currentEvent = store.events.find(evt => evt.uuid === uuidEvent)
+const currentEvent = store.events.find(evt => evt.uuid === uuidEvent)
 
 // currentEvent test dev
-const currentEvent = fakeEvent
+// const currentEvent = fakeEvent
 
 console.log('currentEvent =', currentEvent)
 
@@ -150,6 +153,13 @@ emitter.on('majAdhesion', (data) => {
 emitter.on('majActiveSimpleProduct', (data) => {
   console.log('réception "majActiveSimpleProduct", data=', JSON.stringify(data, null, 2))
   store.formulaireBillet[store.currentUuidEvent].activeSimpleProduct[data.uuidProduct][data.key] = data.value
+})
+
+emitter.on('majOptionsEvent', (data) => {
+  console.log('réception "majOptionsEvent", data=', JSON.stringify(data, null, 2))
+  if (data.name === 'check') {
+    store.formulaireBillet[store.currentUuidEvent]['options'][data.uuid] = data.value
+  }
 })
 
 </script>
