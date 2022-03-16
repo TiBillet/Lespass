@@ -32,6 +32,14 @@ if ( store.formulaireBillet[store.currentUuidEvent]['options'] === undefined) {
   store.formulaireBillet[store.currentUuidEvent]['options'] = {}
 }
 
+console.log('currentEvent.options_radio =', Object.fromEntries(currentEvent.options_radio))
+
+for (const key in currentEvent.options_radio) {
+  const obj = currentEvent.options_radio[key]
+  console.log('obj =', obj.uuid)
+}
+
+
 function emitMajOptionsEvent(name, value, uuid) {
   emitter.emit('majOptionsEvent', {name: name, value: value, uuid: uuid})
 }

@@ -162,6 +162,41 @@ emitter.on('majOptionsEvent', (data) => {
   }
 })
 
+emitter.on('gererCardBillet', (data) => {
+  console.log('réception "gererCardBillet", data=', JSON.stringify(data, null, 2))
+
+  // stock actualisé
+  const nbBillet = store.formulaireBillet[store.currentUuidEvent].identifiants[data.uuidTarif].users.length
+  const stock = store.formulaireBillet[store.currentUuidEvent].identifiants[data.uuidTarif].stock
+  console.log('nbBillet =', nbBillet)
+
+  // ajouter identifiant
+  if (data.action === 'ajouter') {
+    if (nbBillet + 1 <= stock) {
+      const id = store.formulaireBillet[store.currentUuidEvent].identifiants[data.uuidTarif].index + 1
+      // store.formulaireBillet[store.currentUuidEvent].identifiants.push({id: id, uuidTarif: data.uuidTarif, prenom: '', nom: ''})
+      store.formulaireBillet[store.currentUuidEvent].identifiants[data.uuidTarif].users.push({
+        id: id,
+        prenom: '',
+        nom: ''
+      })
+      store.formulaireBillet[store.currentUuidEvent].identifiants[data.uuidTarif].index = id
+    }
+  }
+
+  // supprimer
+  if (data.action === 'supprimer') {
+    const suppData = store.formulaireBillet[store.currentUuidEvent].identifiants[data.uuidTarif].users.filter(ident => ident.id !== data.id)
+    store.formulaireBillet[store.currentUuidEvent].identifiants[data.uuidTarif].users = suppData
+    console.log('identifiants =', store.formulaireBillet[store.currentUuidEvent].identifiants)
+  }
+
+  // modifier
+  if (data.action === 'modifier') {
+    //{ action: 'modifier', uuidTarif: uuidTarif, valeur: valeur, champ: champ, id: id })
+    store.formulaireBillet[store.currentUuidEvent].identifiants[data.uuidTarif].users.find(ident => ident.id === data.id)[data.champ] = data.valeur
+  }
+})
 </script>
 
 <style>
