@@ -7,7 +7,7 @@
         <input :value="infos.email" type="email"
                @change="emitUpdateProfil('email', $event.target.value)"
                pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$"
-               class="form-control" placeholder="Adresse" required>
+               class="form-control" placeholder="Adresse">
         <div class="invalid-feedback">
           Une adresse email valide svp !
         </div>
@@ -19,7 +19,7 @@
         <input id="email-confirmation" :value="infos.confirmeEmail" type="email"
                @change="emitUpdateProfil('confirmeEmail', $event.target.value)"
                pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$" class="form-control"
-               placeholder="Confirmer adresse" required>
+               placeholder="Confirmer adresse">
         <div class="invalid-feedback">
           Une adresse email valide et identique svp !
         </div>

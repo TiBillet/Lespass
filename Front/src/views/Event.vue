@@ -22,20 +22,11 @@
 
         <CardProfil :infos="store.formulaireBillet[uuidEvent]"/>
         <CardProducts :products="currentEvent.products" :categories="['A', 'D']"/>
-        <CardOptions :options="options"/>
-        <CardProducts :products="currentEvent.products" :categories="['B']"/>
-        <!--
-
-               <Adhesion :adhesion="adhesion"/>
-
-               <div v-for="produit in currentEvent.products" :key="produit.uuid">
-                 <CardBillet v-if="produit.categorie_article === 'B' && produit.publish === true" :data-product="produit"
-                             :uuid-event="currentEvent.uuid"/>
-               </div>
-               <div class="col-md-12 col-lg-9">
-                 <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
-               </div>
-       -->
+        <CardOptions/>
+        <CardProducts :products="currentEvent.products" :categories="['B', 'F']"/>
+        <div class="col-md-12 col-lg-9">
+          <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
+        </div>
       </form>
     </div>
   </div>
@@ -43,6 +34,7 @@
 </template>
 
 <script setup>
+console.clear()
 console.log('-> Event.vue !')
 
 // vue
@@ -138,6 +130,37 @@ function getDataCardPlace() {
   }
 }
 
+function goValiderAchats(event) {
+  console.log('-> fonc goValiderAchats !')
+  console.log('validité =', event.target.checkValidity())
+
+  // efface tous les messages d'invalidité
+  const msgInvalides = event.target.querySelectorAll('.invalid-feedback')
+  for (let i = 0; i < msgInvalides.length; i++) {
+    msgInvalides[i].style.display = 'none'
+  }
+
+  if (event.target.checkValidity() === true) {
+    // formulaire valide
+    console.log('validation formulaire ok !!')
+  } else {
+    // formulaire non valide
+    console.log('formulaire pas vailde !')
+    // scroll vers l'entrée non valide et affiche un message
+    const elements = event.target.querySelectorAll('input')
+    for (let i = 0; i < elements.length; i++) {
+      const element = elements[i]
+      if (element.checkValidity() === false) {
+        console.log('element = ', element)
+        element.scrollIntoView({behavior: 'smooth', inline: 'center', block: 'center'})
+        element.parentNode.querySelector('.invalid-feedback').style.display = 'block'
+        break
+      }
+    }
+  }
+}
+
+// ---- gestion des évènements provenant des enfants ----
 // mise à jour données du profil
 emitter.on('emitUpdateProfil', (data) => {
   console.log('réception "emitUpdateProfil", data=', JSON.stringify(data, null, 2))
@@ -198,6 +221,9 @@ emitter.on('gererCardBillet', (data) => {
   }
 })
 </script>
-
 <style>
+.invalid-feedback {
+  margin-top: -4px !important;
+  margin-left: 4px !important;
+}
 </style>

@@ -4,8 +4,11 @@
     <div class="input-group mb-2 has-validation">
       <span v-for="(option, index) in currentEvent.options_radio" :key="index" class="form-check me-3">
         <input class="form-check-input" type="radio"  name="option1" :id="`option-radio${option.uuid}-${index}`" :value="option.uuid"
-               @change="emitMajOptionsEvent('option1',$event.target.value)">
+               @change="emitMajOptionsEvent('option1',$event.target.value)" required>
         <label class="form-check-label text-dark" :for="`option-radio${option.uuid}-${index}`">{{ option.name }}</label>
+        <div class="invalid-feedback">
+          Une adresse email valide svp !
+        </div>
       </span>
     </div>
 

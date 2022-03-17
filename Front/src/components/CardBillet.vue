@@ -54,18 +54,20 @@ console.log('store.currentUuidEvent =', store.currentUuidEvent)
 // init identifiants et tarifs
 if (store.formulaireBillet[store.currentUuidEvent].identifiants === undefined) {
   store.formulaireBillet[store.currentUuidEvent]['identifiants'] = {}
-  for (const key in props.product.prices) {
-    const uuid = props.product.prices[key].uuid
-    const stock = props.product.prices[key].stock
-    if (store.formulaireBillet[store.currentUuidEvent].identifiants[uuid] === undefined) {
-      store.formulaireBillet[store.currentUuidEvent].identifiants[uuid] = {
-        index: 0,
-        users: [],
-        stock: stock
-      }
+}
+
+for (const key in props.product.prices) {
+  const uuid = props.product.prices[key].uuid
+  const stock = props.product.prices[key].stock
+  if (store.formulaireBillet[store.currentUuidEvent].identifiants[uuid] === undefined) {
+    store.formulaireBillet[store.currentUuidEvent].identifiants[uuid] = {
+      index: 0,
+      users: [],
+      stock: stock
     }
   }
 }
+
 
 function stockOk(uuidTarif) {
   const nbBillet = store.formulaireBillet[store.currentUuidEvent].identifiants[uuidTarif].users.length
@@ -75,6 +77,7 @@ function stockOk(uuidTarif) {
   }
   return false
 }
+
 function reste(uuidTarif) {
   const nbBillet = store.formulaireBillet[store.currentUuidEvent].identifiants[uuidTarif].users.length
   const stock = store.formulaireBillet[store.currentUuidEvent].identifiants[uuidTarif].stock
@@ -84,7 +87,6 @@ function reste(uuidTarif) {
 
 
 function obtenirNombreBilletParTarif(uuidTarif, stock) {
-  console.log('identifiants =', store.formulaireBillet[store.currentUuidEvent].identifiants)
   return store.formulaireBillet[store.currentUuidEvent].identifiants[uuidTarif].users.length
 }
 

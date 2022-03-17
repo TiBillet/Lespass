@@ -6,7 +6,7 @@
 
     <CardActiveSimpleProduct v-if="manageComponents.includes(product.categorie_article) === true && product.categorie_article === 'D'" :product="product" :select="true"/>
 
-    <CardBillet v-if="manageComponents.includes(product.categorie_article) === true && product.categorie_article === 'B'" :product="product"/>
+    <CardBillet v-if="manageComponents.includes(product.categorie_article) === true && (product.categorie_article === 'B' || product.categorie_article === 'F')" :product="product"/>
     <!-- composants non gérés -->
     <fieldset v-if="manageComponents.includes(product.categorie_article) === false"
               class="col-md-12 col-lg-9 mb-4 shadow-sm p-3 mb-5 bg-body rounded">
@@ -26,7 +26,7 @@ const props = defineProps({
   products: Object
 })
 
-const manageComponents = ['A', 'D', 'B']
+const manageComponents = ['A', 'D', 'B', 'F']
 
 // ordonnancement par le tableau catégories des produits et seulement ceux contenue dans celui-ci
 const manageProducts = []
