@@ -132,7 +132,6 @@ function getDataCardPlace() {
 
 function goValiderAchats(event) {
   console.log('-> fonc goValiderAchats !')
-  console.log('validité =', event.target.checkValidity())
 
   // efface tous les messages d'invalidité
   const msgInvalides = event.target.querySelectorAll('.invalid-feedback')
@@ -140,21 +139,81 @@ function goValiderAchats(event) {
     msgInvalides[i].style.display = 'none'
   }
 
-  if (event.target.checkValidity() === true) {
-    // formulaire valide
-    console.log('validation formulaire ok !!')
-  } else {
-    // formulaire non valide
-    console.log('formulaire pas vailde !')
-    // scroll vers l'entrée non valide et affiche un message
-    const elements = event.target.querySelectorAll('input')
-    for (let i = 0; i < elements.length; i++) {
-      const element = elements[i]
-      if (element.checkValidity() === false) {
-        console.log('element = ', element)
-        element.scrollIntoView({behavior: 'smooth', inline: 'center', block: 'center'})
-        element.parentNode.querySelector('.invalid-feedback').style.display = 'block'
-        break
+  // vérifier prix adhésion (.adhesion.adhesion = uuid prix)
+  let prixAdhesionOk = true
+  if (document.querySelector(`#prices-parent`)) {
+    document.querySelector(`#prices-parent .invalid-feedback`).style.display = 'none'
+  }
+  console.log('-> prix adhésion =', store.formulaireBillet[store.currentUuidEvent].adhesion.adhesion)
+  if (store.formulaireBillet[store.currentUuidEvent].adhesion.adhesion === undefined && store.formulaireBillet[store.currentUuidEvent].adhesion.activation === true) {
+    prixAdhesionOk = false
+    document.querySelector(`#prices-parent .invalid-feedback`).style.display = 'block'
+    document.querySelector(`#prices-parent`).scrollIntoView({behavior: 'smooth', inline: 'center', block: 'center'})
+  }
+
+  if (prixAdhesionOk === true) {
+    if (event.target.checkValidity() === true) {
+      // formulaire valide
+      console.log('validation formulaire ok !!')
+
+      const data = {
+        event: store.currentUuidEvent,
+        email: store.formulaireBillet[store.currentUuidEvent].email,
+        prices: []
+      }
+      // ---- détermine les prix/users pour les billets('B') ----
+      const dataPrices = store.formulaireBillet[store.currentUuidEvent].identifiants
+      for (const key in dataPrices) {
+        const infos = dataPrices[key]
+        console.log('key =', key)
+        console.log('infos =', infos)
+        const obj = {
+          uuid: key,
+          qty: infos.users.length,
+          customers: []
+        }
+        for (let i = 0; i < infos.users.length; i++) {
+          const info = infos.users[i]
+          console.log('->', info)
+          obj.customers.push({first_name: info.prenom, last_name: info.nom})
+        }
+        console.log('obj =', JSON.stringify(obj, null, 2))
+
+        // prix enregistré si quantité supérieure à 0
+        if (infos.users.length > 0) {
+          data.prices.push(obj)
+        }
+      }
+      console.log('data =', JSON.stringify(data, null, 2))
+
+      /*
+    email": "{{$randomEmail}}", ok
+    "first_name": "{{$randomFirstName}}",
+    "last_name": "{{$randomLastName}}",
+    "phone": "{{$randomPhoneNumber}}",
+    "postal_code": "97480",
+    "birth_date": "1984-04-18",
+    "adhesion":"{{price_adhesion_plein_tarif_uuid}}"
+     */
+      // gère l'adhésion
+      if(store.formulaireBillet[store.currentUuidEvent].adhesion.activation === true) {
+
+      }
+
+
+    } else {
+      // formulaire non valide
+      console.log('formulaire pas vailde !')
+      // scroll vers l'entrée non valide et affiche un message
+      const elements = event.target.querySelectorAll('input')
+      for (let i = 0; i < elements.length; i++) {
+        const element = elements[i]
+        if (element.checkValidity() === false) {
+          console.log('element = ', element)
+          element.scrollIntoView({behavior: 'smooth', inline: 'center', block: 'center'})
+          element.parentNode.querySelector('.invalid-feedback').style.display = 'block'
+          break
+        }
       }
     }
   }

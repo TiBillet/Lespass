@@ -4,7 +4,7 @@
     <legend>Email</legend>
     <div class="mb-2">
       <div class="input-group has-validation">
-        <input :value="infos.email" type="email"
+        <input id="profil-email" :value="infos.email" type="email"
                @change="emitUpdateProfil('email', $event.target.value)"
                pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$"
                class="form-control" placeholder="Adresse">
@@ -16,10 +16,10 @@
 
     <div class="mb-2">
       <div class="input-group has-validation">
-        <input id="email-confirmation" :value="infos.confirmeEmail" type="email"
+        <input id="profil-confirme-email" :value="infos.confirmeEmail" type="email"
                @change="emitUpdateProfil('confirmeEmail', $event.target.value)"
                pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$" class="form-control"
-               placeholder="Confirmer adresse">
+               placeholder="Confirmer adresse" required>
         <div class="invalid-feedback">
           Une adresse email valide et identique svp !
         </div>
@@ -38,7 +38,7 @@
         <input class="form-check-input"
                type="checkbox" id="valid-email"
                :checked="isUnderstood"
-               @change="emitUpdateProfil('attentionEmail', $event.target.checked)"
+               @keyup="emitUpdateProfil('attentionEmail', $event.target.checked)"
                required>
         <label class="form-check-label text-dark" for="valid-email">Prise en compte du message
           si-dessus.</label>
@@ -74,6 +74,14 @@ const isUnderstood = computed(() => {
 
 function emitUpdateProfil(key, value) {
   emitter.emit('emitUpdateProfil', {key: key, value: value})
+  const eleEmail = document.querySelector('#profil-email')
+  const eleConfirmeEmail = document.querySelector('#profil-confirme-email')
+
+  // reset invalide confirmeEmail
+  eleConfirmeEmail.parentNode.querySelector('.invalid-feedback').style.display = 'none'
+  if (eleEmail.value !== eleConfirmeEmail.value) {
+    eleConfirmeEmail.parentNode.querySelector('.invalid-feedback').style.display = 'block'
+  }
 }
 
 

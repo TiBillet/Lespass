@@ -28,6 +28,7 @@
         <button class="btn btn-primary mb-0" type="button" @click="supprimerIdentifiant(price.uuid, identifiant.id)">
           <i class="fas fa-times"></i>
         </button>
+        <div class="invalid-feedback">Donnée(s) manquante(s) !</div>
       </div>
     </div>
   </fieldset>

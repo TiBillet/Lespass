@@ -4,8 +4,6 @@
     <legend>Adhésion</legend>
 
     <div class="form-check form-switch">
-      <!-- <input v-if="adhesionActivation === true" class="form-check-input" type="checkbox"
-             id="etat-adhesion" checked disabled> -->
       <input v-if="store.place.adhesion_obligatoire === true" class="form-check-input" type="checkbox"
              id="etat-adhesion" checked disabled>
       <input v-else class="form-check-input" type="checkbox" id="etat-adhesion"
@@ -14,20 +12,22 @@
         associative.</label>
     </div>
 
-    <!-- <div v-if="adhesionActivation === true"> -->
     <div v-if="adhesion.activation === true || store.place.adhesion_obligatoire === true">
 
       <!-- prix -->
       <div class="input-group mb-2 has-validation">
-        <div class="col form-check mb-3" v-for="(price, index) in prices" :key="index">
-          <input v-if="price.uuid === adhesion.adhesion" :value="price.uuid" class="form-check-input input-uuid-price" type="radio"
+        <div id="prices-parent" class="col form-check mb-3" v-for="(price, index) in prices" :key="index">
+          <input v-if="price.uuid === adhesion.adhesion" :value="price.uuid"
+                 class="form-check-input input-uuid-price" type="radio"
                  name="prixAdhesion" :id="`uuidPriceRadio${index}`"
                  @change="emitMajAdhesion('adhesion', $event.target.value)" checked>
+
           <input v-else :value="price.uuid" class="form-check-input input-uuid-price" type="radio"
                  name="prixAdhesion" :id="`uuidPriceRadio${index}`"
                  @change="emitMajAdhesion('adhesion', $event.target.value)">
+
           <label class="form-check-label" :for="`customRadio${index}`">{{ price.name }} - {{ price.prix }}€</label>
-          <div v-if="index === 0" id="uuid-price-error" class="invalid-feedback">
+          <div v-if="index === 0" class="invalid-feedback">
             Sélectionner un tarif d'adhésion svp !
           </div>
         </div>
@@ -74,7 +74,8 @@
                class="form-control datepicker"
                placeholder="Date de naissance" pattern="^[0-9-+\s()]*$"
                aria-label="Date de naissance" required
-               @change="emitMajAdhesion('birthDate', $event.target.value)" @click="$event.target.type='date'; $event.target.click()">
+               @change="emitMajAdhesion('birthDate', $event.target.value)"
+               @click="$event.target.type='date'; $event.target.click()">
         <div class="invalid-feedback">Un numéro de téléphone svp !</div>
       </div>
 
@@ -87,7 +88,7 @@
 console.log('-> Adhesion.vue !')
 
 // vue
-import {ref} from 'vue'
+import {ref, onMounted} from 'vue'
 
 // store
 import {useStore} from '@/store'
@@ -123,6 +124,7 @@ if (props.form === true) {
 
 let adhesionActivation = ref(adhesion.activation)
 console.log('store.place.adhesion_obligatoire =', store.place.adhesion_obligatoire)
+
 // store.place.adhesion_obligatoirestore === true
 
 function emitMajAdhesion(key, value) {

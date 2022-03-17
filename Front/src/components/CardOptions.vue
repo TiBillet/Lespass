@@ -7,7 +7,7 @@
                @change="emitMajOptionsEvent('option1',$event.target.value)" required>
         <label class="form-check-label text-dark" :for="`option-radio${option.uuid}-${index}`">{{ option.name }}</label>
         <div class="invalid-feedback">
-          Une adresse email valide svp !
+          Un choix doit être fait, svp !
         </div>
       </span>
     </div>

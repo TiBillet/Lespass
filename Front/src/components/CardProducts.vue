@@ -2,7 +2,7 @@
   <div v-for="product in manageProducts" :key="product.uuid">
 
     <Adhesion v-if="manageComponents.includes(product.categorie_article) === true && product.categorie_article === 'A'" :prices="product.prices"
-              :form="true"/>
+              :form="true" required/>
 
     <CardActiveSimpleProduct v-if="manageComponents.includes(product.categorie_article) === true && product.categorie_article === 'D'" :product="product" :select="true"/>
 
