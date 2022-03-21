@@ -15,7 +15,8 @@ export const useStore = defineStore('store', {
       can_create_tenant: true,
       espece: "HU",
       is_staff: false,
-      cashless: {}
+      cashless: {},
+      adhesion: ''
     },
     place: {},
     events: {},

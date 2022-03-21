@@ -1,8 +1,7 @@
 <template>
   <div v-for="product in manageProducts" :key="product.uuid">
 
-    <Adhesion v-if="manageComponents.includes(product.categorie_article) === true && product.categorie_article === 'A'" :prices="product.prices"
-              :form="true" required/>
+    <CardAdhesion v-if="manageComponents.includes(product.categorie_article) === true && product.categorie_article === 'A'" :prices="product.prices"/>
 
     <CardActiveSimpleProduct v-if="manageComponents.includes(product.categorie_article) === true && product.categorie_article === 'D'" :product="product" :select="true"/>
 
@@ -17,7 +16,7 @@
 
 <script setup>
 // components
-import Adhesion from '@/components/Adhesion.vue'
+import CardAdhesion from '@/components/CardAdhesion.vue'
 import CardActiveSimpleProduct from '@/components/CardActiveSimpleProduct.vue'
 import CardBillet from '@/components/CardBillet.vue'
 

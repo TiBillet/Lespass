@@ -19,10 +19,9 @@
   <div class="container mt-5">
     <div class="row">
       <form @submit.prevent="goValiderAchats($event)" class="needs-validation" novalidate>
-
         <CardProfil :infos="store.formulaireBillet[uuidEvent]"/>
         <CardProducts :products="currentEvent.products" :categories="['A', 'D']"/>
-        <CardOptions/>
+        <CardOptions :options-checkbox="optionsCheckbox"/>
         <CardProducts :products="currentEvent.products" :categories="['B', 'F']"/>
         <div class="col-md-12 col-lg-9">
           <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
@@ -73,10 +72,12 @@ if (typeof (uuidEventBrut) === 'object') {
 // currentEvent production
 const currentEvent = store.events.find(evt => evt.uuid === uuidEvent)
 
+const pick =
+
 // currentEvent test dev
 // const currentEvent = fakeEvent
 
-console.log('currentEvent =', currentEvent)
+    console.log('currentEvent =', currentEvent)
 
 store.currentUuidEvent = uuidEvent
 
@@ -96,6 +97,18 @@ if (store.user.refreshToken !== '') {
   store.formulaireBillet[uuidEvent].email = store.user.email
   store.formulaireBillet[uuidEvent].confirmeEmail = store.user.email
 }
+
+// TODO: coder options_radio
+// init options options_checkbox/ options_radio = en attente
+if (store.formulaireBillet[store.currentUuidEvent]['options'] === undefined) {
+  store.formulaireBillet[store.currentUuidEvent]['options'] = []
+  for (const key in currentEvent.options_checkbox) {
+    const obj = currentEvent.options_checkbox[key]
+    obj['activation'] = false
+    store.formulaireBillet[store.currentUuidEvent]['options'].push(obj)
+  }
+}
+const optionsCheckbox = store.formulaireBillet[store.currentUuidEvent]['options']
 
 function getHeaderEvent() {
   let urlImage
@@ -130,8 +143,78 @@ function getDataCardPlace() {
   }
 }
 
+function formaterDatas(adhesionActive, adhesionPrix) {
+  const data = {
+    event: store.currentUuidEvent,
+    email: store.formulaireBillet[store.currentUuidEvent].email,
+    prices: [],
+    options: []
+  }
+
+  // ajout adhésion
+  if (adhesionActive === true) {
+    data.prices.push({
+      uuid: adhesionPrix,
+      qty: 1,
+      customers: [
+        {
+          "first_name": store.formulaireBillet[store.currentUuidEvent].adhesion.firstName,
+          "last_name": store.formulaireBillet[store.currentUuidEvent].adhesion.lastName,
+          "phone": store.formulaireBillet[store.currentUuidEvent].adhesion.phone,
+          "postal_code": store.formulaireBillet[store.currentUuidEvent].adhesion.postalCode,
+          "birth_date": store.formulaireBillet[store.currentUuidEvent].adhesion.birthDate
+        }
+      ]
+    })
+  }
+
+  // billets
+  const identifiants = store.formulaireBillet[store.currentUuidEvent].identifiants
+  for (const uuidPrix in identifiants) {
+    const users = store.formulaireBillet[store.currentUuidEvent].identifiants[uuidPrix].users
+    const qty = users.length
+    const obj = {
+      uuid: uuidPrix,
+      qty: qty,
+      customers: []
+    }
+
+    if (qty > 0) {
+      for (let i = 0; i < qty; i++) {
+        const user = users[i]
+        obj.customers.push({
+          "first_name": user.prenom,
+          "last_name": user.nom
+        })
+      }
+      data.prices.push(obj)
+    }
+
+  }
+
+  // options
+  const options = store.formulaireBillet[store.currentUuidEvent]['options']
+  for (let i = 0; i < options.length; i++) {
+    const option = options[i]
+    console.log('-> option uuid =', option.uuid, '  --  activation =', option.activation)
+    if (option.activation === true) {
+      data.options.push(option.uuid)
+    }
+  }
+  /*
+  for (const option in options) {
+    // console.log('-> option =', option, '  --  value =', options[option])
+    if (options[option] === true) {
+      data.options.push(option)
+    }
+  }
+*/
+  return data
+}
+
 function goValiderAchats(event) {
   console.log('-> fonc goValiderAchats !')
+  console.log('currentEvent =', currentEvent)
 
   // efface tous les messages d'invalidité
   const msgInvalides = event.target.querySelectorAll('.invalid-feedback')
@@ -139,68 +222,52 @@ function goValiderAchats(event) {
     msgInvalides[i].style.display = 'none'
   }
 
-  // vérifier prix adhésion (.adhesion.adhesion = uuid prix)
-  let prixAdhesionOk = true
+  // vérifier activation adhésion
+  let adhesionActive = null
+  try {
+    if (store.formulaireBillet[store.currentUuidEvent].adhesion.activation === true) {
+      adhesionActive = true
+    } else {
+      adhesionActive = false
+    }
+  } catch (erreur) {
+    adhesionActive = false
+  }
+  console.log('adhesionActive =', adhesionActive)
+
+  // vérifier la sélection d'un prix d'adhésion
+  let adhesionPrix = null
+  try {
+    if (store.formulaireBillet[store.currentUuidEvent].adhesion.adhesion === undefined) {
+      adhesionPrix = ''
+    } else {
+      adhesionPrix = store.formulaireBillet[store.currentUuidEvent].adhesion.adhesion
+    }
+  } catch (erreur) {
+    console.log('erreur adhesionPrix =', erreur)
+    adhesionPrix = ''
+  }
+  console.log('adhesionPrix =', adhesionPrix)
+
+  // enlever ancien sigalement (si adhésion active et aucune sélection de prix)
   if (document.querySelector(`#prices-parent`)) {
     document.querySelector(`#prices-parent .invalid-feedback`).style.display = 'none'
   }
-  console.log('-> prix adhésion =', store.formulaireBillet[store.currentUuidEvent].adhesion.adhesion)
-  if (store.formulaireBillet[store.currentUuidEvent].adhesion.adhesion === undefined && store.formulaireBillet[store.currentUuidEvent].adhesion.activation === true) {
-    prixAdhesionOk = false
+
+  // signaler si adhésion active et aucune sélection de prix
+  if (adhesionActive === true && adhesionPrix === '') {
     document.querySelector(`#prices-parent .invalid-feedback`).style.display = 'block'
     document.querySelector(`#prices-parent`).scrollIntoView({behavior: 'smooth', inline: 'center', block: 'center'})
   }
 
-  if (prixAdhesionOk === true) {
+  // continuer validation du formulaire
+  if ((adhesionActive === true && adhesionPrix !== '') || adhesionActive === false) {
+    console.log('valider les autres champs du formulaire !!')
     if (event.target.checkValidity() === true) {
-      // formulaire valide
-      console.log('validation formulaire ok !!')
-
-      const data = {
-        event: store.currentUuidEvent,
-        email: store.formulaireBillet[store.currentUuidEvent].email,
-        prices: []
-      }
-      // ---- détermine les prix/users pour les billets('B') ----
-      const dataPrices = store.formulaireBillet[store.currentUuidEvent].identifiants
-      for (const key in dataPrices) {
-        const infos = dataPrices[key]
-        console.log('key =', key)
-        console.log('infos =', infos)
-        const obj = {
-          uuid: key,
-          qty: infos.users.length,
-          customers: []
-        }
-        for (let i = 0; i < infos.users.length; i++) {
-          const info = infos.users[i]
-          console.log('->', info)
-          obj.customers.push({first_name: info.prenom, last_name: info.nom})
-        }
-        console.log('obj =', JSON.stringify(obj, null, 2))
-
-        // prix enregistré si quantité supérieure à 0
-        if (infos.users.length > 0) {
-          data.prices.push(obj)
-        }
-      }
+      // formulaire valide, formatage data pour api
+      console.log('validation formulaire ok, formatage des datas !')
+      const data = formaterDatas(adhesionActive, adhesionPrix)
       console.log('data =', JSON.stringify(data, null, 2))
-
-      /*
-    email": "{{$randomEmail}}", ok
-    "first_name": "{{$randomFirstName}}",
-    "last_name": "{{$randomLastName}}",
-    "phone": "{{$randomPhoneNumber}}",
-    "postal_code": "97480",
-    "birth_date": "1984-04-18",
-    "adhesion":"{{price_adhesion_plein_tarif_uuid}}"
-     */
-      // gère l'adhésion
-      if(store.formulaireBillet[store.currentUuidEvent].adhesion.activation === true) {
-
-      }
-
-
     } else {
       // formulaire non valide
       console.log('formulaire pas vailde !')
@@ -209,7 +276,7 @@ function goValiderAchats(event) {
       for (let i = 0; i < elements.length; i++) {
         const element = elements[i]
         if (element.checkValidity() === false) {
-          console.log('element = ', element)
+          // console.log('element = ', element)
           element.scrollIntoView({behavior: 'smooth', inline: 'center', block: 'center'})
           element.parentNode.querySelector('.invalid-feedback').style.display = 'block'
           break
@@ -217,6 +284,19 @@ function goValiderAchats(event) {
       }
     }
   }
+
+  /*
+
+      // email": "{{$randomEmail}}", ok
+      // "first_name": "{{$randomFirstName}}",
+      // "last_name": "{{$randomLastName}}",
+      // "phone": "{{$randomPhoneNumber}}",
+      // "postal_code": "97480",
+      // "birth_date": "1984-04-18",
+      // "adhesion":"{{price_adhesion_plein_tarif_uuid}}
+
+
+   */
 }
 
 // ---- gestion des évènements provenant des enfants ----
@@ -239,8 +319,11 @@ emitter.on('majActiveSimpleProduct', (data) => {
 
 emitter.on('majOptionsEvent', (data) => {
   console.log('réception "majOptionsEvent", data=', JSON.stringify(data, null, 2))
+
   if (data.name === 'check') {
-    store.formulaireBillet[store.currentUuidEvent]['options'][data.uuid] = data.value
+    const option = store.formulaireBillet[store.currentUuidEvent]['options'].find(obj => obj.uuid === data.uuid)
+    option.activation = data.value
+    console.log('option =', option)
   }
 })
 

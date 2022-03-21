@@ -20,7 +20,7 @@
 
         <ul class="navbar-nav ms-auto">
           <!-- adhésion -->
-          <li v-if="store.place.button_adhesion && router.currentRoute.value.name === 'Accueil'" class="nav-item px-3">
+          <li v-if="store.place.button_adhesion === true && router.currentRoute.value.name === 'Accueil'" class="nav-item px-3">
             <button class="btn bg-gradient-info mb-0" data-bs-toggle="modal" data-bs-target="#modal-form-adhesion">
               <span class="btn-inner--icon"><i class="fa fa-ticket" aria-hidden="true"></i></span>
               <span class="btn-inner--text">Adhésion</span>
@@ -45,15 +45,15 @@
   <!-- modal login -->
   <Modallogin/>
   <!-- adhésion -->
-  <Adhesion v-if="store.place.button_adhesion === true" :adhesion="adhesion"/>
+  <ModalAdhesion v-if="store.place.button_adhesion === true" :prices="prices" required/>
 
 </template>
 
 <script setup>
-// console.log('-> Navbar.vue')
+console.log('-> Navbar.vue')
 // composants
 import Modallogin from './Modallogin.vue'
-import Adhesion from './Adhesion.vue'
+import ModalAdhesion from './ModalAdhesion.vue'
 
 // vue
 import {ref, computed} from 'vue'
@@ -76,18 +76,19 @@ if (store.user.refreshToken !== '' && window.accessToken === '') {
   refreshAccessToken(store.user.refreshToken)
 }
 
-// l'adhésion
-const adhesion = {
-  form: false,
-  nom: store.user.nom,
-  prenom: store.user.prenom,
-  adresse: store.user.adresse,
-  tel: store.user.tel,
-  uuidEvent: 'dummy',
-  adhesion: store.user.adhesion,
-  uuidPrice: store.user.uuidPrice,
+let prices = []
+if (store.place.button_adhesion === true) {
+  try {
+    prices = store.place.membership_products.filter(adh => adh.categorie_article === 'A')[0].prices
+    console.log('prices =', prices)
+  } catch (erreur) {
+    emitter.emit('message', {
+      tmp: 6,
+      typeMsg: 'warning',
+      contenu: `Avez-vous renseigné les prix pour l'adhésion ?`
+    })
+  }
 }
-console.log()
 
 // si pas d'image
 const getLogo = () => {
