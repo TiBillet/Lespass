@@ -1,10 +1,8 @@
 <template>
-  <!-- pour formulaire -->
   <fieldset class="col-md-12 col-lg-9 mb-4 shadow-sm p-3 mb-5 bg-body rounded">
     <legend>Adhésion</legend>
-
     <div class="form-check form-switch">
-      <input v-if="store.place.adhesion_obligatoire === true" class="form-check-input" type="checkbox"
+      <input v-if="adhesion.obligatoire === true" class="form-check-input" type="checkbox"
              id="etat-adhesion" checked disabled>
       <input v-else class="form-check-input" type="checkbox" id="etat-adhesion"
              @change="emitMajAdhesion('activation', $event.target.checked)" :checked="adhesion.activation">
@@ -12,15 +10,15 @@
         associative.</label>
     </div>
 
-    <div v-if="adhesion.activation === true || store.place.adhesion_obligatoire === true">
+    <div v-if="adhesion.activation === true || adhesion.obligatoire === true">
 
       <!-- prix -->
       <div class="input-group mb-2 has-validation">
-        <div id="prices-parent" class="col form-check mb-3" v-for="(price, index) in prices" :key="index">
-          <input v-model="adhesionPrix" :value="price.uuid"
-                 class="form-check-input input-uuid-price" type="radio"
+        <div id="prices-parent" class="col form-check mb-3" v-for="(price, index) in adhesion.prices" :key="index">
+          <input :value="price.uuid"
+                 class="form-check-input card-adhesion-uuid-price" type="radio"
                  name="prixAdhesion" :id="`uuidPriceRadio${index}`"
-                 @change="emitMajAdhesion('adhesion', $event.target.value)">
+                 @change="emitMajAdhesion('uuidPrix', $event.target.value)">
           <label class="form-check-label" :for="`uuidPriceRadio${index}`">{{ price.name }} - {{ price.prix }}€</label>
           <div v-if="index === 0" class="invalid-feedback">
             Sélectionner un tarif d'adhésion svp !
@@ -36,6 +34,7 @@
                @keyup="emitMajAdhesion('lastName', $event.target.value)">
         <div class="invalid-feedback">Un nom svp !</div>
       </div>
+
       <!-- prénom -->
       <div class="input-group mb-2 has-validation">
         <span class="input-group-text" id="basic-addon1">Prénom</span>
@@ -74,29 +73,123 @@
         <div class="invalid-feedback">Un numéro de téléphone svp !</div>
       </div>
 
-
     </div>
   </fieldset>
-
 </template>
 
 <script setup>
 console.log('-> CardAdhesion.vue !')
-
-// vue
-import {ref, onMounted} from 'vue'
+import {ref, onMounted, onUpdated} from 'vue'
 
 // store
 import {useStore} from '@/store'
 
-const store = useStore()
-
 // attributs/props
 const props = defineProps({
   prices: Object,
-  form: Boolean
+  memo: String, // pour persister l'état du composant dans le store,
+  obligatoire: Boolean // active de force l'adhésion
 })
-console.log('adhésion, props.prices =', props.prices)
+console.log('props =', JSON.stringify(props, null, 2))
+
+const store = useStore()
+
+let adhesion = ref({})
+const dataInit = {
+  firstName: "",
+  lastName: "",
+  phone: null,
+  postalCode: null,
+  birthDate: null,
+  uuidPrix: '',
+  activation: false
+}
+
+try {
+  if (props.memo === '' || props.memo === undefined) {
+    throw new Error(`Erreur index memo vide !`)
+  }
+  if (props.memo !== '') {
+    // init de base pour la persistance de tous les composants "CardAdhesion" dans le store
+    if (store.memoComposants['CardAdhesion'] === undefined) {
+      store.memoComposants['CardAdhesion'] = {}
+    }
+    // init de l'instance de clef "props.memo"
+    if (store.memoComposants.CardAdhesion[props.memo] === undefined) {
+      console.log('Mémorisation initiale')
+      store.memoComposants.CardAdhesion[props.memo] = dataInit
+      adhesion.value = dataInit
+      adhesion.value['prices'] = props.prices
+      adhesion.value['obligatoire'] = props.obligatoire
+    } else {
+      // instance existante
+      adhesion.value = store.memoComposants.CardAdhesion[props.memo]
+      adhesion.value['prices'] = props.prices
+      adhesion.value['obligatoire'] = props.obligatoire
+      console.log('Mémorisation existante')
+    }
+  } else {
+    throw new Error(`Erreur index memo vide !`)
+  }
+} catch (erreur) {
+  console.log('Mémorisation du composant impossible')
+  // instance sans mémorisation dans le store
+  adhesion.value = dataInit
+  adhesion.value['prices'] = props.prices
+  adhesion.value['obligatoire'] = props.obligatoire
+  // utilisation hors local storage
+  window.store = {}
+  window.store.CardAdhesion = adhesion.value
+}
+
+if (adhesion.value.obligatoire === true) {
+  adhesion.value.activation = true
+}
+
+console.log('adhesion =', adhesion.value)
+
+function updateRadioButon() {
+  const eles = document.querySelectorAll(`.card-adhesion-uuid-price`)
+  for (let i = 0; i < eles.length; i++) {
+    const ele = eles[i]
+    // console.log('ele =', ele)
+    ele.removeAttribute('checked')
+    if (ele.value === adhesion.value.uuidPrix) {
+      ele.checked = true
+    }
+  }
+}
+
+onMounted(() => {
+  updateRadioButon()
+})
+
+onUpdated(() => {
+  updateRadioButon()
+})
+
+function emitMajAdhesion(key, value) {
+  console.log(key + " = " + value)
+  adhesion.value[key] = value
+  //emitter.emit('majAdhesion', {key: key, value: value})
+  /*
+  if (key === 'activation') {
+    adhesion.value.activation = value
+  }
+  if (key === 'adhesion') {
+    adhesion.value.uuidPrix = value
+  }
+
+   */
+}
+
+
+/*
+// vue
+import {ref, watch, onMounted} from 'vue'
+
+
+
 
 let adhesion = {}
 let adhesionPrix = ''
@@ -123,11 +216,17 @@ adhesionPrix = store.formulaireBillet[store.currentUuidEvent].adhesion.adhesion
 adhesionActivation.value = adhesion.activation
 
 
+watch(adhesion, (newValue, oldValue) => {
+  console.log('watch adhesion, newValue = ', newValue, '  --  oldValue =', oldValue)
+})
+
+
 function majPrixAdhesion() {
   console.log('fonc majPrixAdhesion !')
   let ele
   try {
     ele = document.querySelector(`.input-uuid-price[value='${store.formulaireBillet[store.currentUuidEvent].adhesion.adhesion}']`)
+    console.log('ele =', ele)
     ele.click()
   } catch (erreur) {
     ele = null
@@ -138,13 +237,7 @@ onMounted(() => {
   majPrixAdhesion()
 })
 
-function emitMajAdhesion(key, value) {
-  console.log(key + " = " + value)
-  emitter.emit('majAdhesion', {key: key, value: value})
-  if (key === 'activation') {
-    adhesionActivation.value = value
-  }
-}
+
 
 
 function validerAdhesion(event) {
@@ -162,6 +255,7 @@ function validerAdhesion(event) {
     console.log('adhesionFormModal =', adhesionFormModal)
   }
 }
+*/
 
 </script>
 

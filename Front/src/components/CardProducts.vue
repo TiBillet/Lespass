@@ -1,7 +1,8 @@
 <template>
   <div v-for="product in manageProducts" :key="product.uuid">
 
-    <CardAdhesion v-if="manageComponents.includes(product.categorie_article) === true && product.categorie_article === 'A'" :prices="product.prices"/>
+    <CardAdhesion v-if="manageComponents.includes(product.categorie_article) === true && product.categorie_article === 'A'" :prices="product.prices" :memo="store.currentUuidEvent" :obligatoire="store.place.adhesion_obligatoire"/>
+
 
     <CardActiveSimpleProduct v-if="manageComponents.includes(product.categorie_article) === true && product.categorie_article === 'D'" :product="product" :select="true"/>
 
@@ -15,6 +16,9 @@
 </template>
 
 <script setup>
+// store
+import {useStore} from '@/store'
+
 // components
 import CardAdhesion from '@/components/CardAdhesion.vue'
 import CardActiveSimpleProduct from '@/components/CardActiveSimpleProduct.vue'
@@ -24,7 +28,7 @@ const props = defineProps({
   categories: Array, // produits contenu seulement et ordonnancement par index
   products: Object
 })
-
+const store = useStore()
 const manageComponents = ['A', 'D', 'B', 'F']
 
 // ordonnancement par le tableau catégories des produits et seulement ceux contenue dans celui-ci
