@@ -3,20 +3,23 @@
     <legend>{{ product.name }}</legend>
 
     <div class="form-check form-switch">
-      <input class="form-check-input" type="checkbox" :id="`active${product.uuid}`"
-             @change="emitMajActiveSimpleProduct(product.uuid,'activation', $event.target.checked)" :checked="activeProd">
-      <label class="form-check-label text-dark" :for="`active${product.uuid}`">Sélectionner/Déselctionner</label>
+      <input class="form-check-input" type="checkbox" :id="`active-simple-product${simpleProduct.uuid}`"
+             @change="updateActiveSimpleProduct('activation', $event.target.checked)" :checked="simpleProduct.activation">
+      <label class="form-check-label text-dark" :for="`active-simple-product${simpleProduct.uuid}`">Sélectionner/Déselctionner</label>
     </div>
 
-
-    <div v-if="activeProd === true" >
+    <div v-if="simpleProduct.activation === true" >
       <!-- prix -->
       <div class="input-group mb-2 has-validation">
-        <div class="col form-check mb-3" v-for="(price, index) in product.prices" :key="index">
-          <input :value="price.uuid" class="form-check-input input-uuid-price" type="radio"
-                 name="prixAdhesion" :id="`simpleproductuuidprice${product.name}${index}`"
-                 @change="emitMajActiveSimpleProduct(product.uuid, 'uuidPrice', $event.target.value)" :checked="select">
-          <label class="form-check-label" :for="`simpleproductuuidprice${product.name}${index}`">{{ price.prix }}€</label>
+        <div class="col form-check" v-for="(price, index) in simpleProduct.prices" :key="index">
+          <!-- sélectionne automatiquement le premier prix -->
+          <input v-if="index === 0" :value="price.uuid" :class="`form-check-input simple-product-active-${nameMemo}-uuid-price`" type="radio"
+                 name="prixAdhesion" :id="`simpleproductuuidprice${nameMemo}${index}`"
+                 @change="updateActiveSimpleProduct('uuidPrix', $event.target.value)" checked>
+          <input v-else :value="price.uuid" :class="`form-check-input simple-product-active-${nameMemo}-uuid-price`" type="radio"
+                 name="prixAdhesion" :id="`simpleproductuuidprice${nameMemo}${index}`"
+                 @change="updateActiveSimpleProduct('uuidPrix', $event.target.value)">
+          <label class="form-check-label" :for="`simpleproductuuidprice${nameMemo}${index}`">{{ price.prix }}€</label>
         </div>
       </div>
     </div>
@@ -24,49 +27,111 @@
 </template>
 
 <script setup>
+console.log('-> CardActiveSimpleProduct.vue')
 /*
 carte gérant:
 - affichage du nom du produit
 - active/désactive l'achat de se produit
-- selection des différent prix de ce produit
+- selection automatiquement le premier prix
 - TODO: afficher image si présente
 */
-
 // vue
-import {ref} from 'vue'
+import {ref, onMounted, onUpdated} from 'vue'
 
 // store
 import {useStore} from '@/store'
 
 const props = defineProps({
   product: Object,
-  select: Boolean
+  nameMemo: String,
+  indexMemo: String,
+  activation: Boolean
 })
-
 const store = useStore()
 
-if (store.formulaireBillet[store.currentUuidEvent]['activeSimpleProduct'] === undefined) {
-  store.formulaireBillet[store.currentUuidEvent]['activeSimpleProduct'] = {}
+// mémorise par défaut
+const record = true
+
+let simpleProduct = ref({})
+
+// mémorise le composant dans le store ou la variable globale window
+try {
+  if (props.indexMemo === '' || props.indexMemo === undefined || props.nameMemo === '' || props.nameMemo === undefined) {
+    throw new Error(`Erreur index memo vide !`)
+  }
+
+  if (props.indexMemo !== '' && props.nameMemo !== '') {
+    // init de base pour la persistance de tous les composants "nameMemo" dans le store
+    if (store.memoComposants[props.nameMemo] === undefined) {
+      store.memoComposants[props.nameMemo] = {}
+    }
+
+    // init de l'instance de clef "props.indexMemo"
+    if (store.memoComposants[props.nameMemo][props.indexMemo] === undefined) {
+      // console.log('Mémorisation initiale')
+      store.memoComposants[props.nameMemo][props.indexMemo] = props.product
+      simpleProduct.value = props.product
+      simpleProduct.value['activation'] = props.activation
+      simpleProduct.value['uuidPrix'] = ''
+      store.memoComposants[props.nameMemo][props.indexMemo]['initDate'] = new Date().toLocaleString()
+    } else {
+      // instance existante
+      simpleProduct.value = store.memoComposants[props.nameMemo][props.indexMemo]
+      // console.log('Mémorisation existante')
+    }
+  } else {
+    throw new Error(`Erreur index memo et/ou  name memo vide !`)
+  }
+} catch (erreur) {
+  record = false
+  // console.log(erreur)
+  console.log('Mémorisation du composant impossible')
+  // instance sans mémorisation dans le store
+  simpleProduct.value = props.product
+  simpleProduct.value['activation'] = props.activation
+  // utilisation hors local storage
+  if (window.store === undefined) {
+    window.store = {}
+  }
+  if (window.store[props.nameMemo] === undefined) {
+    window.store[props.nameMemo] = simpleProduct.value
+    window.store[props.nameMemo]['activation'] = props.activation
+    window.store[props.nameMemo]['uuidPrix'] = ''
+  } else {
+     simpleProduct.value =window.store[props.nameMemo]
+  }
+
 }
-if (store.formulaireBillet[store.currentUuidEvent].activeSimpleProduct[props.product.uuid] === undefined) {
-  store.formulaireBillet[store.currentUuidEvent].activeSimpleProduct[props.product.uuid] = {
-    name: props.product.name,
-    activation: props.select,
-    uuidPrice: props.product.prices[0].uuid
+
+// console.log('simpleProduct.value =', JSON.stringify(simpleProduct.value, null, 2))
+
+function updateRadioButon() {
+  const eles = document.querySelectorAll(`.simple-product-active-${props.nameMemo}-uuid-price`)
+  for (let i = 0; i < eles.length; i++) {
+    const ele = eles[i]
+    // console.log('ele =', ele)
+    ele.removeAttribute('checked')
+    if (ele.value === simpleProduct.value.uuidPrix) {
+      ele.checked = true
+    }
   }
 }
 
-const prod = store.formulaireBillet[store.currentUuidEvent].activeSimpleProduct[props.product.uuid]
+onMounted(() => {
+  updateRadioButon()
+})
 
-const activeProd = ref(prod.activation)
+onUpdated(() => {
+  updateRadioButon()
+})
 
-function emitMajActiveSimpleProduct(uuidProduct, key, value) {
-  emitter.emit('majActiveSimpleProduct', {uuidProduct: uuidProduct, key: key, value: value})
-  if (key === 'activation') {
-    activeProd.value = value
+
+function updateActiveSimpleProduct(key, value) {
+  // console.log(key + " = " + value)
+  if (record === true) {
+    simpleProduct.value[key] = value
   }
 }
-
 </script>
 
 <style scoped>

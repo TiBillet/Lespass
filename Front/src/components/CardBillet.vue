@@ -49,8 +49,8 @@ const store = useStore()
 const props = defineProps({
   product: Object
 })
-console.log('props =', props)
-console.log('store.currentUuidEvent =', store.currentUuidEvent)
+// console.log('props =', props)
+// console.log('store.currentUuidEvent =', store.currentUuidEvent)
 
 // init identifiants et tarifs
 if (store.formulaireBillet[store.currentUuidEvent].identifiants === undefined) {

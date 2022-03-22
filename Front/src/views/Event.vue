@@ -14,14 +14,18 @@
         <hr>
       </div>
     </div>
-  </div>
   <!-- achats -->
-  <div class="container mt-5">
     <div class="row">
       <form @submit.prevent="goValiderAchats($event)" class="needs-validation" novalidate>
-        <CardProfil :infos="store.formulaireBillet[uuidEvent]"/>
+        <!-- index-memo="unique00" = "index fixe" bon pour tous les évènements -->
+        <CardEmail index-memo="unique00"/>
         <CardProducts :products="currentEvent.products" :categories="['A', 'D']"/>
-        <CardOptions :options-checkbox="optionsCheckbox"/>
+
+        <fieldset v-if="currentEvent.options_checkbox.length > 0 || currentEvent.options_radio.length > 0 " class="col-md-12 col-lg-9 mb-4 shadow-sm p-3 mb-5 bg-body rounded">
+          <legend>options</legend>
+          <ListOptionsCheckbox :options-checkbox="currentEvent.options_checkbox" :index-memo="store.currentUuidEvent"/>
+        </fieldset>
+
         <CardProducts :products="currentEvent.products" :categories="['B', 'F']"/>
         <div class="col-md-12 col-lg-9">
           <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
@@ -44,9 +48,9 @@ import {useRoute} from 'vue-router'
 import Header from '@/components/Header.vue'
 import CardPlace from '@/components/CardPlace.vue'
 import CardArtist from '@/components/CardArtist.vue'
-import CardProfil from "@/components/CardProfil.vue"
-import CardProducts from "@/components/CardProducts.vue"
-import CardOptions from "@/components/CardOptions.vue"
+import CardEmail from '@/components/CardEmail.vue'
+import CardProducts from '@/components/CardProducts.vue'
+import ListOptionsCheckbox from '@/components/ListOptionsCheckbox.vue'
 
 // test dev
 import {getMe} from '@/api'
@@ -72,12 +76,10 @@ if (typeof (uuidEventBrut) === 'object') {
 // currentEvent production
 const currentEvent = store.events.find(evt => evt.uuid === uuidEvent)
 
-const pick =
-
 // currentEvent test dev
 // const currentEvent = fakeEvent
 
-    console.log('currentEvent =', currentEvent)
+console.log('currentEvent =', currentEvent)
 
 store.currentUuidEvent = uuidEvent
 
@@ -98,17 +100,6 @@ if (store.user.refreshToken !== '') {
   store.formulaireBillet[uuidEvent].confirmeEmail = store.user.email
 }
 
-// TODO: coder options_radio
-// init options options_checkbox/ options_radio = en attente
-if (store.formulaireBillet[store.currentUuidEvent]['options'] === undefined) {
-  store.formulaireBillet[store.currentUuidEvent]['options'] = []
-  for (const key in currentEvent.options_checkbox) {
-    const obj = currentEvent.options_checkbox[key]
-    obj['activation'] = false
-    store.formulaireBillet[store.currentUuidEvent]['options'].push(obj)
-  }
-}
-const optionsCheckbox = store.formulaireBillet[store.currentUuidEvent]['options']
 
 function getHeaderEvent() {
   let urlImage

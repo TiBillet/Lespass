@@ -32,10 +32,10 @@
 </template>
 
 <script setup>
-  console.log('-> Header.vue')
+  // console.log('-> Header.vue')
   const props = defineProps({
     headerEvent: Object
   })
-console.log('props.headerEvent =', JSON.stringify(props.headerEvent, null, 2))
+// console.log('props.headerEvent =', JSON.stringify(props.headerEvent, null, 2))
 
 </script>

@@ -2,8 +2,8 @@ import {defineStore} from 'pinia'
 
 export const useStore = defineStore('store', {
   state: () => ({
-    memoComposants: {},
     currentUuidEvent: '',
+    memoComposants: {},
     user: {
       refreshToken: '',
       email: '',
@@ -23,5 +23,8 @@ export const useStore = defineStore('store', {
     events: {},
     formulaireBillet: {}
   }),
-  persist: true
+  persist: {
+    key: 'Tibillet',
+    storage: window.sessionStorage,
+  }
 })

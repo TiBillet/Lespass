@@ -1,10 +1,10 @@
 <template>
   <div v-for="product in manageProducts" :key="product.uuid">
 
-    <CardAdhesion v-if="manageComponents.includes(product.categorie_article) === true && product.categorie_article === 'A'" :prices="product.prices" :memo="store.currentUuidEvent" :obligatoire="store.place.adhesion_obligatoire"/>
+    <CardAdhesion v-if="manageComponents.includes(product.categorie_article) === true && product.categorie_article === 'A'" :prices="product.prices" :index-memo="store.currentUuidEvent" :obligatoire="store.place.adhesion_obligatoire"/>
 
-
-    <CardActiveSimpleProduct v-if="manageComponents.includes(product.categorie_article) === true && product.categorie_article === 'D'" :product="product" :select="true"/>
+    <!-- name-memo = nom de l'enristrement dans le "store.memoComposants", index-memo = évènement en cours et activation = active la sélection du produit -->
+    <CardActiveSimpleProduct v-if="manageComponents.includes(product.categorie_article) === true && product.categorie_article === 'D'" :product="product" name-memo="Don" :index-memo="store.currentUuidEvent" :activation="true"/>
 
     <CardBillet v-if="manageComponents.includes(product.categorie_article) === true && (product.categorie_article === 'B' || product.categorie_article === 'F')" :product="product"/>
     <!-- composants non gérés -->
@@ -42,7 +42,6 @@ for (const categoriesKey in props.categories) {
     }
   }
 }
-console.log('manageProducts =', manageProducts)
 </script>
 
 <style>
