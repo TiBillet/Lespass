@@ -64,7 +64,7 @@ const props = defineProps({
 const store = useStore()
 
 // mémorise par défaut
-const record = true
+let record = true
 
 // console.log('props =', JSON.stringify(props, null, 2))
 

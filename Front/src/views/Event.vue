@@ -83,23 +83,6 @@ console.log('currentEvent =', currentEvent)
 
 store.currentUuidEvent = uuidEvent
 
-// init mémoristation formulaire en fonction de l'évènement en cours
-if (store.formulaireBillet[store.currentUuidEvent] === undefined) {
-  store.formulaireBillet[store.currentUuidEvent] = {
-    attentionEmail: false,
-    email: '',
-    confirmeEmail: ''
-  }
-}
-
-// populate profil card if user connected
-console.log('store.user.refreshToken =', store.user.refreshToken)
-if (store.user.refreshToken !== '') {
-  store.formulaireBillet[uuidEvent].attentionEmail = true
-  store.formulaireBillet[uuidEvent].email = store.user.email
-  store.formulaireBillet[uuidEvent].confirmeEmail = store.user.email
-}
-
 
 function getHeaderEvent() {
   let urlImage
@@ -142,6 +125,7 @@ function formaterDatas(adhesionActive, adhesionPrix) {
     options: []
   }
 
+  /*
   // ajout adhésion
   if (adhesionActive === true) {
     data.prices.push({
@@ -192,15 +176,8 @@ function formaterDatas(adhesionActive, adhesionPrix) {
       data.options.push(option.uuid)
     }
   }
-  /*
-  for (const option in options) {
-    // console.log('-> option =', option, '  --  value =', options[option])
-    if (options[option] === true) {
-      data.options.push(option)
-    }
-  }
-*/
   return data
+   */
 }
 
 function goValiderAchats(event) {

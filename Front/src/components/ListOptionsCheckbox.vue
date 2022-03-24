@@ -28,7 +28,7 @@ const props = defineProps({
 const store = useStore()
 
 // mémorise par défaut
-const record = true
+let record = true
 
 // ini props.optionsCheckbox, desactive chaque option
 const dataInit = JSON.parse(JSON.stringify(props.optionsCheckbox))

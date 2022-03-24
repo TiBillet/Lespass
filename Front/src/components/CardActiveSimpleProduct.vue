@@ -50,7 +50,7 @@ const props = defineProps({
 const store = useStore()
 
 // mémorise par défaut
-const record = true
+let record = true
 
 let simpleProduct = ref({})
 

@@ -6,7 +6,7 @@
     <!-- name-memo = nom de l'enristrement dans le "store.memoComposants", index-memo = évènement en cours et activation = active la sélection du produit -->
     <CardActiveSimpleProduct v-if="manageComponents.includes(product.categorie_article) === true && product.categorie_article === 'D'" :product="product" name-memo="Don" :index-memo="store.currentUuidEvent" :activation="true"/>
 
-    <CardBillet v-if="manageComponents.includes(product.categorie_article) === true && (product.categorie_article === 'B' || product.categorie_article === 'F')" :product="product"/>
+    <CardBillet v-if="manageComponents.includes(product.categorie_article) === true && (product.categorie_article === 'B' || product.categorie_article === 'F')" :product="product" :index-memo="store.currentUuidEvent"/>
     <!-- composants non gérés -->
     <fieldset v-if="manageComponents.includes(product.categorie_article) === false"
               class="col-md-12 col-lg-9 mb-4 shadow-sm p-3 mb-5 bg-body rounded">

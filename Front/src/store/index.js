@@ -1,5 +1,6 @@
 import {defineStore} from 'pinia'
 
+// session storage
 export const useStore = defineStore('store', {
   state: () => ({
     currentUuidEvent: '',
@@ -20,11 +21,10 @@ export const useStore = defineStore('store', {
       adhesion: ''
     },
     place: {},
-    events: {},
-    formulaireBillet: {}
+    events: {}
   }),
   persist: {
     key: 'Tibillet',
-    storage: window.sessionStorage,
+    storage: window.sessionStorage
   }
 })

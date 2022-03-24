@@ -31,7 +31,20 @@ import ModalMessage from './components/ModalMessage.vue'
 // store
 import {useStore} from '@/store'
 
+// myStore
+import {StoreLocal} from '@/divers'
+
 const store = useStore()
+// init store local
+const storeLocal = new StoreLocal('localStorage', 'Tibilet-identite', {
+  email: '',
+  refreshToken: ''
+})
+
+
+// console.log('-> App.vue, storeLocal.state =', storeLocal.state())
+console.log('-> App.vue, storeLocal =', storeLocal.state)
+
 
 </script>
 <style>
