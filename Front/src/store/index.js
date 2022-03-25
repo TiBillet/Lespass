@@ -1,12 +1,13 @@
 import {defineStore} from 'pinia'
 
+// session storage
 export const useStore = defineStore('store', {
   state: () => ({
+    currentUuidEvent: '',
+    memoComposants: {},
     user: {
       refreshToken: '',
       email: '',
-      adhesion: false,
-      adhesionUuidPrice: '',
       first_name: '',
       last_name: '',
       phone: null,
@@ -16,11 +17,14 @@ export const useStore = defineStore('store', {
       can_create_tenant: true,
       espece: "HU",
       is_staff: false,
-      cashless: {}
+      cashless: {},
+      adhesion: ''
     },
     place: {},
-    events: {},
-    formulaireBillet: {}
+    events: {}
   }),
-  persist: true
+  persist: {
+    key: 'Tibillet',
+    storage: window.sessionStorage
+  }
 })
