@@ -14,7 +14,7 @@
 
       <!-- prix -->
       <div class="input-group mb-2 has-validation">
-        <div id="prices-parent" class="col form-check mb-3" v-for="(price, index) in adhesion.prices" :key="index">
+        <div :id="`card-adhesion-uuid-price-parent${index}`" class="col form-check mb-3" v-for="(price, index) in adhesion.prices" :key="index">
           <input :value="price.uuid"
                  class="form-check-input card-adhesion-uuid-price" type="radio"
                  name="prixAdhesion" :id="`uuidPriceRadio${index}`"
@@ -70,7 +70,7 @@
                aria-label="Date de naissance" required
                @change="updateAdhesion('birthDate', $event.target.value)"
                @click="$event.target.type='date'; $event.target.click()">
-        <div class="invalid-feedback">Un numéro de téléphone svp !</div>
+        <div class="invalid-feedback">Sélectionner une date svp !</div>
       </div>
 
     </div>

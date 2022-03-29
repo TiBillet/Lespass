@@ -14,14 +14,15 @@
         <hr>
       </div>
     </div>
-  <!-- achats -->
+    <!-- achats -->
     <div class="row">
       <form @submit.prevent="goValiderAchats($event)" class="needs-validation" novalidate>
         <!-- index-memo="unique00" = "index fixe" bon pour tous les évènements -->
         <CardEmail index-memo="unique00"/>
         <CardProducts :products="currentEvent.products" :categories="['A', 'D']"/>
 
-        <fieldset v-if="currentEvent.options_checkbox.length > 0 || currentEvent.options_radio.length > 0 " class="col-md-12 col-lg-9 mb-4 shadow-sm p-3 mb-5 bg-body rounded">
+        <fieldset v-if="currentEvent.options_checkbox.length > 0 || currentEvent.options_radio.length > 0 "
+                  class="col-md-12 col-lg-9 mb-4 shadow-sm p-3 mb-5 bg-body rounded">
           <legend>options</legend>
           <ListOptionsCheckbox :options-checkbox="currentEvent.options_checkbox" :index-memo="store.currentUuidEvent"/>
         </fieldset>
@@ -37,7 +38,7 @@
 </template>
 
 <script setup>
-console.clear()
+// console.clear()
 console.log('-> Event.vue !')
 
 // vue
@@ -77,7 +78,7 @@ if (typeof (uuidEventBrut) === 'object') {
 const currentEvent = store.events.find(evt => evt.uuid === uuidEvent)
 
 // currentEvent test dev
-// const currentEvent = fakeEvent
+// * const currentEvent = fakeEvent
 
 console.log('currentEvent =', currentEvent)
 
@@ -118,71 +119,81 @@ function getDataCardPlace() {
 }
 
 function formaterDatas(adhesionActive, adhesionPrix) {
+  console.clear()
   const data = {
     event: store.currentUuidEvent,
-    email: store.formulaireBillet[store.currentUuidEvent].email,
+    email: store.memoComposants.CardEmail.unique00.email,
     prices: [],
     options: []
   }
 
-  /*
-  // ajout adhésion
-  if (adhesionActive === true) {
+  // options checkbox
+  const optionsCheckbox = store.memoComposants.ListOptionsCheckbox[store.currentUuidEvent]
+  for (let i = 0; i < optionsCheckbox.length; i++) {
+    const option = optionsCheckbox[i]
+    // console.log('-> ',JSON.stringify(option, null, 2))
+    if (option.activation === true) {
+      data.options.push(option.uuid)
+    }
+  }
+
+  // TODO: options radio
+  // options radio
+
+
+  // prix adhésion
+  if (adhesionActive === true && adhesionPrix !== '') {
+    const dataAdhesion = store.memoComposants.CardAdhesion[store.currentUuidEvent]
     data.prices.push({
-      uuid: adhesionPrix,
-      qty: 1,
-      customers: [
+      "uuid": dataAdhesion.uuidPrix,
+      "qty": 1,
+      "customers": [
         {
-          "first_name": store.formulaireBillet[store.currentUuidEvent].adhesion.firstName,
-          "last_name": store.formulaireBillet[store.currentUuidEvent].adhesion.lastName,
-          "phone": store.formulaireBillet[store.currentUuidEvent].adhesion.phone,
-          "postal_code": store.formulaireBillet[store.currentUuidEvent].adhesion.postalCode,
-          "birth_date": store.formulaireBillet[store.currentUuidEvent].adhesion.birthDate
+          "first_name": dataAdhesion.firstName,
+          "last_name": dataAdhesion.lastName,
+          "phone": dataAdhesion.phone,
+          "postal_code": dataAdhesion.postalCode,
+          "birth_date": dataAdhesion.birthDate
         }
       ]
     })
   }
 
-  // billets
-  const identifiants = store.formulaireBillet[store.currentUuidEvent].identifiants
-  for (const uuidPrix in identifiants) {
-    const users = store.formulaireBillet[store.currentUuidEvent].identifiants[uuidPrix].users
-    const qty = users.length
-    const obj = {
-      uuid: uuidPrix,
-      qty: qty,
-      customers: []
-    }
+  // don
+  const don = store.memoComposants.Don[store.currentUuidEvent]
+  if (don.activation === true) {
+    data.prices.push({
+      "uuid": don.uuidPrix,
+      "qty": 1
+    })
+  }
 
-    if (qty > 0) {
-      for (let i = 0; i < qty; i++) {
-        const user = users[i]
+  // prix billets
+  const billets = store.memoComposants.CardBillet[store.currentUuidEvent]
+  for (let i = 0; i < billets.length; i++) {
+    const billet = billets[i]
+    const nbBillets = billet.users.length
+    if (nbBillets > 0) {
+      const obj = {
+        "uuid": billet.uuid,
+        "qty": nbBillets,
+        "customers": []
+      }
+      for (let j = 0; j < billet.users.length; j++) {
+        const user = billet.users[j]
         obj.customers.push({
-          "first_name": user.prenom,
-          "last_name": user.nom
+          "first_name": user.first_name,
+          "last_name": user.last_name,
         })
       }
       data.prices.push(obj)
     }
-
-  }
-
-  // options
-  const options = store.formulaireBillet[store.currentUuidEvent]['options']
-  for (let i = 0; i < options.length; i++) {
-    const option = options[i]
-    console.log('-> option uuid =', option.uuid, '  --  activation =', option.activation)
-    if (option.activation === true) {
-      data.options.push(option.uuid)
-    }
   }
   return data
-   */
 }
 
 function goValiderAchats(event) {
-  console.log('-> fonc goValiderAchats !')
-  console.log('currentEvent =', currentEvent)
+  // console.log('-> fonc goValiderAchats !')
 
   // efface tous les messages d'invalidité
   const msgInvalides = event.target.querySelectorAll('.invalid-feedback')
@@ -191,41 +202,26 @@ function goValiderAchats(event) {
   }
 
   // vérifier activation adhésion
-  let adhesionActive = null
-  try {
-    if (store.formulaireBillet[store.currentUuidEvent].adhesion.activation === true) {
-      adhesionActive = true
-    } else {
-      adhesionActive = false
-    }
-  } catch (erreur) {
-    adhesionActive = false
-  }
+  const adhesionActive = store.memoComposants.CardAdhesion[store.currentUuidEvent].activation
   console.log('adhesionActive =', adhesionActive)
 
   // vérifier la sélection d'un prix d'adhésion
-  let adhesionPrix = null
-  try {
-    if (store.formulaireBillet[store.currentUuidEvent].adhesion.adhesion === undefined) {
-      adhesionPrix = ''
-    } else {
-      adhesionPrix = store.formulaireBillet[store.currentUuidEvent].adhesion.adhesion
-    }
-  } catch (erreur) {
-    console.log('erreur adhesionPrix =', erreur)
-    adhesionPrix = ''
-  }
+  const adhesionPrix = store.memoComposants.CardAdhesion[store.currentUuidEvent].uuidPrix
   console.log('adhesionPrix =', adhesionPrix)
 
   // enlever ancien sigalement (si adhésion active et aucune sélection de prix)
-  if (document.querySelector(`#prices-parent`)) {
-    document.querySelector(`#prices-parent .invalid-feedback`).style.display = 'none'
+  if (document.querySelector(`#card-adhesion-uuid-price-parent0`)) {
+    document.querySelector(`#card-adhesion-uuid-price-parent0`).querySelector(`.invalid-feedback`).style.display = 'none'
   }
 
   // signaler si adhésion active et aucune sélection de prix
   if (adhesionActive === true && adhesionPrix === '') {
-    document.querySelector(`#prices-parent .invalid-feedback`).style.display = 'block'
-    document.querySelector(`#prices-parent`).scrollIntoView({behavior: 'smooth', inline: 'center', block: 'center'})
+    document.querySelector(`#card-adhesion-uuid-price-parent0`).querySelector(`.invalid-feedback`).style.display = 'block'
+    document.querySelector(`#card-adhesion-uuid-price-parent0`).scrollIntoView({
+      behavior: 'smooth',
+      inline: 'center',
+      block: 'center'
+    })
   }
 
   // continuer validation du formulaire
@@ -235,7 +231,45 @@ function goValiderAchats(event) {
       // formulaire valide, formatage data pour api
       console.log('validation formulaire ok, formatage des datas !')
       const data = formaterDatas(adhesionActive, adhesionPrix)
-      console.log('data =', JSON.stringify(data, null, 2))
+      const body = JSON.stringify(data)
+      console.log('body =', body)
+
+      if (data.prices.length === 0) {
+        // pas d'achats
+        emitter.emit('message', {
+          tmp: 4,
+          typeMsg: 'warning',
+          contenu: `Rien à valider !`
+        })
+      } else {
+        // ---- requête "POST" achat billets ----
+        const urlApi = `/api/reservations/`
+        // options de la requête
+        const options = {
+          method: 'POST',
+          body: body,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+        fetch(urlApi, options).then(response => {
+          if (response.status !== 201) {
+            throw new Error(`${response.status} - ${response.statusText}`)
+          }
+          return response.json()
+        }).then(retour => {
+          console.log('retour =', retour)
+          // redirection vers stripe en conservant l'historique de navigation
+          window.location.assign(retour.checkout_url)
+        }).catch(function (erreur) {
+          emitter.emit('message', {
+            tmp: 6,
+            typeMsg: 'danger',
+            contenu: `Store, réservation produits erreur: ${erreur}`
+          })
+        })
+
+      }
     } else {
       // formulaire non valide
       console.log('formulaire pas vailde !')

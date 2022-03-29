@@ -41,6 +41,18 @@ const routes = [
     path: '/artist/:slug',
     name: 'Artist',
     component: () => import(/* webpackChunkName: "Artist" */ '../views/ArtistPage.vue')
+  },
+  {
+    // route interceptée
+    path: '/stripe/return/:id',
+    name: 'StripeReturn',
+    component: {}
+  },
+  {
+    // route interceptée
+    path: '/emailconfirmation/:id/:token',
+    name: 'EmailConfirmation',
+    component: {}
   }
 ]
 
@@ -88,7 +100,7 @@ router.beforeEach((to, from, next) => {
     const uuidStripe = to.params.id
     console.log('uuidStripe =', uuidStripe)
     if (uuidStripe !== undefined) {
-      Api.getStripeReturn(uuidStripe)
+      Api.postStripeReturn(uuidStripe)
     } else {
       emitter.emit('message', {
         tmp: 6,

@@ -20,14 +20,15 @@
 
         <ul class="navbar-nav ms-auto">
           <!-- adhésion -->
-          <li v-if="store.place.button_adhesion === true && router.currentRoute.value.name === 'Accueil'" class="nav-item px-3">
+          <li v-if="store.place.button_adhesion === true && router.currentRoute.value.name === 'Accueil'"
+              class="nav-item px-3">
             <button class="btn bg-gradient-info mb-0" data-bs-toggle="modal" data-bs-target="#modal-form-adhesion">
               <span class="btn-inner--icon"><i class="fa fa-ticket" aria-hidden="true"></i></span>
               <span class="btn-inner--text">Adhésion</span>
             </button>
           </li>
           <!-- déconnexion -->
-          <li v-if="isConnected === true" class="nav-item text-success d-flex flex-row align-items-center">
+          <li v-if="connection === true" class="nav-item text-success d-flex flex-row align-items-center">
             <i class="ni ni-world-2 m"></i>
             <span class="ms-1">Connecté</span>
           </li>
@@ -56,24 +57,31 @@ import Modallogin from './Modallogin.vue'
 import ModalAdhesion from './ModalAdhesion.vue'
 
 // vue
-import {ref, computed} from 'vue'
+import {ref} from 'vue'
 import {useRouter} from 'vue-router'
 // commun
 import {refreshAccessToken} from '@/api'
 // store
 import {useStore} from '@/store'
+// myStore
+import {StoreLocal} from '@/divers'
 
 const router = useRouter()
 const store = useStore()
+let storeLocal = StoreLocal.use('localStorage', 'Tibilet-identite')
 const props = defineProps({
   place: Object
 })
 const domain = `${location.protocol}//${location.host}`
 
+let connection = ref(false)
+if(storeLocal.refreshToken !== '') {
+  connection.value = true
+}
 
 // actualiser le accessToken
-if (store.user.refreshToken !== '' && window.accessToken === '') {
-  refreshAccessToken(store.user.refreshToken)
+if (storeLocal.refreshToken !== '' && window.accessToken === '') {
+  refreshAccessToken(storeLocal.refreshToken)
 }
 
 let prices = []
@@ -92,18 +100,21 @@ if (store.place.button_adhesion === true) {
 
 // si pas d'image
 const getLogo = () => {
-  if (props.place.logo_variations.med === undefined) {
+  if (props.place.logo_variations === undefined) {
     return `${domain}/media/images/image_non_disponible.svg`
+  } else {
+    if (props.place.logo_variations.med === undefined) {
+      return `${domain}/media/images/image_non_disponible.svg`
+    }
   }
   return `${domain + props.place.logo_variations.med}`
 }
 
-const isConnected = computed(() => {
-  if (store.user.refreshToken !== '') {
-    return true
-  }
-  return false
+emitter.on('statusConnection', (data) => {
+  // console.log('réception de "statusConnection", data =', data)
+  connection.value = data
 })
+
 </script>
 
 <style scoped>

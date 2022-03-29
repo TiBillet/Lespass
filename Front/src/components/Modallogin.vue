@@ -29,22 +29,24 @@
   </div>
 </template>
 <script setup>
-// store
-import {useStore} from '@/store'
+// myStore
+import {StoreLocal} from '@/divers'
+
 // vue
 import {ref} from 'vue'
 
-const store = useStore()
-const email = ref(store.user.email)
+const storeLocal = StoreLocal.use('localStorage', 'Tibilet-identite')
+const email = ref(storeLocal.email)
 const domain = `${location.protocol}//${location.host}`
 
 async function validerLogin(event) {
   if (event.target.checkValidity() === true) {
-    console.log('refreshToken =', store.user.refreshToken)
     // enregistre l'email dans le storeUser
-    store.user.email = email.value
+    storeLocal.email = email.value
+    // console.log('storeLocal =', storeLocal)
+    // console.log('refreshToken =', storeLocal.refreshToken)
     // -- créer utilisateur = refreshToken = '' --
-    if (store.user.refreshToken === '') {
+    if (storeLocal.refreshToken === '') {
       const api = `/api/user/create/`
       try {
         const response = await fetch(domain + api, {
@@ -56,6 +58,7 @@ async function validerLogin(event) {
           body: JSON.stringify({email: email.value})
         })
         const retour = await response.json()
+        // console.log('retour =',retour)
         if (response.status === 201 || response.status === 401 || response.status === 202) {
           // ferme le modal
           const elementModal = document.querySelector('#modal-form-login')
@@ -80,6 +83,6 @@ async function validerLogin(event) {
   }
 }
 </script>
-<style>
 
+<style>
 </style>

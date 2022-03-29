@@ -4,20 +4,23 @@
 
     <div class="form-check form-switch">
       <input class="form-check-input" type="checkbox" :id="`active-simple-product${simpleProduct.uuid}`"
-             @change="updateActiveSimpleProduct('activation', $event.target.checked)" :checked="simpleProduct.activation">
+             @change="updateActiveSimpleProduct('activation', $event.target.checked)"
+             :checked="simpleProduct.activation">
       <label class="form-check-label text-dark" :for="`active-simple-product${simpleProduct.uuid}`">Sélectionner/Déselctionner</label>
     </div>
 
-    <div v-if="simpleProduct.activation === true" >
+    <div v-if="simpleProduct.activation === true">
       <!-- prix -->
       <div class="input-group mb-2 has-validation">
         <div class="col form-check" v-for="(price, index) in simpleProduct.prices" :key="index">
           <!-- sélectionne automatiquement le premier prix -->
-          <input v-if="index === 0" :value="price.uuid" :class="`form-check-input simple-product-active-${nameMemo}-uuid-price`" type="radio"
-                 name="prixAdhesion" :id="`simpleproductuuidprice${nameMemo}${index}`"
+          <input v-if="index === 0" :value="price.uuid"
+                 :class="`form-check-input simple-product-active-${nameMemo}-uuid-price`" type="radio"
+                 :name="`prix${nameMemo}`" :id="`simpleproductuuidprice${nameMemo}${index}`"
                  @change="updateActiveSimpleProduct('uuidPrix', $event.target.value)" checked>
-          <input v-else :value="price.uuid" :class="`form-check-input simple-product-active-${nameMemo}-uuid-price`" type="radio"
-                 name="prixAdhesion" :id="`simpleproductuuidprice${nameMemo}${index}`"
+          <input v-else :value="price.uuid" :class="`form-check-input simple-product-active-${nameMemo}-uuid-price`"
+                 type="radio"
+                 :name="`prix${nameMemo}`" :id="`simpleproductuuidprice${nameMemo}${index}`"
                  @change="updateActiveSimpleProduct('uuidPrix', $event.target.value)">
           <label class="form-check-label" :for="`simpleproductuuidprice${nameMemo}${index}`">{{ price.prix }}€</label>
         </div>
@@ -68,11 +71,12 @@ try {
 
     // init de l'instance de clef "props.indexMemo"
     if (store.memoComposants[props.nameMemo][props.indexMemo] === undefined) {
-      // console.log('Mémorisation initiale')
+      console.log('Mémorisation initiale')
       store.memoComposants[props.nameMemo][props.indexMemo] = props.product
       simpleProduct.value = props.product
       simpleProduct.value['activation'] = props.activation
-      simpleProduct.value['uuidPrix'] = ''
+      simpleProduct.value['uuidPrix'] = props.product.prices[0].uuid
+      console.log(`simpleProduct.value['uuidPrix'] =`, simpleProduct.value['uuidPrix'])
       store.memoComposants[props.nameMemo][props.indexMemo]['initDate'] = new Date().toLocaleString()
     } else {
       // instance existante
@@ -98,7 +102,7 @@ try {
     window.store[props.nameMemo]['activation'] = props.activation
     window.store[props.nameMemo]['uuidPrix'] = ''
   } else {
-     simpleProduct.value =window.store[props.nameMemo]
+    simpleProduct.value = window.store[props.nameMemo]
   }
 
 }
@@ -109,7 +113,7 @@ function updateRadioButon() {
   const eles = document.querySelectorAll(`.simple-product-active-${props.nameMemo}-uuid-price`)
   for (let i = 0; i < eles.length; i++) {
     const ele = eles[i]
-    // console.log('ele =', ele)
+    console.log('-> ele =', ele)
     ele.removeAttribute('checked')
     if (ele.value === simpleProduct.value.uuidPrix) {
       ele.checked = true
@@ -134,6 +138,5 @@ function updateActiveSimpleProduct(key, value) {
 }
 </script>
 
-<style scoped>
-
+<style>
 </style>

@@ -1,6 +1,9 @@
 // store
 import {useStore} from '@/store'
 
+// myStore
+import {StoreLocal} from '@/divers'
+
 const domain = `${location.protocol}//${location.host}`
 
 export async function loadPlace() {
@@ -83,7 +86,8 @@ export async function loadEvent(slug) {
 
 export async function emailActivation(id, token) {
   // console.log('-> emailActivation')
-  const store = useStore()
+  const storeLocal = StoreLocal.use('localStorage', 'Tibilet-identite')
+
   // attention pas de "/" à la fin de "api"
   const api = `/api/user/activate/${id}/${token}`
   try {
@@ -104,10 +108,8 @@ export async function emailActivation(id, token) {
       })
       // maj token d'accès
       window.accessToken = retour.access
-      // get infos user
-      store.user = await this.getMe(retour.access)
-      // maj du refresh token dans le storeUser
-      store.user['refreshToken'] = retour.refresh
+      storeLocal.refreshToken = retour.refresh
+      emitter.emit('statusConnection', true)
     } else {
       throw new Error(`Erreur conrfirmation mail !`)
     }
@@ -127,7 +129,7 @@ export async function getMe(token) {
     cache: 'no-cache',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization' : `Bearer ${token}`
+      'Authorization': `Bearer ${token}`
     }
   }
   try {
@@ -147,8 +149,8 @@ export async function getMe(token) {
   }
 }
 
-export function getStripeReturn(uuidStripe) {
-  console.log(`-> charge getReservations !`)
+export function postStripeReturn(uuidStripe) {
+  console.log(`-> fonc api postStripeReturn !`)
   const apiStripe = `/api/webhook_stripe/`
   const options = {
     method: 'POST',
@@ -182,7 +184,7 @@ export function getStripeReturn(uuidStripe) {
 }
 
 export async function refreshAccessToken(refreshToken) {
-  // console.log('-> refreshAccessToken, refreshToken =', refreshToken)
+  console.log('-> refreshAccessToken, refreshToken =', refreshToken)
   const api = `/api/user/token/refresh/`
   try {
     const response = await fetch(domain + api, {
@@ -209,33 +211,36 @@ export async function refreshAccessToken(refreshToken) {
   }
 }
 
-export function getReservations() {
-  console.log(`-> charge getReservations !`)
-  const apiReservations = `/api/reservations/`
+export function postAdhesionModal(data) {
+  console.log(`-> fonc postAdhesionModal !`)
+  const apiMemberShip = `/api/membership/`
   const options = {
-    method: 'GET',
+    method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Token': window.accessToken
-    }
+    },
+    body: JSON.stringify(data)
   }
-  fetch(domain + apiReservations, options).then(response => {
+
+  console.log('options =', JSON.stringify(options, null, 2))
+  fetch(domain + apiMemberShip, options).then(response => {
     console.log('response =', response)
-    /*
-    if (response.status !== 200) {
+    // TODO: le seveur envoie un 400 avec un json => pas logique ?
+    if (response.status !== 201) {
       throw new Error(`${response.status} - ${response.statusText}`)
     }
-
-     */
     return response.json()
   }).then(retour => {
     console.log('retour =', retour)
+    window.location = retour.checkout_url
   }).catch(function (erreur) {
+     console.log('erreur =', erreur)
     emitter.emit('message', {
       tmp: 6,
       typeMsg: 'danger',
-      contenu: `Liste des réservations, erreur: ${erreur}`
+      contenu: `Retour adhésion, erreur: ${erreur}`
     })
   })
-}
 
+}

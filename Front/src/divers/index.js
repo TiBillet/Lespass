@@ -1,13 +1,23 @@
 export class StoreLocal {
   constructor(typeStorage, path, content) {
-    // console.log('-> constructor !')
-    let state = content
+    try {
+      if (window[typeStorage].getItem(path) === null) {
+        window[typeStorage].setItem(path, JSON.stringify(content))
+      }
+    } catch (error) {
+      console.log('Constructor StoreLocal,', error)
+    }
+  }
+
+  static use(typeStorage, path) {
+    // console.log('-> static use !!')
+    let content = {}
     if (window[typeStorage].getItem(path) === null) {
       window[typeStorage].setItem(path, JSON.stringify(content))
     } else {
-      state = JSON.parse(window[typeStorage].getItem(path))
+      content = JSON.parse(window[typeStorage].getItem(path))
     }
-    this.state = new Proxy(state, {
+    const state = new Proxy(content, {
       path,
       typeStorage,
       get(target, name, receiver) {
@@ -17,19 +27,15 @@ export class StoreLocal {
         return null
       },
       set(target, name, value, receiver) {
-        console.log('set -> path =', path, '  --  name =', name)
-        console.log('value =', value)
         if (Reflect.has(target, name)) {
           let newState = Reflect.set(target, name, value, receiver)
           // update storage
           console.log('target =', target)
-          window[this.typeStorage].setItem(this.path, JSON.stringify(target))
+          window[typeStorage].setItem(this.path, JSON.stringify(target))
           return newState
-
         }
-        console.log(`propriété inconnue '${name}' !`);
       }
     })
-
+    return state
   }
 }
