@@ -104,7 +104,8 @@ class create_user(APIView):
 
         if not created:
             if user.is_active:
-                return Response(_("email de connection envoyé. Verifiez vos spam si non reçu."),
+                task = connexion_celery_mailer.delay(user.email, f"https://{request.get_host()}")
+                return Response(_("email de connexion envoyé. Verifiez dans votre boite de spams si non reçu."),
                                 status=status.HTTP_202_ACCEPTED)
             else:
                 if user.email_error:
