@@ -70,7 +70,9 @@ class Command(BaseCommand):
 
         email = os.environ.get('EMAIL')
         dummypassword = os.environ.get('DEMODATA_PASSWORD')
-
+        if not dummypassword:
+            print(f'password for user {email}')
+            dummypassword = input()
         ### Create User :
         data_json = {
             'email': email,
