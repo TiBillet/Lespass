@@ -84,7 +84,7 @@ Venez discuter avec nous :
 ```shell
 cd Docker/Development
 # Copy the example environement file 
-cp env_example .env
+cp ../env_example .env
 # populate .env file with your own variables.
 nano .env
 # build docker image
