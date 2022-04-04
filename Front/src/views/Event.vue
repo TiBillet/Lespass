@@ -55,7 +55,7 @@ import ListOptionsCheckbox from '@/components/ListOptionsCheckbox.vue'
 
 // test dev
 import {getMe} from '@/api'
-import {fakeEvent} from "../../tempo/fakeCurrentEventsTest"
+// import {fakeEvent} from "../../tempo/fakeCurrentEventsTest"
 
 // store
 import {useStore} from '@/store'
