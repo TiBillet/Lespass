@@ -85,8 +85,9 @@ class activate(APIView):
             return Response('Token non valide', status=status.HTTP_400_BAD_REQUEST)
 
 
-@permission_classes([permissions.AllowAny])
 class create_user(APIView):
+    permission_classes = [AllowAny]
+
     def post(self, request):
         validator = CreateUserValidator(data=request.data)
         if not validator.is_valid():
