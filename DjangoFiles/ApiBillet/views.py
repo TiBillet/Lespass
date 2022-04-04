@@ -722,6 +722,7 @@ def paiment_stripe_validator(request, paiement_stripe):
 class Webhook_stripe(APIView):
     def post(self, request):
         payload = request.data
+        logger.info(f"Webhook_stripe : {payload}")
         if payload.get('type') == "checkout.session.completed":
             tenant_uuid_in_metadata = payload["data"]["object"]["metadata"]["tenant"]
             # if connection.tenant.schema_name == "public":
@@ -745,7 +746,13 @@ class Webhook_stripe(APIView):
                                                 checkout_session_id_stripe=payload['data']['object']['id'])
             return paiment_stripe_validator(request, paiement_stripe)
 
-        return Response('OK', status=status.HTTP_200_OK)
+        post_from_front_vue_js = payload.get('uuid')
+        if post_from_front_vue_js:
+            paiement_stripe = get_object_or_404(Paiement_stripe,
+                                                uuid=post_from_front_vue_js)
+            return paiment_stripe_validator(request, paiement_stripe)
+
+        return Response('Pouple', status=status.HTTP_402_PAYMENT_REQUIRED)
 
     def get(self, request, uuid_paiement):
         logger.info("*" * 30)
