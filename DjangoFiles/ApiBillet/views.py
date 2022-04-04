@@ -752,7 +752,7 @@ class Webhook_stripe(APIView):
                                                 uuid=post_from_front_vue_js)
             return paiment_stripe_validator(request, paiement_stripe)
 
-        return Response('Pouple', status=status.HTTP_402_PAYMENT_REQUIRED)
+        return Response('Pouple', status=status.HTTP_202_ACCEPTED)
 
     def get(self, request, uuid_paiement):
         logger.info("*" * 30)
