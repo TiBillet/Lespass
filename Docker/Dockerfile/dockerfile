@@ -17,7 +17,6 @@ RUN pip install gunicorn
 # RUN pip install django-admin-rangefilter
 RUN pip install sentry-sdk
 RUN pip install python-dateutil
-RUN pip install Werkzeug
 RUN pip install django-solo
 # RUN pip install admin-totals
 RUN pip install django-tenants
@@ -33,6 +32,7 @@ RUN pip install social-auth-app-django
 RUN pip install ipython
 RUN pip install ipdb
 RUN pip install django_debug_toolbar
+RUN pip install Werkzeug==2.0.3
 RUN pip install django-extensions
 
 
