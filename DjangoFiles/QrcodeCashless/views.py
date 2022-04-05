@@ -162,7 +162,7 @@ class index_scan(View):
         pk_adhesion = data.get('pk_adhesion')
         montant_recharge = data.get('montant_recharge')
 
-        # c'est un paiement
+        # c'est une demande de paiement
         if (pk_adhesion or montant_recharge) and data.get('email'):
             # montant_recharge = data.get('montant_recharge')
             user = validate_email_and_return_user(data.get('email'))
@@ -251,7 +251,8 @@ class index_scan(View):
 
             sess.close()
 
-            # nouveau membre crée avec uniquement l'email on demande la suite.
+            # Nouveau membre créé avec uniquement l'email
+
             # HTTP_202_ACCEPTED
             # HTTP_201_CREATED
             if r.status_code in (201, 204):
