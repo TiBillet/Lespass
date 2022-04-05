@@ -23,8 +23,8 @@ from django.utils.text import slugify
 from rest_framework.views import APIView
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
-    ReservationValidator, MembreshipValidator, ConfigurationSerializer, NewConfigSerializer, \
-    EventCreateSerializer, TicketSerializer, OptionTicketSerializer, ChargeCashlessValidator
+    ReservationValidator, MembreValidator, ConfigurationSerializer, NewConfigSerializer, \
+    EventCreateSerializer, TicketSerializer, OptionTicketSerializer, ChargeCashlessValidator, NewAdhesionValidator
 from AuthBillet.models import TenantAdminPermission, TibilletUser
 from BaseBillet.tasks import create_ticket_pdf, redirect_post_webhook_stripe_from_public
 from Customers.models import Client, Domain
@@ -463,11 +463,13 @@ class MembershipViewset(viewsets.ViewSet):
 
     def create(self, request):
         print(request.data)
-        validator = MembreshipValidator(data=request.data, context={'request': request})
-        if validator.is_valid():
-            # serializer.save()
-            return Response(validator.data, status=status.HTTP_201_CREATED)
-        return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
+        membre_validator = MembreValidator(data=request.data, context={'request': request})
+        if membre_validator.is_valid():
+            adhesion_validator = NewAdhesionValidator(data=request.data, context={'request': request})
+            if adhesion_validator.is_valid():
+                return Response(adhesion_validator.data, status=status.HTTP_201_CREATED)
+            return Response(adhesion_validator.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(membre_validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def retrieve(self, request, pk=None):
         try:
