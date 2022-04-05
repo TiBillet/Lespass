@@ -92,9 +92,9 @@ class index_scan(View):
         sub_addr = host.partition('.')[0]
         if sub_addr == "m":
             return HttpResponseRedirect(address.replace("://m.", "://raffinerie."))
-        carte = check_carte_local(uuid)
 
         configuration = Configuration.get_solo()
+
         if not configuration.server_cashless:
             return HttpResponse(
                 "L'adress du serveur cashless n'est pas renseignée dans la configuration de la billetterie.")
@@ -102,6 +102,7 @@ class index_scan(View):
             return HttpResponse(
                 "Pas d'information de configuration pour paiement en ligne.")
 
+        carte = check_carte_local(uuid)
         reponse_server_cashless = self.check_carte_serveur_cashless(carte.uuid)
 
         if reponse_server_cashless.status_code == 200:
@@ -113,27 +114,29 @@ class index_scan(View):
                 for his in json_reponse.get('history'):
                     his['date'] = datetime.fromisoformat(his['date'])
 
+            data = {
+                'tarifs_adhesion': Price.objects.filter(product__categorie_article=Product.ADHESION),
+                'adhesion_obligatoire': configuration.adhesion_obligatoire,
+                'history': json_reponse.get('history'),
+                'carte_resto': configuration.carte_restaurant,
+                'site_web': configuration.site_web,
+                'image_carte': carte.detail.img,
+                'numero_carte': carte.number,
+                'client_name': carte.detail.origine.name,
+                'domain': sub_addr,
+                # 'informations_carte': reponse_server_cashless.text,
+                'total_monnaie': json_reponse.get('total_monnaie'),
+                'assets': json_reponse.get('assets'),
+                'a_jour_cotisation': a_jour_cotisation,
+                # 'liste_assets': liste_assets,
+                'email': email,
+                'billetterie_bool': configuration.activer_billetterie,
+            }
+            logger.info(f"index scan data : {data}")
             return render(
                 request,
                 self.template_name,
-                {
-                    'tarifs_adhesion': Price.objects.filter(product__categorie_article=Product.ADHESION),
-                    'adhesion_obligatoire': configuration.adhesion_obligatoire,
-                    'history': json_reponse.get('history'),
-                    'carte_resto': configuration.carte_restaurant,
-                    'site_web': configuration.site_web,
-                    'image_carte': carte.detail.img,
-                    'numero_carte': carte.number,
-                    'client_name': carte.detail.origine.name,
-                    'domain': sub_addr,
-                    # 'informations_carte': reponse_server_cashless.text,
-                    'total_monnaie': json_reponse.get('total_monnaie'),
-                    'assets': json_reponse.get('assets'),
-                    'a_jour_cotisation': a_jour_cotisation,
-                    # 'liste_assets': liste_assets,
-                    'email': email,
-                    'billetterie_bool': configuration.activer_billetterie,
-                }
+                data
             )
 
 
