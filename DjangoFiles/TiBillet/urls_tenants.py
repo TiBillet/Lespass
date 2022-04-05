@@ -33,9 +33,9 @@ urlpatterns = [
     re_path(r'qr/', include('QrcodeCashless.urls')),
 
     # pour carte GEN1 Bisik
-    re_path(r'(?P<numero_carte>^\w{5}$)', include('QrcodeCashless.urls')),
+    re_path(r'(?P<numero_carte>^[qsdf974]{5}$)', include('QrcodeCashless.urls')),
 
-    # catché par le front node JS, a supprimer prochainement
+    # catché par le front node JS, à supprimer prochainement
     path('stripe/return/<uuid:uuid_paiement>', Webhook_stripe.as_view()),
 
     path('', include('BaseBillet.urls')),

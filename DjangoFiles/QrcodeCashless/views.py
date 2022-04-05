@@ -43,7 +43,7 @@ def check_carte_local(uuid):
 
 class gen_one_bisik(View):
     def get(self, request, numero_carte):
-        print(f"gen_one_bisik : {numero_carte}")
+        logger.info(f"gen_one_bisik : {numero_carte} - tenant : {connection.tenant}")
         carte = get_object_or_404(CarteCashless, number=numero_carte)
         address = request.build_absolute_uri()
         return HttpResponseRedirect(
