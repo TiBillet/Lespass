@@ -23,8 +23,8 @@ from django.utils.text import slugify
 from rest_framework.views import APIView
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
-    ReservationValidator, MembreshipValidator, ConfigurationSerializer, NewConfigSerializer, \
-    EventCreateSerializer, TicketSerializer, OptionTicketSerializer, ChargeCashlessValidator
+    ReservationValidator, MembreValidator, ConfigurationSerializer, NewConfigSerializer, \
+    EventCreateSerializer, TicketSerializer, OptionTicketSerializer, ChargeCashlessValidator, NewAdhesionValidator
 from AuthBillet.models import TenantAdminPermission, TibilletUser
 from BaseBillet.tasks import create_ticket_pdf, redirect_post_webhook_stripe_from_public
 from Customers.models import Client, Domain
@@ -463,11 +463,13 @@ class MembershipViewset(viewsets.ViewSet):
 
     def create(self, request):
         print(request.data)
-        validator = MembreshipValidator(data=request.data, context={'request': request})
-        if validator.is_valid():
-            # serializer.save()
-            return Response(validator.data, status=status.HTTP_201_CREATED)
-        return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
+        membre_validator = MembreValidator(data=request.data, context={'request': request})
+        if membre_validator.is_valid():
+            adhesion_validator = NewAdhesionValidator(data=request.data, context={'request': request})
+            if adhesion_validator.is_valid():
+                return Response(adhesion_validator.data, status=status.HTTP_201_CREATED)
+            return Response(adhesion_validator.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(membre_validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def retrieve(self, request, pk=None):
         try:
@@ -722,6 +724,10 @@ def paiment_stripe_validator(request, paiement_stripe):
 class Webhook_stripe(APIView):
     def post(self, request):
         payload = request.data
+        logger.info(f"Webhook_stripe : {payload}")
+
+        # c'est une requete depuis les webhook
+        # configuré dans l'admin stripe
         if payload.get('type') == "checkout.session.completed":
             tenant_uuid_in_metadata = payload["data"]["object"]["metadata"]["tenant"]
             # if connection.tenant.schema_name == "public":
@@ -732,6 +738,9 @@ class Webhook_stripe(APIView):
 
                 tenant = Client.objects.get(uuid=tenant_uuid_in_metadata)
                 url_redirect = f"https://{tenant.domains.all().first().domain}{request.path}"
+                # On lance la requete nous même aussi,
+                # de tel sorte que ça soit déja validé
+                # lorsque le client arrive sur la page de redirection
                 task = redirect_post_webhook_stripe_from_public.delay(url_redirect, request.data)
                 return Response(f"redirect to {url_redirect} with celery", status=status.HTTP_200_OK)
 
@@ -745,7 +754,14 @@ class Webhook_stripe(APIView):
                                                 checkout_session_id_stripe=payload['data']['object']['id'])
             return paiment_stripe_validator(request, paiement_stripe)
 
-        return Response('OK', status=status.HTTP_200_OK)
+        # c'est une requete depuis le vue.js.
+        post_from_front_vue_js = payload.get('uuid')
+        if post_from_front_vue_js:
+            paiement_stripe = get_object_or_404(Paiement_stripe,
+                                                uuid=post_from_front_vue_js)
+            return paiment_stripe_validator(request, paiement_stripe)
+
+        return Response('Pouple', status=status.HTTP_202_ACCEPTED)
 
     def get(self, request, uuid_paiement):
         logger.info("*" * 30)

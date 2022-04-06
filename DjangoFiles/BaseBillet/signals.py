@@ -10,11 +10,9 @@ from BaseBillet.models import Reservation, LigneArticle, Ticket, Product, Config
 from BaseBillet.tasks import ticket_celery_mailer
 
 # from TiBillet import settings
-
-import logging
-
 from BaseBillet.triggers import action_article_paid_by_categorie
 
+import logging
 logger = logging.getLogger(__name__)
 
 

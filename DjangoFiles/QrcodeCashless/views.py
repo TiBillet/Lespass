@@ -43,7 +43,9 @@ def check_carte_local(uuid):
 
 class gen_one_bisik(View):
     def get(self, request, numero_carte):
-        print(f"gen_one_bisik : {numero_carte}")
+        logger.info(f"gen_one_bisik : {numero_carte} - tenant : {connection.tenant}")
+        if connection.tenant.name != "m":
+            raise Http404
         carte = get_object_or_404(CarteCashless, number=numero_carte)
         address = request.build_absolute_uri()
         return HttpResponseRedirect(
@@ -90,9 +92,9 @@ class index_scan(View):
         sub_addr = host.partition('.')[0]
         if sub_addr == "m":
             return HttpResponseRedirect(address.replace("://m.", "://raffinerie."))
-        carte = check_carte_local(uuid)
 
         configuration = Configuration.get_solo()
+
         if not configuration.server_cashless:
             return HttpResponse(
                 "L'adress du serveur cashless n'est pas renseignée dans la configuration de la billetterie.")
@@ -100,6 +102,7 @@ class index_scan(View):
             return HttpResponse(
                 "Pas d'information de configuration pour paiement en ligne.")
 
+        carte = check_carte_local(uuid)
         reponse_server_cashless = self.check_carte_serveur_cashless(carte.uuid)
 
         if reponse_server_cashless.status_code == 200:
@@ -111,27 +114,29 @@ class index_scan(View):
                 for his in json_reponse.get('history'):
                     his['date'] = datetime.fromisoformat(his['date'])
 
+            data = {
+                'tarifs_adhesion': Price.objects.filter(product__categorie_article=Product.ADHESION),
+                'adhesion_obligatoire': configuration.adhesion_obligatoire,
+                'history': json_reponse.get('history'),
+                'carte_resto': configuration.carte_restaurant,
+                'site_web': configuration.site_web,
+                'image_carte': carte.detail.img,
+                'numero_carte': carte.number,
+                'client_name': carte.detail.origine.name,
+                'domain': sub_addr,
+                # 'informations_carte': reponse_server_cashless.text,
+                'total_monnaie': json_reponse.get('total_monnaie'),
+                'assets': json_reponse.get('assets'),
+                'a_jour_cotisation': a_jour_cotisation,
+                # 'liste_assets': liste_assets,
+                'email': email,
+                'billetterie_bool': configuration.activer_billetterie,
+            }
+            logger.info(f"index scan data : {data}")
             return render(
                 request,
                 self.template_name,
-                {
-                    'tarifs_adhesion': Price.objects.filter(product__categorie_article=Product.ADHESION),
-                    'adhesion_obligatoire': configuration.adhesion_obligatoire,
-                    'history': json_reponse.get('history'),
-                    'carte_resto': configuration.carte_restaurant,
-                    'site_web': configuration.site_web,
-                    'image_carte': carte.detail.img,
-                    'numero_carte': carte.number,
-                    'client_name': carte.detail.origine.name,
-                    'domain': sub_addr,
-                    # 'informations_carte': reponse_server_cashless.text,
-                    'total_monnaie': json_reponse.get('total_monnaie'),
-                    'assets': json_reponse.get('assets'),
-                    'a_jour_cotisation': a_jour_cotisation,
-                    # 'liste_assets': liste_assets,
-                    'email': email,
-                    'billetterie_bool': configuration.activer_billetterie,
-                }
+                data
             )
 
 
@@ -157,7 +162,7 @@ class index_scan(View):
         pk_adhesion = data.get('pk_adhesion')
         montant_recharge = data.get('montant_recharge')
 
-        # c'est un paiement
+        # c'est une demande de paiement
         if (pk_adhesion or montant_recharge) and data.get('email'):
             # montant_recharge = data.get('montant_recharge')
             user = validate_email_and_return_user(data.get('email'))
@@ -246,7 +251,8 @@ class index_scan(View):
 
             sess.close()
 
-            # nouveau membre crée avec uniquement l'email on demande la suite.
+            # Nouveau membre créé avec uniquement l'email
+
             # HTTP_202_ACCEPTED
             # HTTP_201_CREATED
             if r.status_code in (201, 204):

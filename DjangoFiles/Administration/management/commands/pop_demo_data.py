@@ -58,10 +58,10 @@ class Command(BaseCommand):
         # base_url = f"https://demo.{os.environ.get('DOMAIN')}"
         sub_domain = "m"
 
-        protocol = "http://"
-        port = ":8002"
-        # protocol = "https://"
-        # port = ""
+        # protocol = "http://"
+        # port = ":8002"
+        protocol = "https://"
+        port = ""
 
         base_url = f"{protocol}{sub_domain}.{os.environ.get('DOMAIN')}{port}"
 
@@ -70,7 +70,9 @@ class Command(BaseCommand):
 
         email = os.environ.get('EMAIL')
         dummypassword = os.environ.get('DEMODATA_PASSWORD')
-
+        if not dummypassword:
+            print(f'password for user {email}')
+            dummypassword = input()
         ### Create User :
         data_json = {
             'email': email,

@@ -99,11 +99,14 @@ class action_article_paid_by_categorie:
         if not configuration.server_cashless or not configuration.key_cashless:
             raise Exception(f'Pas de configuration cashless')
 
-        membre = Membership.objects.get(user=self.ligne_article.paiement_stripe.user)
+        user = self.ligne_article.paiement_stripe.user
+
+        membre, created = Membership.objects.get_or_create(user=user)
         tarif_adhesion = self.ligne_article.pricesold.prix
 
         if not membre.first_contribution:
             membre.first_contribution = timezone.now().date()
+
         membre.last_contribution = timezone.now().date()
         membre.contribution_value = tarif_adhesion
         membre.save()

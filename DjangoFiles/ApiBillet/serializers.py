@@ -400,8 +400,58 @@ def validate_email_and_return_user(email):
     user.save()
     return user
 
+class NewAdhesionValidator(serializers.Serializer):
+    adhesion = serializers.PrimaryKeyRelatedField(
+        queryset=Price.objects.filter(product__categorie_article=Product.ADHESION))
+    email = serializers.EmailField()
 
-class MembreshipValidator(serializers.Serializer):
+    def validate_email(self, value):
+        logger.info(f"NewAdhesionValidator validate email : {value}")
+        user_paiement: TibilletUser = validate_email_and_return_user(value)
+        self.user = user_paiement
+
+    def validate(self, attrs):
+        price_adhesion: Price = attrs.get('adhesion')
+        user: TibilletUser = self.user
+
+        metadata = {
+            'tenant': f'{connection.tenant.uuid}',
+            'pk_adhesion': f"{price_adhesion.pk}",
+        }
+        self.metadata = metadata
+
+        ligne_article_adhesion = LigneArticle.objects.create(
+            pricesold=get_or_create_price_sold(price_adhesion, None),
+            qty=1,
+        )
+
+        new_paiement_stripe = creation_paiement_stripe(
+            user=user,
+            liste_ligne_article=[ligne_article_adhesion, ],
+            metadata=metadata,
+            reservation=None,
+            source=Paiement_stripe.API_BILLETTERIE,
+            absolute_domain=self.context.get('request').build_absolute_uri().partition('/api')[0],
+        )
+
+        if new_paiement_stripe.is_valid():
+            paiement_stripe: Paiement_stripe = new_paiement_stripe.paiement_stripe_db
+            paiement_stripe.lignearticle_set.all().update(status=LigneArticle.UNPAID)
+            self.checkout_session = new_paiement_stripe.checkout_session
+
+            return super().validate(attrs)
+
+        raise serializers.ValidationError(_(f'new_paiement_stripe not valid'))
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        logger.info(f"{self.checkout_session.url}")
+        representation['checkout_url'] = self.checkout_session.url
+        return representation
+
+
+
+class MembreValidator(serializers.Serializer):
     email = serializers.EmailField()
 
     first_name = serializers.CharField(max_length=200, required=False)
@@ -445,57 +495,6 @@ class MembreshipValidator(serializers.Serializer):
         self.fiche_membre.save()
 
         return self.fiche_membre.user.email
-
-        # if self.fiche_membre.first_name:
-        #     return self.fiche_membre.first_name
-        # else :
-        #     raise serializers.ValidationError(_(f'first_name est obligatoire'))
-
-    # def validate_last_name(self, value):
-    #     return value
-    # if self.fiche_membre.last_name:
-    #     return self.fiche_membre.last_name
-    # else :
-    #     raise serializers.ValidationError(_(f'last_name est obligatoire'))
-
-    def validate(self, attrs):
-        price_adhesion: Price = attrs.get('adhesion')
-        user: TibilletUser = self.user
-
-        metadata = {
-            'tenant': f'{connection.tenant.uuid}',
-            'pk_adhesion': f"{price_adhesion.pk}",
-        }
-        self.metadata = metadata
-
-        ligne_article_adhesion = LigneArticle.objects.create(
-            pricesold=get_or_create_price_sold(price_adhesion, None),
-            qty=1,
-        )
-
-        new_paiement_stripe = creation_paiement_stripe(
-            user=user,
-            liste_ligne_article=[ligne_article_adhesion, ],
-            metadata=metadata,
-            reservation=None,
-            source=Paiement_stripe.API_BILLETTERIE,
-            absolute_domain=self.context.get('request').build_absolute_uri().partition('/api')[0],
-        )
-
-        if new_paiement_stripe.is_valid():
-            paiement_stripe: Paiement_stripe = new_paiement_stripe.paiement_stripe_db
-            paiement_stripe.lignearticle_set.all().update(status=LigneArticle.UNPAID)
-            self.checkout_session = new_paiement_stripe.checkout_session
-
-            return super().validate(attrs)
-
-        raise serializers.ValidationError(_(f'new_paiement_stripe not valid'))
-
-    def to_representation(self, instance):
-        representation = super().to_representation(instance)
-        logger.info(f"{self.checkout_session.url}")
-        representation['checkout_url'] = self.checkout_session.url
-        return representation
 
 
 def get_near_event_by_date():

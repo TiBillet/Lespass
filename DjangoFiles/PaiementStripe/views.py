@@ -43,6 +43,7 @@ class creation_paiement_stripe():
         self.paiement_stripe_db = self._paiement_stripe_db()
         self.stripe_api_key = self._stripe_api_key()
         self.line_items = self._line_items()
+        self.return_url = self._return_url()
         self.checkout_session = self._checkout_session()
 
 
@@ -88,11 +89,22 @@ class creation_paiement_stripe():
                 }
             )
         return line_items
+    def _return_url(self):
+        '''
+        Si la source est le QRCode, alors c'est encore le model MVC de django qui gère ça.
+        Sinon, c'est un paiement via la billetterie vue.js
+        :return:
+        '''
+
+        if self.source == Paiement_stripe.QRCODE :
+            return "/api/webhook_stripe/"
+        else :
+            return "/stripe/return/"
 
     def _checkout_session(self):
         checkout_session = stripe.checkout.Session.create(
-            success_url=f'{self.absolute_domain}/stripe/return/{self.paiement_stripe_db.uuid}',
-            cancel_url=f'{self.absolute_domain}/stripe/return/{self.paiement_stripe_db.uuid}',
+            success_url=f'{self.absolute_domain}{self.return_url}{self.paiement_stripe_db.uuid}',
+            cancel_url=f'{self.absolute_domain}{self.return_url}{self.paiement_stripe_db.uuid}',
             payment_method_types=["card"],
             customer_email=f'{self.user.email}',
             line_items=self.line_items,

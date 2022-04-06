@@ -14,17 +14,11 @@ TIME_ZONE='Indian/Reunion'
 
 API_TIBILLET_BILLETERIE_VERS_CASHLESS="CHANGE_ME_OR_DANSE"
 DOMAIN='django-local.org'
+PUBLIC='TiBillet Coop.'
 EMAIL='change@me.org'
-DEMODATA_PASSWORD='ChangeMe'
 
 
 EMAIL_HOST="SSL0.OVH.NET"
 EMAIL_PORT="465"
 EMAIL_HOST_USER="proutprout@proutprout.prout"
 EMAIL_HOST_PASSWORD="CHANGE_ME_OR_DANSE"
-
-# Celui qui va servir a créer le public :
-PUBLIC='TiBillet Coop.'
-DOMAIN='django-local.org'
-
-FRONT_DEV='http://localhost:3000'
