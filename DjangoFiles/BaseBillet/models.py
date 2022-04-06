@@ -131,6 +131,17 @@ class Configuration(SingletonModel):
                         verbose_name='Background'
                         )
 
+    TZ_REUNION, TZ_PARIS = "Indian/Reunion", "Europe/Paris"
+    TZ_CHOICES = [
+        (TZ_REUNION, _('Indian/Reunion')),
+        (TZ_PARIS, _('Europe/Paris')),
+    ]
+
+    fuseau_horaire = models.CharField(default=TZ_REUNION,
+                                      max_length=50,
+                                      choices=TZ_CHOICES,
+                                      )
+
     # noinspection PyUnresolvedReferences
     def img_variations(self):
         if self.img:
@@ -512,21 +523,29 @@ class Reservation(models.Model):
                               on_delete=models.PROTECT,
                               related_name="reservation")
 
-    CANCELED, CREATED, UNPAID, PAID, PAID_ERROR, VALID, = 'C', 'R', 'U', 'P', 'PE', 'V'
+    CANCELED, CREATED, UNPAID, PAID, PAID_ERROR, PAID_NOMAIL, VALID, = 'C', 'R', 'U', 'P', 'PE', 'PN', 'V'
     TYPE_CHOICES = [
         (CANCELED, _('Annulée')),
         (CREATED, _('Crée')),
         (UNPAID, _('Non payée')),
         (PAID, _('Payée')),
         (PAID_ERROR, _('Payée mais mail non valide')),
+        (PAID_NOMAIL, _('Payée mais mail non envoyé')),
         (VALID, _('Validée')),
     ]
 
     status = models.CharField(max_length=3, choices=TYPE_CHOICES, default=CREATED,
                               verbose_name=_("Status de la réservation"))
 
+    # Doit-on envoyer le ticket par mail ?
+    to_mail = models.BooleanField(default=True)
+
+    # Mail bien parti ?
     mail_send = models.BooleanField(default=False)
+
+    # Mail parti, mais retour en erreur ?
     mail_error = models.BooleanField(default=False)
+
     # paiement = models.OneToOneField(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True,
     #                                 related_name='reservation')
 

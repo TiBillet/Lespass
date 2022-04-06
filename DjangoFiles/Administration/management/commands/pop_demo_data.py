@@ -63,7 +63,12 @@ class Command(BaseCommand):
         protocol = "https://"
         port = ""
 
-        base_url = f"{protocol}{sub_domain}.{os.environ.get('DOMAIN')}{port}"
+        base_url_default = f"{protocol}{sub_domain}.{os.environ.get('DOMAIN')}{port}"
+
+        print(f'url par default : {base_url_default}. ENTER pour valider, remplacez sinon')
+        base_url = input()
+        if not base_url:
+            base_url=base_url_default
 
         # demo_base_url = f"https://demo.{os.environ.get('DOMAIN')}"
         headers = {"charset": "utf-8"}

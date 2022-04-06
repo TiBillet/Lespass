@@ -153,6 +153,7 @@ def send_billet_to_mail(old_instance:Reservation, new_instance:Reservation):
             ticket.save()
 
     # import ipdb; ipdb.set_trace()
+
     # On vérifie que le mail n'a pas déja été envoyé
     if not new_instance.mail_send:
         logger.info(f"    TRIGGER RESERVATION send_billet_to_mail {new_instance.status}")
@@ -170,7 +171,8 @@ def send_billet_to_mail(old_instance:Reservation, new_instance:Reservation):
 def set_paiement_valid(old_instance:Reservation, new_instance:Reservation):
     if new_instance.mail_send:
         logger.info(
-            f"    TRIGGER RESERVATION set_paiement_valid Mail envoyé {new_instance.mail_send}, on valide les paiements payés")
+            f"    TRIGGER RESERVATION set_paiement_valid Mail envoyé {new_instance.mail_send},"
+            f" on valide les paiements payés")
         for paiement in new_instance.paiements.filter(status=Paiement_stripe.PAID):
             paiement.status = Paiement_stripe.VALID
             paiement.traitement_en_cours = False

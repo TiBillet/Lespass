@@ -1,7 +1,8 @@
 # Create your views here.
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
+import pytz
 import requests
 import stripe
 from django.contrib import messages
@@ -310,7 +311,7 @@ class HereViewSet(viewsets.ViewSet):
 class EventsViewSet(viewsets.ViewSet):
 
     def list(self, request):
-        queryset = Event.objects.filter(datetime__gte=datetime.now()).order_by('datetime')
+        queryset = Event.objects.filter(datetime__gte=datetime.now().date()).order_by('datetime')
         events_serialized = EventSerializer(queryset, many=True, context={'request': request})
 
         return Response(events_serialized.data)
@@ -397,6 +398,7 @@ class ReservationViewset(viewsets.ViewSet):
 
     def create(self, request):
         print(request.data)
+
         validator = ReservationValidator(data=request.data, context={'request': request})
         if validator.is_valid():
             # serializer.save()
@@ -434,6 +436,40 @@ class OptionTicket(viewsets.ViewSet):
             permission_classes = [permissions.AllowAny]
         else:
             permission_classes = [TenantAdminPermission]
+        return [permission() for permission in permission_classes]
+
+def borne_temps_4h():
+    now = timezone.now()
+    jour = now.date()
+    tzlocal = pytz.timezone(Configuration.get_solo().fuseau_horaire)
+    debut_jour = tzlocal.localize(datetime.combine(jour, datetime.min.time()), is_dst=None) + timedelta(
+        hours=4)
+    lendemain_quatre_heure = tzlocal.localize(datetime.combine(jour, datetime.max.time()), is_dst=None) + timedelta(
+        hours=4)
+
+    if now < debut_jour:
+        # Alors on demande au petit matin.
+        # Les bornes sont ceux de la veille.
+        return debut_jour - timedelta(days=1), debut_jour
+    else:
+        return debut_jour, lendemain_quatre_heure
+
+
+class TicketViewset(viewsets.ViewSet):
+    def list(self, request):
+        debut_jour, lendemain_quatre_heure = borne_temps_4h()
+
+        queryset = Ticket.objects.filter(
+            reservation__event__datetime__gte=debut_jour,
+            reservation__event__datetime__lte=lendemain_quatre_heure,
+            status__in=["K","S"]
+        )
+
+        serializer = TicketSerializer(queryset, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    def get_permissions(self):
+        permission_classes = [TenantAdminPermission]
         return [permission() for permission in permission_classes]
 
 

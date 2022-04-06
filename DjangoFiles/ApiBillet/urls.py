@@ -14,6 +14,7 @@ router.register(r'reservations', api_view.ReservationViewset, basename='reservat
 router.register(r'membership', api_view.MembershipViewset, basename='membership')
 router.register(r'optionticket', api_view.OptionTicket, basename='optionticket')
 router.register(r'chargecashless', api_view.ChargeCashless, basename='chargecashless')
+router.register(r'ticket', api_view.TicketViewset, basename='ticket')
 
 urlpatterns = [
     path('', include(router.urls)),

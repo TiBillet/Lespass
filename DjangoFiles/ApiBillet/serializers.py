@@ -400,6 +400,7 @@ def validate_email_and_return_user(email):
     user.save()
     return user
 
+
 class NewAdhesionValidator(serializers.Serializer):
     adhesion = serializers.PrimaryKeyRelatedField(
         queryset=Price.objects.filter(product__categorie_article=Product.ADHESION))
@@ -448,7 +449,6 @@ class NewAdhesionValidator(serializers.Serializer):
         logger.info(f"{self.checkout_session.url}")
         representation['checkout_url'] = self.checkout_session.url
         return representation
-
 
 
 class MembreValidator(serializers.Serializer):
@@ -510,7 +510,7 @@ def get_near_event_by_date():
 
 def create_ticket(pricesold, customer, reservation):
     statut = Ticket.CREATED
-    if pricesold.price.product.categorie_article == Product.FREERES :
+    if pricesold.price.product.categorie_article == Product.FREERES:
         statut = Ticket.NOT_ACTIV
     ticket = Ticket.objects.create(
         status=statut,
@@ -628,8 +628,15 @@ class ChargeCashlessValidator(serializers.Serializer):
 
 class ReservationValidator(serializers.Serializer):
     email = serializers.EmailField()
+    to_mail = serializers.BooleanField(default=True, required=False)
     event = serializers.PrimaryKeyRelatedField(queryset=Event.objects.all())
     prices = serializers.JSONField(required=True)
+
+    def validate_event(self, value):
+        event: Event = value
+        if event.complet():
+            raise serializers.ValidationError(_(f'Jauge atteinte : Evenement complet.'))
+        return value
 
     def validate_email(self, value):
         self.user_commande = validate_email_and_return_user(value)
@@ -681,8 +688,7 @@ class ReservationValidator(serializers.Serializer):
 
     def validate(self, attrs):
         event: Event = attrs.get('event')
-        if event.complet():
-            raise serializers.ValidationError(_(f'Jauge atteinte : Evenement complet.'))
+        to_mail: bool = attrs.get('to_mail')
 
         for line_price in self.prices_list:
             if line_price['price'].product not in event.products.all():
@@ -692,6 +698,7 @@ class ReservationValidator(serializers.Serializer):
         # on construit l'object reservation.
         reservation = Reservation.objects.create(
             user_commande=self.user_commande,
+            to_mail=to_mail,
             event=event,
         )
 
@@ -764,7 +771,7 @@ class ReservationValidator(serializers.Serializer):
             for line_price in list_line_article_sold:
                 line_price: LigneArticle
                 if line_price.pricesold.productsold.product.categorie_article == Product.FREERES:
-                    if line_price.status != LigneArticle.VALID :
+                    if line_price.status != LigneArticle.VALID:
                         line_price.status = LigneArticle.PAID
                         line_price.save()
 
@@ -776,7 +783,7 @@ class ReservationValidator(serializers.Serializer):
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
-        if self.checkout_session :
+        if self.checkout_session:
             logger.info(f"{self.checkout_session.url}")
             representation['checkout_url'] = self.checkout_session.url
             representation['paiement_stripe_uuid'] = self.paiement_stripe_uuid
