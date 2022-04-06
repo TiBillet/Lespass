@@ -14,6 +14,8 @@
       <Calendar categorie-article="B"/>
     </div>
   </section>
+  <!-- adhésion -->
+  <ModalAdhesion v-if="store.place.button_adhesion === true" :prices="prices" required/>
 </template>
 
 <script setup>
@@ -29,11 +31,31 @@ import {useStore} from '@/store'
 import Header from '../components/Header.vue'
 import CardEvent from '../components/CardEvent.vue'
 import Calendar from '../components/Calendar.vue'
+import ModalAdhesion from '../components/ModalAdhesion.vue'
 
 // store
 const store = useStore()
 const router = useRouter()
 const domain = `${location.protocol}//${location.host}`
+
+
+const emailBase64 = btoa('dijouxnicolas@sfr.fr')
+console.log('email base64 =', emailBase64)
+
+let prices = []
+// console.log('store.place.membership_products =', store.place.membership_products)
+if (store.place.button_adhesion === true) {
+  try {
+    prices = store.place.membership_products.filter(adh => adh.categorie_article === 'A')[0].prices
+    // console.log('prices =', prices)
+  } catch (erreur) {
+    emitter.emit('message', {
+      tmp: 6,
+      typeMsg: 'warning',
+      contenu: `Avez-vous renseigné les prix pour l'adhésion ?`
+    })
+  }
+}
 
 function getHeaderEvent() {
   let urlImage, urlLogo

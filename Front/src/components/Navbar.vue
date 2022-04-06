@@ -45,16 +45,12 @@
   </nav>
   <!-- modal login -->
   <Modallogin/>
-  <!-- adhésion -->
-  <ModalAdhesion v-if="store.place.button_adhesion === true" :prices="prices" required/>
-
 </template>
 
 <script setup>
 console.log('-> Navbar.vue')
 // composants
 import Modallogin from './Modallogin.vue'
-import ModalAdhesion from './ModalAdhesion.vue'
 
 // vue
 import {ref} from 'vue'
@@ -75,27 +71,13 @@ const props = defineProps({
 const domain = `${location.protocol}//${location.host}`
 
 let connection = ref(false)
-if(storeLocal.refreshToken !== '') {
+if (storeLocal.refreshToken !== '') {
   connection.value = true
 }
 
 // actualiser le accessToken
 if (storeLocal.refreshToken !== '' && window.accessToken === '') {
   refreshAccessToken(storeLocal.refreshToken)
-}
-
-let prices = []
-if (store.place.button_adhesion === true) {
-  try {
-    prices = store.place.membership_products.filter(adh => adh.categorie_article === 'A')[0].prices
-    console.log('prices =', prices)
-  } catch (erreur) {
-    emitter.emit('message', {
-      tmp: 6,
-      typeMsg: 'warning',
-      contenu: `Avez-vous renseigné les prix pour l'adhésion ?`
-    })
-  }
 }
 
 // si pas d'image
