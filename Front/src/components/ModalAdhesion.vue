@@ -112,6 +112,8 @@ const props = defineProps({
   prices: Object
 })
 
+// console.log('props.prices = ', props.prices)
+
 let adhesionFormModal = {
   email: storeLocal.email,
   firstName: '',
