@@ -53,8 +53,10 @@
                 <!-- email -->
                 <div class="input-group mb-2 has-validation">
                   <span class="input-group-text">Email</span>
-                  <input v-model="adhesionFormModal.email" type="email"
-                         pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$" class="form-control" required>
+                  <!-- <input v-model="adhesionFormModal.email" type="email"
+                         pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$" class="form-control" required> -->
+                   <input v-model="adhesionFormModal.email" type="email"
+                         pattern="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$" class="form-control" required>
                   <div class="invalid-feedback">
                     Une adresse email valide svp !
                   </div>

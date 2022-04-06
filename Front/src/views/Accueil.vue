@@ -39,12 +39,15 @@ const router = useRouter()
 const domain = `${location.protocol}//${location.host}`
 
 
+const emailBase64 = btoa('dijouxnicolas@sfr.fr')
+console.log('email base64 =', emailBase64)
+
 let prices = []
-console.log('store.place.membership_products =', store.place.membership_products)
+// console.log('store.place.membership_products =', store.place.membership_products)
 if (store.place.button_adhesion === true) {
   try {
     prices = store.place.membership_products.filter(adh => adh.categorie_article === 'A')[0].prices
-    console.log('prices =', prices)
+    // console.log('prices =', prices)
   } catch (erreur) {
     emitter.emit('message', {
       tmp: 6,
