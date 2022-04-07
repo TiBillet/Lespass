@@ -66,6 +66,7 @@ SHARED_APPS = (
     'django.contrib.staticfiles',
     'django.contrib.humanize',
 
+    'channels',
     'django_extensions',
     'Administration',
     'MetaBillet',
@@ -73,6 +74,7 @@ SHARED_APPS = (
     'solo',
     'stdimage',
     'corsheaders',
+
 )
 
 TENANT_APPS = (
@@ -82,6 +84,7 @@ TENANT_APPS = (
     'BaseBillet',
     'ApiBillet',
     'PaiementStripe',
+    'wsocket',
 )
 
 INSTALLED_APPS = list(SHARED_APPS) + [app for app in TENANT_APPS if app not in SHARED_APPS]
@@ -260,7 +263,16 @@ CELERY_BROKER_URL=os.environ.get('CELERY_BROKER', 'redis://redis:6379/0')
 CELERY_RESULT_BACKEND=os.environ.get('CELERY_BACKEND', 'redis://redis:6379/0')
 # DJANGO_CELERY_BEAT_TZ_AWARE=False
 
-
+#CHANNELS
+ASGI_APPLICATION = "TiBillet.asgi.application"
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [('redis', 6379)],
+        },
+    },
+}
 # Jet Menu
 # -------------------------------------/
 # JET_SIDE_MENU_COMPACT = True

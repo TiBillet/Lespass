@@ -43,6 +43,7 @@ services:
     working_dir: /DjangoFiles
 #    command: "bash /DjangoFiles/launch.sh"
 
+
   billetterie_nginx:
     container_name: billetterie_nginx
     image: nginx
