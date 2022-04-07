@@ -3,11 +3,18 @@ import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 import logging
 
+from AuthBillet.models import TibilletUser
+
 logger = logging.getLogger(__name__)
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        self.user = self.scope["user"]
+        self.user :TibilletUser = self.scope["user"]
+        # import ipdb; ipdb.set_trace()
+        if self.user.is_anonymous:
+            logger.warning(f"WEBSOCKET connect {self.user}")
+            await self.close()
+
         logger.info(f'ChatConsumer : {self.user}')
 
         self.room_name = self.scope['url_route']['kwargs']['room_name']
@@ -31,22 +38,22 @@ class ChatConsumer(AsyncWebsocketConsumer):
     # Receive message from WebSocket
     async def receive(self, text_data):
         text_data_json = json.loads(text_data)
-        message = text_data_json['message']
-
-        # Send message to room group
-        await self.channel_layer.group_send(
-            self.room_group_name,
-            {
-                'type': 'chat_message',
-                'message': message
-            }
-        )
+        message = text_data_json.get('message')
+        if message:
+            # Send message to room group
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'chat_message',
+                    'message': message
+                }
+            )
 
     # Receive message from room group
     async def chat_message(self, event):
-        message = event['message']
-
-        # Send message to WebSocket
-        await self.send(text_data=json.dumps({
-            'message': message
-        }))
+        message = event.get('message')
+        if message:
+            # Send message to WebSocket
+            await self.send(text_data=json.dumps({
+                'message': message
+            }))
