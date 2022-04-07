@@ -10,8 +10,11 @@ logger = logging.getLogger(__name__)
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.user :TibilletUser = self.scope["user"]
-        # import ipdb; ipdb.set_trace()
+
         if self.user.is_anonymous:
+            # La requete doit avoir dans header :
+            # {"Authorization": "Bearer JWTOKEN"}
+            # Check wsocket.middlewares.WebSocketJWTAuthMiddleware
             logger.warning(f"WEBSOCKET connect {self.user}")
             await self.close()
 
