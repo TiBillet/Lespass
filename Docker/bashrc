@@ -4,8 +4,8 @@ alias mm="python /DjangoFiles/manage.py migrate"
 # alias mm="python /DjangoFiles/manage.py migrate_schemas --shared"
 
 alias sp="python manage.py tenant_command shell_plus"
-alias rsp="python /DjangoFiles/manage.py runserver_plus 0.0.0.0:8002"
-alias rs="python /DjangoFiles/manage.py runserver 0.0.0.0:8002"
+alias rspp="python /DjangoFiles/manage.py runserver_plus 0.0.0.0:8002"
+alias rsp="python /DjangoFiles/manage.py runserver 0.0.0.0:8002"
 
 #alias flush="python manage.py flushall --noinput"
 

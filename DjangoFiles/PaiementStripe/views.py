@@ -110,7 +110,7 @@ class creation_paiement_stripe():
             line_items=self.line_items,
             mode='payment',
             metadata=self.metadata,
-            client_reference_id=f"{self.user.uuid}",
+            client_reference_id=f"{self.user.pk}",
         )
         print("-"*40)
         print(f"Création d'un nouveau paiment stripe. Metadata : {self.metadata}")

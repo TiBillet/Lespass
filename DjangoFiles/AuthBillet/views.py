@@ -64,7 +64,7 @@ class activate(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, uid, token):
-        user = User.objects.get(uuid=decode_uid(uid))
+        user = User.objects.get(pk=decode_uid(uid))
         if user.email_error:
             return Response('Mail non valide', status=status.HTTP_406_NOT_ACCEPTABLE)
 
