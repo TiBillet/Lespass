@@ -38,6 +38,9 @@ urlpatterns = [
     # catché par le front node JS, à supprimer prochainement
     path('stripe/return/<uuid:uuid_paiement>', Webhook_stripe.as_view()),
 
+    # tuto websocket
+    path('chat/', include('wsocket.urls')),
+
     path('', include('BaseBillet.urls')),
 
     # path('admin/', admin.site.urls, name="public_admin_url"),

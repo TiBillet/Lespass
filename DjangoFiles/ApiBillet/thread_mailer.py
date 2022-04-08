@@ -1,10 +1,11 @@
+'''
 import os
 import threading
 from django.core.mail import send_mail, EmailMessage, EmailMultiAlternatives
 from django.db import connection
 from django.template.loader import render_to_string
 from django.utils import timezone
-from stripe.http_client import requests
+import requests
 from weasyprint import HTML
 from BaseBillet.models import Configuration, Reservation, Ticket
 
@@ -12,13 +13,17 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-'''
 from ApiBillet.thread_mailer import ThreadMaileur
 config = Configuration.get_solo()
 context = {'config': config, }
 mail = ThreadMaileur('jturbeaux@pm.me', "Vos Billets", template='mails/ticket.html', context=context)
 mail.send_with_tread()
 '''
+
+
+'''
+Vieille methode pour envoyer un mail en async
+On utilise aujourd'hui celery.
 
 
 class ThreadMaileur():
@@ -92,3 +97,6 @@ class ThreadMaileur():
         thread_email = threading.Thread(target=self.send)
         thread_email.start()
         logger.info(f'{timezone.now()} Thread email lancé')
+
+
+'''

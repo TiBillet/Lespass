@@ -200,7 +200,7 @@ def connexion_celery_mailer(user_email, base_url):
     User = get_user_model()
     user = User.objects.get(email=user_email)
 
-    uid = encode_uid(user.uuid)
+    uid = encode_uid(user.pk)
     token = default_token_generator.make_token(user)
     connexion_url = f"{base_url}/emailconfirmation/{uid}/{token}"
 
@@ -237,44 +237,50 @@ def ticket_celery_mailer(reservation_uuid: str):
     config = Configuration.get_solo()
     reservation = Reservation.objects.get(pk=reservation_uuid)
 
-    attached_files = {}
-    for ticket in reservation.tickets.filter(status=Ticket.NOT_SCANNED):
-        attached_files[ticket.pdf_filename()] = create_ticket_pdf(ticket)
+    if not reservation.to_mail :
+        reservation.status = Reservation.PAID_NOMAIL
+        reservation.save()
+        logger.info(f"CELERY mail reservation.to_mail : {reservation.to_mail}. On passe en PAID_NOMAIL")
 
-    try:
-        mail = CeleryMailerClass(
-            reservation.user_commande.email,
-            f"Votre reservation pour {config.organisation}",
-            template='mails/buy_confirmation.html',
-            context={
-                'config': config,
-                'reservation': reservation,
-            },
-            attached_files=attached_files,
-        )
+    else :
+        attached_files = {}
+        for ticket in reservation.tickets.filter(status=Ticket.NOT_SCANNED):
+            attached_files[ticket.pdf_filename()] = create_ticket_pdf(ticket)
+
         try:
-            mail.send()
-            logger.info(f"mail.sended : {mail.sended}")
+            mail = CeleryMailerClass(
+                reservation.user_commande.email,
+                f"Votre reservation pour {config.organisation}",
+                template='mails/buy_confirmation.html',
+                context={
+                    'config': config,
+                    'reservation': reservation,
+                },
+                attached_files=attached_files,
+            )
+            try:
+                mail.send()
+                logger.info(f"mail.sended : {mail.sended}")
 
-            if mail.sended:
-                reservation.mail_send = True
-                reservation.status = Reservation.VALID
+                if mail.sended:
+                    reservation.mail_send = True
+                    reservation.status = Reservation.VALID
+                    reservation.save()
+
+            except smtplib.SMTPRecipientsRefused as e:
+
+                logger.error(f"ERROR {timezone.now()} Erreur envoie de mail pour reservation {reservation} : {e}")
+                logger.error(f"mail.sended : {mail.sended}")
+                reservation.mail_send = False
+                reservation.mail_error = True
+
+                reservation.status = Reservation.PAID_ERROR
                 reservation.save()
 
-        except smtplib.SMTPRecipientsRefused as e:
 
-            logger.error(f"ERROR {timezone.now()} Erreur envoie de mail pour reservation {reservation} : {e}")
-            logger.error(f"mail.sended : {mail.sended}")
-            reservation.mail_send = False
-            reservation.mail_error = True
-
-            reservation.status = Reservation.PAID_ERROR
-            reservation.save()
-
-
-    except Exception as e:
-        logger.error(f"{timezone.now()} Erreur envoie de mail pour reservation {reservation} : {e}")
-        raise Exception
+        except Exception as e:
+            logger.error(f"{timezone.now()} Erreur envoie de mail pour reservation {reservation} : {e}")
+            raise Exception
 
 
 @app.task

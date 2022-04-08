@@ -38,16 +38,38 @@ services:
     extends:
       file: ../compose/docker-compose-base.yml
       service: billetterie_celery
-    command: "bash /DjangoFiles/launch_celery.sh"
     env_file: .env
     depends_on:
       - billetterie_django_dev
+      - billetterie_redis_dev
     links:
       - billetterie_postgres_dev:billetterie_postgres
       - billetterie_redis_dev:redis
     networks:
 #      - frontend
       - backend-billeterie
+    command: "bash /DjangoFiles/launch_celery.sh"
+
+#  billetterie_daphne_dev:
+#    extends:
+#      file: ../compose/docker-compose-base.yml
+#      service: billetterie_celery
+#    env_file: .env
+#    container_name: billetterie_daphne
+#    hostname: billetterie_daphne
+#    depends_on:
+#      - billetterie_django_dev
+#      - billetterie_postgres_dev
+#      - billetterie_redis_dev
+#    links:
+#      - billetterie_postgres_dev:billetterie_postgres
+#      - billetterie_redis_dev:redis
+#    ports:
+#      - 7999:7999
+#    networks:
+#      - frontend
+#      - backend-billeterie
+#    command: "bash /DjangoFiles/launch_ws.sh"
 
   billetterie_nodejs_dev:
     image: node:16-bullseye

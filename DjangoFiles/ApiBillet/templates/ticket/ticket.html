@@ -6,7 +6,7 @@
 </head>
 
 <body>
-<section id="informations" style="align-content: center; align-items: center; display: flex">
+<section id="informations">
 
     <h1>{{ ticket.reservation.event.name }}</h1>
     <h2>Lieux : {{ config.organisation }}</h2>
@@ -16,7 +16,7 @@
     <h4>Numéro de billet : {{ ticket.numero_uuid }}</h4>
 
     <div>{{ img_svg | safe }}</div>
-    <div>{{ bar_svg | safe }}</div>
+{#    <div>{{ bar_svg | safe }}</div>#}
 
 </section>
 </body>

@@ -58,10 +58,7 @@ class TibilletManager(BaseUserManager):
 
 class TibilletUser(AbstractUser):
 
-    #TODO regarder du coté du dashboard de jet, ça plante avec uuid !
-    # uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
-
-    uuid = models.UUIDField(default=uuid.uuid4, editable=False)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
 
     # USERNAME_FIELD = 'email'
     # REQUIRED_FIELDS = []  # removes email from REQUIRED_FIELDS
