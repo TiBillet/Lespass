@@ -152,8 +152,7 @@ function formaterDatas(adhesionActive, adhesionPrix) {
           "first_name": dataAdhesion.firstName,
           "last_name": dataAdhesion.lastName,
           "phone": dataAdhesion.phone,
-          "postal_code": dataAdhesion.postalCode,
-          "birth_date": dataAdhesion.birthDate
+          "postal_code": dataAdhesion.postalCode
         }
       ]
     })

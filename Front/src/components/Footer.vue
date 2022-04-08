@@ -32,7 +32,8 @@
                 </a>
               </li>
               <li class="nav-item">
-                <a class="nav-link pe-1" href="https://www.youtube.com/channel/UCVyTG4sCw-rOvB9oHkzZD1w" target="_blank">
+                <a class="nav-link pe-1" href="https://www.youtube.com/channel/UCVyTG4sCw-rOvB9oHkzZD1w"
+                   target="_blank">
                   <i class="fab fa-youtube text-lg opacity-8" aria-hidden="true"></i>
                 </a>
               </li>
@@ -120,7 +121,7 @@
             <h6 class="font-weight-bolder text-sm">Legal</h6>
             <ul class="flex-column ms-n3 nav">
               <li class="nav-item">
-                <a class="nav-link" href="https://www.creative-tim.com/terms" target="_blank">
+                <a class="nav-link" href="/status#general-terms" target="_blank">
                   Terms &amp; Conditions
                 </a>
               </li>
@@ -130,7 +131,7 @@
                 </a>
               </li>
               <li class="nav-item">
-                <a class="nav-link" href="https://www.creative-tim.com/license" target="_blank">
+                <a class="nav-link" href="/status#license" target="_blank">
                   Licenses (EULA)
                 </a>
               </li>
@@ -151,9 +152,9 @@
 </template>
 
 <script setup>
-  // console.log('-> Footer.vue')
+// console.log('-> Footer.vue')
 
-  const props = defineProps({
-    place: Object
-  })
+const props = defineProps({
+  place: Object
+})
 </script>

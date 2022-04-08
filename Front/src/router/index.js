@@ -53,6 +53,11 @@ const routes = [
     path: '/emailconfirmation/:id/:token',
     name: 'EmailConfirmation',
     component: {}
+  },
+  {
+    path: '/status',
+    name: 'StatusPlace',
+    component: () => import(/* webpackChunkName: "StatusPlace" */ '../views/StatusPlace.vue')
   }
 ]
 

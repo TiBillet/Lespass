@@ -5,22 +5,18 @@
   <Footer :place="store.place"/>
   <Message/>
   <ModalMessage/>
+  <!-- loading -->
+  <div v-if="loading === true" class="position-relative d-flex justify-content-center align-items-center vw-100 vh-100">
+    <h1>Chargement des données !</h1>
+    <div class="position-absolute d-flex justify-content-center align-items-center vw-100 vh-100">
+      <div class="spinner-border text-success" role="status" style="width: 10rem; height: 10rem;"></div>
+    </div>
+  </div>
 </template>
 
 <script setup>
-// bootstrap (ui)
-import './assets/js/core/popper.min.js'
-import './assets/js/core/bootstrap.bundle.min.js'
-// en attente (erreur t n'est pas défini)
-import './assets/js/plugins/perfect-scrollbar.js'
-import './assets/js/now-design-system-pro.js'
-
-// Nucleo Icons (ui)
-import './assets/css/nucleo-icons.css'
-import './assets/css/nucleo-svg.css'
-
-// css (ui)
-import './assets/css/now-design-system-pro.min.css'
+// vue
+import {ref} from 'vue'
 
 // composants
 import Navbar from './components/Navbar.vue'
@@ -41,10 +37,16 @@ const storeLocal = new StoreLocal('localStorage', 'Tibilet-identite', {
   refreshToken: ''
 })
 
+const loading = ref(false)
 
 // console.log('-> App.vue, storeLocal.state =', storeLocal.state())
-console.log('-> App.vue, storeLocal =', storeLocal.state)
+// console.log('-> App.vue, storeLocal =', storeLocal.state)
 
+// aller à la page évènement (lien défini si-dessous et dans le store) => /views/Event.vue
+emitter.on('statusLoading', (status) => {
+  console.log('-> Emmiter, réception "statusLoading"; status')
+  loading.value = status
+})
 
 </script>
 <style>

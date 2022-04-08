@@ -1,6 +1,15 @@
 <template>
   <fieldset class="col-md-12 col-lg-9 mb-4 shadow-sm p-3 mb-5 bg-body rounded">
-    <legend>Adhésion</legend>
+    <legend>
+      <!-- Adhésion -->
+      <div class="card-header pb-0 d-flex align-items-center">
+        <h3 class="font-weight-bolder text-info text-gradient align-self-start w-85">Adhésion</h3>
+        <div class="d-flex align-items-center modal-click-info" @click="goStatus()">
+          <span>status</span>
+          <i class="fas fa-question mb-1"></i>
+        </div>
+      </div>
+    </legend>
     <div class="form-check form-switch">
       <input v-if="adhesion.obligatoire === true" class="form-check-input" type="checkbox"
              id="etat-adhesion" checked disabled>
@@ -14,7 +23,8 @@
 
       <!-- prix -->
       <div class="input-group mb-2 has-validation">
-        <div :id="`card-adhesion-uuid-price-parent${index}`" class="col form-check mb-3" v-for="(price, index) in adhesion.prices" :key="index">
+        <div :id="`card-adhesion-uuid-price-parent${index}`" class="col form-check mb-3"
+             v-for="(price, index) in adhesion.prices" :key="index">
           <input :value="price.uuid"
                  class="form-check-input card-adhesion-uuid-price" type="radio"
                  name="prixAdhesion" :id="`uuidPriceRadio${index}`"
@@ -57,20 +67,9 @@
         <span class="input-group-text" id="basic-addon1">Fixe ou Mobile</span>
         <input :value="adhesion.phone" type="tel"
                class="form-control" pattern="^[0-9-+\s()]*$"
-               aria-label="Fixe ou Mobile" required
+               aria-label="Fixe ou Mobile" placeholder="Non obligatoire, uniquement utile pour vous envoyer les confirmations d'achats."
                @keyup="updateAdhesion('phone', $event.target.value)">
         <div class="invalid-feedback">Un numéro de téléphone svp !</div>
-      </div>
-      <!-- date de naissance -->
-      <div class="input-group mb-2 has-validation">
-        <span class="input-group-text" id="basic-addon1">Date de naissance</span>
-        <input :value="adhesion.birthDate" type="text"
-               class="form-control datepicker"
-               placeholder="Date de naissance" pattern="^[0-9-+\s()]*$"
-               aria-label="Date de naissance" required
-               @change="updateAdhesion('birthDate', $event.target.value)"
-               @click="$event.target.type='date'; $event.target.click()">
-        <div class="invalid-feedback">Sélectionner une date svp !</div>
       </div>
 
     </div>
@@ -80,6 +79,9 @@
 <script setup>
 console.log('-> CardAdhesion.vue !')
 import {ref, onMounted, onUpdated} from 'vue'
+
+// vue
+import {useRouter} from 'vue-router'
 
 // store
 import {useStore} from '@/store'
@@ -94,6 +96,8 @@ const props = defineProps({
 
 const store = useStore()
 
+const router = useRouter()
+
 // mémorise par défaut
 let record = true
 
@@ -103,7 +107,6 @@ const dataInit = {
   lastName: "",
   phone: null,
   postalCode: null,
-  birthDate: null,
   uuidPrix: '',
   activation: false
 }
@@ -185,7 +188,16 @@ function updateAdhesion(key, value) {
     adhesion.value[key] = value
   }
 }
+
+function goStatus() {
+  // aller au status
+  router.push({name: 'StatusPlace'})
+}
+
 </script>
 
-<style>
+<style scoped>
+.modal-click-info {
+  cursor: pointer;
+}
 </style>

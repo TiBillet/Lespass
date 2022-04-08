@@ -35,6 +35,7 @@ import ModalAdhesion from '../components/ModalAdhesion.vue'
 
 // store
 const store = useStore()
+
 const router = useRouter()
 const domain = `${location.protocol}//${location.host}`
 
@@ -79,9 +80,6 @@ function getHeaderEvent() {
     domain: domain
   }
 }
-
-
-
 
 // aller à la page évènement (lien défini si-dessous et dans le store) => /views/Event.vue
 emitter.on('goEvenement', (slug) => {

@@ -123,20 +123,23 @@ export async function emailActivation(id, token) {
 }
 
 export async function getMe(token) {
+  console.log('-> fonc getMe, token =',token)
   const apiMe = `/api/user/me/`
   const options = {
     method: 'GET',
     cache: 'no-cache',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
+      'Authorization': `Bearer ${token} `
     }
   }
+  emitter.emit('statusLoading', true)
   try {
     const response = await fetch(domain + apiMe, options)
     if (response.status === 200) {
       const retour = await response.json()
-      return retour
+      // console.log('retour =', JSON.stringify(retour, null, 2))
+      emitter.emit('statusAdhesion', retour)
     } else {
       throw new Error(`Erreur ${apiMe} !`)
     }
@@ -147,6 +150,7 @@ export async function getMe(token) {
       contenu: `${domain + apiMe} : ${erreur}`
     })
   }
+  emitter.emit('statusLoading', false)
 }
 
 export function postStripeReturn(uuidStripe) {
@@ -198,6 +202,7 @@ export async function refreshAccessToken(refreshToken) {
     const retour = await response.json()
     if (response.status === 200) {
       window.accessToken = retour.access
+      getMe(window.accessToken)
     } else {
       throw new Error(`Erreur obtention nouvel "access token" !`)
     }

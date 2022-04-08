@@ -7,10 +7,16 @@
       <div class="modal-content">
         <div class="modal-body p-0">
           <div class="card card-plain">
-            <div class="card-header pb-0 text-left">
-              <h3 class="font-weight-bolder text-info text-gradient">Adhésion</h3>
+            <div class="card-header pb-0 d-flex align-items-center">
+              <h3 class="font-weight-bolder text-info text-gradient align-self-start w-85">Adhésion</h3>
+              <div class="d-flex align-items-center modal-click-info" @click="goStatus()">
+                  <span>status</span>
+                <i class="fas fa-question mb-1"></i>
+              </div>
             </div>
+
             <div class="card-body">
+
               <form @submit.prevent="validerAdhesion($event)" novalidate>
 
                 <!-- prix -->
@@ -55,7 +61,7 @@
                   <span class="input-group-text">Email</span>
                   <!-- <input v-model="adhesionFormModal.email" type="email"
                          pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$" class="form-control" required> -->
-                   <input v-model="adhesionFormModal.email" type="email"
+                  <input v-model="adhesionFormModal.email" type="email"
                          pattern="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$" class="form-control" required>
                   <div class="invalid-feedback">
                     Une adresse email valide svp !
@@ -71,21 +77,14 @@
                 </div>
 
                 <!-- téléphone -->
-                <div class="input-group mb-2 has-validation">
+                <div class="input-group has-validation">
                   <span class="input-group-text">Fixe ou Mobile</span>
                   <input v-model="adhesionFormModal.phone" type="tel"
                          class="form-control" pattern="^[0-9-+\s()]*$"
-                         aria-label="Fixe ou Mobile" required>
+                         aria-label="Fixe ou Mobile">
                   <div class="invalid-feedback">Un numéro de téléphone svp !</div>
                 </div>
-
-                <!-- date de naissance -->
-                <div class="input-group mb-2 has-validation">
-                  <span class="input-group-text">Date de naissance</span>
-                  <input type="date" v-model="adhesionFormModal.birthDate" pattern="^[0-9-+\s()]*$"
-                         aria-label="Date de naissance" required>
-                  <div class="invalid-feedback">Date de naissance svp !</div>
-                </div>
+                <p class="mb-2">Non obligatoire, uniquement utile pour vous envoyer les confirmations d'achats."</p>
 
                 <div class="text-center">
                   <button type="submit" class="btn btn-round bg-gradient-info btn-lg w-100 mt-4 mb-0">Valider</button>
@@ -101,6 +100,9 @@
 </template>
 
 <script setup>
+// vue
+import {useRouter} from 'vue-router'
+
 // myStore
 import {StoreLocal} from '@/divers'
 
@@ -108,6 +110,7 @@ import {StoreLocal} from '@/divers'
 import {postAdhesionModal} from '@/api'
 
 const storeLocal = StoreLocal.use('localStorage', 'Tibilet-identite')
+const router = useRouter()
 
 // attributs/props
 const props = defineProps({
@@ -122,8 +125,16 @@ let adhesionFormModal = {
   lastName: '',
   phone: '',
   postalCode: '',
-  birthDate: '',
   uuidPrix: ''
+}
+
+function goStatus() {
+  // ferme le modal
+  const elementModal = document.querySelector('#modal-form-adhesion')
+  const modal = bootstrap.Modal.getInstance(elementModal) // Returns a Bootstrap modal instance
+  modal.hide()
+  // aller au status
+  router.push({name: 'StatusPlace'})
 }
 
 function validerAdhesion(event) {
@@ -143,7 +154,6 @@ function validerAdhesion(event) {
       last_name: adhesionFormModal.lastName,
       phone: adhesionFormModal.phone,
       postal_code: adhesionFormModal.postalCode,
-      birth_date: adhesionFormModal.birthDate,
       adhesion: adhesionFormModal.uuidPrix
     })
   } else {
@@ -165,5 +175,7 @@ function validerAdhesion(event) {
 </script>
 
 <style scoped>
-
+.modal-click-info {
+  cursor: pointer;
+}
 </style>

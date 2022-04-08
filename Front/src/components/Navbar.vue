@@ -20,15 +20,34 @@
 
         <ul class="navbar-nav ms-auto">
           <!-- adhésion -->
-          <li v-if="store.place.button_adhesion === true && router.currentRoute.value.name === 'Accueil'"
+          <li v-if="store.place.button_adhesion === true && router.currentRoute.value.name === 'Accueil' && statusAdhesion === false"
               class="nav-item px-3">
             <button class="btn bg-gradient-info mb-0" data-bs-toggle="modal" data-bs-target="#modal-form-adhesion">
               <span class="btn-inner--icon"><i class="fa fa-ticket" aria-hidden="true"></i></span>
               <span class="btn-inner--text">Adhésion</span>
             </button>
           </li>
+          <!-- menu Profil -->
+          <li v-if="statusAdhesion === true" class="nav-item dropdown text-success">
+            <a href="#" class="btn bg-gradient-dark dropdown-toggle mb-0" data-bs-toggle="dropdown"
+               id="navbarProfilUser">
+              <i class="fas fa-user me-1"></i>Profil
+            </a>
+            <ul class="dropdown-menu" aria-labelledby="navbarProfilUser">
+              <li>
+                <a class="dropdown-item" href="#" @click="showAssets()">
+                  <i class="fas fa-address-card fa-fw me-1"></i>Carte
+                </a>
+              </li>
+              <li>
+                <a class="dropdown-item" href="#" @click="showAdhesion()">
+                  <i class="fas fa-hourglass-start fa-fw me-1"></i>Adhésion
+                </a>
+              </li>
+            </ul>
+          </li>
           <!-- déconnexion -->
-          <li v-if="connection === true" class="nav-item text-success d-flex flex-row align-items-center">
+          <li v-if="connection === true" class="nav-item d-flex flex-row align-items-center text-success">
             <i class="ni ni-world-2 m"></i>
             <span class="ms-1">Connecté</span>
           </li>
@@ -49,13 +68,35 @@
 
 <script setup>
 console.log('-> Navbar.vue')
+
+import '../assets/css/google_fonts_family_montserrat_400.700.200.css'
+
+// Nucleo Icons (ui)
+import '../assets/css/nucleo-icons.css'
+
+
+// Font Awesome Free 5.15.4 MIT License
+import '../assets/js/kit-fontawesome-42d5adcbca.js'
+
+// bootstrap (ui)
+import '../assets/css/bootstrap-5.0.2/bootstrap.min.css'
+import '../assets/js/bootstrap-5.0.2/bootstrap.bundle.min.js'
+
+// perfect-scrollbar
+import '../assets/css/perfect-scrollbar.css'
+import '../assets/js/perfect-scrollbar/perfect-scrollbar.min.js'
+
+// css (ui)
+import '../assets/css/now-design-system-pro.min.css'
+import '../assets/js/now-design-system-pro.js'
+
 // composants
 import Modallogin from './Modallogin.vue'
 
 // vue
-import {ref} from 'vue'
+import {ref, onMounted} from 'vue'
 import {useRouter} from 'vue-router'
-// commun
+// api
 import {refreshAccessToken} from '@/api'
 // store
 import {useStore} from '@/store'
@@ -69,6 +110,9 @@ const props = defineProps({
   place: Object
 })
 const domain = `${location.protocol}//${location.host}`
+
+let statusAdhesion = ref(false)
+let profil = ref({})
 
 let connection = ref(false)
 if (storeLocal.refreshToken !== '') {
@@ -92,9 +136,62 @@ const getLogo = () => {
   return `${domain + props.place.logo_variations.med}`
 }
 
+function showAssets() {
+  const monnaies = profil.value.assets
+  let contenu = `<h3>Numéro de carte : ${profil.value.numberCahslessCard}</h3>`
+  for (let i = 0; i < monnaies.length; i++) {
+    const monnaie = monnaies[i]
+    console.log('monnaie =', monnaie)
+    // <i class="fas fa-gift"></i>
+    if (monnaie.monnaie_name.toLowerCase().indexOf('cadeau') !== -1) {
+      contenu += `<h3>${monnaie.monnaie_name.split(' ')[0]}<i class="fas fa-gift ms-1"></i> = ${monnaie.qty}</h3>`
+    } else {
+      contenu += `<h3>${monnaie.monnaie_name} = ${monnaie.qty}</h3>`
+    }
+
+  }
+  emitter.emit('modalMessage', {
+    titre: 'Monnaies',
+    dynamique: true,
+    contenu: contenu
+  })
+
+}
+
+function showAdhesion() {
+   emitter.emit('modalMessage', {
+    titre: 'Adhesion',
+    dynamique: true,
+    contenu: `
+      <h3>Email : ${profil.value.email}</h3>
+      <h3>Nom : ${profil.value.lastName}</h3>
+      <h3>Prenom : ${profil.value.firstName}</h3>
+      <h3>Inscription : ${profil.value.inscription}</h3>
+      <h3>Echéance : ${profil.value.echeance}</h3>
+    `
+  })
+}
+
 emitter.on('statusConnection', (data) => {
   // console.log('réception de "statusConnection", data =', data)
   connection.value = data
+})
+
+emitter.on('statusAdhesion', (data) => {
+  console.log('réception de "statusAdhesion", data =', data)
+  if (data.cashless.a_jour_cotisation === true) {
+    statusAdhesion.value = true
+  }
+  const dataProfil = ['', '', '', '', '', 'cashless/cards/number',]
+  profil.value = {
+    email: data.email,
+    lastName: data.cashless.name,
+    firstName: data.cashless.prenom,
+    inscription: data.cashless.date_inscription,
+    echeance: data.cashless.prochaine_echeance,
+    numberCahslessCard: data.cashless.cards[0].number,
+    assets: data.cashless.cards[0].assets
+  }
 })
 
 </script>

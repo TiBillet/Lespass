@@ -3,6 +3,7 @@ import {defineStore} from 'pinia'
 // session storage
 export const useStore = defineStore('store', {
   state: () => ({
+    language: 'fr',
     currentUuidEvent: '',
     memoComposants: {},
     user: {
