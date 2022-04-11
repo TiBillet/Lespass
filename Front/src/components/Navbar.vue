@@ -129,11 +129,11 @@ const getLogo = () => {
   if (props.place.logo_variations === undefined) {
     return `${domain}/media/images/image_non_disponible.svg`
   } else {
-    if (props.place.logo_variations.med === undefined) {
+    if (props.place.logo_variations.thumbnail === undefined) {
       return `${domain}/media/images/image_non_disponible.svg`
     }
   }
-  return `${domain + props.place.logo_variations.med}`
+  return `${domain + props.place.logo_variations.thumbnail}`
 }
 
 function showAssets() {
