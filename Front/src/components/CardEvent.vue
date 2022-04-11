@@ -1,8 +1,8 @@
 <template>
   <div class="card card-blog card-plain">
-    <div v-if="event.img_variations.length > 0">
+    <div v-if="event.artists.length > 0">
       <a class="d-block">
-        <img class="img-fluid shadow border-radius-lg" :src="event.img_variations.thumbnail" loading="lazy"
+        <img class="img-fluid shadow border-radius-lg" :src="event.artists[0].configuration.img_variations.med" loading="lazy"
              alt="Image de l'évènement !"/>
       </a>
     </div>
