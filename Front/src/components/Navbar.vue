@@ -159,7 +159,7 @@ function showAssets() {
 }
 
 function showAdhesion() {
-   emitter.emit('modalMessage', {
+  emitter.emit('modalMessage', {
     titre: 'Adhesion',
     dynamique: true,
     contenu: `
