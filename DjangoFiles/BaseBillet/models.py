@@ -35,8 +35,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-
-
 class OptionGenerale(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
     name = models.CharField(max_length=30, unique=True)
@@ -336,8 +334,10 @@ class Event(models.Model):
     published = models.BooleanField(default=False)
 
     products = models.ManyToManyField(Product, blank=True)
-    options_radio = models.ManyToManyField(OptionGenerale, blank=True, related_name="options_radio", verbose_name="Option choix unique")
-    options_checkbox = models.ManyToManyField(OptionGenerale, blank=True, related_name="options_checkbox", verbose_name="Options choix multiple")
+    options_radio = models.ManyToManyField(OptionGenerale, blank=True, related_name="options_radio",
+                                           verbose_name="Option choix unique")
+    options_checkbox = models.ManyToManyField(OptionGenerale, blank=True, related_name="options_checkbox",
+                                              verbose_name="Options choix multiple")
 
     img = StdImageField(upload_to='images/',
                         validators=[MaxSizeValidator(1920, 1920)],
@@ -697,7 +697,7 @@ class Paiement_stripe(models.Model):
 
     traitement_en_cours = models.BooleanField(default=False)
     NA, WEBHOOK, GET = 'N', 'W', 'G'
-    
+
     SOURCE_CHOICES = (
         (NA, _('Pas de traitement en cours')),
         (WEBHOOK, _('Depuis webhook post stripe')),
@@ -764,7 +764,6 @@ class LigneArticle(models.Model):
             return _('no stripe send')
 
 
-
 class Membership(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='membership')
 
@@ -806,4 +805,3 @@ class Membership(models.Model):
             return f"{self.last_name} {self.first_name}"
         else:
             return f"{self.last_name}"
-
