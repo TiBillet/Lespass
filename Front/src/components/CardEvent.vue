@@ -49,11 +49,6 @@
         {{ event.artists[0].configuration.short_description }}
       </p>
 
-      <!--      <p class="card-description mb-4">-->
-      <!--        Use border utilities to quickly style the border and border-radius of an element. Great for-->
-      <!--        images, buttons.-->
-      <!--      </p>-->
-
       <button type="button" class="btn btn-outline-primary btn-sm" @click="emitGoEvenement(event.slug)">
         Réserver
       </button>
