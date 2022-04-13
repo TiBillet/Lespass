@@ -7,7 +7,7 @@
              @change="updateActiveSimpleProduct('activation', $event.target.checked)"
              :checked="simpleProduct.activation">
       <label class="form-check-label text-dark" :for="`active-simple-product${simpleProduct.uuid}`">
-        Je donne un euro de plus pour soutenir les actions de la coopérative <a href="https://wiki.tibillet.re">TiBillet</a> en faveur de la culture.
+        Je donne un euro de plus pour soutenir les actions de la coopérative <a href="https://wiki.tibillet.re">TiBillet</a> en faveur de la culture et de l'économie sociale et solidaire.
       </label>
     </div>
 
