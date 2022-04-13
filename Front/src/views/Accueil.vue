@@ -39,10 +39,6 @@ const store = useStore()
 const router = useRouter()
 const domain = `${location.protocol}//${location.host}`
 
-
-const emailBase64 = btoa('dijouxnicolas@sfr.fr')
-console.log('email base64 =', emailBase64)
-
 let prices = []
 // console.log('store.place.membership_products =', store.place.membership_products)
 if (store.place.button_adhesion === true) {

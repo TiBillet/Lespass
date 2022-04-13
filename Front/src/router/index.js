@@ -100,6 +100,7 @@ router.beforeEach((to, from, next) => {
   // http://m.django-local.org:3000/stripe/return/a8f3439f-d7f3-474a-9980-8873950c98f8
   // POST /webhook_stripe/a8f3439f-d7f3-474a-9980-8873950c98f8
   if (to.name === "StripeReturn") {
+    console.log('--------------------------------------------------------------------------------------------------')
     console.log('Interception "StripeReturn" !')
     console.log('to =', to)
     const uuidStripe = to.params.id

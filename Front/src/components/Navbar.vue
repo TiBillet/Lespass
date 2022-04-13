@@ -112,7 +112,7 @@ const props = defineProps({
 const domain = `${location.protocol}//${location.host}`
 
 let statusAdhesion = ref(false)
-let profil = ref({})
+let profil = ref(null)
 
 let connection = ref(false)
 if (storeLocal.refreshToken !== '') {
@@ -181,16 +181,15 @@ emitter.on('statusAdhesion', (data) => {
   console.log('réception de "statusAdhesion", data =', data)
   if (data.cashless.a_jour_cotisation === true) {
     statusAdhesion.value = true
-  }
-  const dataProfil = ['', '', '', '', '', 'cashless/cards/number',]
-  profil.value = {
-    email: data.email,
-    lastName: data.cashless.name,
-    firstName: data.cashless.prenom,
-    inscription: data.cashless.date_inscription,
-    echeance: data.cashless.prochaine_echeance,
-    numberCahslessCard: data.cashless.cards[0].number,
-    assets: data.cashless.cards[0].assets
+    profil.value = {
+      email: data.email,
+      lastName: data.cashless.name,
+      firstName: data.cashless.prenom,
+      inscription: data.cashless.date_inscription,
+      echeance: data.cashless.prochaine_echeance,
+      numberCahslessCard: data.cashless.cards[0].number,
+      assets: data.cashless.cards[0].assets
+    }
   }
 })
 

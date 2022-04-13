@@ -136,14 +136,16 @@ export async function getMe(token) {
   emitter.emit('statusLoading', true)
   try {
     const response = await fetch(domain + apiMe, options)
+    console.log('response =', response)
     if (response.status === 200) {
       const retour = await response.json()
-      // console.log('retour =', JSON.stringify(retour, null, 2))
+      console.log('retour =', JSON.stringify(retour, null, 2))
       emitter.emit('statusAdhesion', retour)
     } else {
       throw new Error(`Erreur ${apiMe} !`)
     }
   } catch (erreur) {
+    console.log('-> getMe, erreur:', erreur)
     emitter.emit('message', {
       tmp: 6,
       typeMsg: 'warning',
@@ -165,20 +167,26 @@ export function postStripeReturn(uuidStripe) {
     body: JSON.stringify({uuid: uuidStripe})
   }
   fetch(domain + apiStripe, options).then(response => {
-    console.log('response =', response)
-    if (response.status !== 200) {
+    console.log('/api/webhook_stripe/ -> response =', response)
+    if (response.status !== 202) {
       throw new Error(`${response.status} - ${response.statusText}`)
     }
     return response.json()
   }).then(retour => {
-    console.log('retour =', retour)
-    // TODO: modal = achat(s) ok !
+    console.log('/api/webhook_stripe/ -> retour =', retour)
+    const store = useStore()
+
+    // vider les contenus du memoComposants de l'évènement courant
+
+
     // message achat(s) ok
     emitter.emit('modalMessage', {
       titre: 'Succès',
-      contenu: 'Réservation OK !'
+      dynamique: true,
+      contenu: '<h2>Réservation OK !<h2>'
     })
   }).catch(function (erreur) {
+    console.log('/api/webhook_stripe/ -> erreur: ', erreur)
     emitter.emit('message', {
       tmp: 6,
       typeMsg: 'danger',

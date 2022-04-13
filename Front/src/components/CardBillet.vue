@@ -38,9 +38,6 @@
 <script setup>
 console.log('-> CardBillet.vue')
 
-// vue
-import {computed} from 'vue'
-
 // store
 import {useStore} from '@/store'
 

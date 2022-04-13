@@ -118,6 +118,7 @@ function getDataCardPlace() {
   }
 }
 
+// formatage des données POST events
 function formaterDatas(adhesionActive, adhesionPrix) {
   console.clear()
   const data = {
