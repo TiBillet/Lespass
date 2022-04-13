@@ -74,7 +74,7 @@ router.beforeEach((to, from, next) => {
   let redirection = false
   let nouvelleRoute = '/'
   if (from.name !== undefined) {
-    nouvelleRoute === from.name
+    nouvelleRoute = from.path
   }
 
   // intercepte la route "EmailConfirmation" et active l'email
@@ -114,6 +114,7 @@ router.beforeEach((to, from, next) => {
         contenu: `Retour stipe, erreur: id indéfini !`
       })
     }
+    nouvelleRoute = '/'
     redirection = true
   }
 

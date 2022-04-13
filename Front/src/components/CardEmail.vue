@@ -7,7 +7,7 @@
         <input id="profil-email" :value="profil.email" type="email"
                @change="updateProfil('email', $event.target.value)"
                pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$"
-               class="form-control card-email-input" placeholder="Adresse">
+               class="form-control card-email-input" placeholder="Email" required>
         <div class="invalid-feedback">
           Une adresse email valide svp !
         </div>
@@ -20,7 +20,7 @@
         <input id="profil-confirme-email" :value="profil.confirmeEmail" type="email"
                @change="updateProfil('confirmeEmail', $event.target.value)"
                pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$" class="form-control card-email-input"
-               placeholder="Confirmer adresse" required>
+               placeholder="Confirmer email" required>
         <div class="invalid-feedback">
           Une adresse email valide et identique svp !
         </div>
@@ -31,20 +31,6 @@
     <div class="text-warning mb-0">
       Cette adresse email vous permet de recevoir votre(vos) billet(s),
       si celle-ci comporte une erreur vous n'aurez pas votre(vos) billet(s).
-    </div>
-    <!-- attention adresse email -->
-    <div class="col-md-12">
-      <div class="form-check form-switch">
-
-        <input class="form-check-input"
-               type="checkbox" id="card-email-valid"
-               :checked="profil.activation"
-               @change="updateProfil('activation', $event.target.checked)"
-               required>
-        <label class="form-check-label text-dark" for="card-email-valid">Prise en compte du message
-          si-dessus.</label>
-        <div class="invalid-feedback">La prise en compte doit être activée, svp !</div>
-      </div>
     </div>
   </fieldset>
 </template>
@@ -71,8 +57,7 @@ let record = true
 let profil = ref({})
 const dataInit = {
   email: "",
-  confirmeEmail: "",
-  activation: false
+  confirmeEmail: ""
 }
 
 // mémorise le composant dans le store ou la variable globale window
@@ -99,7 +84,7 @@ try {
     }
   }
 } catch (erreur) {
-   record = false
+  record = false
   // console.log(erreur)
   console.log('Mémorisation du composant impossible')
   // instance sans mémorisation dans le store
@@ -123,27 +108,39 @@ function updateProfil(key, value) {
   }
 }
 
+/*
 function updateComponent() {
-  // emails différent, désactive le message "de prise d'attention sur la validité de l'émail"
-  if (profil.value.confirmeEmail !== profil.value.email) {
-    document.querySelector(`#card-email-valid`).removeAttribute('checked')
-    profil.value.activation = false
-  }
+  const eles = document.querySelectorAll(`.card-email-input`)
 
   // efface tous les erreurs de champ input non valide puisque connforme
-  if (profil.value.confirmeEmail === profil.value.email) {
-    const eles = document.querySelectorAll(`.card-email-input`)
-    for (let i = 0; i < eles.length; i++) {
-      const ele = eles[i]
-      ele.parentNode.querySelector(`.invalid-feedback`).style.display = 'none'
-    }
+  for (let i = 0; i < eles.length; i++) {
+    const ele = eles[i]
+    ele.parentNode.querySelector(`.invalid-feedback`).style.display = 'none'
   }
 
-  // efface le message d'erreur pour "la prise d'attention sur la validité de l'émail"
-  if (profil.value.activation === true) {
-    document.querySelector(`#card-email-valid`).parentNode.querySelector(`.invalid-feedback`).style.display = 'none'
+  // test la conformité du format des emails
+  let erreurFormatEmail = ''
+  for (let i = 0; i < eles.length; i++) {
+    const ele = eles[i]
+    if (ele.checkValidity() !== true) {
+      erreurFormatEmail += '.'
+      ele.parentNode.querySelector(`.invalid-feedback`).style.display = 'block'
+    }
   }
+  console.log('erreurFormatEmail =', erreurFormatEmail)
+
+  const confirmEmail = document.querySelector('#profil-confirme-email')
+  if (profil.value.confirmeEmail === profil.value.email && erreurFormatEmail === '') {
+    confirmEmail.setCustomValidity('')
+    confirmEmail.parentNode.querySelector(`.invalid-feedback`).style.display = 'none'
+  } else {
+    confirmEmail.setCustomValidity('erreur')
+    confirmEmail.parentNode.querySelector(`.invalid-feedback`).style.display = 'block'
+  }
+  confirmEmail.reportValidity()
 }
+
+
 
 onMounted(() => {
   updateComponent()
@@ -152,6 +149,7 @@ onMounted(() => {
 onUpdated(() => {
   updateComponent()
 })
+*/
 </script>
 
 <style scoped>

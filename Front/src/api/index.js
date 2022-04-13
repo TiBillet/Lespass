@@ -108,6 +108,8 @@ export async function emailActivation(id, token) {
       })
       // maj token d'accès
       window.accessToken = retour.access
+      console.log('->  adhsesion(getMe) ?')
+      getMe(window.accessToken)
       storeLocal.refreshToken = retour.refresh
       emitter.emit('statusConnection', true)
     } else {
@@ -177,6 +179,14 @@ export function postStripeReturn(uuidStripe) {
     const store = useStore()
 
     // vider les contenus du memoComposants de l'évènement courant
+   const memoComponentsProperty =['CardAdhesion', 'Don', 'ListOptionsCheckbox', 'CardBillet']
+    for (let i = 0; i < memoComponentsProperty.length; i++) {
+      const property = memoComponentsProperty[i]
+      console.log('property =', property)
+      delete store.memoComposants[property][store.currentUuidEvent]
+      console.log(`store.memoComposants.${property} =`, store.memoComposants[property])
+      console.log('--------------')
+    }
 
 
     // message achat(s) ok

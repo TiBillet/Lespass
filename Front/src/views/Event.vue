@@ -14,6 +14,7 @@
         <hr>
       </div>
     </div>
+
     <!-- achats -->
     <div class="row">
       <form @submit.prevent="goValiderAchats($event)" class="needs-validation" novalidate>
@@ -83,7 +84,6 @@ const currentEvent = store.events.find(evt => evt.uuid === uuidEvent)
 console.log('currentEvent =', currentEvent)
 
 store.currentUuidEvent = uuidEvent
-
 
 function getHeaderEvent() {
   let urlImage
@@ -201,6 +201,24 @@ function goValiderAchats(event) {
     msgInvalides[i].style.display = 'none'
   }
 
+  // vérifier email
+  const email = document.querySelector('#profil-email')
+  if (email.checkValidity() === false) {
+    email.parentNode.querySelector(`.invalid-feedback`).style.display = 'block'
+    email.scrollIntoView({behavior: 'smooth', inline: 'center', block: 'center'})
+  } else {
+    email.parentNode.querySelector(`.invalid-feedback`).style.display = 'none'
+  }
+  const confirmEmail = document.querySelector('#profil-confirme-email')
+  if (email.value !== confirmEmail.value) {
+    confirmEmail.parentNode.querySelector(`.invalid-feedback`).style.display = 'block'
+    confirmEmail.setCustomValidity('erreur')
+    confirmEmail.scrollIntoView({behavior: 'smooth', inline: 'center', block: 'center'})
+  } else {
+    confirmEmail.parentNode.querySelector(`.invalid-feedback`).style.display = 'none'
+    confirmEmail.setCustomValidity('')
+  }
+
   // vérifier activation adhésion
   const adhesionActive = store.memoComposants.CardAdhesion[store.currentUuidEvent].activation
   console.log('adhesionActive =', adhesionActive)
@@ -223,6 +241,7 @@ function goValiderAchats(event) {
       block: 'center'
     })
   }
+
 
   // continuer validation du formulaire
   if ((adhesionActive === true && adhesionPrix !== '') || adhesionActive === false) {
@@ -253,14 +272,28 @@ function goValiderAchats(event) {
           }
         }
         fetch(urlApi, options).then(response => {
-          if (response.status !== 201) {
+          if (response.status !== 201 && response.status !== 400) {
             throw new Error(`${response.status} - ${response.statusText}`)
           }
           return response.json()
         }).then(retour => {
           console.log('retour =', retour)
-          // redirection vers stripe en conservant l'historique de navigation
-          window.location.assign(retour.checkout_url)
+          if (retour.checkout_url !== undefined) {
+            // redirection vers stripe en conservant l'historique de navigation
+            window.location.assign(retour.checkout_url)
+          } else {
+            let contenuMessage = ''
+            for (const key in retour) {
+              for (let i = 0; i < retour[key].length; i++) {
+                contenuMessage += `<h3>- ${retour[key][i]}</h3>`
+              }
+            }
+            emitter.emit('modalMessage', {
+              titre: 'Information',
+              dynamique: true,
+              contenu: contenuMessage
+            })
+          }
         }).catch(function (erreur) {
           emitter.emit('message', {
             tmp: 6,
@@ -286,19 +319,6 @@ function goValiderAchats(event) {
       }
     }
   }
-
-  /*
-
-      // email": "{{$randomEmail}}", ok
-      // "first_name": "{{$randomFirstName}}",
-      // "last_name": "{{$randomLastName}}",
-      // "phone": "{{$randomPhoneNumber}}",
-      // "postal_code": "97480",
-      // "birth_date": "1984-04-18",
-      // "adhesion":"{{price_adhesion_plein_tarif_uuid}}
-
-
-   */
 }
 
 // ---- gestion des évènements provenant des enfants ----
