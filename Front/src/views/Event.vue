@@ -87,10 +87,10 @@ store.currentUuidEvent = uuidEvent
 
 function getHeaderEvent() {
   let urlImage
-  if (currentEvent.img_variations.med === undefined) {
+  if (currentEvent.img_variations.fhd === undefined) {
     urlImage = `${domain}/media/images/image_non_disponible.svg`
   } else {
-    urlImage = currentEvent.img_variations.med
+    urlImage = currentEvent.img_variations.fhd
   }
   // console.log('urlImage =', urlImage)
   return {

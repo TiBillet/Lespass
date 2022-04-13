@@ -6,7 +6,9 @@
       <input class="form-check-input" type="checkbox" :id="`active-simple-product${simpleProduct.uuid}`"
              @change="updateActiveSimpleProduct('activation', $event.target.checked)"
              :checked="simpleProduct.activation">
-      <label class="form-check-label text-dark" :for="`active-simple-product${simpleProduct.uuid}`">Sélectionner/Déselctionner</label>
+      <label class="form-check-label text-dark" :for="`active-simple-product${simpleProduct.uuid}`">
+        Je donne un euro de plus pour soutenir les actions de la coopérative <a href="https://wiki.tibillet.re">TiBillet</a> en faveur de la culture.
+      </label>
     </div>
 
     <div v-if="simpleProduct.activation === true">
