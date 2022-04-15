@@ -158,4 +158,4 @@ class Command(BaseCommand):
 
             '''
 
-        create_reservations(300)
+        create_reservations(30)

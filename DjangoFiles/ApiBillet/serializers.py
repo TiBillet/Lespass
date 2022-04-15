@@ -368,12 +368,12 @@ class TicketSerializer(serializers.ModelSerializer):
             'uuid',
             'first_name',
             'last_name',
-            'reservation',
-            'pricesold',
+            # 'reservation',
+            # 'pricesold',
             'status',
             'seat',
-            'event_name',
-            'pdf_url',
+            # 'event_name',
+            # 'pdf_url',
         ]
         read_only_fields = fields
 

@@ -622,7 +622,7 @@ class Ticket(models.Model):
     status = models.CharField(max_length=1, choices=SCAN_CHOICES, default=CREATED,
                               verbose_name=_("Status du scan"))
 
-    seat = models.CharField(max_length=20, default=_('Placement libre'))
+    seat = models.CharField(max_length=20, default=_('L'))
 
     def pdf_filename(self):
         config = Configuration.get_solo()

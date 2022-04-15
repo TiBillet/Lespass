@@ -455,6 +455,27 @@ def borne_temps_4h():
         return debut_jour, lendemain_quatre_heure
 
 
+@permission_classes([TenantAdminPermission])
+class Gauge(APIView):
+
+    # API pour avoir l'état de la jauge ( GAUGE in inglishe ) et des billets scannés.
+    def get(self, request):
+        config = Configuration.get_solo()
+        debut_jour, lendemain_quatre_heure = borne_temps_4h()
+        queryset = Ticket.objects.filter(
+            reservation__event__datetime__gte=debut_jour,
+            reservation__event__datetime__lte=lendemain_quatre_heure,
+            status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED]
+        )
+
+        data = {
+            "gauge_max" : config.jauge_max,
+            "all_tickets" : queryset.count(),
+            "scanned_tickets" : queryset.filter(status=Ticket.SCANNED).count()
+        }
+
+        return Response(data, status=status.HTTP_200_OK)
+
 class TicketViewset(viewsets.ViewSet):
     def list(self, request):
         debut_jour, lendemain_quatre_heure = borne_temps_4h()
