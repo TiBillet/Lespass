@@ -1,64 +1,135 @@
 <template>
   <!-- Navbar -->
-  <nav class="taille-navbar navbar navbar-expand-lg navbar-dark bg-gradient-dark z-index-3 py-3 fixed-top">
+  <nav class="navbar navbar-expand-lg position-absolute top-0 z-index-3 w-100 navbar-transparent">
     <div class="container">
-      <img :src="getLogo()" class="me-2"
-           style="width: auto; height: 26px;">
-      <router-link to="/" class="navbar-brand text-white">{{ place.organisation }}</router-link>
-      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navigation"
-              aria-controls="navigation" aria-expanded="false" aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon"></span>
+      <div class="navbar-brand">
+        <img :src="getLogo()" style="width: auto; height: 26px;">
+        <router-link to="/" class="navbar-brand text-white">{{ place.organisation }}</router-link>
+      </div>
+
+      <!-- bouton hamburger -->
+      <button class="navbar-toggler shadow-none ms-2" type="button" data-bs-toggle="collapse"
+              data-bs-target="#navigation" aria-controls="navigation" aria-expanded="true"
+              aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon mt-2">
+          <span class="navbar-toggler-bar bar1"></span>
+          <span class="navbar-toggler-bar bar2"></span>
+          <span class="navbar-toggler-bar bar3"></span>
+        </span>
       </button>
-      <div class="collapse navbar-collapse" id="navigation">
+      <div class="navbar-collapse w-100 pt-3 pb-2 py-lg-0 collapse show" id="navigation" style="">
         <ul class="navbar-nav navbar-nav-hover mx-auto">
-          <li v-if="router.currentRoute.value.name === 'Accueil'" class="nav-item px-3">
-            <a href="#calendar" class="nav-link text-white opacity-8">
+          <!-- Calendrier -->
+          <li v-if="router.currentRoute.value.name === 'Accueil'" class="nav-item mx-2">
+            <a href="#calendar" class="nav-link ps-2 d-flex justify-content-between cursor-pointer align-items-center">
               Calendrier
             </a>
           </li>
-        </ul>
 
-        <ul class="navbar-nav ms-auto">
           <!-- adhésion -->
           <li v-if="store.place.button_adhesion === true && router.currentRoute.value.name === 'Accueil' && statusAdhesion === false"
-              class="nav-item px-3">
-            <button class="btn bg-gradient-info mb-0" data-bs-toggle="modal" data-bs-target="#modal-form-adhesion">
-              <span class="btn-inner--icon"><i class="fa fa-ticket" aria-hidden="true"></i></span>
-              <span class="btn-inner--text">Adhésion</span>
-            </button>
-          </li>
-          <!-- menu Profil -->
-          <li v-if="statusAdhesion === true" class="nav-item dropdown text-success">
-            <a href="#" class="btn bg-gradient-dark dropdown-toggle mb-0" data-bs-toggle="dropdown"
-               id="navbarProfilUser">
-              <i class="fas fa-user me-1"></i>Profil
+              class="nav-item mx-2">
+            <a class="nav-link ps-2 d-flex cursor-pointer align-items-center" role="button"
+               data-bs-toggle="modal" data-bs-target="#modal-form-adhesion">
+              <i class="fa fa-ticket me-1" aria-hidden="true"></i>Adhésion
             </a>
-            <ul class="dropdown-menu" aria-labelledby="navbarProfilUser">
-              <li>
-                <a class="dropdown-item" href="#" @click="showAssets()">
-                  <i class="fas fa-address-card fa-fw me-1"></i>Carte
-                </a>
-              </li>
-              <li>
-                <a class="dropdown-item" href="#" @click="showAdhesion()">
-                  <i class="fas fa-hourglass-start fa-fw me-1"></i>Adhésion
-                </a>
-              </li>
-            </ul>
           </li>
+
+          <!-- menu Profil -->
+          <li v-if="statusAdhesion === true" class="nav-item dropdown dropdown-hover mx-2">
+            <a id="dropDownMenuProfil" class="nav-link ps-2 d-flex align-items-center cursor-pointer" role="button"
+               data-bs-toggle="dropdown" aria-expanded="false">
+              <div class="w-95">
+                <i class="fas fa-user me-1"></i>Profil
+              </div>
+              <div class="w-5 float-right">
+                <img src="../assets/img/down-arrow-white.svg" alt="down-arrow" class="arrow ms-1 d-lg-block d-none">
+                <img src="../assets/img/down-arrow-dark.svg" alt="down-arrow" class="arrow ms-1 d-lg-none d-block">
+              </div>
+            </a>
+            <!-- sous menu Profil -->
+            <div class="dropdown-menu dropdown-menu-animation dropdown-lg border-radius-lg py-0 mt-0 mt-lg-auto pe-auto"
+                 aria-labelledby="dropDownMenuProfil">
+              <!-- menu desktop -->
+              <div class="d-none d-lg-block">
+                <ul class="list-group mx-auto">
+                  <li class="nav-item list-group-item border-0 p-0">
+                    <a class="dropdown-item py-2 ps-3 border-radius-md" role="button" @click="showAssets()">
+                      <div class="d-flex">
+                        <div class="icon h-10 me-3 d-flex mt-1">
+                          <i class="fas fa-address-card fa-fw me-1"></i>
+                        </div>
+                        <div>
+                          <h6 class="dropdown-header text-dark font-weight-bold d-flex justify-content-cente align-items-center p-0">
+                            Carte
+                          </h6>
+                        </div>
+                      </div>
+                    </a>
+                  </li>
+                  <li lass="nav-item list-group-item border-0 p-0">
+                    <a class="dropdown-item py-2 ps-3 border-radius-md" role="button" @click="showAdhesion()">
+                      <div class="d-flex">
+                        <div class="icon h-10 me-3 d-flex mt-1">
+                          <i class="fas fa-hourglass-start fa-fw me-1"></i>
+                        </div>
+                        <div>
+                          <h6 class="dropdown-header text-dark font-weight-bold d-flex justify-content-cente align-items-center p-0">
+                            Adhésion
+                          </h6>
+                        </div>
+                      </div>
+                    </a>
+                  </li>
+                </ul>
+              </div>
+              <!-- mobile -->
+              <div class="row d-lg-none">
+                <div class="col-md-12 g-0">
+                  <a class="dropdown-item py-2 ps-3 border-radius-md" role="button" @click="showAssets()">
+                    <div class="d-flex">
+                      <div class="icon h-10 me-3 d-flex mt-1">
+                        <i class="fas fa-address-card fa-fw me-1"></i>
+                      </div>
+                      <div>
+                        <h6 class="dropdown-header text-dark font-weight-bold d-flex justify-content-cente align-items-center p-0">
+                          Carte
+                        </h6>
+                      </div>
+                    </div>
+                  </a>
+                  <a class="dropdown-item py-2 ps-3 border-radius-md" role="button" @click="showAdhesion()">
+                    <div class="d-flex">
+                      <div class="icon h-10 me-3 d-flex mt-1">
+                        <i class="fas fa-hourglass-start fa-fw me-1"></i>
+                      </div>
+                      <div>
+                        <h6 class="dropdown-header text-dark font-weight-bold d-flex justify-content-cente align-items-center p-0">
+                          Adhésion
+                        </h6>
+                      </div>
+                    </div>
+                  </a>
+                </div>
+              </div>
+            </div>
+          </li>
+
           <!-- déconnexion -->
-          <li v-if="connection === true" class="nav-item d-flex flex-row align-items-center text-success">
-            <i class="ni ni-world-2 m"></i>
-            <span class="ms-1">Connecté</span>
+          <li v-if="connection === true" class="nav-item mx-2">
+            <div class="nav-link ps-2 d-flex align-items-center text-success">
+              <i class="ni ni-world-2 me-1 text-success" aria-hidden="true"></i>Connecté
+            </div>
           </li>
           <!-- connexion -->
-          <li v-else>
-            <button class="btn bg-gradient-info mb-0" data-bs-toggle="modal" data-bs-target="#modal-form-login">
-              Connexion
-            </button>
+          <li v-if="connection === false" class="nav-item mx-2">
+            <a class="nav-link ps-2 d-flex cursor-pointer align-items-center" role="button"
+               data-bs-toggle="modal" data-bs-target="#modal-form-login">
+              <i class="ni ni-world-2 me-1" aria-hidden="true"></i>Connexion
+            </a>
           </li>
-        </ul>
 
+        </ul>
       </div>
     </div>
   </nav>
@@ -196,7 +267,4 @@ emitter.on('statusAdhesion', (data) => {
 </script>
 
 <style scoped>
-.taille-navbar {
-  height: 72px;
-}
 </style>

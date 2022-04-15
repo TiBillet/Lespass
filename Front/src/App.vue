@@ -1,6 +1,5 @@
 <template>
   <Navbar :place="store.place"/>
-  <div class="espace-navbar"></div>
   <router-view/>
   <Footer :place="store.place"/>
   <Message/>
@@ -50,7 +49,4 @@ emitter.on('statusLoading', (status) => {
 
 </script>
 <style>
-.espace-navbar {
-  margin-bottom: 72px;
-}
 </style>
