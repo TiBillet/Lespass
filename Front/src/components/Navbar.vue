@@ -1,37 +1,43 @@
 <template>
   <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg position-absolute top-0 z-index-3 w-100 navbar-transparent">
+  <nav class="navbar navbar-expand-lg z-index-3 w-100 navbar-transparent fixed-top">
     <div class="container">
-      <div class="navbar-brand">
-        <img :src="getLogo()" style="width: auto; height: 26px;">
-        <router-link to="/" class="navbar-brand text-white">{{ place.organisation }}</router-link>
-      </div>
+
+<!--      <div class="navbar-brand">-->
+<!--        <img :src="getLogo()" style="width: auto; height: 26px;">-->
+<!--        <router-link to="/" class="navbar-brand text-white">{{ place.organisation }}</router-link>-->
+<!--      </div>-->
 
       <!-- bouton hamburger -->
       <button class="navbar-toggler shadow-none ms-2" type="button" data-bs-toggle="collapse"
               data-bs-target="#navigation" aria-controls="navigation" aria-expanded="true"
               aria-label="Toggle navigation">
+<!--        <i class="fas fa-stream" aria-hidden="true"></i>-->
         <span class="navbar-toggler-icon mt-2">
           <span class="navbar-toggler-bar bar1"></span>
           <span class="navbar-toggler-bar bar2"></span>
           <span class="navbar-toggler-bar bar3"></span>
         </span>
       </button>
+
+
       <div class="navbar-collapse w-100 pt-3 pb-2 py-lg-0 collapse show" id="navigation" style="">
+
         <ul class="navbar-nav navbar-nav-hover mx-auto">
+
           <!-- Calendrier -->
-          <li v-if="router.currentRoute.value.name === 'Accueil'" class="nav-item mx-2">
-            <a href="#calendar" class="nav-link ps-2 d-flex justify-content-between cursor-pointer align-items-center">
-              Calendrier
-            </a>
-          </li>
+<!--          <li v-if="router.currentRoute.value.name === 'Accueil'" class="nav-item mx-2">-->
+<!--            <a href="#calendar" class="nav-link ps-2 d-flex justify-content-between cursor-pointer align-items-center">-->
+<!--              Calendrier-->
+<!--            </a>-->
+<!--          </li>-->
 
           <!-- adhésion -->
           <li v-if="store.place.button_adhesion === true && router.currentRoute.value.name === 'Accueil' && statusAdhesion === false"
               class="nav-item mx-2">
-            <a class="nav-link ps-2 d-flex cursor-pointer align-items-center" role="button"
+            <a class="btn bg-gradient-primary btn-icon me-2" role="button"
                data-bs-toggle="modal" data-bs-target="#modal-form-adhesion">
-              <i class="fa fa-ticket me-1" aria-hidden="true"></i>Adhésion
+              <i class="fas fa-address-card me-1" aria-hidden="true"></i>Adhérez à l'association {{ place.organisation }}
             </a>
           </li>
 
@@ -67,6 +73,8 @@
                       </div>
                     </a>
                   </li>
+
+
                   <li lass="nav-item list-group-item border-0 p-0">
                     <a class="dropdown-item py-2 ps-3 border-radius-md" role="button" @click="showAdhesion()">
                       <div class="d-flex">
@@ -83,7 +91,9 @@
                   </li>
                 </ul>
               </div>
+
               <!-- mobile -->
+
               <div class="row d-lg-none">
                 <div class="col-md-12 g-0">
                   <a class="dropdown-item py-2 ps-3 border-radius-md" role="button" @click="showAssets()">
@@ -117,15 +127,15 @@
 
           <!-- déconnexion -->
           <li v-if="connection === true" class="nav-item mx-2">
-            <div class="nav-link ps-2 d-flex align-items-center text-success">
-              <i class="ni ni-world-2 me-1 text-success" aria-hidden="true"></i>Connecté
+            <div class="btn bg-gradient-light btn-icon me-2">
+              <i class="fas fa-check-square me-1" aria-hidden="true"></i>Connecté
             </div>
           </li>
           <!-- connexion -->
           <li v-if="connection === false" class="nav-item mx-2">
-            <a class="nav-link ps-2 d-flex cursor-pointer align-items-center" role="button"
+            <a class="btn bg-gradient-info btn-icon me-2" role="button"
                data-bs-toggle="modal" data-bs-target="#modal-form-login">
-              <i class="ni ni-world-2 me-1" aria-hidden="true"></i>Connexion
+              <i class="fas fa-sign-in-alt me-1" aria-hidden="true"></i>Se connecter
             </a>
           </li>
 
