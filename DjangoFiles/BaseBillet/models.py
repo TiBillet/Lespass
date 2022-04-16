@@ -517,7 +517,8 @@ class Reservation(models.Model):
     datetime = models.DateTimeField(auto_now=True)
 
     user_commande: AuthBillet.models.TibilletUser = models.ForeignKey(settings.AUTH_USER_MODEL,
-                                                                      on_delete=models.PROTECT)
+                                                                      on_delete=models.PROTECT,
+                                                                      related_name='reservations')
 
     event = models.ForeignKey(Event,
                               on_delete=models.PROTECT,
