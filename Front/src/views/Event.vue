@@ -4,11 +4,11 @@
   <div class="container mt-7">
 
     <!-- artistes -->
-<!--    <div v-for="(artist, index) in currentEvent.artists" :key="index">-->
-<!--      <br>-->
-<!--      <CardArtist :data-artist="artist"/>-->
-<!--      <br>-->
-<!--    </div>-->
+    <div v-for="(artist, index) in currentEvent.artists" :key="index">
+      <br>
+      <CardArtist :data-artist="artist"/>
+      <br>
+    </div>
 
     <!-- achats -->
     <form @submit.prevent="goValiderAchats($event)" class="needs-validation" novalidate>
