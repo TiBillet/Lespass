@@ -1,14 +1,11 @@
 <template>
-  <fieldset class="col-md-12 col-lg-9 mb-4 shadow-sm p-3 mb-5 bg-body rounded" v-for="price in prix"
+  <fieldset class="col-md-6 shadow-sm p-3 mb-5 bg-body rounded" v-for="price in prix"
             :key="price.uuid">
-    <legend>
-      <div class="d-flex flex-row">
-        <div>{{ price.users.length }}</div>
-        <div class="ms-3"> {{ product.name }} - {{ price.name }} {{ price.prix }}€ - Total
-          {{ (price.users.length * price.prix) }}€ - Stock
-          {{ (price.stock - price.users.length) }}
-        </div>
 
+    <legend>
+      <div class="d-flex justify-content-between mb-3">
+        <span> {{ product.name }} {{ price.name.toLowerCase() }} {{ price.prix }}€</span>
+<!--          {{ (price.users.length * price.prix) }}€-->
 
         <button v-if="(price.stock - price.users.length) >= 1" class="btn btn-primary ms-3" type="button"
                 @click.stop="addUser(price.uuid)">
@@ -16,6 +13,7 @@
         </button>
       </div>
     </legend>
+
     <div class="d-flex flex-row"
          v-for="(user, index) in price.users"
          :key="index">
@@ -30,6 +28,12 @@
         </button>
         <div class="invalid-feedback">Donnée(s) manquante(s) !</div>
       </div>
+    </div>
+
+    <div v-if="price.users.length > 0 " class="d-flex justify-content-end mb-3">
+        <h6>
+          SOUS-TOTAL : {{ (price.users.length * price.prix) }}€
+        </h6>
     </div>
   </fieldset>
 
@@ -115,7 +119,7 @@ function addUser(uuidTarif) {
   }
 }
 
-function updateUser(uuidTarif, uuidUser, value,key) {
+function updateUser(uuidTarif, uuidUser, value, key) {
   // console.log('-> fonc updateUser, uuidTarif =', uuidTarif, '  --  uuidUser =', uuidUser)
   const tarif = prix.find(tarif => tarif.uuid === uuidTarif)
   const user = tarif.users.find(user => user.uuid === uuidUser)

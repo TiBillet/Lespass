@@ -1,5 +1,7 @@
 <template>
-  <fieldset class="col-md-12 col-lg-9 mb-4 shadow-sm p-3 mb-5 bg-body rounded">
+<!--  <fieldset class="col-md-12 col-lg-9 mb-4 shadow-sm p-3 mb-5 bg-body rounded">-->
+  <fieldset class="col-md-6 shadow-sm p-3 mb-5 bg-body rounded">
+
     <legend>{{ product.name }}</legend>
 
     <div class="form-check form-switch">
@@ -20,6 +22,7 @@
                  :class="`form-check-input simple-product-active-${nameMemo}-uuid-price`" type="radio"
                  :name="`prix${nameMemo}`" :id="`simpleproductuuidprice${nameMemo}${index}`"
                  @change="updateActiveSimpleProduct('uuidPrix', $event.target.value)" checked>
+
           <input v-else :value="price.uuid" :class="`form-check-input simple-product-active-${nameMemo}-uuid-price`"
                  type="radio"
                  :name="`prix${nameMemo}`" :id="`simpleproductuuidprice${nameMemo}${index}`"
@@ -28,6 +31,7 @@
         </div>
       </div>
     </div>
+
   </fieldset>
 </template>
 

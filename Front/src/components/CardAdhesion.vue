@@ -1,5 +1,6 @@
 <template>
-  <fieldset class="col-md-12 col-lg-9 mb-4 shadow-sm p-3 mb-5 bg-body rounded">
+  <fieldset class="col-md-6 shadow-sm p-3 mb-5 bg-body rounded">
+
     <legend>
       <!-- Adhésion -->
       <div class="card-header pb-0 d-flex align-items-center">

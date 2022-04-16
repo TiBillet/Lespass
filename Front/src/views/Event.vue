@@ -1,45 +1,34 @@
 <template>
   <Header :header-event="getHeaderEvent()"/>
+
   <div class="container mt-7">
-    <!-- lieu -->
-<!--    <div class="row">-->
-<!--      <div class="col-lg-12">-->
-<!--        <CardPlace :data-card="getDataCardPlace()"/>-->
-<!--      </div>-->
-<!--    </div>-->
 
     <!-- artistes -->
-    <div v-for="(artist, index) in currentEvent.artists" :key="index" >
-      <br>
-        <CardArtist :data-artist="artist"/>
-      <br>
-    </div>
-
-<!--    <div class="row mt-5">-->
-<!--      <div v-for="(artist, index) in currentEvent.artists" :key="index" class="col-lg-4 mb-lg-0 mb-4">-->
-<!--        <hr>-->
-<!--      </div>-->
+<!--    <div v-for="(artist, index) in currentEvent.artists" :key="index">-->
+<!--      <br>-->
+<!--      <CardArtist :data-artist="artist"/>-->
+<!--      <br>-->
 <!--    </div>-->
 
     <!-- achats -->
-    <div class="row">
-      <form @submit.prevent="goValiderAchats($event)" class="needs-validation" novalidate>
-        <!-- index-memo="unique00" = "index fixe" bon pour tous les évènements -->
-        <CardEmail index-memo="unique00"/>
-        <CardProducts :products="currentEvent.products" :categories="['A', 'D']"/>
+    <form @submit.prevent="goValiderAchats($event)" class="needs-validation" novalidate>
+      <!-- index-memo="unique00" = "index fixe" bon pour tous les évènements -->
+      <CardEmail index-memo="unique00"/>
 
-        <fieldset v-if="currentEvent.options_checkbox.length > 0 || currentEvent.options_radio.length > 0 "
-                  class="col-md-12 col-lg-9 mb-4 shadow-sm p-3 mb-5 bg-body rounded">
-          <legend>options</legend>
-          <ListOptionsCheckbox :options-checkbox="currentEvent.options_checkbox" :index-memo="store.currentUuidEvent"/>
-        </fieldset>
+      <CardProducts :products="currentEvent.products" :categories="['A', 'D']"/>
 
-        <CardProducts :products="currentEvent.products" :categories="['B', 'F']"/>
-        <div class="col-md-12 col-lg-9">
-          <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
-        </div>
-      </form>
-    </div>
+      <fieldset v-if="currentEvent.options_checkbox.length > 0 || currentEvent.options_radio.length > 0 "
+                class="col-md-6 shadow-sm p-3 mb-5 bg-body rounded">
+        <legend>Options</legend>
+        <ListOptionsCheckbox :options-checkbox="currentEvent.options_checkbox" :index-memo="store.currentUuidEvent"/>
+      </fieldset>
+
+      <CardProducts :products="currentEvent.products" :categories="['B', 'F']"/>
+      <div class="col-md-12 col-lg-9">
+        <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
+      </div>
+    </form>
+
   </div>
 
 </template>

@@ -1,38 +1,39 @@
 <template>
-  <fieldset class="col-md-12 col-lg-9 mb-4 shadow-sm p-3 mb-5 bg-body rounded">
-    <legend>Email</legend>
-    <!-- email -->
-    <div class="mb-2">
-      <div class="input-group has-validation">
-        <input id="profil-email" :value="profil.email" type="email"
-               @change="updateProfil('email', $event.target.value)"
-               pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$"
-               class="form-control card-email-input" placeholder="Email" required>
-        <div class="invalid-feedback">
-          Une adresse email valide svp !
+    <fieldset class="col-md-6 shadow-sm p-3 mb-5 bg-body rounded">
+
+      <legend>Email</legend>
+      <!-- email -->
+      <div class="mb-2">
+        <div class="input-group has-validation">
+          <input id="profil-email" :value="profil.email" type="email"
+                 @change="updateProfil('email', $event.target.value)"
+                 pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$"
+                 class="form-control card-email-input" placeholder="Email" required>
+          <div class="invalid-feedback">
+            Merci de renseigner une adresse email valide.
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- confirme email -->
-    <div class="mb-2">
-      <div class="input-group has-validation">
-        <input id="profil-confirme-email" :value="profil.confirmeEmail" type="email"
-               @change="updateProfil('confirmeEmail', $event.target.value)"
-               pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$" class="form-control card-email-input"
-               placeholder="Confirmer email" required>
-        <div class="invalid-feedback">
-          Une adresse email valide et identique svp !
+      <!-- confirme email -->
+      <div class="mb-2">
+        <div class="input-group has-validation">
+          <input id="profil-confirme-email" :value="profil.confirmeEmail" type="email"
+                 @change="updateProfil('confirmeEmail', $event.target.value)"
+                 pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$" class="form-control card-email-input"
+                 placeholder="Confirmer email" required>
+          <div class="invalid-feedback">
+            Merci de renseigner une adresse email valide et identique.
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- message pour l'adresse email -->
-    <div class="text-warning mb-0">
-      Cette adresse email vous permet de recevoir votre(vos) billet(s),
-      si celle-ci comporte une erreur vous n'aurez pas votre(vos) billet(s).
-    </div>
-  </fieldset>
+      <!-- message pour l'adresse email -->
+      <div class="text-warning mb-0">
+        Merci de bien vérifier votre adresse email afin de bien recevoir votre(vos) billet(s).
+      </div>
+
+    </fieldset>
 </template>
 
 <script setup>

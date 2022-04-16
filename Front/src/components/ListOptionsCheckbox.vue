@@ -1,5 +1,6 @@
 <template>
   <div class="input-group mb-2 has-validation">
+
         <span v-for="(option, index) in options" :key="index" class="form-switch me-3">
           <input v-if="option.activation === true" class="form-check-input" type="checkbox"
                  :id="`option-radio${option.uuid}`"
