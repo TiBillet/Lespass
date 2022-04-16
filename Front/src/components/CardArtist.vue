@@ -1,16 +1,27 @@
 <template>
-  <a @click="goArtistPage(artist.slug)">
-    <div class="card card-background">
-      <div class="full-background" :style="{ backgroundImage: getBackgroundImage() }"></div>
-      <div class="card-body pt-12">
-        <h4 class="text-white text-decoration-underline-hover">{{ artist.organisation }}</h4>
-        <p v-if="artist.long_description !== null"> {{ artist.long_description }}</p>
-        <p v-if="artist.long_description === null && artist.short_description !== null"> {{
-            artist.short_description
-          }}</p>
-      </div>
+
+
+  <div class="card card-background">
+    <div class="full-background" :style="{ backgroundImage: getBackgroundImage() }"></div>
+    <div class="card-body pt-12">
+      <h4 class="text-white">{{ artist.organisation }}</h4>
+      <p v-if="artist.long_description !== null"> {{ artist.long_description }}</p>
+      <p v-if="artist.long_description === null && artist.short_description !== null"> {{
+          artist.short_description
+        }}</p>
     </div>
-  </a>
+  </div>
+
+
+  <!--  <a @click="goArtistPage(artist.slug)">-->
+  <!--    <div class="card card-background">-->
+  <!--      <div class="full-background" :style="{ backgroundImage: getBackgroundImage() }"></div>-->
+  <!--      <div class="card-body pt-12">-->
+  <!--        <h4 class="text-white text-decoration-underline-hover">{{ artist.organisation }}</h4>-->
+  <!--      </div>-->
+  <!--    </div>-->
+  <!--  </a>-->
+
 </template>
 
 <script setup>
@@ -26,10 +37,10 @@ const domain = `${location.protocol}//${location.host}`
 const artist = props.dataArtist.configuration
 
 const getBackgroundImage = () => {
-  if (artist.img_variations.med === undefined) {
+  if (artist.img_variations.fhd === undefined) {
     return `url('${domain}/media/images/image_non_disponible.svg')`
   } else {
-    return `url('${domain + artist.img_variations.med}')`
+    return `url('${domain + artist.img_variations.fhd}')`
   }
 }
 

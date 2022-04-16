@@ -1,7 +1,13 @@
 <template>
   <header>
+
     <div class="page-header min-vh-50"
          :style="{ backgroundImage: `url('${headerEvent.urlImage}')`, maxHeight: `365px` }">
+<!--    <div v-if="headerEvent.urlImage === null" class="page-header min-vh-50"-->
+<!--         :style="{ backgroundImage: `url('${headerEvent.urlImage}')`, maxHeight: `365px` }">-->
+
+
+
       <span class="mask bg-dark opacity-8"></span>
       <div class="container">
         <div class="row">

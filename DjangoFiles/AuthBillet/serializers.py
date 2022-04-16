@@ -47,9 +47,9 @@ class MeReservationSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 class MeSerializer(serializers.ModelSerializer):
-    # reservations = MeReservationSerializer(many=True)
     reservations = serializers.SerializerMethodField()
 
+    # On filtre les reservation : pas plus vieille qu'une semaine.
     def get_reservations(self, user):
         last_week = datetime.datetime.now().date() - datetime.timedelta(days=7)
         qs = Reservation.objects.filter(user_commande=user, datetime__gt=last_week)

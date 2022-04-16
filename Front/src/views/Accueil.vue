@@ -59,7 +59,7 @@ function getHeaderEvent() {
   if (store.place.img_variations.med === undefined) {
     urlImage = `${domain}/media/images/image_non_disponible.svg`
   } else {
-    urlImage = store.place.img_variations.med
+    urlImage = store.place.img_variations.fhd
   }
 
   if (store.place.logo_variations.med === undefined) {

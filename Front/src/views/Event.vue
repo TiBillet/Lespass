@@ -2,18 +2,24 @@
   <Header :header-event="getHeaderEvent()"/>
   <div class="container mt-7">
     <!-- lieu -->
-    <div class="row">
-      <div class="col-lg-12">
-        <CardPlace :data-card="getDataCardPlace()"/>
-      </div>
-    </div>
+<!--    <div class="row">-->
+<!--      <div class="col-lg-12">-->
+<!--        <CardPlace :data-card="getDataCardPlace()"/>-->
+<!--      </div>-->
+<!--    </div>-->
+
     <!-- artistes -->
-    <div class="row mt-5">
-      <div v-for="(artist, index) in currentEvent.artists" :key="index" class="col-lg-4 mb-lg-0 mb-4">
+    <div v-for="(artist, index) in currentEvent.artists" :key="index" >
+      <br>
         <CardArtist :data-artist="artist"/>
-        <hr>
-      </div>
+      <br>
     </div>
+
+<!--    <div class="row mt-5">-->
+<!--      <div v-for="(artist, index) in currentEvent.artists" :key="index" class="col-lg-4 mb-lg-0 mb-4">-->
+<!--        <hr>-->
+<!--      </div>-->
+<!--    </div>-->
 
     <!-- achats -->
     <div class="row">

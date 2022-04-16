@@ -1,4 +1,6 @@
 <template>
+
+
   <div class="row">
     <div class="col-lg-6 justify-content-center d-flex flex-column">
       <div class="card">
@@ -15,6 +17,8 @@
         {{ dataCard.shortDescription }}</p>
     </div>
   </div>
+
+
 </template>
 <script setup>
 // console.log('-> CardPlace.vue')
