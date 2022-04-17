@@ -5,15 +5,13 @@
     <div class="container">
 
       <ul class="navbar-nav navbar-nav-hover mx-auto">
-
         <li v-if="store.place.button_adhesion === true && statusAdhesion === false"
             class="nav-item mx-2">
           <a class="btn btn-sm bg-gradient-primary btn-round mb-0 me-1" role="button"
              data-bs-toggle="modal" data-bs-target="#modal-form-adhesion">
-            Adhérez à l'association {{ place.organisation }}
+            Adhérez à l'association
           </a>
         </li>
-
       </ul>
 
 
@@ -64,6 +62,7 @@
 
             <!-- mobile -->
 
+
             <div class="row d-lg-none">
               <div class="col-md-12 g-0">
                 <a class="dropdown-item py-2 ps-3 border-radius-md" role="button" @click="showAssets()">
@@ -95,11 +94,11 @@
           </div>
         </li>
 
-        <li v-if="statusAdhesion === false && connection === true" class="nav-item">
-          <a class="btn btn-sm  bg-gradient-primary  btn-round mb-0 me-1" role="button">
-            <i class="fas fa-user me-1" aria-hidden="true"></i>Connecté
-          </a>
-        </li>
+<!--        <li v-if="statusAdhesion === false && connection === true" class="nav-item">-->
+<!--          <a class="btn btn-sm  bg-gradient-primary  btn-round mb-0 me-1" role="button">-->
+<!--            <i class="fas fa-user me-1" aria-hidden="true"></i>Connecté-->
+<!--          </a>-->
+<!--        </li>-->
         <!-- connexion -->
         <li v-if="connection === false" class="nav-item">
           <a class="btn btn-sm  bg-gradient-info btn-round mb-0 me-1" role="button"
