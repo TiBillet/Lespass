@@ -1,5 +1,5 @@
 <template>
-  <fieldset class="col-md-6 shadow-sm p-3 mb-5 bg-body rounded" v-for="price in prix"
+  <fieldset class="shadow-sm p-3 mb-5 bg-body rounded" v-for="price in prix"
             :key="price.uuid">
 
     <legend>

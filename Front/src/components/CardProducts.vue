@@ -15,7 +15,7 @@
         :product="product" :index-memo="store.currentUuidEvent"/>
     <!-- composants non gérés -->
     <fieldset v-if="manageComponents.includes(product.categorie_article) === false"
-              class="col-md-6 shadow-sm p-3 mb-5 bg-body rounded">
+              class="shadow-sm p-3 mb-5 bg-body rounded">
       <legend>{{ product.name }}</legend>
     </fieldset>
   </div>

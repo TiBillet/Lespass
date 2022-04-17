@@ -3,31 +3,32 @@
 
   <div class="container mt-7">
 
-    <!-- artistes -->
-    <div v-for="(artist, index) in currentEvent.artists" :key="index">
-      <br>
-      <CardArtist :data-artist="artist"/>
-      <br>
-    </div>
+      <!-- artistes -->
+      <div v-for="(artist, index) in currentEvent.artists" :key="index">
+        <br>
+        <CardArtist :data-artist="artist"/>
+        <br>
+      </div>
 
-    <!-- achats -->
+
     <form @submit.prevent="goValiderAchats($event)" class="needs-validation" novalidate>
+      <CardProducts :products="currentEvent.products" :categories="['B', 'F']"/>
+
+      <div v-if="currentEvent.options_checkbox.length > 0 || currentEvent.options_radio.length > 0 ">
+        <ListOptionsCheckbox :options-checkbox="currentEvent.options_checkbox" :index-memo="store.currentUuidEvent"/>
+      </div>
+
       <!-- index-memo="unique00" = "index fixe" bon pour tous les évènements -->
       <CardEmail index-memo="unique00"/>
 
       <CardProducts :products="currentEvent.products" :categories="['A', 'D']"/>
 
-      <fieldset v-if="currentEvent.options_checkbox.length > 0 || currentEvent.options_radio.length > 0 "
-                class="col-md-6 shadow-sm p-3 mb-5 bg-body rounded">
-        <legend>Options</legend>
-        <ListOptionsCheckbox :options-checkbox="currentEvent.options_checkbox" :index-memo="store.currentUuidEvent"/>
-      </fieldset>
+      <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
 
-      <CardProducts :products="currentEvent.products" :categories="['B', 'F']"/>
-      <div class="col-md-12 col-lg-9">
-        <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
-      </div>
     </form>
+
+
+
 
   </div>
 

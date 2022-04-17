@@ -1,5 +1,5 @@
 <template>
-  <fieldset class="col-md-6 shadow-sm p-3 mb-5 bg-body rounded">
+  <fieldset class="shadow-sm p-3 mb-5 bg-body rounded">
 
     <legend>
       <!-- Adhésion -->
@@ -16,8 +16,13 @@
              id="etat-adhesion" checked disabled>
       <input v-else class="form-check-input" type="checkbox" id="etat-adhesion"
              @change="updateAdhesion('activation', $event.target.checked)" :checked="adhesion.activation">
-      <label class="form-check-label text-dark" for="etat-adhesion">Prendre une adhésion
-        associative.</label>
+
+      <label v-if="adhesion.obligatoire === true" class="form-check-label text-dark" for="etat-adhesion">
+        L'adhésion à l'association est obligatoire pour participer. Connectez vous si vous êtes déja adhérant.
+      </label>
+      <label v-else class="form-check-label text-dark" for="etat-adhesion">
+        Prendre une adhésion associative.
+      </label>
     </div>
 
     <div v-if="adhesion.activation === true || adhesion.obligatoire === true">

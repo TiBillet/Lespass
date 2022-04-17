@@ -1,5 +1,5 @@
 <template>
-    <fieldset class="col-md-6 shadow-sm p-3 mb-5 bg-body rounded">
+    <fieldset class="col shadow-sm p-3 mb-5 bg-body rounded">
 
       <legend>Email</legend>
       <!-- email -->

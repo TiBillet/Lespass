@@ -1,6 +1,7 @@
 <template>
-  <div class="input-group mb-2 has-validation">
-
+  <fieldset class="shadow-sm p-3 mb-5 bg-body rounded">
+    <legend>Options</legend>
+    <div class="input-group mb-2 has-validation">
         <span v-for="(option, index) in options" :key="index" class="form-switch me-3">
           <input v-if="option.activation === true" class="form-check-input" type="checkbox"
                  :id="`option-radio${option.uuid}`"
@@ -9,7 +10,9 @@
                  @change.stop="updateOptions($event.target.checked,option.uuid)">
           <label class="form-check-label text-dark" :for="`option-radio${option.uuid}`">{{ option.name }}</label>
         </span>
-  </div>
+    </div>
+  </fieldset>
+
 </template>
 
 <script setup>
@@ -80,7 +83,7 @@ try {
 }
 console.log('options.value =', options.value.length)
 
-function updateOptions(value,uuidOptions) {
+function updateOptions(value, uuidOptions) {
   console.log('-> fonc updateOptions, value =', value, '  --  uuidOptions =', uuidOptions)
   const option = options.value.find(opt => opt.uuid === uuidOptions)
   option.activation = value
