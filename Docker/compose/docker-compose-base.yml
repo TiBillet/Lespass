@@ -64,8 +64,6 @@ services:
       DEV: 1
       TIMEZONE: Indian/Reunion
 #    restart: on-failure
-    depends_on:
-      - billetterie_django
     volumes:
       - ../../Front:/Front
     working_dir: /Front
