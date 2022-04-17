@@ -1,56 +1,58 @@
 <template>
   <!-- Navbar -->
-  <nav
-      class="navbar navbar-expand-lg navbar-transparent blur blur-light fixed-top z-index-3 py-3">
+  <nav class="navbar navbar-expand-lg z-index-3 w-100 navbar-transparent blur blur-light fixed-top">
+
     <div class="container">
-      <a class="navbar-brand" href="/"
-         rel="tooltip" title="{{ place.organisation.toUpperCase() }}" data-placement="bottom">
-        {{ place.organisation.toUpperCase() }}
-      </a>
 
-      <a v-if="connection === true" class="btn btn-sm bg-gradient-light btn-round mb-0 ms-auto d-lg-none d-block">
-        <i class="fas fa-check-square me-1" aria-hidden="true"></i>Connecté</a>
-      <a v-else="" class="btn btn-sm bg-gradient-info btn-round mb-0 ms-auto d-lg-none d-block"
-         data-bs-toggle="modal" data-bs-target="#modal-form-login">
-        <i class="fas fa-sign-in-alt me-1" aria-hidden="true"></i>Se connecter</a>
+<!--      <div class="navbar-brand">-->
+<!--        <img :src="getLogo()" style="width: auto; height: 26px;">-->
+<!--        <router-link to="/" class="navbar-brand text-white">{{ place.organisation }}</router-link>-->
+<!--      </div>-->
 
-      <a v-if="store.place.button_adhesion === true && router.currentRoute.value.name === 'Accueil' && statusAdhesion === false"
-         class="btn btn-sm bg-gradient-success btn-round mb-0 ms-auto d-lg-none d-block">
-        <i class="fas fa-check-square me-1" aria-hidden="true"></i>Adhérez à l'association {{ place.organisation }}</a>
-
-
+      <!-- bouton hamburger -->
       <button class="navbar-toggler shadow-none ms-2" type="button" data-bs-toggle="collapse"
-              data-bs-target="#navigation" aria-controls="navigation" aria-expanded="false"
+              data-bs-target="#navigation" aria-controls="navigation" aria-expanded="true"
               aria-label="Toggle navigation">
-      <span class="navbar-toggler-icon mt-2">
-        <span class="navbar-toggler-bar bar1"></span>
-        <span class="navbar-toggler-bar bar2"></span>
-        <span class="navbar-toggler-bar bar3"></span>
-      </span>
-
+<!--        <i class="fas fa-stream" aria-hidden="true"></i>-->
+        <span class="navbar-toggler-icon mt-2">
+          <span class="navbar-toggler-bar bar1"></span>
+          <span class="navbar-toggler-bar bar2"></span>
+          <span class="navbar-toggler-bar bar3"></span>
+        </span>
       </button>
-      <div class="collapse navbar-collapse w-100 pt-3 pb-2 py-lg-0" id="navigation">
+
+
+      <div class="navbar-collapse w-100 pt-3 pb-2 py-lg-0 collapse show" id="navigation" style="">
+
         <ul class="navbar-nav navbar-nav-hover mx-auto">
 
-          <li v-if="store.place.button_adhesion === true && statusAdhesion === false"
+          <!-- Calendrier -->
+<!--          <li v-if="router.currentRoute.value.name === 'Accueil'" class="nav-item mx-2">-->
+<!--            <a href="#calendar" class="nav-link ps-2 d-flex justify-content-between cursor-pointer align-items-center">-->
+<!--              Calendrier-->
+<!--            </a>-->
+<!--          </li>-->
+
+          <!-- adhésion -->
+          <li v-if="store.place.button_adhesion === true && router.currentRoute.value.name === 'Accueil' && statusAdhesion === false"
               class="nav-item mx-2">
-            <a class="btn btn-sm bg-gradient-primary btn-round mb-0 me-1" role="button"
+            <a class="btn bg-gradient-primary btn-icon me-2" role="button"
                data-bs-toggle="modal" data-bs-target="#modal-form-adhesion">
-              Adhérez à l'association {{ place.organisation }}
+              <i class="fas fa-address-card me-1" aria-hidden="true"></i>Adhérez à l'association {{ place.organisation }}
             </a>
           </li>
 
-        </ul>
-
-
-        <ul class="navbar-nav d-lg-block d-none">
-
-
-            <!-- menu Profil -->
+          <!-- menu Profil -->
           <li v-if="statusAdhesion === true" class="nav-item dropdown dropdown-hover mx-2">
-            <a id="dropDownMenuProfil" class="btn btn-sm  bg-gradient-primary  btn-round mb-0 me-1" role="button"
+            <a id="dropDownMenuProfil" class="nav-link ps-2 d-flex align-items-center cursor-pointer" role="button"
                data-bs-toggle="dropdown" aria-expanded="false">
-              <i class="fas fa-user me-1" aria-hidden="true"></i>Profil
+              <div class="w-95">
+                <i class="fas fa-user me-1"></i>Profil
+              </div>
+              <div class="w-5 float-right">
+                <img src="../assets/img/down-arrow-white.svg" alt="down-arrow" class="arrow ms-1 d-lg-block d-none">
+                <img src="../assets/img/down-arrow-dark.svg" alt="down-arrow" class="arrow ms-1 d-lg-none d-block">
+              </div>
             </a>
 
             <!-- sous menu Profil -->
@@ -125,14 +127,15 @@
             </div>
           </li>
 
-          <li v-if="statusAdhesion === false && connection === true" class="nav-item">
-            <a class="btn btn-sm  bg-gradient-primary  btn-round mb-0 me-1" role="button">
-              <i class="fas fa-user me-1" aria-hidden="true"></i>Connecté
-            </a>
+          <!-- déconnexion -->
+          <li v-if="connection === true" class="nav-item mx-2">
+            <div class="btn bg-gradient-light btn-icon me-2">
+              <i class="fas fa-check-square me-1" aria-hidden="true"></i>Connecté
+            </div>
           </li>
           <!-- connexion -->
-          <li v-if="connection === false" class="nav-item">
-            <a class="btn btn-sm  bg-gradient-info btn-round mb-0 me-1" role="button"
+          <li v-if="connection === false" class="nav-item mx-2">
+            <a class="btn bg-gradient-info btn-icon me-2" role="button"
                data-bs-toggle="modal" data-bs-target="#modal-form-login">
               <i class="fas fa-sign-in-alt me-1" aria-hidden="true"></i>Se connecter
             </a>

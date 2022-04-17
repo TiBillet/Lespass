@@ -3,96 +3,35 @@
   <nav
       class="navbar navbar-expand-lg navbar-transparent blur blur-light fixed-top z-index-3 py-3">
     <div class="container">
-      <a class="navbar-brand" href="/"
-         rel="tooltip" title="{{ place.organisation.toUpperCase() }}" data-placement="bottom">
-        {{ place.organisation.toUpperCase() }}
-      </a>
 
-<!--      <a v-if="connection === true" class="btn btn-sm bg-gradient-light btn-round mb-0 ms-auto d-lg-none d-block">-->
-<!--        <i class="fas fa-check-square me-1" aria-hidden="true"></i>Connecté</a>-->
-<!--      <a v-else="" class="btn btn-sm bg-gradient-info btn-round mb-0 ms-auto d-lg-none d-block"-->
-<!--         data-bs-toggle="modal" data-bs-target="#modal-form-login">-->
-<!--        <i class="fas fa-sign-in-alt me-1" aria-hidden="true"></i>Se connecter</a>-->
+      <ul class="navbar-nav navbar-nav-hover mx-auto">
 
-<!--      <a v-if="store.place.button_adhesion === true && router.currentRoute.value.name === 'Accueil' && statusAdhesion === false"-->
-<!--         class="btn btn-sm bg-gradient-success btn-round mb-0 ms-auto d-lg-none d-block">-->
-<!--        <i class="fas fa-check-square me-1" aria-hidden="true"></i>Adhérez à l'association {{ place.organisation }}</a>-->
+        <li v-if="store.place.button_adhesion === true && statusAdhesion === false"
+            class="nav-item mx-2">
+          <a class="btn btn-sm bg-gradient-primary btn-round mb-0 me-1" role="button"
+             data-bs-toggle="modal" data-bs-target="#modal-form-adhesion">
+            Adhérez à l'association {{ place.organisation }}
+          </a>
+        </li>
+
+      </ul>
 
 
-<!--      <button class="navbar-toggler shadow-none ms-2" type="button" data-bs-toggle="collapse"-->
-<!--              data-bs-target="#navigation" aria-controls="navigation" aria-expanded="false"-->
-<!--              aria-label="Toggle navigation">-->
-<!--      <span class="navbar-toggler-icon mt-2">-->
-<!--        <span class="navbar-toggler-bar bar1"></span>-->
-<!--        <span class="navbar-toggler-bar bar2"></span>-->
-<!--        <span class="navbar-toggler-bar bar3"></span>-->
-<!--      </span>-->
-<!--      </button>-->
+      <ul class="navbar-nav d-lg-block">
+        <!-- menu Profil -->
+        <li v-if="statusAdhesion === true" class="nav-item dropdown dropdown-hover mx-2">
+          <a id="dropDownMenuProfil" class="btn btn-sm  bg-gradient-primary btn-round mb-0 me-1" role="button"
+             data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="fas fa-user me-1" aria-hidden="true"></i>Profil
+          </a>
 
-        <ul class="navbar-nav navbar-nav-hover mx-auto">
-
-          <li v-if="store.place.button_adhesion === true && statusAdhesion === false"
-              class="nav-item mx-2">
-            <a class="btn btn-sm bg-gradient-primary btn-round mb-0 me-1" role="button"
-               data-bs-toggle="modal" data-bs-target="#modal-form-adhesion">
-              Adhérez à l'association {{ place.organisation }}
-            </a>
-          </li>
-
-        </ul>
-
-
-        <ul class="navbar-nav d-lg-block d-none">
-            <!-- menu Profil -->
-          <li v-if="statusAdhesion === true" class="nav-item dropdown dropdown-hover mx-2">
-            <a id="dropDownMenuProfil" class="btn btn-sm  bg-gradient-primary btn-round mb-0 me-1" role="button"
-               data-bs-toggle="dropdown" aria-expanded="false">
-              <i class="fas fa-user me-1" aria-hidden="true"></i>Profil
-            </a>
-
-            <!-- sous menu Profil -->
-            <div class="dropdown-menu dropdown-menu-animation dropdown-lg border-radius-lg py-0 mt-0 mt-lg-auto pe-auto"
-                 aria-labelledby="dropDownMenuProfil">
-              <!-- menu desktop -->
-              <div class="d-none d-lg-block">
-                <ul class="list-group mx-auto">
-                  <li class="nav-item list-group-item border-0 p-0">
-                    <a class="dropdown-item py-2 ps-3 border-radius-md" role="button" @click="showAssets()">
-                      <div class="d-flex">
-                        <div class="icon h-10 me-3 d-flex mt-1">
-                          <i class="fas fa-address-card fa-fw me-1"></i>
-                        </div>
-                        <div>
-                          <h6 class="dropdown-header text-dark font-weight-bold d-flex justify-content-cente align-items-center p-0">
-                            Carte
-                          </h6>
-                        </div>
-                      </div>
-                    </a>
-                  </li>
-
-
-                  <li class="nav-item list-group-item border-0 p-0">
-                    <a class="dropdown-item py-2 ps-3 border-radius-md" role="button" @click="showAdhesion()">
-                      <div class="d-flex">
-                        <div class="icon h-10 me-3 d-flex mt-1">
-                          <i class="fas fa-hourglass-start fa-fw me-1"></i>
-                        </div>
-                        <div>
-                          <h6 class="dropdown-header text-dark font-weight-bold d-flex justify-content-cente align-items-center p-0">
-                            Adhésion
-                          </h6>
-                        </div>
-                      </div>
-                    </a>
-                  </li>
-                </ul>
-              </div>
-
-              <!-- mobile -->
-
-              <div class="row d-lg-none">
-                <div class="col-md-12 g-0">
+          <!-- sous menu Profil -->
+          <div class="dropdown-menu dropdown-menu-animation dropdown-lg border-radius-lg py-0 mt-0 mt-lg-auto pe-auto"
+               aria-labelledby="dropDownMenuProfil">
+            <!-- menu desktop -->
+            <div class="d-none d-lg-block">
+              <ul class="list-group mx-auto">
+                <li class="nav-item list-group-item border-0 p-0">
                   <a class="dropdown-item py-2 ps-3 border-radius-md" role="button" @click="showAssets()">
                     <div class="d-flex">
                       <div class="icon h-10 me-3 d-flex mt-1">
@@ -105,6 +44,8 @@
                       </div>
                     </div>
                   </a>
+                </li>
+                <li class="nav-item list-group-item border-0 p-0">
                   <a class="dropdown-item py-2 ps-3 border-radius-md" role="button" @click="showAdhesion()">
                     <div class="d-flex">
                       <div class="icon h-10 me-3 d-flex mt-1">
@@ -117,26 +58,58 @@
                       </div>
                     </div>
                   </a>
-                </div>
+                </li>
+              </ul>
+            </div>
+
+            <!-- mobile -->
+
+            <div class="row d-lg-none">
+              <div class="col-md-12 g-0">
+                <a class="dropdown-item py-2 ps-3 border-radius-md" role="button" @click="showAssets()">
+                  <div class="d-flex">
+                    <div class="icon h-10 me-3 d-flex mt-1">
+                      <i class="fas fa-address-card fa-fw me-1"></i>
+                    </div>
+                    <div>
+                      <h6 class="dropdown-header text-dark font-weight-bold d-flex justify-content-cente align-items-center p-0">
+                        Carte
+                      </h6>
+                    </div>
+                  </div>
+                </a>
+                <a class="dropdown-item py-2 ps-3 border-radius-md" role="button" @click="showAdhesion()">
+                  <div class="d-flex">
+                    <div class="icon h-10 me-3 d-flex mt-1">
+                      <i class="fas fa-hourglass-start fa-fw me-1"></i>
+                    </div>
+                    <div>
+                      <h6 class="dropdown-header text-dark font-weight-bold d-flex justify-content-cente align-items-center p-0">
+                        Adhésion
+                      </h6>
+                    </div>
+                  </div>
+                </a>
               </div>
             </div>
-          </li>
+          </div>
+        </li>
 
-          <li v-if="statusAdhesion === false && connection === true" class="nav-item">
-            <a class="btn btn-sm  bg-gradient-primary  btn-round mb-0 me-1" role="button">
-              <i class="fas fa-user me-1" aria-hidden="true"></i>Connecté
-            </a>
-          </li>
-          <!-- connexion -->
-          <li v-if="connection === false" class="nav-item">
-            <a class="btn btn-sm  bg-gradient-info btn-round mb-0 me-1" role="button"
-               data-bs-toggle="modal" data-bs-target="#modal-form-login">
-              <i class="fas fa-sign-in-alt me-1" aria-hidden="true"></i>Se connecter
-            </a>
-          </li>
+        <li v-if="statusAdhesion === false && connection === true" class="nav-item">
+          <a class="btn btn-sm  bg-gradient-primary  btn-round mb-0 me-1" role="button">
+            <i class="fas fa-user me-1" aria-hidden="true"></i>Connecté
+          </a>
+        </li>
+        <!-- connexion -->
+        <li v-if="connection === false" class="nav-item">
+          <a class="btn btn-sm  bg-gradient-info btn-round mb-0 me-1" role="button"
+             data-bs-toggle="modal" data-bs-target="#modal-form-login">
+            <i class="fas fa-sign-in-alt me-1" aria-hidden="true"></i>Se connecter
+          </a>
+        </li>
 
-        </ul>
-      </div>
+      </ul>
+    </div>
   </nav>
   <!-- modal login -->
   <Modallogin/>
