@@ -77,7 +77,7 @@ function getHeaderEvent() {
   }
 }
 
-// aller à la page évènement (lien défini si-dessous et dans le store) => /views/Event.vue
+// aller à la page évènement (lien défini ci-dessous et dans le store) => /views/Event.vue
 emitter.on('goEvenement', (slug) => {
   console.log('-> Emmiter, écoute "goEvenement"; slug =', slug, '  --  type =', typeof (slug))
   router.push({name: 'Event', params: {slug: slug}})
