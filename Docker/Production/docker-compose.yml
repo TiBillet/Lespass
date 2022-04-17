@@ -92,6 +92,15 @@ services:
     volumes:
       - ./nginx:/etc/nginx/conf.d
 
+  billetterie_nodejs_prod:
+    extends:
+      file: ../compose/docker-compose-base.yml
+      service: billetterie_nodejs
+    volumes:
+      - ../../Front:/Front
+    working_dir: /Front
+    command: "bash /Front/build.sh"
+
 # pour demo : jturbeaux@pm.me / eiXom5mo
 
 networks:

@@ -52,3 +52,23 @@ services:
       - ../../Front/dist:/usr/share/nginx/html
       - ../../DjangoFiles/www:/DjangoFiles/www
       - ../../DjangoFiles/logs:/DjangoFiles/logs
+
+
+  billetterie_nodejs:
+    image: node:16-bullseye
+    container_name: billetterie_nodejs
+    hostname: billetterie_nodejs
+#    ports:
+#      - "3000:3000"
+    environment:
+      DEV: 1
+      TIMEZONE: Indian/Reunion
+#    restart: on-failure
+    depends_on:
+      - billetterie_django
+    volumes:
+      - ../../Front:/Front
+    working_dir: /Front
+#    command: "bash /Front/start.sh"
+#    networks:
+#      - frontend
