@@ -54,6 +54,7 @@
                 <img src="../assets/img/down-arrow-dark.svg" alt="down-arrow" class="arrow ms-1 d-lg-none d-block">
               </div>
             </a>
+
             <!-- sous menu Profil -->
             <div class="dropdown-menu dropdown-menu-animation dropdown-lg border-radius-lg py-0 mt-0 mt-lg-auto pe-auto"
                  aria-labelledby="dropDownMenuProfil">
