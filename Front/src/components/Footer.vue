@@ -45,25 +45,25 @@
             <h6 class="font-weight-bolder text-sm">Company</h6>
             <ul class="flex-column ms-n3 nav">
               <li class="nav-item">
-                <a class="nav-link" href="https://www.creative-tim.com/presentation" target="_blank">
+                <a class="nav-link" href="https://www.tibillet.re" target="_blank">
                   About Us
                 </a>
               </li>
-              <li class="nav-item">
-                <a class="nav-link" href="https://www.creative-tim.com/templates/free" target="_blank">
-                  Freebies
-                </a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link" href="https://www.creative-tim.com/templates/premium" target="_blank">
-                  Premium Tools
-                </a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link" href="https://www.creative-tim.com/blog" target="_blank">
-                  Blog
-                </a>
-              </li>
+<!--              <li class="nav-item">-->
+<!--                <a class="nav-link" href="https://www.creative-tim.com/templates/free" target="_blank">-->
+<!--                  Freebies-->
+<!--                </a>-->
+<!--              </li>-->
+<!--              <li class="nav-item">-->
+<!--                <a class="nav-link" href="https://www.creative-tim.com/templates/premium" target="_blank">-->
+<!--                  Premium Tools-->
+<!--                </a>-->
+<!--              </li>-->
+<!--              <li class="nav-item">-->
+<!--                <a class="nav-link" href="https://www.creative-tim.com/blog" target="_blank">-->
+<!--                  Blog-->
+<!--                </a>-->
+<!--              </li>-->
             </ul>
           </div>
         </div>
@@ -72,8 +72,8 @@
             <h6 class="font-weight-bolder text-sm">Resources</h6>
             <ul class="flex-column ms-n3 nav">
               <li class="nav-item">
-                <a class="nav-link" href="https://iradesign.io/" target="_blank">
-                  Illustrations
+                <a class="nav-link" href="https://www.creative-tim.com/" target="_blank">
+                  Design
                 </a>
               </li>
               <li class="nav-item">
@@ -81,11 +81,11 @@
                   Bits &amp; Snippets
                 </a>
               </li>
-              <li class="nav-item">
-                <a class="nav-link" href="https://www.creative-tim.com/affiliates/new" target="_blank">
-                  Affiliate Program
-                </a>
-              </li>
+<!--              <li class="nav-item">-->
+<!--                <a class="nav-link" href="https://www.creative-tim.com/affiliates/new" target="_blank">-->
+<!--                  Affiliate Program-->
+<!--                </a>-->
+<!--              </li>-->
             </ul>
           </div>
         </div>
@@ -94,25 +94,25 @@
             <h6 class="font-weight-bolder text-sm">Help &amp; Support</h6>
             <ul class="flex-column ms-n3 nav">
               <li class="nav-item">
-                <a class="nav-link" href="https://www.creative-tim.com/contact-us" target="_blank">
+                <a class="nav-link" href="mailto:contact@tibillet.re" target="_blank">
                   Contact Us
                 </a>
               </li>
               <li class="nav-item">
-                <a class="nav-link" href="https://www.creative-tim.com/knowledge-center" target="_blank">
+                <a class="nav-link" href="https://github.com/TiBillet/TiBillet" target="_blank">
                   Knowledge Center
                 </a>
               </li>
               <li class="nav-item">
-                <a class="nav-link" href="https://services.creative-tim.com/?ref=ct-now-ui-footer" target="_blank">
+                <a class="nav-link" href="https://www.tibillet.re" target="_blank">
                   Custom Development
                 </a>
               </li>
-              <li class="nav-item">
-                <a class="nav-link" href="https://www.creative-tim.com/sponsorships" target="_blank">
-                  Sponsorships
-                </a>
-              </li>
+<!--              <li class="nav-item">-->
+<!--                <a class="nav-link" href="https://www.creative-tim.com/sponsorships" target="_blank">-->
+<!--                  Sponsorships-->
+<!--                </a>-->
+<!--              </li>-->
             </ul>
           </div>
         </div>
@@ -121,17 +121,17 @@
             <h6 class="font-weight-bolder text-sm">Legal</h6>
             <ul class="flex-column ms-n3 nav">
               <li class="nav-item">
-                <a class="nav-link" href="/status#general-terms" target="_blank">
+                <a class="nav-link" href="https://github.com/TiBillet/TiBillet/blob/main/code_of_conduct-FR.md" target="_blank">
                   Terms &amp; Conditions
                 </a>
               </li>
               <li class="nav-item">
-                <a class="nav-link" href="https://www.creative-tim.com/privacy" target="_blank">
+                <a class="nav-link" href="https://github.com/TiBillet/TiBillet/blob/main/code_of_conduct-FR.md" target="_blank">
                   Privacy Policy
                 </a>
               </li>
               <li class="nav-item">
-                <a class="nav-link" href="/status#license" target="_blank">
+                <a class="nav-link" href="https://github.com/TiBillet/TiBillet/blob/main/LICENSE" target="_blank">
                   Licenses (EULA)
                 </a>
               </li>
@@ -141,7 +141,7 @@
         <div class="col-12">
           <div class="text-center">
             <p class="my-4 text-sm">
-              All rights reserved. Copyright © 2022 <a href="#" target="_blank">Tibillet</a>.
+              All rights reserved. Copyleft © 2022 <a href="#" target="https://www.tibillet.re">Tibillet</a>.
             </p>
           </div>
         </div>
