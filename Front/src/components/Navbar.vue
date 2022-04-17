@@ -99,6 +99,7 @@
 <!--            <i class="fas fa-user me-1" aria-hidden="true"></i>Connecté-->
 <!--          </a>-->
 <!--        </li>-->
+
         <!-- connexion -->
         <li v-if="connection === false" class="nav-item">
           <a class="btn btn-sm  bg-gradient-info btn-round mb-0 me-1" role="button"
