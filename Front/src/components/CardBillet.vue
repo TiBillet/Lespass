@@ -1,12 +1,10 @@
 <template>
   <fieldset class="shadow-sm p-3 mb-5 bg-body rounded" v-for="price in prix"
             :key="price.uuid">
-
     <legend>
       <div class="d-flex justify-content-between mb-3">
-        <span> {{ product.name }} {{ price.name.toLowerCase() }} {{ price.prix }}€</span>
-<!--          {{ (price.users.length * price.prix) }}€-->
-
+        <h3 class="font-weight-bolder text-info text-gradient align-self-start">{{ product.name }}</h3>
+        <span>  {{ price.name.toLowerCase() }} {{ price.prix }}€}</span>
         <button v-if="(price.stock - price.users.length) >= 1" class="btn btn-primary ms-3" type="button"
                 @click.stop="addUser(price.uuid)">
           <i class="fas fa-plus"></i>
@@ -14,26 +12,24 @@
       </div>
     </legend>
 
-    <div class="d-flex flex-row"
-         v-for="(user, index) in price.users"
-         :key="index">
-      <div class="input-group mb-2">
-        <input type="text" :value="user.last_name" placeholder="Nom" aria-label="Nom" class="form-control"
-               @keyup="updateUser(price.uuid, user.uuid, $event.target.value,'last_name')" required>
-        <input type="text" :value="user.first_name" placeholder="Prénom" aria-label="Prénom" class="form-control"
-               @keyup="updateUser(price.uuid, user.uuid, $event.target.value,'first_name')" required>
-        <div class="invalid-tooltip me-4">Erreur, il manque une information svp</div>
-        <button class="btn btn-primary mb-0" type="button" @click="deleteUser(price.uuid, user.uuid)">
+    <!-- <div class="d-flex flex-row" v-for="(user, index) in price.users" :key="index"> -->
+    <div class="input-group mb-2" v-for="(user, index) in price.users" :key="index">
+      <input type="text" :value="user.last_name" placeholder="Nom" aria-label="Nom" class="form-control"
+             @keyup="updateUser(price.uuid, user.uuid, $event.target.value,'last_name')" required>
+      <input type="text" :value="user.first_name" placeholder="Prénom" aria-label="Prénom" class="form-control"
+             @keyup="updateUser(price.uuid, user.uuid, $event.target.value,'first_name')" required>
+      <!-- <div class="invalid-tooltip me-4">Erreur, il manque une information svp</div> -->
+        <button class="btn btn-primary mb-0" type="button" @click="deleteUser(price.uuid, user.uuid)" style="border-top-right-radius: 30px; border-bottom-right-radius: 30px;">
           <i class="fas fa-times"></i>
         </button>
-        <div class="invalid-feedback">Donnée(s) manquante(s) !</div>
-      </div>
+      <div class="invalid-feedback">Donnée(s) manquante(s) !</div>
     </div>
+    <!-- </div> -->
 
     <div v-if="price.users.length > 0 " class="d-flex justify-content-end mb-3">
-        <h6>
-          SOUS-TOTAL : {{ (price.users.length * price.prix) }}€
-        </h6>
+      <h6>
+        SOUS-TOTAL : {{ (price.users.length * price.prix) }}€
+      </h6>
     </div>
   </fieldset>
 
@@ -104,6 +100,8 @@ function addUser(uuidTarif) {
   // console.log('-> fonc addUser, uuidTarif =', uuidTarif)
   const tarifs = prix.find(prod => prod.uuid === uuidTarif)
   console.log('tarifs =', JSON.stringify(tarifs, null, 2))
+
+  // max products by user
   if (tarifs.users.length < tarifs.max_per_user) {
     tarifs.users.push({
       "first_name": "",
@@ -111,10 +109,17 @@ function addUser(uuidTarif) {
       "uuid": createUuid()
     })
   } else {
-    emitter.emit('message', {
-      tmp: 6,
-      typeMsg: 'warning',
+    emitter.emit('modalMessage', {
+      titre: 'Attention',
       contenu: `Nombre max de produits par client atteint !`
+    })
+  }
+
+  // stock empty
+  if (tarifs.users.length === tarifs.stock) {
+    emitter.emit('modalMessage', {
+      titre: 'Attention',
+      contenu: `Produits arrivé en rupture de stock !`
     })
   }
 }
@@ -135,5 +140,4 @@ function deleteUser(uuidTarif, uuidUser) {
 </script>
 
 <style scoped>
-
 </style>

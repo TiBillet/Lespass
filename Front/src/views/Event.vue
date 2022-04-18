@@ -3,20 +3,25 @@
 
   <div class="container mt-7">
 
-      <!-- artistes -->
-      <div v-for="(artist, index) in currentEvent.artists" :key="index">
-        <br>
-        <CardArtist :data-artist="artist"/>
-        <br>
-      </div>
+    <!-- artistes -->
+    <div v-for="(artist, index) in currentEvent.artists" :key="index">
+      <br>
+      <CardArtist :data-artist="artist"/>
+      <br>
+    </div>
 
 
     <form @submit.prevent="goValiderAchats($event)" class="needs-validation" novalidate>
       <CardProducts :products="currentEvent.products" :categories="['B', 'F']"/>
 
-      <div v-if="currentEvent.options_checkbox.length > 0 || currentEvent.options_radio.length > 0 ">
-        <ListOptionsCheckbox :options-checkbox="currentEvent.options_checkbox" :index-memo="store.currentUuidEvent"/>
-      </div>
+
+      <OptionsRadio v-if="currentEvent.options_radio.length > 1" :options-radio="currentEvent.options_radio"
+                    name="Position" :index-memo="store.currentUuidEvent"/>
+
+      <!-- <div v-if="currentEvent.options_checkbox.length > 0 || currentEvent.options_radio.length > 0"> -->
+      <ListOptionsCheckbox v-if="currentEvent.options_checkbox.length > 0 || currentEvent.options_radio.length > 0"
+                           :options-checkbox="currentEvent.options_checkbox" :index-memo="store.currentUuidEvent"/>
+      <!-- </div> -->
 
       <!-- index-memo="unique00" = "index fixe" bon pour tous les évènements -->
       <CardEmail index-memo="unique00"/>
@@ -26,8 +31,6 @@
       <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
 
     </form>
-
-
 
 
   </div>
@@ -49,6 +52,7 @@ import CardArtist from '@/components/CardArtist.vue'
 import CardEmail from '@/components/CardEmail.vue'
 import CardProducts from '@/components/CardProducts.vue'
 import ListOptionsCheckbox from '@/components/ListOptionsCheckbox.vue'
+import OptionsRadio from '@/components/OptionsRadio.vue'
 
 // test dev
 import {getMe} from '@/api'
@@ -75,11 +79,13 @@ if (typeof (uuidEventBrut) === 'object') {
 const currentEvent = store.events.find(evt => evt.uuid === uuidEvent)
 
 // currentEvent test dev
-// * const currentEvent = fakeEvent
+// const currentEvent = fakeEvent
 
 console.log('currentEvent =', currentEvent)
 
 store.currentUuidEvent = uuidEvent
+
+// TODO: maj currentEvent et ses store.memoComposants[composant][currentUuidEvent] provenant d'un websocket
 
 function getHeaderEvent() {
   let urlImage
@@ -134,9 +140,14 @@ function formaterDatas(adhesionActive, adhesionPrix) {
     }
   }
 
-  // TODO: options radio
   // options radio
-
+  const optionsRadio = store.memoComposants.OptionsRadio[store.currentUuidEvent]
+  for (let i = 0; i < optionsRadio.length; i++) {
+    const option = optionsRadio[i]
+    if (option.selection === true) {
+      data.options.push(option.uuid)
+    }
+  }
 
   // prix adhésion
   if (adhesionActive === true && adhesionPrix !== '') {
@@ -275,6 +286,8 @@ function goValiderAchats(event) {
         }).then(retour => {
           console.log('retour =', retour)
           if (retour.checkout_url !== undefined) {
+            // icon de chargement
+            emitter.emit('statusLoading', true)
             // redirection vers stripe en conservant l'historique de navigation
             window.location.assign(retour.checkout_url)
           } else {

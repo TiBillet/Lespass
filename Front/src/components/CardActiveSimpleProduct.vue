@@ -1,15 +1,17 @@
 <template>
-<!--  <fieldset class="col-md-12 col-lg-9 mb-4 shadow-sm p-3 mb-5 bg-body rounded">-->
+  <!--  <fieldset class="col-md-12 col-lg-9 mb-4 shadow-sm p-3 mb-5 bg-body rounded">-->
   <fieldset class="shadow-sm p-3 mb-5 bg-body rounded">
-
-    <legend>{{ product.name }}</legend>
+    <legend>
+      <h3 class="font-weight-bolder text-info text-gradient align-self-start">{{ product.name }}</h3>
+    </legend>
 
     <div class="form-check form-switch">
       <input class="form-check-input" type="checkbox" :id="`active-simple-product${simpleProduct.uuid}`"
              @change="updateActiveSimpleProduct('activation', $event.target.checked)"
              :checked="simpleProduct.activation">
       <label class="form-check-label text-dark" :for="`active-simple-product${simpleProduct.uuid}`">
-        Je donne un euro de plus pour soutenir les actions de la coopérative <a href="https://wiki.tibillet.re">TiBillet</a> en faveur de la culture et de l'économie sociale et solidaire.
+        Je donne un euro de plus pour soutenir les actions de la coopérative <a
+          href="https://wiki.tibillet.re">TiBillet</a> en faveur de la culture et de l'économie sociale et solidaire.
       </label>
     </div>
 

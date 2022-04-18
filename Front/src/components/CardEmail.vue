@@ -1,7 +1,8 @@
 <template>
     <fieldset class="col shadow-sm p-3 mb-5 bg-body rounded">
-
-      <legend>Email</legend>
+      <legend>
+        <h3 class="font-weight-bolder text-info text-gradient align-self-start">Email</h3>
+      </legend>
       <!-- email -->
       <div class="mb-2">
         <div class="input-group has-validation">

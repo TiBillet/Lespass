@@ -1,6 +1,8 @@
 <template>
   <fieldset class="shadow-sm p-3 mb-5 bg-body rounded">
-    <legend>Options</legend>
+    <legend>
+      <h3 class="font-weight-bolder text-info text-gradient align-self-start">Options</h3>
+    </legend>
     <div class="input-group mb-2 has-validation">
         <span v-for="(option, index) in options" :key="index" class="form-switch me-3">
           <input v-if="option.activation === true" class="form-check-input" type="checkbox"
@@ -12,7 +14,6 @@
         </span>
     </div>
   </fieldset>
-
 </template>
 
 <script setup>
@@ -41,7 +42,6 @@ for (let i = 0; i < dataInit.length; i++) {
 }
 
 let options = ref({})
-
 
 try {
   if (props.indexMemo === '' || props.indexMemo === undefined) {
