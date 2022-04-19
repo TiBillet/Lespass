@@ -15,8 +15,12 @@
     <h4>Siège : {{ ticket.seat }}</h4>
     <h4>Numéro de billet : {{ ticket.numero_uuid }}</h4>
 
+    {% for option in ticket.reservation.options.all %}
+        <h4>{{ option.name }}</h4>
+    {% endfor %}
+
     <div>{{ img_svg | safe }}</div>
-{#    <div>{{ bar_svg | safe }}</div>#}
+    {#    <div>{{ bar_svg | safe }}</div>#}
 
 </section>
 </body>

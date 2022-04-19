@@ -358,7 +358,7 @@ class ReservationSerializer(serializers.ModelSerializer):
             'datetime',
             'status',
         ]
-        depth = 1
+        # depth = 1
 
 
 class TicketSerializer(serializers.ModelSerializer):
@@ -630,7 +630,9 @@ class ReservationValidator(serializers.Serializer):
     email = serializers.EmailField()
     to_mail = serializers.BooleanField(default=True, required=False)
     event = serializers.PrimaryKeyRelatedField(queryset=Event.objects.all())
+    options = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(), many=True, allow_null=True)
     prices = serializers.JSONField(required=True)
+
 
     def validate_event(self, value):
         event: Event = value
@@ -688,19 +690,33 @@ class ReservationValidator(serializers.Serializer):
 
     def validate(self, attrs):
         event: Event = attrs.get('event')
+        options = attrs.get('options')
         to_mail: bool = attrs.get('to_mail')
 
-        for line_price in self.prices_list:
-            if line_price['price'].product not in event.products.all():
+        # On check que les prices sont bien dans l'event original.
+        for price_object in self.prices_list:
+            if price_object['price'].product not in event.products.all():
                 raise serializers.ValidationError(_(f'Article non disponible'))
 
-        # Les articles semblent bon,
+        # On check que les options sont bien dans l'event original.
+        if options:
+            for option in options:
+                option: OptionGenerale
+                if option not in list(set(event.options_checkbox.all()) | set(event.options_radio.all())) :
+                    raise serializers.ValidationError(_(f'Option {option.name} non disponible dans event'))
+
+
         # on construit l'object reservation.
         reservation = Reservation.objects.create(
             user_commande=self.user_commande,
             to_mail=to_mail,
             event=event,
         )
+
+        if options:
+            for option in options:
+                reservation.options.add(option)
+
 
         # Ici on construit :
         #   price_sold pour lier l'event à la vente
@@ -709,9 +725,9 @@ class ReservationValidator(serializers.Serializer):
 
         list_line_article_sold = []
         total_checkout = 0
-        for line_price in self.prices_list:
-            price_generique: Price = line_price['price']
-            qty = line_price.get('qty')
+        for price_object in self.prices_list:
+            price_generique: Price = price_object['price']
+            qty = price_object.get('qty')
             total_checkout += qty * price_generique.prix
 
             pricesold: PriceSold = get_or_create_price_sold(price_generique, event)
@@ -726,7 +742,7 @@ class ReservationValidator(serializers.Serializer):
             # import ipdb; ipdb.set_trace()
             # Les Tickets si article est un billet
             if price_generique.product.categorie_article in [Product.BILLET, Product.FREERES]:
-                for customer in line_price.get('customers'):
+                for customer in price_object.get('customers'):
                     create_ticket(pricesold, customer, reservation)
 
         print(f"total_checkout : {total_checkout}")

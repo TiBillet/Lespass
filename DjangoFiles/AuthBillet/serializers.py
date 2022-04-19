@@ -2,7 +2,6 @@ import datetime
 
 from rest_framework import serializers
 
-from ApiBillet.serializers import ReservationSerializer
 from AuthBillet.models import TibilletUser
 import logging
 
