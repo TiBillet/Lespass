@@ -12,12 +12,21 @@
     <h2>Lieux : {{ config.organisation }}</h2>
     <h2>{{ ticket.reservation.event.datetime }}</h2>
     <h3>{{ ticket.first_name }} {{ ticket.last_name }}</h3>
-    <h4>Siège : {{ ticket.seat }}</h4>
+
+    {% if ticket.seat == "L" %}
+        <h4>Placement libre</h4>
+    {% else %}
+        <h4>Siège : {{ ticket.seat }}</h4>
+    {% endif %}
+
     <h4>Numéro de billet : {{ ticket.numero_uuid }}</h4>
 
-    {% for option in ticket.reservation.options.all %}
-        <h4>{{ option.name }}</h4>
-    {% endfor %}
+    {% if ticket.reservation.options.all|length > 0 %}
+        <h3>Options :</h3>
+        {% for option in ticket.reservation.options.all %}
+            <h4>- {{ option.name }}</h4>
+        {% endfor %}
+    {% endif %}
 
     <div>{{ img_svg | safe }}</div>
     {#    <div>{{ bar_svg | safe }}</div>#}
