@@ -329,15 +329,6 @@ class EventSerializer(serializers.ModelSerializer):
         representation = super().to_representation(instance)
         return representation
 
-    '''
-    
-    products = [
-        {"uuid":"9340a9a1-1b90-488e-ab68-7b358b213dd7"},
-        {"uuid":"60db1531-fd0a-4d92-a785-f384e77cd213"}
-    ]
-    
-    
-    '''
 
 
 class ReservationSerializer(serializers.ModelSerializer):
@@ -361,6 +352,14 @@ class ReservationSerializer(serializers.ModelSerializer):
         # depth = 1
 
 
+class OptionResaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Reservation
+        fields = [
+            'options'
+        ]
+        read_only_fields = fields
+
 class TicketSerializer(serializers.ModelSerializer):
     class Meta:
         model = Ticket
@@ -368,7 +367,6 @@ class TicketSerializer(serializers.ModelSerializer):
             'uuid',
             'first_name',
             'last_name',
-            # 'reservation',
             # 'pricesold',
             'status',
             'seat',
@@ -377,6 +375,11 @@ class TicketSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+    # on rajoute les options directement.
+    def to_representation(self, instance: Ticket):
+        representation = super().to_representation(instance)
+        representation['options'] = [option.name for option in instance.reservation.options.all()]
+        return representation
 
 def validate_email_and_return_user(email):
     """
