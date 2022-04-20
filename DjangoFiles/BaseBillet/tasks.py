@@ -207,7 +207,7 @@ def connexion_celery_mailer(user_email, base_url):
     try:
         mail = CeleryMailerClass(
             user.email,
-            f"{config.organisation} : Confirmer votre connexion à l'espace TiBillet.",
+            f"{config.organisation} : Confirmez votre email et connectez vous !",
             template='mails/connexion.html',
             context={
                 'config': config,
