@@ -4,7 +4,7 @@ from django.db import connection
 from AuthBillet.models import TibilletUser
 from BaseBillet.tasks import connexion_celery_mailer
 
-def validate_email_and_return_user(email, password):
+def validate_email_and_return_user(email, password=None):
 
         User: TibilletUser = get_user_model()
         user, created = User.objects.get_or_create(email=email, username=email)

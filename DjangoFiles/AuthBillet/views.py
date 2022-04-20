@@ -103,7 +103,7 @@ class create_user(APIView):
         user = validate_email_and_return_user(email, password)
 
         if user :
-            return Response(_('Pour acceder à votre espace et voir vos reservations, merci de valider votre adresse email. Pensez à regarder dans les spams !'),
+            return Response(_('Pour acceder à votre espace et réservations, merci de valider votre adresse email. Pensez à regarder dans les spams !'),
                             status=status.HTTP_200_OK)
         else :
             return Response(_("Email non valide. Merci de vérifier votre email."), status=status.HTTP_406_NOT_ACCEPTABLE)
