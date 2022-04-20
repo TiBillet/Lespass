@@ -11,6 +11,8 @@ from rest_framework.generics import get_object_or_404
 from django_tenants.utils import schema_context, tenant_context
 
 from AuthBillet.models import TibilletUser, HumanUser
+from AuthBillet.utils import validate_email_and_return_user
+
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, Paiement_stripe, \
     PriceSold, ProductSold, Artist_on_event, OptionGenerale, Membership
 from Customers.models import Client
@@ -381,27 +383,6 @@ class TicketSerializer(serializers.ModelSerializer):
         representation['options'] = [option.name for option in instance.reservation.options.all()]
         return representation
 
-def validate_email_and_return_user(email):
-    """
-
-    :param email: email à vérifier
-    :type email: str
-    :return: TibilletUser
-    :rtype: TibilletUser
-    """
-    User: TibilletUser = get_user_model()
-    user, created = User.objects.get_or_create(
-        email=email, username=email)
-
-    if created:
-        user: HumanUser
-        user.client_source = connection.tenant
-        user.is_active = False
-
-    user.client_achat.add(connection.tenant)
-
-    user.save()
-    return user
 
 
 class NewAdhesionValidator(serializers.Serializer):

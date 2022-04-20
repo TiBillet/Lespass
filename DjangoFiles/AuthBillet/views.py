@@ -19,11 +19,13 @@ from AuthBillet.models import TibilletUser
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from AuthBillet.serializers import MeSerializer, CreateUserValidator
+from AuthBillet.utils import validate_email_and_return_user
 from BaseBillet.models import Configuration
-from BaseBillet.tasks import connexion_celery_mailer
 
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
+
+from BaseBillet.tasks import connexion_celery_mailer
 
 User = get_user_model()
 
@@ -86,37 +88,6 @@ class activate(APIView):
 
 
 
-def create_and_return_user(email, password):
-
-        User: TibilletUser = get_user_model()
-        user, created = User.objects.get_or_create(email=email, username=email)
-
-        base_url = connection.tenant.get_primary_domain().domain
-
-        if not created:
-            if user.is_active:
-                task = connexion_celery_mailer.delay(user.email, f"https://{base_url}")
-                return user
-            else:
-                if user.email_error:
-                    return False
-                else:
-                    task = connexion_celery_mailer.delay(user.email, f"https://{base_url}")
-                    return user
-        else:
-            if password:
-                user.set_password(password)
-
-            user.is_active = False
-
-            user.espece = TibilletUser.TYPE_HUM
-            user.client_achat.add(connection.tenant)
-            user.save()
-            task = connexion_celery_mailer.delay(user.email, f"https://{base_url}")
-
-            return user
-
-
 
 class create_user(APIView):
     permission_classes = [AllowAny]
@@ -129,13 +100,13 @@ class create_user(APIView):
         email = validator.validated_data.get('email').lower()
         password = validator.validated_data.get('password')
 
-        user = create_and_return_user(email, password)
+        user = validate_email_and_return_user(email, password)
 
         if user :
             return Response(_('Pour acceder à votre espace et voir vos reservations, merci de valider votre adresse email. Pensez à regarder dans les spams !'),
                             status=status.HTTP_200_OK)
         else :
-            return Response(_("Email non valide"), status=status.HTTP_406_NOT_ACCEPTABLE)
+            return Response(_("Email non valide. Merci de vérifier votre email."), status=status.HTTP_406_NOT_ACCEPTABLE)
 
 
 
