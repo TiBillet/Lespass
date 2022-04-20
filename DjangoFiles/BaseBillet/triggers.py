@@ -58,7 +58,7 @@ class action_article_paid_by_categorie:
 
     # Category Free Reservation
     def trigger_F(self):
-        logger.info(f"TRIGGER FREERES")
+        logger.info(f"TRIGGER FREE RESERVATION")
 
     # Category RECHARGE_CASHLESS
     def trigger_R(self):

@@ -59,14 +59,16 @@ async function validerLogin(event) {
         })
         const retour = await response.json()
         // console.log('retour =',retour)
-        if (response.status === 201 || response.status === 401 || response.status === 202) {
+        // if (response.status === 201 || response.status === 401 || response.status === 202) {
+
+        if (response.status === 200) {
           // ferme le modal
           const elementModal = document.querySelector('#modal-form-login')
           const modal = bootstrap.Modal.getInstance(elementModal) // Returns a Bootstrap modal instance
           modal.hide()
           // message de succès
           emitter.emit('modalMessage', {
-            titre: 'Création utilisateur OK !',
+            titre: 'Validation',
             contenu: retour
           })
         } else {

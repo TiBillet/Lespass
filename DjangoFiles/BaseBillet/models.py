@@ -524,11 +524,12 @@ class Reservation(models.Model):
                               on_delete=models.PROTECT,
                               related_name="reservation")
 
-    CANCELED, CREATED, UNPAID, PAID, PAID_ERROR, PAID_NOMAIL, VALID, = 'C', 'R', 'U', 'P', 'PE', 'PN', 'V'
+    CANCELED, CREATED, UNPAID, FREERES, PAID, PAID_ERROR, PAID_NOMAIL, VALID, = 'C', 'R', 'U', 'F', 'P', 'PE', 'PN', 'V'
     TYPE_CHOICES = [
         (CANCELED, _('Annulée')),
         (CREATED, _('Crée')),
         (UNPAID, _('Non payée')),
+        (FREERES, _('Mail non vérifié')),
         (PAID, _('Payée')),
         (PAID_ERROR, _('Payée mais mail non valide')),
         (PAID_NOMAIL, _('Payée mais mail non envoyé')),
@@ -743,11 +744,12 @@ class LigneArticle(models.Model):
 
     paiement_stripe = models.ForeignKey(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True)
 
-    CANCELED, CREATED, UNPAID, PAID, VALID, = 'C', 'O', 'U', 'P', 'V'
+    CANCELED, CREATED, UNPAID, PAID, FREERES, VALID, = 'C', 'O', 'U', 'P', 'F', 'V'
     TYPE_CHOICES = [
         (CANCELED, _('Annulée')),
         (CREATED, _('Non envoyé en paiement')),
         (UNPAID, _('Non payée')),
+        (FREERES, _('Reservation gratuite')),
         (PAID, _('Payée')),
         (VALID, _('Validée par serveur cashless')),
     ]

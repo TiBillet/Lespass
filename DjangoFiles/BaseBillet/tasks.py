@@ -269,7 +269,7 @@ def ticket_celery_mailer(reservation_uuid: str):
 
             except smtplib.SMTPRecipientsRefused as e:
 
-                logger.error(f"ERROR {timezone.now()} Erreur envoie de mail pour reservation {reservation} : {e}")
+                logger.error(f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour reservation {reservation} : {e}")
                 logger.error(f"mail.sended : {mail.sended}")
                 reservation.mail_send = False
                 reservation.mail_error = True

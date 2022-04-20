@@ -85,37 +85,24 @@ class activate(APIView):
             return Response('Token non valide', status=status.HTTP_400_BAD_REQUEST)
 
 
-class create_user(APIView):
-    permission_classes = [AllowAny]
 
-    def post(self, request):
-        validator = CreateUserValidator(data=request.data)
-        if not validator.is_valid():
-            return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-        email = request.data.get('email')
-        password = request.data.get('password')
-        if not email:
-            return Response("email required", status=status.HTTP_400_BAD_REQUEST)
-        else:
-            email = email.lower()
+def create_and_return_user(email, password):
 
         User: TibilletUser = get_user_model()
         user, created = User.objects.get_or_create(email=email, username=email)
 
+        base_url = connection.tenant.get_primary_domain().domain
+
         if not created:
             if user.is_active:
-                task = connexion_celery_mailer.delay(user.email, f"https://{request.get_host()}")
-                return Response(_("email de connexion envoyé. Verifiez dans votre boite de spams si non reçu."),
-                                status=status.HTTP_202_ACCEPTED)
+                task = connexion_celery_mailer.delay(user.email, f"https://{base_url}")
+                return user
             else:
                 if user.email_error:
-                    return Response(_("Email non valide"), status=status.HTTP_406_NOT_ACCEPTABLE)
+                    return False
                 else:
-                    task = connexion_celery_mailer.delay(user.email, f"https://{request.get_host()}")
-                    return Response(
-                        _("Merci de valider l'email de confirmation envoyé. Pensez à regarder dans les spams !"),
-                        status=status.HTTP_401_UNAUTHORIZED)
+                    task = connexion_celery_mailer.delay(user.email, f"https://{base_url}")
+                    return user
         else:
             if password:
                 user.set_password(password)
@@ -125,11 +112,30 @@ class create_user(APIView):
             user.espece = TibilletUser.TYPE_HUM
             user.client_achat.add(connection.tenant)
             user.save()
-            task = connexion_celery_mailer.delay(user.email, f"https://{request.get_host()}")
+            task = connexion_celery_mailer.delay(user.email, f"https://{base_url}")
 
-            return Response(_('User Créé, merci de valider votre adresse email. Pensez à regarder dans les spams !'),
-                            status=status.HTTP_201_CREATED)
+            return user
 
+
+
+class create_user(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        validator = CreateUserValidator(data=request.data)
+        if not validator.is_valid():
+            return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        email = validator.validated_data.get('email').lower()
+        password = validator.validated_data.get('password')
+
+        user = create_and_return_user(email, password)
+
+        if user :
+            return Response(_('Pour acceder à votre espace et voir vos reservations, merci de valider votre adresse email. Pensez à regarder dans les spams !'),
+                            status=status.HTTP_200_OK)
+        else :
+            return Response(_("Email non valide"), status=status.HTTP_406_NOT_ACCEPTABLE)
 
 
 

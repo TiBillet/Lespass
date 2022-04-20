@@ -513,8 +513,10 @@ def get_near_event_by_date():
 
 def create_ticket(pricesold, customer, reservation):
     statut = Ticket.CREATED
+
     if pricesold.price.product.categorie_article == Product.FREERES:
         statut = Ticket.NOT_ACTIV
+
     ticket = Ticket.objects.create(
         status=statut,
         reservation=reservation,
@@ -522,6 +524,7 @@ def create_ticket(pricesold, customer, reservation):
         first_name=customer.get('first_name'),
         last_name=customer.get('last_name'),
     )
+
     return ticket
 
 
@@ -530,7 +533,7 @@ def get_or_create_price_sold(price: Price, event: Event):
     Générateur des objets PriceSold pour envoi à Stripe.
     Price + Event = PriceSold
 
-    On va chercher l'objets prix générique.
+    On va chercher l'objet prix générique.
     On lie le prix générique a l'event
     pour générer la clé et afficher le bon nom sur stripe
     """
@@ -785,17 +788,18 @@ class ReservationValidator(serializers.Serializer):
             else:
                 raise serializers.ValidationError(_(f'checkout strip not valid'))
 
+        # TODO: La validation de la reservation doit se fait uniquement si l'user possède un mail vérifié
         elif total_checkout == 0:
             # On passe les reservations gratuites en payées automatiquement :
             for line_price in list_line_article_sold:
                 line_price: LigneArticle
                 if line_price.pricesold.productsold.product.categorie_article == Product.FREERES:
                     if line_price.status != LigneArticle.VALID:
-                        line_price.status = LigneArticle.PAID
+                        line_price.status = LigneArticle.FREERES
                         line_price.save()
 
             if reservation:
-                reservation.status = Reservation.PAID
+                reservation.status = Reservation.FREERES
                 reservation.save()
 
             return super().validate(attrs)

@@ -139,7 +139,6 @@ def check_paid(old_instance: LigneArticle, new_instance: LigneArticle):
 
 ######################## TRIGGER RESERVATION ########################
 
-
 # @receiver(post_save, sender=Reservation)
 # def send_billet_to_mail(sender, instance: Reservation, **kwargs):
 def send_billet_to_mail(old_instance:Reservation, new_instance:Reservation):

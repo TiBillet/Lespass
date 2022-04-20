@@ -661,7 +661,7 @@ def paiment_stripe_validator(request, paiement_stripe):
 
         checkout_session = stripe.checkout.Session.retrieve(paiement_stripe.checkout_session_id_stripe)
 
-        # on vérfie que les metatada soient cohérentes. #NTUI !
+        # Vérifie que les metatada soient cohérentes. #NTUI !
         if metatadata_valid(paiement_stripe, checkout_session):
             if checkout_session.payment_status == "unpaid":
                 paiement_stripe.status = Paiement_stripe.PENDING
