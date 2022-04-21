@@ -1,8 +1,10 @@
 import datetime
 
-from django.contrib.auth import get_user_model
-from django.contrib.sites import requests
+import requests
 from django.db import connection
+from io import BytesIO
+from django.core import files
+
 from django.utils.text import slugify
 from rest_framework import serializers
 import json
@@ -185,11 +187,15 @@ class OptionTicketSerializer(serializers.ModelSerializer):
 
 
 class EventCreateSerializer(serializers.Serializer):
-    date = serializers.DateField()
-    artists = ArtistEventCreateSerializer(many=True)
+    name = serializers.CharField(required=False, max_length=200)
+    datetime = serializers.DateTimeField()
+    artists = ArtistEventCreateSerializer(many=True, required=False)
     products = serializers.ListField(required=False)
     options_radio = serializers.ListField(required=False)
     options_checkbox = serializers.ListField(required=False)
+    long_description = serializers.CharField(required=False)
+    short_description = serializers.CharField(required=False, max_length=100)
+    img_url = serializers.URLField(required=False)
 
     def validate_products(self, value):
         self.products_db = []
@@ -221,19 +227,46 @@ class EventCreateSerializer(serializers.Serializer):
                 raise serializers.ValidationError(_(f'{uuid} Option non trouvé'))
         return self.options_checkbox
 
+    def validate_img_url(self, value):
+        if value:
+            print(f"validate_img_url : {value}")
+            res = requests.get(value, stream = True)
+            fp = BytesIO()
+            fp.write(res.content)
+            self.file_name = value.split('/')[-1]
+            self.file_img = fp
+            # if res.status_code == 200:
+            #     self.img = res.raw
+        return value
+
     def validate(self, attrs):
         # import ipdb; ipdb.set_trace()
-        names = [artist.get('config').organisation for artist in attrs.get('artists')]
-        print(names)
-        list_datetime = [artist.get('datetime') for artist in attrs.get('artists')]
-        list_datetime.sort()
-        first_datetime = list_datetime[0]
+        name = None
+        if attrs.get('artists') :
+            name = (" & ").join([artist.get('config').organisation for artist in attrs.get('artists')])
+
+        # Name prend le dessus sur le join artist
+        if attrs.get('name'):
+            name = attrs.get('name')
+
+        if not name:
+            raise serializers.ValidationError(f"if not 'artist', 'name' is required")
 
         event, created = Event.objects.get_or_create(
-            name=(" & ").join(names),
-            datetime=first_datetime,
+            name=name,
+            datetime=attrs.get('datetime'),
             categorie=Event.CONCERT,
+            long_description=attrs.get('long_description'),
+            short_description=attrs.get('short_description'),
+            # img=self.img,
         )
+
+
+        if attrs.get('img_url'):
+            if type(self.file_img) == type(BytesIO()):
+                event.img.save(self.file_name, self.file_img)
+
+        # import ipdb; ipdb.set_trace()
 
         event.products.clear()
         if attrs.get('products'):
@@ -250,12 +283,13 @@ class EventCreateSerializer(serializers.Serializer):
             for option in attrs.get('options_checkbox'):
                 event.options_checkbox.add(option)
 
-        for artist_input in attrs.get('artists'):
-            prog, created = Artist_on_event.objects.get_or_create(
-                artist=artist_input.get('tenant'),
-                datetime=artist_input.get('datetime'),
-                event=event
-            )
+        if attrs.get('artists') :
+            for artist_input in attrs.get('artists'):
+                prog, created = Artist_on_event.objects.get_or_create(
+                    artist=artist_input.get('tenant'),
+                    datetime=artist_input.get('datetime'),
+                    event=event
+                )
 
         print(attrs)
         return event
