@@ -124,6 +124,7 @@ class Configuration(SingletonModel):
                             'hdr': (720, 720),
                             'med': (480, 480),
                             'thumbnail': (150, 90),
+
                         },
                         delete_orphans=True,
                         verbose_name='Background'
@@ -360,7 +361,18 @@ class Event(models.Model):
                 'hdr': self.img.hdr.url,
                 'med': self.img.med.url,
                 'thumbnail': self.img.thumbnail.url,
-                'crop': self.img.crop.url,
+            }
+        elif self.artists.all().count() > 0:
+            artist_on_event : Artist_on_event = self.artists.all()[0]
+            tenant: Clien = artist_on_event.artist
+            with tenant_context(tenant):
+                img = Configuration.get_solo().img
+
+            return {
+                'fhd': img.fhd.url,
+                'hdr': img.hdr.url,
+                'med': img.med.url,
+                'thumbnail': img.thumbnail.url,
             }
         else:
             return {}

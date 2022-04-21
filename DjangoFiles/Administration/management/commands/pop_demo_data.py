@@ -441,7 +441,7 @@ class Command(BaseCommand):
             print('*' * 30)
             print(f'on lance la requete : {url}')
             products = requests.request("GET", url).json()
-            products_uuid = [product.get('uuid') for product in products]
+            products_uuid = [product.get('uuid') for product in products if product.get('categorie_article') != "F"]
 
             req_options = requests.request("GET", f"{base_url}/api/optionticket/").json()
             options_uuid = [option.get('uuid') for option in req_options]
@@ -488,7 +488,6 @@ class Command(BaseCommand):
             headers["Content_type"] = "application/json"
             data_json = {
                 'datetime': (r_date - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M"),
-                "img_url": "http://placeimg.com/1920/1080/any.jpg",
                 'artists': [
                     {
                         "uuid": artists[0].get('uuid'),
@@ -549,3 +548,12 @@ class Command(BaseCommand):
                 "products": products_uuid
             }
             response = requests.request("POST", f"{base_url}/api/events/", headers=headers, data=json.dumps(data_json))
+
+            r_date = random_date()
+            headers["Content_type"] = "application/json"
+            data_json = {
+                'datetime': (r_date - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M"),
+                "img_url": "http://placeimg.com/1920/1080/any.jpg",
+                "name": f"Ceci est un évènement sans artiste et sans produit",
+            }
+            response

@@ -2,15 +2,13 @@
 <template>
   <div class="card">
     <div class="card-header p-0 position-relative z-index-1">
-      <div v-if="event.artists.length > 0">
-        <a class="d-block">
-          <img
-              class="img-fluid border-radius-md border-bottom-end-radius-0 border-bottom-start-radius-0 shadow"
-              :src="getImg()"
-              loading="lazy"
-              alt="Image de l'évènement !"/>
-        </a>
-      </div>
+      <a class="d-block">
+        <img
+            class="img-fluid border-radius-md border-bottom-end-radius-0 border-bottom-start-radius-0 shadow"
+            :src="event.img_variations.med"
+            loading="lazy"
+            alt="Image de l'évènement !"/>
+      </a>
     </div>
 
     <div class="card-body">
@@ -45,7 +43,7 @@
         {{ event.short_description }}
       </p>
       <p class="card-description mb-4"
-         v-if="event.short_description === null && event.artists !== null">
+         v-if="event.short_description === null && event.artists[0] !== undefined">
         {{ event.artists[0].configuration.short_description }}
       </p>
 
@@ -97,8 +95,6 @@
 <!--  </div>-->
 
 <script setup>
-console.log('-> CardEvent.vue')
-
 
 
 // asset
@@ -108,16 +104,8 @@ const props = defineProps({
   event: Object
 })
 
-// Cherche l'image à afficher ( #Jojo dev style )
-const getImg = () => {
-  console.log("props.event: ",props.event)
-  if (props.event.img_variations.med === undefined) {
-    if (props.event.artists !== undefined) {
-      return props.event.artists[0].configuration.img_variations.med
-    }
-  }
-  return props.event.img_variations.med
-}
+// console.log('-> CardEvent.vue', props.event
+
 
 function formateDate(dateString) {
   const date = new Date(dateString)
