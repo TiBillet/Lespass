@@ -524,12 +524,13 @@ class Reservation(models.Model):
                               on_delete=models.PROTECT,
                               related_name="reservation")
 
-    CANCELED, CREATED, UNPAID, FREERES, PAID, PAID_ERROR, PAID_NOMAIL, VALID, = 'C', 'R', 'U', 'F', 'P', 'PE', 'PN', 'V'
+    CANCELED, CREATED, UNPAID, FREERES, FREERES_USERACTIV, PAID, PAID_ERROR, PAID_NOMAIL, VALID, = 'C', 'R', 'U', 'F', 'FA', 'P', 'PE', 'PN', 'V'
     TYPE_CHOICES = [
         (CANCELED, _('Annulée')),
         (CREATED, _('Crée')),
         (UNPAID, _('Non payée')),
         (FREERES, _('Mail non vérifié')),
+        (FREERES_USERACTIV, _('Mail user vérifié')),
         (PAID, _('Payée')),
         (PAID_ERROR, _('Payée mais mail non valide')),
         (PAID_NOMAIL, _('Payée mais mail non envoyé')),

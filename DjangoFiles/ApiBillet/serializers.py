@@ -704,7 +704,7 @@ class ReservationValidator(serializers.Serializer):
             for option in options:
                 reservation.options.add(option)
 
-
+        self.reservation = reservation
         # Ici on construit :
         #   price_sold pour lier l'event à la vente
         #   ligne article pour envoi en paiement
@@ -769,7 +769,7 @@ class ReservationValidator(serializers.Serializer):
             else:
                 raise serializers.ValidationError(_(f'checkout strip not valid'))
 
-        # TODO: La validation de la reservation doit se fait uniquement si l'user possède un mail vérifié
+        # La validation de la reservation doit se fait uniquement si l'user possède un mail vérifié
         elif total_checkout == 0:
             # On passe les reservations gratuites en payées automatiquement :
             for line_price in list_line_article_sold:
@@ -780,13 +780,24 @@ class ReservationValidator(serializers.Serializer):
                         line_price.save()
 
             if reservation:
-                reservation.status = Reservation.FREERES
+                # Si l'utilisateur est actif, il a vérifié son email.
+                if self.user_commande.is_active :
+                    reservation.status = Reservation.FREERES_USERACTIV
+                # Sinon on attend que l'user ai vérifié son email.
+                # La fonctione presave du fichier BaseBillet.signals
+                # mettra a jour le statut de la réservation et enverra le billet dés validation de l'email
+                else :
+                    reservation.status = Reservation.FREERES
                 reservation.save()
+
+
 
             return super().validate(attrs)
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
+        if self.reservation:
+            representation['reservation'] = ReservationSerializer(self.reservation, read_only=True).data
         if self.checkout_session:
             logger.info(f"{self.checkout_session.url}")
             representation['checkout_url'] = self.checkout_session.url

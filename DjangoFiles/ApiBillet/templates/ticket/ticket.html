@@ -19,7 +19,7 @@
         <h4>Siège : {{ ticket.seat }}</h4>
     {% endif %}
 
-    <h4>Numéro de billet : {{ ticket.numero_uuid }}</h4>
+    <h4>Numéro de billet : {{ ticket.status }}-{{ ticket.numero_uuid }}-{{ ticket.seat }}</h4>
 
     {% if ticket.reservation.options.all|length > 0 %}
         <h3>Options :</h3>

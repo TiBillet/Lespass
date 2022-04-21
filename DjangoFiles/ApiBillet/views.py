@@ -565,6 +565,11 @@ class TicketPdf(APIView):
 
     def get(self, request, pk_uuid):
         ticket = get_object_or_404(Ticket, uuid=pk_uuid)
+
+        VALID_TICKET_FOR_PDF = [Ticket.NOT_SCANNED, Ticket.SCANNED]
+        if ticket.status not in VALID_TICKET_FOR_PDF :
+            return Response('Ticket non valide', status=status.HTTP_403_FORBIDDEN)
+
         pdf_binary = create_ticket_pdf(ticket)
         response = HttpResponse(pdf_binary, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{ticket.pdf_filename()}"'

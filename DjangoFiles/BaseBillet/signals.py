@@ -6,6 +6,7 @@ from django.dispatch import receiver
 # from django.utils import timezone
 
 # from ApiBillet.thread_mailer import ThreadMaileur
+from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, LigneArticle, Ticket, Product, Configuration, Paiement_stripe
 from BaseBillet.tasks import ticket_celery_mailer
 
@@ -184,6 +185,21 @@ def error_in_mail(old_instance: Reservation, new_instance: Reservation):
     # TODO: Prévenir l'admin q'un billet a été acheté, mais pas envoyé
 
 
+######################## TRIGGER TIBILLETUSER ########################
+
+def activator_free_reservation(old_instance: TibilletUser, new_instance: TibilletUser):
+    logger.info(f"activator_free_reservation : {new_instance}")
+    free_reservation = Reservation.objects.filter(
+        user_commande=new_instance,
+        to_mail=True,
+        status=Reservation.FREERES
+    )
+
+    for resa in free_reservation:
+        print(f"    {resa}")
+        resa.status = Reservation.FREERES_USERACTIV
+        resa.save()
+
 ######################## MOTEUR TRIGGER ########################
 
 def error_regression(old_instance, new_instance):
@@ -192,8 +208,10 @@ def error_regression(old_instance, new_instance):
     # raise Exception('Regression de status impossible.')
     pass
 
+
 def test_signal(old_instance, new_instance):
-    logger.info(f"Test signal : {new_instance}")
+    logger.info(f"Test signal instance : {new_instance} - Status : {new_instance.status}")
+
 
 # On déclare les transitions possibles entre différents etats des statuts.
 # Exemple première ligne : Si status passe de PENDING vers PAID, alors on lance set_ligne_article_paid
@@ -238,6 +256,13 @@ PRE_SAVE_TRANSITIONS = {
     'RESERVATION': {
         Reservation.CREATED: {
             Reservation.PAID: send_billet_to_mail,
+            Reservation.FREERES_USERACTIV : send_billet_to_mail,
+        },
+        Reservation.FREERES:{
+            Reservation.FREERES_USERACTIV : send_billet_to_mail,
+        },
+        Reservation.FREERES_USERACTIV: {
+            Reservation.FREERES_USERACTIV: send_billet_to_mail,
         },
         Reservation.UNPAID: {
             Reservation.PAID: send_billet_to_mail,
@@ -254,8 +279,8 @@ PRE_SAVE_TRANSITIONS = {
     },
 
     'TIBILLETUSER': {
-        True:{
-            True:test_signal,
+        False: {
+            True: activator_free_reservation,
         }
     },
 }
@@ -274,7 +299,7 @@ def pre_save_signal_status(sender, instance, **kwargs):
             new_instance = instance
 
             # Trick pour les status qui s'appellent différement que status
-            CALLABLE_STATUS_MODEL = {'TIBILLETUSER':'is_active'}
+            CALLABLE_STATUS_MODEL = {'TIBILLETUSER': 'is_active'}
             if CALLABLE_STATUS_MODEL.get(sender_str):
                 old_instance.status = getattr(old_instance, CALLABLE_STATUS_MODEL.get(sender_str))
                 new_instance.status = getattr(new_instance, CALLABLE_STATUS_MODEL.get(sender_str))
@@ -292,7 +317,6 @@ def pre_save_signal_status(sender, instance, **kwargs):
                     if not callable(trigger_function):
                         raise Exception(f'Fonction {trigger_function} is not callable. Disdonc !?')
                     trigger_function(old_instance, new_instance)
-
 
 # POST_SAVE_TRANSITIONS = {
 #     'TIBILLETUSER': {
