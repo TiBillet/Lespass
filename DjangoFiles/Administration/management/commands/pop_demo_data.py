@@ -300,6 +300,7 @@ class Command(BaseCommand):
                              'product': uuid_ticket_product}
                 response = requests.request("POST", url, headers=headers, data=data_json)
                 uuid_price_demi = response.json().get("uuid")
+
                 # print(response.text)
                 assert response.status_code == 201
 
@@ -311,6 +312,7 @@ class Command(BaseCommand):
                              'product': uuid_ticket_product}
                 response = requests.request("POST", url, headers=headers, data=data_json)
                 uuid_price_plein = response.json().get("uuid")
+
                 # print(response.text)
                 assert response.status_code == 201
                 print("************ Create Ticket prices OK")
@@ -460,7 +462,7 @@ class Command(BaseCommand):
                 r_date = random_date()
                 headers["Content-type"] = "application/json"
                 data_json = {
-                    'date': r_date.date().strftime("%Y-%m-%d"),
+                    'datetime': (r_date - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M"),
                     'artists': [
                         {
                             "uuid": artist.get('uuid'),
@@ -485,7 +487,8 @@ class Command(BaseCommand):
             r_date = random_date()
             headers["Content_type"] = "application/json"
             data_json = {
-                'date': r_date.date().strftime("%Y-%m-%d"),
+                'datetime': (r_date - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M"),
+                "img_url": "http://placeimg.com/1920/1080/any.jpg",
                 'artists': [
                     {
                         "uuid": artists[0].get('uuid'),
@@ -504,7 +507,9 @@ class Command(BaseCommand):
             r_date = random_date()
             headers["Content_type"] = "application/json"
             data_json = {
-                'date': r_date.date().strftime("%Y-%m-%d"),
+                'datetime': (r_date - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M"),
+                "img_url": "http://placeimg.com/1920/1080/any.jpg",
+                "name": f"{artists[2].get('organisation')} danse avec {artists[3].get('organisation')}",
                 'artists': [
                     {
                         "uuid": artists[2].get('uuid'),
@@ -524,7 +529,7 @@ class Command(BaseCommand):
             r_date = random_date()
             headers["Content_type"] = "application/json"
             data_json = {
-                'date': r_date.date().strftime("%Y-%m-%d"),
+                'datetime': (r_date - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M"),
                 'artists': [
                     {
                         "uuid": artists[2].get('uuid'),
@@ -534,3 +539,13 @@ class Command(BaseCommand):
             }
             response = requests.request("POST", f"{base_url}/api/events/", headers=headers, data=json.dumps(data_json))
             # print(response.text)
+
+            r_date = random_date()
+            headers["Content_type"] = "application/json"
+            data_json = {
+                'datetime': (r_date - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M"),
+                "img_url": "http://placeimg.com/1920/1080/any.jpg",
+                "name": f"Ceci est un évènement sans artiste",
+                "products": products_uuid
+            }
+            response = requests.request("POST", f"{base_url}/api/events/", headers=headers, data=json.dumps(data_json))
