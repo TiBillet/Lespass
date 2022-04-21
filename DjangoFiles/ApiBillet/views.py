@@ -308,6 +308,22 @@ class HereViewSet(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
+class EventsSlugViewSet(viewsets.ViewSet):
+    def retrieve(self, request, pk=None):
+        queryset = Event.objects.all().order_by('-datetime')
+        event = get_object_or_404(queryset, slug=pk)
+        serializer = EventSerializer(event)
+        return Response(serializer.data)
+
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [permissions.AllowAny]
+        else:
+            permission_classes = [TenantAdminPermission]
+        return [permission() for permission in permission_classes]
+
+
 class EventsViewSet(viewsets.ViewSet):
 
     def list(self, request):
