@@ -87,8 +87,6 @@ class activate(APIView):
             return Response('Token non valide', status=status.HTTP_400_BAD_REQUEST)
 
 
-
-
 class create_user(APIView):
     permission_classes = [AllowAny]
 
@@ -96,18 +94,21 @@ class create_user(APIView):
         validator = CreateUserValidator(data=request.data)
         if not validator.is_valid():
             return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+
         email = validator.validated_data.get('email').lower()
         password = validator.validated_data.get('password')
 
         user = validate_email_and_return_user(email, password)
 
-        if user :
-            return Response(_('Pour acceder à votre espace et réservations, merci de valider votre adresse email. Pensez à regarder dans les spams !'),
+        if user:
+            return Response(_('Pour acceder à votre espace et réservations, '
+                              'merci de valider votre adresse email. '
+                              'Pensez à regarder dans les spams !'),
                             status=status.HTTP_200_OK)
-        else :
-            return Response(_("Email non valide. Merci de vérifier votre email."), status=status.HTTP_406_NOT_ACCEPTABLE)
-
+        else:
+            return Response(_("Email soumis non valide. "
+                              "Merci de vérifier votre adresse."),
+                            status=status.HTTP_406_NOT_ACCEPTABLE)
 
 
 class MeViewset(viewsets.ViewSet):
@@ -121,8 +122,6 @@ class MeViewset(viewsets.ViewSet):
             serializer_copy['cashless'] = request_for_data_cashless(request.user)
 
         return Response(serializer_copy, status=status.HTTP_200_OK)
-
-
 
     def get_permissions(self):
         if self.action in ['list', ]:
