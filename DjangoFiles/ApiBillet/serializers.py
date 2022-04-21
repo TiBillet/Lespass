@@ -339,7 +339,7 @@ class ReservationSerializer(serializers.ModelSerializer):
         fields = [
             'uuid',
             'datetime',
-            'user_commande',
+            'user_mail',
             'event',
             'status',
             'options',
