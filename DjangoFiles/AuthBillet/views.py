@@ -1,12 +1,14 @@
 import json
+import logging
 
 import requests
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from django.db.utils import IntegrityError
 from django.shortcuts import render
 
 # Create your views here.
-from rest_framework import status, permissions, viewsets
+from rest_framework import status, permissions, viewsets, serializers
 from rest_framework.decorators import permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -15,19 +17,18 @@ from django.db import connection
 from django.utils.translation import ugettext_lazy as _
 
 from ApiBillet.views import request_for_data_cashless
-from AuthBillet.models import TibilletUser
+from AuthBillet.models import TibilletUser, TenantAdminPermission, TermUser
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from AuthBillet.serializers import MeSerializer, CreateUserValidator
+from AuthBillet.serializers import MeSerializer, CreateUserValidator, CreateTerminalValidator, TokenTerminalValidator
 from AuthBillet.utils import validate_email_and_return_user
 from BaseBillet.models import Configuration
 
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 
-from BaseBillet.tasks import connexion_celery_mailer
-
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 def decode_uid(pk):
@@ -109,6 +110,32 @@ class create_user(APIView):
             return Response(_("Email soumis non valide. "
                               "Merci de vérifier votre adresse."),
                             status=status.HTTP_406_NOT_ACCEPTABLE)
+
+
+class create_terminal_user(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        logger.info(f"create_terminal_user request.data : {request.data}")
+        validator = CreateTerminalValidator(data=request.data)
+        if not validator.is_valid():
+            return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        logger.info(f"create_terminal_user validated_data : {validator.data}")
+        return Response(validator.data, status=status.HTTP_200_OK)
+
+
+class validate_token_terminal(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, token):
+        logger.info(f"validate_token_terminal : {token}")
+        validator = TokenTerminalValidator(data=request.data, context={'request': request, 'token': token})
+        if not validator.is_valid():
+            return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        logger.info(f"validate_token_terminal validated_data : {validator.data}")
+        return Response(validator.data, status=status.HTTP_200_OK)
 
 
 class MeViewset(viewsets.ViewSet):

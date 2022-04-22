@@ -1,6 +1,7 @@
 # import base64
 import json
 import os
+import random
 import smtplib
 from io import BytesIO
 
@@ -19,10 +20,9 @@ from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string, get_template
 from django.utils import timezone
 
-from AuthBillet.models import TibilletUser
-from BaseBillet.models import Configuration, Reservation, Ticket
+from AuthBillet.models import TibilletUser, TerminalPairingToken
+from BaseBillet.models import Reservation, Ticket, Configuration
 from TiBillet.celery import app
-
 import logging
 
 from TiBillet.settings import DEBUG
@@ -52,7 +52,6 @@ class CeleryMailerClass():
         self.email = email
         self.text = text
         self.html = html
-        self.config = Configuration.get_solo()
         self.context = context
         self.attached_files = attached_files
         self.sended = None
@@ -66,7 +65,22 @@ class CeleryMailerClass():
         EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
         EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
 
-        if EMAIL_HOST and EMAIL_PORT and EMAIL_HOST_USER and EMAIL_HOST_PASSWORD and self.config.email:
+        # Try except un peu degueulasse causé par l'envoie de task
+        # depuis le tenant public pour l'envoi du mail d'appairage
+        try:
+            self.return_email = Configuration.get_solo().email
+            assert self.return_email
+        except Exception as e:
+            logger.info(f'  WORKDER CELERY : self.return_email {e}')
+            self.return_email = "contact@tibillet.re"
+
+        if all([
+            EMAIL_HOST,
+            EMAIL_PORT,
+            EMAIL_HOST_USER,
+            EMAIL_HOST_PASSWORD,
+            self.return_email,
+        ]):
             return True
         else:
             return False
@@ -77,7 +91,7 @@ class CeleryMailerClass():
             mail = EmailMultiAlternatives(
                 self.title,
                 self.text,
-                self.config.email,
+                self.return_email,
                 [self.email, ],
             )
             mail.attach_alternative(self.html, "text/html")
@@ -116,8 +130,6 @@ def create_ticket_pdf(ticket: Ticket):
 
     CODE128 = barcode.get_barcode_class('code128')
     bar_svg = BytesIO()
-
-
 
     bar_secret = encode_uid(f"{ticket.uuid}".split('-')[4])
 
@@ -174,6 +186,7 @@ def create_ticket_pdf(ticket: Ticket):
 
     return pdf_binary
 
+
 @app.task
 def redirect_post_webhook_stripe_from_public(url, data):
     headers = {"Content-type": "application/json"}
@@ -196,7 +209,7 @@ def connexion_celery_mailer(user_email, base_url, subject=None):
     :type tenant_name: str
 
     """
-    logger.info(f'      WORKDER CELERY app.task connexion_celery_mailer : {user_email}')
+    logger.info(f'WORKDER CELERY app.task connexion_celery_mailer : {user_email}')
     config = Configuration.get_solo()
     User = get_user_model()
     user = User.objects.get(email=user_email)
@@ -205,7 +218,7 @@ def connexion_celery_mailer(user_email, base_url, subject=None):
     token = default_token_generator.make_token(user)
     connexion_url = f"{base_url}/emailconfirmation/{uid}/{token}"
 
-    if subject is None :
+    if subject is None:
         subject = f"{config.organisation} : Confirmez votre email et connectez vous !"
 
     try:
@@ -236,17 +249,64 @@ def connexion_celery_mailer(user_email, base_url, subject=None):
 
 
 @app.task
+def terminal_pairing_celery_mailer(term_user_email, subject=None):
+    """
+
+    :param subject: Sujet de l'email
+    :type user_email: str
+    :type url: str
+    :type tenant_name: str
+
+    """
+    logger.info(f'WORKDER CELERY app.task terminal_pairing_celery_mailer : {term_user_email}')
+    User = get_user_model()
+    terminal_user = User.objects.get(email=term_user_email, espece=TibilletUser.TYPE_TERM)
+    user_parent = terminal_user.user_parent()
+
+    token = TerminalPairingToken.objects.create(user=terminal_user, token=random.randint(100000, 999999))
+    logger.info(f'WORKDER CELERY app.task terminal_pairing_celery_mailer token: {token.token}')
+
+    if subject is None:
+        subject = f"Appairage du terminal {terminal_user.terminal_uuid} "
+
+    try:
+        mail = CeleryMailerClass(
+            user_parent.email,
+            subject,
+            template='mails/pairing_terminal.html',
+            context={
+                'small_token': token.token,
+                'terminal_user': terminal_user
+            },
+        )
+        try:
+            mail.send()
+            logger.info(f"mail.sended : {mail.sended}")
+
+        except smtplib.SMTPRecipientsRefused as e:
+            logger.error(f"ERROR {timezone.now()} Erreur envoie de mail pour appairage {user_parent.email} : {e}")
+            logger.error(f"mail.sended : {mail.sended}")
+            terminal_user.is_active = False
+            terminal_user.email_error = True
+            terminal_user.save()
+
+    except Exception as e:
+        logger.error(f"{timezone.now()} Erreur envoie de mail pour appairage {user_parent.email} : {e}")
+        raise Exception
+
+
+@app.task
 def ticket_celery_mailer(reservation_uuid: str):
     logger.info(f'      WORKDER CELERY app.task ticket_celery_mailer : {reservation_uuid}')
     config = Configuration.get_solo()
     reservation = Reservation.objects.get(pk=reservation_uuid)
 
-    if not reservation.to_mail :
+    if not reservation.to_mail:
         reservation.status = Reservation.PAID_NOMAIL
         reservation.save()
         logger.info(f"CELERY mail reservation.to_mail : {reservation.to_mail}. On passe en PAID_NOMAIL")
 
-    else :
+    else:
         attached_files = {}
         for ticket in reservation.tickets.filter(status=Ticket.NOT_SCANNED):
             attached_files[ticket.pdf_filename()] = create_ticket_pdf(ticket)
@@ -273,7 +333,8 @@ def ticket_celery_mailer(reservation_uuid: str):
 
             except smtplib.SMTPRecipientsRefused as e:
 
-                logger.error(f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour reservation {reservation} : {e}")
+                logger.error(
+                    f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour reservation {reservation} : {e}")
                 logger.error(f"mail.sended : {mail.sended}")
                 reservation.mail_send = False
                 reservation.mail_error = True

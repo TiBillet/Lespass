@@ -21,8 +21,8 @@
         <div class="input-group has-validation">
           <input id="profil-confirme-email" :value="profil.confirmeEmail" type="email"
                  @change="updateProfil('confirmeEmail', $event.target.value)"
-                 pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$" class="form-control card-email-input"
-                 placeholder="Confirmer email" required>
+                 pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$"
+                 class="form-control card-email-input" placeholder="Confirmer email" required>
           <div class="invalid-feedback">
             Merci de renseigner une adresse email valide et identique.
           </div>

@@ -44,6 +44,7 @@ TiBillet was an original idéa from GDNA and designed and developed by 3Peaks, M
 - Demo Images:
   - Unsplash (unsplash.com)
   - Creative-tim 
+  - Pexels
 - Icons:
   - Font Awesome (fontawesome.io)
 - Other:
