@@ -2,7 +2,7 @@ import datetime
 
 from django.contrib.auth.tokens import default_token_generator, PasswordResetTokenGenerator
 from django.db import connection
-from django_tenants.utils import schema_context
+from django_tenants.utils import schema_context, tenant_context
 from rest_framework import serializers
 from rest_framework.generics import get_object_or_404
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -61,13 +61,16 @@ class TokenTerminalValidator(serializers.Serializer):
             raise serializers.ValidationError(_(f'User invalide'))
 
         self.tenant_admin = {}
-        for tenant in user_parent.client_admin.all():
+        tenants_admin = user_parent.client_admin.all()
+        for tenant in tenants_admin:
             self.term_user.client_admin.add(tenant)
             self.tenant_admin[tenant.name] = tenant.get_primary_domain().domain
 
-        with schema_context('m'):
+        # On enregistre avec le context de l'admin du parent
+        # ça crash si on reste sur le tenant public.
+        # Pas génant dans la mesure ou le model user est public.
+        with tenant_context(tenants_admin.first()):
             self.term_user.is_active = True
-            self.refresh = RefreshToken.for_user(self.term_user)
             self.term_user.save()
 
         pairing.used = True
@@ -77,9 +80,13 @@ class TokenTerminalValidator(serializers.Serializer):
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
+
+        refresh = RefreshToken.for_user(self.term_user)
+        representation['jwt_token'] =  {"refresh":str(refresh), "access": str(refresh.access_token)}
+
         representation['espece'] = self.term_user.espece
         representation['tenants_admin'] = self.tenant_admin
-        representation['jwt_token'] =  {"refresh":str(self.refresh), "access": str(self.refresh.access_token)}
+
         return representation
 
 
