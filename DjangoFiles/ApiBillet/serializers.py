@@ -1,8 +1,10 @@
 import datetime
 
-from django.contrib.auth import get_user_model
-from django.contrib.sites import requests
+import requests
 from django.db import connection
+from io import BytesIO
+from django.core import files
+
 from django.utils.text import slugify
 from rest_framework import serializers
 import json
@@ -11,6 +13,8 @@ from rest_framework.generics import get_object_or_404
 from django_tenants.utils import schema_context, tenant_context
 
 from AuthBillet.models import TibilletUser, HumanUser
+from AuthBillet.utils import validate_email_and_return_user
+
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, Paiement_stripe, \
     PriceSold, ProductSold, Artist_on_event, OptionGenerale, Membership
 from Customers.models import Client
@@ -183,11 +187,15 @@ class OptionTicketSerializer(serializers.ModelSerializer):
 
 
 class EventCreateSerializer(serializers.Serializer):
-    date = serializers.DateField()
-    artists = ArtistEventCreateSerializer(many=True)
+    name = serializers.CharField(required=False, max_length=200)
+    datetime = serializers.DateTimeField()
+    artists = ArtistEventCreateSerializer(many=True, required=False)
     products = serializers.ListField(required=False)
     options_radio = serializers.ListField(required=False)
     options_checkbox = serializers.ListField(required=False)
+    long_description = serializers.CharField(required=False)
+    short_description = serializers.CharField(required=False, max_length=100)
+    img_url = serializers.URLField(required=False)
 
     def validate_products(self, value):
         self.products_db = []
@@ -219,19 +227,46 @@ class EventCreateSerializer(serializers.Serializer):
                 raise serializers.ValidationError(_(f'{uuid} Option non trouvé'))
         return self.options_checkbox
 
+    def validate_img_url(self, value):
+        if value:
+            print(f"validate_img_url : {value}")
+            res = requests.get(value, stream = True)
+            fp = BytesIO()
+            fp.write(res.content)
+            self.file_name = value.split('/')[-1]
+            self.file_img = fp
+            # if res.status_code == 200:
+            #     self.img = res.raw
+        return value
+
     def validate(self, attrs):
         # import ipdb; ipdb.set_trace()
-        names = [artist.get('config').organisation for artist in attrs.get('artists')]
-        print(names)
-        list_datetime = [artist.get('datetime') for artist in attrs.get('artists')]
-        list_datetime.sort()
-        first_datetime = list_datetime[0]
+        name = None
+        if attrs.get('artists') :
+            name = (" & ").join([artist.get('config').organisation for artist in attrs.get('artists')])
+
+        # Name prend le dessus sur le join artist
+        if attrs.get('name'):
+            name = attrs.get('name')
+
+        if not name:
+            raise serializers.ValidationError(f"if not 'artist', 'name' is required")
 
         event, created = Event.objects.get_or_create(
-            name=(" & ").join(names),
-            datetime=first_datetime,
+            name=name,
+            datetime=attrs.get('datetime'),
             categorie=Event.CONCERT,
+            long_description=attrs.get('long_description'),
+            short_description=attrs.get('short_description'),
+            # img=self.img,
         )
+
+
+        if attrs.get('img_url'):
+            if type(self.file_img) == type(BytesIO()):
+                event.img.save(self.file_name, self.file_img)
+
+        # import ipdb; ipdb.set_trace()
 
         event.products.clear()
         if attrs.get('products'):
@@ -248,12 +283,13 @@ class EventCreateSerializer(serializers.Serializer):
             for option in attrs.get('options_checkbox'):
                 event.options_checkbox.add(option)
 
-        for artist_input in attrs.get('artists'):
-            prog, created = Artist_on_event.objects.get_or_create(
-                artist=artist_input.get('tenant'),
-                datetime=artist_input.get('datetime'),
-                event=event
-            )
+        if attrs.get('artists') :
+            for artist_input in attrs.get('artists'):
+                prog, created = Artist_on_event.objects.get_or_create(
+                    artist=artist_input.get('tenant'),
+                    datetime=artist_input.get('datetime'),
+                    event=event
+                )
 
         print(attrs)
         return event
@@ -329,15 +365,6 @@ class EventSerializer(serializers.ModelSerializer):
         representation = super().to_representation(instance)
         return representation
 
-    '''
-    
-    products = [
-        {"uuid":"9340a9a1-1b90-488e-ab68-7b358b213dd7"},
-        {"uuid":"60db1531-fd0a-4d92-a785-f384e77cd213"}
-    ]
-    
-    
-    '''
 
 
 class ReservationSerializer(serializers.ModelSerializer):
@@ -346,7 +373,7 @@ class ReservationSerializer(serializers.ModelSerializer):
         fields = [
             'uuid',
             'datetime',
-            'user_commande',
+            'user_mail',
             'event',
             'status',
             'options',
@@ -358,8 +385,16 @@ class ReservationSerializer(serializers.ModelSerializer):
             'datetime',
             'status',
         ]
-        depth = 1
+        # depth = 1
 
+
+class OptionResaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Reservation
+        fields = [
+            'options'
+        ]
+        read_only_fields = fields
 
 class TicketSerializer(serializers.ModelSerializer):
     class Meta:
@@ -368,7 +403,6 @@ class TicketSerializer(serializers.ModelSerializer):
             'uuid',
             'first_name',
             'last_name',
-            # 'reservation',
             # 'pricesold',
             'status',
             'seat',
@@ -377,28 +411,12 @@ class TicketSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+    # on rajoute les options directement.
+    def to_representation(self, instance: Ticket):
+        representation = super().to_representation(instance)
+        representation['options'] = [option.name for option in instance.reservation.options.all()]
+        return representation
 
-def validate_email_and_return_user(email):
-    """
-
-    :param email: email à vérifier
-    :type email: str
-    :return: TibilletUser
-    :rtype: TibilletUser
-    """
-    User: TibilletUser = get_user_model()
-    user, created = User.objects.get_or_create(
-        email=email, username=email)
-
-    if created:
-        user: HumanUser
-        user.client_source = connection.tenant
-        user.is_active = False
-
-    user.client_achat.add(connection.tenant)
-
-    user.save()
-    return user
 
 
 class NewAdhesionValidator(serializers.Serializer):
@@ -510,8 +528,10 @@ def get_near_event_by_date():
 
 def create_ticket(pricesold, customer, reservation):
     statut = Ticket.CREATED
+
     if pricesold.price.product.categorie_article == Product.FREERES:
         statut = Ticket.NOT_ACTIV
+
     ticket = Ticket.objects.create(
         status=statut,
         reservation=reservation,
@@ -519,6 +539,7 @@ def create_ticket(pricesold, customer, reservation):
         first_name=customer.get('first_name'),
         last_name=customer.get('last_name'),
     )
+
     return ticket
 
 
@@ -527,7 +548,7 @@ def get_or_create_price_sold(price: Price, event: Event):
     Générateur des objets PriceSold pour envoi à Stripe.
     Price + Event = PriceSold
 
-    On va chercher l'objets prix générique.
+    On va chercher l'objet prix générique.
     On lie le prix générique a l'event
     pour générer la clé et afficher le bon nom sur stripe
     """
@@ -630,7 +651,9 @@ class ReservationValidator(serializers.Serializer):
     email = serializers.EmailField()
     to_mail = serializers.BooleanField(default=True, required=False)
     event = serializers.PrimaryKeyRelatedField(queryset=Event.objects.all())
+    options = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(), many=True, allow_null=True)
     prices = serializers.JSONField(required=True)
+
 
     def validate_event(self, value):
         event: Event = value
@@ -688,13 +711,22 @@ class ReservationValidator(serializers.Serializer):
 
     def validate(self, attrs):
         event: Event = attrs.get('event')
+        options = attrs.get('options')
         to_mail: bool = attrs.get('to_mail')
 
-        for line_price in self.prices_list:
-            if line_price['price'].product not in event.products.all():
+        # On check que les prices sont bien dans l'event original.
+        for price_object in self.prices_list:
+            if price_object['price'].product not in event.products.all():
                 raise serializers.ValidationError(_(f'Article non disponible'))
 
-        # Les articles semblent bon,
+        # On check que les options sont bien dans l'event original.
+        if options:
+            for option in options:
+                option: OptionGenerale
+                if option not in list(set(event.options_checkbox.all()) | set(event.options_radio.all())) :
+                    raise serializers.ValidationError(_(f'Option {option.name} non disponible dans event'))
+
+
         # on construit l'object reservation.
         reservation = Reservation.objects.create(
             user_commande=self.user_commande,
@@ -702,6 +734,11 @@ class ReservationValidator(serializers.Serializer):
             event=event,
         )
 
+        if options:
+            for option in options:
+                reservation.options.add(option)
+
+        self.reservation = reservation
         # Ici on construit :
         #   price_sold pour lier l'event à la vente
         #   ligne article pour envoi en paiement
@@ -709,9 +746,9 @@ class ReservationValidator(serializers.Serializer):
 
         list_line_article_sold = []
         total_checkout = 0
-        for line_price in self.prices_list:
-            price_generique: Price = line_price['price']
-            qty = line_price.get('qty')
+        for price_object in self.prices_list:
+            price_generique: Price = price_object['price']
+            qty = price_object.get('qty')
             total_checkout += qty * price_generique.prix
 
             pricesold: PriceSold = get_or_create_price_sold(price_generique, event)
@@ -726,7 +763,7 @@ class ReservationValidator(serializers.Serializer):
             # import ipdb; ipdb.set_trace()
             # Les Tickets si article est un billet
             if price_generique.product.categorie_article in [Product.BILLET, Product.FREERES]:
-                for customer in line_price.get('customers'):
+                for customer in price_object.get('customers'):
                     create_ticket(pricesold, customer, reservation)
 
         print(f"total_checkout : {total_checkout}")
@@ -766,23 +803,35 @@ class ReservationValidator(serializers.Serializer):
             else:
                 raise serializers.ValidationError(_(f'checkout strip not valid'))
 
+        # La validation de la reservation doit se fait uniquement si l'user possède un mail vérifié
         elif total_checkout == 0:
             # On passe les reservations gratuites en payées automatiquement :
             for line_price in list_line_article_sold:
                 line_price: LigneArticle
                 if line_price.pricesold.productsold.product.categorie_article == Product.FREERES:
                     if line_price.status != LigneArticle.VALID:
-                        line_price.status = LigneArticle.PAID
+                        line_price.status = LigneArticle.FREERES
                         line_price.save()
 
             if reservation:
-                reservation.status = Reservation.PAID
+                # Si l'utilisateur est actif, il a vérifié son email.
+                if self.user_commande.is_active :
+                    reservation.status = Reservation.FREERES_USERACTIV
+                # Sinon on attend que l'user ai vérifié son email.
+                # La fonctione presave du fichier BaseBillet.signals
+                # mettra a jour le statut de la réservation et enverra le billet dés validation de l'email
+                else :
+                    reservation.status = Reservation.FREERES
                 reservation.save()
+
+
 
             return super().validate(attrs)
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
+        if self.reservation:
+            representation['reservation'] = ReservationSerializer(self.reservation, read_only=True).data
         if self.checkout_session:
             logger.info(f"{self.checkout_session.url}")
             representation['checkout_url'] = self.checkout_session.url

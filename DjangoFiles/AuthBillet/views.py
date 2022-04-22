@@ -19,11 +19,13 @@ from AuthBillet.models import TibilletUser
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from AuthBillet.serializers import MeSerializer, CreateUserValidator
+from AuthBillet.utils import validate_email_and_return_user
 from BaseBillet.models import Configuration
-from BaseBillet.tasks import connexion_celery_mailer
 
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
+
+from BaseBillet.tasks import connexion_celery_mailer
 
 User = get_user_model()
 
@@ -92,45 +94,21 @@ class create_user(APIView):
         validator = CreateUserValidator(data=request.data)
         if not validator.is_valid():
             return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-        email = request.data.get('email')
-        password = request.data.get('password')
-        if not email:
-            return Response("email required", status=status.HTTP_400_BAD_REQUEST)
+
+        email = validator.validated_data.get('email').lower()
+        password = validator.validated_data.get('password')
+
+        user = validate_email_and_return_user(email, password)
+
+        if user:
+            return Response(_('Pour acceder à votre espace et réservations, '
+                              'merci de valider votre adresse email. '
+                              'Pensez à regarder dans les spams !'),
+                            status=status.HTTP_200_OK)
         else:
-            email = email.lower()
-
-        User: TibilletUser = get_user_model()
-        user, created = User.objects.get_or_create(email=email, username=email)
-
-        if not created:
-            if user.is_active:
-                task = connexion_celery_mailer.delay(user.email, f"https://{request.get_host()}")
-                return Response(_("email de connexion envoyé. Verifiez dans votre boite de spams si non reçu."),
-                                status=status.HTTP_202_ACCEPTED)
-            else:
-                if user.email_error:
-                    return Response(_("Email non valide"), status=status.HTTP_406_NOT_ACCEPTABLE)
-                else:
-                    task = connexion_celery_mailer.delay(user.email, f"https://{request.get_host()}")
-                    return Response(
-                        _("Merci de valider l'email de confirmation envoyé. Pensez à regarder dans les spams !"),
-                        status=status.HTTP_401_UNAUTHORIZED)
-        else:
-            if password:
-                user.set_password(password)
-
-            user.is_active = False
-
-            user.espece = TibilletUser.TYPE_HUM
-            user.client_achat.add(connection.tenant)
-            user.save()
-            task = connexion_celery_mailer.delay(user.email, f"https://{request.get_host()}")
-
-            return Response(_('User Créé, merci de valider votre adresse email. Pensez à regarder dans les spams !'),
-                            status=status.HTTP_201_CREATED)
-
-
+            return Response(_("Email soumis non valide. "
+                              "Merci de vérifier votre adresse."),
+                            status=status.HTTP_406_NOT_ACCEPTABLE)
 
 
 class MeViewset(viewsets.ViewSet):
@@ -144,8 +122,6 @@ class MeViewset(viewsets.ViewSet):
             serializer_copy['cashless'] = request_for_data_cashless(request.user)
 
         return Response(serializer_copy, status=status.HTTP_200_OK)
-
-
 
     def get_permissions(self):
         if self.action in ['list', ]:

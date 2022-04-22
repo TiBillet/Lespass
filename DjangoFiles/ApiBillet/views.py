@@ -308,6 +308,22 @@ class HereViewSet(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
+class EventsSlugViewSet(viewsets.ViewSet):
+    def retrieve(self, request, pk=None):
+        queryset = Event.objects.all().order_by('-datetime')
+        event = get_object_or_404(queryset, slug=pk)
+        serializer = EventSerializer(event)
+        return Response(serializer.data)
+
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [permissions.AllowAny]
+        else:
+            permission_classes = [TenantAdminPermission]
+        return [permission() for permission in permission_classes]
+
+
 class EventsViewSet(viewsets.ViewSet):
 
     def list(self, request):
@@ -397,11 +413,12 @@ class ReservationViewset(viewsets.ViewSet):
         return Response(serializer.data)
 
     def create(self, request):
-        print(request.data)
+
+        # import ipdb; ipdb.set_trace()
+        logger.info(f"ReservationViewset CREATE : {request.data}")
 
         validator = ReservationValidator(data=request.data, context={'request': request})
         if validator.is_valid():
-            # serializer.save()
             return Response(validator.data, status=status.HTTP_201_CREATED)
         return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -564,6 +581,11 @@ class TicketPdf(APIView):
 
     def get(self, request, pk_uuid):
         ticket = get_object_or_404(Ticket, uuid=pk_uuid)
+
+        VALID_TICKET_FOR_PDF = [Ticket.NOT_SCANNED, Ticket.SCANNED]
+        if ticket.status not in VALID_TICKET_FOR_PDF :
+            return Response('Ticket non valide', status=status.HTTP_403_FORBIDDEN)
+
         pdf_binary = create_ticket_pdf(ticket)
         response = HttpResponse(pdf_binary, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{ticket.pdf_filename()}"'
@@ -660,7 +682,7 @@ def paiment_stripe_validator(request, paiement_stripe):
 
         checkout_session = stripe.checkout.Session.retrieve(paiement_stripe.checkout_session_id_stripe)
 
-        # on vérfie que les metatada soient cohérentes. #NTUI !
+        # Vérifie que les metatada soient cohérentes. #NTUI !
         if metatadata_valid(paiement_stripe, checkout_session):
             if checkout_session.payment_status == "unpaid":
                 paiement_stripe.status = Paiement_stripe.PENDING

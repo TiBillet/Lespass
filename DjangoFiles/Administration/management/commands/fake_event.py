@@ -108,6 +108,7 @@ class Command(BaseCommand):
                     "event": f"{event_uuid}",
                     "email": f"{gen_random_string()}@{gen_random_string()}.com",
                     "to_mail": False,
+                    "options": [options()[0],],
                     "prices": [
                         {
                             "uuid": f"{price_uuid}",

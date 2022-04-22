@@ -122,6 +122,15 @@ class TibilletUser(AbstractUser):
     client_admin = models.ManyToManyField(Client,
                                           related_name="user_admin", blank=True)
 
+    is_active = models.BooleanField(
+        _('active'),
+        default=False,
+        help_text=_(
+            'Designates whether this user should be treated as active. '
+            'Unselect this instead of deleting accounts.'
+        ),
+    )
+
     objects = TibilletManager()
 
     def achat(self):
@@ -251,4 +260,5 @@ class SuperHumanUser(TibilletUser):
         super().save(*args, **kwargs)
 
 # ---------------------------------------------------------------------------------------------------------------------
+
 

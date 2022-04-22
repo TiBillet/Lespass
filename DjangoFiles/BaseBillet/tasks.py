@@ -187,9 +187,10 @@ def redirect_post_webhook_stripe_from_public(url, data):
 
 
 @app.task
-def connexion_celery_mailer(user_email, base_url):
+def connexion_celery_mailer(user_email, base_url, subject=None):
     """
 
+    :param subject: Sujet de l'email
     :type user_email: str
     :type url: str
     :type tenant_name: str
@@ -204,10 +205,13 @@ def connexion_celery_mailer(user_email, base_url):
     token = default_token_generator.make_token(user)
     connexion_url = f"{base_url}/emailconfirmation/{uid}/{token}"
 
+    if subject is None :
+        subject = f"{config.organisation} : Confirmez votre email et connectez vous !"
+
     try:
         mail = CeleryMailerClass(
             user.email,
-            f"{config.organisation} : Confirmer votre connexion à l'espace TiBillet.",
+            subject,
             template='mails/connexion.html',
             context={
                 'config': config,
@@ -269,7 +273,7 @@ def ticket_celery_mailer(reservation_uuid: str):
 
             except smtplib.SMTPRecipientsRefused as e:
 
-                logger.error(f"ERROR {timezone.now()} Erreur envoie de mail pour reservation {reservation} : {e}")
+                logger.error(f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour reservation {reservation} : {e}")
                 logger.error(f"mail.sended : {mail.sended}")
                 reservation.mail_send = False
                 reservation.mail_error = True

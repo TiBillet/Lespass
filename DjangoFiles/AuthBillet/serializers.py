@@ -1,14 +1,16 @@
 import datetime
 
+from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
-from ApiBillet.serializers import ReservationSerializer
 from AuthBillet.models import TibilletUser
 import logging
 
 from BaseBillet.models import Reservation, Ticket
 
 logger = logging.getLogger(__name__)
+
+
 
 class CreateUserValidator(serializers.Serializer):
     email = serializers.EmailField()

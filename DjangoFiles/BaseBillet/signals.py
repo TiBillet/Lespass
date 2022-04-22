@@ -6,6 +6,7 @@ from django.dispatch import receiver
 # from django.utils import timezone
 
 # from ApiBillet.thread_mailer import ThreadMaileur
+from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, LigneArticle, Ticket, Product, Configuration, Paiement_stripe
 from BaseBillet.tasks import ticket_celery_mailer
 
@@ -13,6 +14,7 @@ from BaseBillet.tasks import ticket_celery_mailer
 from BaseBillet.triggers import action_article_paid_by_categorie
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -63,7 +65,7 @@ def valide_stripe_paiement(old_instance, new_instance):
 def set_paiement_stripe_valid(old_instance: LigneArticle, new_instance: LigneArticle):
     if new_instance.status == LigneArticle.VALID:
         # Si paiement stripe :
-        if new_instance.paiement_stripe :
+        if new_instance.paiement_stripe:
             logger.info(
                 f"    TRIGGER LIGNE ARTICLE set_paiement_and_reservation_valid {new_instance.pricesold}. On test si toute les lignes sont validées")
 
@@ -120,14 +122,13 @@ def send_to_cashless(instance: LigneArticle):
     return r.status_code
 
 
-
 def check_paid(old_instance: LigneArticle, new_instance: LigneArticle):
-    logger.info(f"    TRIGGER LIGNE ARTICLE check_paid {old_instance.pricesold} new_instance status : {new_instance.status}")
+    logger.info(
+        f"    TRIGGER LIGNE ARTICLE check_paid {old_instance.pricesold} new_instance status : {new_instance.status}")
     action_article_paid_by_categorie(new_instance)
-    logger.info(f"    TRIGGER LIGNE ARTICLE check_paid {old_instance.pricesold} new_instance status : {new_instance.status}")
+    logger.info(
+        f"    TRIGGER LIGNE ARTICLE check_paid {old_instance.pricesold} new_instance status : {new_instance.status}")
     set_paiement_stripe_valid(old_instance, new_instance)
-
-
 
     '''
     if new_instance.pricesold.productsold.product.categorie_article in \
@@ -139,10 +140,9 @@ def check_paid(old_instance: LigneArticle, new_instance: LigneArticle):
 
 ######################## TRIGGER RESERVATION ########################
 
-
 # @receiver(post_save, sender=Reservation)
 # def send_billet_to_mail(sender, instance: Reservation, **kwargs):
-def send_billet_to_mail(old_instance:Reservation, new_instance:Reservation):
+def send_billet_to_mail(old_instance: Reservation, new_instance: Reservation):
     # On active les tickets
     if new_instance.tickets:
         # On prend aussi ceux qui sont déja activé ( avec les Q() )
@@ -168,7 +168,7 @@ def send_billet_to_mail(old_instance:Reservation, new_instance:Reservation):
         set_paiement_valid(old_instance, new_instance)
 
 
-def set_paiement_valid(old_instance:Reservation, new_instance:Reservation):
+def set_paiement_valid(old_instance: Reservation, new_instance: Reservation):
     if new_instance.mail_send:
         logger.info(
             f"    TRIGGER RESERVATION set_paiement_valid Mail envoyé {new_instance.mail_send},"
@@ -179,11 +179,26 @@ def set_paiement_valid(old_instance:Reservation, new_instance:Reservation):
             paiement.save()
 
 
-def error_in_mail(old_instance:Reservation, new_instance:Reservation):
+def error_in_mail(old_instance: Reservation, new_instance: Reservation):
     logger.info(f"    TRIGGER RESERVATION error_in_mail")
     new_instance.paiements.all().update(traitement_en_cours=False)
     # TODO: Prévenir l'admin q'un billet a été acheté, mais pas envoyé
 
+
+######################## TRIGGER TIBILLETUSER ########################
+
+def activator_free_reservation(old_instance: TibilletUser, new_instance: TibilletUser):
+    logger.info(f"activator_free_reservation : {new_instance}")
+    free_reservation = Reservation.objects.filter(
+        user_commande=new_instance,
+        to_mail=True,
+        status=Reservation.FREERES
+    )
+
+    for resa in free_reservation:
+        print(f"    {resa}")
+        resa.status = Reservation.FREERES_USERACTIV
+        resa.save()
 
 ######################## MOTEUR TRIGGER ########################
 
@@ -194,10 +209,14 @@ def error_regression(old_instance, new_instance):
     pass
 
 
+def test_signal(old_instance, new_instance):
+    logger.info(f"Test signal instance : {new_instance} - Status : {new_instance.status}")
+
+
 # On déclare les transitions possibles entre différents etats des statuts.
 # Exemple première ligne : Si status passe de PENDING vers PAID, alors on lance set_ligne_article_paid
 
-TRANSITIONS = {
+PRE_SAVE_TRANSITIONS = {
     'PAIEMENT_STRIPE': {
         Paiement_stripe.PENDING: {
             Paiement_stripe.PAID: set_ligne_article_paid,
@@ -237,6 +256,13 @@ TRANSITIONS = {
     'RESERVATION': {
         Reservation.CREATED: {
             Reservation.PAID: send_billet_to_mail,
+            Reservation.FREERES_USERACTIV : send_billet_to_mail,
+        },
+        Reservation.FREERES:{
+            Reservation.FREERES_USERACTIV : send_billet_to_mail,
+        },
+        Reservation.FREERES_USERACTIV: {
+            Reservation.FREERES_USERACTIV: send_billet_to_mail,
         },
         Reservation.UNPAID: {
             Reservation.PAID: send_billet_to_mail,
@@ -251,18 +277,32 @@ TRANSITIONS = {
             '_all_': error_regression,
         }
     },
+
+    'TIBILLETUSER': {
+        False: {
+            True: activator_free_reservation,
+        }
+    },
 }
 
 
 @receiver(pre_save)
 def pre_save_signal_status(sender, instance, **kwargs):
+    # logger.info(f"pre_save_signal_status. Sender : {sender} - Instance : {instance}")
     # if not create
     if not instance._state.adding:
         sender_str = sender.__name__.upper()
-        dict_transition = TRANSITIONS.get(sender_str)
+        dict_transition = PRE_SAVE_TRANSITIONS.get(sender_str)
+
         if dict_transition:
             old_instance = sender.objects.get(pk=instance.pk)
             new_instance = instance
+
+            # Trick pour les status qui s'appellent différement que status
+            CALLABLE_STATUS_MODEL = {'TIBILLETUSER': 'is_active'}
+            if CALLABLE_STATUS_MODEL.get(sender_str):
+                old_instance.status = getattr(old_instance, CALLABLE_STATUS_MODEL.get(sender_str))
+                new_instance.status = getattr(new_instance, CALLABLE_STATUS_MODEL.get(sender_str))
 
             logger.info(f"dict_transition {sender_str} {new_instance} : {old_instance.status} to {new_instance.status}")
             transitions = dict_transition.get(old_instance.status, None)
@@ -277,3 +317,24 @@ def pre_save_signal_status(sender, instance, **kwargs):
                     if not callable(trigger_function):
                         raise Exception(f'Fonction {trigger_function} is not callable. Disdonc !?')
                     trigger_function(old_instance, new_instance)
+
+# POST_SAVE_TRANSITIONS = {
+#     'TIBILLETUSER': {
+#         Paiement_stripe.EXPIRE: {
+#             Paiement_stripe.PAID: set_ligne_article_paid,
+#         },
+#     },
+# }
+#
+#
+# @receiver(post_save)
+# def post_save_signal_status(sender, instance, **kwargs):
+#     sender_str = sender.__name__.upper()
+#     dict_transition = POST_SAVE_TRANSITIONS.get(sender_str)
+#     if dict_transition:
+#         logger.info(f"post_save_signal_status. Sender : {sender_str} - Instance : {instance}")
+#
+#         trigger_function = transitions.get('_all_', (
+#             transitions.get(new_instance.status, (
+#                 transitions.get('_else_', None)
+#             ))))

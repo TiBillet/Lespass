@@ -223,6 +223,7 @@ class TicketAdmin(admin.ModelAdmin):
         'datetime',
     ]
     readonly_fields = list_display
+    ordering = ('-reservation__datetime', )
 
 
 staff_admin_site.register(Ticket, TicketAdmin)

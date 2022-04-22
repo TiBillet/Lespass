@@ -3,8 +3,7 @@
             :key="price.uuid">
     <legend>
       <div class="d-flex justify-content-between mb-3">
-        <h3 class="font-weight-bolder text-info text-gradient align-self-start">{{ product.name }}</h3>
-        <span>  {{ price.name.toLowerCase() }} {{ price.prix }}€</span>
+        <h3 class="font-weight-bolder text-info text-gradient align-self-start">{{ product.name }} {{ price.name.toLowerCase() }} : {{ price.prix }}€</h3>
         <button v-if="(price.stock - price.users.length) >= 1" class="btn btn-primary ms-3" type="button"
                 @click.stop="addUser(price.uuid)">
           <i class="fas fa-plus"></i>

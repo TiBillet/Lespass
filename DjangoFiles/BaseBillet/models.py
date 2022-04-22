@@ -124,6 +124,7 @@ class Configuration(SingletonModel):
                             'hdr': (720, 720),
                             'med': (480, 480),
                             'thumbnail': (150, 90),
+
                         },
                         delete_orphans=True,
                         verbose_name='Background'
@@ -360,7 +361,18 @@ class Event(models.Model):
                 'hdr': self.img.hdr.url,
                 'med': self.img.med.url,
                 'thumbnail': self.img.thumbnail.url,
-                'crop': self.img.crop.url,
+            }
+        elif self.artists.all().count() > 0:
+            artist_on_event : Artist_on_event = self.artists.all()[0]
+            tenant: Clien = artist_on_event.artist
+            with tenant_context(tenant):
+                img = Configuration.get_solo().img
+
+            return {
+                'fhd': img.fhd.url,
+                'hdr': img.hdr.url,
+                'med': img.med.url,
+                'thumbnail': img.thumbnail.url,
             }
         else:
             return {}
@@ -524,11 +536,13 @@ class Reservation(models.Model):
                               on_delete=models.PROTECT,
                               related_name="reservation")
 
-    CANCELED, CREATED, UNPAID, PAID, PAID_ERROR, PAID_NOMAIL, VALID, = 'C', 'R', 'U', 'P', 'PE', 'PN', 'V'
+    CANCELED, CREATED, UNPAID, FREERES, FREERES_USERACTIV, PAID, PAID_ERROR, PAID_NOMAIL, VALID, = 'C', 'R', 'U', 'F', 'FA', 'P', 'PE', 'PN', 'V'
     TYPE_CHOICES = [
         (CANCELED, _('Annulée')),
         (CREATED, _('Crée')),
         (UNPAID, _('Non payée')),
+        (FREERES, _('Mail non vérifié')),
+        (FREERES_USERACTIV, _('Mail user vérifié')),
         (PAID, _('Payée')),
         (PAID_ERROR, _('Payée mais mail non valide')),
         (PAID_NOMAIL, _('Payée mais mail non envoyé')),
@@ -743,11 +757,12 @@ class LigneArticle(models.Model):
 
     paiement_stripe = models.ForeignKey(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True)
 
-    CANCELED, CREATED, UNPAID, PAID, VALID, = 'C', 'O', 'U', 'P', 'V'
+    CANCELED, CREATED, UNPAID, PAID, FREERES, VALID, = 'C', 'O', 'U', 'P', 'F', 'V'
     TYPE_CHOICES = [
         (CANCELED, _('Annulée')),
         (CREATED, _('Non envoyé en paiement')),
         (UNPAID, _('Non payée')),
+        (FREERES, _('Reservation gratuite')),
         (PAID, _('Payée')),
         (VALID, _('Validée par serveur cashless')),
     ]

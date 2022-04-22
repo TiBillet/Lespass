@@ -1,7 +1,7 @@
 # V2 IN ACTIVE BETA
 
 V1 ( deprecated ) here :
-https://github.com/Nasjoe/TiBillet-Cashless-V1-DEPRECATED
+https://github.com/TiBillet/TiBillet-Cashless-V1-DEPRECATED
 
 ## Nous cherchons activement toute forme d'aide pour construire TiBillet ! N'hésitez pas à nous contacter :)
 
@@ -40,7 +40,11 @@ on https://excalidraw.com/
 
 ![](Presentation/Design_Front_Cashless_APP.svg)
 
-### Cashless démo :
+### Billetterie démo ( nighty build ) :
+
+https://m.tibillet.fr
+
+### Cashless démo ( nighty build ) :
 
 https://demo.tibillet.re
 
