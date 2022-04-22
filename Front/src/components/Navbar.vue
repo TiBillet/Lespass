@@ -5,7 +5,8 @@
     <div class="container">
 
       <ul class="navbar-nav navbar-nav-hover mx-auto">
-        <li v-if="store.place.button_adhesion === true && statusAdhesion === false"
+        <!-- <li v-if="store.place.button_adhesion === true && statusAdhesion === false" -->
+        <li v-if="store.place.button_adhesion === true && store.adhesion === false"
             class="nav-item mx-2">
           <a class="btn btn-sm bg-gradient-primary btn-round mb-0 me-1" role="button"
              data-bs-toggle="modal" data-bs-target="#modal-form-adhesion">
@@ -14,10 +15,10 @@
         </li>
       </ul>
 
-
       <ul class="navbar-nav d-lg-block">
         <!-- menu Profil -->
-        <li v-if="statusAdhesion === true" class="nav-item dropdown dropdown-hover mx-2">
+        <!-- <li v-if="statusAdhesion === true" class="nav-item dropdown dropdown-hover mx-2"> -->
+        <li v-if="store.adhesion === true" class="nav-item dropdown dropdown-hover mx-2">
           <a id="dropDownMenuProfil" class="btn btn-sm  bg-gradient-primary btn-round mb-0 me-1" role="button"
              data-bs-toggle="dropdown" aria-expanded="false">
             <i class="fas fa-user me-1" aria-hidden="true"></i>Profil
@@ -61,8 +62,6 @@
             </div>
 
             <!-- mobile -->
-
-
             <div class="row d-lg-none">
               <div class="col-md-12 g-0">
                 <a class="dropdown-item py-2 ps-3 border-radius-md" role="button" @click="showAssets()">
@@ -94,14 +93,13 @@
           </div>
         </li>
 
-<!--        <li v-if="statusAdhesion === false && connection === true" class="nav-item">-->
-<!--          <a class="btn btn-sm  bg-gradient-primary  btn-round mb-0 me-1" role="button">-->
-<!--            <i class="fas fa-user me-1" aria-hidden="true"></i>Connecté-->
-<!--          </a>-->
-<!--        </li>-->
+        <!-- pas adhérant mais connecté -->
+        <li v-if="connection === true" class="nav-item text-success">
+              <i class="fas fa-user me-1" aria-hidden="true"></i>Connecté
+        </li>
 
         <!-- connexion -->
-        <li v-if="connection === false" class="nav-item">
+        <li v-else class="nav-item">
           <a class="btn btn-sm  bg-gradient-info btn-round mb-0 me-1" role="button"
              data-bs-toggle="modal" data-bs-target="#modal-form-login">
             <i class="fas fa-sign-in-alt me-1" aria-hidden="true"></i>Se connecter
@@ -122,7 +120,6 @@ import '../assets/css/google_fonts_family_montserrat_400.700.200.css'
 
 // Nucleo Icons (ui)
 import '../assets/css/nucleo-icons.css'
-
 
 // Font Awesome Free 5.15.4 MIT License
 import '../assets/js/kit-fontawesome-42d5adcbca.js'
@@ -160,7 +157,9 @@ const props = defineProps({
 })
 const domain = `${location.protocol}//${location.host}`
 
-let statusAdhesion = ref(false)
+// let statusAdhesion = ref(false)
+// store.adhesion = statusAdhesion.value
+store.adhesion = false
 let profil = ref(null)
 
 let connection = ref(false)
@@ -229,7 +228,9 @@ emitter.on('statusConnection', (data) => {
 emitter.on('statusAdhesion', (data) => {
   console.log('réception de "statusAdhesion", data =', data)
   if (data.cashless.a_jour_cotisation === true) {
-    statusAdhesion.value = true
+    // statusAdhesion.value = true
+    // store.adhesion = statusAdhesion.value
+    store.adhesion = true
     profil.value = {
       email: data.email,
       lastName: data.cashless.name,

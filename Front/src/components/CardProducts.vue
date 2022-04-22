@@ -2,7 +2,7 @@
   <div v-for="product in manageProducts" :key="product.uuid">
 
     <CardAdhesion
-        v-if="manageComponents.includes(product.categorie_article) === true && product.categorie_article === 'A'"
+        v-if="manageComponents.includes(product.categorie_article) === true && product.categorie_article === 'A' && store.adhesion === false"
         :prices="product.prices" :index-memo="store.currentUuidEvent" :obligatoire="store.place.adhesion_obligatoire"/>
 
     <!-- name-memo = nom de l'enristrement dans le "store.memoComposants", index-memo = évènement en cours et activation = active la sélection du produit -->

@@ -34,7 +34,7 @@ const routes = [
     component: () => import(/* webpackChunkName: "Event" */ '../views/Event.vue'),
     // chargement synchrone des données lieu et évènements avant d'entrer dans la vue
     async beforeEnter(to, from) {
-      await Api.loadEvent(to.params.slug)
+      await Api.loadEventBySlug(to.params.slug)
     }
   },
   {

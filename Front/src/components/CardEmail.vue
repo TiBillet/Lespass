@@ -47,7 +47,8 @@ import {ref, onMounted, onUpdated} from 'vue'
 import {useStore} from '@/store'
 
 const props = defineProps({
-  indexMemo: String
+  indexMemo: String,
+  defaultEmail: String
 })
 const store = useStore()
 
@@ -58,7 +59,7 @@ let record = true
 
 let profil = ref({})
 const dataInit = {
-  email: "",
+  email: props.defaultEmail,
   confirmeEmail: ""
 }
 

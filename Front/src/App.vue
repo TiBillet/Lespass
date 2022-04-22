@@ -4,6 +4,9 @@
   <Footer :place="store.place"/>
   <Message/>
   <ModalMessage/>
+  <!-- adhésion -->
+  <ModalAdhesion v-if="store.place.button_adhesion === true" :prices="prices" required/>
+
   <!-- loading -->
   <div v-if="loading === true" class="position-relative d-flex justify-content-center align-items-center vw-100 vh-100">
     <h1>Chargement des données !</h1>
@@ -14,6 +17,7 @@
 </template>
 
 <script setup>
+console.log(' -> App.vue !')
 // vue
 import {ref} from 'vue'
 
@@ -22,6 +26,7 @@ import Navbar from './components/Navbar.vue'
 import Footer from './components/Footer.vue'
 import Message from './components/Message.vue'
 import ModalMessage from './components/ModalMessage.vue'
+import ModalAdhesion from './components/ModalAdhesion.vue'
 
 // store
 import {useStore} from '@/store'
@@ -33,8 +38,26 @@ const store = useStore()
 // init store local
 const storeLocal = new StoreLocal('localStorage', 'Tibilet-identite', {
   email: '',
-  refreshToken: ''
+  refreshToken: '',
+  storeBeforeUseExternalUrl: {}
 })
+
+let prices = []
+console.log('store.place =', store.place)
+
+// console.log('store =., storeplace.membership_products =', store.place.membership_products)
+if (store.place.button_adhesion === true) {
+  try {
+    prices = store.place.membership_products.filter(adh => adh.categorie_article === 'A')[0].prices
+    // console.log('prices =', prices)
+  } catch (erreur) {
+    emitter.emit('message', {
+      tmp: 6,
+      typeMsg: 'warning',
+      contenu: `Avez-vous renseigné les prix pour l'adhésion ?`
+    })
+  }
+}
 
 const loading = ref(false)
 
@@ -43,7 +66,7 @@ const loading = ref(false)
 
 // aller à la page évènement (lien défini si-dessous et dans le store) => /views/Event.vue
 emitter.on('statusLoading', (status) => {
-  console.log('-> Emmiter, réception "statusLoading"; status')
+  // console.log('-> Emmiter, réception "statusLoading"; status')
   loading.value = status
 })
 

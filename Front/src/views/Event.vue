@@ -14,17 +14,10 @@
     <form @submit.prevent="goValiderAchats($event)" class="needs-validation" novalidate>
       <CardProducts :products="currentEvent.products" :categories="['B', 'F']"/>
 
-
-      <OptionsRadio v-if="currentEvent.options_radio.length > 1" :options-radio="currentEvent.options_radio"
-                    name="Position" :index-memo="store.currentUuidEvent"/>
-
-      <!-- <div v-if="currentEvent.options_checkbox.length > 0 || currentEvent.options_radio.length > 0"> -->
-      <ListOptionsCheckbox v-if="currentEvent.options_checkbox.length > 0 || currentEvent.options_radio.length > 0"
-                           :options-checkbox="currentEvent.options_checkbox" :index-memo="store.currentUuidEvent"/>
-      <!-- </div> -->
+      <CardOptions :options="options"  :index-memo="store.currentUuidEvent"/>
 
       <!-- index-memo="unique00" = "index fixe" bon pour tous les évènements -->
-      <CardEmail index-memo="unique00"/>
+      <CardEmail :default-email="storeLocal.email" index-memo="unique00"/>
 
       <CardProducts :products="currentEvent.products" :categories="['A', 'D']"/>
 
@@ -45,25 +38,29 @@ console.log('-> Event.vue !')
 import {ref} from 'vue'
 import {useRoute} from 'vue-router'
 
+// store
+import {useStore} from '@/store'
+
+// myStore
+import {StoreLocal} from '@/divers'
+
 // composants
 import Header from '@/components/Header.vue'
 import CardPlace from '@/components/CardPlace.vue'
 import CardArtist from '@/components/CardArtist.vue'
 import CardEmail from '@/components/CardEmail.vue'
 import CardProducts from '@/components/CardProducts.vue'
-import ListOptionsCheckbox from '@/components/ListOptionsCheckbox.vue'
-import OptionsRadio from '@/components/OptionsRadio.vue'
+import CardOptions  from '@/components/CardOptions.vue'
 
 // test dev
 import {getMe} from '@/api'
-// import {fakeEvent} from "../../tempo/fakeCurrentEventsTest"
-
-// store
-import {useStore} from '@/store'
+// import {fakeEvent} from "../../tempo/fakeCurrentEventTest"
+import {fakeEvent} from "../../tempo/fakeCurrentEventTestNoArtists.js"
 
 const route = useRoute()
 const slug = route.params.slug
 const store = useStore()
+const storeLocal = StoreLocal.use('localStorage', 'Tibilet-identite')
 const domain = `${location.protocol}//${location.host}`
 
 // récupération du uuid évènement à partir du slug
@@ -76,16 +73,22 @@ if (typeof (uuidEventBrut) === 'object') {
 }
 
 // currentEvent production
-const currentEvent = store.events.find(evt => evt.uuid === uuidEvent)
+// const currentEvent = store.events.find(evt => evt.uuid === uuidEvent)
 
 // currentEvent test dev
-// const currentEvent = fakeEvent
+const currentEvent = fakeEvent
 
 console.log('currentEvent =', currentEvent)
 
 store.currentUuidEvent = uuidEvent
 
 // TODO: maj currentEvent et ses store.memoComposants[composant][currentUuidEvent] provenant d'un websocket
+
+// un objet options contenant les checkbox et radio
+const options = {
+  checkbox: currentEvent.options_checkbox,
+  radio: currentEvent.options_radio
+}
 
 function getHeaderEvent() {
   let urlImage
@@ -131,7 +134,7 @@ function formaterDatas(adhesionActive, adhesionPrix) {
   }
 
   // options checkbox
-  const optionsCheckbox = store.memoComposants.ListOptionsCheckbox[store.currentUuidEvent]
+  const optionsCheckbox = store.memoComposants.Options[store.currentUuidEvent].checkbox
   for (let i = 0; i < optionsCheckbox.length; i++) {
     const option = optionsCheckbox[i]
     // console.log('-> ',JSON.stringify(option, null, 2))
@@ -141,7 +144,7 @@ function formaterDatas(adhesionActive, adhesionPrix) {
   }
 
   // options radio
-  const optionsRadio = store.memoComposants.OptionsRadio[store.currentUuidEvent]
+  const optionsRadio = store.memoComposants.Options[store.currentUuidEvent].radio
   for (let i = 0; i < optionsRadio.length; i++) {
     const option = optionsRadio[i]
     if (option.selection === true) {

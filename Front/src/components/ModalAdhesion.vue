@@ -10,7 +10,7 @@
             <div class="card-header pb-0 d-flex align-items-center">
               <h3 class="font-weight-bolder text-info text-gradient align-self-start w-85">Adhésion</h3>
               <div class="d-flex align-items-center modal-click-info" @click="goStatus()">
-                  <span>status</span>
+                <span>status</span>
                 <i class="fas fa-question mb-1"></i>
               </div>
             </div>
@@ -41,27 +41,25 @@
 
                 <!-- nom -->
                 <div class="input-group mb-2 has-validation">
-                  <span class="input-group-text">Nom</span>
-                  <input v-model="adhesionFormModal.lastName" type="text"
-                         class="form-control" aria-label="Nom pour l'adhésion">
+                  <span class="input-group-text" @click="inputFocus('adhesion-nom')">Nom</span>
+                  <input id="adhesion-nom" v-model="adhesionFormModal.lastName" type="text"
+                         class="form-control" aria-label="Nom pour l'adhésion" required>
                   <div class=" invalid-feedback">Un nom svp !
                   </div>
                 </div>
 
                 <!-- prénom -->
                 <div class="input-group mb-2 has-validation">
-                  <span class="input-group-text">Prénom</span>
-                  <input v-model="adhesionFormModal.firstName" type="text"
-                         class="form-control" aria-label="Prénom pour l'adhésion">
+                  <span class="input-group-text" @click="inputFocus('adhesion-prenom')">Prénom</span>
+                  <input id="adhesion-prenom" v-model="adhesionFormModal.firstName" type="text"
+                         class="form-control" aria-label="Prénom pour l'adhésion" required>
                   <div class="invalid-feedback">Un prénom svp !</div>
                 </div>
 
                 <!-- email -->
                 <div class="input-group mb-2 has-validation">
-                  <span class="input-group-text">Email</span>
-                  <!-- <input v-model="adhesionFormModal.email" type="email"
-                         pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$" class="form-control" required> -->
-                  <input v-model="adhesionFormModal.email" type="email"
+                  <span class="input-group-text" @click="inputFocus('adhesion-email')">Email</span>
+                  <input id="adhesion-email" v-model="adhesionFormModal.email" type="email"
                          pattern="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$" class="form-control" required>
                   <div class="invalid-feedback">
                     Une adresse email valide svp !
@@ -70,18 +68,18 @@
 
                 <!-- code postal -->
                 <div class="input-group mb-2 has-validation">
-                  <span class="input-group-text">Code postal</span>
-                  <input v-model="adhesionFormModal.postalCode" id="adhesion-adresse"
+                  <span class="input-group-text" @click="inputFocus('adhesion-code-postal')">Code postal</span>
+                  <input id="adhesion-code-postal" v-model="adhesionFormModal.postalCode"
                          type="number" class="form-control" aria-label="Code postal" required>
                   <div class="invalid-feedback">Code postal svp !</div>
                 </div>
 
                 <!-- téléphone -->
                 <div class="input-group has-validation">
-                  <span class="input-group-text">Fixe ou Mobile</span>
-                  <input v-model="adhesionFormModal.phone" type="tel"
+                  <span class="input-group-text" @click="inputFocus('adhesion-tel')">Fixe ou Mobile</span>
+                  <input id="adhesion-tel" v-model="adhesionFormModal.phone" type="tel"
                          class="form-control" pattern="^[0-9-+\s()]*$"
-                         aria-label="Fixe ou Mobile">
+                         aria-label="Fixe ou Mobile" required>
                   <div class="invalid-feedback">Un numéro de téléphone svp !</div>
                 </div>
                 <p class="mb-2">Non obligatoire, uniquement utile pour vous envoyer les confirmations d'achats."</p>
@@ -137,6 +135,10 @@ function goStatus() {
   router.push({name: 'StatusPlace'})
 }
 
+function inputFocus(id) {
+  document.querySelector(`#${id}`).focus()
+}
+
 function validerAdhesion(event) {
   console.log('-> fonc validerAdhesion !!')
   // efface tous les messages d'invalidité
@@ -147,7 +149,7 @@ function validerAdhesion(event) {
 
   if (event.target.checkValidity() === true) {
     // formulaire valide
-    console.log('-> valide !')
+    // console.log('-> valide !')
     postAdhesionModal({
       email: adhesionFormModal.email,
       first_name: adhesionFormModal.firstName,

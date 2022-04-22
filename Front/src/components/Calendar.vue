@@ -45,7 +45,7 @@
 </template>
 
 <script setup>
-console.log('-> Calendar.vue')
+// console.log('-> Calendar.vue')
 // storeMain
 import {useStore} from '@/store'
 
