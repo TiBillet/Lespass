@@ -43,7 +43,8 @@ class TokenTerminalValidator(serializers.Serializer):
         pairing = get_object_or_404(TerminalPairingToken,
                                     user=self.term_user,
                                     token=self.context.get('token'),
-                                    # used=False,
+                                    used=False,
+
                                     )
 
         PR = PasswordResetTokenGenerator()
