@@ -65,7 +65,7 @@ export async function loadEventBySlug(slug) {
     // TODO: remplacer le code si_dessous par la fonction .find()
     if (store.currentUuidEvent !== undefined) {
       for (const key in store.events) {
-        if (store.events[key].uuid === currentUuidEvent) {
+        if (store.events[key].uuid === store.currentUuidEvent) {
           store.events[key] = retour
           break
         }
@@ -76,7 +76,7 @@ export async function loadEventBySlug(slug) {
     emitter.emit('message', {
       tmp: 4,
       typeMsg: 'danger',
-      contenu: `Chargement de l'évènement ${uuidEvent}, erreur: ${erreur}`
+      contenu: `Chargement de l'évènement '${slug}', erreur: ${erreur}`
     })
   }
 }

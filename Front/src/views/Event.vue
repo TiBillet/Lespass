@@ -53,9 +53,8 @@ import CardProducts from '@/components/CardProducts.vue'
 import CardOptions  from '@/components/CardOptions.vue'
 
 // test dev
-import {getMe} from '@/api'
 // import {fakeEvent} from "../../tempo/fakeCurrentEventTest"
-import {fakeEvent} from "../../tempo/fakeCurrentEventTestNoArtists.js"
+// import {fakeEvent} from "../../tempo/fakeCurrentEventTestNoArtists.js"
 
 const route = useRoute()
 const slug = route.params.slug
@@ -73,10 +72,10 @@ if (typeof (uuidEventBrut) === 'object') {
 }
 
 // currentEvent production
-// const currentEvent = store.events.find(evt => evt.uuid === uuidEvent)
+const currentEvent = store.events.find(evt => evt.uuid === uuidEvent)
 
 // currentEvent test dev
-const currentEvent = fakeEvent
+// const currentEvent = fakeEvent
 
 console.log('currentEvent =', currentEvent)
 
