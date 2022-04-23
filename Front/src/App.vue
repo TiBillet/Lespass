@@ -38,7 +38,6 @@ import {storeLocalInit} from '@/storelocal'
 const store = useStore()
 
 // init store local
-// const storeLocal = new StoreLocal()
 storeLocalInit()
 
 

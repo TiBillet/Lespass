@@ -1,8 +1,5 @@
 <template>
   <Header :header-event="getHeaderEvent()"/>
-  <button @click="test('get', 'email')">get</button>
-  <button @click="test('set', 'email', '')">set email ''</button>
-  <button @click="test('set', 'email', 'dijouxnicolas@sfr.fr')">set email 'dijouxnicolas@sfr.fr'</button>
   <section class="pt-5 pb-0">
     <div class="container">
       <div class="row">
@@ -40,17 +37,6 @@ const store = useStore()
 
 const router = useRouter()
 const domain = `${location.protocol}//${location.host}`
-
-// dev
-function test(action, name, value) {
-  if (action === 'get') {
-    console.log('-> storeLocalGet', name, '=', storeLocalGet(name))
-  }
-  if (action === 'set') {
-    console.log('-> storeLocalset', name, '=', name, '  -- value =', value)
-    storeLocalSet(name, value)
-  }
-}
 
 function getHeaderEvent() {
   let urlImage, urlLogo
