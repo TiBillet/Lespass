@@ -556,4 +556,4 @@ class Command(BaseCommand):
                 "img_url": "http://placeimg.com/1920/1080/any.jpg",
                 "name": f"Ceci est un évènement sans artiste et sans produit",
             }
-            response
+            response = requests.request("POST", f"{base_url}/api/events/", headers=headers, data=json.dumps(data_json))

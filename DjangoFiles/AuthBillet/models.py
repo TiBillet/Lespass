@@ -1,5 +1,8 @@
+import random
+
 from django.contrib.auth.base_user import BaseUserManager, AbstractBaseUser
 from django.db import models
+from django.utils import timezone
 from django.utils.translation import ugettext_lazy as _
 import uuid
 from django.contrib.auth.models import AbstractUser, Group, Permission
@@ -9,13 +12,36 @@ from django.db import connection
 from rest_framework import permissions
 
 
-
 class TenantAdminPermission(permissions.BasePermission):
     message = 'No admin in tenant'
 
     def has_permission(self, request, view):
         if request.user.is_authenticated :
-            return bool((connection.tenant in request.user.client_admin.all() and request.user.is_staff) or request.user.is_superuser)
+            return any([
+                all([
+                    connection.tenant in request.user.client_admin.all(),
+                    request.user.is_staff,
+                    request.user.is_active,
+                    request.user.espece == TibilletUser.TYPE_HUM
+                ]),
+                request.user.is_superuser
+            ])
+        else :
+            return False
+
+class TerminalScanPermission(permissions.BasePermission):
+    message = "Termnal must be validated by an admin"
+    def has_permission(self, request, view):
+        if request.user.is_authenticated :
+            return any([
+                all([
+                    connection.tenant in request.user.client_admin.all(),
+                    request.user.is_active,
+                    request.user.user_parent().is_staff,
+                    request.user.espece == TibilletUser.TYPE_TERM
+                ]),
+                request.user.is_superuser
+            ])
         else :
             return False
 
@@ -118,9 +144,10 @@ class TibilletUser(AbstractUser):
     client_achat = models.ManyToManyField(Client,
                                           related_name="user_achats", blank=True)
 
-    # sur quelle interface d'admin peut il aller ?
+    # sur quelle interface d'admin peut-il aller ?
     client_admin = models.ManyToManyField(Client,
                                           related_name="user_admin", blank=True)
+
 
     is_active = models.BooleanField(
         _('active'),
@@ -130,6 +157,28 @@ class TibilletUser(AbstractUser):
             'Unselect this instead of deleting accounts.'
         ),
     )
+
+    ##### Pour les user terminaux ####
+
+    user_parent_pk = models.UUIDField(
+        null=True,
+        blank=True,
+        verbose_name=_("Utilisateur parent"),
+    )
+
+    def user_parent(self):
+        if self.user_parent_pk:
+            return TibilletUser.objects.get(pk=self.user_parent_pk)
+        else:
+            class user_vide:
+                is_staff = False
+            return user_vide
+
+    local_ip_sended = models.GenericIPAddressField(blank=True, null=True)
+    mac_adress_sended = models.CharField(blank=True, null=True, max_length=17)
+    terminal_uuid = models.CharField(blank=True, null=True, max_length=200)
+
+    ##### END user terminaux ####
 
     objects = TibilletManager()
 
@@ -171,10 +220,11 @@ class TibilletUser(AbstractUser):
 
 # ---------------------------------------------------------------------------------------------------------------------
 
+
 class TermUserManager(TibilletManager):
     def get_queryset(self):
         return super().get_queryset().filter(espece=TibilletUser.TYPE_TERM,
-                                             client_source=connection.tenant,
+                                             client_admin__pk__in=[connection.tenant.pk, ],
                                              )
 
 
@@ -184,13 +234,14 @@ class TermUser(TibilletUser):
         verbose_name = "Terminal"
         verbose_name_plural = "Terminaux"
 
+
     objects = TermUserManager()
 
     def save(self, *args, **kwargs):
         # Si création :
-        if not self.pk:
-            self.espece = TibilletUser.TYPE_TERM
-            self.email = self.email.lower()
+
+        self.espece = TibilletUser.TYPE_TERM
+        self.email = self.email.lower()
 
         super().save(*args, **kwargs)
 
@@ -217,7 +268,9 @@ class HumanUser(TibilletUser):
     def save(self, *args, **kwargs):
         # Si création :
         if not self.pk:
-            self.espece = TibilletUser.TYPE_HUM
+            self.client_source = connection.tenant
+
+        self.espece = TibilletUser.TYPE_HUM
 
         self.is_staff = False
         self.is_superuser = False
@@ -250,8 +303,8 @@ class SuperHumanUser(TibilletUser):
     def save(self, *args, **kwargs):
         # import ipdb; ipdb.set_trace()
         # Si création :
-        if not self.pk:
-            self.espece = TibilletUser.TYPE_HUM
+        # if not self.pk:
+        self.espece = TibilletUser.TYPE_HUM
 
         self.is_staff = True
         self.is_superuser = False
@@ -262,3 +315,8 @@ class SuperHumanUser(TibilletUser):
 # ---------------------------------------------------------------------------------------------------------------------
 
 
+class TerminalPairingToken(models.Model):
+    datetime = models.DateTimeField(default=timezone.now)
+    user = models.ForeignKey(TermUser, on_delete=models.CASCADE)
+    token = models.PositiveIntegerField()
+    used = models.BooleanField(default=False)

@@ -36,3 +36,36 @@ def validate_email_and_return_user(email, password=None, subject_mail=None):
         task = connexion_celery_mailer.delay(user.email, f"https://{base_url}")
 
         return user
+
+
+
+################################# MAC ADRESS SERIALIZER #################################
+
+
+import re
+from rest_framework.fields import Field
+from django.core.validators import RegexValidator
+from django.utils.translation import ugettext_lazy as _
+
+class MacAdressField(Field):
+    MAX_STRING_LENGTH = 17
+    default_error_messages = {
+        'invalid': _("Not a mac address")
+    }
+    MAC_GROUPS = 6
+    MAC_DELIMITER = ':'
+    MAC_RE = re.compile("([0-9a-f]{2})" +
+                        ("\%s([0-9a-f]{2})" % MAC_DELIMITER) * (MAC_GROUPS - 1),
+                        flags=re.IGNORECASE)
+
+    def __init__(self, **kwargs):
+        super(MacAdressField, self).__init__(**kwargs)
+        self.validators.append(
+            RegexValidator(self.MAC_RE, message=self.error_messages['invalid']))
+
+
+    def to_internal_value(self, data):
+        return data
+
+    def to_representation(self, value):
+        return value
