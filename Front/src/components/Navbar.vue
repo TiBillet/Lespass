@@ -5,7 +5,6 @@
     <div class="container">
 
       <ul class="navbar-nav navbar-nav-hover mx-auto">
-        <!-- <li v-if="store.place.button_adhesion === true && statusAdhesion === false" -->
         <li v-if="store.place.button_adhesion === true && store.adhesion === false"
             class="nav-item mx-2">
           <a class="btn btn-sm bg-gradient-primary btn-round mb-0 me-1" role="button"
@@ -17,7 +16,6 @@
 
       <ul class="navbar-nav d-lg-block">
         <!-- menu Profil -->
-        <!-- <li v-if="statusAdhesion === true" class="nav-item dropdown dropdown-hover mx-2"> -->
         <li v-if="store.adhesion === true" class="nav-item dropdown dropdown-hover mx-2">
           <a id="dropDownMenuProfil" class="btn btn-sm  bg-gradient-primary btn-round mb-0 me-1" role="button"
              data-bs-toggle="dropdown" aria-expanded="false">
@@ -93,10 +91,59 @@
           </div>
         </li>
 
-        <!-- pas adhérant mais connecté -->
+        <!-- pas adhérant mais connecté
         <li v-if="connection === true" class="nav-item text-success">
               <i class="fas fa-user me-1" aria-hidden="true"></i>Connecté
         </li>
+        -->
+        <li v-if="connection === true" class="nav-item dropdown dropdown-hover mx-2">
+          <a id="dropDownMenuConnection" class="btn btn-sm  bg-gradient-info text-dark btn-round mb-0 me-1"
+             role="button"
+             data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="fas fa-user me-1" aria-hidden="true"></i>{{ trad('user', {FirstLetterCapitalise: true}) }}
+          </a>
+          <!-- dropdown blocks -->
+          <div class="dropdown-menu dropdown-menu-animation dropdown-lg border-radius-lg py-0 mt-0 mt-lg-auto pe-auto"
+               aria-labelledby="dropDownMenuConnection">
+            <!-- menu desktop -->
+            <div class="d-none d-lg-block">
+              <ul class="list-group mx-auto">
+                <li class="nav-item list-group-item border-0 p-0">
+                  <a class="dropdown-item py-2 ps-3 border-radius-md" role="button" @click="disconnection()">
+                    <div class="d-flex">
+                      <div class="icon h-10 me-3 d-flex mt-1">
+                        <i class="fas fa-user-slash fa-fw me-1"></i>
+                      </div>
+                      <div>
+                        <h6 class="dropdown-header text-dark font-weight-bold d-flex justify-content-cente align-items-center p-0">
+                          {{ trad('log out', {FirstLetterCapitalise: true}) }}
+                        </h6>
+                      </div>
+                    </div>
+                  </a>
+                </li>
+              </ul>
+            </div>
+            <!-- mobile -->
+            <div class="row d-lg-none">
+              <div class="col-md-12 g-0">
+                <a class="dropdown-item py-2 ps-3 border-radius-md" role="button" @click="disconnection()">
+                  <div class="d-flex">
+                    <div class="icon h-10 me-3 d-flex mt-1">
+                      <i class="fas fa-user-slash fa-fw me-1"></i>
+                    </div>
+                    <div>
+                      <h6 class="dropdown-header text-dark font-weight-bold d-flex justify-content-cente align-items-center p-0">
+                        {{ trad('log out', {FirstLetterCapitalise: true}) }}
+                      </h6>
+                    </div>
+                  </div>
+                </a>
+              </div>
+            </div>
+          </div>
+        </li>
+
 
         <!-- connexion -->
         <li v-else class="nav-item">
@@ -147,11 +194,15 @@ import {refreshAccessToken} from '@/api'
 // store
 import {useStore} from '@/store'
 // myStore
-import {StoreLocal} from '@/divers'
+import {storeLocalGet, storeLocalSet} from '@/storelocal'
+// translation
+import {trad} from '@/translation'
+
 
 const router = useRouter()
 const store = useStore()
-let storeLocal = StoreLocal.use('localStorage', 'Tibilet-identite')
+// let storeLocal = new StoreLocal()
+
 const props = defineProps({
   place: Object
 })
@@ -162,14 +213,18 @@ const domain = `${location.protocol}//${location.host}`
 store.adhesion = false
 let profil = ref(null)
 
-let connection = ref(false)
-if (storeLocal.refreshToken !== '') {
+let connection = ref(null)
+const refreshToken = storeLocalGet('refreshToken')
+if (refreshToken === '') {
+  connection.value = false
+} else {
   connection.value = true
 }
 
+
 // actualiser le accessToken
-if (storeLocal.refreshToken !== '' && window.accessToken === '') {
-  refreshAccessToken(storeLocal.refreshToken)
+if (refreshToken !== '' && window.accessToken === '') {
+  refreshAccessToken(refreshToken)
 }
 
 // si pas d'image
@@ -182,6 +237,18 @@ const getLogo = () => {
     }
   }
   return `${domain + props.place.logo_variations.thumbnail}`
+}
+
+// reset email and refreshToken
+function disconnection() {
+  console.log('-> fonc disconnection')
+  console.log('store.memoComposants.CardEmail.unique00 =', store.memoComposants.CardEmail.unique00)
+  if (store.memoComposants.CardEmail !== undefined) {
+    store.memoComposants.CardEmail.unique00.email = ''
+    store.memoComposants.CardEmail.unique00.confirmeEmail = ''
+  }
+  storeLocalSet('refreshToken', '')
+  storeLocalSet('email', '')
 }
 
 function showAssets() {
@@ -220,9 +287,12 @@ function showAdhesion() {
   })
 }
 
-emitter.on('statusConnection', (data) => {
-  // console.log('réception de "statusConnection", data =', data)
-  connection.value = data
+emitter.on('refreshTokenChange', (value) => {
+  if (value === '') {
+    connection.value = false
+  } else {
+    connection.value = true
+  }
 })
 
 emitter.on('statusAdhesion', (data) => {

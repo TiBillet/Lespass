@@ -238,8 +238,8 @@
 <script setup>
 console.log('-> StatusPlace.vue !')
 
-// test - traduction
-import {trad} from '@/divers'
+// traduction
+import {trad} from '@/translation'
 
 // store
 import {useStore} from '@/store'

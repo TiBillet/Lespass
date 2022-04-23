@@ -1,13 +1,10 @@
 <template>
   <Header :header-event="getHeaderEvent()"/>
-
   <div class="container mt-7">
 
     <!-- artistes -->
     <div v-for="(artist, index) in currentEvent.artists" :key="index">
-      <br>
-      <CardArtist :data-artist="artist"/>
-      <br>
+      <CardArtist :data-artist="artist" class="mb-6"/>
     </div>
 
 
@@ -17,7 +14,7 @@
       <CardOptions :options="options"  :index-memo="store.currentUuidEvent"/>
 
       <!-- index-memo="unique00" = "index fixe" bon pour tous les évènements -->
-      <CardEmail :default-email="storeLocal.email" index-memo="unique00"/>
+      <CardEmail :default-email="storeLocalGet('email')" index-memo="unique00"/>
 
       <CardProducts :products="currentEvent.products" :categories="['A', 'D']"/>
 
@@ -42,7 +39,7 @@ import {useRoute} from 'vue-router'
 import {useStore} from '@/store'
 
 // myStore
-import {StoreLocal} from '@/divers'
+import {storeLocalGet, storeLocalSet} from '@/storelocal'
 
 // composants
 import Header from '@/components/Header.vue'
@@ -59,7 +56,9 @@ import CardOptions  from '@/components/CardOptions.vue'
 const route = useRoute()
 const slug = route.params.slug
 const store = useStore()
-const storeLocal = StoreLocal.use('localStorage', 'Tibilet-identite')
+// const storeLocal = StoreLocal.use('localStorage', 'Tibilet-identite')
+// const storeLocal = StoreLocal.use()
+// const storeLocal = new StoreLocal()
 const domain = `${location.protocol}//${location.host}`
 
 // récupération du uuid évènement à partir du slug

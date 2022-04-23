@@ -5,7 +5,7 @@
   <Message/>
   <ModalMessage/>
   <!-- adhésion -->
-  <ModalAdhesion v-if="store.place.button_adhesion === true" :prices="prices" required/>
+  <ModalAdhesion v-if="store.place.button_adhesion === true" />
 
   <!-- loading -->
   <div v-if="loading === true" class="position-relative d-flex justify-content-center align-items-center vw-100 vh-100">
@@ -32,32 +32,15 @@ import ModalAdhesion from './components/ModalAdhesion.vue'
 import {useStore} from '@/store'
 
 // myStore
-import {StoreLocal} from '@/divers'
+// import {StoreLocal} from '@/storelocal'
+import {storeLocalInit} from '@/storelocal'
 
 const store = useStore()
+
 // init store local
-const storeLocal = new StoreLocal('localStorage', 'Tibilet-identite', {
-  email: '',
-  refreshToken: '',
-  storeBeforeUseExternalUrl: {}
-})
+// const storeLocal = new StoreLocal()
+storeLocalInit()
 
-let prices = []
-console.log('store.place =', store.place)
-
-// console.log('store =., storeplace.membership_products =', store.place.membership_products)
-if (store.place.button_adhesion === true) {
-  try {
-    prices = store.place.membership_products.filter(adh => adh.categorie_article === 'A')[0].prices
-    // console.log('prices =', prices)
-  } catch (erreur) {
-    emitter.emit('message', {
-      tmp: 6,
-      typeMsg: 'warning',
-      contenu: `Avez-vous renseigné les prix pour l'adhésion ?`
-    })
-  }
-}
 
 const loading = ref(false)
 

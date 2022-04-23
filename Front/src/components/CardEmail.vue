@@ -55,13 +55,15 @@ const store = useStore()
 // mémorise par défaut
 let record = true
 
-// console.log('props =', JSON.stringify(props, null, 2))
+console.log('props =', JSON.stringify(props, null, 2))
 
 let profil = ref({})
 const dataInit = {
   email: props.defaultEmail,
-  confirmeEmail: ""
+  confirmeEmail: props.defaultEmail
 }
+
+console.log('dataInit =', JSON.stringify(dataInit, null, 2))
 
 // mémorise le composant dans le store ou la variable globale window
 try {
@@ -111,48 +113,11 @@ function updateProfil(key, value) {
   }
 }
 
-/*
-function updateComponent() {
-  const eles = document.querySelectorAll(`.card-email-input`)
-
-  // efface tous les erreurs de champ input non valide puisque connforme
-  for (let i = 0; i < eles.length; i++) {
-    const ele = eles[i]
-    ele.parentNode.querySelector(`.invalid-feedback`).style.display = 'none'
-  }
-
-  // test la conformité du format des emails
-  let erreurFormatEmail = ''
-  for (let i = 0; i < eles.length; i++) {
-    const ele = eles[i]
-    if (ele.checkValidity() !== true) {
-      erreurFormatEmail += '.'
-      ele.parentNode.querySelector(`.invalid-feedback`).style.display = 'block'
-    }
-  }
-  console.log('erreurFormatEmail =', erreurFormatEmail)
-
-  const confirmEmail = document.querySelector('#profil-confirme-email')
-  if (profil.value.confirmeEmail === profil.value.email && erreurFormatEmail === '') {
-    confirmEmail.setCustomValidity('')
-    confirmEmail.parentNode.querySelector(`.invalid-feedback`).style.display = 'none'
-  } else {
-    confirmEmail.setCustomValidity('erreur')
-    confirmEmail.parentNode.querySelector(`.invalid-feedback`).style.display = 'block'
-  }
-  confirmEmail.reportValidity()
-}
-
-
-
-onMounted(() => {
-  updateComponent()
+emitter.on('emailChange', (value) => {
+  profil.value.email = value
+  profil.value.confirmeEmail = value
 })
 
-onUpdated(() => {
-  updateComponent()
-})
-*/
 </script>
 
 <style scoped>

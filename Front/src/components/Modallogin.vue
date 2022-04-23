@@ -13,7 +13,7 @@
             <div class="card-body">
               <form role="form text-left" @submit.prevent="validerLogin($event)">
                 <div class="input-group mb-3">
-                  <input id="test-email" v-model="email" laria-describedby="email-addon" aria-label="Email"
+                  <input id="login-email"  laria-describedby="email-addon" aria-label="Email"
                          class="form-control" placeholder="Email" type="email"
                          pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$" required>
                 </div>
@@ -30,23 +30,23 @@
 </template>
 <script setup>
 // myStore
-import {StoreLocal} from '@/divers'
+import {storeLocalGet, storeLocalSet} from '@/storelocal'
 
 // vue
 import {ref} from 'vue'
 
-const storeLocal = StoreLocal.use('localStorage', 'Tibilet-identite')
-const email = ref(storeLocal.email)
+// const storeLocal = new StoreLocal()
 const domain = `${location.protocol}//${location.host}`
 
 async function validerLogin(event) {
   if (event.target.checkValidity() === true) {
     // enregistre l'email dans le storeUser
-    storeLocal.email = email.value
-    // console.log('storeLocal =', storeLocal)
-    // console.log('refreshToken =', storeLocal.refreshToken)
+    const email = document.querySelector('#login-email').value
+    console.log('-> validerLogin, email =',email)
+    storeLocalSet('email', email)
+
     // -- créer utilisateur = refreshToken = '' --
-    if (storeLocal.refreshToken === '') {
+    if (storeLocalGet('refreshToken') === '') {
       const api = `/api/user/create/`
       try {
         const response = await fetch(domain + api, {
@@ -55,7 +55,7 @@ async function validerLogin(event) {
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({email: email.value})
+          body: JSON.stringify({email: email})
         })
         const retour = await response.json()
         // console.log('retour =',retour)
@@ -75,6 +75,7 @@ async function validerLogin(event) {
           throw new Error(`Erreur création utilisateur !`)
         }
       } catch (erreur) {
+        console.log('-> validerLogin, erreur :', erreur)
         emitter.emit('message', {
           tmp: 8,
           typeMsg: 'warning',

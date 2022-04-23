@@ -23,7 +23,7 @@
 
     <!-- search -->
 
-    <div class="container">
+    <div v-if="router.currentRoute.value.name !== 'Event'" class="container">
       <div class="row bg-white shadow mt-n5 border-radius-lg pb-4 p-3 position-relative w-75 mx-auto">
         <div class="col-lg-8 mt-lg-n2 mt-2">
           <label></label>
@@ -45,9 +45,14 @@
 
 <script setup>
 // console.log('-> Header.vue')
+
+// vue
+import {useRouter} from 'vue-router'
+
 const props = defineProps({
   headerEvent: Object
 })
-// console.log('props.headerEvent =', JSON.stringify(props.headerEvent, null, 2))
+
+const router = useRouter()
 
 </script>

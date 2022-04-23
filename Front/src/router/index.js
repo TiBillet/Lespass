@@ -3,8 +3,7 @@ import {createRouter, createWebHistory} from 'vue-router'
 import Accueil from '../views/Accueil.vue'
 
 // api
-// import {loadPlace, loadEvents, emailActivation, getStripeReturn} from '../api'
-import * as Api from '@/api'
+import {loadPlace, loadEvents, loadEventBySlug, emailActivation, postStripeReturn} from '@/api'
 
 const domain = `${location.protocol}//${location.host}`
 
@@ -15,8 +14,8 @@ const routes = [
     component: Accueil,
     // chargement synchrone des données lieu et évènements avant d'entrer dans la vue
     async beforeEnter(to, from) {
-      await Api.loadPlace()
-      await Api.loadEvents()
+      await loadPlace()
+      await loadEvents()
     }
   },
   {
@@ -34,7 +33,7 @@ const routes = [
     component: () => import(/* webpackChunkName: "Event" */ '../views/Event.vue'),
     // chargement synchrone des données lieu et évènements avant d'entrer dans la vue
     async beforeEnter(to, from) {
-      await Api.loadEventBySlug(to.params.slug)
+      await loadEventBySlug(to.params.slug)
     }
   },
   {
@@ -89,7 +88,7 @@ router.beforeEach((to, from, next) => {
     const token = to.params.token
     console.log('id =', id, '  --  token =', token)
     if (id !== undefined && token !== undefined) {
-      Api.emailActivation(id, token)
+      emailActivation(id, token)
     } else {
       emitter.emit('message', {
         tmp: 6,
@@ -110,7 +109,7 @@ router.beforeEach((to, from, next) => {
     const uuidStripe = to.params.id
     console.log('uuidStripe =', uuidStripe)
     if (uuidStripe !== undefined) {
-      Api.postStripeReturn(uuidStripe)
+      postStripeReturn(uuidStripe)
     } else {
       emitter.emit('message', {
         tmp: 6,

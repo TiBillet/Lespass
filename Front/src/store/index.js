@@ -6,7 +6,7 @@ export const useStore = defineStore('store', {
     language: 'fr',
     currentUuidEvent: '',
     memoComposants: {},
-    adhesion: null,
+    adhesion: false,
     /*
     user: {
       refreshToken: '',
@@ -29,12 +29,6 @@ export const useStore = defineStore('store', {
   }),
   persist: {
     key: 'Tibillet',
-    storage: window.sessionStorage,
-    beforeRestore: context => {
-      console.log('-> Before hydration...')
-    },
-    afterRestore: context => {
-      console.log('-> After hydration...')
-    }
+    storage: window.sessionStorage
   }
 })

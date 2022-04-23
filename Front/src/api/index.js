@@ -2,7 +2,7 @@
 import {useStore} from '@/store'
 
 // myStore
-import {StoreLocal} from '@/divers'
+import {storeLocalGet, storeLocalSet} from '@/storelocal'
 
 const domain = `${location.protocol}//${location.host}`
 
@@ -10,14 +10,17 @@ export async function loadPlace() {
   const store = useStore()
   const apiLieu = `/api/here/`
   try {
+    emitter.emit('statusLoading', true)
     const response = await fetch(domain + apiLieu)
     if (response.status !== 200) {
       throw new Error(`${response.status} - ${response.statusText}`)
     }
     const retour = await response.json()
     store.place = retour
+    // console.log('-> loadPlace retour =', retour)
+    emitter.emit('statusLoading', false)
   } catch (erreur) {
-    // console.log('Store, place, erreur:', erreur)
+    console.log('Store, place, erreur:', erreur)
     emitter.emit('message', {
       tmp: 4,
       typeMsg: 'danger',
@@ -62,14 +65,14 @@ export async function loadEventBySlug(slug) {
     const retour = await response.json()
     console.log('retour =', retour)
     // maj store events
-    // TODO: remplacer le code si_dessous par la fonction .find()
-    if (store.currentUuidEvent !== undefined) {
-      for (const key in store.events) {
-        if (store.events[key].uuid === store.currentUuidEvent) {
-          store.events[key] = retour
-          break
-        }
-      }
+    if (store.currentUuidEvent !== '' && store.currentUuidEvent !== undefined) {
+      // maj store events pour un store events déjà existant
+      let currentEvent = store.events.find(evt => evt.uuid === store.currentUuidEvent)
+      currentEvent = retour
+    } else {
+      // maj store events pour un store events vide []
+      store.events = []
+      store.events.push(retour)
     }
   } catch (erreur) {
     console.log('Store, event(slug), erreur:', erreur)
@@ -83,8 +86,6 @@ export async function loadEventBySlug(slug) {
 
 export async function emailActivation(id, token) {
   // console.log('-> emailActivation')
-  const storeLocal = StoreLocal.use('localStorage', 'Tibilet-identite')
-
   // attention pas de "/" à la fin de "api"
   const api = `/api/user/activate/${id}/${token}`
   try {
@@ -107,8 +108,7 @@ export async function emailActivation(id, token) {
       window.accessToken = retour.access
       console.log('->  adhsesion(getMe) ?')
       getMe(window.accessToken)
-      storeLocal.refreshToken = retour.refresh
-      emitter.emit('statusConnection', true)
+      storeLocalSet('refreshToken', retour.refresh)
     } else {
       throw new Error(`Erreur conrfirmation mail !`)
     }
@@ -138,7 +138,6 @@ export async function getMe(token) {
     // console.log('response =', response)
     if (response.status === 200) {
       const retour = await response.json()
-      // console.log('retour =', JSON.stringify(retour, null, 2))
       emitter.emit('statusAdhesion', retour)
     } else {
       throw new Error(`Erreur ${apiMe} !`)
@@ -253,6 +252,7 @@ export function postAdhesionModal(data) {
   }
 
   console.log('options =', JSON.stringify(options, null, 2))
+  emitter.emit('statusLoading', true)
   fetch(domain + apiMemberShip, options).then(response => {
     console.log('response =', response)
     if (response.status !== 201) {

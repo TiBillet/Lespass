@@ -98,33 +98,76 @@
 </template>
 
 <script setup>
+console.log('-> ModalAdhesion.vue !')
 // vue
+import {ref, onMounted} from 'vue'
 import {useRouter} from 'vue-router'
 
+// store
+import {useStore} from '@/store'
+
 // myStore
-import {StoreLocal} from '@/divers'
+import {storeLocalGet, storeLocalSet} from '@/storelocal'
 
 // api
 import {postAdhesionModal} from '@/api'
 
-const storeLocal = StoreLocal.use('localStorage', 'Tibilet-identite')
+const store = useStore()
+
+// init store local
+// const storeLocal = new StoreLocal()
+
 const router = useRouter()
 
-// attributs/props
-const props = defineProps({
-  prices: Object
-})
+let prices = ref([])
+
+// get prices
+try {
+  emitter.emit('statusLoading', true)
+  const apiLieu = `/api/here/`
+  const domain = `${location.protocol}//${location.host}`
+  fetch(domain + apiLieu).then((response) => {
+    if (response.status !== 200) {
+      throw new Error(`${response.status} - ${response.statusText}`)
+    }
+    return response.json()
+  }).then((retour) => {
+    store.place = retour
+    prices.value = store.place.membership_products.filter(article => article.categorie_article === 'A')[0].prices
+    console.log('prices.value =', prices.value)
+  })
+  emitter.emit('statusLoading', false)
+} catch (erreur) {
+  // console.log('Store, place, erreur:', erreur)
+  emitter.emit('message', {
+    tmp: 4,
+    typeMsg: 'danger',
+    contenu: `Chargement lieu, erreur: ${erreur}`
+  })
+}
+
 
 // console.log('props.prices = ', props.prices)
 
-let adhesionFormModal = {
-  email: storeLocal.email,
+let adhesionFormModal = ref({
+  email: storeLocalGet('email'),
   firstName: '',
   lastName: '',
   phone: '',
   postalCode: '',
   uuidPrix: ''
-}
+})
+
+/*
+// document.querySelector trouvera un élément seulement si celui-ci est dans le dom(mounted)
+onMounted(() => {
+  // maj email
+  document.querySelector('#modal-form-adhesion').addEventListener('show.bs.modal', function (event) {
+    console.log(new Date().toLocaleString(),'-> modal adhesion visible, storeLocal.email =', storeLocalGet('email'))
+    adhesionFormModal.value.email =
+  })
+})
+*/
 
 function goStatus() {
   // ferme le modal
@@ -174,6 +217,15 @@ function validerAdhesion(event) {
     }
   }
 }
+
+emitter.on('emailChange', (value) => {
+  try {
+    adhesionFormModal.value.email = value
+  } catch (erreur) {
+    console.log('-> ModalAdhesion.vue, erreur:', erreur)
+  }
+})
+
 </script>
 
 <style scoped>
