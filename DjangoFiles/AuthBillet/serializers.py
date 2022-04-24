@@ -118,13 +118,15 @@ class CreateTerminalValidator(serializers.Serializer):
 
         part_email = list(self.user_parent.email.partition('@'))
         part_email[0] = f"{part_email[0]}+{attrs.get('unique_id')}"
-        email = "".join(part_email)
+        email = "".join(part_email).lower()
 
+        logger.info(f'email : {email}, {self.user_parent.pk}')
 
-        term_user, created = TermUser.objects.get_or_create(
+        term_user, created = TibilletUser.objects.get_or_create(
             email=email,
             username=email,
-            user_parent_pk=self.user_parent.pk
+            user_parent_pk=self.user_parent.pk,
+            espece=TibilletUser.TYPE_TERM
         )
 
         if created:
@@ -139,9 +141,12 @@ class CreateTerminalValidator(serializers.Serializer):
         # for tenant in self.user_parent.client_admin.all():
         #     term_user.client_admin.add(tenant)
 
+        term_user.is_active = False
         term_user.save()
+
         self.term_user = term_user
         task = terminal_pairing_celery_mailer.delay(term_user.email)
+
         return validation_data
 
     def to_representation(self, instance):

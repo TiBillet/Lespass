@@ -41,7 +41,7 @@ staff_admin_site = StaffAdminSite(name='staff_admin')
 # -------------------------------------/
 class UserAdminTibillet(UserAdmin):
     # list_display = ('email', 'client_source', 'achat')
-    list_display = ('email', 'is_active')
+    list_display = ('email', 'is_active', 'last_see')
     list_filter = ('email', 'is_active',)
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
@@ -56,7 +56,7 @@ class UserAdminTibillet(UserAdmin):
     )
 
     search_fields = ('email',)
-    ordering = ('email',)
+    ordering = ('-last_see',)
 
     def save_model(self, request, obj, form, change):
         if not obj.client_source:
