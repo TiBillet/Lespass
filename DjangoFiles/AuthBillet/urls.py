@@ -3,7 +3,7 @@ from django.urls import include, path, re_path
 from AuthBillet import views as auth_view
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView, TokenVerifyView
 
-from AuthBillet.views import create_user, create_terminal_user
+from AuthBillet.views import create_user, create_terminal_user, TokenRefreshViewCustom
 from rest_framework import routers
 
 router = routers.DefaultRouter()
@@ -14,8 +14,7 @@ urlpatterns = [
 
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
 
-    # TODO: Verifier l'user human / term dans le refresh
-    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('token/refresh/', TokenRefreshViewCustom.as_view(), name='token_refresh'),
     
     path('token/verify/', TokenVerifyView.as_view(), name='token_verify'),
     path('create/', create_user.as_view(), name='create_user'),

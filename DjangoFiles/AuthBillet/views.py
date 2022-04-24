@@ -10,11 +10,15 @@ from django.shortcuts import render
 # Create your views here.
 from rest_framework import status, permissions, viewsets, serializers
 from rest_framework.decorators import permission_classes
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.db import connection
 from django.utils.translation import ugettext_lazy as _
+from rest_framework_simplejwt.backends import TokenBackend
+from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
+from rest_framework_simplejwt.views import TokenViewBase, TokenRefreshView
 
 from ApiBillet.views import request_for_data_cashless
 from AuthBillet.models import TibilletUser, TenantAdminPermission, TermUser
@@ -61,6 +65,46 @@ class TokenCreateView_custom(TokenCreateView):
                 data=data_response, status=status.HTTP_200_OK
             )
 '''
+
+
+class TokenRefreshViewCustom(TokenRefreshView):
+
+
+        '''
+        Surclassage de la fonction Refresh
+        On s'assure ici que le refresh token d'un terminal provient 
+        bien de lui avec sa mac_adress
+
+        token = serializer.validated_data.get('access')
+        # verify = False car déja vérifié plus haut.
+        valid_data = TokenBackend(algorithm='HS256').decode(token=token, verify=False)
+        # import ipdb; ipdb.set_trace()
+        user = TibilletUser.objects.get(pk=valid_data['user_id'])
+        if user.espece == TibilletUser.TYPE_TERM:
+            try:
+                assert user.mac_adress_sended == request.data.get('mac_adress')
+            except:
+                raise AuthenticationFailed(
+                    "not valid",
+                )
+
+        return Response(serializer.validated_data, status=status.HTTP_200_OK)
+        '''
+
+        def post(self, request, *args, **kwargs):
+            serializer = self.get_serializer(data=request.data)
+            valid_data = serializer.token_class(self.request.data.get('refresh'))
+            user = TibilletUser.objects.get(pk=valid_data['user_id'])
+            if user.espece == TibilletUser.TYPE_TERM:
+                try:
+                    assert user.mac_adress_sended == request.data.get('mac_adress')
+                    assert user.terminal_uuid == request.data.get('unique_id')
+                except AssertionError as e :
+                    raise AuthenticationFailed(
+                        f"AssertionError",
+                    )
+
+            return super().post(request, *args, **kwargs)
 
 
 class activate(APIView):
