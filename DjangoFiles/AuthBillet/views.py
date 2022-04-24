@@ -71,6 +71,7 @@ class TokenRefreshViewCustom(TokenRefreshView):
 
 
         def post(self, request, *args, **kwargs):
+            super_return = super().post(request, *args, **kwargs)
             '''
             Surclassage de la fonction Refresh
             On s'assure ici que le refresh token d'un terminal provient
@@ -78,18 +79,19 @@ class TokenRefreshViewCustom(TokenRefreshView):
 
             '''
             serializer = self.get_serializer(data=request.data)
-            valid_data = serializer.token_class(self.request.data.get('refresh'))
-            user = TibilletUser.objects.get(pk=valid_data['user_id'])
+            refresh = serializer.token_class(self.request.data.get('refresh'))
+            user = TibilletUser.objects.get(pk=refresh['user_id'])
             if user.espece == TibilletUser.TYPE_TERM:
                 try:
                     assert user.mac_adress_sended == request.data.get('mac_adress')
                     assert user.terminal_uuid == request.data.get('unique_id')
                 except AssertionError as e :
+                    refresh.blacklist()
                     raise AuthenticationFailed(
                         f"AssertionError",
                     )
 
-            return super().post(request, *args, **kwargs)
+            return super_return
 
 
 class activate(APIView):
