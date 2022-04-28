@@ -82,6 +82,8 @@ RUN pip install django-cors-headers
 RUN python -m pip install -U channels
 RUN python -m pip install -U channels_redis
 
+RUN pip install mailjet_rest
+
 RUN apt-get -y clean
 
 RUN python --version

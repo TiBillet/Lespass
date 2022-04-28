@@ -39,7 +39,6 @@ Open [Front Cashless.excalidraw](https://github.com/TiBillet/TiBillet/blob/main/
 on https://excalidraw.com/
 
 ![](Presentation/Design_Front_Cashless_APP.svg)
-
 ### Billetterie démo ( nighty build ) :
 
 https://m.tibillet.fr
@@ -176,3 +175,8 @@ https://webassets.mongodb.com/_com_assets/legal/SSPL-compared-to-AGPL.pdf
 
 [AUTHORS.md](https://github.com/TiBillet/TiBillet/blob/main/AUTHORS.md)
 
+# Sponsors
+
+- JetBrain ; Many thanks to us !
+https://jb.gg/OpenSourceSupport
+![](https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.svg)

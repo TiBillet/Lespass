@@ -12,6 +12,9 @@ TiBillet was an original idéa from GDNA and designed and developed by 3Peaks, M
 - Flavien BRANCHEREAU ( Old Symphony projet - Frontend - GDNA )
 
 # Many Thanks to  :
+- JetBrain ; Many thanks to us !
+https://jb.gg/OpenSourceSupport
+![](https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.svg)
 
 - The PRMA ( Pôle régional des musiques actuelles de la Réunion )
   - Laurent BOURMAULT

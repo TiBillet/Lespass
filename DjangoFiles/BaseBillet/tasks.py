@@ -23,6 +23,9 @@ from django.utils import timezone
 from AuthBillet.models import TibilletUser, TerminalPairingToken
 from BaseBillet.models import Reservation, Ticket, Configuration
 from TiBillet.celery import app
+
+from mailjet_rest import Client
+
 import logging
 
 from TiBillet.settings import DEBUG
@@ -112,6 +115,73 @@ class CeleryMailerClass():
         else:
             logger.error(f'Pas de contenu HTML ou de configuration email valide')
             raise ValueError('Pas de contenu HTML ou de configuration email valide')
+
+
+class MailJetSendator():
+    def __init__(self,
+                 email: str,
+                 template: None,
+                 context=None,
+                 attached_files=None,
+                 ):
+
+        self.template = template
+        self.email = email
+
+        self.context = context
+        self.attached_files = attached_files
+        self.sended = None
+
+    def config_valid(self):
+        api_key = os.environ['MAILJET_APIKEY']
+        api_secret = os.environ['MAILJET_SECRET']
+
+        # Try except un peu degueulasse causé par l'envoie de task
+        # depuis le tenant public pour l'envoi du mail d'appairage
+        try:
+            self.return_email = Configuration.get_solo().email
+            assert self.return_email
+        except Exception as e:
+            logger.info(f'  WORKDER CELERY : self.return_email {e}')
+            self.return_email = "contact@tibillet.re"
+
+        if all([api_key,
+                api_secret,
+                self.template,
+                self.email,
+                ]):
+
+            self.mailjet = Client(auth=(api_key, api_secret), version='v3.1')
+            return True
+        else:
+            return False
+
+    def send(self):
+        if self.config_valid():
+
+            data = {
+                'Messages': [
+                    {
+                        "From": {
+                            "Email": "contact@tibillet.re",
+                            "Name": "TiBillet.re"
+                        },
+                        "To": [
+                            {
+                                "Email": f"{self.email}",
+                                "Name": f"{self.email}"
+                            }
+                        ],
+                        "TemplateID": self.template,
+                        "TemplateLanguage": True,
+                        "Subject": "{{var:place:""}} : Confirmez votre e-mail",
+                        "Variables": self.context
+                    }
+                ]
+            }
+            result = self.mailjet.send.create(data=data)
+            logger.info(result.status_code)
+            logger.info(result.json())
 
 
 def create_ticket_pdf(ticket: Ticket):
@@ -218,34 +288,58 @@ def connexion_celery_mailer(user_email, base_url, subject=None):
     token = default_token_generator.make_token(user)
     connexion_url = f"{base_url}/emailconfirmation/{uid}/{token}"
 
-    if subject is None:
-        subject = f"{config.organisation} : Confirmez votre email et connectez vous !"
+    # Moteur MailSend
+    if config.activate_mailjet:
+        context = {
+            "confirmation_link": f"{connexion_url}",
+            "place": f"{config.organisation}"
+        }
+        template = config.email_confirm_template
 
-    try:
-        mail = CeleryMailerClass(
-            user.email,
-            subject,
-            template='mails/connexion.html',
-            context={
-                'config': config,
-                'connexion_url': connexion_url,
-                'base_url': base_url,
-            },
+        mail = MailJetSendator(
+            email=user.email,
+            template=template,
+            context=context
         )
         try:
             mail.send()
             logger.info(f"mail.sended : {mail.sended}")
 
-        except smtplib.SMTPRecipientsRefused as e:
-            logger.error(f"ERROR {timezone.now()} Erreur envoie de mail pour connexion {user.email} : {e}")
-            logger.error(f"mail.sended : {mail.sended}")
-            user.is_active = False
-            user.email_error = True
-            user.save()
+        except Exception as e:
+            logger.error(f"{timezone.now()} Erreur envoie de mail pour connexion {user.email} : {e}")
+            raise Exception
 
-    except Exception as e:
-        logger.error(f"{timezone.now()} Erreur envoie de mail pour connexion {user.email} : {e}")
-        raise Exception
+
+    # Internal SMTP and html template
+    else:
+        if subject is None:
+            subject = f"{config.organisation} : Confirmez votre email et connectez vous !"
+
+        try:
+            mail = CeleryMailerClass(
+                user.email,
+                subject,
+                template='mails/connexion.html',
+                context={
+                    'config': config,
+                    'connexion_url': connexion_url,
+                    'base_url': base_url,
+                },
+            )
+            try:
+                mail.send()
+                logger.info(f"mail.sended : {mail.sended}")
+
+            except smtplib.SMTPRecipientsRefused as e:
+                logger.error(f"ERROR {timezone.now()} Erreur envoie de mail pour connexion {user.email} : {e}")
+                logger.error(f"mail.sended : {mail.sended}")
+                user.is_active = False
+                user.email_error = True
+                user.save()
+
+        except Exception as e:
+            logger.error(f"{timezone.now()} Erreur envoie de mail pour connexion {user.email} : {e}")
+            raise Exception
 
 
 @app.task
