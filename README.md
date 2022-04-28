@@ -177,6 +177,8 @@ https://webassets.mongodb.com/_com_assets/legal/SSPL-compared-to-AGPL.pdf
 
 # Sponsors
 
-- JetBrain ; Many thanks to us !
+JetBrain ; Many thanks to us !
+
 https://jb.gg/OpenSourceSupport
+
 ![](https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.svg)
