@@ -45,13 +45,13 @@ https://m.tibillet.fr
 
 ### Cashless démo ( nighty build ) :
 
-https://demo.tibillet.re
+https://cashless.betabillet.tech/
 
 - login : adminou
 - password : miaoumiaou
 
 Une fois sur la page d'administration, aller sur "Voir le site" pour découvrir l'interface cashless. Ou aller sur :
-https://demo.tibillet.re/wv/
+https://cashless.betabillet.tech/wv/
 
 ## Introduction.
 

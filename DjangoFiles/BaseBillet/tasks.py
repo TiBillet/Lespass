@@ -299,7 +299,7 @@ def connexion_celery_mailer(user_email, base_url, subject=None):
         mail = MailJetSendator(
             email=user.email,
             template=template,
-            context=context
+            context={}
         )
         try:
             mail.send()

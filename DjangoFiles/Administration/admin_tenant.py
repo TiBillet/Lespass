@@ -157,6 +157,12 @@ class ConfigurationAdmin(SingletonModelAdmin):
                 'key_cashless',
             ),
         }),
+        ('Mailing', {
+            'fields': (
+                'activate_mailjet',
+                'email_confirm_template',
+            ),
+        }),
     )
 
 
