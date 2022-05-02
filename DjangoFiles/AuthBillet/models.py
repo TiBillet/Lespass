@@ -149,14 +149,14 @@ class TibilletUser(AbstractUser):
                                           related_name="user_admin", blank=True)
 
 
-    is_active = models.BooleanField(
-        _('active'),
-        default=False,
-        help_text=_(
-            'Designates whether this user should be treated as active. '
-            'Unselect this instead of deleting accounts.'
-        ),
-    )
+    # is_active = models.BooleanField(
+    #     _('active'),
+    #     default=False,
+    #     help_text=_(
+    #         'Designates whether this user should be treated as active. '
+    #         'Unselect this instead of deleting accounts.'
+    #     ),
+    # )
 
     ##### Pour les user terminaux ####
 

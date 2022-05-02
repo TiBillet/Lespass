@@ -1,5 +1,5 @@
 import requests
-# from django.db import connection
+from django.db import connection
 from django.db.models import Q
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
@@ -189,16 +189,17 @@ def error_in_mail(old_instance: Reservation, new_instance: Reservation):
 
 def activator_free_reservation(old_instance: TibilletUser, new_instance: TibilletUser):
     logger.info(f"activator_free_reservation : {new_instance}")
-    free_reservation = Reservation.objects.filter(
-        user_commande=new_instance,
-        to_mail=True,
-        status=Reservation.FREERES
-    )
+    if connection.tenant.schema_name != "public" :
+        free_reservation = Reservation.objects.filter(
+            user_commande=new_instance,
+            to_mail=True,
+            status=Reservation.FREERES
+        )
 
-    for resa in free_reservation:
-        print(f"    {resa}")
-        resa.status = Reservation.FREERES_USERACTIV
-        resa.save()
+        for resa in free_reservation:
+            print(f"    {resa}")
+            resa.status = Reservation.FREERES_USERACTIV
+            resa.save()
 
 ######################## MOTEUR TRIGGER ########################
 
