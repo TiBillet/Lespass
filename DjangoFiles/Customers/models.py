@@ -13,7 +13,7 @@ class Client(TenantMixin):
     on_trial = models.BooleanField(default=True)
     created_on = models.DateField(auto_now_add=True)
 
-    ARTISTE, SALLE_SPECTACLE, FESTIVAL, TOURNEUR, PRODUCTEUR, META = 'A', 'S', 'F', 'T', 'P', 'M'
+    ARTISTE, SALLE_SPECTACLE, FESTIVAL, TOURNEUR, PRODUCTEUR, META, ROOT = 'A', 'S', 'F', 'T', 'P', 'M', 'R'
     CATEGORIE_CHOICES = [
         (ARTISTE, _('Artiste')),
         (SALLE_SPECTACLE, _("Lieu de spectacle vivant")),
@@ -21,6 +21,7 @@ class Client(TenantMixin):
         (TOURNEUR, _('Tourneur')),
         (PRODUCTEUR, _('Producteur')),
         (META, _('Agenda culturel')),
+        (ROOT, _('Tenant public root')),
     ]
 
     categorie = models.CharField(max_length=3, choices=CATEGORIE_CHOICES, default=SALLE_SPECTACLE,

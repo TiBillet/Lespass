@@ -31,6 +31,7 @@ urlpatterns = [
     path('api/webhook_stripe/', Webhook_stripe.as_view()),
     re_path(r'^api/user/terminal/(?P<token>[0-9]{6})/$', validate_token_terminal.as_view(), name='validate_token_terminal'),
     path('api/user/terminal/', create_terminal_user.as_view(), name='create_terminal_user'),
+    re_path(r'api/user/', include('AuthBillet.urls')),
 
     path('', include('MetaBillet.urls')),
     # path('admin/', admin.site.urls, name="public_admin_url"),

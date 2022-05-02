@@ -13,7 +13,9 @@ DEBUG_DJANGO=True
 TIME_ZONE='Indian/Reunion'
 
 API_TIBILLET_BILLETERIE_VERS_CASHLESS="CHANGE_ME_OR_DANSE"
+
 DOMAIN='django-local.org'
+META='run'
 PUBLIC='TiBillet Coop.'
 EMAIL='change@me.org'
 

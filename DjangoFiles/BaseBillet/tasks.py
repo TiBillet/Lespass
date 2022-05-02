@@ -10,6 +10,7 @@ import segno
 import barcode
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
+from django.db import connection
 
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
@@ -22,9 +23,10 @@ from django.utils import timezone
 
 from AuthBillet.models import TibilletUser, TerminalPairingToken
 from BaseBillet.models import Reservation, Ticket, Configuration
+from Customers.models import Client
 from TiBillet.celery import app
 
-from mailjet_rest import Client
+# from mailjet_rest import Client
 
 import logging
 
@@ -107,9 +109,9 @@ class CeleryMailerClass():
 
             if mail_return == 1:
                 self.sended = True
-                logger.info(f'      WORKDER CELERY mail envoyé : {mail_return} - {self.email}')
+                logger.info(f'      WORKER CELERY mail envoyé : {mail_return} - {self.email}')
             else:
-                logger.error(f'     WORKDER CELERY mail non envoyé : {mail_return} - {self.email}')
+                logger.error(f'     WORKER CELERY mail non envoyé : {mail_return} - {self.email}')
 
             return mail_return
         else:
@@ -280,7 +282,8 @@ def connexion_celery_mailer(user_email, base_url, subject=None):
 
     """
     logger.info(f'WORKDER CELERY app.task connexion_celery_mailer : {user_email}')
-    config = Configuration.get_solo()
+
+
     User = get_user_model()
     user = User.objects.get(email=user_email)
 
@@ -288,6 +291,19 @@ def connexion_celery_mailer(user_email, base_url, subject=None):
     token = default_token_generator.make_token(user)
     connexion_url = f"{base_url}/emailconfirmation/{uid}/{token}"
 
+
+    if connection.tenant.schema_name != "public":
+        config = Configuration.get_solo()
+        organisation = config.organisation
+        img_orga = config.img.med
+    else :
+        organisation = "TiBillet"
+        img_orga = "Logo_Tibillet_Noir_Ombre_600px.png"
+        meta = Client.objects.filter(categorie=Client.META).first()
+        meta_domain = f"https://{meta.get_primary_domain().domain}"
+        connexion_url = f"{meta_domain}/emailconfirmation/{uid}/{token}"
+
+    '''
     # Moteur MailSend
     if config.activate_mailjet:
         context = {
@@ -308,38 +324,41 @@ def connexion_celery_mailer(user_email, base_url, subject=None):
         except Exception as e:
             logger.error(f"{timezone.now()} Erreur envoie de mail pour connexion {user.email} : {e}")
             raise Exception
+    
+    else:
+    '''
 
 
     # Internal SMTP and html template
-    else:
-        if subject is None:
-            subject = f"{config.organisation} : Confirmez votre email et connectez vous !"
+    if subject is None:
+        subject = f"{organisation} : Confirmez votre email et connectez vous !"
 
+    try:
+        mail = CeleryMailerClass(
+            user.email,
+            subject,
+            template='mails/connexion.html',
+            context={
+                'organisation': organisation,
+                'url_image': img_orga,
+                'connexion_url': connexion_url,
+                'base_url': base_url,
+            },
+        )
         try:
-            mail = CeleryMailerClass(
-                user.email,
-                subject,
-                template='mails/connexion.html',
-                context={
-                    'config': config,
-                    'connexion_url': connexion_url,
-                    'base_url': base_url,
-                },
-            )
-            try:
-                mail.send()
-                logger.info(f"mail.sended : {mail.sended}")
+            mail.send()
+            logger.info(f"mail.sended : {mail.sended}")
 
-            except smtplib.SMTPRecipientsRefused as e:
-                logger.error(f"ERROR {timezone.now()} Erreur envoie de mail pour connexion {user.email} : {e}")
-                logger.error(f"mail.sended : {mail.sended}")
-                user.is_active = False
-                user.email_error = True
-                user.save()
+        except smtplib.SMTPRecipientsRefused as e:
+            logger.error(f"ERROR {timezone.now()} Erreur envoie de mail pour connexion {user.email} : {e}")
+            logger.error(f"mail.sended : {mail.sended}")
+            user.is_active = False
+            user.email_error = True
+            user.save()
 
-        except Exception as e:
-            logger.error(f"{timezone.now()} Erreur envoie de mail pour connexion {user.email} : {e}")
-            raise Exception
+    except Exception as e:
+        logger.error(f"{timezone.now()} Erreur envoie de mail pour connexion {user.email} : {e}")
+        raise Exception
 
 
 @app.task
