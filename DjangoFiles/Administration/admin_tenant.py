@@ -135,9 +135,8 @@ class ConfigurationAdmin(SingletonModelAdmin):
         }),
         ('Paiements', {
             'fields': (
-                'mollie_api_key',
-                'stripe_api_key',
-                'stripe_test_api_key',
+                # 'stripe_api_key',
+                # 'stripe_test_api_key',
                 'stripe_mode_test',
             ),
         }),
