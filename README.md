@@ -86,14 +86,14 @@ Venez discuter avec nous :
 
 ### For Production :
 
-Soon ! 
+Soon !
 
 ### To help us in the development :
 
 1. Go talk to us in discord :)
-2. accept the code of conduct.
-3. Download the assets sources.
-4. follow lines below :
+2. Accept the code of conduct.
+3. Download the assets sources and clone this repo.
+4. Follow lines below :
 
 #### Dependency
 
