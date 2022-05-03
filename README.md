@@ -84,7 +84,18 @@ Venez discuter avec nous :
 
 ## Install :
 
-### Dependency
+### For Production :
+
+Soon ! 
+
+### To help us in the development :
+
+1. Go talk to us in discord :)
+2. accept the code of conduct.
+3. Download the assets sources.
+4. follow lines below :
+
+#### Dependency
 
 - Traefik. Example here :
   https://github.com/TiBillet/Traefik-reverse-proxy
@@ -103,7 +114,7 @@ docker-compose build
 docker-compose up
 ```
 
-## First time launch
+#### First time launch
 
 ```shell
 
@@ -127,7 +138,7 @@ docker exec -ti billetterie_django bash
   
 ```
 
-## POP demo data, for dev' or just take a look :)
+#### POP demo data :)
 
 If you want to use the demonstration data, add this to your /etc/hosts :
 ```
