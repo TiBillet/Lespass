@@ -13,9 +13,8 @@
         <div class="row">
           <div class="col-lg-8 mx-auto text-white text-center">
             <h2 class="text-white">{{ headerEvent.titre }}</h2>
-            <p v-if="headerEvent.longDescription === null && headerEvent.shortDescription !== null" class="lead">
+            <p v-if="headerEvent.shortDescription !== null" class="lead">
               {{ headerEvent.shortDescription }}</p>
-            <p v-if="headerEvent.longDescription !== null" class="lead">{{ headerEvent.longDescription }}</p>
           </div>
         </div>
       </div>

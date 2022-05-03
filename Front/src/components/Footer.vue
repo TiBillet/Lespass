@@ -42,18 +42,18 @@
         </div>
         <div class="col-md-2 col-sm-6 col-6 mb-4">
           <div>
-            <h6 class="font-weight-bolder text-sm">Company</h6>
+            <h6 class="font-weight-bolder text-sm">Coopérative</h6>
             <ul class="flex-column ms-n3 nav">
               <li class="nav-item">
-                <a class="nav-link" href="https://www.tibillet.re" target="_blank">
-                  About Us
+                <a class="nav-link" href="https://wiki.tibillet.re" target="_blank">
+                  A Propos
                 </a>
               </li>
-<!--              <li class="nav-item">-->
-<!--                <a class="nav-link" href="https://www.creative-tim.com/templates/free" target="_blank">-->
-<!--                  Freebies-->
-<!--                </a>-->
-<!--              </li>-->
+              <li class="nav-item">
+                <a class="nav-link" href="https://www.creative-tim.com/templates/free" target="_blank">
+                  https://www.les-scic.coop/
+                </a>
+              </li>
 <!--              <li class="nav-item">-->
 <!--                <a class="nav-link" href="https://www.creative-tim.com/templates/premium" target="_blank">-->
 <!--                  Premium Tools-->
@@ -69,43 +69,43 @@
         </div>
         <div class="col-md-2 col-sm-6 col-6 mb-4">
           <div>
-            <h6 class="font-weight-bolder text-sm">Resources</h6>
+            <h6 class="font-weight-bolder text-sm">Resources & Sponsors</h6>
             <ul class="flex-column ms-n3 nav">
               <li class="nav-item">
                 <a class="nav-link" href="https://www.creative-tim.com/" target="_blank">
-                  Design
+                  Design source
                 </a>
               </li>
               <li class="nav-item">
-                <a class="nav-link" href="https://www.creative-tim.com/bits" target="_blank">
-                  Bits &amp; Snippets
+                <a class="nav-link" href="https://jb.gg/OpenSourceSupport" target="_blank">
+                  JetBrain IDE
                 </a>
               </li>
-<!--              <li class="nav-item">-->
-<!--                <a class="nav-link" href="https://www.creative-tim.com/affiliates/new" target="_blank">-->
-<!--                  Affiliate Program-->
-<!--                </a>-->
-<!--              </li>-->
+              <li class="nav-item">
+                <a class="nav-link" href="https://www.communecter.org/#" target="_blank">
+                  Communecter
+                </a>
+              </li>
             </ul>
           </div>
         </div>
         <div class="col-md-2 col-sm-6 col-6 mb-4">
           <div>
-            <h6 class="font-weight-bolder text-sm">Help &amp; Support</h6>
+            <h6 class="font-weight-bolder text-sm">Aide &amp; Support</h6>
             <ul class="flex-column ms-n3 nav">
               <li class="nav-item">
                 <a class="nav-link" href="mailto:contact@tibillet.re" target="_blank">
-                  Contact Us
+                  Nous contacter
                 </a>
               </li>
               <li class="nav-item">
                 <a class="nav-link" href="https://github.com/TiBillet/TiBillet" target="_blank">
-                  Knowledge Center
+                  Dépot Github
                 </a>
               </li>
               <li class="nav-item">
-                <a class="nav-link" href="https://www.tibillet.re" target="_blank">
-                  Custom Development
+                <a class="nav-link" href="mailto:contact@tibillet.re" target="_blank">
+                  Développement spécialisé
                 </a>
               </li>
 <!--              <li class="nav-item">-->
@@ -122,12 +122,12 @@
             <ul class="flex-column ms-n3 nav">
               <li class="nav-item">
                 <a class="nav-link" href="https://github.com/TiBillet/TiBillet/blob/main/code_of_conduct-FR.md" target="_blank">
-                  Terms &amp; Conditions
+                  CGU/CGV
                 </a>
               </li>
               <li class="nav-item">
                 <a class="nav-link" href="https://github.com/TiBillet/TiBillet/blob/main/code_of_conduct-FR.md" target="_blank">
-                  Privacy Policy
+                  Code de conduite
                 </a>
               </li>
               <li class="nav-item">
@@ -141,7 +141,7 @@
         <div class="col-12">
           <div class="text-center">
             <p class="my-4 text-sm">
-              All rights reserved. Copyleft © 2022 <a href="#" target="https://www.tibillet.re">Tibillet</a>.
+              Tout droits presque reservés : Copyleft 2022 <a href="#" target="https://www.tibillet.re">Tibillet</a>.
             </p>
           </div>
         </div>
