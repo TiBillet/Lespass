@@ -42,7 +42,9 @@ on https://excalidraw.com/
 
 ## Instances de démonstration
 
-TiBillet est en très activement en développement. Si les liens ci dessous ne sont pas valide, c'est que nous avons les mains dans le cambouis :) Revenez plus tard ou passez nous voir sur le discord ! 
+TiBillet bouge beaucoup en ce moment !
+Si les liens ci-dessous ne sont pas valide, c'est que nous avons les mains dans le cambouis :) 
+Revenez plus tard ou passez nous voir sur le discord ! 
 
 ### Billetterie démo ( nighty build ) :
 
