@@ -39,13 +39,18 @@ Open [Front Cashless.excalidraw](https://github.com/TiBillet/TiBillet/blob/main/
 on https://excalidraw.com/
 
 ![](Presentation/Design_Front_Cashless_APP.svg)
+
+## Instances de démonstration
+
+TiBillet est en très activement en développement. Si les liens ci dessous ne sont pas valide, c'est que nous avons les mains dans le cambouis :) Revenez plus tard ou passez nous voir sur le discord ! 
+
 ### Billetterie démo ( nighty build ) :
 
-https://m.tibillet.fr
+https://run.tibillet.org
 
 ### Cashless démo ( nighty build ) :
 
-https://cashless.betabillet.tech/
+https://cashless.run.tibillet.org/
 
 - login : adminou
 - password : miaoumiaou
