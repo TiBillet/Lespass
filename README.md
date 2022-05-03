@@ -58,7 +58,7 @@ https://demo.cashless.tibillet.org
 - password : miaoumiaou
 
 Une fois sur la page d'administration, aller sur "Voir le site" pour découvrir l'interface cashless. Ou aller sur :
-https://cashless.betabillet.tech/wv/
+https://cashless.run.tibillet.org/wv/
 
 ## Introduction.
 
