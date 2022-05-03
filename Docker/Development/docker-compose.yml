@@ -106,7 +106,7 @@ services:
       - traefik.enable=true
       - traefik.docker.network=frontend
       - traefik.http.routers.billetterie_nginx_dev.tls.certresolver=myresolver
-      - traefik.http.routers.billetterie_nginx_dev.rule=HostRegexp(`{sub:[a-zA-Z0-9-]+}.${DOMAIN}`)
+      - traefik.http.routers.billetterie_nginx_dev.rule=HostRegexp(`{sub:[a-zA-Z0-9-]+}.${DOMAIN}`) || Host(`${DOMAIN}`)
     networks:
       - frontend
     volumes:

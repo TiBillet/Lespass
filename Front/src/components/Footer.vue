@@ -50,8 +50,8 @@
                 </a>
               </li>
               <li class="nav-item">
-                <a class="nav-link" href="https://www.creative-tim.com/templates/free" target="_blank">
-                  https://www.les-scic.coop/
+                <a class="nav-link" href="https://www.les-scic.coop/" target="_blank">
+                  Les SCIC
                 </a>
               </li>
 <!--              <li class="nav-item">-->
