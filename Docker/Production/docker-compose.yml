@@ -49,26 +49,26 @@ services:
       - backend-billeterie
 
 
-  billetterie_daphne_prod:
-    extends:
-      file: ../compose/docker-compose-base.yml
-      service: billetterie_celery
-    env_file: .env
-    container_name: billetterie_daphne
-    hostname: billetterie_daphne
-    depends_on:
-      - billetterie_django_prod
-      - billetterie_postgres_prod
-      - billetterie_redis_prod
-    links:
-      - billetterie_postgres_prod:billetterie_postgres
-      - billetterie_redis_prod:redis
-    ports:
-      - 7999:7999
-    networks:
-      - frontend
-      - backend-billeterie
-    command: "bash /DjangoFiles/launch_ws.sh"
+#  billetterie_daphne_prod:
+#    extends:
+#      file: ../compose/docker-compose-base.yml
+#      service: billetterie_celery
+#    env_file: .env
+#    container_name: billetterie_daphne
+#    hostname: billetterie_daphne
+#    depends_on:
+#      - billetterie_django_prod
+#      - billetterie_postgres_prod
+#      - billetterie_redis_prod
+#    links:
+#      - billetterie_postgres_prod:billetterie_postgres
+#      - billetterie_redis_prod:redis
+#    ports:
+#      - 7999:7999
+#    networks:
+#      - frontend
+#      - backend-billeterie
+#    command: "bash /DjangoFiles/launch_ws.sh"
 
 
   billetterie_nginx_prod:
