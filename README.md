@@ -52,7 +52,7 @@ https://run.tibillet.org
 
 ### Cashless démo ( nighty build ) :
 
-https://cashless.run.tibillet.org/
+https://demo.cashless.tibillet.org
 
 - login : adminou
 - password : miaoumiaou
