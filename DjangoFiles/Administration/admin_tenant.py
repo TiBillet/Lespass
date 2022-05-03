@@ -143,8 +143,8 @@ class ConfigurationAdmin(SingletonModelAdmin):
         ('Billetterie', {
             'fields': (
                 'activer_billetterie',
-                'template_billetterie',
-                'template_meta',
+                # 'template_billetterie',
+                # 'template_meta',
                 'jauge_max',
                 'option_generale_radio',
                 'option_generale_checkbox',
@@ -156,12 +156,12 @@ class ConfigurationAdmin(SingletonModelAdmin):
                 'key_cashless',
             ),
         }),
-        ('Mailing', {
-            'fields': (
-                'activate_mailjet',
-                'email_confirm_template',
-            ),
-        }),
+        # ('Mailing', {
+        #     'fields': (
+        #         'activate_mailjet',
+        #         'email_confirm_template',
+        #     ),
+        # }),
     )
 
 

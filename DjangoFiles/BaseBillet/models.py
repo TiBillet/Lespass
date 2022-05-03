@@ -117,7 +117,7 @@ class Configuration(SingletonModel):
                                      )
 
     img = StdImageField(upload_to='images/',
-                        validators=[MaxSizeValidator(1920, 1920), MinSizeValidator(720, 720)],
+                        validators=[MinSizeValidator(720, 720)],
                         blank=False, null=False,
                         variations={
                             'fhd': (1920, 1920),
