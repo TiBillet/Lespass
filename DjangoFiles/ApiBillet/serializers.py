@@ -213,7 +213,7 @@ class EventCreateSerializer(serializers.Serializer):
             try:
                 option = OptionGenerale.objects.get(pk=uuid)
                 self.options_radio.append(option)
-            except Product.DoesNotExist as e:
+            except OptionGenerale.DoesNotExist as e:
                 raise serializers.ValidationError(_(f'{uuid} Option non trouvé'))
         return self.options_radio
 
@@ -223,7 +223,7 @@ class EventCreateSerializer(serializers.Serializer):
             try:
                 option = OptionGenerale.objects.get(pk=uuid)
                 self.options_checkbox.append(option)
-            except Product.DoesNotExist as e:
+            except OptionGenerale.DoesNotExist as e:
                 raise serializers.ValidationError(_(f'{uuid} Option non trouvé'))
         return self.options_checkbox
 

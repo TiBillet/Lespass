@@ -86,7 +86,7 @@ services:
       - traefik.enable=true
       - traefik.docker.network=frontend
       - traefik.http.routers.billetterie_nginx_prod.tls.certresolver=letsencrypt
-      - traefik.http.routers.billetterie_nginx_prod.rule=HostRegexp(`{sub:[a-zA-Z0-9-]+}.${DOMAIN}`)
+      - traefik.http.routers.billetterie_nginx_prod.rule=HostRegexp(`{sub:[a-zA-Z0-9-]+}.${DOMAIN}`) || Host(`${DOMAIN}`)
       - traefik.http.routers.billetterie_nginx_prod.entrypoints=websecure
 
     networks:
