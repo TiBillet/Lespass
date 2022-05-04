@@ -39,6 +39,12 @@ class Command(BaseCommand):
         )
         tenant_meta.save()
 
+        domain_public, created = Domain.objects.get_or_create(
+            domain= f'm.{os.getenv("DOMAIN")}',
+            tenant = tenant_meta,
+            is_primary = False
+        )
+        domain_public.save()
 
         domain_public, created = Domain.objects.get_or_create(
             domain= f'{slugify(meta)}.{os.getenv("DOMAIN")}',

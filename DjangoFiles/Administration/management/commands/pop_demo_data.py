@@ -21,41 +21,13 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
 
 
-        # Création du tenant principal public
-        tenant_public, created = Client.objects.get_or_create(
-            schema_name='public',
-            name=os.environ.get('PUBLIC'),
-            on_trial=False,
-            categorie=Client.ROOT,
-        )
-        tenant_public.save()
+        # Tenant principal public
+        tenant_public = Client.objects.get(categorie=Client.ROOT).first()
+        domain_public = tenant_public.get_primary_domain()
 
-        domain_public, created = Domain.objects.get_or_create(
-            domain=f'{os.getenv("DOMAIN")}',
-            tenant=tenant_public,
-            is_primary=True
-        )
-        domain_public.save()
+        tenant_m = Client.objects.filter(categorie=Client.META).first()
+        domain_m = tenant_m.get_primary_domain()
 
-        tenant_m, created = Client.objects.get_or_create(
-            schema_name="m",
-            name="m",
-            on_trial=False,
-            categorie=Client.META,
-        )
-        tenant_m.save()
-
-        domain_m, created = Domain.objects.get_or_create(
-            domain=f'm.{os.getenv("DOMAIN")}',
-            tenant=tenant_m,
-            is_primary=True
-        )
-        domain_m.save()
-
-        # with schema_context('demo'):
-        #     call_command('flush')
-
-        # base_url = f"https://demo.{os.environ.get('DOMAIN')}"
         sub_domain = "m"
 
         protocol = "http://"
