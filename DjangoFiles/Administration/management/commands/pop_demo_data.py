@@ -26,7 +26,7 @@ class Command(BaseCommand):
             schema_name='public',
             name=os.environ.get('PUBLIC'),
             on_trial=False,
-            categorie=Client.META,
+            categorie=Client.ROOT,
         )
         tenant_public.save()
 
@@ -41,7 +41,7 @@ class Command(BaseCommand):
             schema_name="m",
             name="m",
             on_trial=False,
-            categorie=Client.SALLE_SPECTACLE,
+            categorie=Client.META,
         )
         tenant_m.save()
 
