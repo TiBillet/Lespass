@@ -15,7 +15,7 @@ de restauration, d'engagement associatif et d'achat de billets en ligne … mais
 C'est aussi un outil de mise en réseau et de gestion d'une carte cashless locale et commune à plusieurs lieux.
 
 L’idée de TiBillet est de se réapproprier des outils qui n’existent tout simplement pas en libre, et de les mutualiser
-pour en faire un réseau de musiciens, de lieux et pourquoi pas une monnaie locale dédiée à la culture.
+pour en faire un réseau de musiciens, de lieux et pourquoi pas une monnaie locale dédiée, à la culture, aux associations, aux tiers-lieux, etc...
 
 La richesse de TiBillet, c’est de chercher à créer des zones d’échange, de créer une économie circulaire, sociale et
 solidaire, décentralisée et non spéculative à l'échelle d'un territoire.
