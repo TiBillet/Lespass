@@ -72,7 +72,10 @@ class ProductViewSet(viewsets.ViewSet):
     def create(self, request):
         serializer = ProductSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            product = serializer.save()
+            if getattr(serializer, 'img_img', None):
+                product.img.save(serializer.img_name, serializer.img_img.fp)
+
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         for error in [serializer.errors[error][0] for error in serializer.errors]:
             if error.code == "unique":
@@ -86,6 +89,7 @@ class ProductViewSet(viewsets.ViewSet):
             permission_classes = [TenantAdminPermission]
         return [permission() for permission in permission_classes]
 
+'''
 
 class ArtistViewSet(viewsets.ViewSet):
 
@@ -130,7 +134,11 @@ class ArtistViewSet(viewsets.ViewSet):
 
                 user.client_admin.add(tenant)
 
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+                place_serialized = ConfigurationSerializer(Configuration.get_solo(), context={'request': request})
+                place_serialized_with_uuid = {'uuid': f"{tenant.uuid}"}
+                place_serialized_with_uuid.update(place_serialized.data)
+            return Response(place_serialized_with_uuid, status=status.HTTP_201_CREATED)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def update(self, request, pk=None):
@@ -178,26 +186,38 @@ class ArtistViewSet(viewsets.ViewSet):
             permission_classes = [TenantAdminPermission]
         return [permission() for permission in permission_classes]
 
+'''
 
-class PlacesViewSet(viewsets.ViewSet):
+class TenantViewSet(viewsets.ViewSet):
 
     def create(self, request):
         user: TibilletUser = request.user
+
         if not user.can_create_tenant:
             raise serializers.ValidationError(_("Vous n'avez pas la permission de créer de nouveaux lieux"))
         if not request.data.get('categorie'):
             raise serializers.ValidationError(_("categorie est obligatoire"))
-        if request.data.get('categorie') not in [Client.SALLE_SPECTACLE, ]:
+
+        categories = []
+        if 'place' in request.get_full_path():
+            categories = [Client.SALLE_SPECTACLE, Client.FESTIVAL]
+        if 'artist' in request.get_full_path():
+            categories = [Client.ARTISTE]
+
+        if request.data.get('categorie') not in categories:
             raise serializers.ValidationError(_("categorie doit être une salle de spectacle"))
 
         serializer = NewConfigSerializer(data=request.data, context={'request': request})
 
         if serializer.is_valid():
+
+
+
             futur_conf = serializer.validated_data
             with schema_context('public'):
                 try:
                     tenant, created = Client.objects.get_or_create(
-                        schema_name=slugify(futur_conf.get('organisation')),
+                        schema_name=futur_conf.get('slug'),
                         name=futur_conf.get('organisation'),
                         categorie=request.data.get('categorie'),
                     )
@@ -209,7 +229,7 @@ class PlacesViewSet(viewsets.ViewSet):
                             status=status.HTTP_409_CONFLICT)
 
                     domain, created = Domain.objects.get_or_create(
-                        domain=f"{slugify(futur_conf.get('organisation'))}.{os.getenv('DOMAIN')}",
+                        domain=f"{futur_conf.get('slug')}.{os.getenv('DOMAIN')}",
                         tenant=tenant,
                         is_primary=True
                     )
@@ -224,14 +244,26 @@ class PlacesViewSet(viewsets.ViewSet):
                 serializer.update(instance=conf, validated_data=futur_conf)
                 conf.stripe_api_key = os.environ.get('SRIPE_KEY')
                 conf.stripe_test_api_key = os.environ.get('SRIPE_KEY_TEST')
+
                 if os.environ.get('STRIPE_TEST') == "False":
                     conf.stripe_mode_test = False
                 if os.environ.get('STRIPE_TEST') == "True":
                     conf.stripe_mode_test = True
+
+                if getattr(serializer, 'img_img', None):
+                    conf.img.save(serializer.img_name, serializer.img_img.fp)
+                if getattr(serializer, 'logo_img', None):
+                    conf.logo.save(serializer.logo_name, serializer.logo_img.fp)
+
                 conf.save()
                 user.client_admin.add(tenant)
 
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+                place_serialized = ConfigurationSerializer(Configuration.get_solo(), context={'request': request})
+                place_serialized_with_uuid = {'uuid': f"{tenant.uuid}"}
+                place_serialized_with_uuid.update(place_serialized.data)
+            return Response(place_serialized_with_uuid, status=status.HTTP_201_CREATED)
+
+        logger.info(f"serializer.errors : {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def update(self, request, pk=None):
@@ -256,7 +288,14 @@ class PlacesViewSet(viewsets.ViewSet):
     def list(self, request):
         places_serialized_with_uuid = []
         configurations = []
-        for tenant in Client.objects.filter(categorie__in=['S', 'F']):
+        categories = []
+        if 'place' in request.get_full_path():
+            categories = [Client.SALLE_SPECTACLE, Client.FESTIVAL]
+        if 'artist' in request.get_full_path():
+            categories = [Client.ARTISTE]
+
+
+        for tenant in Client.objects.filter(categorie__in=categories):
             with tenant_context(tenant):
                 places_serialized_with_uuid.append({"uuid": f"{tenant.uuid}"})
                 configurations.append(Configuration.get_solo())

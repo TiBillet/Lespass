@@ -65,11 +65,7 @@ class Configuration(SingletonModel):
 
     organisation = models.CharField(db_index=True, max_length=50, verbose_name=_("Nom de l'organisation"))
 
-    def slug(self):
-        if self.organisation:
-            return slugify(f"{self.organisation}")
-        else:
-            return None
+    slug = models.SlugField(max_length=50)
 
     short_description = models.CharField(max_length=250, verbose_name=_("Description courte"))
     long_description = models.TextField(blank=True, null=True)
@@ -118,7 +114,7 @@ class Configuration(SingletonModel):
 
     img = StdImageField(upload_to='images/',
                         validators=[MinSizeValidator(720, 720)],
-                        blank=False, null=False,
+                        blank=True, null=True,
                         variations={
                             'fhd': (1920, 1920),
                             'hdr': (720, 720),
@@ -127,7 +123,7 @@ class Configuration(SingletonModel):
 
                         },
                         delete_orphans=True,
-                        verbose_name='Background'
+                        verbose_name='Background',
                         )
 
     TZ_REUNION, TZ_PARIS = "Indian/Reunion", "Europe/Paris"
@@ -155,7 +151,7 @@ class Configuration(SingletonModel):
 
     logo = StdImageField(upload_to='images/',
                          validators=[MaxSizeValidator(1920, 1920)],
-                         blank=False, null=False,
+                         blank=True, null=True,
                          variations={
                              'fhd': (1920, 1920),
                              'hdr': (720, 720),

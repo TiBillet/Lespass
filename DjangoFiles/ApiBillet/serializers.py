@@ -1,6 +1,7 @@
 import datetime
 
 import requests
+from PIL import Image
 from django.db import connection
 from io import BytesIO
 from django.core import files
@@ -26,6 +27,15 @@ from QrcodeCashless.models import CarteCashless
 
 logger = logging.getLogger(__name__)
 
+def get_img_from_url(url):
+    try:
+        res = requests.get(url, stream=True)
+        file_name = url.split('/')[-1]
+        file_img = Image.open(res.raw)
+    except Exception as e:
+        raise serializers.ValidationError(_(f"{url} doit contenir une url d'image valide : {e}"))
+    return file_name, file_img
+
 
 class ProductSerializer(serializers.ModelSerializer):
     class Meta:
@@ -44,6 +54,17 @@ class ProductSerializer(serializers.ModelSerializer):
             'prices',
         ]
 
+    def validate(self, attrs):
+        logger.info(f"validate : {attrs}")
+
+        # On cherche la source de l'image principale :
+        img_url = self.initial_data.get('img_url')
+        if not attrs.get('img') and not img_url:
+            raise serializers.ValidationError(_(f'img doit contenir un fichier, ou img_url doit contenir une url valide'))
+        if not attrs.get('img') and img_url:
+            self.img_name, self.img_img = get_img_from_url(img_url)
+
+        return super().validate(attrs)
 
 class PriceSerializer(serializers.ModelSerializer):
     product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
@@ -89,6 +110,7 @@ class ConfigurationSerializer(serializers.ModelSerializer):
             "carte_restaurant",
             "img_variations",
             "logo_variations",
+
         ]
         read_only_fields = fields
 
@@ -112,6 +134,7 @@ class ConfigurationSerializer(serializers.ModelSerializer):
 #     postal_code = serializers.IntegerField(required=True)
 #
 #     contribution_value = serializers.FloatField()
+
 
 
 class NewConfigSerializer(serializers.ModelSerializer):
@@ -138,7 +161,26 @@ class NewConfigSerializer(serializers.ModelSerializer):
             "img",
             "logo",
         ]
-        read_only_fields = ("slug",)
+
+    def validate(self, attrs):
+        logger.info(f"validate : {attrs}")
+
+        # On cherche la source de l'image principale :
+        img_url = self.initial_data.get('img_url')
+        if not attrs.get('img') and not img_url:
+            raise serializers.ValidationError(_(f'img doit contenir un fichier, ou img_url doit contenir une url valide'))
+        if not attrs.get('img') and img_url:
+            self.img_name, self.img_img = get_img_from_url(img_url)
+
+        # On cherche la source de l'image du logo :
+        logo_url = self.initial_data.get('logo_url')
+        if not attrs.get('logo') and not logo_url:
+            raise serializers.ValidationError(_(f'img doit contenir un fichier, ou logo_url doit contenir une url valide'))
+        if not attrs.get('logo') and logo_url:
+            self.logo_name, self.logo_img = get_img_from_url(logo_url)
+
+
+        return super().validate(attrs)
 
 
 class ArtistEventCreateSerializer(serializers.Serializer):
@@ -229,14 +271,7 @@ class EventCreateSerializer(serializers.Serializer):
 
     def validate_img_url(self, value):
         if value:
-            print(f"validate_img_url : {value}")
-            res = requests.get(value, stream = True)
-            fp = BytesIO()
-            fp.write(res.content)
-            self.file_name = value.split('/')[-1]
-            self.file_img = fp
-            # if res.status_code == 200:
-            #     self.img = res.raw
+            self.file_name, self.file_img = get_img_from_url(value)
         return value
 
     def validate(self, attrs):
@@ -263,8 +298,7 @@ class EventCreateSerializer(serializers.Serializer):
 
 
         if attrs.get('img_url'):
-            if type(self.file_img) == type(BytesIO()):
-                event.img.save(self.file_name, self.file_img)
+            event.img.save(self.file_name, self.file_img.fp)
 
         # import ipdb; ipdb.set_trace()
 

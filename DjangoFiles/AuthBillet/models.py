@@ -16,7 +16,7 @@ class TenantAdminPermission(permissions.BasePermission):
     message = 'No admin in tenant'
 
     def has_permission(self, request, view):
-        if request.user.is_authenticated :
+        if request.user.is_authenticated:
             return any([
                 all([
                     connection.tenant in request.user.client_admin.all(),
@@ -26,13 +26,15 @@ class TenantAdminPermission(permissions.BasePermission):
                 ]),
                 request.user.is_superuser
             ])
-        else :
+        else:
             return False
+
 
 class TerminalScanPermission(permissions.BasePermission):
     message = "Termnal must be validated by an admin"
+
     def has_permission(self, request, view):
-        if request.user.is_authenticated :
+        if request.user.is_authenticated:
             return any([
                 all([
                     connection.tenant in request.user.client_admin.all(),
@@ -42,8 +44,9 @@ class TerminalScanPermission(permissions.BasePermission):
                 ]),
                 request.user.is_superuser
             ])
-        else :
+        else:
             return False
+
 
 class TibilletManager(BaseUserManager):
     def _create_user(self, email, password, **extra_fields):
@@ -64,6 +67,7 @@ class TibilletManager(BaseUserManager):
         return user
 
     def create_user(self, email, password, **extra_fields):
+        extra_fields.setdefault('is_active', False)
         extra_fields.setdefault('is_staff', False)
         extra_fields.setdefault('is_superuser', False)
         return self._create_user(email, password, **extra_fields)
@@ -76,14 +80,15 @@ class TibilletManager(BaseUserManager):
     def create_superuser(self, email, password, **extra_fields):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
+        extra_fields.setdefault('can_create_tenant', True)
         return self._create_user(email, password, **extra_fields)
 
     def set_permission_staff(self, user):
         staff_group = Group.objects.get_or_create(name="staff")[0]
         user.groups.add(staff_group)
 
-class TibilletUser(AbstractUser):
 
+class TibilletUser(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
 
     # USERNAME_FIELD = 'email'
@@ -148,7 +153,6 @@ class TibilletUser(AbstractUser):
     client_admin = models.ManyToManyField(Client,
                                           related_name="user_admin", blank=True)
 
-
     # is_active = models.BooleanField(
     #     _('active'),
     #     default=False,
@@ -172,6 +176,7 @@ class TibilletUser(AbstractUser):
         else:
             class user_vide:
                 is_staff = False
+
             return user_vide
 
     local_ip_sended = models.GenericIPAddressField(blank=True, null=True)
@@ -234,7 +239,6 @@ class TermUser(TibilletUser):
         verbose_name = "Terminal"
         verbose_name_plural = "Terminaux"
 
-
     objects = TermUserManager()
 
     def save(self, *args, **kwargs):
@@ -279,8 +283,6 @@ class HumanUser(TibilletUser):
         super().save(*args, **kwargs)
 
 
-
-
 # ---------------------------------------------------------------------------------------------------------------------
 
 class SuperHumanUserManager(TibilletManager):
@@ -311,6 +313,7 @@ class SuperHumanUser(TibilletUser):
         self.email = self.email.lower()
 
         super().save(*args, **kwargs)
+
 
 # ---------------------------------------------------------------------------------------------------------------------
 
