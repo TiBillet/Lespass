@@ -188,7 +188,7 @@ class ArtistEventCreateSerializer(serializers.Serializer):
     datetime = serializers.DateTimeField()
 
     def validate_uuid(self, value):
-        self.artiste_event_db = {}
+        self.artiste_event_db = getattr(self, "artiste_event_db", {})
         try:
             tenant = Client.objects.get(pk=value, categorie=Client.ARTISTE)
             self.artiste_event_db['tenant'] = tenant
@@ -199,6 +199,7 @@ class ArtistEventCreateSerializer(serializers.Serializer):
         return value
 
     def validate_datetime(self, value):
+        self.artiste_event_db = getattr(self, "artiste_event_db", {})
         self.artiste_event_db['datetime'] = value
         return value
 
@@ -393,7 +394,7 @@ class EventSerializer(serializers.ModelSerializer):
             free_reservation, created = Product.objects.get_or_create(categorie_article=Product.FREERES,
                                                                       name="Reservation")
             free_reservation_price, created = Price.objects.get_or_create(product=free_reservation, prix=0,
-                                                                          name="Reservation")
+                                                                          name="gratuite")
             instance.products.add(free_reservation)
 
         representation = super().to_representation(instance)
