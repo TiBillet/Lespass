@@ -53,11 +53,11 @@ export async function loadEvents() {
 export async function loadEventBySlug(slug) {
   console.log('-> fonction loadEventBySlug !')
   const store = useStore()
-  console.log('store.events =', store.events)
+  console.log('1 -> store.events =', store.events)
   try {
     // récupération du uuid évènement à partir du slug
     const urlApi = `/api/eventslug/${slug}`
-
+    console.log('domain + urlApi =', domain + urlApi)
     const response = await fetch(domain + urlApi)
     if (response.status !== 200) {
       throw new Error(`${response.status} - ${response.statusText}`)
@@ -65,15 +65,19 @@ export async function loadEventBySlug(slug) {
     const retour = await response.json()
     console.log('retour =', retour)
     // maj store events
+    console.log('store.currentUuidEvent =', store.currentUuidEvent)
     if (store.currentUuidEvent !== '' && store.currentUuidEvent !== undefined) {
       // maj store events pour un store events déjà existant
+      console.log('-> maj currentEvent !')
       let currentEvent = store.events.find(evt => evt.uuid === store.currentUuidEvent)
       currentEvent = retour
     } else {
       // maj store events pour un store events vide []
-      store.events = []
+      console.log('-> ajout currentEvent !')
+      // store.events = []
       store.events.push(retour)
     }
+    console.log('2 -> store.events =', store.events)
   } catch (erreur) {
     console.log('Store, event(slug), erreur:', erreur)
     emitter.emit('message', {

@@ -32,9 +32,11 @@ const routes = [
     // which is lazy-loaded when the route is visited.
     component: () => import(/* webpackChunkName: "Event" */ '../views/Event.vue'),
     // chargement synchrone des données lieu et évènements avant d'entrer dans la vue
+    /*
     async beforeEnter(to, from) {
       await loadEventBySlug(to.params.slug)
     }
+     */
   },
   {
     path: '/artist/:slug',
@@ -70,8 +72,8 @@ const router = createRouter({
 })
 
 router.beforeEach((to, from, next) => {
-  console.log('from =', from)
-  console.log('to =', to)
+  // console.log('from =', from)
+  // console.log('to =', to)
 
   // traitement de la redirection si interception
   let redirection = false

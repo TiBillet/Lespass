@@ -1,25 +1,31 @@
 <template>
-  <Header :header-event="getHeaderEvent()"/>
-  <div class="container mt-7">
+  <Loading v-if="loading"/>
+  <p v-if="error">{{ error.message }}</p>
+  <Header v-if="Object.entries(event).length > 0" :header-event="getEventHeader()"/>
+  <div v-if="Object.entries(event).length > 0" class="container mt-7">
 
     <!-- artistes -->
-    <div v-for="(artist, index) in currentEvent.artists" :key="index">
+    <div v-for="(artist, index) in event.artists" :key="index">
       <CardArtist :data-artist="artist" class="mb-6"/>
     </div>
 
 
     <form @submit.prevent="goValiderAchats($event)" class="needs-validation" novalidate>
+      <!-- sans attribut "image" le nom du billet est affiché -->
+      <CardBillet :image="true" :style-image="styleImage" />
+
+      <!--
       <CardProducts :products="currentEvent.products" :categories="['B', 'F']"/>
 
       <CardOptions :options="options"  :index-memo="store.currentUuidEvent"/>
 
-      <!-- index-memo="unique00" = "index fixe" bon pour tous les évènements -->
+       index-memo="unique00" = "index fixe" bon pour tous les évènements
       <CardEmail :default-email="storeLocalGet('email')" index-memo="unique00"/>
 
       <CardProducts :products="currentEvent.products" :categories="['A', 'D']"/>
 
       <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
-
+-->
     </form>
 
 
@@ -32,11 +38,58 @@
 console.log('-> Event.vue !')
 
 // vue
-import {ref} from 'vue'
 import {useRoute} from 'vue-router'
 
 // store
-import {useStore} from '@/store'
+import {storeToRefs} from 'pinia'
+// import {useStore} from '@/store'
+import {useEventsStore} from '@/stores/events'
+
+const {event, loading, error} = storeToRefs(useEventsStore())
+const {getEventBySlug} = useEventsStore()
+
+// composants
+import Loading from '@/components/Loading.vue'
+import Header from '@/components/Header.vue'
+import CardArtist from '@/components/CardArtist.vue'
+import CardBillet from '@/components/CardBillet.vue'
+
+// const store = useStore()
+const route = useRoute()
+const slug = route.params.slug
+
+const styleImage = {
+  height: '30px',
+  width: 'auto'
+}
+
+// current event
+getEventBySlug(slug)
+
+function getEventHeader() {
+  // console.log('-> fonc getHeaderEvent, event =', event)
+  const domain = `${location.protocol}//${location.host}`
+  let urlImage
+  try {
+    urlImage = event.value.img_variations.fhd
+  } catch (e) {
+    urlImage = `${domain}/media/images/image_non_disponible.svg`
+  }
+  // console.log('urlImage =', urlImage)
+  return {
+    urlImage: urlImage,
+    shortDescription: event.value.short_description,
+    longDescription: event.value.long_description,
+    titre: event.value.name
+  }
+}
+
+
+/*
+// vue
+import {ref} from 'vue'
+import {useRoute} from 'vue-router'
+
 
 // myStore
 import {storeLocalGet, storeLocalSet} from '@/storelocal'
@@ -50,15 +103,13 @@ import CardProducts from '@/components/CardProducts.vue'
 import CardOptions  from '@/components/CardOptions.vue'
 
 // test dev
-// import {fakeEvent} from "../../tempo/fakeCurrentEventTest"
-// import {fakeEvent} from "../../tempo/fakeCurrentEventTestNoArtists.js"
+// import {fakeEvent} from "../../tests/fakeCurrentEventTest"
+// import {fakeEvent} from "../../tests/fakeCurrentEventTestNoArtists.js"
+// import {fakeEvent} from "../../tests/fakeSimpleCurrentEventRaffinerie.js"
 
 const route = useRoute()
 const slug = route.params.slug
 const store = useStore()
-// const storeLocal = StoreLocal.use('localStorage', 'Tibilet-identite')
-// const storeLocal = StoreLocal.use()
-// const storeLocal = new StoreLocal()
 const domain = `${location.protocol}//${location.host}`
 
 // récupération du uuid évènement à partir du slug
@@ -78,7 +129,6 @@ const currentEvent = store.events.find(evt => evt.uuid === uuidEvent)
 
 console.log('currentEvent =', currentEvent)
 
-store.currentUuidEvent = uuidEvent
 
 // TODO: maj currentEvent et ses store.memoComposants[composant][currentUuidEvent] provenant d'un websocket
 
@@ -88,21 +138,6 @@ const options = {
   radio: currentEvent.options_radio
 }
 
-function getHeaderEvent() {
-  let urlImage
-  if (currentEvent.img_variations.fhd === undefined) {
-    urlImage = `${domain}/media/images/image_non_disponible.svg`
-  } else {
-    urlImage = currentEvent.img_variations.fhd
-  }
-  // console.log('urlImage =', urlImage)
-  return {
-    urlImage: urlImage,
-    shortDescription: currentEvent.short_description,
-    longDescription: currentEvent.long_description,
-    titre: currentEvent.name
-  }
-}
 
 
 function getDataCardPlace() {
@@ -394,6 +429,7 @@ emitter.on('gererCardBillet', (data) => {
     store.formulaireBillet[store.currentUuidEvent].identifiants[data.uuidTarif].users.find(ident => ident.id === data.id)[data.champ] = data.valeur
   }
 })
+ */
 </script>
 <style>
 .invalid-feedback {
