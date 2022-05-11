@@ -12,6 +12,7 @@ export const useEventStore = defineStore({
   actions: {
     async getEventBySlug(slug) {
       const urlApi = `/api/eventslug/${slug}`
+      this.error = null
       this.event = {}
       this.loading = true
       try {
@@ -32,11 +33,11 @@ export const useEventStore = defineStore({
         this.event = retour
       } catch (error) {
         this.error = error
-        console.log('useEventStore, getEventBySlug:', erreur)
+        console.log('useEventStore, getEventBySlug:', error)
         emitter.emit('message', {
           tmp: 4,
           typeMsg: 'danger',
-          contenu: `Chargement de l'évènement '${slug}', erreur: ${erreur}`
+          contenu: `Chargement de l'évènement '${slug}', erreur: ${error}`
         })
       } finally {
         this.loading = false

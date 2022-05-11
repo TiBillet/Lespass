@@ -47,7 +47,8 @@
         {{ event.artists[0].configuration.short_description }}
       </p>
 
-      <button type="button" class="btn btn-outline-primary btn-sm" @click="emitGoEvenement(event.slug)">
+      <!-- <button type="button" class="btn btn-outline-primary btn-sm" @click="emitGoEvenement(event.slug)"> -->
+      <button type="button" class="btn btn-outline-primary btn-sm" @click="$emit('goEvent', event.slug)">
         Réserver
       </button>
     </div>
@@ -96,9 +97,10 @@
 
 <script setup>
 
-
 // asset
 const img = import('../../src/assets/img/loading.svg')
+
+const emit = defineEmits(['goEvent'])
 
 const props = defineProps({
   event: Object
@@ -112,10 +114,12 @@ function formateDate(dateString) {
   return `${date.toLocaleDateString()} - ${date.toLocaleTimeString()}`
 }
 
+/*
 function emitGoEvenement(slug) {
   // console.log('-> goEvenement, slug =', slug)
   emitter.emit("goEvenement", slug)
 }
+ */
 </script>
 
 <style>

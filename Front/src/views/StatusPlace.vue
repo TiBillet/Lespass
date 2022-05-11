@@ -239,7 +239,7 @@
 console.log('-> StatusPlace.vue !')
 
 // traduction
-import {trad} from '@/translation'
+import {trad} from '@/divers/translation'
 
 </script>
 <style>

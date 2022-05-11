@@ -6,14 +6,15 @@ export const useAllStore = defineStore({
   id: 'all',
   state: () => ({
     language: 'fr',
-    events: [],
+    events: {},
     place: {},
     loading: false,
     error: null
   }),
   actions: {
     async getEvents() {
-      this.events = []
+      this.error = null
+      this.events = {}
       this.loading = true
       try {
         const apiEvents = `/api/events/`
@@ -22,16 +23,17 @@ export const useAllStore = defineStore({
           throw new Error(`${response.status} - ${response.statusText}`)
         }
         const retour = await response.json()
-        console.log('getEvents, type retour =', typeof(retour))
+        console.log('getEvents, type retour =', retour)
         this.events = retour
       } catch (error) {
-        console.log('useAllStore, getEvents:', erreur)
+        console.log('useAllStore, getEvents:', error)
         this.error = error
       } finally {
         this.loading = false
       }
     },
     async getPlace(slug) {
+      this.error = null
       this.place = {}
       this.loading = true
       try {
@@ -41,11 +43,12 @@ export const useAllStore = defineStore({
           throw new Error(`${response.status} - ${response.statusText}`)
         }
         const retour = await response.json()
-        console.log('useAllStore, getPlace:', retour)
+        // console.log('useAllStore, getPlace:', retour)
+        console.log('getPlace, retour =', retour)
         this.place = retour
       } catch (error) {
         this.error = error
-        console.log('Store, event(slug), erreur:', erreur)
+        console.log('Store, event(slug), erreur:', error)
       } finally {
         this.loading = false
       }

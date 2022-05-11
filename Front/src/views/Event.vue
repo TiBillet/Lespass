@@ -1,6 +1,6 @@
 <template>
   <Loading v-if="loading"/>
-  <p v-if="error">{{ error.message }}</p>
+  <p v-if="error !== null" class="text-dark">{{ error }}</p>
   <Header v-if="Object.entries(event).length > 0" :header-event="getEventHeader()"/>
   <div v-if="Object.entries(event).length > 0" class="container mt-7">
 

@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 // const path = require('path')
 import { resolve } from 'path'
-let urlLieu = 'http://m.django-local.org:8002'
+let urlLieu = 'https://raffinerie.django-local.org'
 
 // https://vitejs.dev/config/
 export default defineConfig({
