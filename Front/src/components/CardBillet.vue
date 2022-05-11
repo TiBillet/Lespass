@@ -76,7 +76,7 @@ console.log('-> CardBillet.vue')
 
 // pinia
 import {storeToRefs} from 'pinia'
-import {useEventsStore} from '@/stores/events'
+import {useEventStore} from '@/stores/event'
 
 // attributs/props
 let props = defineProps({
@@ -92,7 +92,7 @@ if (props.styleImage === undefined) {
   }
 }
 
-const {event} = storeToRefs(useEventsStore())
+const {event} = storeToRefs(useEventStore())
 
 function addUser(priceUuid) {
   const products = event.value.products.filter(prod => prod.categorie_article === 'F' || prod.categorie_article === 'B')

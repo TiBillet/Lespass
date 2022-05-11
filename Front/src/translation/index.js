@@ -1,5 +1,6 @@
 // store
-import {useStore} from '@/store'
+import {useAllStore} from '@/stores/all'
+const {language} = storeToRefs(useAllStore())
 
 // traduction
 const listTrad = [
@@ -17,7 +18,7 @@ const listTrad = [
 export function trad(text,options) {
   // store
   const store = useStore()
-  const langueSite = store.language
+  const langueSite = language
 
   for (let i = 0; i < listTrad.length; i++) {
     const terme = listTrad[i]

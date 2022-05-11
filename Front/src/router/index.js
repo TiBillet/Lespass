@@ -3,7 +3,7 @@ import {createRouter, createWebHistory} from 'vue-router'
 import Accueil from '../views/Accueil.vue'
 
 // api
-import {loadPlace, loadEvents, loadEventBySlug, emailActivation, postStripeReturn} from '@/api'
+// import {loadPlace, loadEvents, loadEventBySlug, emailActivation, postStripeReturn} from '@/api'
 
 const domain = `${location.protocol}//${location.host}`
 
@@ -11,12 +11,13 @@ const routes = [
   {
     path: '/',
     name: 'Accueil',
-    component: Accueil,
+    component: Accueil/*,
     // chargement synchrone des données lieu et évènements avant d'entrer dans la vue
     async beforeEnter(to, from) {
       await loadPlace()
       await loadEvents()
     }
+    */
   },
   {
     // route interceptée

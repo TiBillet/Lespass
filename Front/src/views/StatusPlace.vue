@@ -241,13 +241,6 @@ console.log('-> StatusPlace.vue !')
 // traduction
 import {trad} from '@/translation'
 
-// store
-import {useStore} from '@/store'
-
-// store
-const store = useStore()
-// console.log('store.place =', store.place)
-
 </script>
 <style>
 

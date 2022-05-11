@@ -42,11 +42,10 @@ import {useRoute} from 'vue-router'
 
 // store
 import {storeToRefs} from 'pinia'
-// import {useStore} from '@/store'
-import {useEventsStore} from '@/stores/events'
+import {useEventStore} from '@/stores/event'
 
-const {event, loading, error} = storeToRefs(useEventsStore())
-const {getEventBySlug} = useEventsStore()
+const {event, loading, error} = storeToRefs(useEventStore())
+const {getEventBySlug} = useEventStore()
 
 // composants
 import Loading from '@/components/Loading.vue'
@@ -63,7 +62,7 @@ const styleImage = {
   width: 'auto'
 }
 
-// current event
+// load event
 getEventBySlug(slug)
 
 function getEventHeader() {
