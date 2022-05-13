@@ -15,12 +15,15 @@ export default defineConfig({
   },
   server: {
     // pour exposer le port d'un container docker
-    host: true,
+    host: 'billetterie_nodejs_dev',
     port: 3000,
     strictPort: true,
     proxy: {
       '/api': urlLieu,
       '/media': urlLieu
+    },
+    watch: {
+      usePolling: true
     }
   }
 })
