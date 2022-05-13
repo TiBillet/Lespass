@@ -15,7 +15,7 @@ export default defineConfig({
   },
   server: {
     // pour exposer le port d'un container docker
-    host: 'billetterie_nodejs_dev',
+    host: true,
     port: 3000,
     strictPort: true,
     proxy: {

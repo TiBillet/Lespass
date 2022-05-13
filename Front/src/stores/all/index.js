@@ -1,3 +1,4 @@
+// store
 import {defineStore} from 'pinia'
 
 const domain = `${location.protocol}//${location.host}`
@@ -46,9 +47,17 @@ export const useAllStore = defineStore({
         // console.log('useAllStore, getPlace:', retour)
         console.log('getPlace, retour =', retour)
         this.place = retour
+        // redirection sur le wiki tibillet si la billetterie n'est pas activée
+        if (retour.activer_billetterie === false) {
+         window.location = "https://wiki.tibillet.re/"
+        }
       } catch (error) {
         this.error = error
-        console.log('Store, event(slug), erreur:', error)
+        console.log('useAllStore, getPlace: type =', error)
+        // redirection sur le wiki tibillet si 404
+        if (error.toString().indexOf('404')) {
+          window.location = "https://wiki.tibillet.re/"
+        }
       } finally {
         this.loading = false
       }

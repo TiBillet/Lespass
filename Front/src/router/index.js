@@ -9,6 +9,12 @@ const domain = `${location.protocol}//${location.host}`
 
 const routes = [
   {
+    // 404, route interceptée
+    path: '/:pathMatch(.*)*',
+    name: 'NotFound',
+    component: {}
+  },
+  {
     path: '/',
     name: 'Accueil',
     component: Accueil/*,
@@ -81,6 +87,11 @@ router.beforeEach((to, from, next) => {
   let nouvelleRoute = '/'
   if (from.name !== undefined) {
     nouvelleRoute = from.path
+  }
+
+  // intercepte la route "NotFound" et redirige sur le wiki tibillet
+  if (to.name === "NotFound") {
+    window.location = "https://wiki.tibillet.re/"
   }
 
   // intercepte la route "EmailConfirmation" et active l'email
