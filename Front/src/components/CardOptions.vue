@@ -1,5 +1,5 @@
 <template>
-  <fieldset class="shadow-sm p-3 mb-5 bg-body rounded">
+  <fieldset v-if="options.checkbox.length > 1 && options.radio.length > 0" class="shadow-sm p-3 mb-5 bg-body rounded">
     <legend>
       <h3 class="font-weight-bolder text-info text-gradient align-self-start">Options</h3>
     </legend>

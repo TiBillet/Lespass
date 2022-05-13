@@ -1,6 +1,44 @@
 <template>
+
+  <fieldset class="shadow-sm p-3 mb-5 bg-body rounded"
+            v-for="product in event.products.filter(prod => prod.categorie_article === 'F' || prod.categorie_article === 'B')"
+            :key="product.uuid">
+    <legend>
+      <img v-if="image === true" :src="product.img" class="image-product" alt="Image du billet !" :style="styleImage">
+      <h3 v-else class="font-weight-bolder text-info text-gradient align-self-start">{{ product.name }}</h3>
+    </legend>
+    <div v-for="price in product.prices" :key="price.uuid">
+      <!-- prix -->
+      <div class="d-flex justify-content-between mb-3">
+        <!-- nom tarif -->
+        <h4 class="font-weight-bolder text-info text-gradient align-self-start">{{ price.name.toLowerCase() }} :
+          {{ price.prix }} €</h4>
+        <button
+            v-if="(price.stock === null && price.customers.length < price.max_per_user) || (price.stock !== null && (price.stock - price.customers.length) >= 1 && price.customers.length < price.max_per_user)"
+            class="btn btn-primary ms-3" type="button"
+            @click.stop="addUser(price.uuid)">
+          <i class="fas fa-plus"></i>
+        </button>
+      </div>
+      <!-- clients -->
+      <div class="input-group mb-2" v-for="(customer, index) in price.customers" :key="index">
+        <input type="text" :value="customer.last_name" placeholder="Nom" aria-label="Nom" class="form-control"
+               @keyup="updateUser(price.uuid, customer.uuid, $event.target.value,'last_name')" required>
+        <input type="text" :value="customer.first_name" placeholder="Prénom" aria-label="Prénom" class="form-control"
+               @keyup="updateUser(price.uuid, customer.uuid, $event.target.value,'first_name')" required>
+        <button class="btn btn-primary mb-0" type="button" @click="deleteUser(price.uuid, customer.uuid)"
+                style="border-top-right-radius: 30px; border-bottom-right-radius: 30px;">
+          <i class="fas fa-times"></i>
+        </button>
+        <div class="invalid-feedback">Donnée(s) manquante(s) !</div>
+      </div>
+    </div>
+  </fieldset>
+
+
+  <!--
   <fieldset class="shadow-sm p-3 mb-5 bg-body rounded" v-for="price in prix"
-            :key="price.uuid">
+
     <legend>
       <div class="d-flex justify-content-between mb-3">
         <h3 class="font-weight-bolder text-info text-gradient align-self-start">{{ product.name }} {{ price.name.toLowerCase() }} : {{ price.prix }}€</h3>
@@ -11,19 +49,18 @@
       </div>
     </legend>
 
-    <!-- <div class="d-flex flex-row" v-for="(user, index) in price.users" :key="index"> -->
+
     <div class="input-group mb-2" v-for="(user, index) in price.users" :key="index">
       <input type="text" :value="user.last_name" placeholder="Nom" aria-label="Nom" class="form-control"
              @keyup="updateUser(price.uuid, user.uuid, $event.target.value,'last_name')" required>
       <input type="text" :value="user.first_name" placeholder="Prénom" aria-label="Prénom" class="form-control"
              @keyup="updateUser(price.uuid, user.uuid, $event.target.value,'first_name')" required>
-      <!-- <div class="invalid-tooltip me-4">Erreur, il manque une information svp</div> -->
         <button class="btn btn-primary mb-0" type="button" @click="deleteUser(price.uuid, user.uuid)" style="border-top-right-radius: 30px; border-bottom-right-radius: 30px;">
           <i class="fas fa-times"></i>
         </button>
       <div class="invalid-feedback">Donnée(s) manquante(s) !</div>
     </div>
-    <!-- </div> -->
+    </div>
 
     <div v-if="price.users.length > 0 " class="d-flex justify-content-end mb-3">
       <h6>
@@ -31,12 +68,73 @@
       </h6>
     </div>
   </fieldset>
-
+  -->
 </template>
 
 <script setup>
 console.log('-> CardBillet.vue')
 
+// pinia
+import {storeToRefs} from 'pinia'
+import {useEventStore} from '@/stores/event'
+
+// attributs/props
+let props = defineProps({
+  image: Boolean,
+  styleImage: Object
+})
+
+// valeurs par défaut
+if (props.styleImage === undefined) {
+  props.styleImage = {
+    height: '20px',
+    width: 'auto'
+  }
+}
+
+const {event} = storeToRefs(useEventStore())
+
+function addUser(priceUuid) {
+  const products = event.value.products.filter(prod => prod.categorie_article === 'F' || prod.categorie_article === 'B')
+  for (const productsKey in products) {
+    const product = products[productsKey]
+    for (const productKey in product.prices) {
+      const prix = product.prices[productKey]
+      if (prix.uuid === priceUuid) {
+        console.log('prix =', prix)
+
+        // max products by user
+        if (prix.customers.length < prix.max_per_user) {
+          prix.customers.push({
+            "first_name": "",
+            "last_name": ""
+          })
+        } else {
+          emitter.emit('modalMessage', {
+            titre: 'Attention',
+            contenu: `Nombre max de produits par client atteint !`
+          })
+        }
+
+        break
+      }
+    }
+  }
+}
+
+
+/*
+const { events } = () => {
+  const store = useStore()
+  return Object.fromEntries(
+    Object.keys(store.getters).map(
+      getter => [getter, computed(() => store.getters[getter])]
+    )
+  )
+}
+*/
+
+/*
 // store
 import {useStore} from '@/store'
 
@@ -54,7 +152,7 @@ let record = true
 
 let prix = {}
 
-// mémorise le composant dans le store ou la variable globale window
+// création du state dynamique(mémorise le composant dans le store ou la variable globale window(todo)).
 try {
   if (props.indexMemo === '' || props.indexMemo === undefined) {
     throw new Error(`Erreur index memo vide !`)
@@ -136,6 +234,8 @@ function deleteUser(uuidTarif, uuidUser) {
   const newUsers = tarif.users.filter(user => user.uuid !== uuidUser)
   tarif.users = newUsers
 }
+
+ */
 </script>
 
 <style scoped>
