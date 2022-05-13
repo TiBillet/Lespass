@@ -104,6 +104,7 @@ class ConfigurationSerializer(serializers.ModelSerializer):
             "twitter",
             "facebook",
             "instagram",
+            "activer_billetterie",
             "adhesion_obligatoire",
             "button_adhesion",
             "map_img",
@@ -116,7 +117,7 @@ class ConfigurationSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
-        # import ipdb;ipdb.set_trace()
+        representation['categorie'] = connection.tenant.categorie
         return representation
 
 
@@ -204,6 +205,7 @@ class ArtistEventCreateSerializer(serializers.Serializer):
         return value
 
     def validate(self, attrs):
+        logger.info(f"ArtistEventCreateSerializer : {self.artiste_event_db}")
         return self.artiste_event_db
 
 
@@ -239,6 +241,10 @@ class EventCreateSerializer(serializers.Serializer):
     long_description = serializers.CharField(required=False)
     short_description = serializers.CharField(required=False, max_length=100)
     img_url = serializers.URLField(required=False)
+
+    def validate_artists(self, value):
+        logger.info(f"validate_artists : {value}")
+        return value
 
     def validate_products(self, value):
         self.products_db = []
@@ -398,6 +404,10 @@ class EventSerializer(serializers.ModelSerializer):
             instance.products.add(free_reservation)
 
         representation = super().to_representation(instance)
+
+        representation['url'] = f"https://{connection.tenant.get_primary_domain().domain}/event/{instance.slug}/"
+        representation['place'] = Configuration.get_solo().organisation
+
         return representation
 
 

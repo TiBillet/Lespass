@@ -366,10 +366,24 @@ class EventsSlugViewSet(viewsets.ViewSet):
 class EventsViewSet(viewsets.ViewSet):
 
     def list(self, request):
-        queryset = Event.objects.filter(datetime__gte=datetime.now().date()).order_by('datetime')
-        events_serialized = EventSerializer(queryset, many=True, context={'request': request})
+        tenant: Client = connection.tenant
 
-        return Response(events_serialized.data)
+        if tenant.categorie == Client.SALLE_SPECTACLE :
+            queryset = Event.objects.filter(datetime__gte=datetime.now().date()).order_by('datetime')
+            events_serialized = EventSerializer(queryset, many=True, context={'request': request})
+            return Response(events_serialized.data)
+
+        elif tenant.categorie == Client.META:
+            events_serialized_data = []
+            tenants = Client.objects.filter(categorie=Client.SALLE_SPECTACLE)
+            for other_tenant in tenants:
+                with tenant_context(other_tenant):
+                    queryset = Event.objects.filter(datetime__gte=datetime.now().date()).order_by('datetime')
+                    events_serialized = EventSerializer(queryset, many=True, context={'request': request})
+                    for data in events_serialized.data:
+                        events_serialized_data.append(data)
+            return Response(events_serialized_data)
+
 
     def retrieve(self, request, pk=None):
         queryset = Event.objects.all().order_by('-datetime')

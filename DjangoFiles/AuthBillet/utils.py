@@ -1,9 +1,13 @@
+import logging
+
 from django.contrib.auth import get_user_model
 from django.db import connection
 
 from AuthBillet.models import TibilletUser
+from BaseBillet.models import Configuration
 from BaseBillet.tasks import connexion_celery_mailer
 
+logger = logging.getLogger(__name__)
 
 def validate_email_and_return_user(email, password=None, subject_mail=None):
     User: TibilletUser = get_user_model()
@@ -15,15 +19,27 @@ def validate_email_and_return_user(email, password=None, subject_mail=None):
 
     base_url = connection.tenant.get_primary_domain().domain
 
+    # Si la billetterie est active, on envoie le mail de confirmation
+    billetterie_active = False
+    try:
+        config = Configuration.get_solo()
+        if config.activer_billetterie:
+            billetterie_active = True
+    except Exception as e:
+        logger.error(f"validate_email_and_return_user erreur pour récuperer config : {user} - {base_url} : {e}")
+
+
     if not created:
         if user.is_active:
-            task = connexion_celery_mailer.delay(user.email, f"https://{base_url}", subject_mail)
+            if billetterie_active:
+                task = connexion_celery_mailer.delay(user.email, f"https://{base_url}", subject_mail)
             return user
         else:
             if user.email_error:
                 return False
             else:
-                task = connexion_celery_mailer.delay(user.email, f"https://{base_url}", subject_mail)
+                if billetterie_active:
+                    task = connexion_celery_mailer.delay(user.email, f"https://{base_url}", subject_mail)
                 return user
     else:
         if password:
@@ -33,10 +49,11 @@ def validate_email_and_return_user(email, password=None, subject_mail=None):
 
         user.client_achat.add(connection.tenant)
         user.save()
-        task = connexion_celery_mailer.delay(user.email, f"https://{base_url}")
+
+        if billetterie_active:
+            task = connexion_celery_mailer.delay(user.email, f"https://{base_url}")
 
         return user
-
 
 
 ################################# MAC ADRESS SERIALIZER #################################
