@@ -174,6 +174,7 @@ class index_scan(View):
             metadata['recharge_carte_uuid'] = str(carte.uuid)
 
             if montant_recharge:
+                #TODO: Checker si l'image existe. Sinon erreur lorsqu'on change l'image ensuite ...
                 product, created = Product.objects.get_or_create(
                     name=f"Recharge Carte {carte.detail.origine.name} v{carte.detail.generation}",
                     categorie_article=Product.RECHARGE_CASHLESS,
