@@ -11,6 +11,7 @@ from django.shortcuts import render
 from rest_framework import status, permissions, viewsets, serializers
 from rest_framework.decorators import permission_classes
 from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -78,9 +79,12 @@ class TokenRefreshViewCustom(TokenRefreshView):
             bien de lui avec sa mac_adress et son unique_id
 
             '''
+            # import ipdb; ipdb.set_trace()
             serializer = self.get_serializer(data=request.data)
             refresh = serializer.token_class(self.request.data.get('refresh'))
-            user = TibilletUser.objects.get(pk=refresh['user_id'])
+            # user = TibilletUser.objects.get(pk=refresh['user_id'])
+            user = get_object_or_404(TibilletUser, pk=refresh['user_id'])
+
             if user.espece == TibilletUser.TYPE_TERM:
                 try:
                     assert user.mac_adress_sended == request.data.get('mac_adress')
