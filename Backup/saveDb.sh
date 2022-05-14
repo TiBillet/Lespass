@@ -12,7 +12,7 @@ export PGUSER=$POSTGRES_USER
 export PGHOST=$POSTGRES_HOST
 
 # borg init --encryption=repokey-blake2 .
-# borg init --encryption=repokey-blake2 /SaveDb/borg
+# borg init --encryption=repokey-blake2 /Backup/borg
 
 export BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes
 export BORG_RELOCATED_REPO_ACCESS_IS_OK=yes

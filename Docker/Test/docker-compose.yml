@@ -1,0 +1,10 @@
+version: '3'
+services:
+  billetterie_nodejs:
+    image: node:16-bullseye
+    volumes:
+      - ../../Front:/Front
+      - ./dist:/builded/dist
+    working_dir: /Front
+#    command: "bash /Front/start.sh"
+    command: "sleep 3600"
