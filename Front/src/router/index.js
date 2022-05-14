@@ -17,13 +17,7 @@ const routes = [
   {
     path: '/',
     name: 'Accueil',
-    component: Accueil/*,
-    // chargement synchrone des données lieu et évènements avant d'entrer dans la vue
-    async beforeEnter(to, from) {
-      await loadPlace()
-      await loadEvents()
-    }
-    */
+    component: Accueil
   },
   {
     // route interceptée

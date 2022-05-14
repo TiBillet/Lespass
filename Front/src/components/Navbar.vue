@@ -5,10 +5,12 @@
   <!-- Navbar -->
   <nav v-else class="navbar navbar-expand-lg z-index-3 w-100 navbar-transparent blur blur-light fixed-top">
     <div class="container">
+      <!-- lieu -->
       <div class="navbar-brand">
         <router-link to="/" class="navbar-brand font-weight-bolder text-white">{{ place.organisation }}</router-link>
       </div>
 
+      <!-- menu hamburger -->
       <button class="navbar-toggler shadow-none ms-2" type="button" data-bs-toggle="collapse"
               data-bs-target="#navigation" aria-controls="navigation" aria-expanded="true"
               aria-label="Toggle navigation">
@@ -19,9 +21,10 @@
         </span>
       </button>
 
+      <!-- menu -->
       <div class="navbar-collapse w-100 pt-3 pb-2 py-lg-0 collapse show" id="navigation" style="">
-        <ul class="navbar-nav navbar-nav-hover mx-auto">
-
+        <!-- desktop lg >= 992px -->
+        <ul class="d-none d-lg-block navbar-nav ms-auto">
           <!-- adhésion -->
           <li v-if="place.button_adhesion === true && router.currentRoute.value.name === 'Accueil' && membership === false"
               class="nav-item mx-2">
@@ -32,8 +35,15 @@
             </a>
           </li>
 
-
         </ul>
+
+      <!-- mobile -->
+        <ul class="d-block d-lg-none navbar-nav ms-auto">
+          <li class="font-weight-bolder text-dark">
+             Adhérez
+          </li>
+        </ul>
+
       </div>
     </div>
   </nav>
