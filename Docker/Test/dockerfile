@@ -6,3 +6,4 @@ RUN npm install
 RUN npm run build --if-present
 
 FROM python:3.8-bullseye AS django
+COPY - -from=0  /Front/dist .
