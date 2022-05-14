@@ -39,16 +39,14 @@ class Command(BaseCommand):
 
             input_client = input('quel client ? \n')
 
-            cards_dict[input_client]=input_client
+            cards_dict[input_client]= {}
             print(' ')
             # client_tenant = Client.objects.get(schema_name='VavangArt')
 
             input_generation = input('quelle génération ? \n')
 
             print(' ')
-            # input_generation = "1"
 
-            print('url, numéro imprimé len(8), fisrt tag id len(8)')
             input_fichier_csv = input('path fichier csv ? \n')
             cards_dict[input_client][input_generation]=input_fichier_csv
 

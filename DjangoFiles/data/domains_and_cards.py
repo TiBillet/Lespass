@@ -108,7 +108,8 @@ cards = {
     },
     "Raffinerie": {
         1: f"{dir_path}/Raffinerie_G1.csv",
-        2: f"{dir_path}/Raffinerie_G2.csv"
+        2: f"{dir_path}/Raffinerie_G2.csv",
+        3: f"{dir_path}/Raffinerie_G3.csv"
     },
     "3Peaks": {
         3: f"{dir_path}/3Peaks_G3.csv"
