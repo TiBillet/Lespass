@@ -1,12 +1,12 @@
 <template>
-  <section class="pt-3 pt-md-5 pb-md-5 pt-lg-7">
+  <section class="pt-1 pb-0">
     <div class="container">
       <div class="row">
         <!-- liens -->
         <div class="col-lg-3 mb-lg-0 mb-3">
           <ul class="nav flex-column bg-white border-radius-lg p-3 position-sticky top-1">
             <li class="nav-item">
-              <a class="nav-link text-dark d-flex align-items-center" data-scroll="" href="#general-terms">
+              <a class="nav-link text-dark d-flex align-items-center cursor-pointer" @click="goTo('general-terms')">
                 <div class="icon me-2 mb-1">
                   <i class="ni ni-books text-info"></i>
                 </div>
@@ -14,7 +14,7 @@
               </a>
             </li>
             <li class="nav-item">
-              <a class="nav-link text-dark d-flex align-items-center" data-scroll="" href="#cookies">
+              <a class="nav-link text-dark d-flex align-items-center cursor-pointer" @click="goTo('cookies')">
                 <div class="icon me-2 mb-1">
                   <i class="ni ni-bulb-61 text-info"></i>
                 </div>
@@ -22,7 +22,7 @@
               </a>
             </li>
             <li class="nav-item">
-              <a class="nav-link text-dark d-flex align-items-center" data-scroll="" href="#license">
+              <a class="nav-link text-dark d-flex align-items-center cursor-pointer" @click="goTo('license')">
                 <div class="icon me-2 mb-1">
                   <i class="ni ni-briefcase-24 text-info"></i>
                 </div>
@@ -30,7 +30,7 @@
               </a>
             </li>
             <li class="nav-item">
-              <a class="nav-link text-dark d-flex align-items-center" data-scroll="" href="#hyperlinking">
+              <a class="nav-link text-dark d-flex align-items-center cursor-pointer" @click="goTo('hyperlinking')">
                 <div class="icon me-2 mb-1">
                   <i class="ni ni-planet text-info"></i>
                 </div>
@@ -38,7 +38,7 @@
               </a>
             </li>
             <li class="nav-item">
-              <a class="nav-link text-dark d-flex align-items-center" data-scroll="" href="#iframes">
+              <a class="nav-link text-dark d-flex align-items-center cursor-pointer" @click="goTo('iframes')">
                 <div class="icon me-2 mb-1">
                   <i class="ni ni-world-2 text-info"></i>
                 </div>
@@ -46,7 +46,7 @@
               </a>
             </li>
             <li class="nav-item">
-              <a class="nav-link text-dark d-flex align-items-center" data-scroll="" href="#liability">
+              <a class="nav-link text-dark d-flex align-items-center cursor-pointer" @click="goTo('liability')">
                 <div class="icon me-2 mb-1">
                   <i class="ni ni-ui-04 text-info"></i>
                 </div>
@@ -54,7 +54,7 @@
               </a>
             </li>
             <li class="nav-item">
-              <a class="nav-link text-dark d-flex align-items-center" data-scroll="" href="#disclaimer">
+              <a class="nav-link text-dark d-flex align-items-center cursor-pointer" @click="goTo('disclaimer')">
                 <div class="icon me-2 mb-1">
                   <i class="ni ni-archive-2 text-info"></i>
                 </div>
@@ -213,7 +213,7 @@
                 accuracy; nor do we promise to ensure that the website remains available or that the material on the
                 website is kept up to date.
               </p>
-              <h3 class="mt-5 mb-3" id="disclaimer">Disclaimer</h3>
+              <h3 class="mt-5 mb-3" id="disclaimer">{{ trad('Disclaimer') }}</h3>
               <p>To the maximum extent permitted by applicable law, we exclude all representations, warranties and
                 conditions relating to our website and the use of this website. Nothing in this disclaimer will:</p>
               <ul>
@@ -239,9 +239,18 @@
 console.log('-> StatusPlace.vue !')
 
 // traduction
-// import {trad} from '@/divers/translation'
+import {trad} from '@/divers/translation'
+
+function goTo(anchor) {
+  console.log('-> fonc goTo, anchor =', anchor)
+  const element = document.querySelector(`#${anchor}`)
+  console.log('element =', element)
+  element.scrollIntoView({
+    behavior: 'smooth',
+    block: 'center'
+  })
+}
 
 </script>
 <style>
-
 </style>

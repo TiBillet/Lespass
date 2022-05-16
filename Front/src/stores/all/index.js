@@ -24,10 +24,10 @@ export const useAllStore = defineStore({
           throw new Error(`${response.status} - ${response.statusText}`)
         }
         const retour = await response.json()
-        console.log('getEvents, type retour =', retour)
+        // console.log('getEvents, type retour =', retour)
         this.events = retour
       } catch (error) {
-        console.log('useAllStore, getEvents:', error)
+        // console.log('useAllStore, getEvents:', error)
         this.error = error
       } finally {
         this.loading = false
@@ -44,8 +44,7 @@ export const useAllStore = defineStore({
           throw new Error(`${response.status} - ${response.statusText}`)
         }
         const retour = await response.json()
-        // console.log('useAllStore, getPlace:', retour)
-        console.log('getPlace, retour =', retour)
+        // console.log('getPlace, retour =', retour)
         this.place = retour
         // redirection sur le wiki tibillet si la billetterie n'est pas activée
         if (retour.activer_billetterie === false) {
@@ -53,7 +52,7 @@ export const useAllStore = defineStore({
         }
       } catch (error) {
         this.error = error
-        console.log('useAllStore, getPlace: type =', error)
+        // console.log('useAllStore, getPlace: type =', error)
         // redirection sur le wiki tibillet si 404
         if (error.toString().indexOf('404')) {
           window.location = "https://wiki.tibillet.re/"
