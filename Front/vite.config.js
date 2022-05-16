@@ -21,9 +21,6 @@ export default defineConfig({
     proxy: {
       '/api': urlLieu,
       '/media': urlLieu
-    },
-    watch: {
-      usePolling: true
     }
   }
 })

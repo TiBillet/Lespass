@@ -1,6 +1,6 @@
 <template>
   <!-- modal adhésion -->
-  <div class="modal fade" id="modal-form-adhesion" tabindex="-1" role="dialog"
+  <div v-if="Object.entries(place).length > 0" class="modal fade" id="modal-form-adhesion" tabindex="-1" role="dialog"
        aria-labelledby="modal-form-adhesion"
        aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-" role="document">
@@ -14,20 +14,18 @@
                 <i class="fas fa-question mb-1"></i>
               </div>
             </div>
-
             <div class="card-body">
-
               <form @submit.prevent="validerAdhesion($event)" novalidate>
 
                 <!-- prix -->
                 <div class="input-group mb-2 has-validation">
                   <div :id="`adesion-modal-price-parent${index}`" class="col form-check mb-3"
-                       v-for="(price, index) in prices" :key="index">
-                    <input v-if="index === 0" :value="price.uuid" v-model="adhesionFormModal.uuidPrix"
+                       v-for="(price, index) in getPricesAdhesion()" :key="index">
+                    <input v-if="index === 0" :value="price.uuid" v-model="adhesion.uuidPrix"
                            class="form-check-input input-adesion-modal-price" type="radio"
                            name="prixAdhesionModal" :id="`uuidadhesionmodalpriceradio${index}`"
                            required>
-                    <input v-else :value="price.uuid" v-model="adhesionFormModal.uuidPrix"
+                     <input v-else :value="price.uuid" v-model="adhesion.uuidPrix"
                            class="form-check-input input-adesion-modal-price" type="radio"
                            name="prixAdhesionModal" :id="`uuidadhesionmodalpriceradio${index}`">
                     <label class="form-check-label" :for="`uuidadhesionmodalpriceradio${index}`">{{ price.name }} - {{
@@ -39,10 +37,10 @@
                   </div>
                 </div>
 
-                <!-- nom -->
+                                <!-- nom -->
                 <div class="input-group mb-2 has-validation">
                   <span class="input-group-text" @click="inputFocus('adhesion-nom')">Nom</span>
-                  <input id="adhesion-nom" v-model="adhesionFormModal.lastName" type="text"
+                  <input id="adhesion-nom" v-model="adhesion.lastName" type="text"
                          class="form-control" aria-label="Nom pour l'adhésion" required>
                   <div class=" invalid-feedback">Un nom svp !
                   </div>
@@ -51,7 +49,7 @@
                 <!-- prénom -->
                 <div class="input-group mb-2 has-validation">
                   <span class="input-group-text" @click="inputFocus('adhesion-prenom')">Prénom</span>
-                  <input id="adhesion-prenom" v-model="adhesionFormModal.firstName" type="text"
+                  <input id="adhesion-prenom" v-model="adhesion.firstName" type="text"
                          class="form-control" aria-label="Prénom pour l'adhésion" required>
                   <div class="invalid-feedback">Un prénom svp !</div>
                 </div>
@@ -59,7 +57,7 @@
                 <!-- email -->
                 <div class="input-group mb-2 has-validation">
                   <span class="input-group-text" @click="inputFocus('adhesion-email')">Email</span>
-                  <input id="adhesion-email" v-model="adhesionFormModal.email" type="email"
+                  <input id="adhesion-email" v-model="adhesion.email" type="email"
                          pattern="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$" class="form-control" required>
                   <div class="invalid-feedback">
                     Une adresse email valide svp !
@@ -69,7 +67,7 @@
                 <!-- code postal -->
                 <div class="input-group mb-2 has-validation">
                   <span class="input-group-text" @click="inputFocus('adhesion-code-postal')">Code postal</span>
-                  <input id="adhesion-code-postal" v-model="adhesionFormModal.postalCode"
+                  <input id="adhesion-code-postal" v-model="adhesion.postalCode"
                          type="number" class="form-control" aria-label="Code postal" required>
                   <div class="invalid-feedback">Code postal svp !</div>
                 </div>
@@ -77,7 +75,7 @@
                 <!-- téléphone -->
                 <div class="input-group has-validation">
                   <span class="input-group-text" @click="inputFocus('adhesion-tel')">Fixe ou Mobile</span>
-                  <input id="adhesion-tel" v-model="adhesionFormModal.phone" type="tel"
+                  <input id="adhesion-tel" v-model="adhesion.phone" type="tel"
                          class="form-control" pattern="^[0-9-+\s()]*$"
                          aria-label="Fixe ou Mobile" required>
                   <div class="invalid-feedback">Un numéro de téléphone svp !</div>
@@ -87,6 +85,7 @@
                 <div class="text-center">
                   <button type="submit" class="btn btn-round bg-gradient-info btn-lg w-100 mt-4 mb-0">Valider</button>
                 </div>
+
               </form>
             </div>
           </div>
@@ -99,8 +98,45 @@
 
 <script setup>
 console.log('-> ModalAdhesion.vue !')
+
+// store
+import {storeToRefs} from 'pinia'
+import {useAllStore} from '@/stores/all'
+import {useLocalStore} from '@/stores/local'
+
+// routes
+import {useRouter} from 'vue-router'
+
+// obtenir prix adhesion
+const {place} = storeToRefs(useAllStore())
+// stockage adhesion en ocal
+const {adhesion} = storeToRefs(useLocalStore())
+
+const router = useRouter()
+
+function getPricesAdhesion() {
+  const prices = place.value.membership_products.find(product => product.categorie_article === 'A').prices
+
+  console.log('prices =', prices)
+  return prices
+}
+
+function inputFocus(id) {
+  document.querySelector(`#${id}`).focus()
+}
+
+function goStatus() {
+  // ferme le modal
+  const elementModal = document.querySelector('#modal-form-adhesion')
+  const modal = bootstrap.Modal.getInstance(elementModal) // Returns a Bootstrap modal instance
+  modal.hide()
+  // aller au status
+  router.push('/status')
+}
+
+/*
 // vue
-import {ref, onMounted} from 'vue'
+import {ref} from 'vue'
 import {useRouter} from 'vue-router'
 
 // store
@@ -158,29 +194,7 @@ let adhesionFormModal = ref({
   uuidPrix: ''
 })
 
-/*
-// document.querySelector trouvera un élément seulement si celui-ci est dans le dom(mounted)
-onMounted(() => {
-  // maj email
-  document.querySelector('#modal-form-adhesion').addEventListener('show.bs.modal', function (event) {
-    console.log(new Date().toLocaleString(),'-> modal adhesion visible, storeLocal.email =', storeLocalGet('email'))
-    adhesionFormModal.value.email =
-  })
-})
-*/
 
-function goStatus() {
-  // ferme le modal
-  const elementModal = document.querySelector('#modal-form-adhesion')
-  const modal = bootstrap.Modal.getInstance(elementModal) // Returns a Bootstrap modal instance
-  modal.hide()
-  // aller au status
-  router.push({name: 'StatusPlace'})
-}
-
-function inputFocus(id) {
-  document.querySelector(`#${id}`).focus()
-}
 
 function validerAdhesion(event) {
   console.log('-> fonc validerAdhesion !!')
@@ -225,7 +239,7 @@ emitter.on('emailChange', (value) => {
     console.log('-> ModalAdhesion.vue, erreur:', erreur)
   }
 })
-
+*/
 </script>
 
 <style scoped>
