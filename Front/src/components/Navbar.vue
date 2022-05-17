@@ -1,9 +1,9 @@
 <template>
   <!-- pour load place -->
   <p v-if="error !== null" class="text-dark">{{ error }}</p>
-  <Loading v-if="loading === true"/>
+  <Loading v-if="loading === true" test="accueil"/>
   <!-- Navbar router.currentRoute.value.name -->
-  <nav id="navbar" v-else class="navbar navbar-expand-lg z-index-3 w-100 bg-dark sticky-top">
+  <nav id="navbar" v-else class="navbar navbar-expand-lg z-index-3 w-100 navbar-transparent position-fixed">
     <div class="container">
       <!-- lieu -->
       <div class="navbar-brand">
@@ -15,7 +15,7 @@
       <!-- partie droite -->
       <div class="d-flex justify-content-between d-block ms-auto">
         <!-- pas d'adhésion -->
-        <a v-if="membership === false" class="nav-link ps-1 cursor-pointer"
+        <a v-if="adhesion.status === ''" class="nav-link ps-1 cursor-pointer"
            :title="`Adhérez à l'association '${ place.organisation }'`"
            role="button" data-bs-toggle="modal" data-bs-target="#modal-form-adhesion">
           <div class="d-flex justify-content-between align-items-center">
@@ -70,10 +70,20 @@ import {useLocalStore} from '@/stores/local'
 
 const {place, loading, error} = storeToRefs(useAllStore())
 const {getPlace} = useAllStore()
-const {email, refreshToken, membership} = storeToRefs(useLocalStore())
+const {email, refreshToken, adhesion} = storeToRefs(useLocalStore())
 
 // load place
 getPlace()
+
+window.addEventListener("scroll", (event) => {
+  if (scrollY === 0) {
+    document.querySelector('#navbar').style.backgroundColor = ''
+  } else {
+    document.querySelector('#navbar').style.backgroundColor = '#384663'
+  }
+    console.log('scrollY =', scrollY)
+})
+
 </script>
 
 <style>

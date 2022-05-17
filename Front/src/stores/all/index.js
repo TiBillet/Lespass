@@ -48,14 +48,16 @@ export const useAllStore = defineStore({
         this.place = retour
         // redirection sur le wiki tibillet si la billetterie n'est pas activée
         if (retour.activer_billetterie === false) {
-         window.location = "https://wiki.tibillet.re/"
+          console.log('redirection stopée --> all/index.js, retour.activer_billetterie = false ')
+          // window.location = "https://wiki.tibillet.re/"
         }
       } catch (error) {
         this.error = error
         // console.log('useAllStore, getPlace: type =', error)
         // redirection sur le wiki tibillet si 404
         if (error.toString().indexOf('404')) {
-          window.location = "https://wiki.tibillet.re/"
+          console.log('redirection stopée --> all/index.js, erreur getPlace ')
+          // window.location = "https://wiki.tibillet.re/"
         }
       } finally {
         this.loading = false

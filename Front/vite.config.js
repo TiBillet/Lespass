@@ -13,6 +13,9 @@ export default defineConfig({
       "~@": resolve(__dirname, "/src")
     },
   },
+  build: {
+    minify: false
+  },
   server: {
     // pour exposer le port d'un container docker
     host: true,
