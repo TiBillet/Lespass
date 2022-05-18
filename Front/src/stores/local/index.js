@@ -7,7 +7,7 @@ export const useLocalStore = defineStore({
   id: 'local',
   state: () => ({
     refreshToken: '',
-    me,
+    me: {},
     adhesion: {
       email: '',
       first_name: '',

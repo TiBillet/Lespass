@@ -2,9 +2,6 @@
 import {createRouter, createWebHistory} from 'vue-router'
 import Accueil from '../views/Accueil.vue'
 
-// api
-import {/*emailActivation, */postStripeReturn} from '@/api'
-
 // store
 import {useLocalStore} from '@/stores/local'
 
