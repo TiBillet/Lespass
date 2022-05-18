@@ -239,7 +239,7 @@
 console.log('-> StatusPlace.vue !')
 
 // traduction
-import {trad} from '@/divers/translation'
+// import {trad} from '@/divers/translation'
 
 function goTo(anchor) {
   console.log('-> fonc goTo, anchor =', anchor)
