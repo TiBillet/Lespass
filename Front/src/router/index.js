@@ -3,7 +3,8 @@ import {createRouter, createWebHistory} from 'vue-router'
 import Accueil from '../views/Accueil.vue'
 
 // api
-// import {loadPlace, loadEvents, loadEventBySlug, emailActivation, postStripeReturn} from '@/api'
+// import {emailActivation, postStripeReturn} from '@/api'
+import {postStripeReturn} from '@/api'
 
 const domain = `${location.protocol}//${location.host}`
 
@@ -17,13 +18,7 @@ const routes = [
   {
     path: '/',
     name: 'Accueil',
-    component: Accueil/*,
-    // chargement synchrone des données lieu et évènements avant d'entrer dans la vue
-    async beforeEnter(to, from) {
-      await loadPlace()
-      await loadEvents()
-    }
-    */
+    component: Accueil
   },
   {
     // route interceptée
@@ -74,13 +69,16 @@ const router = createRouter({
   routes,
   scrollBehavior(to, from, savedPosition) {
     // always scroll to top
-    return {top: 0}
+    return {
+      top: 0,
+      behavior: 'smooth'
+    }
   }
 })
 
 router.beforeEach((to, from, next) => {
-  // console.log('from =', from)
-  // console.log('to =', to)
+  console.log('from =', from)
+  console.log('to =', to)
 
   // traitement de la redirection si interception
   let redirection = false
@@ -91,7 +89,8 @@ router.beforeEach((to, from, next) => {
 
   // intercepte la route "NotFound" et redirige sur le wiki tibillet
   if (to.name === "NotFound") {
-    window.location = "https://wiki.tibillet.re/"
+    console.log(`redirection stopée --> router/index.js, route 'NotFound'`)
+    // window.location = "https://wiki.tibillet.re/"
   }
 
   // intercepte la route "EmailConfirmation" et active l'email
@@ -135,7 +134,11 @@ router.beforeEach((to, from, next) => {
     redirection = true
   }
 
+  console.log('redirection =',redirection)
+  console.log('nouvelleRoute =',nouvelleRoute)
+
   if (redirection === true) {
+
     next({
       path: nouvelleRoute,
       replace: true

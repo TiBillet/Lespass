@@ -1,12 +1,13 @@
 <template>
-  <Navbar/>
+  <Navbar />
   <router-view/>
   <!--
   <Footer :place="place"/>
   <Message/>
+    -->
   <ModalMessage/>
-   adhésion
-  <ModalAdhesion v-if="place.button_adhesion === true"/> -->
+  <!-- adhésion -->
+  <ModalAdhesion v-if="place.button_adhesion === true"/>
 </template>
 
 <script setup>
@@ -14,11 +15,19 @@ console.log(' -> App.vue !')
 
 // composants
 import Navbar from './components/Navbar.vue'
+import ModalAdhesion from './components/ModalAdhesion.vue'
+import ModalMessage from './components/ModalMessage.vue'
+
+// store
+import {storeToRefs} from 'pinia'
+import {useAllStore} from '@/stores/all'
+
+const {place} = storeToRefs(useAllStore())
+
 /*
 import Footer from './components/Footer.vue'
 import Message from './components/Message.vue'
-import ModalMessage from './components/ModalMessage.vue'
-import ModalAdhesion from './components/ModalAdhesion.vue'
+
 */
 
 

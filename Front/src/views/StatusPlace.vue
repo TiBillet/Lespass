@@ -1,5 +1,9 @@
 <template>
-  <section class="pt-1 pb-0">
+  <p v-if="error !== null" class="text-dark">{{ error }}</p>
+  <Loading v-if="loading === true" test="accueil"/>
+  <Header v-if="Object.entries(place).length > 0" :header-event="getHeaderPlace()"/>
+
+  <section class="pt-3 pb-0">
     <div class="container">
       <div class="row">
         <!-- liens -->
@@ -238,8 +242,40 @@
 <script setup>
 console.log('-> StatusPlace.vue !')
 
+// store
+import {storeToRefs} from 'pinia'
+import {useAllStore} from '@/stores/all'
+
+// composants
+import Loading from '@/components/Loading.vue'
+import Header from '../components/Header.vue'
+
 // traduction
-// import {trad} from '@/divers/translation'
+import {trad} from '@/divers/translation'
+
+const {place, events, loading, error} = storeToRefs(useAllStore())
+
+function getHeaderPlace() {
+  const domain = `${location.protocol}//${location.host}`
+  let urlImage, urlLogo
+  try {
+    urlImage = place.value.img_variations.fhd
+  } catch (e) {
+    urlImage = `${domain}/media/images/image_non_disponible.svg`
+  }
+
+  try {
+    urlLogo = place.value.logo_variations.med
+  } catch (e) {
+    urlLogo = `${domain}/media/images/image_non_disponible.svg`
+  }
+
+  return {
+    urlImage: urlImage,
+    logo: urlLogo,
+    titre: 'Status'
+  }
+}
 
 function goTo(anchor) {
   console.log('-> fonc goTo, anchor =', anchor)

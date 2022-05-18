@@ -1,9 +1,9 @@
 <template>
   <!-- pour load events -->
   <p v-if="error !== null" class="text-dark">{{ error }}</p>
-  <Loading v-if="loading === true"/>
+  <Loading v-if="loading === true" test="accueil"/>
   <Header v-if="Object.entries(place).length > 0" :header-event="getHeaderPlace()"/>
-  <section v-if="Object.entries(events).length > 0" class="pt-5 pb-0">
+  <section v-if="Object.entries(events).length > 0" class="pb-0">
     <div class="container">
       <div class="row">
         <div class="col-lg-4 col-md-6 mb-2" v-for="(event, index) in events" :key="index">

@@ -5,8 +5,16 @@ export const useLocalStore = defineStore({
   state: () => ({
     email: '',
     refreshToken: '',
-    membership: false,
-    storeBeforeUseExternalUrl: {}
+    storeBeforeUseExternalUrl: {},
+    adhesion: {
+      email: '',
+      first_name: '',
+      last_name: '',
+      phone: null,
+      postal_code: null,
+      adhesion: '',
+      status: ''
+    }
   }),
   persist: {
     key: 'Tibillet-local',

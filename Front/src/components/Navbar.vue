@@ -1,40 +1,38 @@
 <template>
   <!-- pour load place -->
   <p v-if="error !== null" class="text-dark">{{ error }}</p>
-  <Loading v-if="loading === true"/>
-  <!-- Navbar -->
-  <nav v-else class="navbar navbar-expand-lg z-index-3 w-100 navbar-transparent blur blur-light fixed-top">
+  <Loading v-if="loading === true" test="accueil"/>
+  <!-- Navbar router.currentRoute.value.name -->
+  <nav id="navbar" v-else class="navbar navbar-expand-lg z-index-3 w-100 navbar-transparent position-fixed">
     <div class="container">
+      <!-- lieu -->
       <div class="navbar-brand">
-        <router-link to="/" class="navbar-brand font-weight-bolder text-white">{{ place.organisation }}</router-link>
+        <router-link to="/" class="navbar-brand d-flex justify-content-between align-items-center">
+          <h6 class="m-0 text-white">{{ place.organisation }}</h6>
+        </router-link>
       </div>
 
-      <button class="navbar-toggler shadow-none ms-2" type="button" data-bs-toggle="collapse"
-              data-bs-target="#navigation" aria-controls="navigation" aria-expanded="true"
-              aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon mt-2">
-          <span class="navbar-toggler-bar bar1"></span>
-          <span class="navbar-toggler-bar bar2"></span>
-          <span class="navbar-toggler-bar bar3"></span>
-        </span>
-      </button>
+      <!-- partie droite -->
+      <div class="d-flex justify-content-between d-block ms-auto">
+        <!-- pas d'adhésion -->
+        <a v-if="adhesion.status === ''" class="nav-link ps-1 cursor-pointer"
+           :title="`Adhérez à l'association '${ place.organisation }'`"
+           role="button" data-bs-toggle="modal" data-bs-target="#modal-form-adhesion">
+          <div class="d-flex justify-content-between align-items-center">
+            <i class="fa fa-address-card me-1 text-white" aria-hidden="true"></i>
+            <h6 class="m-0 text-white">Adhérez</h6>
+          </div>
+        </a>
 
-      <div class="navbar-collapse w-100 pt-3 pb-2 py-lg-0 collapse show" id="navigation" style="">
-        <ul class="navbar-nav navbar-nav-hover mx-auto">
-
-          <!-- adhésion -->
-          <li v-if="place.button_adhesion === true && router.currentRoute.value.name === 'Accueil' && membership === false"
-              class="nav-item mx-2">
-            <a class="btn bg-gradient-primary btn-icon me-2" role="button"
-               data-bs-toggle="modal" data-bs-target="#modal-form-adhesion">
-              <i class="fas fa-address-card me-1" aria-hidden="true"></i>
-              Adhérez à l'association '{{ place.organisation }}'
-            </a>
-          </li>
-
-
-        </ul>
+        <!-- pas de connexion -->
+        <a v-if="refreshToken === ''" class="nav-link ps-1  cursor-pointer">
+          <div class="d-flex justify-content-between align-items-center">
+            <i class="fa fa-user-circle-o me-1 text-white" aria-hidden="true"></i>
+            <h6 class="m-0 text-white">Se connecter</h6>
+          </div>
+        </a>
       </div>
+
     </div>
   </nav>
 </template>
@@ -70,18 +68,23 @@ import {storeToRefs} from 'pinia'
 import {useAllStore} from '@/stores/all'
 import {useLocalStore} from '@/stores/local'
 
-// routes
-import {useRouter} from 'vue-router'
-
 const {place, loading, error} = storeToRefs(useAllStore())
 const {getPlace} = useAllStore()
-const {email, refreshToken, membership} = storeToRefs(useLocalStore())
-const router = useRouter()
+const {email, refreshToken, adhesion} = storeToRefs(useLocalStore())
 
 // load place
 getPlace()
 
+window.addEventListener("scroll", (event) => {
+  if (scrollY === 0) {
+    document.querySelector('#navbar').style.backgroundColor = ''
+  } else {
+    document.querySelector('#navbar').style.backgroundColor = '#384663'
+  }
+    console.log('scrollY =', scrollY)
+})
+
 </script>
 
-<style scoped>
+<style>
 </style>

@@ -1,93 +1,64 @@
 // store
-import {useStore} from '@/store'
-
-// myStore
-import {storeLocalGet, storeLocalSet} from '@/storelocal'
+import {useLocalStore} from '@/stores/local'
 
 const domain = `${location.protocol}//${location.host}`
 
-export async function loadPlace() {
-  const store = useStore()
-  const apiLieu = `/api/here/`
-  try {
-    emitter.emit('statusLoading', true)
-    const response = await fetch(domain + apiLieu)
-    if (response.status !== 200) {
-      throw new Error(`${response.status} - ${response.statusText}`)
-    }
-    const retour = await response.json()
-    store.place = retour
-    // console.log('-> loadPlace retour =', retour)
-    emitter.emit('statusLoading', false)
-  } catch (erreur) {
-    console.log('Store, place, erreur:', erreur)
-    emitter.emit('message', {
-      tmp: 4,
-      typeMsg: 'danger',
-      contenu: `Chargement lieu, erreur: ${erreur}`
-    })
-  }
-}
+// status 226 = 'Paiement validé. Création des billets et envoi par mail en cours.' côté serveur
+// status 208 = 'Paiement validé. Billets envoyés par mail.'
+// status 402 = pas payé
+// status 202 = 'Paiement validé. Création des billets et envoi par mail en cours.' coté front
+export function postStripeReturn(uuidStripe) {
+  console.log(`-> fonc api postStripeReturn !`)
 
-export async function loadEvents() {
-  const store = useStore()
-  const apiEvents = `/api/events/`
-  try {
-    const response = await fetch(domain + apiEvents)
-    if (response.status !== 200) {
-      throw new Error(`${response.status} - ${response.statusText}`)
-    }
-    const retour = await response.json()
-    store.events = retour
-  } catch (erreur) {
-    console.log('Store, events, erreur:', erreur)
-    emitter.emit('message', {
-      tmp: 4,
-      typeMsg: 'danger',
-      contenu: `Chargement des évènements, erreur: ${erreur}`
-    })
+  // stockage adhesion en local
+  const {adhesion} = useLocalStore()
+
+  let messageValidation = 'OK', messageErreur = 'Retour stripe:'
+  if ( adhesion.status === 'attente_stripe') {
+    messageValidation = `<h2>Adhésion OK !</h2>`
+    messageErreur = `Retour stripe pour l'adhésion:`
   }
 
-}
-
-export async function loadEventBySlug(slug) {
-  console.log('-> fonction loadEventBySlug !')
-  const store = useStore()
-  console.log('1 -> store.events =', store.events)
-  try {
-    // récupération du uuid évènement à partir du slug
-    const urlApi = `/api/eventslug/${slug}`
-    console.log('domain + urlApi =', domain + urlApi)
-    const response = await fetch(domain + urlApi)
-    if (response.status !== 200) {
+  const apiStripe = `/api/webhook_stripe/`
+  const options = {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({uuid: uuidStripe})
+  }
+  fetch(domain + apiStripe, options).then(response => {
+    console.log('/api/webhook_stripe/ -> response =', response)
+    // TODO: vérifier tous les status possible du serveur
+    // if (response.status !== 202) {
+    if (response.status !== 226) {
       throw new Error(`${response.status} - ${response.statusText}`)
     }
-    const retour = await response.json()
-    console.log('retour =', retour)
-    // maj store events
-    console.log('store.currentUuidEvent =', store.currentUuidEvent)
-    if (store.currentUuidEvent !== '' && store.currentUuidEvent !== undefined) {
-      // maj store events pour un store events déjà existant
-      console.log('-> maj currentEvent !')
-      let currentEvent = store.events.find(evt => evt.uuid === store.currentUuidEvent)
-      currentEvent = retour
-    } else {
-      // maj store events pour un store events vide []
-      console.log('-> ajout currentEvent !')
-      // store.events = []
-      store.events.push(retour)
-    }
-    console.log('2 -> store.events =', store.events)
-  } catch (erreur) {
-    console.log('Store, event(slug), erreur:', erreur)
-    emitter.emit('message', {
-      tmp: 4,
-      typeMsg: 'danger',
-      contenu: `Chargement de l'évènement '${slug}', erreur: ${erreur}`
+    return response.json()
+  }).then(retour => {
+    // maj status adhésion
+    adhesion.status = 'membership'
+    console.log('/api/webhook_stripe/ -> retour =', retour)
+    // message achat(s) ok
+    emitter.emit('modalMessage', {
+      titre: 'Succès',
+      dynamique: true,
+      contenu: messageValidation
     })
-  }
+  }).catch(function (erreur) {
+    adhesion.status = ''
+    console.log('/api/webhook_stripe/ -> erreur: ', erreur)
+    emitter.emit('modalMessage', {
+      titre: 'Erreur',
+      dynamique: true,
+      contenu: `${messageErreur} ${erreur}`
+    })
+  })
+
+
 }
 
+/* 4242
 export async function emailActivation(id, token) {
   // console.log('-> emailActivation')
   // attention pas de "/" à la fin de "api"
@@ -157,63 +128,6 @@ export async function getMe(token) {
   emitter.emit('statusLoading', false)
 }
 
-// status 226 = 'Paiement validé. Création des billets et envoi par mail en cours.' côté serveur
-// status 208 = 'Paiement validé. Billets envoyés par mail.'
-// status 402 = pas payé
-// status 202 = 'Paiement validé. Création des billets et envoi par mail en cours.' coté front
-export function postStripeReturn(uuidStripe) {
-  console.log(`-> fonc api postStripeReturn !`)
-  const store = useStore()
-  const apiStripe = `/api/webhook_stripe/`
-  const options = {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Token': window.accessToken
-    },
-    body: JSON.stringify({uuid: uuidStripe})
-  }
-  fetch(domain + apiStripe, options).then(response => {
-    console.log('/api/webhook_stripe/ -> response =', response)
-    // TODO: vérifier tous les status possible du serveur
-    // if (response.status !== 202) {
-    if (response.status !== 226) {
-      throw new Error(`${response.status} - ${response.statusText}`)
-    }
-    return response.json()
-  }).then(retour => {
-
-    console.log('/api/webhook_stripe/ -> retour =', retour)
-    // store.$state = { counter: 666, name: 'Paimon' }
-    const piniaCache = JSON.parse(window.sessionStorage.getItem('Tibillet'))
-    console.log('piniaCache =', piniaCache)
-    console.log('store.memoComposants =', store.memoComposants)
-    // vider les contenus du memoComposants de l'évènement courant
-    const memoComponentsProperty = ['CardAdhesion', 'Don', 'Options', 'CardBillet']
-    for (let i = 0; i < memoComponentsProperty.length; i++) {
-      const property = memoComponentsProperty[i]
-      console.log('property =', property)
-      delete store.memoComposants[property][store.currentUuidEvent]
-      console.log(`store.memoComposants.${property} =`, store.memoComposants[property])
-      console.log('--------------')
-    }
-
-    // message achat(s) ok
-    emitter.emit('modalMessage', {
-      titre: 'Succès',
-      dynamique: true,
-      contenu: '<h2>Validation OK !<h2>'
-    })
-  }).catch(function (erreur) {
-    console.log('/api/webhook_stripe/ -> erreur: ', erreur)
-    emitter.emit('message', {
-      tmp: 6,
-      typeMsg: 'danger',
-      contenu: `Retour achat(s) stripe, erreur: ${erreur}`
-    })
-  })
-}
-
 export async function refreshAccessToken(refreshToken) {
   console.log('-> refreshAccessToken, refreshToken =', refreshToken)
   const api = `/api/user/token/refresh/`
@@ -242,44 +156,4 @@ export async function refreshAccessToken(refreshToken) {
     window.accessToken = ''
   }
 }
-
-export function postAdhesionModal(data) {
-  console.log(`-> fonc postAdhesionModal !`)
-  const apiMemberShip = `/api/membership/`
-  const options = {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Token': window.accessToken
-    },
-    body: JSON.stringify(data)
-  }
-
-  console.log('options =', JSON.stringify(options, null, 2))
-  emitter.emit('statusLoading', true)
-  fetch(domain + apiMemberShip, options).then(response => {
-    console.log('response =', response)
-    if (response.status !== 201) {
-      throw new Error(`${response.status} - ${response.statusText}`)
-    }
-    return response.json()
-  }).then(retour => {
-    // console.log('retour =', retour)
-
-    // sauver état du store(session) pour nouvel onglet ou page(entraine nouvelle session "storage") redirigé par stripe
-    const store = useStore()
-    const storeLocal = StoreLocal.use('localStorage', 'Tibilet-identite')
-    storeLocal.storeBeforeUseExternalUrl = store.memoComposants
-
-    // redirection stripe formulaire paiement
-    window.location = retour.checkout_url
-  }).catch(function (erreur) {
-    console.log('erreur =', erreur)
-    emitter.emit('message', {
-      tmp: 10,
-      typeMsg: 'danger',
-      contenu: `Retour adhésion, erreur: ${erreur}`
-    })
-  })
-
-}
+ */

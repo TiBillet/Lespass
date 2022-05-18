@@ -137,3 +137,24 @@ DjangoFiles/BaseBillet/static/blk-pro
 DjangoFiles/BaseBillet/templates/blk-pro-mvc
 
 tempo/
+/Front/src/assets/js/now-design-system-pro.js
+/Front/src/assets/js/now-design-system-pro.js.map
+/Front/src/assets/js/now-design-system-pro.min.js
+/.gitignore
+/Front/src/assets/img/down-arrow.svg
+/Front/src/assets/img/down-arrow-dark.svg
+/Front/src/assets/img/down-arrow-white.svg
+/Front/src/assets/fonts/nucleo-icons.eot
+/Front/src/assets/fonts/nucleo.eot
+/Front/src/assets/fonts/nucleo.ttf
+/Front/src/assets/fonts/nucleo.woff
+/Front/src/assets/fonts/nucleo.woff2
+/Front/src/assets/fonts/nucleo-icons.svg
+/Front/src/assets/fonts/nucleo-icons.ttf
+/Front/src/assets/fonts/nucleo-icons.woff
+/Front/src/assets/fonts/nucleo-icons.woff2
+/Front/src/assets/css/now-design-system-pro.css
+/Front/src/assets/css/now-design-system-pro.css.map
+/Front/src/assets/css/now-design-system-pro.min.css
+/Front/src/assets/css/nucleo-icons.css
+/Front/src/assets/css/nucleo-svg.css

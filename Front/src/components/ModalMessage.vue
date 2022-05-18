@@ -27,7 +27,7 @@
 </template>
 
 <script setup>
-import {ref, onMounted} from 'vue'
+import {ref} from 'vue'
 
 const dataModal = ref({})
 const dynamic = ref(false)
@@ -38,16 +38,14 @@ emitter.on('modalMessage', (data) => {
     titre: data.titre,
     contenu: data.contenu
   }
+  dynamic.value = false
   if (data.dynamique === true) {
     dynamic.value = true
-  } else {
-    dynamic.value = false
   }
   const elementModal = document.querySelector('#conteneur-message-modal')
   const modalMessage = bootstrap.Modal.getOrCreateInstance(elementModal)
   modalMessage.show()
 })
-
 </script>
 
 <style scoped>
