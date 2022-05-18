@@ -253,7 +253,7 @@ import Header from '../components/Header.vue'
 // traduction
 import {trad} from '@/divers/translation'
 
-const {place, events, loading, error} = storeToRefs(useAllStore())
+const {place, loading, error} = storeToRefs(useAllStore())
 
 function getHeaderPlace() {
   const domain = `${location.protocol}//${location.host}`

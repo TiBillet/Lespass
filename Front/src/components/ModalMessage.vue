@@ -33,7 +33,7 @@ const dataModal = ref({})
 const dynamic = ref(false)
 
 emitter.on('modalMessage', (data) => {
-  console.log('-> Ecoute modalMessage, data =', JSON.stringify(data, null, 2))
+  // console.log('-> Ecoute modalMessage, data =', JSON.stringify(data, null, 2))
   dataModal.value = {
     titre: data.titre,
     contenu: data.contenu
