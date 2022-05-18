@@ -6,6 +6,8 @@ import smtplib
 from io import BytesIO
 
 import requests
+from requests.exceptions import ConnectionError
+
 import segno
 import barcode
 from django.contrib.auth import get_user_model
@@ -22,7 +24,7 @@ from django.template.loader import render_to_string, get_template
 from django.utils import timezone
 
 from AuthBillet.models import TibilletUser, TerminalPairingToken
-from BaseBillet.models import Reservation, Ticket, Configuration
+from BaseBillet.models import Reservation, Ticket, Configuration, Membership, LigneArticle
 from Customers.models import Client
 from TiBillet.celery import app
 
@@ -160,7 +162,6 @@ class MailJetSendator():
 
     def send(self):
         if self.config_valid():
-
             data = {
                 'Messages': [
                     {
@@ -283,7 +284,6 @@ def connexion_celery_mailer(user_email, base_url, subject=None):
     """
     logger.info(f'WORKDER CELERY app.task connexion_celery_mailer : {user_email}')
 
-
     User = get_user_model()
     user = User.objects.get(email=user_email)
 
@@ -291,12 +291,11 @@ def connexion_celery_mailer(user_email, base_url, subject=None):
     token = default_token_generator.make_token(user)
     connexion_url = f"{base_url}/emailconfirmation/{uid}/{token}"
 
-
     if connection.tenant.schema_name != "public":
         config = Configuration.get_solo()
         organisation = config.organisation
         img_orga = config.img.med
-    else :
+    else:
         organisation = "TiBillet"
         img_orga = "Logo_Tibillet_Noir_Ombre_600px.png"
         meta = Client.objects.filter(categorie=Client.META).first()
@@ -327,7 +326,6 @@ def connexion_celery_mailer(user_email, base_url, subject=None):
     
     else:
     '''
-
 
     # Internal SMTP and html template
     if subject is None:
@@ -459,6 +457,66 @@ def ticket_celery_mailer(reservation_uuid: str):
         except Exception as e:
             logger.error(f"{timezone.now()} Erreur envoie de mail pour reservation {reservation} : {e}")
             raise Exception
+
+
+@app.task
+def send_membership_to_cashless(data):
+    configuration = Configuration.get_solo()
+    if not configuration.server_cashless or not configuration.key_cashless:
+        logger.warning(f'Pas de configuration cashless')
+
+    else :
+        ligne_article = LigneArticle.objects.get(pk=data.get('ligne_article_pk'))
+        user = ligne_article.paiement_stripe.user
+
+        membre, created = Membership.objects.get_or_create(user=user)
+        tarif_adhesion = ligne_article.pricesold.prix
+
+        if not membre.first_contribution:
+            membre.first_contribution = timezone.now().date()
+
+        membre.last_contribution = timezone.now().date()
+        membre.contribution_value = tarif_adhesion
+        membre.save()
+
+        data = {
+            "email": membre.email(),
+            "adhesion": tarif_adhesion,
+            "uuid_commande": ligne_article.paiement_stripe.uuid,
+            "first_name": membre.first_name,
+            "last_name": membre.last_name,
+            "phone": membre.phone,
+            "postal_code": membre.postal_code,
+            "birth_date": membre.birth_date,
+        }
+
+        try:
+
+            sess = requests.Session()
+            r = sess.post(
+                f'{configuration.server_cashless}/api/membership',
+                headers={
+                    'Authorization': f'Api-Key {configuration.key_cashless}'
+                },
+                data=data,
+            )
+
+            sess.close()
+            logger.info(
+                f"        demande au serveur cashless pour {data}. réponse : {r.status_code} ")
+
+            if r.status_code in [200, 201, 202]:
+                ligne_article.status = LigneArticle.VALID
+            else:
+                logger.error(
+                    f"erreur réponse serveur cashless {r.status_code} {r.text}")
+
+        except ConnectionError as e:
+            logger.error(
+                f"ConnectionError serveur cashless {configuration.server_cashless} : {e}")
+
+        except Exception as e:
+            raise Exception(f'Exception request send_membership_to_cashless {type(e)} : {e} ')
 
 
 @app.task

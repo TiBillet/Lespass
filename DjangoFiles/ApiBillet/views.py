@@ -856,11 +856,11 @@ def paiment_stripe_validator(request, paiement_stripe):
 class Webhook_stripe(APIView):
     def post(self, request):
         payload = request.data
-        logger.info(f"Webhook_stripe : {payload}")
 
         # c'est une requete depuis les webhook
         # configuré dans l'admin stripe
         if payload.get('type') == "checkout.session.completed":
+            logger.info(f"Webhook_stripe from stripe : {payload}")
             tenant_uuid_in_metadata = payload["data"]["object"]["metadata"]["tenant"]
             # if connection.tenant.schema_name == "public":
             if f"{connection.tenant.uuid}" != tenant_uuid_in_metadata:
@@ -870,8 +870,9 @@ class Webhook_stripe(APIView):
 
                 tenant = Client.objects.get(uuid=tenant_uuid_in_metadata)
                 url_redirect = f"https://{tenant.domains.all().first().domain}{request.path}"
+
                 # On lance la requete nous même aussi,
-                # de tel sorte que ça soit déja validé
+                # de telle sorte que ça soit déja validé
                 # lorsque le client arrive sur la page de redirection
                 task = redirect_post_webhook_stripe_from_public.delay(url_redirect, request.data)
                 return Response(f"redirect to {url_redirect} with celery", status=status.HTTP_200_OK)
@@ -886,13 +887,17 @@ class Webhook_stripe(APIView):
                                                 checkout_session_id_stripe=payload['data']['object']['id'])
             return paiment_stripe_validator(request, paiement_stripe)
 
-        # c'est une requete depuis le vue.js.
+        # c'est une requete depuis vue.js.
         post_from_front_vue_js = payload.get('uuid')
         if post_from_front_vue_js:
+            logger.info(f"Webhook_stripe from vue.js : {payload}")
             paiement_stripe = get_object_or_404(Paiement_stripe,
                                                 uuid=post_from_front_vue_js)
             return paiment_stripe_validator(request, paiement_stripe)
 
+
+        # Réponse pour l'api stripe qui envoie des webhook pour tout autre que la validation de paiement.
+        # Si on renvoie une erreur, ils suppriment le webhook de leur côté.
         return Response('Pouple', status=status.HTTP_202_ACCEPTED)
 
     def get(self, request, uuid_paiement):
