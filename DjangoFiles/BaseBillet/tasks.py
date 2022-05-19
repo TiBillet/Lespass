@@ -28,17 +28,11 @@ from BaseBillet.models import Reservation, Ticket, Configuration, Membership, Li
 from Customers.models import Client
 from TiBillet.celery import app
 
-# from mailjet_rest import Client
-
 import logging
 
-from TiBillet.settings import DEBUG
 
 logger = logging.getLogger(__name__)
 
-
-# from celery.utils.log import get_task_logger
-# logger = get_task_logger(__name__)
 def encode_uid(pk):
     return force_str(urlsafe_base64_encode(force_bytes(pk)))
 

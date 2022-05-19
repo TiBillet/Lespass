@@ -17,7 +17,7 @@ from django.utils import timezone
 from django.db.models import JSONField
 
 from django.utils.text import slugify
-from django_tenants.utils import tenant_context
+from django_tenants.utils import tenant_context, schema_context
 from solo.models import SingletonModel
 from django.utils.translation import ugettext_lazy as _
 from stdimage import StdImageField
@@ -26,6 +26,7 @@ from django.db import connection
 
 import AuthBillet.models
 from Customers.models import Client
+from MetaBillet.models import EventDirectory
 from QrcodeCashless.models import CarteCashless
 from TiBillet import settings
 import stripe
@@ -431,6 +432,19 @@ class Artist_on_event(models.Model):
     def configuration(self):
         with tenant_context(self.artist):
             return Configuration.get_solo()
+
+@receiver(post_save, sender=Artist_on_event)
+def add_to_public_event_directory(sender, instance: Artist_on_event, created, **kwargs):
+    place = connection.tenant
+    artist = instance.artist
+    with schema_context('public'):
+        event_directory, created = EventDirectory.objects.get_or_create(
+            datetime=instance.datetime,
+            event_uuid=instance.event.uuid,
+            place=place,
+            artist=artist,
+        )
+
 
 
 class ProductSold(models.Model):

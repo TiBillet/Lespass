@@ -318,24 +318,3 @@ def pre_save_signal_status(sender, instance, **kwargs):
                     if not callable(trigger_function):
                         raise Exception(f'Fonction {trigger_function} is not callable. Disdonc !?')
                     trigger_function(old_instance, new_instance)
-
-# POST_SAVE_TRANSITIONS = {
-#     'TIBILLETUSER': {
-#         Paiement_stripe.EXPIRE: {
-#             Paiement_stripe.PAID: set_ligne_article_paid,
-#         },
-#     },
-# }
-#
-#
-# @receiver(post_save)
-# def post_save_signal_status(sender, instance, **kwargs):
-#     sender_str = sender.__name__.upper()
-#     dict_transition = POST_SAVE_TRANSITIONS.get(sender_str)
-#     if dict_transition:
-#         logger.info(f"post_save_signal_status. Sender : {sender_str} - Instance : {instance}")
-#
-#         trigger_function = transitions.get('_all_', (
-#             transitions.get(new_instance.status, (
-#                 transitions.get('_else_', None)
-#             ))))
