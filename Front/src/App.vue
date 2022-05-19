@@ -11,7 +11,7 @@
 </template>
 
 <script setup>
-console.log(' -> App.vue !')
+// console.log(' -> App.vue !')
 
 // composants
 import Navbar from './components/Navbar.vue'

@@ -71,7 +71,7 @@ export const useLocalStore = defineStore({
 
     },
     async emailActivation(id, token) {
-      // console.log('store, all/index.js -> emailActivation')
+      console.log('store, all/index.js -> emailActivation')
       // console.log('-> id =', id)
       // console.log('-> token =', token)
 
@@ -97,7 +97,7 @@ export const useLocalStore = defineStore({
             titre: 'Succès',
             contenu: 'Utilisateur activé / connecté !'
           })
-          // console.log('emailActivation, retour.access =', retour.access)
+          console.log('emailActivation, retour =', retour)
           // maj token d'accès
           window.accessToken = retour.access
           this.refreshToken = retour.refresh

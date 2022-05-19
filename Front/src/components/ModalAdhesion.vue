@@ -116,8 +116,7 @@
 </template>
 
 <script setup>
-console.log('-> ModalAdhesion.vue !')
-
+// console.log('-> ModalAdhesion.vue !')
 // vue
 import {ref} from 'vue'
 
@@ -164,7 +163,7 @@ function goStatus() {
 
 
 function postAdhesionModal(data) {
-  console.log(`-> fonc postAdhesionModal !`)
+  // console.log(`-> fonc postAdhesionModal !`)
   const domain = `${location.protocol}//${location.host}`
   const apiMemberShip = `/api/membership/`
   const options = {
