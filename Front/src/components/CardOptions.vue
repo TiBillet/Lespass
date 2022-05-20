@@ -1,30 +1,32 @@
 <template>
-  <fieldset v-if="options.checkbox.length > 1 && options.radio.length > 0" class="shadow-sm p-3 mb-5 bg-body rounded">
+  <fieldset v-if="getOptions.nb_options_checkbox > 0 && getOptions.nb_options_radio > 1"
+            class="shadow-sm p-3 mb-5 bg-body rounded">
     <legend>
       <h3 class="font-weight-bolder text-info text-gradient align-self-start">Options</h3>
     </legend>
-    <!-- options radio -->
-    <div v-if="options.checkbox.length > 1" class="input-group mb-2 has-validation">
-        <span v-for="(option, index) in options.checkbox" :key="index" class="form-switch me-3">
+
+    <!-- options checkbox -->
+    <div v-if="getOptions.nb_options_checkbox > 0" class="input-group mb-2 has-validation">
+        <span v-for="(option, index) in getOptions.options_checkbox" :key="index" class="form-switch me-3">
           <input v-if="option.activation === true" class="form-check-input" type="checkbox"
                  :id="`option-checkbox${option.uuid}`"
-                 @change.stop="updateOptions('checkbox',$event.target.checked,option.uuid)" checked>
+                 @change.stop="updateOptions('options_checkbox',$event.target.checked,option.uuid)" checked>
           <input v-else class="form-check-input" type="checkbox" :id="`option-checkbox${option.uuid}`"
-                 @change.stop="updateOptions('checkbox',$event.target.checked,option.uuid)">
+                 @change.stop="updateOptions('options_checkbox',$event.target.checked,option.uuid)">
           <label class="form-check-label text-dark" :for="`option-checkbox${option.uuid}`">{{ option.name }}</label>
         </span>
     </div>
 
-    <!-- options checkbox -->
-    <div v-if="options.radio.length > 0" class="input-group mb-2 has-validation">
-      <div v-for="(option, index) in options.radio" :key="index" class="form-check ps-0 me-3">
-        <input v-if="option.selection === true" class="form-check-input " type="radio" name="OptionRadioName"
+    <!-- options radio -->
+    <div v-if="getOptions.nb_options_radio > 1" class="input-group mb-2 has-validation">
+      <div v-for="(option, index) in getOptions.options_radio" :key="index" class="form-check ps-0 me-3">
+        <input v-if="option.activation === true" class="form-check-input " type="radio" name="OptionRadioName"
                :id="`flexOptionRadio${index}`"
                style="margin-left: 0;"
-               @change.stop="updateOptions('radio',$event.target.checked,option.uuid)" checked>
+               @change.stop="updateOptions('options_radio',$event.target.checked,option.uuid)" checked>
         <input v-else class="form-check-input " type="radio" name="OptionRadioName" :id="`flexOptionRadio${index}`"
                style="margin-left: 0;"
-               @change.stop="updateOptions('radio',$event.target.checked,option.uuid)">
+               @change.stop="updateOptions('options_radio',$event.target.checked,option.uuid)">
         <label class="form-check-label" :for="`flexOptionRadio${index}`">
           {{ option.name }}
         </label>
@@ -35,8 +37,18 @@
 </template>
 
 <script setup>
-// console.log('-> CardOptions.vue !')
+console.log('-> CardOptions.vue !')
 
+// store
+import {storeToRefs} from 'pinia'
+import {useEventStore} from '@/stores/event'
+
+// state event
+const {event} = storeToRefs(useEventStore())
+// action(s) du state event
+const {getOptions, updateOptions} = useEventStore()
+
+/*
 // vue
 import {ref} from 'vue'
 
@@ -45,8 +57,7 @@ import {useStore} from '@/store'
 
 // attributs/props
 const props = defineProps({
-  options: Object,
-  indexMemo: String
+  uuidEvent: String,
 })
 const store = useStore()
 
@@ -55,7 +66,7 @@ let record = true
 
 // ini props.options desactive chaque option
 //checkbox (convert proxy to array)
-const dataInitCheckbox = JSON.parse(JSON.stringify(props.options.checkbox))
+const dataInitCheckbox = JSON.parse(JSON.stringify(props.event.options.checkbox))
 for (let i = 0; i < dataInitCheckbox.length; i++) {
   dataInitCheckbox[i]['activation'] = false
 }
@@ -123,6 +134,8 @@ function updateOptions(inputType, value, uuidOptions) {
   const option = options.value[inputType].find(opt => opt.uuid === uuidOptions)
   option.activation = value
 }
+
+ */
 </script>
 
 <style scoped>

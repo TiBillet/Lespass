@@ -1,4 +1,5 @@
 import {defineStore} from 'pinia'
+import {useLocalStore} from '@/stores/local'
 
 const domain = `${location.protocol}//${location.host}`
 
@@ -22,26 +23,53 @@ export const useEventStore = defineStore({
           throw new Error(`${response.status} - ${response.statusText}`)
         }
         const retour = await response.json()
-        // console.log('-> getEventBySlug, retour =', retour)
+
+        // ajout d'une propriété 'customers' à chaque prix
         for (const productKey in retour.products) {
           const product = retour.products[productKey]
           for (const prixKey in product.prices) {
-            // ajout d'une propriété 'customers' à chaque prix
             product.prices[prixKey]['customers'] = []
           }
-
         }
         this.event = retour
+        this.initEventForm()
       } catch (error) {
         this.error = error
         console.log('useEventStore, getEventBySlug:', error)
-        emitter.emit('message', {
-          tmp: 4,
-          typeMsg: 'danger',
+        emitter.emit('modalMessage', {
+          titre: 'Erreur',
           contenu: `Chargement de l'évènement '${slug}', erreur: ${error}`
         })
       } finally {
         this.loading = false
+      }
+    },
+    // init le formulaire d'un évènement (CardBillet, CardOptions)
+    initEventForm() {
+      console.log('-> action initEventForm !')
+      const localStore = useLocalStore()
+      // init data form / event uuid
+      let form = this.forms.find(obj => obj.event === this.event.uuid)
+      if (form === undefined) {
+        this.forms.push({
+          event: this.event.uuid,
+          email: localStore.adhesion.email, // pas d'observeur/proxy
+          options_radio: this.event.options_radio,
+          options_checkbox: this.event.options_checkbox,
+          prices: []
+        })
+        form = this.forms.find(obj => obj.event === this.event.uuid)
+
+        // options, ajout de la propriétée 'activation' à toutes les options
+        const options = ['options_checkbox', 'options_radio']
+        for (const optionsKey in options) {
+          let eventOptions = form[options[optionsKey]]
+          for (const eventOptionsKey in eventOptions) {
+            console.log('->', eventOptions[eventOptionsKey])
+            eventOptions[eventOptionsKey]['activation'] = false
+          }
+        }
+
       }
     },
     generateUUIDUsingMathRandom() {
@@ -67,17 +95,14 @@ export const useEventStore = defineStore({
         return []
       }
     },
-    addCustomer(priceUuid, categorieArticle) {
-      console.log('-> fonc addCustomer !')
-      console.log('priceUuid =', priceUuid)
-      console.log('categorieArticle =', categorieArticle)
+    addCustomer(priceUuid) {
+      // console.log('-> fonc addCustomer !')
       let prix = this.forms.find(obj => obj.event === this.event.uuid).prices
       let lePrix = prix.find(obj => obj.uuid === priceUuid)
       // pas encore d'ajout de ce prix
       if (lePrix === undefined) {
         prix.push({
           uuid: priceUuid,
-          categorie_article: categorieArticle,
           qty: 0,
           customers: []
         })
@@ -102,16 +127,69 @@ export const useEventStore = defineStore({
       // supprime leproduit si quantité = 0
       prix = this.forms.find(obj => obj.event === this.event.uuid).prices.filter(obj2 => obj2.qty > 0)
       this.forms.find(obj => obj.event === this.event.uuid).prices = prix
-
       // console.log('customers =', customers)
     },
     updateCustomer(priceUuid, customerUuid, value, variable) {
-      console.log('-> fonc updateCustomer !')
-      // console.log('priceUuid =', priceUuid)
-      // console.log('customerUuid =', customerUuid)
+      // console.log('-> fonc updateCustomer !')
       const customers = this.forms.find(obj => obj.event === this.event.uuid).prices.find(obj2 => obj2.uuid === priceUuid).customers
       let customer = customers.find(obj => obj.uuid === customerUuid)
       customer[variable] = value
+    },
+    stop(priceUuid, stock, maxPerUser) {
+      console.log('-> fonc stop !')
+      const price = this.forms.find(obj => obj.event === this.event.uuid).prices.find(obj2 => obj2.uuid === priceUuid)
+
+      // --- gestion de l'affichage du bouton "+" ---
+      // aucun ajout
+      if (price == undefined) {
+        return false
+      }
+      const nbCustomers = price.customers.length
+
+      // message nb billet max par utilisateur atteint
+      if (nbCustomers === maxPerUser) {
+        emitter.emit('modalMessage', {
+          titre: 'Attention',
+          contenu: `Le nombre maximun de billet par utilisateur est atteint !`
+        })
+      }
+
+      // stock pas géré et maxi par user géré
+      if (stock === null && nbCustomers < maxPerUser) {
+        return false
+      }
+      // stock et maxi par user géré
+      if (stock !== null && (stock - nbCustomers) >= 1 && nbCustomers < maxPerUser) {
+        return false
+      }
+      return true
+    },
+    updateOptions(inputType, value, uuidOption) {
+      let form = this.forms.find(obj => obj.event === this.event.uuid)
+      // console.log('-> fonc updateOptions, type =', inputType, '  --  value =', value, '  --  uuidOptions =', uuidOptions)
+      if (inputType === 'options_radio') {
+        // toutes les activation radio à false
+        for (let i = 0; i < form.options_radio.length; i++) {
+          form.options_radio[i].activation = false
+        }
+      }
+      const option = form[inputType].find(opt => opt.uuid === uuidOption)
+      option.activation = value
+    }
+  },
+  getters: {
+    getOptions: (state) => {
+      let form = state.forms.find(obj => obj.event === state.event.uuid)
+      const options_checkbox = form.options_checkbox
+      const nb_options_checkbox = options_checkbox.length
+      const options_radio = form.options_radio
+      const nb_options_radio = options_radio.length
+      return {
+        options_checkbox,
+        options_radio,
+        nb_options_checkbox,
+        nb_options_radio
+      }
     }
   },
   persist: {

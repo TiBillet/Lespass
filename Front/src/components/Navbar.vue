@@ -151,21 +151,21 @@ function showAdhesion() {
 
 function showAssets() {
   let contenu = `<h3>En travaux !</h3>`
- /*
-  const monnaies = profil.value.assets
-  let contenu = `<h3>Numéro de carte : ${profil.value.numberCahslessCard}</h3>`
-  for (let i = 0; i < monnaies.length; i++) {
-    const monnaie = monnaies[i]
-    console.log('monnaie =', monnaie)
-    // <i class="fas fa-gift"></i>
-    if (monnaie.monnaie_name.toLowerCase().indexOf('cadeau') !== -1) {
-      contenu += `<h3>${monnaie.monnaie_name.split(' ')[0]}<i class="fas fa-gift ms-1"></i> = ${monnaie.qty}</h3>`
-    } else {
-      contenu += `<h3>${monnaie.monnaie_name} = ${monnaie.qty}</h3>`
-    }
-  }
+  /*
+   const monnaies = profil.value.assets
+   let contenu = `<h3>Numéro de carte : ${profil.value.numberCahslessCard}</h3>`
+   for (let i = 0; i < monnaies.length; i++) {
+     const monnaie = monnaies[i]
+     console.log('monnaie =', monnaie)
+     // <i class="fas fa-gift"></i>
+     if (monnaie.monnaie_name.toLowerCase().indexOf('cadeau') !== -1) {
+       contenu += `<h3>${monnaie.monnaie_name.split(' ')[0]}<i class="fas fa-gift ms-1"></i> = ${monnaie.qty}</h3>`
+     } else {
+       contenu += `<h3>${monnaie.monnaie_name} = ${monnaie.qty}</h3>`
+     }
+   }
 
-  */
+   */
   emitter.emit('modalMessage', {
     titre: 'Monnaies',
     dynamique: true,
@@ -176,10 +176,12 @@ function showAssets() {
 
 // menu transparant / non transparant
 window.addEventListener("scroll", (event) => {
-  if (scrollY === 0) {
-    document.querySelector('#navbar').style.backgroundColor = ''
-  } else {
-    document.querySelector('#navbar').style.backgroundColor = '#384663'
+  if (document.querySelector('#navbar') !== null) {
+    if (scrollY === 0) {
+      document.querySelector('#navbar').style.backgroundColor = ''
+    } else {
+      document.querySelector('#navbar').style.backgroundColor = '#384663'
+    }
   }
 })
 
