@@ -15,6 +15,7 @@
               </div>
             </div>
             <div class="card-body">
+              <h6>Attention changement à vérifier !!!</h6>
               <!-- error -->
               <div v-if="modal.status === 'error'" class="bg-light"
                    :style="`width: ${modal.size.width}px; height: ${modal.size.height}px;`">
@@ -39,12 +40,12 @@
                 <!-- prix -->
                 <div class="input-group mb-2 has-validation">
                   <div :id="`adesion-modal-price-parent${index}`" class="col form-check mb-3"
-                       v-for="(price, index) in getPricesAdhesion()" :key="index">
-                    <input v-if="index === 0" :value="price.uuid" v-model="adhesion.uuidPrix"
+                       v-for="(price, index) in getPricesAdhesion" :key="index">
+                    <input v-if="index === 0" :value="price.uuid" v-model="adhesion.adhesion"
                            class="form-check-input input-adesion-modal-price" type="radio"
                            name="prixAdhesionModal" :id="`uuidadhesionmodalpriceradio${index}`"
                            required>
-                    <input v-else :value="price.uuid" v-model="adhesion.uuidPrix"
+                    <input v-else :value="price.uuid" v-model="adhesion.adhesion"
                            class="form-check-input input-adesion-modal-price" type="radio"
                            name="prixAdhesionModal" :id="`uuidadhesionmodalpriceradio${index}`">
                     <label class="form-check-label" :for="`uuidadhesionmodalpriceradio${index}`">{{ price.name }} - {{
@@ -59,7 +60,7 @@
                 <!-- nom -->
                 <div class="input-group mb-2 has-validation">
                   <span class="input-group-text" @click="inputFocus('adhesion-nom')">Nom</span>
-                  <input id="adhesion-nom" v-model="adhesion.lastName" type="text"
+                  <input id="adhesion-nom" v-model="adhesion.last_name" type="text"
                          class="form-control" aria-label="Nom pour l'adhésion" required>
                   <div class=" invalid-feedback">Un nom svp !
                   </div>
@@ -68,7 +69,7 @@
                 <!-- prénom -->
                 <div class="input-group mb-2 has-validation">
                   <span class="input-group-text" @click="inputFocus('adhesion-prenom')">Prénom</span>
-                  <input id="adhesion-prenom" v-model="adhesion.firstName" type="text"
+                  <input id="adhesion-prenom" v-model="adhesion.first_name" type="text"
                          class="form-control" aria-label="Prénom pour l'adhésion" required>
                   <div class="invalid-feedback">Un prénom svp !</div>
                 </div>
@@ -86,7 +87,7 @@
                 <!-- code postal -->
                 <div class="input-group mb-2 has-validation">
                   <span class="input-group-text" @click="inputFocus('adhesion-code-postal')">Code postal</span>
-                  <input id="adhesion-code-postal" v-model="adhesion.postalCode"
+                  <input id="adhesion-code-postal" v-model="adhesion.postal_code"
                          type="number" class="form-control" aria-label="Code postal" required>
                   <div class="invalid-feedback">Code postal svp !</div>
                 </div>
@@ -128,8 +129,10 @@ import {useLocalStore} from '@/stores/local'
 // routes
 import {useRouter} from 'vue-router'
 
-// obtenir prix adhesion
+// obtenir data adhesion
 const {place} = storeToRefs(useAllStore())
+const {getPricesAdhesion} = useAllStore()
+
 // stockage adhesion en ocal
 const {adhesion} = storeToRefs(useLocalStore())
 
@@ -140,13 +143,6 @@ const modal = ref({
   size: {},
   message: ''
 })
-
-function getPricesAdhesion() {
-  const prices = place.value.membership_products.find(product => product.categorie_article === 'A').prices
-
-  console.log('prices =', prices)
-  return prices
-}
 
 function inputFocus(id) {
   document.querySelector(`#${id}`).focus()
@@ -161,7 +157,7 @@ function goStatus() {
   router.push('/status')
 }
 
-
+// todo: mettre dans stores/all en tantque action
 function postAdhesionModal(data) {
   // console.log(`-> fonc postAdhesionModal !`)
   const domain = `${location.protocol}//${location.host}`
@@ -227,11 +223,11 @@ function validerAdhesion(event) {
     console.log('test adhesion =', adhesion.value)
     postAdhesionModal({
       email: adhesion.value.email,
-      first_name: adhesion.value.firstName,
-      last_name: adhesion.value.lastName,
+      first_name: adhesion.value.first_name,
+      last_name: adhesion.value.last_name,
       phone: adhesion.value.phone,
-      postal_code: adhesion.value.postalCode,
-      adhesion: adhesion.value.uuidPrix
+      postal_code: adhesion.value.postal_code,
+      adhesion: adhesion.value.adhesion
     })
 
   } else {

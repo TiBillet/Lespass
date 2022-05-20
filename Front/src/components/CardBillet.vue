@@ -39,37 +39,11 @@
 
 
   <!--
-  <fieldset class="shadow-sm p-3 mb-5 bg-body rounded" v-for="price in prix"
-
-    <legend>
-      <div class="d-flex justify-content-between mb-3">
-        <h3 class="font-weight-bolder text-info text-gradient align-self-start">{{ product.name }} {{ price.name.toLowerCase() }} : {{ price.prix }}€</h3>
-        <button v-if="(price.stock - price.users.length) >= 1" class="btn btn-primary ms-3" type="button"
-                @click.stop="addUser(price.uuid)">
-          <i class="fas fa-plus"></i>
-        </button>
-      </div>
-    </legend>
-
-
-    <div class="input-group mb-2" v-for="(user, index) in price.users" :key="index">
-      <input type="text" :value="user.last_name" placeholder="Nom" aria-label="Nom" class="form-control"
-             @keyup="updateUser( user.uuid, $event.target.value,'last_name')" required>
-      <input type="text" :value="user.first_name" placeholder="Prénom" aria-label="Prénom" class="form-control"
-             @keyup="updateUser(price.uuid, user.uuid, $event.target.value,'first_name')" required>
-        <button class="btn btn-primary mb-0" type="button" @click="deleteUser(price.uuid, user.uuid)" style="border-top-right-radius: 30px; border-bottom-right-radius: 30px;">
-          <i class="fas fa-times"></i>
-        </button>
-      <div class="invalid-feedback">Donnée(s) manquante(s) !</div>
-    </div>
-    </div>
-
     <div v-if="price.users.length > 0 " class="d-flex justify-content-end mb-3">
       <h6>
         SOUS-TOTAL : {{ (price.users.length * price.prix) }}€
       </h6>
     </div>
-  </fieldset>
   -->
 </template>
 
@@ -84,7 +58,6 @@ import {useEventStore} from '@/stores/event'
 const props = defineProps({
   image: Boolean,
   styleImage: Object,
-  uuidEvent: String
 })
 
 let stImage = ''

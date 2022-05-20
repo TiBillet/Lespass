@@ -15,7 +15,8 @@ export const useLocalStore = defineStore({
       phone: null,
       postal_code: null,
       adhesion: '',
-      status: ''
+      status: '',
+      activation: false
     }
   }),
   actions: {

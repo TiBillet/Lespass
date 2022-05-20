@@ -51,9 +51,11 @@ export const useEventStore = defineStore({
       // init data form / event uuid
       let form = this.forms.find(obj => obj.event === this.event.uuid)
       if (form === undefined) {
+
         this.forms.push({
           event: this.event.uuid,
           email: localStore.adhesion.email, // pas d'observeur/proxy
+          emailConfirme: localStore.adhesion.email,
           options_radio: this.event.options_radio,
           options_checkbox: this.event.options_checkbox,
           prices: []
@@ -175,6 +177,10 @@ export const useEventStore = defineStore({
       }
       const option = form[inputType].find(opt => opt.uuid === uuidOption)
       option.activation = value
+    },
+    updateEmail(emailType, value) {
+      // console.log('-> fonc updateEmail !')
+      this.forms.find(obj => obj.event === this.event.uuid)[emailType] = value
     }
   },
   getters: {
@@ -190,6 +196,12 @@ export const useEventStore = defineStore({
         nb_options_checkbox,
         nb_options_radio
       }
+    },
+    getEmail: (state) => {
+      const form = state.forms.find(obj => obj.event === state.event.uuid)
+      const email = form.email
+      const confirme = form.emailConfirme
+      return {email, confirme}
     }
   },
   persist: {

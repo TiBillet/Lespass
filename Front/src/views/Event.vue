@@ -12,16 +12,18 @@
 
     <form @submit.prevent="validerAchats($event)" class="needs-validation" novalidate>
       <!-- sans attribut "image" le nom du billet est affiché , style-image n'est pas obligatoire -->
-      <CardBillet :uuid-event="event.uuid" :image="true" :style-image="{height: '30px',width: 'auto'}" />
+      <CardBillet :image="true" :style-image="{height: '30px',width: 'auto'}" />
 
-      <CardOptions :uuid-event="event.uuid" />
-<!--
-       index-memo="unique00" = "index fixe" bon pour tous les évènements
-      <CardEmail :default-email="storeLocalGet('email')" index-memo="unique00"/>
+      <CardOptions  />
 
-      // Adhésion, Don
-      <CardProducts :products="currentEvent.products" :categories="['A', 'D']"/>
--->
+       <CardEmail />
+
+      <!--Adhésion -->
+      <CardAdhesion />
+
+      <!-- Don -->
+      <CardDon :activation="true"/>
+
       <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
     </form>
 
@@ -47,6 +49,9 @@ import Header from '@/components/Header.vue'
 import CardArtist from '@/components/CardArtist.vue'
 import CardBillet from '@/components/CardBillet.vue'
 import CardOptions  from '@/components/CardOptions.vue'
+import CardEmail from '@/components/CardEmail.vue'
+import CardAdhesion from '@/components/CardAdhesion.vue'
+import CardDon from '@/components/CardDon.vue'
 
 const {event, forms, loading, error} = storeToRefs(useEventStore())
 const {getEventBySlug} = useEventStore()
@@ -95,7 +100,7 @@ import {storeLocalGet, storeLocalSet} from '@/storelocal'
 import Header from '@/components/Header.vue'
 import CardPlace from '@/components/CardPlace.vue'
 import CardArtist from '@/components/CardArtist.vue'
-import CardEmail from '@/components/CardEmail.vue'
+
 import CardProducts from '@/components/CardProducts.vue'
 
 

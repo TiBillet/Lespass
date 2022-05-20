@@ -1,6 +1,5 @@
 <template>
   <fieldset class="shadow-sm p-3 mb-5 bg-body rounded">
-
     <legend>
       <!-- Adhésion -->
       <div class="card-header pb-0 d-flex align-items-center">
@@ -11,83 +10,162 @@
         </div>
       </div>
     </legend>
+
     <div class="form-check form-switch">
-      <input v-if="adhesion.obligatoire === true" class="form-check-input" type="checkbox"
+      <input v-if="place.adhesion_obligatoire === true" class="form-check-input" type="checkbox"
              id="etat-adhesion" checked disabled>
       <input v-else class="form-check-input" type="checkbox" id="etat-adhesion"
              @change="updateAdhesion('activation', $event.target.checked)" :checked="adhesion.activation">
 
-      <label v-if="adhesion.obligatoire === true" class="form-check-label text-dark" for="etat-adhesion">
+      <label v-if="place.adhesion_obligatoire === true" class="form-check-label text-dark" for="etat-adhesion">
         L'adhésion à l'association est obligatoire pour participer. Connectez vous si vous êtes déja adhérant.
       </label>
       <label v-else class="form-check-label text-dark" for="etat-adhesion">
         Prendre une adhésion associative.
       </label>
     </div>
-
-    <div v-if="adhesion.activation === true || adhesion.obligatoire === true">
+    <div v-if="adhesion.activation === true || place.adhesion_obligatoire === true">
 
       <!-- prix -->
       <div class="input-group mb-2 has-validation">
-        <div :id="`card-adhesion-uuid-price-parent${index}`" class="col form-check mb-3"
-             v-for="(price, index) in adhesion.prices" :key="index">
-          <input :value="price.uuid"
-                 class="form-check-input card-adhesion-uuid-price" type="radio"
-                 name="prixAdhesion" :id="`uuidPriceRadio${index}`"
-                 @change="updateAdhesion('uuidPrix', $event.target.value)">
-          <label class="form-check-label" :for="`uuidPriceRadio${index}`">{{ price.name }} - {{ price.prix }}€</label>
+        <div :id="`adesion-modal-price-parent${index}`" class="col form-check mb-3"
+             v-for="(price, index) in getPricesAdhesion" :key="index">
+          <input v-if="index === 0" :value="price.uuid" v-model="adhesion.uuidPrix"
+                 class="form-check-input input-adesion-modal-price" type="radio"
+                 name="prixAdhesionModal" :id="`uuidadhesionmodalpriceradio${index}`"
+                 required>
+          <input v-else :value="price.uuid" v-model="adhesion.uuidPrix"
+                 class="form-check-input input-adesion-modal-price" type="radio"
+                 name="prixAdhesionModal" :id="`uuidadhesionmodalpriceradio${index}`">
+          <label class="form-check-label" :for="`uuidadhesionmodalpriceradio${index}`">{{ price.name }} - {{
+              price.prix
+            }}€</label>
           <div v-if="index === 0" class="invalid-feedback">
-            Sélectionner un tarif d'adhésion svp !
+            Un tarif ?
           </div>
         </div>
       </div>
 
       <!-- nom -->
       <div class="input-group mb-2 has-validation">
-        <span class="input-group-text" id="basic-addon1">Nom</span>
-        <input :value="adhesion.lastName" type="text"
-               class="form-control" aria-label="Nom pour l'adhésion" required
-               @keyup="updateAdhesion('lastName', $event.target.value)">
-        <div class="invalid-feedback">Un nom svp !</div>
+        <span class="input-group-text" @click="inputFocus('adhesion-nom')">Nom</span>
+        <input id="adhesion-nom" v-model="adhesion.last_name" type="text"
+               class="form-control" aria-label="Nom pour l'adhésion" required>
+        <div class=" invalid-feedback">Un nom svp !
+        </div>
       </div>
 
       <!-- prénom -->
       <div class="input-group mb-2 has-validation">
-        <span class="input-group-text" id="basic-addon1">Prénom</span>
-        <input :value="adhesion.firstName" type="text"
-               id="adhesion-prenom" class="form-control" aria-label="Prénom pour l'adhésion" required
-               @keyup="updateAdhesion('firstName', $event.target.value)">
+        <span class="input-group-text" @click="inputFocus('adhesion-prenom')">Prénom</span>
+        <input id="adhesion-prenom" v-model="adhesion.first_name" type="text"
+               class="form-control" aria-label="Prénom pour l'adhésion" required>
         <div class="invalid-feedback">Un prénom svp !</div>
       </div>
+
       <!-- code postal -->
       <div class="input-group mb-2 has-validation">
-        <span class="input-group-text" id="basic-addon1">Code postal</span>
-        <input :value="adhesion.postalCode" id="adhesion-adresse"
-               type="number"
-               class="form-control" aria-label="Code postal" required
-               @keyup="updateAdhesion('postalCode', $event.target.value)">
+        <span class="input-group-text" @click="inputFocus('adhesion-code-postal')">Code postal</span>
+        <input id="adhesion-code-postal" v-model="adhesion.postal_code"
+               type="number" class="form-control" aria-label="Code postal" required>
         <div class="invalid-feedback">Code postal svp !</div>
       </div>
+
       <!-- téléphone -->
-      <div class="input-group mb-2 has-validation">
-        <span class="input-group-text" id="basic-addon1">Fixe ou Mobile</span>
-        <input :value="adhesion.phone" type="tel"
+      <div class="input-group has-validation">
+        <span class="input-group-text" @click="inputFocus('adhesion-tel')">Fixe ou Mobile</span>
+        <input id="adhesion-tel" v-model="adhesion.phone" type="tel"
                class="form-control" pattern="^[0-9-+\s()]*$"
-               aria-label="Fixe ou Mobile" placeholder="Non obligatoire, uniquement utile pour vous envoyer les confirmations d'achats."
-               @keyup="updateAdhesion('phone', $event.target.value)">
+               aria-label="Fixe ou Mobile" required>
         <div class="invalid-feedback">Un numéro de téléphone svp !</div>
       </div>
+      <p class="mb-2">Non obligatoire, uniquement utile pour vous envoyer les confirmations d'achats."</p>
 
+      <!--
+        // prix
+        <div class="input-group mb-2 has-validation">
+          <div :id="`card-adhesion-uuid-price-parent${index}`" class="col form-check mb-3"
+               v-for="(price, index) in getPricesAdhesion" :key="index">
+            <input :value="price.uuid"
+                   class="form-check-input card-adhesion-uuid-price" type="radio"
+                   name="prixAdhesion" :id="`uuidPriceRadio${index}`"
+                   @change="updateAdhesion('uuidPrix', $event.target.value)">
+            <label class="form-check-label" :for="`uuidPriceRadio${index}`">{{ price.name }} - {{ price.prix }}€</label>
+            <div v-if="index === 0" class="invalid-feedback">
+              Sélectionner un tarif d'adhésion svp !
+            </div>
+          </div>
+        </div>
+
+        // nom
+        <div class="input-group mb-2 has-validation">
+          <span class="input-group-text" id="basic-addon1">Nom</span>
+          <input :value="adhesion.lastName" type="text"
+                 class="form-control" aria-label="Nom pour l'adhésion" required
+                 @keyup="updateAdhesion('lastName', $event.target.value)">
+          <div class="invalid-feedback">Un nom svp !</div>
+        </div>
+
+        // prénom
+        <div class="input-group mb-2 has-validation">
+          <span class="input-group-text" id="basic-addon1">Prénom</span>
+          <input :value="adhesion.firstName" type="text"
+                 id="adhesion-prenom" class="form-control" aria-label="Prénom pour l'adhésion" required
+                 @keyup="updateAdhesion('firstName', $event.target.value)">
+          <div class="invalid-feedback">Un prénom svp !</div>
+        </div>
+        // code postal
+        <div class="input-group mb-2 has-validation">
+          <span class="input-group-text" id="basic-addon1">Code postal</span>
+          <input :value="adhesion.postalCode" id="adhesion-adresse"
+                 type="number"
+                 class="form-control" aria-label="Code postal" required
+                 @keyup="updateAdhesion('postalCode', $event.target.value)">
+          <div class="invalid-feedback">Code postal svp !</div>
+        </div>
+        // téléphone
+        <div class="input-group mb-2 has-validation">
+          <span class="input-group-text" id="basic-addon1">Fixe ou Mobile</span>
+          <input :value="adhesion.phone" type="tel"
+                 class="form-control" pattern="^[0-9-+\s()]*$"
+                 aria-label="Fixe ou Mobile" placeholder="Non obligatoire, uniquement utile pour vous envoyer les confirmations d'achats."
+                 @keyup="updateAdhesion('phone', $event.target.value)">
+          <div class="invalid-feedback">Un numéro de téléphone svp !</div>
+        </div>
+      -->
     </div>
   </fieldset>
 </template>
 
 <script setup>
 console.log('-> CardAdhesion.vue !')
-import {ref, onMounted, onUpdated} from 'vue'
 
 // vue
 import {useRouter} from 'vue-router'
+
+// store
+import {storeToRefs} from 'pinia'
+import {useAllStore} from "@/stores/all"
+import {useLocalStore} from "@/stores/local"
+
+const {place} = storeToRefs(useAllStore())
+const {getPricesAdhesion} = useAllStore()
+const {adhesion} = storeToRefs(useLocalStore())
+const router = useRouter()
+
+function inputFocus(id) {
+  document.querySelector(`#${id}`).focus()
+}
+
+function goStatus() {
+  // aller au status
+  router.push('/status')
+}
+
+
+/*
+import {ref, onMounted, onUpdated} from 'vue'
+
 
 // store
 import {useStore} from '@/store'
@@ -102,7 +180,7 @@ const props = defineProps({
 
 const store = useStore()
 
-const router = useRouter()
+
 
 // mémorise par défaut
 let record = true
@@ -195,11 +273,7 @@ function updateAdhesion(key, value) {
   }
 }
 
-function goStatus() {
-  // aller au status
-  router.push({name: 'StatusPlace'})
-}
-
+*/
 </script>
 
 <style scoped>
