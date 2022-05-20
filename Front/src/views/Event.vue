@@ -10,9 +10,9 @@
     </div>
 
 
-    <form @submit.prevent="goValiderAchats($event)" class="needs-validation" novalidate>
-      <!-- sans attribut "image" le nom du billet est affiché -->
-      <CardBillet :image="true" :style-image="styleImage" />
+    <form @submit.prevent="validerAchats($event)" class="needs-validation" novalidate>
+      <!-- sans attribut "image" le nom du billet est affiché , style-image n'est pas obligatoire -->
+      <CardBillet :uuid-event="event.uuid" :image="true" :style-image="{height: '30px',width: 'auto'}" />
 
       <!--
       <CardProducts :products="currentEvent.products" :categories="['B', 'F']"/>
@@ -23,9 +23,8 @@
       <CardEmail :default-email="storeLocalGet('email')" index-memo="unique00"/>
 
       <CardProducts :products="currentEvent.products" :categories="['A', 'D']"/>
-
-      <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
 -->
+      <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
     </form>
 
 
@@ -43,9 +42,11 @@ import {useRoute} from 'vue-router'
 // store
 import {storeToRefs} from 'pinia'
 import {useEventStore} from '@/stores/event'
+import {useLocalStore} from '@/stores/local'
 
-const {event, loading, error} = storeToRefs(useEventStore())
+const {event, forms, loading, error} = storeToRefs(useEventStore())
 const {getEventBySlug} = useEventStore()
+const {adhesion} = useLocalStore()
 
 // composants
 import Loading from '@/components/Loading.vue'
@@ -57,16 +58,25 @@ import CardBillet from '@/components/CardBillet.vue'
 const route = useRoute()
 const slug = route.params.slug
 
-const styleImage = {
-  height: '30px',
-  width: 'auto'
-}
-
 // load event
 getEventBySlug(slug)
 
 function getEventHeader() {
-  // console.log('-> fonc getHeaderEvent, event =', event)
+  console.log('-> fonc getHeaderEvent, event =', event.value)
+
+  // init data form / event uuid
+  let form = forms.value.find(obj => obj.event === event.value.uuid)
+  if (form === undefined) {
+    forms.value.push({
+      event: event.value.uuid,
+      email: adhesion.email, // pas d'observeur/proxy
+      oprions: [],
+      prices: []
+    })
+    form = forms.value.find(obj => obj.event === event.value.uuid)
+  }
+  console.log('form =', form)
+
   const domain = `${location.protocol}//${location.host}`
   let urlImage
   try {
@@ -83,6 +93,10 @@ function getEventHeader() {
   }
 }
 
+function validerAchats(domEvent) {
+  const data = forms.value.find(obj => obj.event === event.value.uuid)
+  console.log('formulaire =', JSON.stringify(data, null, 2))
+}
 
 /*
 // vue

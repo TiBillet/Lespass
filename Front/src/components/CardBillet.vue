@@ -7,26 +7,28 @@
       <img v-if="image === true" :src="product.img" class="image-product" alt="Image du billet !" :style="styleImage">
       <h3 v-else class="font-weight-bolder text-info text-gradient align-self-start">{{ product.name }}</h3>
     </legend>
-    <div v-for="price in product.prices" :key="price.uuid">
+    <div v-for="price in product.prices" :key="price.uuid" class="mt-5">
       <!-- prix -->
-      <div class="d-flex justify-content-between mb-3">
+      <div class="d-flex justify-content-between">
         <!-- nom tarif -->
         <h4 class="font-weight-bolder text-info text-gradient align-self-start">{{ price.name.toLowerCase() }} :
           {{ price.prix }} €</h4>
         <button
             v-if="(price.stock === null && price.customers.length < price.max_per_user) || (price.stock !== null && (price.stock - price.customers.length) >= 1 && price.customers.length < price.max_per_user)"
             class="btn btn-primary ms-3" type="button"
-            @click.stop="addUser(price.uuid)">
+            @click.stop="addCustomer(price.uuid, product.categorie_article)">
           <i class="fas fa-plus"></i>
         </button>
       </div>
       <!-- clients -->
-      <div class="input-group mb-2" v-for="(customer, index) in price.customers" :key="index">
+
+      <div class="input-group mb-1"
+           v-for="(customer, index) in getCustomersByUuidPrix(price.uuid)" :key="index">
         <input type="text" :value="customer.last_name" placeholder="Nom" aria-label="Nom" class="form-control"
-               @keyup="updateUser(price.uuid, customer.uuid, $event.target.value,'last_name')" required>
+               @keyup="updateCustomer(price.uuid, customer.uuid, $event.target.value,'last_name')" required>
         <input type="text" :value="customer.first_name" placeholder="Prénom" aria-label="Prénom" class="form-control"
-               @keyup="updateUser(price.uuid, customer.uuid, $event.target.value,'first_name')" required>
-        <button class="btn btn-primary mb-0" type="button" @click="deleteUser(price.uuid, customer.uuid)"
+               @keyup="updateCustomer(price.uuid, customer.uuid, $event.target.value,'first_name')" required>
+        <button class="btn btn-primary mb-0" type="button" @click="deleteCustomer(price.uuid, customer.uuid)"
                 style="border-top-right-radius: 30px; border-bottom-right-radius: 30px;">
           <i class="fas fa-times"></i>
         </button>
@@ -52,7 +54,7 @@
 
     <div class="input-group mb-2" v-for="(user, index) in price.users" :key="index">
       <input type="text" :value="user.last_name" placeholder="Nom" aria-label="Nom" class="form-control"
-             @keyup="updateUser(price.uuid, user.uuid, $event.target.value,'last_name')" required>
+             @keyup="updateUser( user.uuid, $event.target.value,'last_name')" required>
       <input type="text" :value="user.first_name" placeholder="Prénom" aria-label="Prénom" class="form-control"
              @keyup="updateUser(price.uuid, user.uuid, $event.target.value,'first_name')" required>
         <button class="btn btn-primary mb-0" type="button" @click="deleteUser(price.uuid, user.uuid)" style="border-top-right-radius: 30px; border-bottom-right-radius: 30px;">
@@ -74,14 +76,15 @@
 <script setup>
 console.log('-> CardBillet.vue')
 
-// pinia
+// store
 import {storeToRefs} from 'pinia'
 import {useEventStore} from '@/stores/event'
 
 // attributs/props
 let props = defineProps({
   image: Boolean,
-  styleImage: Object
+  styleImage: Object,
+  uuidEvent: String
 })
 
 // valeurs par défaut
@@ -92,36 +95,10 @@ if (props.styleImage === undefined) {
   }
 }
 
+// state event
 const {event} = storeToRefs(useEventStore())
-
-function addUser(priceUuid) {
-  const products = event.value.products.filter(prod => prod.categorie_article === 'F' || prod.categorie_article === 'B')
-  for (const productsKey in products) {
-    const product = products[productsKey]
-    for (const productKey in product.prices) {
-      const prix = product.prices[productKey]
-      if (prix.uuid === priceUuid) {
-        console.log('prix =', prix)
-
-        // max products by user
-        if (prix.customers.length < prix.max_per_user) {
-          prix.customers.push({
-            "first_name": "",
-            "last_name": ""
-          })
-        } else {
-          emitter.emit('modalMessage', {
-            titre: 'Attention',
-            contenu: `Nombre max de produits par client atteint !`
-          })
-        }
-
-        break
-      }
-    }
-  }
-}
-
+// action(s) du state event
+const {getCustomersByUuidPrix, addCustomer, updateCustomer, deleteCustomer} = useEventStore()
 
 /*
 const { events } = () => {
