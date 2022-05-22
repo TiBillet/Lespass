@@ -11,18 +11,25 @@
 
 
     <form @submit.prevent="validerAchats($event)" class="needs-validation" novalidate>
-      <!-- sans attribut "image" le nom du billet est affiché , style-image n'est pas obligatoire -->
-      <CardBillet :image="true" :style-image="{height: '30px',width: 'auto'}" />
+      <!--
+      Billet(s)
+      Si attribut "image", une image est affiché à la place du nom
+      Attribut 'style-image' gère les propriétées(css) de l'image (pas obligaoire, style par défaut)
+       -->
+      <CardBillet :image="true" :style-image="{height: '30px',width: 'auto'}"/>
 
-      <CardOptions  />
+      <CardOptions/>
 
-       <CardEmail />
+      <CardEmail/>
 
-      <!--Adhésion -->
-      <CardAdhesion />
+      <CardAdhesion/>
 
-      <!-- Don -->
-      <CardDon :activation="true"/>
+      <!--
+      Don(s):
+      les dons ont désactivé par défaut
+      l'attribut enable-names permet dactiver une liste de don par son nom (attention: nom unique !!)
+      -->
+      <CardGifts :enable-names="['Don']"/>
 
       <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
     </form>
@@ -48,10 +55,10 @@ import Loading from '@/components/Loading.vue'
 import Header from '@/components/Header.vue'
 import CardArtist from '@/components/CardArtist.vue'
 import CardBillet from '@/components/CardBillet.vue'
-import CardOptions  from '@/components/CardOptions.vue'
+import CardOptions from '@/components/CardOptions.vue'
 import CardEmail from '@/components/CardEmail.vue'
 import CardAdhesion from '@/components/CardAdhesion.vue'
-import CardDon from '@/components/CardDon.vue'
+import CardGifts from '@/components/CardGifts.vue'
 
 const {event, forms, loading, error} = storeToRefs(useEventStore())
 const {getEventBySlug} = useEventStore()

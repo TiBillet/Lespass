@@ -53,6 +53,8 @@ export const useEventStore = defineStore({
       if (form === undefined) {
 
         this.forms.push({
+          name: this.event.name,
+          initDate: new Date().toLocaleString(),
           event: this.event.uuid,
           email: localStore.adhesion.email, // pas d'observeur/proxy
           emailConfirme: localStore.adhesion.email,
@@ -72,13 +74,26 @@ export const useEventStore = defineStore({
           }
         }
 
+        // ajout de la propriété "don", l'activation de chaque don sera à false par défaut
+        form['gifts'] = []
+        const dons = this.event.products.filter(prod => prod.categorie_article === 'D')
+        console.log('init dons')
+        for (const donsKey in dons) {
+          const don = dons[donsKey]
+          form.gifts.push({
+            uuidGift: don.uuid,
+            name: don.name,
+            price: don.prices[0].uuid, // sélection du premier prix
+            enable: false
+          })
+        }
       }
     },
     generateUUIDUsingMathRandom() {
-      var d = new Date().getTime();//Timestamp
-      var d2 = (performance && performance.now && (performance.now() * 1000)) || 0;//Time in microseconds since page-load or 0 if unsupported
+      let d = new Date().getTime();//Timestamp
+      let d2 = (performance && performance.now && (performance.now() * 1000)) || 0;//Time in microseconds since page-load or 0 if unsupported
       return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-        var r = Math.random() * 16;//random number between 0 and 16
+        let r = Math.random() * 16;//random number between 0 and 16
         if (d > 0) {//Use timestamp until depleted
           r = (d + r) % 16 | 0
           d = Math.floor(d / 16)
@@ -143,7 +158,7 @@ export const useEventStore = defineStore({
 
       // --- gestion de l'affichage du bouton "+" ---
       // aucun ajout
-      if (price == undefined) {
+      if (price === undefined) {
         return false
       }
       const nbCustomers = price.customers.length
@@ -181,9 +196,64 @@ export const useEventStore = defineStore({
     updateEmail(emailType, value) {
       // console.log('-> fonc updateEmail !')
       this.forms.find(obj => obj.event === this.event.uuid)[emailType] = value
+    },
+    enableGifts(list) {
+      if (list !== undefined && list.length > 0) {
+        const gifts = this.forms.find(obj => obj.event === this.event.uuid).gifts
+        console.log('gifts =', gifts)
+        for (const listKey in list) {
+          const giftNameToEnable = list[listKey]
+          try {
+            if (gifts.find(obj2 => obj2.name === giftNameToEnable) === undefined) {
+              throw('Nom du don inconnu !')
+            } else {
+              let gift = gifts.find(obj2 => obj2.name === giftNameToEnable)
+              gift.enable = true
+            }
+          } catch (err) {
+            console.log('event store, func. enableGifts :', err)
+          }
+        }
+      }
+    },
+    changePriceGift(uuidGift, priceUuid) {
+      let gift = this.forms.find(obj => obj.event === this.event.uuid).gifts.find(obj2 => obj2.uuidGift === uuidGift)
+      gift.price = priceUuid
+    },
+    /*
+    addGift(priceUuid) {
+       console.log('-> fonc addGift !')
+      let prix = this.forms.find(obj => obj.event === this.event.uuid).prices
+        prix.push({
+          uuid: priceUuid,
+          qty: 1
+        })
+    },
+    deleteGift(priceUuid) {
+      console.log('-> fonc deleteGift !')
+      let prices = this.forms.find(obj => obj.event === this.event.uuid).prices
+      const PricesWithoutGift = prices.find(obj => obj.uuid !== priceUuid)
+      prices = PricesWithoutGift
+    },
+    */
+    setEnableGift(uuidGift, value) {
+      let gift = this.forms.find(obj => obj.event === this.event.uuid).gifts.find(obj2 => obj2.uuidGift === uuidGift)
+      gift.enable = value
     }
   },
   getters: {
+    getEnableGift: (state) => {
+      // console.log('-> fonc getEnableGift')
+      return (uuidGift) => { // récupération de l'argument
+        const gifts = state.forms.find(obj => obj.event === state.event.uuid).gifts
+        return gifts.find(obj2 => obj2.uuidGift === uuidGift).enable
+      }
+    },
+    getPriceGift: (state) => {
+      return (uuidGift) => {
+        return state.forms.find(obj => obj.event === state.event.uuid).gifts.find(obj2 => obj2.uuidGift === uuidGift).price
+      }
+    },
     getOptions: (state) => {
       let form = state.forms.find(obj => obj.event === state.event.uuid)
       const options_checkbox = form.options_checkbox

@@ -66,7 +66,12 @@ export const useAllStore = defineStore({
   },
   getters: {
     getPricesAdhesion: (state) => {
-      return state.place.membership_products.find(obj => obj.categorie_article === 'A').prices
+      // console.log('-> fonc getPricesAdhesion !')
+      if (state.place.membership_products !== undefined) {
+        return state.place.membership_products.find(obj => obj.categorie_article === 'A').prices
+      } else {
+        return []
+      }
     }
   },
   persist: {
