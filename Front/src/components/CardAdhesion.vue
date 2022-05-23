@@ -12,20 +12,19 @@
     </legend>
 
     <div class="form-check form-switch">
-      <input v-if="place.adhesion_obligatoire === true" class="form-check-input" type="checkbox"
+      <input v-if="adhesion.activation === true && place.adhesion_obligatoire === true" class="form-check-input" type="checkbox"
              id="etat-adhesion" checked disabled>
       <input v-else class="form-check-input" type="checkbox" id="etat-adhesion"
-             @change="updateAdhesion('activation', $event.target.checked)" :checked="adhesion.activation">
+             @change="setActivationAdhesion($event.target.checked)" :checked="adhesion.activation">
 
-      <label v-if="place.adhesion_obligatoire === true" class="form-check-label text-dark" for="etat-adhesion">
+      <label v-if="adhesion.activation === true" class="form-check-label text-dark" for="etat-adhesion">
         L'adhésion à l'association est obligatoire pour participer. Connectez vous si vous êtes déja adhérant.
       </label>
       <label v-else class="form-check-label text-dark" for="etat-adhesion">
         Prendre une adhésion associative.
       </label>
     </div>
-    <div v-if="adhesion.activation === true || place.adhesion_obligatoire === true">
-
+    <div v-if="adhesion.activation === true">
       <!-- prix -->
       <div class="input-group mb-2 has-validation">
         <div :id="`adesion-modal-price-parent${index}`" class="col form-check mb-3"
@@ -95,10 +94,18 @@ import {storeToRefs} from 'pinia'
 import {useAllStore} from "@/stores/all"
 import {useLocalStore} from "@/stores/local"
 
+// state "ref"
 const {place} = storeToRefs(useAllStore())
+// action
 const {getPricesAdhesion} = useAllStore()
+// state ref
 const {adhesion} = storeToRefs(useLocalStore())
+// action
+const {sychronizeMembershipWithObligationPlace, setActivationAdhesion} = useLocalStore()
+// vue-router
 const router = useRouter()
+
+sychronizeMembershipWithObligationPlace()
 
 function inputFocus(id) {
   document.querySelector(`#${id}`).focus()

@@ -1,7 +1,7 @@
 <template>
   <Loading v-if="loading"/>
   <p v-if="error !== null" class="text-dark">{{ error }}</p>
-  <Header v-if="Object.entries(event).length > 0" :header-event="getEventHeader()"/>
+  <Header v-if="Object.entries(event).length > 0" :header-event="getEventHeader"/>
   <div v-if="Object.entries(event).length > 0" class="container mt-7">
 
     <!-- artistes -->
@@ -49,6 +49,7 @@ import {useRoute} from 'vue-router'
 // store
 import {storeToRefs} from 'pinia'
 import {useEventStore} from '@/stores/event'
+import {useLocalStore} from '@/stores/local'
 
 // composants
 import Loading from '@/components/Loading.vue'
@@ -60,66 +61,94 @@ import CardEmail from '@/components/CardEmail.vue'
 import CardAdhesion from '@/components/CardAdhesion.vue'
 import CardGifts from '@/components/CardGifts.vue'
 
+// state event
 const {event, forms, loading, error} = storeToRefs(useEventStore())
-const {getEventBySlug} = useEventStore()
+// actions
+const {getEventBySlug, getEventHeader} = useEventStore()
+// state adhésion
+const {adhesion} = useLocalStore()
 
-// const store = useStore()
 const route = useRoute()
 const slug = route.params.slug
 
 // load event
 getEventBySlug(slug)
 
-function getEventHeader() {
-  console.log('-> fonc getHeaderEvent, event =', event.value)
+function validerAchats(domEvent) {
+  console.clear()
+  console.log('-> fonc validerAchats !')
 
-  const domain = `${location.protocol}//${location.host}`
-  let urlImage
-  try {
-    urlImage = event.value.img_variations.fhd
-  } catch (e) {
-    urlImage = `${domain}/media/images/image_non_disponible.svg`
+  // efface tous les messages d'invalidité
+  const msgInvalides = domEvent.target.querySelectorAll('.invalid-feedback')
+  for (let i = 0; i < msgInvalides.length; i++) {
+    msgInvalides[i].style.display = 'none'
   }
-  // console.log('urlImage =', urlImage)
-  return {
-    urlImage: urlImage,
-    shortDescription: event.value.short_description,
-    longDescription: event.value.long_description,
-    titre: event.value.name
+
+  if (domEvent.target.checkValidity() === false) {
+    // formulaire non valide
+    console.log('formulaire pas vailde !')
+    // scroll vers l'entrée non valide et affiche un message
+    const elements = domEvent.target.querySelectorAll('input')
+    for (let i = 0; i < elements.length; i++) {
+      const element = elements[i]
+      if (element.checkValidity() === false) {
+        // console.log('element = ', element)
+        element.scrollIntoView({behavior: 'smooth', inline: 'center', block: 'center'})
+        element.parentNode.querySelector('.invalid-feedback').style.display = 'block'
+        break
+      }
+    }
+  } else {
+    // vérifier emails
+    const email = document.querySelector(`#profil-email`)
+    const confirmeEmail = document.querySelector(`#profil-confirme-email`)
+    if (email.value !== confirmeEmail.value) {
+      console.log('formulaire non valide !')
+      confirmeEmail.parentNode.querySelector('.invalid-feedback').style.display = 'block'
+      confirmeEmail.scrollIntoView({behavior: 'smooth', inline: 'center', block: 'center'})
+    } else {
+      // formulaire valide
+      console.log('formulaire valide !')
+
+      // vérifier qu'il y a au moins un achat pour valider un POST
+      let buyEnable = false
+      const form = forms.value.find(obj => obj.event === event.value.uuid)
+      console.log('formulaire =', JSON.stringify(form, null, 2))
+      if (form.prices.length > 0) {
+        buyEnable = true
+      }
+      if (adhesion.activation === true) {
+        buyEnable = true
+      }
+      // lancement achat
+      if (buyEnable === true) {
+        const body = formatBodyPost()
+        console.log('body =', body)
+      }
+    }
   }
+
 }
 
-function validerAchats(domEvent) {
-  const data = forms.value.find(obj => obj.event === event.value.uuid)
-  console.log('formulaire =', JSON.stringify(data, null, 2))
+// formatage des données POST events
+function formatBodyPost() {
+  // console.log('-> fonc formatBodyPost !')
+
+  const form = forms.value.find(obj => obj.event === event.value.uuid)
+
+  // enlever les uuid de chaque custumer
+
+  const body = {
+    event: form.event,
+    email: form.email,
+    prices: form.prices,
+    options: []
+  }
+
+  return body
 }
 
 /*
-// vue
-import {ref} from 'vue'
-import {useRoute} from 'vue-router'
-
-
-// myStore
-import {storeLocalGet, storeLocalSet} from '@/storelocal'
-
-// composants
-import Header from '@/components/Header.vue'
-import CardPlace from '@/components/CardPlace.vue'
-import CardArtist from '@/components/CardArtist.vue'
-
-import CardProducts from '@/components/CardProducts.vue'
-
-
-// test dev
-// import {fakeEvent} from "../../tests/fakeCurrentEventTest"
-// import {fakeEvent} from "../../tests/fakeCurrentEventTestNoArtists.js"
-// import {fakeEvent} from "../../tests/fakeSimpleCurrentEventRaffinerie.js"
-
-const route = useRoute()
-const slug = route.params.slug
-const store = useStore()
-const domain = `${location.protocol}//${location.host}`
 
 // récupération du uuid évènement à partir du slug
 const uuidEventBrut = store.events.find(evt => evt.slug === slug).uuid
@@ -128,41 +157,6 @@ let uuidEvent = uuidEventBrut
 if (typeof (uuidEventBrut) === 'object') {
   // converti le proxy en string son type original avant le retour de navigation
   uuidEvent = JSON.parse(JSON.stringify(uuidEventBrut)).uuid
-}
-
-// currentEvent production
-const currentEvent = store.events.find(evt => evt.uuid === uuidEvent)
-
-// currentEvent test dev
-// const currentEvent = fakeEvent
-
-console.log('currentEvent =', currentEvent)
-
-
-// TODO: maj currentEvent et ses store.memoComposants[composant][currentUuidEvent] provenant d'un websocket
-
-// un objet options contenant les checkbox et radio
-const options = {
-  checkbox: currentEvent.options_checkbox,
-  radio: currentEvent.options_radio
-}
-
-
-
-function getDataCardPlace() {
-  let urlImage
-  if (store.place.img_variations.med === undefined) {
-    urlImage = `${domain}/media/images/image_non_disponible.svg`
-  } else {
-    urlImage = store.place.img_variations.med
-  }
-
-  return {
-    urlImage: urlImage,
-    titre: store.place.organisation,
-    lonDescription: store.place.long_description,
-    shortDescription: store.place.short_description
-  }
 }
 
 // formatage des données POST events
@@ -375,69 +369,6 @@ function goValiderAchats(event) {
   }
 }
 
-// ---- gestion des évènements provenant des enfants ----
-// mise à jour données du profil
-emitter.on('emitUpdateProfil', (data) => {
-  console.log('réception "emitUpdateProfil", data=', JSON.stringify(data, null, 2))
-  store.formulaireBillet[store.currentUuidEvent][data.key] = data.value
-})
-
-// mise à jour données de l'adhésion
-emitter.on('majAdhesion', (data) => {
-  console.log('réception "majAdhesion", data=', JSON.stringify(data, null, 2))
-  store.formulaireBillet[store.currentUuidEvent].adhesion[data.key] = data.value
-})
-
-emitter.on('majActiveSimpleProduct', (data) => {
-  console.log('réception "majActiveSimpleProduct", data=', JSON.stringify(data, null, 2))
-  store.formulaireBillet[store.currentUuidEvent].activeSimpleProduct[data.uuidProduct][data.key] = data.value
-})
-
-emitter.on('majOptionsEvent', (data) => {
-  console.log('réception "majOptionsEvent", data=', JSON.stringify(data, null, 2))
-
-  if (data.name === 'check') {
-    const option = store.formulaireBillet[store.currentUuidEvent]['options'].find(obj => obj.uuid === data.uuid)
-    option.activation = data.value
-    console.log('option =', option)
-  }
-})
-
-emitter.on('gererCardBillet', (data) => {
-  console.log('réception "gererCardBillet", data=', JSON.stringify(data, null, 2))
-
-  // stock actualisé
-  const nbBillet = store.formulaireBillet[store.currentUuidEvent].identifiants[data.uuidTarif].users.length
-  const stock = store.formulaireBillet[store.currentUuidEvent].identifiants[data.uuidTarif].stock
-  console.log('nbBillet =', nbBillet)
-
-  // ajouter identifiant
-  if (data.action === 'ajouter') {
-    if (nbBillet + 1 <= stock) {
-      const id = store.formulaireBillet[store.currentUuidEvent].identifiants[data.uuidTarif].index + 1
-      // store.formulaireBillet[store.currentUuidEvent].identifiants.push({id: id, uuidTarif: data.uuidTarif, prenom: '', nom: ''})
-      store.formulaireBillet[store.currentUuidEvent].identifiants[data.uuidTarif].users.push({
-        id: id,
-        prenom: '',
-        nom: ''
-      })
-      store.formulaireBillet[store.currentUuidEvent].identifiants[data.uuidTarif].index = id
-    }
-  }
-
-  // supprimer
-  if (data.action === 'supprimer') {
-    const suppData = store.formulaireBillet[store.currentUuidEvent].identifiants[data.uuidTarif].users.filter(ident => ident.id !== data.id)
-    store.formulaireBillet[store.currentUuidEvent].identifiants[data.uuidTarif].users = suppData
-    console.log('identifiants =', store.formulaireBillet[store.currentUuidEvent].identifiants)
-  }
-
-  // modifier
-  if (data.action === 'modifier') {
-    //{ action: 'modifier', uuidTarif: uuidTarif, valeur: valeur, champ: champ, id: id })
-    store.formulaireBillet[store.currentUuidEvent].identifiants[data.uuidTarif].users.find(ident => ident.id === data.id)[data.champ] = data.valeur
-  }
-})
  */
 </script>
 <style>
