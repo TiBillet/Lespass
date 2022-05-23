@@ -11,19 +11,26 @@
 
 
     <form @submit.prevent="validerAchats($event)" class="needs-validation" novalidate>
-      <!-- sans attribut "image" le nom du billet est affiché , style-image n'est pas obligatoire -->
-      <CardBillet :uuid-event="event.uuid" :image="true" :style-image="{height: '30px',width: 'auto'}" />
+      <!--
+      Billet(s)
+      Si attribut "image", une image est affiché à la place du nom
+      Attribut 'style-image' gère les propriétées(css) de l'image (pas obligaoire, style par défaut)
+       -->
+      <CardBillet :image="true" :style-image="{height: '30px',width: 'auto'}"/>
+
+      <CardOptions/>
+
+      <CardEmail/>
+
+      <CardAdhesion/>
 
       <!--
-      <CardProducts :products="currentEvent.products" :categories="['B', 'F']"/>
+      Don(s):
+      les dons ont désactivé par défaut
+      l'attribut enable-names permet dactiver une liste de don par son nom (attention: nom unique !!)
+      -->
+      <CardGifts :enable-names="['Don']"/>
 
-      <CardOptions :options="options"  :index-memo="store.currentUuidEvent"/>
-
-       index-memo="unique00" = "index fixe" bon pour tous les évènements
-      <CardEmail :default-email="storeLocalGet('email')" index-memo="unique00"/>
-
-      <CardProducts :products="currentEvent.products" :categories="['A', 'D']"/>
--->
       <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
     </form>
 
@@ -42,17 +49,19 @@ import {useRoute} from 'vue-router'
 // store
 import {storeToRefs} from 'pinia'
 import {useEventStore} from '@/stores/event'
-import {useLocalStore} from '@/stores/local'
-
-const {event, forms, loading, error} = storeToRefs(useEventStore())
-const {getEventBySlug} = useEventStore()
-const {adhesion} = useLocalStore()
 
 // composants
 import Loading from '@/components/Loading.vue'
 import Header from '@/components/Header.vue'
 import CardArtist from '@/components/CardArtist.vue'
 import CardBillet from '@/components/CardBillet.vue'
+import CardOptions from '@/components/CardOptions.vue'
+import CardEmail from '@/components/CardEmail.vue'
+import CardAdhesion from '@/components/CardAdhesion.vue'
+import CardGifts from '@/components/CardGifts.vue'
+
+const {event, forms, loading, error} = storeToRefs(useEventStore())
+const {getEventBySlug} = useEventStore()
 
 // const store = useStore()
 const route = useRoute()
@@ -63,19 +72,6 @@ getEventBySlug(slug)
 
 function getEventHeader() {
   console.log('-> fonc getHeaderEvent, event =', event.value)
-
-  // init data form / event uuid
-  let form = forms.value.find(obj => obj.event === event.value.uuid)
-  if (form === undefined) {
-    forms.value.push({
-      event: event.value.uuid,
-      email: adhesion.email, // pas d'observeur/proxy
-      oprions: [],
-      prices: []
-    })
-    form = forms.value.find(obj => obj.event === event.value.uuid)
-  }
-  console.log('form =', form)
 
   const domain = `${location.protocol}//${location.host}`
   let urlImage
@@ -111,9 +107,9 @@ import {storeLocalGet, storeLocalSet} from '@/storelocal'
 import Header from '@/components/Header.vue'
 import CardPlace from '@/components/CardPlace.vue'
 import CardArtist from '@/components/CardArtist.vue'
-import CardEmail from '@/components/CardEmail.vue'
+
 import CardProducts from '@/components/CardProducts.vue'
-import CardOptions  from '@/components/CardOptions.vue'
+
 
 // test dev
 // import {fakeEvent} from "../../tests/fakeCurrentEventTest"

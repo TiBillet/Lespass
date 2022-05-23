@@ -70,60 +70,13 @@ function getHeaderPlace() {
 }
 
 function goEvent(slug) {
-  console.log('-> Emmiter, écoute "goEvenement"; slug =', slug, '  --  type =', typeof (slug))
+  // console.log('-> fonc "goEvenement"; slug =', slug)
   router.push({name: 'Event', params: {slug: slug}})
 }
-
-
-/*
-// vue
-import {useRouter} from 'vue-router'
-
-// store
-import {useStore} from '@/store'
 
 // composants
-import Header from '../components/Header.vue'
-import CardEvent from '../components/CardEvent.vue'
-import Calendar from '../components/Calendar.vue'
+// import Calendar from '../components/Calendar.vue'
 
-import {storeLocalGet, storeLocalSet} from '@/storelocal'
-
-// store
-const store = useStore()
-
-const router = useRouter()
-const domain = `${location.protocol}//${location.host}`
-
-function getHeaderEvent() {
-  let urlImage, urlLogo
-  if (store.place.img_variations.med === undefined) {
-    urlImage = `${domain}/media/images/image_non_disponible.svg`
-  } else {
-    urlImage = store.place.img_variations.fhd
-  }
-
-  if (store.place.logo_variations.med === undefined) {
-    urlLogo = `${domain}/media/images/image_non_disponible.svg`
-  } else {
-    urlLogo = store.place.logo_variations.med
-  }
-  return {
-    urlImage: urlImage,
-    logo: urlLogo,
-    shortDescription: store.place.short_description,
-    longDescription: store.place.long_description,
-    titre: store.place.organisation,
-    domain: domain
-  }
-}
-
-// aller à la page évènement (lien défini ci-dessous et dans le store) => /views/Event.vue
-emitter.on('goEvenement', (slug) => {
-  console.log('-> Emmiter, écoute "goEvenement"; slug =', slug, '  --  type =', typeof (slug))
-  router.push({name: 'Event', params: {slug: slug}})
-})
-*/
 </script>
 
 <style>

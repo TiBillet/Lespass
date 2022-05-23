@@ -64,6 +64,16 @@ export const useAllStore = defineStore({
       }
     }
   },
+  getters: {
+    getPricesAdhesion: (state) => {
+      // console.log('-> fonc getPricesAdhesion !')
+      if (state.place.membership_products !== undefined) {
+        return state.place.membership_products.find(obj => obj.categorie_article === 'A').prices
+      } else {
+        return []
+      }
+    }
+  },
   persist: {
     key: 'Tibillet-all',
     storage: window.sessionStorage
