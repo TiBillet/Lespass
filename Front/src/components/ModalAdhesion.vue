@@ -9,7 +9,8 @@
           <div class="card card-plain">
             <div class="card-header pb-0 d-flex align-items-center">
               <h3 class="font-weight-bolder text-info text-gradient align-self-start w-85">Adhésion</h3>
-              <div v-if="modal.status === 'input'" class="d-flex align-items-center modal-click-info" @click="goStatus()">
+              <div v-if="modal.status === 'input'" class="d-flex align-items-center modal-click-info"
+                   @click="goStatus()">
                 <span>status</span>
                 <i class="fas fa-question mb-1"></i>
               </div>
@@ -40,7 +41,7 @@
                 <!-- prix -->
                 <div class="input-group mb-2 has-validation">
                   <div :id="`adesion-modal-price-parent${index}`" class="col form-check mb-3"
-                       v-for="(price, index) in getPricesAdhesion" :key="index">
+                       v-for="(price, index) in getPricesAdhesion()" :key="index">
                     <input v-if="index === 0" :value="price.uuid" v-model="adhesion.adhesion"
                            class="form-check-input input-adesion-modal-price" type="radio"
                            name="prixAdhesionModal" :id="`uuidadhesionmodalpriceradio${index}`"
@@ -135,7 +136,7 @@ const {getPricesAdhesion} = useAllStore()
 
 // stockage adhesion en ocal
 const {adhesion} = storeToRefs(useLocalStore())
-let {stripeEtape} = useLocalStore()
+let {setEtapeStripe} = useLocalStore()
 
 const router = useRouter()
 
@@ -173,6 +174,8 @@ function postAdhesionModal(data) {
   }
 
   console.log('options =', JSON.stringify(data, null, 2))
+  // init étape adhésion stripe
+  setEtapeStripe('attente_stripe_adhesion')
 
   fetch(domain + apiMemberShip, options).then(response => {
     console.log('response =', response)
@@ -181,8 +184,6 @@ function postAdhesionModal(data) {
     }
     return response.json()
   }).then(retour => {
-    // init étape adhésion stripe
-    stripeEtape = 'attente_stripe_adhesion'
     // redirection stripe formulaire paiement
     window.location = retour.checkout_url
   }).catch(function (error) {
@@ -197,6 +198,7 @@ function postAdhesionModal(data) {
       message: error
     }
   })
+
 }
 
 function validerAdhesion(event) {

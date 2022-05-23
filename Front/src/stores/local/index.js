@@ -183,6 +183,18 @@ export const useLocalStore = defineStore({
       if (mainStore.place.adhesion_obligatoire === true) {
         this.adhesion.activation = true
       }
+    },
+    setEtapeStripe(value) {
+      this.stripeEtape = value
+    },
+    infosCardExist() {
+      try {
+        if (this.me.cashless.cards !== undefined) {
+          return true
+        }
+      } catch (err) {
+        return false
+      }
     }
   },
   persist: {

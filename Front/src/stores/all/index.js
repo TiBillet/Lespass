@@ -23,9 +23,7 @@ export const useAllStore = defineStore({
         if (response.status !== 200) {
           throw new Error(`${response.status} - ${response.statusText}`)
         }
-        const retour = await response.json()
-        // console.log('getEvents, type retour =', retour)
-        this.events = retour
+        this.events = await response.json()
       } catch (error) {
         // console.log('useAllStore, getEvents:', error)
         this.error = error
@@ -33,7 +31,7 @@ export const useAllStore = defineStore({
         this.loading = false
       }
     },
-    async getPlace(slug) {
+    async getPlace() {
       this.error = null
       this.place = {}
       this.loading = true
@@ -62,13 +60,11 @@ export const useAllStore = defineStore({
       } finally {
         this.loading = false
       }
-    }
-  },
-  getters: {
-    getPricesAdhesion: (state) => {
+    },
+    getPricesAdhesion() {
       // console.log('-> fonc getPricesAdhesion !')
-      if (state.place.membership_products !== undefined) {
-        return state.place.membership_products.find(obj => obj.categorie_article === 'A').prices
+      if (this.place.membership_products !== undefined) {
+        return this.place.membership_products.find(obj => obj.categorie_article === 'A').prices
       } else {
         return []
       }

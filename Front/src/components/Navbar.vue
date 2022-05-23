@@ -16,7 +16,7 @@
       <!-- <div class="d-flex justify-content-between d-block ms-auto"> -->
       <ul class="navbar-nav d-flex flex-row-reverse ms-auto d-block">
         <!-- bouton user -->
-        <li v-if="adhesion.status === 'membership' || refreshToken !== ''" class="nav-item dropdown">
+        <li v-if="adhesion.status === 'membership'" class="nav-item dropdown">
           <a class="nav-link d-flex justify-content-between align-items-center dropdown-toggle" href="#" id="menuUser"
              role="button" data-bs-toggle="dropdown" aria-expanded="false">
             <i class="fas fa-user me-1" aria-hidden="true"></i>
@@ -25,7 +25,7 @@
           <!-- menu user -->
           <ul class="dropdown-menu" aria-labelledby="menuUser">
             <!-- déconnexion -->
-            <li>
+            <li v-if="refreshToken !== ''">
               <a class="dropdown-item py-2 ps-3 border-radius-md d-flex justify-content-star align-items-center"
                  role="button" @click="disconnect()">
                 <i class="fa fa-sign-out text-dark" aria-hidden="true"></i>
@@ -33,7 +33,7 @@
               </a>
             </li>
             <!-- assets -->
-            <li v-if="me.cashless.cards !== undefined">
+            <li v-if="infosCardExist() === true">
               <a class="dropdown-item py-2 ps-3 border-radius-md d-flex justify-content-star align-items-center"
                  role="button" @click="showAssets()">
                 <i class="fas fa-address-card fa-fw me-1 text-dark" aria-hidden="true"></i>
@@ -116,6 +116,7 @@ import {useLocalStore} from '@/stores/local'
 const {place, loading, error} = storeToRefs(useAllStore())
 const {getPlace} = useAllStore()
 const {refreshToken, me, adhesion} = storeToRefs(useLocalStore())
+const {infosCardExist} = useLocalStore()
 
 // load place
 getPlace()
@@ -136,7 +137,7 @@ function disconnect() {
 
 function showAdhesion() {
   emitter.emit('modalMessage', {
-    titre: 'Adhesion',
+    titre: 'Adhesion OK !',
     dynamique: true,
     contenu: `
       <h3>Email : ${adhesion.value.email}</h3>
@@ -175,7 +176,7 @@ function showAssets() {
 }
 
 // menu transparant / non transparant
-window.addEventListener("scroll", (event) => {
+window.addEventListener("scroll", () => {
   if (document.querySelector('#navbar') !== null) {
     if (scrollY === 0) {
       document.querySelector('#navbar').style.backgroundColor = ''
