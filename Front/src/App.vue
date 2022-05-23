@@ -5,8 +5,9 @@
   <Footer :place="place"/>
     -->
   <ModalMessage/>
-  <!-- adhésion -->
-  <ModalAdhesion v-if="place.button_adhesion === true"/>
+  <!-- adhésion
+  <ModalAdhesion v-if="place.button_adhesion === true"/> -->
+  <ModalAdhesion />
 </template>
 
 <script setup>

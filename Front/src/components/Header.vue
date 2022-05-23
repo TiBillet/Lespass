@@ -3,11 +3,6 @@
 
     <div class="page-header min-vh-50"
          :style="{ backgroundImage: `url('${headerEvent.urlImage}')`, maxHeight: `365px` }">
-<!--    <div v-if="headerEvent.urlImage === null" class="page-header min-vh-50"-->
-<!--         :style="{ backgroundImage: `url('${headerEvent.urlImage}')`, maxHeight: `365px` }">-->
-
-
-
       <span class="mask bg-dark opacity-8"></span>
       <div class="container">
         <div class="row">
@@ -21,7 +16,6 @@
     </div>
 
     <!-- search -->
-
     <div v-if="router.currentRoute.value.name !== 'Event'" class="container">
       <div class="row bg-white shadow mt-n5 border-radius-lg pb-4 p-3 position-relative w-75 mx-auto">
         <div class="col-lg-8 mt-lg-n2 mt-2">
@@ -36,8 +30,6 @@
         </div>
       </div>
     </div>
-
-
 
   </header>
 </template>

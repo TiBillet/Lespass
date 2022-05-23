@@ -200,7 +200,7 @@ export const useEventStore = defineStore({
     enableGifts(list) {
       if (list !== undefined && list.length > 0) {
         const gifts = this.forms.find(obj => obj.event === this.event.uuid).gifts
-        console.log('gifts =', gifts)
+        // console.log('gifts =', gifts)
         for (const listKey in list) {
           const giftNameToEnable = list[listKey]
           try {
@@ -223,23 +223,31 @@ export const useEventStore = defineStore({
     setEnableGift(uuidGift, value) {
       let gift = this.forms.find(obj => obj.event === this.event.uuid).gifts.find(obj2 => obj2.uuidGift === uuidGift)
       gift.enable = value
-    }
-  },
-  getters: {
-    getEventHeader: (state) => {
+    },
+    getEventHeader() {
       console.log('-> action getHeaderEvent')
       let urlImage
       try {
-        urlImage = state.event.img_variations.fhd
+        urlImage = this.event.img_variations.fhd
       } catch (e) {
         urlImage = `${domain}/media/images/image_non_disponible.svg`
       }
       return {
         urlImage: urlImage,
-        shortDescription: state.event.short_description,
-        longDescription: state.event.long_description,
-        titre: state.event.name
+        shortDescription: this.event.short_description,
+        longDescription: this.event.long_description,
+        titre: this.event.name
       }
+    }
+
+  },
+  getters: {
+    getExistGift: (state) => {
+      let retour = false
+      if (state.event.products.filter(prod => prod.categorie_article === 'D').length > 0) {
+        retour = true
+      }
+      return retour
     },
     getEnableGift: (state) => {
       // console.log('-> fonc getEnableGift')

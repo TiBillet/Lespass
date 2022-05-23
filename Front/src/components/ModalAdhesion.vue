@@ -135,6 +135,7 @@ const {getPricesAdhesion} = useAllStore()
 
 // stockage adhesion en ocal
 const {adhesion} = storeToRefs(useLocalStore())
+let {stripeEtape} = useLocalStore()
 
 const router = useRouter()
 
@@ -181,7 +182,7 @@ function postAdhesionModal(data) {
     return response.json()
   }).then(retour => {
     // init étape adhésion stripe
-    adhesion.value.status = 'attente_stripe'
+    stripeEtape = 'attente_stripe_adhesion'
     // redirection stripe formulaire paiement
     window.location = retour.checkout_url
   }).catch(function (error) {

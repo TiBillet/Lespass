@@ -8,6 +8,7 @@ export const useLocalStore = defineStore({
   state: () => ({
     refreshToken: '',
     me: {},
+    stripeEtape: '',
     adhesion: {
       email: '',
       first_name: '',
@@ -30,9 +31,15 @@ export const useLocalStore = defineStore({
       let messageValidation = 'OK', messageErreur = 'Retour stripe:'
 
       // adhésion
-      if (this.adhesion.status === 'attente_stripe') {
+      if (this.stripeEtape === 'attente_stripe_adhesion') {
         messageValidation = `<h2>Adhésion OK !</h2>`
         messageErreur = `Retour stripe pour l'adhésion:`
+      }
+
+      // reservation(s)
+      if (this.stripeEtape === 'attente_stripe_reservation') {
+        messageValidation = `<h2>Réservation(s) OK !</h2>`
+        messageErreur = `Retour stripe pour une/des réservation(s):`
       }
 
       const apiStripe = `/api/webhook_stripe/`
@@ -51,7 +58,7 @@ export const useLocalStore = defineStore({
         return response.json()
       }).then(retour => {
         // maj status adhésion
-        if (this.adhesion.status === 'attente_stripe') {
+        if (this.stripeEtape === 'attente_stripe_adhesion') {
           this.adhesion.status = 'membership'
         }
         // message ok
@@ -61,7 +68,7 @@ export const useLocalStore = defineStore({
           contenu: messageValidation
         })
       }).catch(function (erreur) {
-        this.adhesion.status = ''
+        this.stripeEtape = ''
         console.log('/api/webhook_stripe/ -> erreur: ', erreur)
         emitter.emit('modalMessage', {
           titre: 'Erreur',

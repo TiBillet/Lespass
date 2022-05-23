@@ -1,8 +1,10 @@
 <template>
   <Loading v-if="loading"/>
   <p v-if="error !== null" class="text-dark">{{ error }}</p>
-  <Header v-if="Object.entries(event).length > 0" :header-event="getEventHeader"/>
-  <div v-if="Object.entries(event).length > 0" class="container mt-7">
+
+  <!-- info getEventHeader en tant qu'action () est contractuel, le getter donne des données antérieures -->
+  <Header v-if="loading === false" :header-event="getEventHeader()"/>
+  <div v-if="loading === false" class="container mt-7">
 
     <!-- artistes -->
     <div v-for="(artist, index) in event.artists" :key="index">
@@ -66,7 +68,7 @@ const {event, forms, loading, error} = storeToRefs(useEventStore())
 // actions
 const {getEventBySlug, getEventHeader} = useEventStore()
 // state adhésion
-const {adhesion} = useLocalStore()
+let {adhesion, stripeEtape} = useLocalStore()
 
 const route = useRoute()
 const slug = route.params.slug
@@ -74,8 +76,70 @@ const slug = route.params.slug
 // load event
 getEventBySlug(slug)
 
+// formatage des données POST events
+function formatBodyPost() {
+  // console.log('-> fonc formatBodyPost !')
+
+  const form = forms.value.find(obj => obj.event === event.value.uuid)
+
+  // proxy to array
+  const prices = JSON.parse(JSON.stringify(form.prices))
+
+  // init body with prices ticket
+  const body = {
+    event: form.event,
+    email: form.email,
+    prices,
+    options: []
+  }
+
+  // options radio
+  for (const optionRadioKey in form.options_radio) {
+    const option = form.options_radio[optionRadioKey]
+    if (option.activation === true) {
+      body.options.push(option.uuid)
+    }
+  }
+
+  // options checkbox
+  for (const optionCheckboxKey in form.options_checkbox) {
+    const option = form.options_checkbox[optionCheckboxKey]
+    if (option.activation === true) {
+      body.options.push(option.uuid)
+    }
+  }
+
+  // adhésion
+  if (adhesion.activation === true) {
+    console.log('adhesion =', adhesion)
+    const obj = {
+      uuid: adhesion.uuidPrix,
+      qty: 1,
+      customers: [{
+        first_name: adhesion.first_name,
+        last_name: adhesion.last_name,
+        phone: adhesion.phone,
+        postal_code: adhesion.postal_code,
+        birth_date: "1984-04-18"
+      }]
+    }
+    body.prices.push(obj)
+  }
+
+  // gifts
+  for (const giftKey in form.gifts) {
+    const gift = form.gifts[giftKey]
+    if (gift.enable === true) {
+      body.prices.push({
+        uuid: gift.price,
+        qty: 1
+      })
+    }
+  }
+  return body
+}
+
 function validerAchats(domEvent) {
-  console.clear()
   console.log('-> fonc validerAchats !')
 
   // efface tous les messages d'invalidité
@@ -86,7 +150,7 @@ function validerAchats(domEvent) {
 
   if (domEvent.target.checkValidity() === false) {
     // formulaire non valide
-    console.log('formulaire pas vailde !')
+    // console.log('formulaire pas vailde !')
     // scroll vers l'entrée non valide et affiche un message
     const elements = domEvent.target.querySelectorAll('input')
     for (let i = 0; i < elements.length; i++) {
@@ -103,7 +167,7 @@ function validerAchats(domEvent) {
     const email = document.querySelector(`#profil-email`)
     const confirmeEmail = document.querySelector(`#profil-confirme-email`)
     if (email.value !== confirmeEmail.value) {
-      console.log('formulaire non valide !')
+      // console.log('formulaire non valide !')
       confirmeEmail.parentNode.querySelector('.invalid-feedback').style.display = 'block'
       confirmeEmail.scrollIntoView({behavior: 'smooth', inline: 'center', block: 'center'})
     } else {
@@ -122,121 +186,74 @@ function validerAchats(domEvent) {
       }
       // lancement achat
       if (buyEnable === true) {
-        const body = formatBodyPost()
-        console.log('body =', body)
-      }
-    }
-  }
+        const body = JSON.stringify(formatBodyPost())
 
-}
+        // ---- requête "POST" achat billets ----
+        const urlApi = `/api/reservations/`
 
-// formatage des données POST events
-function formatBodyPost() {
-  // console.log('-> fonc formatBodyPost !')
-
-  const form = forms.value.find(obj => obj.event === event.value.uuid)
-
-  // enlever les uuid de chaque custumer
-
-  const body = {
-    event: form.event,
-    email: form.email,
-    prices: form.prices,
-    options: []
-  }
-
-  return body
-}
-
-/*
-
-// récupération du uuid évènement à partir du slug
-const uuidEventBrut = store.events.find(evt => evt.slug === slug).uuid
-let uuidEvent = uuidEventBrut
-// un retour de navigation("history")  donne un proxy et non un string
-if (typeof (uuidEventBrut) === 'object') {
-  // converti le proxy en string son type original avant le retour de navigation
-  uuidEvent = JSON.parse(JSON.stringify(uuidEventBrut)).uuid
-}
-
-// formatage des données POST events
-function formaterDatas(adhesionActive, adhesionPrix) {
-  console.clear()
-  const data = {
-    event: store.currentUuidEvent,
-    email: store.memoComposants.CardEmail.unique00.email,
-    prices: [],
-    options: []
-  }
-
-  // options checkbox
-  const optionsCheckbox = store.memoComposants.Options[store.currentUuidEvent].checkbox
-  for (let i = 0; i < optionsCheckbox.length; i++) {
-    const option = optionsCheckbox[i]
-    // console.log('-> ',JSON.stringify(option, null, 2))
-    if (option.activation === true) {
-      data.options.push(option.uuid)
-    }
-  }
-
-  // options radio
-  const optionsRadio = store.memoComposants.Options[store.currentUuidEvent].radio
-  for (let i = 0; i < optionsRadio.length; i++) {
-    const option = optionsRadio[i]
-    if (option.selection === true) {
-      data.options.push(option.uuid)
-    }
-  }
-
-  // prix adhésion
-  if (adhesionActive === true && adhesionPrix !== '') {
-    const dataAdhesion = store.memoComposants.CardAdhesion[store.currentUuidEvent]
-    data.prices.push({
-      "uuid": dataAdhesion.uuidPrix,
-      "qty": 1,
-      "customers": [
-        {
-          "first_name": dataAdhesion.firstName,
-          "last_name": dataAdhesion.lastName,
-          "phone": dataAdhesion.phone,
-          "postal_code": dataAdhesion.postalCode
+        // options de la requête
+        const options = {
+          method: 'POST',
+          body: body,
+          headers: {
+            'Content-Type': 'application/json'
+          }
         }
-      ]
-    })
-  }
+        console.log('options =', options)
 
-  // don
-  const don = store.memoComposants.Don[store.currentUuidEvent]
-  if (don.activation === true) {
-    data.prices.push({
-      "uuid": don.uuidPrix,
-      "qty": 1
-    })
-  }
+        // chargement
+        loading.value = true
 
-  // prix billets
-  const billets = store.memoComposants.CardBillet[store.currentUuidEvent]
-  for (let i = 0; i < billets.length; i++) {
-    const billet = billets[i]
-    const nbBillets = billet.users.length
-    if (nbBillets > 0) {
-      const obj = {
-        "uuid": billet.uuid,
-        "qty": nbBillets,
-        "customers": []
-      }
-      for (let j = 0; j < billet.users.length; j++) {
-        const user = billet.users[j]
-        obj.customers.push({
-          "first_name": user.first_name,
-          "last_name": user.last_name,
+        fetch(urlApi, options).then(response => {
+          if (response.status !== 201 && response.status !== 400) {
+            throw new Error(`${response.status} - ${response.statusText}`)
+          }
+          return response.json()
+        }).then(retour => {
+          console.log('retour =', retour)
+          if (retour.checkout_url !== undefined) {
+            // redirection vers stripe
+            stripeEtape = 'attente_stripe_reservation'
+            window.location.assign(retour.checkout_url)
+          } else {
+            loading.value = false
+            let contenuMessage = ''
+            for (const key in retour) {
+              for (let i = 0; i < retour[key].length; i++) {
+                contenuMessage += `<h3>- ${retour[key][i]}</h3>`
+              }
+            }
+            emitter.emit('modalMessage', {
+              titre: 'Information',
+              dynamique: true,
+              contenu: contenuMessage
+            })
+          }
+        }).catch(function (erreur) {
+          loading.value = false
+          error.value = `Event, réservation produits erreur: ${erreur}`
+          /*
+          emitter.emit('message', {
+            tmp: 6,
+            typeMsg: 'danger',
+            contenu: `Event, réservation produits erreur: ${erreur}`
+          })
+           */
+        })
+      } else {
+        // aucun produit sélectionné
+        emitter.emit('modalMessage', {
+          titre: '?',
+          contenu: `Aucun produit sélectionné !`
         })
       }
-      data.prices.push(obj)
     }
   }
-  return data
+
 }
+
+
+/*
 
 function goValiderAchats(event) {
   // console.log('-> fonc goValiderAchats !')
@@ -375,5 +392,9 @@ function goValiderAchats(event) {
 .invalid-feedback {
   margin-top: -4px !important;
   margin-left: 4px !important;
+}
+
+#app {
+  background-color: #FFFFFF;
 }
 </style>

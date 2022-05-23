@@ -1,5 +1,5 @@
 <template>
-  <fieldset class="shadow-sm p-3 mb-5 bg-body rounded"
+  <fieldset v-if="getExistGift" class="shadow-sm p-3 mb-5 bg-body rounded"
             v-for="product in event.products.filter(prod => prod.categorie_article === 'D')" :key="product.uuid">
     <legend>
       <h3 class="font-weight-bolder text-info text-gradient align-self-start">Don</h3>
@@ -24,19 +24,12 @@
           <!-- getPriceGift(product.uuid) -->
           <input v-if="getPriceGift(product.uuid) === price.uuid"
                  :class="`form-check-input don-uuid-price-${price.uuid}`" type="radio"
-                 :name="`prix${nameMemo}`" :id="`don-uuid-price-${price.uuid}`"
+                 :name="`don-prix-${price.uuid}`" :id="`don-uuid-price-${price.uuid}`"
                  @change="changePriceGift(product.uuid, price.uuid)" checked>
 
           <input v-else :class="`form-check-input don-uuid-price-${price.uuid}`" type="radio"
-                 :name="`prix${nameMemo}`" :id="`don-uuid-price-${price.uuid}`"
+                 :name="`don-prix-${price.uuid}`" :id="`don-uuid-price-${price.uuid}`"
                  @change="changePriceGift(product.uuid, price.uuid)">
-
-          <!--
-          <input v-else :value="price.uuid" :class="`form-check-input simple-product-active-${nameMemo}-uuid-price`"
-                 type="radio"
-                 :name="`prix${nameMemo}`" :id="`simpleproductuuidprice${nameMemo}${index}`"
-                 @change="updateActiveSimpleProduct('uuidPrix', $event.target.value)">
-                 -->
           <label class="form-check-label" :for="`don-uuid-price-${price.uuid}`">{{ price.prix }}€</label>
         </div>
       </div>
@@ -46,7 +39,7 @@
 </template>
 
 <script setup>
-console.log('-> CordDon.vue')
+console.log('-> CardGifts.vue')
 
 // store
 import {storeToRefs} from 'pinia'
@@ -58,7 +51,7 @@ const props = defineProps({
 // state event
 const {event} = storeToRefs(useEventStore())
 // action(s) du state event
-const {enableGifts, getEnableGift, setEnableGift, getPriceGift, changePriceGift} = useEventStore()
+const {enableGifts, getEnableGift, setEnableGift, getPriceGift, changePriceGift, getExistGift} = useEventStore()
 
 // activation des dons de la liste 'props.enableNames'
 enableGifts(props.enableNames)
