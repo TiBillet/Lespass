@@ -220,28 +220,27 @@ export const useEventStore = defineStore({
       let gift = this.forms.find(obj => obj.event === this.event.uuid).gifts.find(obj2 => obj2.uuidGift === uuidGift)
       gift.price = priceUuid
     },
-    /*
-    addGift(priceUuid) {
-       console.log('-> fonc addGift !')
-      let prix = this.forms.find(obj => obj.event === this.event.uuid).prices
-        prix.push({
-          uuid: priceUuid,
-          qty: 1
-        })
-    },
-    deleteGift(priceUuid) {
-      console.log('-> fonc deleteGift !')
-      let prices = this.forms.find(obj => obj.event === this.event.uuid).prices
-      const PricesWithoutGift = prices.find(obj => obj.uuid !== priceUuid)
-      prices = PricesWithoutGift
-    },
-    */
     setEnableGift(uuidGift, value) {
       let gift = this.forms.find(obj => obj.event === this.event.uuid).gifts.find(obj2 => obj2.uuidGift === uuidGift)
       gift.enable = value
     }
   },
   getters: {
+    getEventHeader: (state) => {
+      console.log('-> action getHeaderEvent')
+      let urlImage
+      try {
+        urlImage = state.event.img_variations.fhd
+      } catch (e) {
+        urlImage = `${domain}/media/images/image_non_disponible.svg`
+      }
+      return {
+        urlImage: urlImage,
+        shortDescription: state.event.short_description,
+        longDescription: state.event.long_description,
+        titre: state.event.name
+      }
+    },
     getEnableGift: (state) => {
       // console.log('-> fonc getEnableGift')
       return (uuidGift) => { // récupération de l'argument

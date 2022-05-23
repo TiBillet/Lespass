@@ -167,6 +167,15 @@ export const useLocalStore = defineStore({
         })
         window.accessToken = ''
       }
+    },
+    setActivationAdhesion(value) {
+      this.adhesion.activation = value
+    },
+    sychronizeMembershipWithObligationPlace() {
+      const mainStore = useAllStore()
+      if (mainStore.place.adhesion_obligatoire === true) {
+        this.adhesion.activation = true
+      }
     }
   },
   persist: {
