@@ -724,6 +724,7 @@ class ReservationValidator(serializers.Serializer):
         nbr_ticket = 0
         self.prices_list = []
         for entry in value:
+            logger.info(f"price entry : {entry}")
             try:
                 price = Price.objects.get(pk=entry['uuid'])
                 price_object = {
