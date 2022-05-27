@@ -2,7 +2,7 @@
   <div class="modal fade" id="conteneur-message-modal" tabindex="-1" role="dialog"
        aria-labelledby="Exemple de message sous forme d'un modal."
        aria-hidden="true">
-    <div id="conteneur-message-modal-body" class="modal-dialog modal-dialog-centered" :init-scroll="isScrollable()"
+    <div id="conteneur-message-modal-body" class="modal-dialog modal-dialog-centered" :init-scroll-properties="initScrollProperties()"
          role="document">
       <div class="modal-content">
         <div class="modal-header">
@@ -30,17 +30,22 @@ import {ref} from 'vue'
 const dataModal = ref({})
 const message = ref(false)
 
-function isScrollable() {
+function initScrollProperties() {
   if (document.querySelector('#conteneur-message-modal-body') !== null) {
     const elementModalBody = document.querySelector('#conteneur-message-modal-body')
     if (message.value.scrollable === true) {
       elementModalBody.classList.add('modal-dialog-scrollable')
-      return true
     } else {
       elementModalBody.classList.remove('modal-dialog-scrollable')
-      return false
     }
+    if (message.value.size !== undefined) {
+      // xl, lg, sm
+      const size = 'modal-'+ message.value.size
+      elementModalBody.classList.add(size)
+    }
+
   }
+  return 'init'
 }
 
 emitter.on('modalMessage', (data) => {

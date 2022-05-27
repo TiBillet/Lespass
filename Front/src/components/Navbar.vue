@@ -46,7 +46,7 @@
               <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
                  role="button" @click="showReservations()">
                 <i class="fas fa-address-card fa-fw me-1 text-dark" aria-hidden="true"></i>
-                <h6 class="m-0 text-dark">Reservation(s)</h6>
+                <h6 class="m-0 text-dark">Réservation(s)</h6>
               </a>
             </li>
 
@@ -123,7 +123,7 @@ import {storeToRefs} from 'pinia'
 import {useAllStore} from '@/stores/all'
 import {useLocalStore} from '@/stores/local'
 
-const {place, loading, error} = storeToRefs(useAllStore())
+const {place, events, loading, error} = storeToRefs(useAllStore())
 const {getPlace} = useAllStore()
 const {refreshToken, me, adhesion} = storeToRefs(useLocalStore())
 const {infosCardExist, infosReservationExist, getMe, refreshAccessToken} = useLocalStore()
@@ -136,7 +136,7 @@ if (window.accessToken === '' && refreshToken.value !== '') {
 }
 
 async function updateAccessToken() {
-  console.log('-> fonc updateAccessToken !')
+  // console.log('-> fonc updateAccessToken !')
   loading.value = true
   await refreshAccessToken(refreshToken.value)
   loading.value = false
@@ -204,7 +204,6 @@ async function showAssets() {
     }
     for (const cardKey in me.value.cashless.cards) {
       const card = me.value.cashless.cards[cardKey]
-      console.log('-->', card)
       contenu += `
         <fieldset class="shadow-sm p-3 mb-5 bg-body rounded">
           <legend>
@@ -242,18 +241,64 @@ async function showAssets() {
 }
 
 async function showReservations() {
-  let contenu = `hahah`
+  let contenu = ``
   try {
     const actu = await updateMe()
     if (actu.error === 1) {
       throw new Error(message)
     }
+
+    for (const key in me.value.reservations) {
+      const reservation = me.value.reservations[key]
+      console.log('--> reservation =', reservation)
+      const eventFind = events.value.find(evt => evt.uuid === reservation.event)
+
+      for (const Key in eventFind.products) {
+        const prices = eventFind.products[key].prices
+        console.log('prices =', prices)
+      }
+
+      const eventName = eventFind.name
+
+      contenu += `
+        <fieldset class="shadow-sm p-3 mb-5 bg-body rounded">
+          <legend>
+              <h5 class="font-weight-bolder text-info text-gradient align-self-start w-85"> ${eventName} - ${dateToFrenchFormat(reservation.datetime)}</h5>
+          </legend>
+          <div class="flex-column">
+      `
+
+      for (const ticketKey in reservation.tickets) {
+        const ticket = reservation.tickets[ticketKey]
+        console.log('ticket = ', ticket)
+        contenu += `
+          <div class="row">
+            <div class="col-8">${ticket.first_name} ${ticket.last_name}</div>
+            <div class="col-4">
+              <a href="${ticket.pdf_url}" download="ticket-${ticket.first_name}_${ticket.last_name}" class="d-flex flex-row-reverse align-items-center">
+                <i class="fa fa-download ms-1" aria-hidden="true"></i>
+                <h6 class="m-0 text-dark">Télécharger</h6>
+              </a>
+            </div>
+          </div>
+        `
+      }
+
+      contenu += `
+          </div>
+        </fieldset>
+      `
+    }
+
+
   } catch (error) {
-     contenu = `<h3>Aucune donnée !</h3>`
+    contenu = `<h3>Aucune donnée !</h3>`
   }
   emitter.emit('modalMessage', {
     titre: 'Réservation(s)',
     dynamic: true,
+    // xl, lg, sm
+    size: 'xl',
     scrollable: true,
     contenu: contenu
   })

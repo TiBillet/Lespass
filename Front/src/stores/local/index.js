@@ -149,7 +149,7 @@ export const useLocalStore = defineStore({
       }
     },
     async refreshAccessToken(refreshToken) {
-      console.log('-> refreshAccessToken, refreshToken =', refreshToken)
+      // console.log('-> refreshAccessToken, refreshToken =', refreshToken)
       const api = `/api/user/token/refresh/`
       try {
         const response = await fetch(domain + api, {
