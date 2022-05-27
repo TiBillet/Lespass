@@ -64,7 +64,7 @@ export const useLocalStore = defineStore({
         // message ok
         emitter.emit('modalMessage', {
           titre: 'Succès',
-          dynamique: true,
+          dynamic: true,
           contenu: messageValidation
         })
       }).catch(function (erreur) {
@@ -72,7 +72,7 @@ export const useLocalStore = defineStore({
         console.log('/api/webhook_stripe/ -> erreur: ', erreur)
         emitter.emit('modalMessage', {
           titre: 'Erreur',
-          dynamique: true,
+          dynamic: true,
           contenu: `${messageErreur} ${erreur}`
         })
       })
@@ -190,6 +190,15 @@ export const useLocalStore = defineStore({
     infosCardExist() {
       try {
         if (this.me.cashless.cards !== undefined) {
+          return true
+        }
+      } catch (err) {
+        return false
+      }
+    },
+    infosReservationExist() {
+      try {
+        if (this.me.reservations !== undefined && window.accessToken !== '') {
           return true
         }
       } catch (err) {

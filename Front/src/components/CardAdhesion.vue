@@ -28,7 +28,7 @@
       <!-- prix -->
       <div class="input-group mb-2 has-validation">
         <div :id="`adesion-modal-price-parent${index}`" class="col form-check mb-3"
-             v-for="(price, index) in getPricesAdhesion" :key="index">
+             v-for="(price, index) in getPricesAdhesion()" :key="index">
           <input v-if="index === 0" :value="price.uuid" v-model="adhesion.uuidPrix"
                  class="form-check-input input-adesion-modal-price" type="radio"
                  name="prixAdhesionModal" :id="`uuidadhesionmodalpriceradio${index}`"

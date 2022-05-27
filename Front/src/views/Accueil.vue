@@ -43,7 +43,6 @@ const router = useRouter()
 // load events
 getEvents()
 
-
 function getHeaderPlace() {
   const domain = `${location.protocol}//${location.host}`
   let urlImage, urlLogo
