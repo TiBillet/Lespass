@@ -15,18 +15,19 @@
       <!-- partie droite -->
       <!-- <div class="d-flex justify-content-between d-block ms-auto"> -->
       <ul class="navbar-nav d-flex flex-row-reverse ms-auto d-block">
-        <!-- bouton user -->
-        <li v-if="adhesion.status === 'membership'" class="nav-item dropdown">
-          <a class="nav-link d-flex justify-content-between align-items-center dropdown-toggle" href="#" id="menuUser"
+        <!-- user -->
+        <li v-if="adhesion.status === 'membership' || refreshToken !== ''" class="nav-item dropdown">
+          <a class="nav-link d-flex justify-content-between align-items-center dropdown-toggle me-1" href="#"
+             id="menuUser"
              role="button" data-bs-toggle="dropdown" aria-expanded="false">
             <i class="fas fa-user me-1" aria-hidden="true"></i>
             <h6 class="m-0 text-white">User</h6>
           </a>
           <!-- menu user -->
-          <ul class="dropdown-menu" aria-labelledby="menuUser">
+          <ul class="dropdown-menu w-100" aria-labelledby="menuUser">
             <!-- déconnexion -->
             <li v-if="refreshToken !== ''">
-              <a class="dropdown-item py-2 ps-3 border-radius-md d-flex justify-content-star align-items-center"
+              <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
                  role="button" @click="disconnect()">
                 <i class="fa fa-sign-out text-dark" aria-hidden="true"></i>
                 <h6 class="m-0 text-dark">Deconnexion</h6>
@@ -34,15 +35,24 @@
             </li>
             <!-- assets -->
             <li v-if="infosCardExist() === true">
-              <a class="dropdown-item py-2 ps-3 border-radius-md d-flex justify-content-star align-items-center"
+              <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
                  role="button" @click="showAssets()">
                 <i class="fas fa-address-card fa-fw me-1 text-dark" aria-hidden="true"></i>
                 <h6 class="m-0 text-dark">Carte</h6>
               </a>
             </li>
+            <!-- réservations -->
+            <li v-if="infosReservationExist() === true">
+              <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
+                 role="button" @click="showReservations()">
+                <i class="fas fa-address-card fa-fw me-1 text-dark" aria-hidden="true"></i>
+                <h6 class="m-0 text-dark">Réservation(s)</h6>
+              </a>
+            </li>
+
             <!-- infos adhésion -->
             <li v-if="adhesion.status === 'membership'">
-              <a class="dropdown-item py-2 ps-3 border-radius-md d-flex justify-content-star align-items-center"
+              <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
                  role="button" @click="showAdhesion()">
                 <i class="fas fa-address-card fa-fw me-1 text-dark" aria-hidden="true"></i>
                 <h6 class="m-0 text-dark">Adhésion</h6>
@@ -113,13 +123,24 @@ import {storeToRefs} from 'pinia'
 import {useAllStore} from '@/stores/all'
 import {useLocalStore} from '@/stores/local'
 
-const {place, loading, error} = storeToRefs(useAllStore())
+const {place, events, loading, error} = storeToRefs(useAllStore())
 const {getPlace} = useAllStore()
 const {refreshToken, me, adhesion} = storeToRefs(useLocalStore())
-const {infosCardExist} = useLocalStore()
+const {infosCardExist, infosReservationExist, getMe, refreshAccessToken} = useLocalStore()
 
 // load place
 getPlace()
+
+if (window.accessToken === '' && refreshToken.value !== '') {
+  updateAccessToken()
+}
+
+async function updateAccessToken() {
+  // console.log('-> fonc updateAccessToken !')
+  loading.value = true
+  await refreshAccessToken(refreshToken.value)
+  loading.value = false
+}
 
 function disconnect() {
   refreshToken.value = ''
@@ -135,44 +156,152 @@ function disconnect() {
   }
 }
 
+function dateToFrenchFormat(dateString) {
+  const nomMois = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+  const dateArray = dateString.split('T')[0].split('-')
+  const mois = nomMois[parseInt(dateArray[1])]
+  return dateArray[2] + ' ' + mois + ' ' + dateArray[0]
+}
+
 function showAdhesion() {
-  emitter.emit('modalMessage', {
-    titre: 'Adhesion OK !',
-    dynamique: true,
-    contenu: `
-      <h3>Email : ${adhesion.value.email}</h3>
-      <h3>Nom : ${adhesion.value.lastName}</h3>
-      <h3>Prenom : ${adhesion.value.firstName}</h3>
-      <h3>Inscription : ${adhesion.value.inscription}</h3>
-      <h3>Echéance : ${adhesion.value.echeance}</h3>
+  let contenu = ``
+  try {
+    const infos = me.value.cashless
+    contenu += `
+      <h5>Email : ${infos.email}</h5>
+      <h5>Nom : ${infos.name}</h5>
+      <h5>Prenom : ${infos.prenom}</h5>
+      <h5>Inscription : ${dateToFrenchFormat(infos.date_ajout)}</h5>
+      <h5>Echéance : ${dateToFrenchFormat(infos.prochaine_echeance)}</h5>
     `
+  } catch (error) {
+    contenu = `<h3>Aucune donnée !</h3>`
+  }
+  emitter.emit('modalMessage', {
+    titre: 'Adhésion',
+    dynamic: true,
+    scrollable: true,
+    contenu: contenu
   })
 }
 
+async function updateMe() {
+  if (window.accessToken !== '') {
+    loading.value = true
+    me.value = await getMe(window.accessToken)
+    loading.value = false
+    return {error: 0}
+  }
+  return {error: 1, message: 'Access token inconnu !'}
+}
 
-function showAssets() {
-  let contenu = `<h3>En travaux !</h3>`
-  /*
-   const monnaies = profil.value.assets
-   let contenu = `<h3>Numéro de carte : ${profil.value.numberCahslessCard}</h3>`
-   for (let i = 0; i < monnaies.length; i++) {
-     const monnaie = monnaies[i]
-     console.log('monnaie =', monnaie)
-     // <i class="fas fa-gift"></i>
-     if (monnaie.monnaie_name.toLowerCase().indexOf('cadeau') !== -1) {
-       contenu += `<h3>${monnaie.monnaie_name.split(' ')[0]}<i class="fas fa-gift ms-1"></i> = ${monnaie.qty}</h3>`
-     } else {
-       contenu += `<h3>${monnaie.monnaie_name} = ${monnaie.qty}</h3>`
-     }
-   }
+async function showAssets() {
+  let contenu = ``
+  try {
+    const actu = await updateMe()
+    if (actu.error === 1) {
+      throw new Error(message)
+    }
+    for (const cardKey in me.value.cashless.cards) {
+      const card = me.value.cashless.cards[cardKey]
+      contenu += `
+        <fieldset class="shadow-sm p-3 mb-5 bg-body rounded">
+          <legend>
+              <h5 class="font-weight-bolder text-info text-gradient align-self-start w-85">Numéro ${card.number}</h5>
+          </legend>
+          <div class="flex-column">
+      `
 
-   */
+      // assets
+      for (const assetKey1 in card.assets) {
+        const monnaie = card.assets[assetKey1]
+        contenu += `
+          <div class="row">
+            <div class="col-8">${monnaie.qty} ${monnaie.monnaie_name}</div>
+            <div class="col-4">${dateToFrenchFormat(monnaie.last_date_used)}</div>
+          </div>
+        `
+      }
+
+      contenu += `
+          </div>
+        </fieldset>
+      `
+    }
+  } catch (error) {
+    contenu = `<h3>Aucune donnée !</h3>`
+  }
+
   emitter.emit('modalMessage', {
-    titre: 'Monnaies',
-    dynamique: true,
+    titre: 'Carte(s)',
+    dynamic: true,
+    scrollable: true,
     contenu: contenu
   })
+}
 
+async function showReservations() {
+  let contenu = ``
+  try {
+    const actu = await updateMe()
+    if (actu.error === 1) {
+      throw new Error(message)
+    }
+
+    for (const key in me.value.reservations) {
+      const reservation = me.value.reservations[key]
+      console.log('--> reservation =', reservation)
+      const eventFind = events.value.find(evt => evt.uuid === reservation.event)
+
+      for (const Key in eventFind.products) {
+        const prices = eventFind.products[key].prices
+        console.log('prices =', prices)
+      }
+
+      const eventName = eventFind.name
+
+      contenu += `
+        <fieldset class="shadow-sm p-3 mb-5 bg-body rounded">
+          <legend>
+              <h5 class="font-weight-bolder text-info text-gradient align-self-start w-85"> ${eventName} - ${dateToFrenchFormat(reservation.datetime)}</h5>
+          </legend>
+          <div class="flex-column">
+      `
+
+      for (const ticketKey in reservation.tickets) {
+        const ticket = reservation.tickets[ticketKey]
+        console.log('ticket = ', ticket)
+        contenu += `
+          <div class="row">
+            <div class="col-8">${ticket.first_name} ${ticket.last_name}</div>
+            <div class="col-4">
+              <a href="${ticket.pdf_url}" download="ticket-${ticket.first_name}_${ticket.last_name}" class="d-flex flex-row-reverse align-items-center">
+                <i class="fa fa-download ms-1" aria-hidden="true"></i>
+                <h6 class="m-0 text-dark">Télécharger</h6>
+              </a>
+            </div>
+          </div>
+        `
+      }
+
+      contenu += `
+          </div>
+        </fieldset>
+      `
+    }
+
+
+  } catch (error) {
+    contenu = `<h3>Aucune donnée !</h3>`
+  }
+  emitter.emit('modalMessage', {
+    titre: 'Réservation(s)',
+    dynamic: true,
+    // xl, lg, sm
+    size: 'xl',
+    scrollable: true,
+    contenu: contenu
+  })
 }
 
 // menu transparant / non transparant
@@ -189,4 +318,5 @@ window.addEventListener("scroll", () => {
 </script>
 
 <style>
+
 </style>

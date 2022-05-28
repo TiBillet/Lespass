@@ -214,34 +214,23 @@ function validerAchats(domEvent) {
           }
           return response.json()
         }).then(retour => {
-          console.log('retour =', retour)
+          console.log('-> /api/reservations/, retour =', retour)
           if (retour.checkout_url !== undefined) {
             // redirection vers stripe
             window.location.assign(retour.checkout_url)
           } else {
+
             loading.value = false
-            let contenuMessage = ''
-            for (const key in retour) {
-              for (let i = 0; i < retour[key].length; i++) {
-                contenuMessage += `<h3>- ${retour[key][i]}</h3>`
-              }
-            }
+            // let contenuMessage = JSON.stringify(retour, null, 2)
             emitter.emit('modalMessage', {
-              titre: 'Information',
-              dynamique: true,
-              contenu: contenuMessage
+              titre: 'Succès',
+              dynamic: true,
+              contenu: `<h5>Réservation de l'évènement ok !<h5>`
             })
           }
         }).catch(function (erreur) {
           loading.value = false
           error.value = `Event, réservation produits erreur: ${erreur}`
-          /*
-          emitter.emit('message', {
-            tmp: 6,
-            typeMsg: 'danger',
-            contenu: `Event, réservation produits erreur: ${erreur}`
-          })
-           */
         })
       } else {
         // aucun produit sélectionné
