@@ -1,6 +1,4 @@
 <template>
-  <p v-if="error !== null" class="text-dark">Modallogin.vue - {{ error }}</p>
-  <Loading v-if="loading === true" test="accueil"/>
   <div id="modal-form-login" aria-hidden="true" aria-labelledby="modal-form-login"
        class="modal fade" role="dialog"
        tabindex="-1">
@@ -31,19 +29,16 @@
   </div>
 </template>
 <script setup>
-// myStore
+// store local
 import {useLocalStore} from '@/stores/local'
 
-// vue
-import {ref} from 'vue'
-
-// composant
-import Loading from '@/components/Loading.vue'
+// store
+import {storeToRefs} from 'pinia'
+import {useAllStore} from '@/stores/all'
 
 const {adhesion} = useLocalStore()
 const domain = `${location.protocol}//${location.host}`
-const error = ref(null)
-const loading = ref(false)
+const {loading, error} = storeToRefs(useAllStore())
 
 async function validerLogin(event) {
   if (event.target.checkValidity() === true) {

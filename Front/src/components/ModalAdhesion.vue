@@ -1,6 +1,6 @@
 <template>
   <!-- modal adhésion -->
-  <div v-if="Object.entries(place).length > 0" class="modal fade" id="modal-form-adhesion" tabindex="-1" role="dialog"
+  <div class="modal fade" id="modal-form-adhesion" tabindex="-1" role="dialog"
        aria-labelledby="modal-form-adhesion"
        aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-" role="document">
@@ -9,34 +9,19 @@
           <div class="card card-plain">
             <div class="card-header pb-0 d-flex align-items-center">
               <h3 class="font-weight-bolder text-info text-gradient align-self-start w-85">Adhésion</h3>
-              <div v-if="modal.status === 'input'" class="d-flex align-items-center modal-click-info"
-                   @click="goStatus()">
-                <span>status</span>
-                <i class="fas fa-question mb-1"></i>
+              <!-- status -->
+              <div class="form-check form-switch position-relative">
+                <input class="form-check-input" type="checkbox" id="read-status" @click="goStatus()" required>
+                <label class="form-check-label text-dark" for="read-status">Status</label>
+                <div class="invalid-feedback position-absolute">
+                  non lu !
+                </div>
               </div>
+
             </div>
             <div class="card-body">
-              <h6>Attention changement à vérifier !!!</h6>
-              <!-- error -->
-              <div v-if="modal.status === 'error'" class="bg-light"
-                   :style="`width: ${modal.size.width}px; height: ${modal.size.height}px;`">
-                <h1>Erreur !</h1>
-                <div class="text-warning">
-                  {{ modal.message }}
-                </div>
-              </div>
-              <!-- loadding -->
-              <div v-if="modal.status === 'loading'"
-                   class="position-relative d-flex justify-content-center align-items-center bg-light"
-                   :style="`width: ${modal.size.width}px; height: ${modal.size.height}px;`">
-                <h1>En attente !</h1>
-                <div class="position-absolute d-flex justify-content-center align-items-center"
-                     :style="`width: ${modal.size.width}px; height: ${modal.size.height}px;`">
-                  <div class="spinner-border text-success" role="status" style="width: 10rem; height: 10rem;"></div>
-                </div>
-              </div>
               <!-- formulaire -->
-              <form v-if="modal.status === 'input'" @submit.prevent="validerAdhesion($event)" novalidate>
+              <form @submit.prevent="validerAdhesion($event)" novalidate>
 
                 <!-- prix -->
                 <div class="input-group mb-2 has-validation">
@@ -131,7 +116,7 @@ import {useLocalStore} from '@/stores/local'
 import {useRouter} from 'vue-router'
 
 // obtenir data adhesion
-const {place} = storeToRefs(useAllStore())
+const {place, loading, error} = storeToRefs(useAllStore())
 const {getPricesAdhesion} = useAllStore()
 
 // stockage adhesion en ocal
@@ -140,23 +125,24 @@ let {setEtapeStripe} = useLocalStore()
 
 const router = useRouter()
 
+/*
 const modal = ref({
   status: 'input',
+  readStatus: false,
   size: {},
   message: ''
 })
+*/
 
 function inputFocus(id) {
   document.querySelector(`#${id}`).focus()
 }
 
 function goStatus() {
-  // ferme le modal
-  const elementModal = document.querySelector('#modal-form-adhesion')
-  const modal = bootstrap.Modal.getInstance(elementModal) // Returns a Bootstrap modal instance
-  modal.hide()
-  // aller au status
-  router.push('/status')
+  const status = document.querySelector(`#read-status`).checked
+  if (status === true) {
+    window.open(place.value.site_web, "_blank")
+  }
 }
 
 // todo: mettre dans stores/all en tantque action
@@ -177,6 +163,8 @@ function postAdhesionModal(data) {
   // init étape adhésion stripe
   setEtapeStripe('attente_stripe_adhesion')
 
+  loading.value = true
+  /*
   fetch(domain + apiMemberShip, options).then(response => {
     console.log('response =', response)
     if (response.status !== 201) {
@@ -198,130 +186,66 @@ function postAdhesionModal(data) {
       message: error
     }
   })
-
+*/
 }
 
 function validerAdhesion(event) {
   console.log('-> fonc validerAdhesion !!')
 
   // efface tous les messages d'invalidité
+  document.querySelector(`#read-status`).parentNode.querySelector(`.invalid-feedback`).style.display = 'none'
   const msgInvalides = event.target.querySelectorAll('.invalid-feedback')
   for (let i = 0; i < msgInvalides.length; i++) {
     msgInvalides[i].style.display = 'none'
   }
 
-  if (event.target.checkValidity() === true) {
-    // formulaire valide
-    // console.log('-> valide !')
-    const modalForm = document.querySelector(`#modal-form-adhesion form`).getBoundingClientRect()
 
-    modal.value = {
-      status: 'loading',
-      size: {
-        width: modalForm.width,
-        height: modalForm.height
-      }
-    }
+  // vérification status
+  const satusElement = document.querySelector(`#read-status`)
+  if (satusElement.checked === false) {
+    const warningElement = satusElement.parentNode.querySelector(`.invalid-feedback`)
+    warningElement.style.display = 'block'
+    warningElement.style.top = '20px'
+    warningElement.style.left = '-6px'
+  }
+  if (satusElement.checked === true) {
+    if (event.target.checkValidity() === true) {
+      // formulaire valide
+      // console.log('-> valide !')
 
-    console.log('test adhesion =', adhesion.value)
-    postAdhesionModal({
-      email: adhesion.value.email,
-      first_name: adhesion.value.first_name,
-      last_name: adhesion.value.last_name,
-      phone: adhesion.value.phone,
-      postal_code: adhesion.value.postal_code,
-      adhesion: adhesion.value.adhesion
-    })
+      // ferme le modal
+      const elementModal = document.querySelector('#modal-form-adhesion')
+      const modal = bootstrap.Modal.getInstance(elementModal) // Returns a Bootstrap modal instance
+      modal.hide()
 
-  } else {
-    // formulaire non valide
-    console.log('-> pas valide !')
-    // scroll vers l'entrée non valide et affiche un message
-    const elements = event.target.querySelectorAll('input')
-    for (let i = 0; i < elements.length; i++) {
-      const element = elements[i]
-      if (element.checkValidity() === false) {
-        // console.log('element = ', element)
-        element.scrollIntoView({behavior: 'smooth', inline: 'center', block: 'center'})
-        element.parentNode.querySelector('.invalid-feedback').style.display = 'block'
-        break
+      // POST adhésion
+      postAdhesionModal({
+        email: adhesion.value.email,
+        first_name: adhesion.value.first_name,
+        last_name: adhesion.value.last_name,
+        phone: adhesion.value.phone,
+        postal_code: adhesion.value.postal_code,
+        adhesion: adhesion.value.adhesion
+      })
+
+    } else {
+      // formulaire non valide
+      console.log('-> pas valide !')
+      // scroll vers l'entrée non valide et affiche un message
+      const elements = event.target.querySelectorAll('input')
+      for (let i = 0; i < elements.length; i++) {
+        const element = elements[i]
+        if (element.checkValidity() === false) {
+          // console.log('element = ', element)
+          element.scrollIntoView({behavior: 'smooth', inline: 'center', block: 'center'})
+          element.parentNode.querySelector('.invalid-feedback').style.display = 'block'
+          break
+        }
       }
     }
   }
 }
 
-
-/*
-// vue
-import {ref} from 'vue'
-import {useRouter} from 'vue-router'
-
-// store
-import {useStore} from '@/store'
-
-// myStore
-import {storeLocalGet, storeLocalSet} from '@/storelocal'
-
-// api
-import {postAdhesionModal} from '@/api'
-
-const store = useStore()
-
-// init store local
-// const storeLocal = new StoreLocal()
-
-const router = useRouter()
-
-let prices = ref([])
-
-// get prices
-try {
-  emitter.emit('statusLoading', true)
-  const apiLieu = `/api/here/`
-  const domain = `${location.protocol}//${location.host}`
-  fetch(domain + apiLieu).then((response) => {
-    if (response.status !== 200) {
-      throw new Error(`${response.status} - ${response.statusText}`)
-    }
-    return response.json()
-  }).then((retour) => {
-    store.place = retour
-    prices.value = store.place.membership_products.filter(article => article.categorie_article === 'A')[0].prices
-    console.log('prices.value =', prices.value)
-  })
-  emitter.emit('statusLoading', false)
-} catch (erreur) {
-  // console.log('Store, place, erreur:', erreur)
-  emitter.emit('message', {
-    tmp: 4,
-    typeMsg: 'danger',
-    contenu: `Chargement lieu, erreur: ${erreur}`
-  })
-}
-
-
-// console.log('props.prices = ', props.prices)
-
-let adhesionFormModal = ref({
-  email: storeLocalGet('email'),
-  firstName: '',
-  lastName: '',
-  phone: '',
-  postalCode: '',
-  uuidPrix: ''
-})
-
-
-
-
-emitter.on('emailChange', (value) => {
-  try {
-    adhesionFormModal.value.email = value
-  } catch (erreur) {
-    console.log('-> ModalAdhesion.vue, erreur:', erreur)
-  }
-})
-*/
 </script>
 
 <style scoped>

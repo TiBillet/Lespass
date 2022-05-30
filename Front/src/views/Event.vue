@@ -1,44 +1,40 @@
 <template>
-  <Loading v-if="loading"/>
-  <p v-if="error !== null" class="text-dark">{{ error }}</p>
+    <!-- info getEventHeader en tant qu'action () est contractuel, le getter donne des données antérieures -->
+    <!-- <Header :data-header="getEventHeader()"/> -->
 
-  <!-- info getEventHeader en tant qu'action () est contractuel, le getter donne des données antérieures -->
-  <Header v-if="loading === false" :header-event="getEventHeader()"/>
-  <div v-if="loading === false" class="container mt-7">
+    <div v-if="Object.entries(event).length > 0" class="container mt-7">
 
-    <!-- artistes -->
-    <div v-for="(artist, index) in event.artists" :key="index">
-      <CardArtist :data-artist="artist" class="mb-6"/>
+      <!-- artistes -->
+      <div v-for="(artist, index) in event.artists" :key="index">
+        <CardArtist :data-artist="artist" class="mb-6"/>
+      </div>
+
+
+      <form @submit.prevent="validerAchats($event)" class="needs-validation" novalidate>
+        <!--
+        Billet(s)
+        Si attribut "image", une image est affiché à la place du nom
+        Attribut 'style-image' gère les propriétées(css) de l'image (pas obligaoire, style par défaut)
+         -->
+        <CardBillet :image="true" :style-image="{height: '30px',width: 'auto'}"/>
+
+        <CardOptions/>
+
+        <CardEmail/>
+
+        <!-- <CardAdhesion/> -->
+
+        <!--
+        Don(s):
+        les dons ont désactivé par défaut
+        l'attribut enable-names permet dactiver une liste de don par son nom (attention: nom unique !!)
+        -->
+        <CardGifts :enable-names="['Don']"/>
+
+        <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
+      </form>
+
     </div>
-
-
-    <form @submit.prevent="validerAchats($event)" class="needs-validation" novalidate>
-      <!--
-      Billet(s)
-      Si attribut "image", une image est affiché à la place du nom
-      Attribut 'style-image' gère les propriétées(css) de l'image (pas obligaoire, style par défaut)
-       -->
-      <CardBillet :image="true" :style-image="{height: '30px',width: 'auto'}"/>
-
-      <CardOptions/>
-
-      <CardEmail/>
-
-      <CardAdhesion/>
-
-      <!--
-      Don(s):
-      les dons ont désactivé par défaut
-      l'attribut enable-names permet dactiver une liste de don par son nom (attention: nom unique !!)
-      -->
-      <CardGifts :enable-names="['Don']"/>
-
-      <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
-    </form>
-
-
-  </div>
-
 </template>
 
 <script setup>
@@ -52,26 +48,31 @@ import {useRoute} from 'vue-router'
 import {storeToRefs} from 'pinia'
 import {useEventStore} from '@/stores/event'
 import {useLocalStore} from '@/stores/local'
+import {useAllStore} from '@/stores/all'
 
 // composants
-import Loading from '@/components/Loading.vue'
+// import LayoutDefault from '@/layouts/LayoutDefault.vue'
 import Header from '@/components/Header.vue'
 import CardArtist from '@/components/CardArtist.vue'
 import CardBillet from '@/components/CardBillet.vue'
 import CardOptions from '@/components/CardOptions.vue'
 import CardEmail from '@/components/CardEmail.vue'
-import CardAdhesion from '@/components/CardAdhesion.vue'
+// import CardAdhesion from '@/components/CardAdhesion.vue'
 import CardGifts from '@/components/CardGifts.vue'
 
 // state event
-const {event, forms, loading, error} = storeToRefs(useEventStore())
+const {event, forms} = storeToRefs(useEventStore())
 // actions
-const {getEventBySlug, getEventHeader} = useEventStore()
+const {getEventBySlug} = useEventStore()
 // state adhésion
 let {adhesion, setEtapeStripe} = useLocalStore()
+// state "all" for loading components
+const {loading, error} = storeToRefs(useAllStore())
 
 const route = useRoute()
 const slug = route.params.slug
+
+// const emit = defineEmits(['update:layout'])
 
 // load event
 getEventBySlug(slug)

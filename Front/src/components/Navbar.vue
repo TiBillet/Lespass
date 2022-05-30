@@ -1,9 +1,5 @@
 <template>
-  <!-- pour load place -->
-  <p v-if="error !== null" class="text-dark">{{ error }}</p>
-  <Loading v-if="loading === true" test="accueil"/>
-  <!-- Navbar router.currentRoute.value.name -->
-  <nav id="navbar" v-else class="navbar navbar-expand-lg z-index-3 w-100 navbar-transparent position-fixed">
+  <nav id="navbar" class="navbar navbar-expand-lg z-index-3 w-100 navbar-transparent position-fixed">
     <div class="container">
       <!-- lieu -->
       <div class="navbar-brand">
@@ -13,7 +9,6 @@
       </div>
 
       <!-- partie droite -->
-      <!-- <div class="d-flex justify-content-between d-block ms-auto"> -->
       <ul class="navbar-nav d-flex flex-row-reverse ms-auto d-block">
         <!-- user -->
         <li v-if="adhesion.status === 'membership' || refreshToken !== ''" class="nav-item dropdown">
@@ -84,11 +79,8 @@
 
       </ul>
 
-
     </div>
   </nav>
-  <!-- modal login -->
-  <Modallogin/>
 </template>
 
 <script setup>
@@ -113,10 +105,6 @@ import '../assets/js/perfect-scrollbar/perfect-scrollbar.min.js'
 // css (ui)
 import '../assets/css/now-design-system-pro.min.css'
 import '../assets/js/now-design-system-pro.js'
-
-// composants
-import Loading from '@/components/Loading.vue'
-import Modallogin from '@/components/Modallogin.vue'
 
 // store
 import {storeToRefs} from 'pinia'
@@ -166,6 +154,7 @@ function dateToFrenchFormat(dateString) {
 function showAdhesion() {
   let contenu = ``
   try {
+    console.log('me:', me.value)
     const infos = me.value.cashless
     contenu += `
       <h5>Email : ${infos.email}</h5>
@@ -175,6 +164,7 @@ function showAdhesion() {
       <h5>Echéance : ${dateToFrenchFormat(infos.prochaine_echeance)}</h5>
     `
   } catch (error) {
+    console.log('showAdhesion:', error)
     contenu = `<h3>Aucune donnée !</h3>`
   }
   emitter.emit('modalMessage', {
