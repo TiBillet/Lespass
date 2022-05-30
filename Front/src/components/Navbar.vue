@@ -252,9 +252,10 @@ async function showReservations() {
       const reservation = me.value.reservations[key]
       console.log('--> reservation =', reservation)
       const eventFind = events.value.find(evt => evt.uuid === reservation.event)
+      console.log('eventFind =', eventFind)
 
-      for (const Key in eventFind.products) {
-        const prices = eventFind.products[key].prices
+      for (const prodKey in eventFind.products) {
+        const prices = eventFind.products[prodKey].prices
         console.log('prices =', prices)
       }
 
@@ -292,6 +293,7 @@ async function showReservations() {
 
 
   } catch (error) {
+    console.log('Rservation, erreur:', error)
     contenu = `<h3>Aucune donnée !</h3>`
   }
   emitter.emit('modalMessage', {
