@@ -68,6 +68,7 @@ class ProductSerializer(serializers.ModelSerializer):
 
 class PriceSerializer(serializers.ModelSerializer):
     product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
+    adhesion_obligatoire = serializers.PrimaryKeyRelatedField(queryset=Product.objects.filter(categorie_article=Product.ADHESION))
 
     class Meta:
         model = Price
@@ -79,6 +80,7 @@ class PriceSerializer(serializers.ModelSerializer):
             'vat',
             'stock',
             'max_per_user',
+            'adhesion_obligatoire',
         ]
 
         read_only_fields = [
@@ -87,6 +89,7 @@ class PriceSerializer(serializers.ModelSerializer):
         depth = 1
 
 
+# Utilisé par /here
 class ConfigurationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Configuration
@@ -515,6 +518,9 @@ class NewAdhesionValidator(serializers.Serializer):
 
 
 class MembreValidator(serializers.Serializer):
+    adhesion = serializers.PrimaryKeyRelatedField(
+        queryset=Price.objects.filter(product__categorie_article=Product.ADHESION))
+
     email = serializers.EmailField()
 
     first_name = serializers.CharField(max_length=200, required=False)
@@ -525,15 +531,18 @@ class MembreValidator(serializers.Serializer):
     birth_date = serializers.DateField(required=False)
     newsletter = serializers.BooleanField(required=False)
 
-    adhesion = serializers.PrimaryKeyRelatedField(
-        queryset=Price.objects.filter(product__categorie_article=Product.ADHESION))
+    def validate_adhesion(self, value):
+        self.price = value
+        return value
+
 
     def validate_email(self, value):
         user_paiement: TibilletUser = validate_email_and_return_user(value)
         self.user = user_paiement
 
         self.fiche_membre, created = Membership.objects.get_or_create(
-            user=user_paiement
+            user=user_paiement,
+            price=self.price,
         )
 
         if not self.fiche_membre.first_name:

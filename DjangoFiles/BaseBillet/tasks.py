@@ -463,19 +463,19 @@ def send_membership_to_cashless(data):
         ligne_article = LigneArticle.objects.get(pk=data.get('ligne_article_pk'))
         user = ligne_article.paiement_stripe.user
 
-        membre, created = Membership.objects.get_or_create(user=user)
-        tarif_adhesion = ligne_article.pricesold.prix
+        price = ligne_article.pricesold.prix
+        membre, created = Membership.objects.get_or_create(user=user, price=price)
 
         if not membre.first_contribution:
             membre.first_contribution = timezone.now().date()
 
         membre.last_contribution = timezone.now().date()
-        membre.contribution_value = tarif_adhesion
+        membre.contribution_value = price
         membre.save()
 
         data = {
             "email": membre.email(),
-            "adhesion": tarif_adhesion,
+            "adhesion": price,
             "uuid_commande": ligne_article.paiement_stripe.uuid,
             "first_name": membre.first_name,
             "last_name": membre.last_name,

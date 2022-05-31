@@ -12,8 +12,9 @@ import logging
 from django.utils.translation import ugettext_lazy as _
 
 from AuthBillet.utils import MacAdressField
-from BaseBillet.models import Reservation, Ticket
+from BaseBillet.models import Reservation, Ticket, Membership
 from BaseBillet.tasks import terminal_pairing_celery_mailer
+
 logger = logging.getLogger(__name__)
 
 
@@ -53,9 +54,9 @@ class TokenTerminalValidator(serializers.Serializer):
             raise serializers.ValidationError(_(f'app_token non valide'))
 
         # token expiration : 10 minutes
-        if (datetime.datetime.now() - datetime.timedelta(seconds=(100*60))).timestamp() > pairing.datetime.timestamp() :
+        if (datetime.datetime.now() - datetime.timedelta(
+                seconds=(100 * 60))).timestamp() > pairing.datetime.timestamp():
             raise serializers.ValidationError(_(f'Token expiré'))
-
 
         user_parent = self.term_user.user_parent()
         if not user_parent.is_staff:
@@ -83,7 +84,7 @@ class TokenTerminalValidator(serializers.Serializer):
         representation = super().to_representation(instance)
 
         refresh = RefreshToken.for_user(self.term_user)
-        representation['jwt_token'] =  {"refresh":str(refresh), "access": str(refresh.access_token)}
+        representation['jwt_token'] = {"refresh": str(refresh), "access": str(refresh.access_token)}
 
         representation['espece'] = self.term_user.espece
         representation['tenants_admin'] = self.tenant_admin
@@ -175,6 +176,29 @@ class MeTicketsSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+class MeMembershipSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Membership
+        fields = [
+            'price',
+            'price_name',
+            'date_added',
+            'first_contribution',
+            'last_contribution',
+            'deadline',
+            'contribution_value',
+            'last_action',
+            'first_name',
+            'last_name',
+            'pseudo',
+            'newsletter',
+            'postal_code',
+            'birth_date',
+            'phone',
+            'email',
+        ]
+        read_only_fields = fields
+
 
 class MeReservationSerializer(serializers.ModelSerializer):
     tickets = MeTicketsSerializer(many=True)
@@ -195,11 +219,17 @@ class MeReservationSerializer(serializers.ModelSerializer):
 
 class MeSerializer(serializers.ModelSerializer):
     reservations = serializers.SerializerMethodField()
+    membership = MeMembershipSerializer(many=True)
 
     # On filtre les reservation : pas plus vieille qu'une semaine.
     def get_reservations(self, user):
+        reservation_valide = [
+            Reservation.FREERES_USERACTIV,
+            Reservation.PAID,
+            Reservation.VALID
+        ]
         last_week = datetime.datetime.now().date() - datetime.timedelta(days=7)
-        qs = Reservation.objects.filter(user_commande=user, datetime__gt=last_week)
+        qs = Reservation.objects.filter(user_commande=user, datetime__gt=last_week, status__in=reservation_valide)
         serializer = MeReservationSerializer(instance=qs, many=True)
         return serializer.data
 
@@ -216,7 +246,9 @@ class MeSerializer(serializers.ModelSerializer):
             'can_create_tenant',
             'espece',
             'is_staff',
-            'reservations'
+            'reservations',
+            'membership'
+
         ]
         read_only_fields = fields
         # depth = 1

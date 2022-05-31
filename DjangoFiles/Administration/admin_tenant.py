@@ -254,6 +254,7 @@ class PriceAdmin(admin.ModelAdmin):
         'name',
         'product',
         'prix',
+        'adhesion_obligatoire'
     )
     ordering = ('product', 'name')
 

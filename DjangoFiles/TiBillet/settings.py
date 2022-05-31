@@ -46,7 +46,7 @@ SHARED_APPS = (
     'django_tenants',  # mandatory
     # 'jet.dashboard',
     # 'jet',
-    'Customers', # you must list the app where your tenant model resides in
+    'Customers',  # you must list the app where your tenant model resides in
 
     'django.contrib.contenttypes',
 
@@ -59,7 +59,11 @@ SHARED_APPS = (
     'rest_framework.authtoken',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
-    # 'djoser',
+
+    "allauth",
+    "allauth.account",
+    "allauth.socialaccount",
+    "allauth.socialaccount.providers.github",
 
     'django.contrib.sessions',
     'django.contrib.sites',
@@ -79,6 +83,9 @@ SHARED_APPS = (
 
 )
 
+# CodeLogin_app/settings.py
+
+
 TENANT_APPS = (
     # The following Django contrib apps must be in TENANT_APPS
     'django.contrib.contenttypes',
@@ -90,13 +97,12 @@ TENANT_APPS = (
 )
 
 INSTALLED_APPS = list(SHARED_APPS) + [app for app in TENANT_APPS if app not in SHARED_APPS]
-TENANT_MODEL = "Customers.Client" # app.Model
+TENANT_MODEL = "Customers.Client"  # app.Model
 TENANT_DOMAIN_MODEL = "Customers.Domain"  # app.Model
 ROOT_URLCONF = 'TiBillet.urls_tenants'
 PUBLIC_SCHEMA_URLCONF = 'TiBillet.urls_public'
 SITE_ID = 1
 AUTH_USER_MODEL = 'AuthBillet.TibilletUser'
-
 
 MIDDLEWARE = [
     'django_tenants.middleware.main.TenantMainMiddleware',
@@ -168,17 +174,15 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
-        # "rest_framework.authentication.TokenAuthentication",
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10
 }
 
-
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
-#     'REFRESH_TOKEN_LIFETIME': timedelta(seconds=30),
+    #     'REFRESH_TOKEN_LIFETIME': timedelta(seconds=30),
     'ROTATE_REFRESH_TOKENS': False,
     'BLACKLIST_AFTER_ROTATION': False,
     'UPDATE_LAST_LOGIN': False,
@@ -207,6 +211,7 @@ SIMPLE_JWT = {
     'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
 }
+
 
 # DJOSER = {
 #     "SEND_ACTIVATION_EMAIL": True,
@@ -257,15 +262,15 @@ EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', False)
 EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', True)
 
 # Celery Configuration Options
-CELERY_TIMEZONE=os.environ.get('TIME_ZONE', 'UTC')
-CELERY_TASK_TRACK_STARTED=True
-CELERY_TASK_TIME_LIMIT=30 * 60
-BROKER_URL=os.environ.get('CELERY_BROKER', 'redis://redis:6379/0')
-CELERY_BROKER_URL=os.environ.get('CELERY_BROKER', 'redis://redis:6379/0')
-CELERY_RESULT_BACKEND=os.environ.get('CELERY_BACKEND', 'redis://redis:6379/0')
+CELERY_TIMEZONE = os.environ.get('TIME_ZONE', 'UTC')
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60
+BROKER_URL = os.environ.get('CELERY_BROKER', 'redis://redis:6379/0')
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER', 'redis://redis:6379/0')
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_BACKEND', 'redis://redis:6379/0')
 # DJANGO_CELERY_BEAT_TZ_AWARE=False
 
-#CHANNELS
+# CHANNELS
 ASGI_APPLICATION = "TiBillet.asgi.application"
 CHANNEL_LAYERS = {
     'default': {
