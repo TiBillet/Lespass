@@ -1,5 +1,6 @@
 import os
 import uuid
+from datetime import timedelta
 
 import requests
 from django.contrib.auth import get_user_model
@@ -269,13 +270,14 @@ class Product(models.Model):
                         )
 
     BILLET, PACK, RECHARGE_CASHLESS, VETEMENT, MERCH, ADHESION, DON, FREERES = 'B', 'P', 'R', 'T', 'M', 'A', 'D', 'F'
+
     CATEGORIE_ARTICLE_CHOICES = [
         (BILLET, _('Billet')),
         (PACK, _("Pack d'objets")),
         (RECHARGE_CASHLESS, _('Recharge cashless')),
         (VETEMENT, _('Vetement')),
         (MERCH, _('Merchandasing')),
-        (ADHESION, _('Adhésion')),
+        (ADHESION, _('Adhésions et abonnements')),
         (DON, _('Don')),
         (FREERES, _('Reservation gratuite'))
     ]
@@ -313,6 +315,10 @@ class Price(models.Model):
 
     stock = models.SmallIntegerField(blank=True, null=True)
     max_per_user = models.PositiveSmallIntegerField(default=10)
+
+    adhesion_obligatoire = models.ForeignKey(Product, on_delete=models.PROTECT,
+                                             related_name="adhesion_obligatoire",
+                                             blank=True, null=True)
 
     def range_max(self):
         return range(self.max_per_user + 1)
@@ -799,10 +805,13 @@ class LigneArticle(models.Model):
 
 class Membership(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='membership')
+    price = models.ForeignKey(Price, on_delete=models.PROTECT, related_name='user',
+                              null=True, blank=True)
 
     date_added = models.DateTimeField(auto_now_add=True)
     first_contribution = models.DateField(null=True, blank=True)
     last_contribution = models.DateField(null=True, blank=True)
+
     contribution_value = models.FloatField(null=True, blank=True)
     last_action = models.DateTimeField(auto_now=True, verbose_name="Présence")
 
@@ -830,6 +839,16 @@ class Membership(models.Model):
 
     def email(self):
         return self.user.email
+
+    def deadline(self):
+        if self.last_contribution :
+            return self.last_contribution + timedelta(days=365)
+        return None
+
+    def price_name(self):
+        if self.price:
+            return self.price.name
+        return None
 
     def __str__(self):
         if self.pseudo:
