@@ -741,6 +741,13 @@ class ReservationValidator(serializers.Serializer):
                     'qty': float(entry['qty']),
                 }
 
+                if price.adhesion_obligatoire :
+                    membership_products = [ membership.price.product for membership in self.user_commande.membership.all()]
+                    if price.adhesion_obligatoire not in membership_products:
+                        # import ipdb; ipdb.set_trace()
+                        logger.warning(_(f"L'utilisateur n'est pas membre"))
+                        raise serializers.ValidationError(_(f"L'utilisateur n'est pas membre"))
+
                 if price.product.categorie_article in [Product.BILLET, Product.FREERES]:
                     nbr_ticket += entry['qty']
 
