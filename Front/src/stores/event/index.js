@@ -1,5 +1,6 @@
 import {defineStore} from 'pinia'
 import {useLocalStore} from '@/stores/local'
+import {useAllStore} from '@/stores/all'
 
 const domain = `${location.protocol}//${location.host}`
 
@@ -33,6 +34,9 @@ export const useEventStore = defineStore({
         }
         this.event = retour
         this.initEventForm()
+        // updata data header
+        this.getEventHeader()
+
       } catch (error) {
         this.error = error
         console.log('useEventStore, getEventBySlug:', error)
@@ -232,7 +236,8 @@ export const useEventStore = defineStore({
       } catch (e) {
         urlImage = `${domain}/media/images/image_non_disponible.svg`
       }
-      return {
+      const allStore = useAllStore()
+      allStore.header = {
         urlImage: urlImage,
         shortDescription: this.event.short_description,
         longDescription: this.event.long_description,

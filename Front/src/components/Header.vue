@@ -1,22 +1,21 @@
 <template>
   <header>
-
     <div class="page-header min-vh-50"
-         :style="{ backgroundImage: `url('${headerEvent.urlImage}')`, maxHeight: `365px` }">
+         :style="{ backgroundImage: `url('${header.urlImage}')`, maxHeight: `365px` }">
       <span class="mask bg-dark opacity-8"></span>
       <div class="container">
         <div class="row">
           <div class="col-lg-8 mx-auto text-white text-center">
-            <h2 class="text-white">{{ headerEvent.titre }}</h2>
-            <p v-if="headerEvent.shortDescription !== null" class="lead">
-              {{ headerEvent.shortDescription }}</p>
+            <h2 class="text-white">{{ header.titre }}</h2>
+            <p v-if="header.shortDescription !== null" class="lead">
+              {{ header.shortDescription }}</p>
           </div>
         </div>
       </div>
     </div>
 
     <!-- search -->
-    <div v-if="router.currentRoute.value.name !== 'Event'" class="container">
+    <div v-if="routeName !== 'Event'" class="container">
       <div class="row bg-white shadow mt-n5 border-radius-lg pb-4 p-3 position-relative w-75 mx-auto">
         <div class="col-lg-8 mt-lg-n2 mt-2">
           <label></label>
@@ -37,13 +36,11 @@
 <script setup>
 // console.log('-> Header.vue')
 
-// vue
-import {useRouter} from 'vue-router'
+// store
+import {storeToRefs} from 'pinia'
+import {useAllStore} from '@/stores/all'
 
-const props = defineProps({
-  headerEvent: Object
-})
 
-const router = useRouter()
+const {routeName, header} = storeToRefs(useAllStore())
 
 </script>

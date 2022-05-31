@@ -1,8 +1,4 @@
 <template>
-  <!-- pour load events -->
-  <p v-if="error !== null" class="text-dark">{{ error }}</p>
-  <Loading v-if="loading === true" test="accueil"/>
-  <Header v-if="Object.entries(place).length > 0" :header-event="getHeaderPlace()"/>
   <section v-if="Object.entries(events).length > 0" class="pb-0">
     <div class="container">
       <div class="row">
@@ -17,6 +13,7 @@
       <!-- <Calendar categorie-article="B"/> -->
     </div>
   </section>
+
 </template>
 
 <script setup>
@@ -30,43 +27,20 @@ import {useAllStore} from '@/stores/all'
 import {useRouter} from 'vue-router'
 
 // composants
-import Loading from '@/components/Loading.vue'
+// import LayoutDefault from '@/layouts/LayoutDefault.vue'
 import Header from '../components/Header.vue'
 import CardEvent from '../components/CardEvent.vue'
 // import Calendar from '../components/Calendar.vue'
 
-
-const {place, events, loading, error} = storeToRefs(useAllStore())
+// state
+const {place, header, events, loading, error} = storeToRefs(useAllStore())
+// actions du state
 const {getEvents} = useAllStore()
 const router = useRouter()
 
-// load events
+// load events and update data header
 getEvents()
 
-function getHeaderPlace() {
-  const domain = `${location.protocol}//${location.host}`
-  let urlImage, urlLogo
-  try {
-    urlImage = place.value.img_variations.fhd
-  } catch (e) {
-    urlImage = `${domain}/media/images/image_non_disponible.svg`
-  }
-
-  try {
-    urlLogo = place.value.logo_variations.med
-  } catch (e) {
-    urlLogo = `${domain}/media/images/image_non_disponible.svg`
-  }
-
-  return {
-    urlImage: urlImage,
-    logo: urlLogo,
-    shortDescription: place.value.short_description,
-    longDescription: place.value.long_description,
-    titre: place.value.organisation,
-    domain: domain
-  }
-}
 
 function goEvent(slug) {
   // console.log('-> fonc "goEvenement"; slug =', slug)
