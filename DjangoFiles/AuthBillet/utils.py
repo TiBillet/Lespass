@@ -39,12 +39,7 @@ def get_or_create_user(email, password=None):
         espece=TibilletUser.TYPE_HUM
     )
 
-    if not created:
-        if user.email_error:
-            return False
-        return user
-
-    else:
+    if created :
         if password:
             user.set_password(password)
 
@@ -53,6 +48,13 @@ def get_or_create_user(email, password=None):
         user.client_achat.add(connection.tenant)
         user.save()
 
+        sender_mail_connect(user.email)
+
+        return user
+
+    else:
+        if user.email_error:
+            return False
         return user
 
 
