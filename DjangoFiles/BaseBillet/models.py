@@ -1,6 +1,6 @@
 import os
 import uuid
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 import requests
 from django.contrib.auth import get_user_model
@@ -80,6 +80,7 @@ class Configuration(SingletonModel):
     email = models.EmailField()
 
     site_web = models.URLField(blank=True, null=True)
+    legal_documents = models.URLField(blank=True, null=True, verbose_name='Statuts associatif')
 
     twitter = models.URLField(blank=True, null=True)
     facebook = models.URLField(blank=True, null=True)
@@ -844,6 +845,12 @@ class Membership(models.Model):
         if self.last_contribution :
             return self.last_contribution + timedelta(days=365)
         return None
+
+    def is_valid(self):
+        if self.last_contribution:
+            if datetime.now().date() < self.deadline():
+                return True
+        return False
 
     def price_name(self):
         if self.price:

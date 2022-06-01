@@ -627,6 +627,7 @@ class MembershipViewset(viewsets.ViewSet):
             return Response(adhesion_validator.errors, status=status.HTTP_400_BAD_REQUEST)
         return Response(membre_validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    #TODO: gerer en interne, pas avec le cashless
     def retrieve(self, request, pk=None):
         try:
             email = force_str(urlsafe_base64_decode(pk))

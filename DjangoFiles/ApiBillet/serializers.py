@@ -14,7 +14,7 @@ from rest_framework.generics import get_object_or_404
 from django_tenants.utils import schema_context, tenant_context
 
 from AuthBillet.models import TibilletUser, HumanUser
-from AuthBillet.utils import validate_email_and_return_user
+from AuthBillet.utils import get_or_create_user
 
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, Paiement_stripe, \
     PriceSold, ProductSold, Artist_on_event, OptionGenerale, Membership
@@ -104,6 +104,7 @@ class ConfigurationSerializer(serializers.ModelSerializer):
             "phone",
             "email",
             "site_web",
+            "legal_documents",
             "twitter",
             "facebook",
             "instagram",
@@ -474,8 +475,9 @@ class NewAdhesionValidator(serializers.Serializer):
 
     def validate_email(self, value):
         logger.info(f"NewAdhesionValidator validate email : {value}")
-        user_paiement: TibilletUser = validate_email_and_return_user(value)
+        user_paiement: TibilletUser = get_or_create_user(value)
         self.user = user_paiement
+        return user_paiement.email
 
     def validate(self, attrs):
         price_adhesion: Price = attrs.get('adhesion')
@@ -537,13 +539,17 @@ class MembreValidator(serializers.Serializer):
 
 
     def validate_email(self, value):
-        user_paiement: TibilletUser = validate_email_and_return_user(value)
+        user_paiement: TibilletUser = get_or_create_user(value)
         self.user = user_paiement
 
         self.fiche_membre, created = Membership.objects.get_or_create(
             user=user_paiement,
             price=self.price,
         )
+
+        if not created:
+            if self.fiche_membre.is_valid():
+                raise serializers.ValidationError(_(f"L'abonnement existe et est valide jusque : {self.fiche_membre.deadline()}"))
 
         if not self.fiche_membre.first_name:
             if not self.initial_data.get('first_name'):
@@ -716,7 +722,7 @@ class ReservationValidator(serializers.Serializer):
         return value
 
     def validate_email(self, value):
-        self.user_commande = validate_email_and_return_user(value)
+        self.user_commande = get_or_create_user(value)
         return self.user_commande.email
 
     def validate_prices(self, value):

@@ -31,6 +31,7 @@ public_admin_site = PublicAdminSite(name='public_admin')
 class UserAdminTibillet(UserAdmin):
     list_display = (
         'email',
+        'email_error',
         'is_active',
         'is_staff',
         'is_superuser',
@@ -55,6 +56,7 @@ class UserAdminTibillet(UserAdmin):
                 'first_name',
                 'last_name',
                 'email',
+                'email_error',
                 'phone',
                 'client_source',
                 'client_admin',
