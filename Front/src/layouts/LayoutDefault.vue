@@ -1,9 +1,11 @@
 <template>
   <Navbar/>
-  <Header />
+  <Header/>
   <p v-if="error !== null" class="text-dark">{{ error }}</p>
   <Loading v-if="loading === true"/>
-  <slot />
+  <div>
+    <slot/>
+  </div>
   <!--
   <Footer :place="place"/>
     -->

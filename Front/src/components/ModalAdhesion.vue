@@ -164,7 +164,6 @@ function postAdhesionModal(data) {
   setEtapeStripe('attente_stripe_adhesion')
 
   loading.value = true
-  /*
   fetch(domain + apiMemberShip, options).then(response => {
     console.log('response =', response)
     if (response.status !== 201) {
@@ -186,7 +185,6 @@ function postAdhesionModal(data) {
       message: error
     }
   })
-*/
 }
 
 function validerAdhesion(event) {
