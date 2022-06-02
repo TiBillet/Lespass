@@ -26,7 +26,7 @@ from AuthBillet.models import TibilletUser, TenantAdminPermission, TermUser
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from AuthBillet.serializers import MeSerializer, CreateUserValidator, CreateTerminalValidator, TokenTerminalValidator
-from AuthBillet.utils import validate_email_and_return_user
+from AuthBillet.utils import get_or_create_user, sender_mail_connect
 from BaseBillet.models import Configuration
 
 from django.utils.encoding import force_str
@@ -134,9 +134,10 @@ class create_user(APIView):
         email = validator.validated_data.get('email').lower()
         password = validator.validated_data.get('password')
 
-        user = validate_email_and_return_user(email, password)
+        user = get_or_create_user(email, password)
 
         if user:
+            sender_mail_connect(user.email)
             return Response(_('Pour acceder à votre espace et réservations, '
                               'merci de valider votre adresse email. '
                               'Pensez à regarder dans les spams !'),

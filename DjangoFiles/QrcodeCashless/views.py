@@ -10,7 +10,7 @@ from rest_framework.generics import get_object_or_404
 from django.views import View
 from rest_framework import status
 
-from ApiBillet.serializers import validate_email_and_return_user, get_or_create_price_sold, get_near_event_by_date
+from ApiBillet.serializers import get_or_create_user, get_or_create_price_sold, get_near_event_by_date
 from BaseBillet.models import Configuration, Product, LigneArticle, Price, Paiement_stripe, ProductSold, Event
 from PaiementStripe.views import creation_paiement_stripe
 from QrcodeCashless.models import CarteCashless
@@ -165,7 +165,7 @@ class index_scan(View):
         # c'est une demande de paiement
         if (pk_adhesion or montant_recharge) and data.get('email'):
             # montant_recharge = data.get('montant_recharge')
-            user = validate_email_and_return_user(data.get('email'))
+            user = get_or_create_user(data.get('email'))
             ligne_articles = []
             metadata = {
                 'tenant': f'{connection.tenant.uuid}'

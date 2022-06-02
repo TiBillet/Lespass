@@ -60,10 +60,10 @@ SHARED_APPS = (
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
 
-    "allauth",
-    "allauth.account",
-    "allauth.socialaccount",
-    "allauth.socialaccount.providers.github",
+    # "allauth",
+    # "allauth.account",
+    # "allauth.socialaccount",
+    # "allauth.socialaccount.providers.github",
 
     'django.contrib.sessions',
     'django.contrib.sites',

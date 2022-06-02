@@ -9,7 +9,29 @@ from BaseBillet.tasks import connexion_celery_mailer
 
 logger = logging.getLogger(__name__)
 
-def validate_email_and_return_user(email, password=None, subject_mail=None):
+def sender_mail_connect(email, subject_mail=None):
+    # Si la billetterie est active, on envoie le mail de confirmation
+    base_url = connection.tenant.get_primary_domain().domain
+    try:
+        config = Configuration.get_solo()
+        if config.activer_billetterie:
+            logger.info(f"sender_mail_connect : {email} - {base_url}")
+            connexion_celery_mailer.delay(email, f"https://{base_url}", subject_mail)
+
+    except Exception as e:
+        logger.error(f"validate_email_and_return_user erreur pour récuperer config : {email} - {base_url} : {e}")
+
+
+def get_or_create_user(email, password=None):
+    """
+    If user not created, set it inactive.
+    Only the mail validation can set active the user.
+
+    :param email: email
+    :param password: str
+    :return:
+    """
+
     User: TibilletUser = get_user_model()
     user, created = User.objects.get_or_create(
         email=email,
@@ -17,31 +39,7 @@ def validate_email_and_return_user(email, password=None, subject_mail=None):
         espece=TibilletUser.TYPE_HUM
     )
 
-    base_url = connection.tenant.get_primary_domain().domain
-
-    # Si la billetterie est active, on envoie le mail de confirmation
-    billetterie_active = False
-    try:
-        config = Configuration.get_solo()
-        if config.activer_billetterie:
-            billetterie_active = True
-    except Exception as e:
-        logger.error(f"validate_email_and_return_user erreur pour récuperer config : {user} - {base_url} : {e}")
-
-
-    if not created:
-        if user.is_active:
-            if billetterie_active:
-                task = connexion_celery_mailer.delay(user.email, f"https://{base_url}", subject_mail)
-            return user
-        else:
-            if user.email_error:
-                return False
-            else:
-                if billetterie_active:
-                    task = connexion_celery_mailer.delay(user.email, f"https://{base_url}", subject_mail)
-                return user
-    else:
+    if created :
         if password:
             user.set_password(password)
 
@@ -50,9 +48,13 @@ def validate_email_and_return_user(email, password=None, subject_mail=None):
         user.client_achat.add(connection.tenant)
         user.save()
 
-        if billetterie_active:
-            task = connexion_celery_mailer.delay(user.email, f"https://{base_url}")
+        sender_mail_connect(user.email)
 
+        return user
+
+    else:
+        if user.email_error:
+            return False
         return user
 
 
