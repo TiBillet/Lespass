@@ -43,6 +43,8 @@ class ProductSerializer(serializers.ModelSerializer):
         fields = [
             "uuid",
             "name",
+            'short_description',
+            'long_description',
             "publish",
             "img",
             "categorie_article",
@@ -79,6 +81,8 @@ class PriceSerializer(serializers.ModelSerializer):
             'uuid',
             'product',
             'name',
+            'short_description',
+            'long_description',
             'prix',
             'vat',
             'stock',

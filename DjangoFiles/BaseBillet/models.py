@@ -255,6 +255,9 @@ class Product(models.Model):
 
     name = models.CharField(max_length=500, unique=True)
 
+    short_description = models.CharField(max_length=250, blank=True, null=True)
+    long_description = models.TextField(blank=True, null=True)
+
     publish = models.BooleanField(default=False)
 
     img = StdImageField(upload_to='images/',
@@ -296,6 +299,9 @@ class Price(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
     product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="prices")
 
+    short_description = models.CharField(max_length=250, blank=True, null=True)
+    long_description = models.TextField(blank=True, null=True)
+    
     name = models.CharField(max_length=50)
     prix = models.FloatField()
 
