@@ -86,13 +86,28 @@ Venez discuter avec nous :
 
 ### For Production :
 
-Soon !
+You need
+- a wildcard ssl certificate. 
+It is possible to generate one with letsencrypt and a dns-challenge.
+You can use this repo for example :
+https://github.com/TiBillet/Traefik-reverse-proxy/tree/main/wildcard
 
-### To help us in the development :
+- Docker & docker-compose See https://docs.docker.com/ for installation.
+
+- copy env_example to .env and fill in the necessary variables.
+- 
+```shell
+cd Docker/Production
+docker compose pull
+docker compose up -d 
+docker exec -ti billetterie_django bash
+tibinstall
+```
+
+### Contribute :
 
 1. Go talk to us in discord :)
 2. Accept the code of conduct.
-3. Download the assets sources and clone this repo.
 4. Follow lines below :
 
 #### Dependency
