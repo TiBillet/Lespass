@@ -1,0 +1,10 @@
+# syntax=docker/dockerfile:1
+FROM node:16-bullseye
+WORKDIR /front
+COPY ./ ./
+RUN npm install
+RUN npm run build
+
+FROM nginx:latest
+WORKDIR /root/
+COPY --from=0 /front/dist /usr/share/nginx/html
