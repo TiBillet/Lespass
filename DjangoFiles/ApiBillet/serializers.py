@@ -68,7 +68,10 @@ class ProductSerializer(serializers.ModelSerializer):
 
 class PriceSerializer(serializers.ModelSerializer):
     product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
-    adhesion_obligatoire = serializers.PrimaryKeyRelatedField(queryset=Product.objects.filter(categorie_article=Product.ADHESION))
+    adhesion_obligatoire = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.filter(categorie_article=Product.ADHESION),
+        required=False
+    )
 
     class Meta:
         model = Price
