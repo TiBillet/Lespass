@@ -100,8 +100,7 @@ https://github.com/TiBillet/Traefik-reverse-proxy/tree/main/wildcard
 cd Docker/Production
 docker compose pull
 docker compose up -d 
-docker exec -ti billetterie_django bash
-tibinstall
+docker exec -ti billetterie_django tibinstall
 ```
 
 ### Contribute :
