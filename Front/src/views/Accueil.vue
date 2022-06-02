@@ -1,4 +1,5 @@
 <template>
+  <div>
   <section v-if="Object.entries(events).length > 0" class="pb-0">
     <div class="container">
       <div class="row">
@@ -13,7 +14,7 @@
       <!-- <Calendar categorie-article="B"/> -->
     </div>
   </section>
-
+</div>
 </template>
 
 <script setup>
@@ -28,9 +29,10 @@ import {useRouter} from 'vue-router'
 
 // composants
 // import LayoutDefault from '@/layouts/LayoutDefault.vue'
-import Header from '../components/Header.vue'
-import CardEvent from '../components/CardEvent.vue'
+// import Header from '../components/Header.vue'
+import CardEvent from '@/components/CardEvent.vue'
 // import Calendar from '../components/Calendar.vue'
+
 
 // state
 const {place, header, events, loading, error} = storeToRefs(useAllStore())
@@ -40,7 +42,6 @@ const router = useRouter()
 
 // load events and update data header
 getEvents()
-
 
 function goEvent(slug) {
   // console.log('-> fonc "goEvenement"; slug =', slug)
