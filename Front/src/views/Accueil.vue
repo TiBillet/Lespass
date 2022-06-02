@@ -28,8 +28,6 @@ import {useAllStore} from '@/stores/all'
 import {useRouter} from 'vue-router'
 
 // composants
-// import LayoutDefault from '@/layouts/LayoutDefault.vue'
-// import Header from '../components/Header.vue'
 import CardEvent from '@/components/CardEvent.vue'
 // import Calendar from '../components/Calendar.vue'
 
@@ -47,10 +45,6 @@ function goEvent(slug) {
   // console.log('-> fonc "goEvenement"; slug =', slug)
   router.push({name: 'Event', params: {slug: slug}})
 }
-
-// composants
-// import Calendar from '../components/Calendar.vue'
-
 </script>
 
 <style>

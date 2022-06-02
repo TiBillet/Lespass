@@ -46,6 +46,11 @@ const routes = [
     component: () => import(/* webpackChunkName: "Artist" */ '../views/ArtistPage.vue')
   },
   {
+    path: '/adhesions/',
+    name: 'Adhesions',
+    component: () => import(/* webpackChunkName: "Artist" */ '@/views/Adhesions.vue')
+  },
+  {
     // route interceptée
     path: '/stripe/return/:id',
     name: 'StripeReturn',
@@ -77,8 +82,8 @@ const router = createRouter({
 })
 
 router.beforeEach((to, from, next) => {
-  // console.log('from =', from)
-  // console.log('to =', to)
+  console.log('from =', from)
+  console.log('to =', to)
 
   // traitement de la redirection si interception
   let redirection = false

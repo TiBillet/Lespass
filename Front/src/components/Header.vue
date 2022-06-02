@@ -15,7 +15,7 @@
     </div>
 
     <!-- search -->
-    <div v-if="routeName !== 'Event'" class="container">
+    <div v-if="routeName === 'Accueil'" class="container">
       <div class="row bg-white shadow mt-n5 border-radius-lg pb-4 p-3 position-relative w-75 mx-auto">
         <div class="col-lg-8 mt-lg-n2 mt-2">
           <label></label>
@@ -40,7 +40,6 @@
 import {storeToRefs} from 'pinia'
 import {useAllStore} from '@/stores/all'
 
-
-const {routeName, header} = storeToRefs(useAllStore())
+const {place, routeName, header} = storeToRefs(useAllStore())
 
 </script>

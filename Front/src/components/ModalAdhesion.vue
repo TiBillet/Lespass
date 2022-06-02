@@ -1,14 +1,14 @@
 <template>
-  <!-- modal adhésion -->
+  <!-- modal formulaire adhésion -->
   <div class="modal fade" id="modal-form-adhesion" tabindex="-1" role="dialog"
        aria-labelledby="modal-form-adhesion"
        aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-" role="document">
+    <div class="modal-dialog modal-dialog-centered" role="document">
       <div class="modal-content">
         <div class="modal-body p-0">
           <div class="card card-plain">
             <div class="card-header pb-0 d-flex align-items-center">
-              <h3 class="font-weight-bolder text-info text-gradient align-self-start w-85">Adhésion</h3>
+              <h3 class="font-weight-bolder text-info text-gradient align-self-start w-85">{{ getNameAdhesion(productUuid)}}</h3>
               <!-- status -->
               <div class="form-check form-switch position-relative">
                 <input class="form-check-input" type="checkbox" id="read-status" @click="goStatus()" required>
@@ -26,7 +26,7 @@
                 <!-- prix -->
                 <div class="input-group mb-2 has-validation">
                   <div :id="`adesion-modal-price-parent${index}`" class="col form-check mb-3"
-                       v-for="(price, index) in getPricesAdhesion()" :key="index">
+                       v-for="(price, index) in getPricesAdhesion(productUuid)" :key="index">
                     <input v-if="index === 0" :value="price.uuid" v-model="adhesion.adhesion"
                            class="form-check-input input-adesion-modal-price" type="radio"
                            name="prixAdhesionModal" :id="`uuidadhesionmodalpriceradio${index}`"
@@ -104,8 +104,6 @@
 
 <script setup>
 // console.log('-> ModalAdhesion.vue !')
-// vue
-import {ref} from 'vue'
 
 // store
 import {storeToRefs} from 'pinia'
@@ -117,26 +115,22 @@ import {useRouter} from 'vue-router'
 
 // obtenir data adhesion
 const {place, loading, error} = storeToRefs(useAllStore())
-const {getPricesAdhesion} = useAllStore()
+const {getPricesAdhesion, getNameAdhesion} = useAllStore()
 
 // stockage adhesion en ocal
 const {adhesion} = storeToRefs(useLocalStore())
 let {setEtapeStripe} = useLocalStore()
-
 const router = useRouter()
 
-/*
-const modal = ref({
-  status: 'input',
-  readStatus: false,
-  size: {},
-  message: ''
+const props = defineProps({
+  productUuid: String
 })
-*/
+
 
 function inputFocus(id) {
   document.querySelector(`#${id}`).focus()
 }
+
 
 function goStatus() {
   const status = document.querySelector(`#read-status`).checked

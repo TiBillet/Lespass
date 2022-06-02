@@ -46,9 +46,10 @@
             </li>
 
             <!-- infos adhésion -->
-            <li v-if="adhesion.status === 'membership'">
+            <!-- <li v-if="adhesion.status === 'membership'"> -->
+            <li>
               <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
-                 role="button" @click="showAdhesion()">
+                 role="button" data-bs-toggle="modal" data-bs-target="#modal-liste-adhesion">
                 <i class="fas fa-address-card fa-fw me-1 text-dark" aria-hidden="true"></i>
                 <h6 class="m-0 text-dark">Adhésion</h6>
               </a>
@@ -69,9 +70,9 @@
 
         <!-- pas d'adhésion -->
         <li class="nav-item">
-          <a v-if="adhesion.status === ''" class="nav-link ps-1 d-flex justify-content-between align-items-center"
-             :title="`Adhérez à l'association '${ place.organisation }'`"
-             role="button" data-bs-toggle="modal" data-bs-target="#modal-form-adhesion">
+          <a v-if="adhesion.status === '' && routeName !== 'Adhesions'" href="/adhesions"
+             class="nav-link ps-1 d-flex justify-content-between align-items-center"
+             :title="`Adhérez à l'association '${ place.organisation }'`">
             <i class="fa fa-address-card me-1 text-white" aria-hidden="true"></i>
             <h6 class="m-0 text-white">Adhérez</h6>
           </a>
@@ -86,32 +87,12 @@
 <script setup>
 // console.log(' -> Navbar.vue !')
 
-import '../assets/css/google_fonts_family_montserrat_400.700.200.css'
-
-// Nucleo Icons (ui)
-import '../assets/css/nucleo-icons.css'
-
-// Font Awesome Free 5.15.4 MIT License
-import '../assets/js/kit-fontawesome-42d5adcbca.js'
-
-// bootstrap (ui)
-import '../assets/css/bootstrap-5.0.2/bootstrap.min.css'
-import '../assets/js/bootstrap-5.0.2/bootstrap.bundle.min.js'
-
-// perfect-scrollbar
-import '../assets/css/perfect-scrollbar.css'
-import '../assets/js/perfect-scrollbar/perfect-scrollbar.min.js'
-
-// css (ui)
-import '../assets/css/now-design-system-pro.min.css'
-import '../assets/js/now-design-system-pro.js'
-
 // store
 import {storeToRefs} from 'pinia'
 import {useAllStore} from '@/stores/all'
 import {useLocalStore} from '@/stores/local'
 
-const {place, events, loading, error} = storeToRefs(useAllStore())
+const {place, events, routeName, loading, error} = storeToRefs(useAllStore())
 const {getPlace} = useAllStore()
 const {refreshToken, me, adhesion} = storeToRefs(useLocalStore())
 const {infosCardExist, infosReservationExist, getMe, refreshAccessToken} = useLocalStore()
@@ -155,7 +136,8 @@ function showAdhesion() {
   let contenu = ``
   try {
     console.log('me:', me.value)
-    const infos = me.value.cashless
+    const infos = me.value.membership
+
     contenu += `
       <h5>Email : ${infos.email}</h5>
       <h5>Nom : ${infos.name}</h5>
