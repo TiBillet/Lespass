@@ -4,7 +4,6 @@ import Accueil from '../views/Accueil.vue'
 
 // store
 import {useLocalStore} from '@/stores/local'
-import {useAllStore} from '@/stores/all'
 
 const domain = `${location.protocol}//${location.host}`
 
@@ -81,10 +80,8 @@ const router = createRouter({
   }
 })
 
-router.beforeEach((to, from, next) => {
-  console.log('from =', from)
-  console.log('to =', to)
 
+router.beforeEach((to, from, next) => {
   // traitement de la redirection si interception
   let redirection = false
   let nouvelleRoute = '/'
@@ -148,8 +145,9 @@ router.beforeEach((to, from, next) => {
     next()
   }
 
-  const allStore = useAllStore()
-  allStore.routeName = to.name
+  //   console.log('from =', from)
+  // console.log('to =', to)
+
 })
 
 

@@ -52,12 +52,7 @@ import '../assets/js/now-design-system-pro.js'
 
 
 // console.log('dataHeader =', dataHeader)
-const {routeName,loading, error} = storeToRefs(useAllStore())
-const {getPlace} = useAllStore()
-
-if (routeName !== 'Event') {
-  getPlace()
-}
+const {loading, error} = storeToRefs(useAllStore())
 </script>
 
 <style scoped>

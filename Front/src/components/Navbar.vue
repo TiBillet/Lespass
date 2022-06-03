@@ -3,9 +3,9 @@
     <div class="container">
       <!-- lieu -->
       <div class="navbar-brand">
-        <router-link to="/" class="navbar-brand d-flex justify-content-between align-items-center">
+        <a href="/" class="navbar-brand d-flex justify-content-between align-items-center">
           <h6 class="m-0 text-white">{{ place.organisation }}</h6>
-        </router-link>
+        </a>
       </div>
 
       <!-- partie droite -->
@@ -93,7 +93,7 @@ import {useAllStore} from '@/stores/all'
 import {useLocalStore} from '@/stores/local'
 
 const {place, events, routeName, loading, error} = storeToRefs(useAllStore())
-const {getPlace} = useAllStore()
+const {getPlace, setHeaderPlace} = useAllStore()
 const {refreshToken, me, adhesion} = storeToRefs(useLocalStore())
 const {infosCardExist, infosReservationExist, getMe, refreshAccessToken} = useLocalStore()
 

@@ -2,7 +2,7 @@
     <!-- info getEventHeader en tant qu'action () est contractuel, le getter donne des données antérieures -->
     <!-- <Header :data-header="getEventHeader()"/> -->
 
-    <div v-if="Object.entries(event).length > 0" class="container mt-7">
+    <div v-if="Object.entries(event).length > 0" class="container mt-5">
 
       <!-- artistes -->
       <div v-for="(artist, index) in event.artists" :key="index">

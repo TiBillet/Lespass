@@ -31,9 +31,11 @@ import ModalAdhesion from '@/components/ModalAdhesion.vue'
 
 // store
 import {useAllStore} from '@/stores/all'
+import {useLocalStore} from '@/stores/local'
 
 // obtenir data adhesion
 const {getListAdhesions, getHeaderPlace} = useAllStore()
+// const {me} = storeToRefs(useLocalStore())
 
 let selectedProductUuid = ref('')
 
