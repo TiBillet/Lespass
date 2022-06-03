@@ -329,6 +329,21 @@ class Price(models.Model):
                                              related_name="adhesion_obligatoire",
                                              blank=True, null=True)
 
+
+    NA, YEAR, MONTH, CIVIL = 'N', 'Y', 'M', 'C'
+    SUB_CHOICES = [
+        (NA, _('Non applicable')),
+        (YEAR, _("365 Jours")),
+        (MONTH, _('30 Jours')),
+        (CIVIL, _('Fin decembre.')),
+    ]
+
+    subscription_type = models.CharField(max_length=1,
+                           choices=SUB_CHOICES,
+                           default=NA,
+                           verbose_name=_("Taux TVA"),
+                           )
+
     def range_max(self):
         return range(self.max_per_user + 1)
 
@@ -846,6 +861,9 @@ class Membership(models.Model):
     phone = models.CharField(max_length=20, null=True, blank=True)
     commentaire = models.TextField(null=True, blank=True)
 
+    class Meta:
+        unique_together = ('user', 'price')
+
     def email(self):
         return self.user.email
 
@@ -863,6 +881,12 @@ class Membership(models.Model):
     def price_name(self):
         if self.price:
             return self.price.name
+        return None
+
+    def product_name(self):
+        if self.price:
+            if self.price.product :
+                return self.price.product.name
         return None
 
     def __str__(self):

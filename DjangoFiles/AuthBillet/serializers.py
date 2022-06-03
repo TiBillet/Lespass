@@ -182,6 +182,7 @@ class MeMembershipSerializer(serializers.ModelSerializer):
         fields = [
             'price',
             'price_name',
+            'product_name',
             'date_added',
             'first_contribution',
             'last_contribution',

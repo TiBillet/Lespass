@@ -1,3 +1,5 @@
+import datetime
+
 import requests
 # from django.db import connection
 from django.contrib.auth import get_user_model
@@ -97,9 +99,24 @@ class action_article_paid_by_categorie:
 
         logger.info(f"TRIGGER ADHESION")
         logger.info(f"    Envoie celery task.send_membership_to_cashless")
+
+        user = self.ligne_article.paiement_stripe.user
+        price = self.ligne_article.pricesold.price
+
+        membership = Membership.objects.get(
+            user = user,
+            price = price
+        )
+
+        membership.first_contribution = datetime.datetime.now().date()
+        membership.last_contribution = datetime.datetime.now().date()
+        membership.contribution_value = self.ligne_article.pricesold.prix
+        membership.save()
+
         data = {
             "ligne_article_pk" : self.ligne_article.pk,
         }
+
         task = send_membership_to_cashless.delay(data)
 
 
