@@ -1,7 +1,7 @@
 <template>
   <header>
     <div class="page-header min-vh-50"
-         :style="{ backgroundImage: `url('${header.urlImage}')`, maxHeight: `365px` }">
+         :style="{backgroundImage: `url('${header.urlImage}')`, maxHeight: `365px`}">
       <span class="mask bg-dark opacity-8"></span>
       <div class="container">
         <div class="row">
@@ -15,7 +15,7 @@
     </div>
 
     <!-- search -->
-    <div v-if="routeName !== 'Event'" class="container">
+    <div v-if="routeName === 'Accueil'" class="container">
       <div class="row bg-white shadow mt-n5 border-radius-lg pb-4 p-3 position-relative w-75 mx-auto">
         <div class="col-lg-8 mt-lg-n2 mt-2">
           <label></label>
@@ -35,12 +35,15 @@
 
 <script setup>
 // console.log('-> Header.vue')
+import {watch} from "vue"
 
 // store
 import {storeToRefs} from 'pinia'
 import {useAllStore} from '@/stores/all'
 
-
 const {routeName, header} = storeToRefs(useAllStore())
 
+watch(routeName, (newValue, oldValue) => {
+  console.log('-> routeName:', newValue, oldValue)
+})
 </script>

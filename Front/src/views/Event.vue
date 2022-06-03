@@ -2,7 +2,7 @@
     <!-- info getEventHeader en tant qu'action () est contractuel, le getter donne des données antérieures -->
     <!-- <Header :data-header="getEventHeader()"/> -->
 
-    <div v-if="Object.entries(event).length > 0" class="container mt-7">
+    <div v-if="Object.entries(event).length > 0" class="container mt-5">
 
       <!-- artistes -->
       <div v-for="(artist, index) in event.artists" :key="index">
@@ -51,13 +51,10 @@ import {useLocalStore} from '@/stores/local'
 import {useAllStore} from '@/stores/all'
 
 // composants
-// import LayoutDefault from '@/layouts/LayoutDefault.vue'
-import Header from '@/components/Header.vue'
 import CardArtist from '@/components/CardArtist.vue'
 import CardBillet from '@/components/CardBillet.vue'
 import CardOptions from '@/components/CardOptions.vue'
 import CardEmail from '@/components/CardEmail.vue'
-// import CardAdhesion from '@/components/CardAdhesion.vue'
 import CardGifts from '@/components/CardGifts.vue'
 
 // state event

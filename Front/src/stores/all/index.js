@@ -10,7 +10,11 @@ export const useAllStore = defineStore({
     events: {},
     place: {},
     routeName: '',
-    header: {},
+    header: {
+      titre: '',
+      urlImage: null,
+      shortDescription: ''
+    },
     loading: false,
     error: null
   }),
@@ -26,8 +30,6 @@ export const useAllStore = defineStore({
           throw new Error(`${response.status} - ${response.statusText}`)
         }
         this.events = await response.json()
-        // update data header
-        this.getHeaderPlace()
       } catch (error) {
         // console.log('useAllStore, getEvents:', error)
         this.error = error
@@ -50,6 +52,8 @@ export const useAllStore = defineStore({
         this.loading = false
         // console.log('getPlace, retour =', retour)
         this.place = retour
+        // update data header
+        this.setHeaderPlace()
         // redirection sur le wiki tibillet si la billetterie n'est pas activée
         if (retour.activer_billetterie === false) {
           console.log('redirection stopée --> all/index.js, retour.activer_billetterie = false ')
@@ -68,15 +72,32 @@ export const useAllStore = defineStore({
         this.loading = false
       }
     },
-    getPricesAdhesion() {
+    getPricesAdhesion(productUuid) {
       // console.log('-> fonc getPricesAdhesion !')
+      try {
+        return this.place.membership_products.find(obj => obj.uuid === productUuid).prices
+      } catch (error) {
+        // console.log('store all, getPricesAdhesion:', error)
+        return []
+      }
+    },
+    getNameAdhesion(productUuid) {
+      console.log('-> fonc getNameAdhesion !')
+      try {
+        return this.place.membership_products.find(obj => obj.uuid === productUuid).name
+      } catch (error) {
+        // console.log('store all, getNameAdhesion:', error)
+        return ''
+      }
+    },
+    getListAdhesions() {
       if (this.place.membership_products !== undefined) {
-        return this.place.membership_products.find(obj => obj.categorie_article === 'A').prices
+        return this.place.membership_products
       } else {
         return []
       }
     },
-    getHeaderPlace() {
+    setHeaderPlace() {
       let urlImage, urlLogo
       try {
         urlImage = this.place.img_variations.fhd

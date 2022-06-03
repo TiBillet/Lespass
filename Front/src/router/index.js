@@ -4,7 +4,6 @@ import Accueil from '../views/Accueil.vue'
 
 // store
 import {useLocalStore} from '@/stores/local'
-import {useAllStore} from '@/stores/all'
 
 const domain = `${location.protocol}//${location.host}`
 
@@ -46,6 +45,11 @@ const routes = [
     component: () => import(/* webpackChunkName: "Artist" */ '../views/ArtistPage.vue')
   },
   {
+    path: '/adhesions/',
+    name: 'Adhesions',
+    component: () => import(/* webpackChunkName: "Artist" */ '@/views/Adhesions.vue')
+  },
+  {
     // route interceptée
     path: '/stripe/return/:id',
     name: 'StripeReturn',
@@ -76,10 +80,8 @@ const router = createRouter({
   }
 })
 
-router.beforeEach((to, from, next) => {
-  // console.log('from =', from)
-  // console.log('to =', to)
 
+router.beforeEach((to, from, next) => {
   // traitement de la redirection si interception
   let redirection = false
   let nouvelleRoute = '/'
@@ -143,8 +145,9 @@ router.beforeEach((to, from, next) => {
     next()
   }
 
-  const allStore = useAllStore()
-  allStore.routeName = to.name
+  //   console.log('from =', from)
+  // console.log('to =', to)
+
 })
 
 
