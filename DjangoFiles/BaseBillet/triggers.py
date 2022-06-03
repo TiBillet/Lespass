@@ -11,12 +11,14 @@ from django.dispatch import receiver
 # from ApiBillet.thread_mailer import ThreadMaileur
 from django.utils import timezone
 
-from BaseBillet.models import Reservation, LigneArticle, Ticket, Product, Configuration, Paiement_stripe, Membership
+from BaseBillet.models import Reservation, LigneArticle, Ticket, Product, Configuration, Paiement_stripe, Membership, \
+    Price
 from BaseBillet.tasks import send_membership_to_cashless
 
 # from TiBillet import settings
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -35,18 +37,19 @@ class action_article_paid_by_categorie:
     Trigged action by categorie when Article is PAID
     '''
 
-    def __init__(self, ligne_article:LigneArticle, **kwargs):
+    def __init__(self, ligne_article: LigneArticle, **kwargs):
         self.ligne_article = ligne_article
         self.categorie = self.ligne_article.pricesold.productsold.product.categorie_article
 
         self.data_for_cashless = {}
-        if ligne_article.paiement_stripe :
-            self.data_for_cashless = {'uuid_commande': ligne_article.paiement_stripe.uuid }
+        if ligne_article.paiement_stripe:
+            self.data_for_cashless = {'uuid_commande': ligne_article.paiement_stripe.uuid}
 
         try:
             # on met en majuscule et on rajoute _ au début du nom de la catégorie.
             trigger_name = f"_{self.categorie.upper()}"
-            logger.info(f"category_trigger launched - ligne_article : {self.ligne_article} - trigger_name : {trigger_name}")
+            logger.info(
+                f"category_trigger launched - ligne_article : {self.ligne_article} - trigger_name : {trigger_name}")
             trigger = getattr(self, f"trigger{trigger_name}")
             trigger()
         except AttributeError:
@@ -90,7 +93,7 @@ class action_article_paid_by_categorie:
         if r.status_code == 202:
             self.ligne_article.status = LigneArticle.VALID
             # set_paiement_and_reservation_valid(None, self.ligne_article)
-        else :
+        else:
             logger.error(
                 f"erreur réponse serveur cashless {r.status_code} {r.text}")
 
@@ -101,11 +104,12 @@ class action_article_paid_by_categorie:
         logger.info(f"    Envoie celery task.send_membership_to_cashless")
 
         user = self.ligne_article.paiement_stripe.user
-        price = self.ligne_article.pricesold.price
+        price: Price = self.ligne_article.pricesold.price
+        product: Product = self.ligne_article.pricesold.productsold.product
 
         membership = Membership.objects.get(
-            user = user,
-            price = price
+            user=user,
+            price=price
         )
 
         membership.first_contribution = datetime.datetime.now().date()
@@ -113,10 +117,8 @@ class action_article_paid_by_categorie:
         membership.contribution_value = self.ligne_article.pricesold.prix
         membership.save()
 
-        data = {
-            "ligne_article_pk" : self.ligne_article.pk,
-        }
-
-        task = send_membership_to_cashless.delay(data)
-
-
+        if product.send_to_cashless:
+            data = {
+                "ligne_article_pk": self.ligne_article.pk,
+            }
+            task = send_membership_to_cashless.delay(data)

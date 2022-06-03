@@ -49,6 +49,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "publish",
             "img",
             "categorie_article",
+            "send_to_cashless",
             "prices",
         ]
         depth = 1

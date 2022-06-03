@@ -176,12 +176,13 @@ class MeTicketsSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-class MeMembershipSerializer(serializers.ModelSerializer):
+class MembershipSerializer(serializers.ModelSerializer):
     class Meta:
         model = Membership
         fields = [
             'price',
             'price_name',
+            'product_uuid',
             'product_name',
             'date_added',
             'first_contribution',
@@ -220,7 +221,7 @@ class MeReservationSerializer(serializers.ModelSerializer):
 
 class MeSerializer(serializers.ModelSerializer):
     reservations = serializers.SerializerMethodField()
-    membership = MeMembershipSerializer(many=True)
+    membership = MembershipSerializer(many=True)
 
     # On filtre les reservation : pas plus vieille qu'une semaine.
     def get_reservations(self, user):
