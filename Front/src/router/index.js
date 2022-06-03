@@ -4,6 +4,7 @@ import Accueil from '../views/Accueil.vue'
 
 // store
 import {useLocalStore} from '@/stores/local'
+import {useAllStore} from '@/stores/all'
 
 const domain = `${location.protocol}//${location.host}`
 
@@ -147,6 +148,7 @@ router.beforeEach((to, from, next) => {
 
   //   console.log('from =', from)
   // console.log('to =', to)
+  useAllStore().routeName = to.name
 
 })
 

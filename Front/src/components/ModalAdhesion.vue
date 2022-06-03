@@ -8,21 +8,25 @@
         <div class="modal-body p-0">
           <div class="card card-plain">
             <div class="card-header pb-0 d-flex align-items-center">
-              <h3 class="font-weight-bolder text-info text-gradient align-self-start w-85">{{ getNameAdhesion(productUuid)}}</h3>
-              <!-- status -->
-              <div class="form-check form-switch position-relative">
-                <input class="form-check-input" type="checkbox" id="read-status" @click="goStatus()" required>
-                <label class="form-check-label text-dark" for="read-status">Status</label>
-                <div class="invalid-feedback position-absolute">
-                  non lu !
-                </div>
-              </div>
-
+              <h3 class="font-weight-bolder text-info text-gradient align-self-start w-85">
+                {{ getNameAdhesion(productUuid) }}</h3>
             </div>
             <div class="card-body">
               <!-- formulaire -->
               <form @submit.prevent="validerAdhesion($event)" novalidate>
 
+                <!-- status -->
+                <div class="input-group mb-2 has-validation">
+                  <div class="form-check form-switch position-relative">
+                    <input class="form-check-input" type="checkbox" id="read-status" required>
+                    <label class="form-check-label text-dark" for="read-status">
+                      j'ai pris connaissance des <a class="text-info" @click="goStatus()">conditions générales</a>
+                    </label>
+                    <div class="invalid-feedback position-absolute">
+                      conditions non lues !
+                    </div>
+                  </div>
+                </div>
                 <!-- prix -->
                 <div class="input-group mb-2 has-validation">
                   <div :id="`adesion-modal-price-parent${index}`" class="col form-check mb-3"

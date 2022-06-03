@@ -33,7 +33,7 @@
               <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
                  role="button" @click="showAssets()">
                 <i class="fas fa-address-card fa-fw me-1 text-dark" aria-hidden="true"></i>
-                <h6 class="m-0 text-dark">Carte</h6>
+                <h6 class="m-0 text-dark">Carte(s)</h6>
               </a>
             </li>
             <!-- réservations -->
@@ -45,16 +45,14 @@
               </a>
             </li>
 
-            <!-- infos adhésion -->
-            <!-- <li v-if="adhesion.status === 'membership'"> -->
+            <!-- les adhésions possibles -->
             <li>
               <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
                  role="button" data-bs-toggle="modal" data-bs-target="#modal-liste-adhesion">
                 <i class="fas fa-address-card fa-fw me-1 text-dark" aria-hidden="true"></i>
-                <h6 class="m-0 text-dark">Adhésion</h6>
+                <h6 class="m-0 text-dark">Mes adhésions</h6>
               </a>
             </li>
-
           </ul>
         </li>
 
@@ -70,11 +68,11 @@
 
         <!-- pas d'adhésion -->
         <li class="nav-item">
-          <a v-if="adhesion.status === '' && routeName !== 'Adhesions'" href="/adhesions"
+          <a v-if="routeName !== 'Adhesions'" href="/adhesions"
              class="nav-link ps-1 d-flex justify-content-between align-items-center"
              :title="`Adhérez à l'association '${ place.organisation }'`">
             <i class="fa fa-address-card me-1 text-white" aria-hidden="true"></i>
-            <h6 class="m-0 text-white">Adhérez</h6>
+            <h6 class="m-0 text-white">Adhésions</h6>
           </a>
         </li>
 
@@ -171,6 +169,7 @@ async function showAssets() {
   let contenu = ``
   try {
     const actu = await updateMe()
+    console.log('actu =', actu)
     if (actu.error === 1) {
       throw new Error(message)
     }
@@ -184,6 +183,9 @@ async function showAssets() {
           <div class="flex-column">
       `
 
+      // lien de rechargement
+      const reloadLink = `${location.protocol}//${location.host}/qr/${card.uuid_qrcode}`
+
       // assets
       for (const assetKey1 in card.assets) {
         const monnaie = card.assets[assetKey1]
@@ -196,6 +198,12 @@ async function showAssets() {
       }
 
       contenu += `
+            <a href="${reloadLink}" class="btn btn-secondary btn-sm active mt-4" role="button" aria-pressed="true">
+              <div class="d-flex justify-content-star align-items-center">
+                <div>Recharger</div>
+                <i class="fas fa-address-card fa-fw ms-2" aria-hidden="true"></i>
+              </div>
+            </a>
           </div>
         </fieldset>
       `
