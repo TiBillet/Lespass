@@ -22,7 +22,7 @@
 
         <CardEmail/>
 
-        <!-- <CardAdhesion/> -->
+        <CardAdhesions/>
 
         <!--
         Don(s):
@@ -55,6 +55,7 @@ import CardArtist from '@/components/CardArtist.vue'
 import CardBillet from '@/components/CardBillet.vue'
 import CardOptions from '@/components/CardOptions.vue'
 import CardEmail from '@/components/CardEmail.vue'
+import CardAdhesions from '@/components/CardAdhesions.vue'
 import CardGifts from '@/components/CardGifts.vue'
 
 // state event
