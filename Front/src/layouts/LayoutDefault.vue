@@ -10,7 +10,6 @@
   <Footer :place="place"/>
     -->
   <ModalMessage/>
-  <ModalAdhesion/>
   <Modallogin/>
   <ModalMembershipList />
 </template>
@@ -20,7 +19,6 @@
 import Loading from '@/components/Loading.vue'
 import Navbar from '@/components/Navbar.vue'
 import Header from '@/components/Header.vue'
-import ModalAdhesion from '@/components/ModalAdhesion.vue'
 import ModalMessage from '@/components/ModalMessage.vue'
 import Modallogin from '@/components/Modallogin.vue'
 import ModalMembershipList from '@/components/ModalMembershipList.vue'

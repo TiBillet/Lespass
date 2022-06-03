@@ -7,21 +7,26 @@
       <img v-if="image === true" :src="product.img" class="image-product" alt="Image du billet !" :style="stImage">
       <h3 v-else class="font-weight-bolder text-info text-gradient align-self-start">{{ product.name }}</h3>
     </legend>
+    <!-- tous les produits de type billet -->
     <div v-for="price in product.prices" :key="price.uuid" class="mt-5">
       <!-- prix -->
       <div class="d-flex justify-content-between">
         <!-- nom tarif -->
         <h4 class="font-weight-bolder text-info text-gradient align-self-start">{{ price.name.toLowerCase() }} :
           {{ price.prix }} €</h4>
+        {{ testProductEnable(price.adhesion_obligatoire) }}
         <button
-            v-if="stop(price.uuid, price.stock, price.max_per_user) === false"
+            v-if="stop(price.uuid, price.stock, price.max_per_user) === false && testProductEnable(price.adhesion_obligatoire) === true"
             class="btn btn-primary ms-3" type="button"
             @click.stop="addCustomer(price.uuid)">
           <i class="fas fa-plus"></i>
         </button>
+        <div v-else>
+          {{ getNameAdhesion(price.adhesion_obligatoire)}}
+        </div>
+
       </div>
       <!-- clients -->
-
       <div class="input-group mb-1"
            v-for="(customer, index) in getCustomersByUuidPrix(price.uuid)" :key="index">
         <input type="text" :value="customer.last_name" placeholder="Nom" aria-label="Nom" class="form-control"
@@ -53,6 +58,7 @@
 // store
 import {storeToRefs} from 'pinia'
 import {useEventStore} from '@/stores/event'
+import {useLocalStore} from '@/stores/local'
 
 // attributs/props
 const props = defineProps({
@@ -75,6 +81,33 @@ if (props.styleImage === undefined) {
 const {event} = storeToRefs(useEventStore())
 // action(s) du state event
 const {getCustomersByUuidPrix, addCustomer, updateCustomer, deleteCustomer, stop} = useEventStore()
+// action state local
+const {me} = useLocalStore()
+
+function testProductEnable(uuidProductAdhesion) {
+  if (uuidProductAdhesion === null) {
+    return true
+  } else {
+    let retour = false
+    try {
+      for (const adhesionKey in me.membership) {
+        const adhesion = me.membership[adhesionKey]
+        if (adhesion.product_uuid === uuidProductAdhesion) {
+          retour = true
+          break
+        }
+      }
+      return retour
+    } catch (error) {
+      console.log('CardBillet, fonc testProductEnable', error)
+      return false
+    }
+  }
+}
+
+function getNameAdhesion(uuidProductAdhesion) {
+
+}
 </script>
 
 <style scoped>
