@@ -240,9 +240,12 @@ class ProductAdmin(admin.ModelAdmin):
         'publish',
         'img',
         'categorie_article',
+        'send_to_cashless',
     )
+
     list_editable = (
         'publish',
+        'send_to_cashless',
     )
 
 
