@@ -45,6 +45,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "name",
             'short_description',
             'long_description',
+            'terms_and_conditions_document',
             "publish",
             "img",
             "categorie_article",
@@ -122,7 +123,6 @@ class ConfigurationSerializer(serializers.ModelSerializer):
             "carte_restaurant",
             "img_variations",
             "logo_variations",
-
         ]
         read_only_fields = fields
 

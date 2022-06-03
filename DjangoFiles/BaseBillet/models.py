@@ -258,6 +258,8 @@ class Product(models.Model):
     short_description = models.CharField(max_length=250, blank=True, null=True)
     long_description = models.TextField(blank=True, null=True)
 
+    terms_and_conditions_document = models.URLField(blank=True, null=True)
+
     publish = models.BooleanField(default=False)
 
     img = StdImageField(upload_to='images/',
