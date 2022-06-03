@@ -237,8 +237,6 @@ staff_admin_site.register(Ticket, TicketAdmin)
 class ProductAdmin(admin.ModelAdmin):
     list_display = (
         'name',
-        'short_description',
-        'long_description',
         'publish',
         'img',
         'categorie_article',
@@ -254,8 +252,6 @@ staff_admin_site.register(Product, ProductAdmin)
 class PriceAdmin(admin.ModelAdmin):
     list_display = (
         'name',
-        'short_description',
-        'long_description',
         'product',
         'prix',
         'adhesion_obligatoire'
