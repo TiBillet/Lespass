@@ -245,7 +245,6 @@ class ProductAdmin(admin.ModelAdmin):
 
     list_editable = (
         'publish',
-        'send_to_cashless',
     )
 
 
@@ -257,7 +256,8 @@ class PriceAdmin(admin.ModelAdmin):
         'name',
         'product',
         'prix',
-        'adhesion_obligatoire'
+        'adhesion_obligatoire',
+        'subscription_type'
     )
     ordering = ('product', 'name')
 
@@ -265,28 +265,28 @@ class PriceAdmin(admin.ModelAdmin):
 staff_admin_site.register(Price, PriceAdmin)
 
 
-class ProductSoldAdmin(admin.ModelAdmin):
-    list_display = (
-        'product',
-        'event',
-        'img',
-        'id_product_stripe',
-    )
-
-
-staff_admin_site.register(ProductSold, ProductSoldAdmin)
-
-
-class PricesSoldAdmin(admin.ModelAdmin):
-    list_display = (
-        'productsold',
-        'price',
-        'qty_solded',
-        'id_price_stripe',
-    )
-
-
-staff_admin_site.register(PriceSold, PricesSoldAdmin)
+# class ProductSoldAdmin(admin.ModelAdmin):
+#     list_display = (
+#         'product',
+#         'event',
+#         'img',
+#         'id_product_stripe',
+#     )
+#
+#
+# staff_admin_site.register(ProductSold, ProductSoldAdmin)
+#
+#
+# class PricesSoldAdmin(admin.ModelAdmin):
+#     list_display = (
+#         'productsold',
+#         'price',
+#         'qty_solded',
+#         'id_price_stripe',
+#     )
+#
+#
+# staff_admin_site.register(PriceSold, PricesSoldAdmin)
 
 
 class PaiementStripeAdmin(admin.ModelAdmin):
@@ -327,6 +327,10 @@ class MembershipAdmin(admin.ModelAdmin):
         'last_name',
         'first_name',
         'user',
+        'product_name',
+        'price',
+        'is_valid',
+        'deadline',
         'date_added',
         'first_contribution',
         'last_contribution',
@@ -338,6 +342,5 @@ class MembershipAdmin(admin.ModelAdmin):
         'commentaire',
     )
     ordering = ('-date_added',)
-
 
 staff_admin_site.register(Membership, MembershipAdmin)

@@ -336,13 +336,13 @@ class Price(models.Model):
         (NA, _('Non applicable')),
         (YEAR, _("365 Jours")),
         (MONTH, _('30 Jours')),
-        (CIVIL, _('Fin decembre.')),
+        (CIVIL, _('Civile')),
     ]
 
     subscription_type = models.CharField(max_length=1,
                            choices=SUB_CHOICES,
                            default=NA,
-                           verbose_name=_("Taux TVA"),
+                           verbose_name=_("durée d'abonnement"),
                            )
 
     def range_max(self):
@@ -868,16 +868,33 @@ class Membership(models.Model):
     def email(self):
         return self.user.email
 
+    '''
+    subscription_type : 
+        SUB_CHOICES = [
+        (NA, _('Non applicable')),
+        (YEAR, _("365 Jours")),
+        (MONTH, _('31 Jours')),
+        (CIVIL, _('Fin decembre.')),
+    ]
+    '''
+
     def deadline(self):
         if self.last_contribution :
-            return self.last_contribution + timedelta(days=365)
+            if self.price.subscription_type == Price.YEAR :
+                return self.last_contribution + timedelta(days=365)
+            if self.price.subscription_type == Price.MONTH :
+                return self.last_contribution + timedelta(days=31)
+            if self.price.subscription_type == Price.CIVIL :
+                return datetime.strptime(f'{self.last_contribution.year}-12-31', '%Y-%m-%d').date()
+
         return None
 
     def is_valid(self):
-        if self.last_contribution:
+        if self.deadline():
             if datetime.now().date() < self.deadline():
                 return True
         return False
+    is_valid.boolean = True
 
     def price_name(self):
         if self.price:
