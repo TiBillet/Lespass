@@ -11,7 +11,8 @@
       <!-- partie droite -->
       <ul class="navbar-nav d-flex flex-row-reverse ms-auto d-block">
         <!-- user -->
-        <li v-if="adhesion.status === 'membership' || refreshToken !== ''" class="nav-item dropdown">
+        <!-- <li v-if="adhesion.status === 'membership' || refreshToken !== ''" class="nav-item dropdown"> -->
+        <li v-if="refreshToken !== ''" class="nav-item dropdown">
           <a class="nav-link d-flex justify-content-between align-items-center dropdown-toggle me-1" href="#"
              id="menuUser"
              role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -66,7 +67,7 @@
           </a>
         </li>
 
-        <!-- pas d'adhésion -->
+        <!-- adhésions -->
         <li class="nav-item">
           <a v-if="routeName !== 'Adhesions'" href="/adhesions"
              class="nav-link ps-1 d-flex justify-content-between align-items-center"
