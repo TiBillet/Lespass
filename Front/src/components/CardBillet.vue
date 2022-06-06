@@ -9,6 +9,7 @@
     </legend>
     <!-- tous les produits de type billet -->
     <div v-for="price in product.prices" :key="price.uuid" class="mt-5">
+      <!-- produit ne nécessitant pas une adhésion ou déjà adhérant -->
       <section v-if="testProductEnable(price.adhesion_obligatoire) === true">
         <!-- prix -->
         <div class="d-flex justify-content-between">
@@ -35,6 +36,7 @@
           <div class="invalid-feedback">Donnée(s) manquante(s) !</div>
         </div>
       </section>
+      <!-- produit nécessitant une adhésion -->
       <section v-if="testProductEnable(price.adhesion_obligatoire) === false">
         <div class="d-flex justify-content-start align-items-center">
           <!-- nom tarif -->
