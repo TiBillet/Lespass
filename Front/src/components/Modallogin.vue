@@ -29,16 +29,13 @@
   </div>
 </template>
 <script setup>
-// store local
-import {useLocalStore} from '@/stores/local'
-
 // store
 import {storeToRefs} from 'pinia'
 import {useAllStore} from '@/stores/all'
 
-const {adhesion} = useLocalStore()
+// const {adhesion} = useLocalStore()
 const domain = `${location.protocol}//${location.host}`
-const {loading, error} = storeToRefs(useAllStore())
+const {adhesion, loading, error} = storeToRefs(useAllStore())
 
 async function validerLogin(event) {
   if (event.target.checkValidity() === true) {

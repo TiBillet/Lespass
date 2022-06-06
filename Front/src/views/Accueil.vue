@@ -2,7 +2,7 @@
     <div class="container mt-5">
       <div class="row">
         <div class="col-lg-4 col-md-6 mb-2" v-for="(event, index) in events" :key="index">
-          <CardEvent :event="event" @go-event="goEvent"/>
+          <CardEvent :event="event" />
         </div>
       </div>
     </div>
@@ -35,10 +35,6 @@ const router = useRouter()
 // load events and update data header
 getEvents()
 
-function goEvent(slug) {
-  // console.log('-> fonc "goEvenement"; slug =', slug)
-  router.push({name: 'Event', params: {slug: slug}})
-}
 </script>
 
 <style>

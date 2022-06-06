@@ -8,17 +8,7 @@ export const useLocalStore = defineStore({
   state: () => ({
     refreshToken: '',
     me: {},
-    stripeEtape: '',
-    adhesion: {
-      email: '',
-      first_name: '',
-      last_name: '',
-      phone: null,
-      postal_code: null,
-      adhesion: '',
-      status: '',
-      activation: false
-    }
+    stripeEtape: ''
   }),
   actions: {
     // status 226 = 'Paiement validé. Création des billets et envoi par mail en cours.' côté serveur
@@ -26,7 +16,7 @@ export const useLocalStore = defineStore({
     // status 402 = pas payé
     // status 202 = 'Paiement validé. Création des billets et envoi par mail en cours.' coté front
     async postStripeReturn(uuidStripe) {
-      console.log(`-> fonc api postStripeReturn !`)
+      console.log(`-> fonc postStripeReturn !`)
 
       let messageValidation = 'OK', messageErreur = 'Retour stripe:'
 
@@ -57,10 +47,6 @@ export const useLocalStore = defineStore({
         }
         return response.json()
       }).then(retour => {
-        // maj status adhésion
-        if (this.stripeEtape === 'attente_stripe_adhesion') {
-          this.adhesion.status = 'membership'
-        }
         // message ok
         emitter.emit('modalMessage', {
           titre: 'Succès',

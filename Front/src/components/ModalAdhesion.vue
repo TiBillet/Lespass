@@ -15,11 +15,12 @@
               <!-- formulaire -->
               <form @submit.prevent="validerAdhesion($event)" novalidate>
 
-                <!-- status -->
+                <!-- conditions -->
                 <div class="input-group mb-2 has-validation">
                   <div class="form-check form-switch position-relative">
-                    <input class="form-check-input" type="checkbox" id="read-status" required>
-                    <label class="form-check-label text-dark" for="read-status">
+                    <input id="read-conditions" class="form-check-input" type="checkbox" required
+                           @click="checkConditions()" :checked="adhesion.readConditions">
+                    <label class="form-check-label text-dark" for="read-conditions">
                       j'ai pris connaissance des <a class="text-info" @click="goStatus()">conditions générales</a>
                     </label>
                     <div class="invalid-feedback position-absolute">
@@ -38,9 +39,9 @@
                     <input v-else :value="price.uuid" v-model="adhesion.adhesion"
                            class="form-check-input input-adesion-modal-price" type="radio"
                            name="prixAdhesionModal" :id="`uuidadhesionmodalpriceradio${index}`">
-                    <label class="form-check-label" :for="`uuidadhesionmodalpriceradio${index}`">{{ price.name }} - {{
-                        price.prix
-                      }}€</label>
+                    <label class="form-check-label" :for="`uuidadhesionmodalpriceradio${index}`">
+                      {{ price.name }} - {{ price.prix }}€
+                    </label>
                     <div v-if="index === 0" class="invalid-feedback">
                       Un tarif ?
                     </div>
@@ -118,11 +119,10 @@ import {useLocalStore} from '@/stores/local'
 import {useRouter} from 'vue-router'
 
 // obtenir data adhesion
-const {place, loading, error} = storeToRefs(useAllStore())
+const {place, adhesion, loading, error} = storeToRefs(useAllStore())
 const {getPricesAdhesion, getNameAdhesion} = useAllStore()
 
-// stockage adhesion en ocal
-const {adhesion} = storeToRefs(useLocalStore())
+// stockage adhesion en local
 let {setEtapeStripe} = useLocalStore()
 const router = useRouter()
 
@@ -135,15 +135,14 @@ function inputFocus(id) {
   document.querySelector(`#${id}`).focus()
 }
 
-
-function goStatus() {
-  const status = document.querySelector(`#read-status`).checked
-  if (status === true) {
-    window.open(place.value.site_web, "_blank")
-  }
+function checkConditions() {
+  adhesion.value.readConditions = document.querySelector(`#read-conditions`).checked
 }
 
-// todo: mettre dans stores/all en tantque action
+function goStatus() {
+  window.open(place.value.site_web, "_blank")
+}
+
 function postAdhesionModal(data) {
   // console.log(`-> fonc postAdhesionModal !`)
   const domain = `${location.protocol}//${location.host}`
@@ -189,7 +188,7 @@ function validerAdhesion(event) {
   console.log('-> fonc validerAdhesion !!')
 
   // efface tous les messages d'invalidité
-  document.querySelector(`#read-status`).parentNode.querySelector(`.invalid-feedback`).style.display = 'none'
+  document.querySelector(`#read-conditions`).parentNode.querySelector(`.invalid-feedback`).style.display = 'none'
   const msgInvalides = event.target.querySelectorAll('.invalid-feedback')
   for (let i = 0; i < msgInvalides.length; i++) {
     msgInvalides[i].style.display = 'none'
@@ -197,7 +196,7 @@ function validerAdhesion(event) {
 
 
   // vérification status
-  const satusElement = document.querySelector(`#read-status`)
+  const satusElement = document.querySelector(`#read-conditions`)
   if (satusElement.checked === false) {
     const warningElement = satusElement.parentNode.querySelector(`.invalid-feedback`)
     warningElement.style.display = 'block'

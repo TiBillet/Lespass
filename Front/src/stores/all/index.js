@@ -15,6 +15,16 @@ export const useAllStore = defineStore({
       urlImage: null,
       shortDescription: ''
     },
+    adhesion: {
+      email: '',
+      first_name: '',
+      last_name: '',
+      phone: null,
+      postal_code: null,
+      adhesion: '',
+      // status: '',
+      readConditions: false
+    },
     loading: false,
     error: null
   }),
