@@ -165,14 +165,17 @@ export const useLocalStore = defineStore({
           window.accessToken = retour.access
           this.me = await this.getMe(window.accessToken)
         } else {
-          throw new Error(`Erreur obtention nouvel "access token" !`)
+          // reset all et local store
+          this.$reset()
+          const allStore = useAllStore()
+          allStore.$reset()
+          window.accessToken = ''
         }
       } catch (erreur) {
         emitter.emit('modalMessage', {
           titre: 'Erreur, maj accessToken !',
           contenu: `${domain + api} : ${erreur}`
         })
-        window.accessToken = ''
       }
     },
     setActivationAdhesion(value) {
