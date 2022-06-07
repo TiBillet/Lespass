@@ -33,7 +33,7 @@
             <li v-if="infosCardExist() === true">
               <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
                  role="button" @click="showAssets()">
-                <i class="fas fa-address-card fa-fw me-1 text-dark" aria-hidden="true"></i>
+                <i class="fa fa-money fa-fw me-1 text-dark" aria-hidden="true"></i>
                 <h6 class="m-0 text-dark">Carte(s)</h6>
               </a>
             </li>
@@ -41,7 +41,7 @@
             <li v-if="infosReservationExist() === true">
               <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
                  role="button" @click="showReservations()">
-                <i class="fas fa-address-card fa-fw me-1 text-dark" aria-hidden="true"></i>
+                <i class="fa fa-ticket fa-fw me-1 text-dark tourne-ticket" aria-hidden="true"></i>
                 <h6 class="m-0 text-dark">Réservation(s)</h6>
               </a>
             </li>
@@ -50,7 +50,7 @@
             <li>
               <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
                  role="button" data-bs-toggle="modal" data-bs-target="#membership-owned-modal">
-                <i class="fas fa-address-card fa-fw me-1 text-dark" aria-hidden="true"></i>
+                <i class="fa fa-users fa-fw me-1 text-dark" aria-hidden="true"></i>
                 <h6 class="m-0 text-dark">Mes adhésions</h6>
               </a>
             </li>
@@ -275,6 +275,8 @@ window.addEventListener("scroll", () => {
 
 </script>
 
-<style>
-
+<style scoped>
+.tourne-ticket{
+  transform: rotate(-20deg);
+}
 </style>

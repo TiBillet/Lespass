@@ -22,7 +22,7 @@
               </h5>
             </legend>
             <div class="flex-row">
-              <h5>Nom / prénom : {{adhesion.last_name}} {{adhesion.first_name}}</h5>
+              <h5 class="text-capitalize">Nom / prénom : {{adhesion.last_name}} {{adhesion.first_name}}</h5>
               <h5>Inscription : {{dateToFrenchFormat(adhesion.last_contribution)}}</h5>
               <h5>Echéance : {{dateToFrenchFormat(adhesion.deadline)}}</h5>
               <h5>Email : {{adhesion.email}}</h5>
