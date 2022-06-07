@@ -18,7 +18,7 @@
 
       </div>
     </div>
-    <ModalAdhesion :product-uuid="selectedProductUuid"/>
+    <ModalMembershipForm :product-uuid="selectedProductUuid"/>
   </section>
 </template>
 
@@ -27,7 +27,7 @@
 import {ref} from 'vue'
 
 // components
-import ModalAdhesion from '@/components/ModalAdhesion.vue'
+import ModalMembershipForm from '@/components/ModalMembershipForm.vue'
 
 // store
 import {useAllStore} from '@/stores/all'

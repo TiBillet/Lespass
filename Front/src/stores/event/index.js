@@ -51,7 +51,7 @@ export const useEventStore = defineStore({
     // init le formulaire d'un évènement (CardBillet, CardOptions)
     initEventForm() {
       console.log('-> action initEventForm !')
-      const localStore = useLocalStore()
+      const allStore = useAllStore()
       // init data form / event uuid
       let form = this.forms.find(obj => obj.event === this.event.uuid)
       if (form === undefined) {
@@ -60,8 +60,8 @@ export const useEventStore = defineStore({
           name: this.event.name,
           initDate: new Date().toLocaleString(),
           event: this.event.uuid,
-          email: localStore.adhesion.email, // pas d'observeur/proxy
-          emailConfirme: localStore.adhesion.email,
+          email: allStore.adhesAllmail, // pas d'observeur/proxy
+          emailConfirme: allStore.adhesAllmail,
           options_radio: this.event.options_radio,
           options_checkbox: this.event.options_checkbox,
           prices: []

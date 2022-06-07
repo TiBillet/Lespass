@@ -12,6 +12,7 @@
   <ModalMessage/>
   <Modallogin/>
   <ModalMembershipList />
+  <ModalMembershipOwned />
 </template>
 
 <script setup>
@@ -22,6 +23,7 @@ import Header from '@/components/Header.vue'
 import ModalMessage from '@/components/ModalMessage.vue'
 import Modallogin from '@/components/Modallogin.vue'
 import ModalMembershipList from '@/components/ModalMembershipList.vue'
+import ModalMembershipOwned from '@/components/ModalMembershipOwned.vue'
 // import Footer from '@/components/Footer.vue'
 
 // store

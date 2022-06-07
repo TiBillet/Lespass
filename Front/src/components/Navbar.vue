@@ -46,10 +46,10 @@
               </a>
             </li>
 
-            <!-- les adhésions possibles -->
+            <!-- les adhésions du client -->
             <li>
               <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
-                 role="button" data-bs-toggle="modal" data-bs-target="#modal-liste-adhesion">
+                 role="button" data-bs-toggle="modal" data-bs-target="#membership-owned-modal">
                 <i class="fas fa-address-card fa-fw me-1 text-dark" aria-hidden="true"></i>
                 <h6 class="m-0 text-dark">Mes adhésions</h6>
               </a>
@@ -91,9 +91,9 @@ import {storeToRefs} from 'pinia'
 import {useAllStore} from '@/stores/all'
 import {useLocalStore} from '@/stores/local'
 
-const {place, events, routeName, loading, error} = storeToRefs(useAllStore())
+const {place, events, adhesion, routeName, loading, error} = storeToRefs(useAllStore())
 const {getPlace, setHeaderPlace} = useAllStore()
-const {refreshToken, me, adhesion} = storeToRefs(useLocalStore())
+const {refreshToken, me} = storeToRefs(useLocalStore())
 const {infosCardExist, infosReservationExist, getMe, refreshAccessToken} = useLocalStore()
 
 // load place
@@ -129,31 +129,6 @@ function dateToFrenchFormat(dateString) {
   const dateArray = dateString.split('T')[0].split('-')
   const mois = nomMois[parseInt(dateArray[1])]
   return dateArray[2] + ' ' + mois + ' ' + dateArray[0]
-}
-
-function showAdhesion() {
-  let contenu = ``
-  try {
-    console.log('me:', me.value)
-    const infos = me.value.membership
-
-    contenu += `
-      <h5>Email : ${infos.email}</h5>
-      <h5>Nom : ${infos.name}</h5>
-      <h5>Prenom : ${infos.prenom}</h5>
-      <h5>Inscription : ${dateToFrenchFormat(infos.date_ajout)}</h5>
-      <h5>Echéance : ${dateToFrenchFormat(infos.prochaine_echeance)}</h5>
-    `
-  } catch (error) {
-    console.log('showAdhesion:', error)
-    contenu = `<h3>Aucune donnée !</h3>`
-  }
-  emitter.emit('modalMessage', {
-    titre: 'Adhésion',
-    dynamic: true,
-    scrollable: true,
-    contenu: contenu
-  })
 }
 
 async function updateMe() {

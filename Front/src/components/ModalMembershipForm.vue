@@ -108,7 +108,7 @@
 </template>
 
 <script setup>
-// console.log('-> ModalAdhesion.vue !')
+// console.log('-> ModalMembershipForm.vue !')
 
 // store
 import {storeToRefs} from 'pinia'
