@@ -34,7 +34,7 @@
               <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
                  role="button" @click="showAssets()">
                 <i class="fa fa-money fa-fw me-1 text-dark" aria-hidden="true"></i>
-                <h6 class="m-0 text-dark">Carte(s)</h6>
+                <h6 class="m-0 text-dark">Monnaies</h6>
               </a>
             </li>
             <!-- réservations -->
@@ -71,8 +71,8 @@
         <li class="nav-item">
           <a v-if="routeName !== 'Adhesions'" href="/adhesions"
              class="nav-link ps-1 d-flex justify-content-between align-items-center"
-             :title="`Adhérez à l'association '${ place.organisation }'`">
-            <i class="fa fa-address-card me-1 text-white" aria-hidden="true"></i>
+             :title="`Adhésions possibles à l'association '${ place.organisation }'`">
+            <i class="fa fa-users me-1 text-white" aria-hidden="true"></i>
             <h6 class="m-0 text-white">Adhésions</h6>
           </a>
         </li>
@@ -189,7 +189,7 @@ async function showAssets() {
   }
 
   emitter.emit('modalMessage', {
-    titre: 'Carte(s)',
+    titre: 'Monnaies',
     dynamic: true,
     scrollable: true,
     contenu: contenu
@@ -276,7 +276,7 @@ window.addEventListener("scroll", () => {
 </script>
 
 <style scoped>
-.tourne-ticket{
+.tourne-ticket {
   transform: rotate(-20deg);
 }
 </style>
