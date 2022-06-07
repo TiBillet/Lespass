@@ -38,11 +38,11 @@
       </section>
       <!-- produit nécessitant une adhésion -->
       <section v-if="testProductEnable(price.adhesion_obligatoire) === false">
-        <div class="d-flex justify-content-start align-items-center">
+        <div class="">
           <!-- nom tarif -->
           <h4 class="font-weight-bolder text-dark text-gradient">{{ price.name.toLowerCase() }} :
             {{ price.prix }} €</h4>
-          <div v-html="getNameAdhesion(price.adhesion_obligatoire)" class="ms-2 mb-1"></div>
+          <div v-html="getNameAdhesion(price.adhesion_obligatoire)" class="ms-2 mt-0"></div>
         </div>
       </section>
     </div>
@@ -118,7 +118,7 @@ function getNameAdhesion(uuidProductAdhesion) {
   // console.log('-> getNameAdhesion, uuid product =', uuidProductAdhesion)
   try {
     const nameAdhesion = place.value.membership_products.find(prod => prod.uuid === uuidProductAdhesion).name
-    return ` - Produit accessible si adhérant à "<a href="/adhesions" class="text-info">${nameAdhesion}"</a> .`
+    return `Produit accessible si adhérant à "<a href="/adhesions" class="text-info">${nameAdhesion}"</a> .`
   } catch (error) {
     return ''
   }

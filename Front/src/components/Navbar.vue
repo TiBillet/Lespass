@@ -33,24 +33,24 @@
             <li v-if="infosCardExist() === true">
               <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
                  role="button" @click="showAssets()">
-                <i class="fas fa-address-card fa-fw me-1 text-dark" aria-hidden="true"></i>
-                <h6 class="m-0 text-dark">Carte(s)</h6>
+                <i class="fa fa-money fa-fw me-1 text-dark" aria-hidden="true"></i>
+                <h6 class="m-0 text-dark">Monnaies</h6>
               </a>
             </li>
             <!-- réservations -->
             <li v-if="infosReservationExist() === true">
               <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
                  role="button" @click="showReservations()">
-                <i class="fas fa-address-card fa-fw me-1 text-dark" aria-hidden="true"></i>
+                <i class="fa fa-ticket fa-fw me-1 text-dark tourne-ticket" aria-hidden="true"></i>
                 <h6 class="m-0 text-dark">Réservation(s)</h6>
               </a>
             </li>
 
-            <!-- les adhésions possibles -->
+            <!-- les adhésions du client -->
             <li>
               <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
-                 role="button" data-bs-toggle="modal" data-bs-target="#modal-liste-adhesion">
-                <i class="fas fa-address-card fa-fw me-1 text-dark" aria-hidden="true"></i>
+                 role="button" data-bs-toggle="modal" data-bs-target="#membership-owned-modal">
+                <i class="fa fa-users fa-fw me-1 text-dark" aria-hidden="true"></i>
                 <h6 class="m-0 text-dark">Mes adhésions</h6>
               </a>
             </li>
@@ -71,8 +71,8 @@
         <li class="nav-item">
           <a v-if="routeName !== 'Adhesions'" href="/adhesions"
              class="nav-link ps-1 d-flex justify-content-between align-items-center"
-             :title="`Adhérez à l'association '${ place.organisation }'`">
-            <i class="fa fa-address-card me-1 text-white" aria-hidden="true"></i>
+             :title="`Adhésions possibles à l'association '${ place.organisation }'`">
+            <i class="fa fa-users me-1 text-white" aria-hidden="true"></i>
             <h6 class="m-0 text-white">Adhésions</h6>
           </a>
         </li>
@@ -91,9 +91,9 @@ import {storeToRefs} from 'pinia'
 import {useAllStore} from '@/stores/all'
 import {useLocalStore} from '@/stores/local'
 
-const {place, events, routeName, loading, error} = storeToRefs(useAllStore())
+const {place, events, adhesion, routeName, loading, error} = storeToRefs(useAllStore())
 const {getPlace, setHeaderPlace} = useAllStore()
-const {refreshToken, me, adhesion} = storeToRefs(useLocalStore())
+const {refreshToken, me} = storeToRefs(useLocalStore())
 const {infosCardExist, infosReservationExist, getMe, refreshAccessToken} = useLocalStore()
 
 // load place
@@ -129,31 +129,6 @@ function dateToFrenchFormat(dateString) {
   const dateArray = dateString.split('T')[0].split('-')
   const mois = nomMois[parseInt(dateArray[1])]
   return dateArray[2] + ' ' + mois + ' ' + dateArray[0]
-}
-
-function showAdhesion() {
-  let contenu = ``
-  try {
-    console.log('me:', me.value)
-    const infos = me.value.membership
-
-    contenu += `
-      <h5>Email : ${infos.email}</h5>
-      <h5>Nom : ${infos.name}</h5>
-      <h5>Prenom : ${infos.prenom}</h5>
-      <h5>Inscription : ${dateToFrenchFormat(infos.date_ajout)}</h5>
-      <h5>Echéance : ${dateToFrenchFormat(infos.prochaine_echeance)}</h5>
-    `
-  } catch (error) {
-    console.log('showAdhesion:', error)
-    contenu = `<h3>Aucune donnée !</h3>`
-  }
-  emitter.emit('modalMessage', {
-    titre: 'Adhésion',
-    dynamic: true,
-    scrollable: true,
-    contenu: contenu
-  })
 }
 
 async function updateMe() {
@@ -214,7 +189,7 @@ async function showAssets() {
   }
 
   emitter.emit('modalMessage', {
-    titre: 'Carte(s)',
+    titre: 'Monnaies',
     dynamic: true,
     scrollable: true,
     contenu: contenu
@@ -300,6 +275,8 @@ window.addEventListener("scroll", () => {
 
 </script>
 
-<style>
-
+<style scoped>
+.tourne-ticket {
+  transform: rotate(-20deg);
+}
 </style>

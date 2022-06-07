@@ -24,8 +24,8 @@
 
         <!--
         Don(s):
-        les dons ont désactivé par défaut
-        l'attribut enable-names permet dactiver une liste de don par son nom (attention: nom unique !!)
+        les dons sont désactivés par défaut
+        l'attribut enable-names permet d'activer une liste de don par son nom (attention: nom unique !!)
         -->
         <CardGifts :enable-names="['Don']"/>
 
@@ -60,9 +60,9 @@ const {event, forms} = storeToRefs(useEventStore())
 // actions
 const {getEventBySlug} = useEventStore()
 // state adhésion
-let {adhesion, setEtapeStripe} = useLocalStore()
+let {setEtapeStripe} = useLocalStore()
 // state "all" for loading components
-const {loading, error} = storeToRefs(useAllStore())
+const {adhesion, loading, error} = storeToRefs(useAllStore())
 
 const route = useRoute()
 const slug = route.params.slug
@@ -106,6 +106,7 @@ function formatBodyPost() {
   }
 
   // adhésion
+/*
   if (adhesion.activation === true) {
     console.log('adhesion =', adhesion)
     const obj = {
@@ -121,6 +122,7 @@ function formatBodyPost() {
     }
     body.prices.push(obj)
   }
+*/
 
   // gifts
   for (const giftKey in form.gifts) {
