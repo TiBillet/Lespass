@@ -7,7 +7,10 @@ export const useLocalStore = defineStore({
   id: 'local',
   state: () => ({
     refreshToken: '',
-    me: {},
+    me: {
+      cashless: {},
+      reservations: {}
+    },
     stripeEtape: ''
   }),
   actions: {
@@ -91,7 +94,6 @@ export const useLocalStore = defineStore({
             titre: 'Succès',
             contenu: 'Utilisateur activé / connecté !'
           })
-          console.log('emailActivation, retour =', retour)
           // maj token d'accès
           window.accessToken = retour.access
           this.refreshToken = retour.refresh

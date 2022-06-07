@@ -11,8 +11,9 @@
     -->
   <ModalMessage/>
   <Modallogin/>
-  <ModalMembershipList />
   <ModalMembershipOwned />
+  <ModalCardsList />
+  <ModalReservationList />
 </template>
 
 <script setup>
@@ -22,8 +23,9 @@ import Navbar from '@/components/Navbar.vue'
 import Header from '@/components/Header.vue'
 import ModalMessage from '@/components/ModalMessage.vue'
 import Modallogin from '@/components/Modallogin.vue'
-import ModalMembershipList from '@/components/ModalMembershipList.vue'
 import ModalMembershipOwned from '@/components/ModalMembershipOwned.vue'
+import ModalCardsList from "@/components/ModalCardsList.vue"
+import ModalReservationList from "@/components/ModalReservationList.vue"
 // import Footer from '@/components/Footer.vue'
 
 // store
@@ -49,7 +51,6 @@ import '../assets/js/perfect-scrollbar/perfect-scrollbar.min.js'
 // css (ui)
 import '../assets/css/now-design-system-pro.min.css'
 import '../assets/js/now-design-system-pro.js'
-
 
 // console.log('dataHeader =', dataHeader)
 const {loading, error} = storeToRefs(useAllStore())

@@ -47,7 +47,7 @@ import {useLocalStore} from '@/stores/local'
 const {me} = storeToRefs(useLocalStore())
 
 function dateToFrenchFormat(dateString) {
-  const nomMois = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+  const nomMois = ['','Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
   const dateArray = dateString.split('T')[0].split('-')
   const mois = nomMois[parseInt(dateArray[1])]
   return dateArray[2] + ' ' + mois + ' ' + dateArray[0]

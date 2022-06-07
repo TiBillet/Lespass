@@ -32,15 +32,15 @@
             <!-- assets -->
             <li v-if="infosCardExist() === true">
               <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
-                 role="button" @click="showAssets()">
-                <i class="fa fa-money fa-fw me-1 text-dark" aria-hidden="true"></i>
-                <h6 class="m-0 text-dark">Monnaies</h6>
+                 role="button" data-bs-toggle="modal" data-bs-target="#cards-list-modal">
+                <i class="fa fa-id-card-o fa-fw me-1 text-dark" aria-hidden="true"></i>
+                <h6 class="m-0 text-dark">Carte(s)</h6>
               </a>
             </li>
             <!-- réservations -->
             <li v-if="infosReservationExist() === true">
               <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
-                 role="button" @click="showReservations()">
+                 role="button" data-bs-toggle="modal" data-bs-target="#reservation-list-modal">
                 <i class="fa fa-ticket fa-fw me-1 text-dark tourne-ticket" aria-hidden="true"></i>
                 <h6 class="m-0 text-dark">Réservation(s)</h6>
               </a>
@@ -112,7 +112,10 @@ async function updateAccessToken() {
 
 function disconnect() {
   refreshToken.value = ''
-  me.value = {}
+  me.value = {
+    cashless: {},
+    reservations: {}
+  }
   adhesion.value = {
     email: '',
     first_name: '',
@@ -124,6 +127,7 @@ function disconnect() {
   }
 }
 
+/*
 function dateToFrenchFormat(dateString) {
   const nomMois = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
   const dateArray = dateString.split('T')[0].split('-')
@@ -140,127 +144,7 @@ async function updateMe() {
   }
   return {error: 1, message: 'Access token inconnu !'}
 }
-
-async function showAssets() {
-  let contenu = ``
-  try {
-    const actu = await updateMe()
-    console.log('actu =', actu)
-    if (actu.error === 1) {
-      throw new Error(message)
-    }
-    for (const cardKey in me.value.cashless.cards) {
-      const card = me.value.cashless.cards[cardKey]
-      contenu += `
-        <fieldset class="shadow-sm p-3 mb-5 bg-body rounded">
-          <legend>
-              <h5 class="font-weight-bolder text-info text-gradient align-self-start w-85">Numéro ${card.number}</h5>
-          </legend>
-          <div class="flex-column">
-      `
-
-      // lien de rechargement
-      const reloadLink = `${location.protocol}//${location.host}/qr/${card.uuid_qrcode}`
-
-      // assets
-      for (const assetKey1 in card.assets) {
-        const monnaie = card.assets[assetKey1]
-        contenu += `
-          <div class="row">
-            <div class="col-8">${monnaie.qty} ${monnaie.monnaie_name}</div>
-            <div class="col-4">${dateToFrenchFormat(monnaie.last_date_used)}</div>
-          </div>
-        `
-      }
-
-      contenu += `
-            <a href="${reloadLink}" class="btn btn-secondary btn-sm active mt-4" role="button" aria-pressed="true">
-              <div class="d-flex justify-content-star align-items-center">
-                <div>Recharger</div>
-                <i class="fas fa-address-card fa-fw ms-2" aria-hidden="true"></i>
-              </div>
-            </a>
-          </div>
-        </fieldset>
-      `
-    }
-  } catch (error) {
-    contenu = `<h3>Aucune donnée !</h3>`
-  }
-
-  emitter.emit('modalMessage', {
-    titre: 'Monnaies',
-    dynamic: true,
-    scrollable: true,
-    contenu: contenu
-  })
-}
-
-async function showReservations() {
-  let contenu = ``
-  try {
-    const actu = await updateMe()
-    if (actu.error === 1) {
-      throw new Error(message)
-    }
-
-    for (const key in me.value.reservations) {
-      const reservation = me.value.reservations[key]
-      console.log('--> reservation =', reservation)
-      const eventFind = events.value.find(evt => evt.uuid === reservation.event)
-      console.log('eventFind =', eventFind)
-
-      for (const prodKey in eventFind.products) {
-        const prices = eventFind.products[prodKey].prices
-        console.log('prices =', prices)
-      }
-
-      const eventName = eventFind.name
-
-      contenu += `
-        <fieldset class="shadow-sm p-3 mb-5 bg-body rounded">
-          <legend>
-              <h5 class="font-weight-bolder text-info text-gradient align-self-start w-85"> ${eventName} - ${dateToFrenchFormat(reservation.datetime)}</h5>
-          </legend>
-          <div class="flex-column">
-      `
-
-      for (const ticketKey in reservation.tickets) {
-        const ticket = reservation.tickets[ticketKey]
-        console.log('ticket = ', ticket)
-        contenu += `
-          <div class="row">
-            <div class="col-8">${ticket.first_name} ${ticket.last_name}</div>
-            <div class="col-4">
-              <a href="${ticket.pdf_url}" download="ticket-${ticket.first_name}_${ticket.last_name}" class="d-flex flex-row-reverse align-items-center">
-                <i class="fa fa-download ms-1" aria-hidden="true"></i>
-                <h6 class="m-0 text-dark">Télécharger</h6>
-              </a>
-            </div>
-          </div>
-        `
-      }
-
-      contenu += `
-          </div>
-        </fieldset>
-      `
-    }
-
-
-  } catch (error) {
-    console.log('Rservation, erreur:', error)
-    contenu = `<h3>Aucune donnée !</h3>`
-  }
-  emitter.emit('modalMessage', {
-    titre: 'Réservation(s)',
-    dynamic: true,
-    // xl, lg, sm
-    size: 'xl',
-    scrollable: true,
-    contenu: contenu
-  })
-}
+*/
 
 // menu transparant / non transparant
 window.addEventListener("scroll", () => {
