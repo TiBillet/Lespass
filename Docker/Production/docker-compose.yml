@@ -1,71 +1,55 @@
 version: '3.7'
 services:
-  billetterie_postgres:
+  billetterie_postgres_prod:
     extends:
       file: ../compose/docker-compose-base.yml
       service: billetterie_postgres
     env_file: .env
+#    ports:
+#      - 5432:5432
     networks:
       - backend-billeterie
 
-  billetterie_redis:
+  billetterie_redis_prod:
     extends:
       file: ../compose/docker-compose-base.yml
       service: billetterie_redis
     networks:
       - backend-billeterie
 
-  billetterie_django:
+  billetterie_django_prod:
     extends:
       file: ../compose/docker-compose-base.yml
       service: billetterie_django
     command: "bash /DjangoFiles/launch_prod.sh"
     env_file: .env
+
     depends_on:
-      - billetterie_postgres
+      - billetterie_postgres_prod
     links:
-      - billetterie_postgres:billetterie_postgres
-      - billetterie_redis:redis
+      - billetterie_postgres_prod:billetterie_postgres
+      - billetterie_redis_prod:redis
     networks:
       - frontend
       - backend-billeterie
 
-  billetterie_celery:
+  billetterie_celery_prod:
     extends:
       file: ../compose/docker-compose-base.yml
       service: billetterie_celery
     command: "bash /DjangoFiles/launch_celery.sh"
     env_file: .env
     depends_on:
-      - billetterie_django
+      - billetterie_django_prod
     links:
-      - billetterie_postgres:billetterie_postgres
-      - billetterie_redis:redis
+      - billetterie_postgres_prod:billetterie_postgres
+      - billetterie_redis_prod:redis
     networks:
 #      - frontend
       - backend-billeterie
 
-  billetterie_nginx:
-    image : tibillet/front:latest
-    env_file: .env
-    depends_on:
-      - billetterie_django
-    links:
-      - billetterie_django:billetterie_django
-    networks:
-      - frontend
-    volumes:
-      - ./nginx:/etc/nginx/conf.d
-      - ../../DjangoFiles/www:/DjangoFiles/www
-      - ../../DjangoFiles/logs:/DjangoFiles/logs
-    labels:
-      - traefik.enable=true
-      - traefik.docker.network=frontend
-      - traefik.http.routers.billetterie_nginx_prod.tls.certresolver=letsencrypt
-      - traefik.http.routers.billetterie_nginx_prod.rule=HostRegexp(`{sub:[a-zA-Z0-9-]+}.${DOMAIN}`) || Host(`${DOMAIN}`)
-      - traefik.http.routers.billetterie_nginx_prod.entrypoints=websecure
 
-#  billetterie_daphne:
+#  billetterie_daphne_prod:
 #    extends:
 #      file: ../compose/docker-compose-base.yml
 #      service: billetterie_celery
@@ -73,18 +57,52 @@ services:
 #    container_name: billetterie_daphne
 #    hostname: billetterie_daphne
 #    depends_on:
-#      - billetterie_django
-#      - billetterie_postgres
-#      - billetterie_redis
+#      - billetterie_django_prod
+#      - billetterie_postgres_prod
+#      - billetterie_redis_prod
 #    links:
-#      - billetterie_postgres:billetterie_postgres
-#      - billetterie_redis:redis
+#      - billetterie_postgres_prod:billetterie_postgres
+#      - billetterie_redis_prod:redis
 #    ports:
 #      - 7999:7999
 #    networks:
 #      - frontend
 #      - backend-billeterie
 #    command: "bash /DjangoFiles/launch_ws.sh"
+
+
+  billetterie_nginx_prod:
+    extends:
+      file: ../compose/docker-compose-base.yml
+      service: billetterie_nginx
+#    ports:
+#      - 80:80
+    env_file: .env
+    depends_on:
+      - billetterie_django_prod
+    links:
+      - billetterie_django_prod:billetterie_django
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=frontend
+      - traefik.http.routers.billetterie_nginx_prod.tls.certresolver=myresolver
+      - traefik.http.routers.billetterie_nginx_prod.rule=Host(`m.${DOMAIN}`) || Host(`www.${DOMAIN}`) || Host(`raffinerie.${DOMAIN}`) || Host(`bisik.${DOMAIN}`) || Host(`vavangart.${DOMAIN}`) || Host(`3peaks.${DOMAIN}`) || Host(`meta.${DOMAIN}`) || Host(`${DOMAIN}`)
+
+    networks:
+      - frontend
+    volumes:
+      - ./nginx:/etc/nginx/conf.d
+
+  billetterie_nodejs_prod:
+    extends:
+      file: ../compose/docker-compose-base.yml
+      service: billetterie_nodejs
+    volumes:
+      - ../../Front:/Front
+    working_dir: /Front
+    command: "bash /Front/build.sh"
+
+# pour demo : jturbeaux@pm.me / eiXom5mo
 
 networks:
   frontend:
