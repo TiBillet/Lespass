@@ -85,8 +85,9 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=frontend
-      - traefik.http.routers.billetterie_nginx_prod.tls.certresolver=myresolver
-      - traefik.http.routers.billetterie_nginx_prod.rule=Host(`m.${DOMAIN}`) || Host(`www.${DOMAIN}`) || Host(`raffinerie.${DOMAIN}`) || Host(`bisik.${DOMAIN}`) || Host(`vavangart.${DOMAIN}`) || Host(`3peaks.${DOMAIN}`) || Host(`meta.${DOMAIN}`) || Host(`${DOMAIN}`)
+      - traefik.http.routers.billetterie_nginx_prod.tls.certresolver=letsencrypt
+      - traefik.http.routers.billetterie_nginx_prod.rule=HostRegexp(`{sub:[a-zA-Z0-9-]+}.${DOMAIN}`) || Host(`${DOMAIN}`)
+      - traefik.http.routers.billetterie_nginx_prod.entrypoints=websecure
 
     networks:
       - frontend
