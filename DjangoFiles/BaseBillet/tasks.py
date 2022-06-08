@@ -401,7 +401,7 @@ def terminal_pairing_celery_mailer(term_user_email, subject=None):
 
 
 @app.task
-def ticket_celery_mailer(reservation_uuid: str):
+def ticket_celery_mailer(reservation_uuid: str, base_url):
     logger.info(f'      WORKDER CELERY app.task ticket_celery_mailer : {reservation_uuid}')
     config = Configuration.get_solo()
     reservation = Reservation.objects.get(pk=reservation_uuid)
@@ -424,6 +424,7 @@ def ticket_celery_mailer(reservation_uuid: str):
                 context={
                     'config': config,
                     'reservation': reservation,
+                    'base_url': base_url
                 },
                 attached_files=attached_files,
             )
