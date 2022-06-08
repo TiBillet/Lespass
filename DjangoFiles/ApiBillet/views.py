@@ -646,8 +646,6 @@ def maj_membership_from_cashless(user: TibilletUser, data: dict):
 
     except Exception as e:
         logger.error(f'maj_membership_from_cashless ERROR : {e}')
-        import ipdb;
-        ipdb.set_trace()
         return None
 
 
