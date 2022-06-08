@@ -160,7 +160,7 @@ def send_billet_to_mail(old_instance: Reservation, new_instance: Reservation):
 
         if new_instance.user_commande.email:
             # import ipdb; ipdb.set_trace()
-            base_url = connection.tenant.get_primary_domain().domain
+            base_url = f"https://{connection.tenant.get_primary_domain().domain}"
             task = ticket_celery_mailer.delay(new_instance.pk, base_url)
             # https://github.com/psf/requests/issues/5832
     else:
