@@ -642,7 +642,7 @@ class Reservation(models.Model):
         return total_paid
 
     def __str__(self):
-        return f"{str(self.uuid).partition('-')[0]} - {self.user_commande.email}"
+        return f"{self.user_commande.email} - {str(self.uuid).partition('-')[0]}"
 
     # def total_billet(self):
     #     total = 0
@@ -724,6 +724,9 @@ class Ticket(models.Model):
 
     def numero_uuid(self):
         return f"{self.uuid}".split('-')[0]
+
+    def options(self):
+        return " - ".join([option.name for option in self.reservation.options.all()])
 
     class meta:
         ordering = ('-datetime',)

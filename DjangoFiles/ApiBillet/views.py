@@ -9,6 +9,7 @@ import stripe
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.http import HttpResponseRedirect, Http404, HttpResponse
+from django.shortcuts import render
 from django.utils import timezone
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
@@ -717,6 +718,7 @@ class MembershipViewset(viewsets.ViewSet):
             permission_classes = [TenantAdminPermission]
 
         return [permission() for permission in permission_classes]
+
 
 
 class TicketPdf(APIView):

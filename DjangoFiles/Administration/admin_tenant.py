@@ -1,7 +1,16 @@
-from django.contrib import admin
-from django.contrib.admin import AdminSite
+import datetime
+
+from django.conf.urls import url
+from django.contrib import admin, messages
+from django.contrib.admin import AdminSite, SimpleListFilter
+from django.contrib.admin.views.main import ChangeList
 from django.contrib.auth.models import Group
+from django.http import HttpResponseRedirect
+from django.template.response import TemplateResponse
+from django.urls import reverse
+from django.utils.html import format_html
 from solo.admin import SingletonModelAdmin
+from django.utils.translation import ugettext_lazy as _
 
 from AuthBillet.models import HumanUser, SuperHumanUser, TermUser
 from BaseBillet.models import Configuration, Event, OptionGenerale, Product, Price, Reservation, LigneArticle, Ticket, \
@@ -177,6 +186,7 @@ class EventAdmin(admin.ModelAdmin):
     readonly_fields = (
         'reservations',
     )
+    search_fields = ['name']
 
 
 staff_admin_site.register(Event, EventAdmin)
@@ -213,22 +223,134 @@ class ReservationAdmin(admin.ModelAdmin):
         'total_paid',
     )
     # readonly_fields = list_display
+    # search_fields = ['event']
 
 
 staff_admin_site.register(Reservation, ReservationAdmin)
 
 
+class EventFilter(SimpleListFilter):
+    title = _('Évènement')
+    parameter_name = 'reservation__event__name'
+
+    def lookups(self, request, model_admin):
+        events = Event.objects.filter(
+            datetime__gt=(datetime.datetime.now() - datetime.timedelta(days=2)).date(),
+        )
+
+        tuples_list = []
+        for event in events:
+            if event.reservation.count() > 0:
+                t = (event.uuid, event.name.capitalize())
+                tuples_list.append(t)
+        return tuples_list
+
+    def queryset(self, request, queryset):
+        if not self.value():
+            return queryset
+        else:
+            return queryset.filter(reservation__event__uuid=self.value())
+
+def valider_ticket(modeladmin, request, queryset):
+    queryset.update(status=Ticket.SCANNED)
+
+valider_ticket.short_description = "Valider le/les tickets"
+
 class TicketAdmin(admin.ModelAdmin):
     list_display = [
+        'reservations',
         'first_name',
         'last_name',
         'event',
-        'reservation',
-        'status',
-        'datetime',
+        'options',
+        'state',
     ]
+
+    # list_editable = ['status',]
     readonly_fields = list_display
-    ordering = ('-reservation__datetime', )
+    actions = [valider_ticket, ]
+    ordering = ('-reservation__datetime',)
+    # list_filter = [EventFilter, ]
+
+    # list_filter = (
+    #     EventFilter,
+        # 'reservation__uuid'
+    # )
+
+    search_fields = (
+        'first_name',
+        'last_name',
+        'reservation__user_commande__email'
+    )
+
+    def state(self, obj):
+        if obj.status == Ticket.NOT_SCANNED:
+            return format_html(
+                f'<a  href="{reverse("staff_admin:ticket-scann", args=[obj.pk])}" class="button">Valider</a>&nbsp;',
+            )
+        elif obj.status == Ticket.SCANNED:
+            return 'Validé'
+        else :
+            return obj.status
+
+    state.short_description = 'Etat'
+    state.allow_tags = True
+
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            url(
+                r'^(?P<ticket_pk>.+)/scanner/$',
+                self.admin_site.admin_view(self.scanner),
+                name='ticket-scann',
+            ),
+        ]
+        return custom_urls + urls
+
+
+
+
+
+    def scanner(self, request, ticket_pk, *arg, **kwarg):
+        print(ticket_pk)
+        ticket = Ticket.objects.get(pk=ticket_pk)
+        ticket.status = Ticket.SCANNED
+        ticket.save()
+        messages.add_message(
+            request,
+            messages.SUCCESS,
+            f"Ticket validé. Statut scanné."
+        )
+        # context = self.admin_site.each_context(request)
+        return HttpResponseRedirect(
+            reverse("staff_admin:BaseBillet_ticket_changelist")
+        )
+
+    def reservations(self, obj):
+        return format_html(
+            '<a  '
+            f'href="{reverse("staff_admin:BaseBillet_ticket_changelist")}?reservation__uuid={obj.reservation.pk}">'
+            f'{obj.reservation}'
+            f'</a>&nbsp;'
+        )
+
+    reservations.short_description = 'Reservations'
+    reservations.allow_tags = True
+
+    def has_delete_permission(self, request, obj=None):
+        # return request.user.is_superuser
+        return False
+
+    def has_add_permission(self, request):
+        return False
+
+    def get_queryset(self, request):
+        qs = super(TicketAdmin, self).get_queryset(request)
+        future_events = qs.filter(
+            reservation__event__datetime__gt=(datetime.datetime.now() - datetime.timedelta(days=2)).date(),
+        )
+        return future_events
 
 
 staff_admin_site.register(Ticket, TicketAdmin)
@@ -342,5 +464,6 @@ class MembershipAdmin(admin.ModelAdmin):
         'commentaire',
     )
     ordering = ('-date_added',)
+
 
 staff_admin_site.register(Membership, MembershipAdmin)

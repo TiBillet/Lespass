@@ -68,6 +68,7 @@ class event(APIView):
 
 
 
+
 class Ticket_html_view(APIView):
     permission_classes = [AllowAny]
 
