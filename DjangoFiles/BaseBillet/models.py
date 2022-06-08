@@ -882,7 +882,7 @@ class Membership(models.Model):
     '''
 
     def deadline(self):
-        if self.last_contribution :
+        if self.last_contribution and self.price :
             if self.price.subscription_type == Price.YEAR :
                 return self.last_contribution + timedelta(days=365)
             if self.price.subscription_type == Price.MONTH :
