@@ -27,6 +27,7 @@ from QrcodeCashless.models import CarteCashless
 
 logger = logging.getLogger(__name__)
 
+
 def get_img_from_url(url):
     try:
         res = requests.get(url, stream=True)
@@ -64,11 +65,23 @@ class ProductSerializer(serializers.ModelSerializer):
         # On cherche la source de l'image principale :
         img_url = self.initial_data.get('img_url')
         if not attrs.get('img') and not img_url:
-            raise serializers.ValidationError(_(f'img doit contenir un fichier, ou img_url doit contenir une url valide'))
+            raise serializers.ValidationError(
+                _(f'img doit contenir un fichier, ou img_url doit contenir une url valide'))
         if not attrs.get('img') and img_url:
             self.img_name, self.img_img = get_img_from_url(img_url)
 
+        if attrs.get('send_to_cashless') and attrs.get('categorie_article') == Product.ADHESION :
+            adhesion_to_cashless = Product.objects.filter(
+                categorie_article=Product.ADHESION,
+                send_to_cashless=True
+            )
+            if len(adhesion_to_cashless > 0):
+                raise serializers.ValidationError(
+                    _(f"Un article d'adhésion vers le cashless existe déja."))
+
+
         return super().validate(attrs)
+
 
 class PriceSerializer(serializers.ModelSerializer):
     product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
@@ -150,7 +163,6 @@ class ConfigurationSerializer(serializers.ModelSerializer):
 #     contribution_value = serializers.FloatField()
 
 
-
 class NewConfigSerializer(serializers.ModelSerializer):
     class Meta:
         model = Configuration
@@ -182,17 +194,18 @@ class NewConfigSerializer(serializers.ModelSerializer):
         # On cherche la source de l'image principale :
         img_url = self.initial_data.get('img_url')
         if not attrs.get('img') and not img_url:
-            raise serializers.ValidationError(_(f'img doit contenir un fichier, ou img_url doit contenir une url valide'))
+            raise serializers.ValidationError(
+                _(f'img doit contenir un fichier, ou img_url doit contenir une url valide'))
         if not attrs.get('img') and img_url:
             self.img_name, self.img_img = get_img_from_url(img_url)
 
         # On cherche la source de l'image du logo :
         logo_url = self.initial_data.get('logo_url')
         if not attrs.get('logo') and not logo_url:
-            raise serializers.ValidationError(_(f'img doit contenir un fichier, ou logo_url doit contenir une url valide'))
+            raise serializers.ValidationError(
+                _(f'img doit contenir un fichier, ou logo_url doit contenir une url valide'))
         if not attrs.get('logo') and logo_url:
             self.logo_name, self.logo_img = get_img_from_url(logo_url)
-
 
         return super().validate(attrs)
 
@@ -297,7 +310,7 @@ class EventCreateSerializer(serializers.Serializer):
     def validate(self, attrs):
         # import ipdb; ipdb.set_trace()
         name = None
-        if attrs.get('artists') :
+        if attrs.get('artists'):
             name = (" & ").join([artist.get('config').organisation for artist in attrs.get('artists')])
 
         # Name prend le dessus sur le join artist
@@ -315,7 +328,6 @@ class EventCreateSerializer(serializers.Serializer):
             short_description=attrs.get('short_description'),
             # img=self.img,
         )
-
 
         if attrs.get('img_url'):
             event.img.save(self.file_name, self.file_img.fp)
@@ -337,7 +349,7 @@ class EventCreateSerializer(serializers.Serializer):
             for option in attrs.get('options_checkbox'):
                 event.options_checkbox.add(option)
 
-        if attrs.get('artists') :
+        if attrs.get('artists'):
             for artist_input in attrs.get('artists'):
                 prog, created = Artist_on_event.objects.get_or_create(
                     artist=artist_input.get('tenant'),
@@ -424,7 +436,6 @@ class EventSerializer(serializers.ModelSerializer):
         return representation
 
 
-
 class ReservationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Reservation
@@ -454,6 +465,7 @@ class OptionResaSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+
 class TicketSerializer(serializers.ModelSerializer):
     class Meta:
         model = Ticket
@@ -474,7 +486,6 @@ class TicketSerializer(serializers.ModelSerializer):
         representation = super().to_representation(instance)
         representation['options'] = [option.name for option in instance.reservation.options.all()]
         return representation
-
 
 
 class NewAdhesionValidator(serializers.Serializer):
@@ -546,7 +557,6 @@ class MembreValidator(serializers.Serializer):
         self.price = value
         return value
 
-
     def validate_email(self, value):
         user_paiement: TibilletUser = get_or_create_user(value)
         self.user = user_paiement
@@ -558,7 +568,8 @@ class MembreValidator(serializers.Serializer):
 
         if not created:
             if self.fiche_membre.is_valid():
-                raise serializers.ValidationError(_(f"L'abonnement existe et est valide jusque : {self.fiche_membre.deadline()}"))
+                raise serializers.ValidationError(
+                    _(f"L'abonnement existe et est valide jusque : {self.fiche_membre.deadline()}"))
 
         if not self.fiche_membre.first_name:
             if not self.initial_data.get('first_name'):
@@ -723,7 +734,6 @@ class ReservationValidator(serializers.Serializer):
     options = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(), many=True, allow_null=True)
     prices = serializers.JSONField(required=True)
 
-
     def validate_event(self, value):
         event: Event = value
         if event.complet():
@@ -756,8 +766,9 @@ class ReservationValidator(serializers.Serializer):
                     'qty': float(entry['qty']),
                 }
 
-                if price.adhesion_obligatoire :
-                    membership_products = [ membership.price.product for membership in self.user_commande.membership.all()]
+                if price.adhesion_obligatoire:
+                    membership_products = [membership.price.product for membership in
+                                           self.user_commande.membership.all()]
                     if price.adhesion_obligatoire not in membership_products:
                         # import ipdb; ipdb.set_trace()
                         logger.warning(_(f"L'utilisateur n'est pas membre"))
@@ -800,9 +811,8 @@ class ReservationValidator(serializers.Serializer):
         if options:
             for option in options:
                 option: OptionGenerale
-                if option not in list(set(event.options_checkbox.all()) | set(event.options_radio.all())) :
+                if option not in list(set(event.options_checkbox.all()) | set(event.options_radio.all())):
                     raise serializers.ValidationError(_(f'Option {option.name} non disponible dans event'))
-
 
         # on construit l'object reservation.
         reservation = Reservation.objects.create(
@@ -892,16 +902,14 @@ class ReservationValidator(serializers.Serializer):
 
             if reservation:
                 # Si l'utilisateur est actif, il a vérifié son email.
-                if self.user_commande.is_active :
+                if self.user_commande.is_active:
                     reservation.status = Reservation.FREERES_USERACTIV
                 # Sinon on attend que l'user ai vérifié son email.
                 # La fonctione presave du fichier BaseBillet.signals
                 # mettra a jour le statut de la réservation et enverra le billet dés validation de l'email
-                else :
+                else:
                     reservation.status = Reservation.FREERES
                 reservation.save()
-
-
 
             return super().validate(attrs)
 

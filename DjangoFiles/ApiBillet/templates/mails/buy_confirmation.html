@@ -418,7 +418,7 @@
                                                             <img align="center" width="600"
                                                                  style="border-radius: 3px 3px 0px 0px; width: 100%; max-width: 600px!important"
                                                                  class="hund"
-                                                                 src="{{ config.img.med }}">
+                                                                 src="{{ base_url }}/media/{{ config.img.hdr }}">
                                                         </td>
                                                     </tr>
                                                     <!-- END HEADER IMAGE -->
@@ -434,16 +434,22 @@
                                                             style="font-family: 'Roboto Mono', monospace; color: #212121!important; font-size: 16px; line-height: 24px; padding-top: 18px; padding-left: 18px!important; padding-right: 18px!important; padding-bottom: 0px!important; mso-line-height-rule: exactly; mso-padding-alt: 18px 18px 0px 18px;">
                                                             Bonjour !
                                                             <br><br>
-                                                            Nous vous confirmons votre achat
-                                                            d'un total de {{ reservation.total_paid | floatformat:2 }}€.
-
-                                                            <strong>Grand merci pour votre reservation !</strong>
+                                                            {% if reservation.total_paid > 0 %}
+                                                                Nous vous confirmons votre achat
+                                                                d'un total de
+                                                                {{ reservation.total_paid | floatformat:2 }}€.
+                                                                <strong>Grand merci pour votre reservation !</strong>
+                                                            {% else %}
+                                                                <strong>Grand merci pour votre reservation !</strong>
+                                                            {% endif %}
                                                             <br><br>
                                                             {% if reservation.tickets %}
                                                                 Vous trouverez vos billets en pièce jointe.
                                                             {% else %}
                                                                 Aucun billets pour un concert ? Etrange etrange
                                                             {% endif %}
+                                                            <br><br>
+
                                                         </td>
                                                     </tr>
                                                     <!-- END BODY COPY -->

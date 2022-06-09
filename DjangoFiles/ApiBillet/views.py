@@ -1,6 +1,7 @@
 # Create your views here.
 import json
 from datetime import datetime, timedelta
+import dateutil.parser
 
 import pytz
 import requests
@@ -8,6 +9,7 @@ import stripe
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.http import HttpResponseRedirect, Http404, HttpResponse
+from django.shortcuts import render
 from django.utils import timezone
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
@@ -29,7 +31,8 @@ from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSeria
 from AuthBillet.models import TenantAdminPermission, TibilletUser
 from BaseBillet.tasks import create_ticket_pdf, redirect_post_webhook_stripe_from_public
 from Customers.models import Client, Domain
-from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe, OptionGenerale
+from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe, \
+    OptionGenerale, Membership
 from rest_framework import viewsets, permissions, status
 from django.db import connection, IntegrityError
 
@@ -90,6 +93,7 @@ class ProductViewSet(viewsets.ViewSet):
         else:
             permission_classes = [TenantAdminPermission]
         return [permission() for permission in permission_classes]
+
 
 '''
 
@@ -190,6 +194,7 @@ class ArtistViewSet(viewsets.ViewSet):
 
 '''
 
+
 class TenantViewSet(viewsets.ViewSet):
 
     def create(self, request):
@@ -212,8 +217,6 @@ class TenantViewSet(viewsets.ViewSet):
         serializer = NewConfigSerializer(data=request.data, context={'request': request})
 
         if serializer.is_valid():
-
-
 
             futur_conf = serializer.validated_data
             with schema_context('public'):
@@ -296,7 +299,6 @@ class TenantViewSet(viewsets.ViewSet):
         if 'artist' in request.get_full_path():
             categories = [Client.ARTISTE]
 
-
         for tenant in Client.objects.filter(categorie__in=categories):
             with tenant_context(tenant):
                 places_serialized_with_uuid.append({"uuid": f"{tenant.uuid}"})
@@ -356,7 +358,6 @@ class EventsSlugViewSet(viewsets.ViewSet):
         serializer = EventSerializer(event)
         return Response(serializer.data)
 
-
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             permission_classes = [permissions.AllowAny]
@@ -371,7 +372,7 @@ class EventsViewSet(viewsets.ViewSet):
         tenant: Client = connection.tenant
         four_hour_before_now = datetime.now().date() - timedelta(hours=4)
 
-        if tenant.categorie == Client.SALLE_SPECTACLE :
+        if tenant.categorie == Client.SALLE_SPECTACLE:
             queryset = Event.objects.filter(datetime__gte=four_hour_before_now).order_by('datetime')
             events_serialized = EventSerializer(queryset, many=True, context={'request': request})
             return Response(events_serialized.data)
@@ -399,7 +400,6 @@ class EventsViewSet(viewsets.ViewSet):
                     for data in events_serialized.data:
                         events_serialized_data.append(data)
 
-
             return Response(events_serialized_data)
 
         elif tenant.categorie == Client.META:
@@ -412,7 +412,6 @@ class EventsViewSet(viewsets.ViewSet):
                     for data in events_serialized.data:
                         events_serialized_data.append(data)
             return Response(events_serialized_data)
-
 
     def retrieve(self, request, pk=None):
         queryset = Event.objects.all().order_by('-datetime')
@@ -537,6 +536,7 @@ class OptionTicket(viewsets.ViewSet):
             permission_classes = [TenantAdminPermission]
         return [permission() for permission in permission_classes]
 
+
 def borne_temps_4h():
     now = timezone.now()
     jour = now.date()
@@ -568,12 +568,13 @@ class Gauge(APIView):
         )
 
         data = {
-            "gauge_max" : config.jauge_max,
-            "all_tickets" : queryset.count(),
-            "scanned_tickets" : queryset.filter(status=Ticket.SCANNED).count()
+            "gauge_max": config.jauge_max,
+            "all_tickets": queryset.count(),
+            "scanned_tickets": queryset.filter(status=Ticket.SCANNED).count()
         }
 
         return Response(data, status=status.HTTP_200_OK)
+
 
 class TicketViewset(viewsets.ViewSet):
     def list(self, request):
@@ -582,7 +583,7 @@ class TicketViewset(viewsets.ViewSet):
         queryset = Ticket.objects.filter(
             reservation__event__datetime__gte=debut_jour,
             reservation__event__datetime__lte=lendemain_quatre_heure,
-            status__in=["K","S"]
+            status__in=["K", "S"]
         )
 
         serializer = TicketSerializer(queryset, many=True, context={'request': request})
@@ -593,11 +594,65 @@ class TicketViewset(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
+def maj_membership_from_cashless(user: TibilletUser, data: dict):
+    '''
+    On met à jour la carte de membre si le cashless à des données plus récentes.
+
+    '''
+    logger.info('maj_membership_from_cashless')
+    try:
+        # Il n'y est sensé y avoir qu'un seul objet produit qui puisse être envoyé au cashless
+        produit_adhesion = Product.objects.get(send_to_cashless=True)
+
+        # On va chercher la carte membership
+        deadline_billetterie = None
+        membership = Membership.objects.filter(
+            user=user,
+            price__product=produit_adhesion
+        ).first()
+
+        if membership:
+            deadline_billetterie = membership.deadline()
+        else:
+            prices_adhesion = produit_adhesion.prices.all()
+            price: Price = prices_adhesion.get(prix=float(data.get('cotisation')))
+            logger.info(f'Pas de membreship, on la crée avec la data du cashless :')
+            logger.info(f'{data}')
+            membership = Membership.objects.create(
+                user=user,
+                first_name=data.get('prenom'),
+                last_name=data.get('name'),
+                newsletter=bool(data.get('demarchage')),
+                price=price
+            )
+
+        date_inscription = data.get('date_inscription')
+        if date_inscription:
+            deadline_cashless = datetime.strptime(data.get('prochaine_echeance'), '%Y-%m-%d').date()
+            if deadline_billetterie:
+                if deadline_billetterie >= deadline_cashless:
+                    logger.info('Adhésion associative syncho avec le cashless.')
+                    return membership
+
+            logger.info(f'Adhésion associative {produit_adhesion} non syncho avec le cashless. On mets à jour.')
+
+            membership.date_added = dateutil.parser.parse(data.get('date_ajout'))
+            membership.first_contribution = datetime.strptime(data.get('date_inscription'), '%Y-%m-%d').date()
+            membership.last_contribution = datetime.strptime(data.get('date_derniere_cotisation'), '%Y-%m-%d').date()
+            membership.contribution_value = float(data.get('cotisation'))
+            membership.save()
+
+            return membership
+
+    except Exception as e:
+        logger.error(f'maj_membership_from_cashless ERROR : {e}')
+        return None
+
+
 def request_for_data_cashless(user: TibilletUser):
     if user.email_error or not user.email:
         return {'erreur': f"user.email_error {user.email_error}"}
 
-    sess = requests.Session
     configuration = Configuration.get_solo()
     if configuration.server_cashless and configuration.key_cashless:
         try:
@@ -608,7 +663,11 @@ def request_for_data_cashless(user: TibilletUser):
 
             if response.status_code != 200:
                 return {'erreur': f"{response.status_code} : {response.text}"}
-            return json.loads(response.content)
+
+            data = json.loads(response.content)
+            membership = maj_membership_from_cashless(user, data)
+            return data
+
         except Exception as e:
             return {'erreur': f"{e}"}
 
@@ -627,28 +686,28 @@ class MembershipViewset(viewsets.ViewSet):
             return Response(adhesion_validator.errors, status=status.HTTP_400_BAD_REQUEST)
         return Response(membre_validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    #TODO: gerer en interne, pas avec le cashless
-    def retrieve(self, request, pk=None):
-        try:
-            email = force_str(urlsafe_base64_decode(pk))
-        except:
-            return Response("base64 email only", status=status.HTTP_406_NOT_ACCEPTABLE)
-        User = get_user_model()
-        user = User.objects.filter(email=email, username=email).first()
-
-        if user:
-            configuration = Configuration.get_solo()
-            if configuration.server_cashless and configuration.key_cashless:
-                data = request_for_data_cashless(user)
-                data_retrieve = {
-                    'a_jour_cotisation': data.get('a_jour_cotisation'),
-                    'date_derniere_cotisation': data.get('date_derniere_cotisation'),
-                    'prochaine_echeance': data.get('prochaine_echeance')
-                }
-                return Response(data_retrieve, status=status.HTTP_200_OK)
-
-            return Response('no cashless server', status=status.HTTP_404_NOT_FOUND)
-        return Response('no User', status=status.HTTP_402_PAYMENT_REQUIRED)
+    # TODO: gerer en interne, pas avec le cashless
+    # def retrieve(self, request, pk=None):
+    #     try:
+    #         email = force_str(urlsafe_base64_decode(pk))
+    #     except:
+    #         return Response("base64 email only", status=status.HTTP_406_NOT_ACCEPTABLE)
+    #     User = get_user_model()
+    #     user = User.objects.filter(email=email, username=email).first()
+    #
+    #     if user:
+    #         configuration = Configuration.get_solo()
+    #         if configuration.server_cashless and configuration.key_cashless:
+    #             data = request_for_data_cashless(user)
+    #             data_retrieve = {
+    #                 'a_jour_cotisation': data.get('a_jour_cotisation'),
+    #                 'date_derniere_cotisation': data.get('date_derniere_cotisation'),
+    #                 'prochaine_echeance': data.get('prochaine_echeance')
+    #             }
+    #             return Response(data_retrieve, status=status.HTTP_200_OK)
+    #
+    #         return Response('no cashless server', status=status.HTTP_404_NOT_FOUND)
+    #     return Response('no User', status=status.HTTP_402_PAYMENT_REQUIRED)
 
     def get_permissions(self):
         if self.action in ['create', 'retrieve']:
@@ -659,6 +718,7 @@ class MembershipViewset(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
+
 class TicketPdf(APIView):
     permission_classes = [AllowAny]
 
@@ -666,7 +726,7 @@ class TicketPdf(APIView):
         ticket = get_object_or_404(Ticket, uuid=pk_uuid)
 
         VALID_TICKET_FOR_PDF = [Ticket.NOT_SCANNED, Ticket.SCANNED]
-        if ticket.status not in VALID_TICKET_FOR_PDF :
+        if ticket.status not in VALID_TICKET_FOR_PDF:
             return Response('Ticket non valide', status=status.HTTP_403_FORBIDDEN)
 
         pdf_binary = create_ticket_pdf(ticket)
@@ -924,7 +984,6 @@ class Webhook_stripe(APIView):
             paiement_stripe = get_object_or_404(Paiement_stripe,
                                                 uuid=post_from_front_vue_js)
             return paiment_stripe_validator(request, paiement_stripe)
-
 
         # Réponse pour l'api stripe qui envoie des webhook pour tout autre que la validation de paiement.
         # Si on renvoie une erreur, ils suppriment le webhook de leur côté.
