@@ -2,8 +2,14 @@
   <fieldset v-if="getOptions.nb_options_checkbox > 0 && getOptions.nb_options_radio > 1"
             class="shadow-sm p-3 mb-5 bg-body rounded">
     <legend>
-      <h3 class="font-weight-bolder text-info text-gradient align-self-start">Options</h3>
+      <div class="d-flex flex-row align-items-center justify-content-between">
+        <h3 class="font-weight-bolder text-info text-gradient align-self-start">Options</h3>
+        <button class="btn btn-primary ms-3" type="button" title="Annuler les options !" @click="allOptionsFalse()">
+          <span class="btn-inner--icon">Annuler<i class="fa fa-trash ms-1" aria-hidden="true"></i></span>
+        </button>
+      </div>
     </legend>
+
 
     <!-- options checkbox -->
     <div v-if="getOptions.nb_options_checkbox > 0" class="input-group mb-2 has-validation">
@@ -46,9 +52,12 @@ import {useEventStore} from '@/stores/event'
 // state event
 const {event} = storeToRefs(useEventStore())
 // action(s) du state event
-const {getOptions, updateOptions} = useEventStore()
-
+const {getOptions, updateOptions, allOptionsFalse} = useEventStore()
 </script>
 
 <style scoped>
+.style-h3 {
+  font-size: 1.875rem;
+  line-height: 1.375;
+}
 </style>

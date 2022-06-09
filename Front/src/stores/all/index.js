@@ -48,7 +48,7 @@ export const useAllStore = defineStore({
       }
     },
     async getPlace() {
-      console.log('-> action getPlace !')
+      // console.log('-> action getPlace !')
       this.error = null
       this.place = {}
       this.loading = true

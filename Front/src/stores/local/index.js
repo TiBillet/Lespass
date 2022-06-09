@@ -9,7 +9,8 @@ export const useLocalStore = defineStore({
     refreshToken: '',
     me: {
       cashless: {},
-      reservations: {}
+      reservations: [],
+      membership: []
     },
     stripeEtape: ''
   }),

@@ -114,7 +114,8 @@ function disconnect() {
   refreshToken.value = ''
   me.value = {
     cashless: {},
-    reservations: {}
+    reservations: [],
+    membership: []
   }
   adhesion.value = {
     email: '',

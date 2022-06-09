@@ -50,7 +50,7 @@ export const useEventStore = defineStore({
     },
     // init le formulaire d'un évènement (CardBillet, CardOptions)
     initEventForm() {
-      console.log('-> action initEventForm !')
+      // console.log('-> action initEventForm !')
       const allStore = useAllStore()
       // init data form / event uuid
       let form = this.forms.find(obj => obj.event === this.event.uuid)
@@ -73,7 +73,7 @@ export const useEventStore = defineStore({
         for (const optionsKey in options) {
           let eventOptions = form[options[optionsKey]]
           for (const eventOptionsKey in eventOptions) {
-            console.log('->', eventOptions[eventOptionsKey])
+            // console.log('->', eventOptions[eventOptionsKey])
             eventOptions[eventOptionsKey]['activation'] = false
           }
         }
@@ -157,9 +157,8 @@ export const useEventStore = defineStore({
       customer[variable] = value
     },
     stop(priceUuid, stock, maxPerUser) {
-      console.log('-> fonc stop !')
+      // console.log('-> fonc stop !')
       const price = this.forms.find(obj => obj.event === this.event.uuid).prices.find(obj2 => obj2.uuid === priceUuid)
-
       // --- gestion de l'affichage du bouton "+" ---
       // aucun ajout
       if (price === undefined) {
@@ -197,6 +196,15 @@ export const useEventStore = defineStore({
       const option = form[inputType].find(opt => opt.uuid === uuidOption)
       option.activation = value
     },
+    allOptionsFalse() {
+      let form = this.forms.find(obj => obj.event === this.event.uuid)
+      for (let i = 0; i < form.options_radio.length; i++) {
+        form.options_radio[i].activation = false
+      }
+      for (let i = 0; i < form.options_checkbox.length; i++) {
+        form.options_checkbox[i].activation = false
+      }
+    },
     updateEmail(emailType, value) {
       // console.log('-> fonc updateEmail !')
       this.forms.find(obj => obj.event === this.event.uuid)[emailType] = value
@@ -229,7 +237,7 @@ export const useEventStore = defineStore({
       gift.enable = value
     },
     getEventHeader() {
-      console.log('-> action getHeaderEvent')
+      // console.log('-> action getHeaderEvent')
       let urlImage
       try {
         urlImage = this.event.img_variations.fhd

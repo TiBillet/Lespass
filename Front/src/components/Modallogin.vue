@@ -2,13 +2,13 @@
   <div id="modal-form-login" aria-hidden="true" aria-labelledby="modal-form-login"
        class="modal fade" role="dialog"
        tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered modal-sm" role="document">
+    <div class="modal-dialog modal-dialog-centered" role="document">
       <div class="modal-content">
         <div class="modal-body p-0">
           <div class="card card-plain">
             <div class="card-header pb-0 text-left">
               <h3 class="font-weight-bolder text-info text-gradient">Connectez vous</h3>
-              <p class="mb-0">Entrez votre email</p>
+              <!-- <p class="mb-0">Entrez votre email</p> -->
             </div>
             <div class="card-body">
               <form role="form text-left" @submit.prevent="validerLogin($event)">
@@ -18,7 +18,10 @@
                          pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$" required>
                 </div>
                 <div class="text-center">
-                  <button class="btn btn-round bg-gradient-info btn-lg w-100 mt-4 mb-0" type="submit">Valider</button>
+                  <button class="btn btn-round bg-gradient-info btn-lg w-100 mt-4 mb-0 btn-sm" type="submit">Valider</button>
+                </div>
+                <div class="text-center mt-2">
+                  <a class="text-info" type="submit">Se connecter avec communecter</a>
                 </div>
               </form>
             </div>

@@ -10,11 +10,7 @@
             <span aria-hidden="true">&times;</span>
           </button>
         </div>
-        <!-- contenu  -->
         <div class="modal-body">
-
-          <!-- <pre class="text-dark">{{me.membership}}</pre> -->
-
           <fieldset class="shadow-sm p-3 mb-5 bg-body rounded" v-for="(adhesion, index) in me.membership" :key="index">
             <legend>
               <h5 class="font-weight-bolder text-info text-gradient align-self-start w-85">
@@ -36,7 +32,6 @@
       </div>
     </div>
   </div>
-
 </template>
 
 <script setup>
@@ -47,12 +42,15 @@ import {useLocalStore} from '@/stores/local'
 const {me} = storeToRefs(useLocalStore())
 
 function dateToFrenchFormat(dateString) {
-  const nomMois = ['','Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
-  const dateArray = dateString.split('T')[0].split('-')
-  const mois = nomMois[parseInt(dateArray[1])]
-  return dateArray[2] + ' ' + mois + ' ' + dateArray[0]
+  if(dateString !== null) {
+    const nomMois = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+    const dateArray = dateString.split('T')[0].split('-')
+    const mois = nomMois[parseInt(dateArray[1])]
+    return dateArray[2] + ' ' + mois + ' ' + dateArray[0]
+  } else {
+    return ''
+  }
 }
-
 </script>
 
 <style scoped>
