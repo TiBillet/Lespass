@@ -236,8 +236,11 @@ class OAauthCallback(APIView):
         sso_client = oauth.register(
             settings.OAUTH_CLIENT_NAME, overwrite=True, **settings.OAUTH_CLIENT, update_token=update_token
         )
-        import ipdb; ipdb.set_trace()
-        sso_client.authorize_access_token(request)
+
+        # import ipdb; ipdb.set_trace()
+
+        auth = sso_client.authorize_access_token(request)
+        return Response(f"sso_client.authorize_access_token(request) : {auth}", status=status.HTTP_200_OK)
 
 
 '''
