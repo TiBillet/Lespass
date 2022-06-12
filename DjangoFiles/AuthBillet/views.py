@@ -217,7 +217,7 @@ class OAauthApi(APIView):
         )
 
         redirect_base_url = f"https://{connection.tenant.get_primary_domain().domain}"
-        logger.info(f"redirect_base_url : {redirect_base_url}")
+        logger.info(f"redirect_base_url : {redirect_base_url}/api/user/oauth")
 
         # auth = sso_client.authorize_redirect(request, settings.OAUTH_CLIENT['redirect_uri'])
         auth = sso_client.authorize_redirect(request, redirect_base_url)
