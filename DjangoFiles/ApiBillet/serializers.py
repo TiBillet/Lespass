@@ -111,6 +111,15 @@ class PriceSerializer(serializers.ModelSerializer):
         ]
         depth = 1
 
+    def validate(self, attrs):
+        product = attrs.get('product')
+        if product.categorie_article == Product.ADHESION:
+            sub_type_novalid = [None, Price.NA]
+            if attrs.get('subscription_type') in sub_type_novalid:
+                raise serializers.ValidationError(
+                    _(f'error fields subscription_type - Une adhésion doit avoir une durée de validité.'))
+        return super().validate(attrs)
+
 
 # Utilisé par /here
 class ConfigurationSerializer(serializers.ModelSerializer):

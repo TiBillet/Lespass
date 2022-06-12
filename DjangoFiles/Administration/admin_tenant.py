@@ -1,5 +1,6 @@
 import datetime
 
+from django import forms
 from django.conf.urls import url
 from django.contrib import admin, messages
 from django.contrib.admin import AdminSite, SimpleListFilter
@@ -41,6 +42,11 @@ class StaffAdminSite(AdminSite):
             return False
         except Exception as e:
             raise e
+
+
+    # def get_app_list(self, request):
+    #     import ipdb; ipdb.set_trace()
+    #     return super().get_app_list(request)
 
 
 staff_admin_site = StaffAdminSite(name='staff_admin')
@@ -177,32 +183,68 @@ class ConfigurationAdmin(SingletonModelAdmin):
 staff_admin_site.register(Configuration, ConfigurationAdmin)
 
 
+class CustomEventForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        config = Configuration.get_solo()
+        self.fields['jauge_max'].initial = config.jauge_max
+
+
 class EventAdmin(admin.ModelAdmin):
-    list_display = (
+    form = CustomEventForm
+    fieldsets = (
+        ('Nouvel évènement', {
+            'fields': (
+                'name',
+                'datetime',
+                'img',
+                'short_description',
+                'long_description',
+            )
+        }),
+        ('Articles', {
+            'fields': (
+                'products',
+            )
+        }),
+        ('Options', {
+            'fields': (
+                'jauge_max',
+                'options_radio',
+                'options_checkbox',
+            )
+        }),
+    )
+
+    list_display = [
         'name',
         'reservations',
         'datetime',
-    )
+    ]
     readonly_fields = (
         'reservations',
     )
     search_fields = ['name']
 
+    def save_form(self, request, form, change):
+        # import ipdb; ipdb.set_trace()
+        return super().save_form(request, form, change)
+
 
 staff_admin_site.register(Event, EventAdmin)
 
 
-class OptionGeneraleAdmin(admin.ModelAdmin):
-    list_display = (
-        'name',
-        'poids',
-    )
-    list_editable = (
-        'poids',
-    )
-
-
-staff_admin_site.register(OptionGenerale, OptionGeneraleAdmin)
+# class OptionGeneraleAdmin(admin.ModelAdmin):
+#     list_display = (
+#         'name',
+#         'poids',
+#     )
+#     list_editable = (
+#         'poids',
+#     )
+#
+#
+# staff_admin_site.register(OptionGenerale, OptionGeneraleAdmin)
 
 
 # class QuantitiesSoldAdmin(admin.ModelAdmin):
@@ -224,9 +266,9 @@ class ReservationAdmin(admin.ModelAdmin):
     )
     # readonly_fields = list_display
     # search_fields = ['event']
+# staff_admin_site.register(Reservation, ReservationAdmin)
 
 
-staff_admin_site.register(Reservation, ReservationAdmin)
 
 
 class EventFilter(SimpleListFilter):
@@ -291,7 +333,9 @@ class TicketAdmin(admin.ModelAdmin):
         elif obj.status == Ticket.SCANNED:
             return 'Validé'
         else :
-            return obj.status
+            for choice in Reservation.TYPE_CHOICES:
+                if choice[0] == obj.reservation.status:
+                    return choice[1]
 
     state.short_description = 'Etat'
     state.allow_tags = True
@@ -428,20 +472,20 @@ class PaiementStripeAdmin(admin.ModelAdmin):
 staff_admin_site.register(Paiement_stripe, PaiementStripeAdmin)
 
 
-class LigneArticleAdmin(admin.ModelAdmin):
-    list_display = (
-        'datetime',
-        'pricesold',
-        'qty',
-        'carte',
-        'status',
-        'paiement_stripe',
-        'status_stripe'
-    )
-    ordering = ('-datetime',)
-
-
-staff_admin_site.register(LigneArticle, LigneArticleAdmin)
+# class LigneArticleAdmin(admin.ModelAdmin):
+#     list_display = (
+#         'datetime',
+#         'pricesold',
+#         'qty',
+#         'carte',
+#         'status',
+#         'paiement_stripe',
+#         'status_stripe'
+#     )
+#     ordering = ('-datetime',)
+#
+#
+# staff_admin_site.register(LigneArticle, LigneArticleAdmin)
 
 
 class MembershipAdmin(admin.ModelAdmin):

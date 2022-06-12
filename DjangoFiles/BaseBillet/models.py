@@ -3,6 +3,7 @@ import uuid
 from datetime import timedelta, datetime
 
 import requests
+from django import forms
 from django.contrib.auth import get_user_model
 from django.db import models
 from django.db.models.aggregates import Sum
@@ -354,7 +355,6 @@ class Price(models.Model):
     class Meta:
         unique_together = ('name', 'product')
 
-
 class Event(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
 
@@ -362,6 +362,7 @@ class Event(models.Model):
     slug = models.SlugField(unique=True, db_index=True, blank=True, null=True, max_length=250)
     datetime = models.DateTimeField()
     created = models.DateTimeField(auto_now=True)
+    jauge_max = models.PositiveSmallIntegerField(default=50, verbose_name=_("Jauge maximale"))
 
     short_description = models.CharField(max_length=250, blank=True, null=True)
     long_description = models.TextField(blank=True, null=True)
@@ -370,6 +371,7 @@ class Event(models.Model):
     published = models.BooleanField(default=False)
 
     products = models.ManyToManyField(Product, blank=True)
+
     options_radio = models.ManyToManyField(OptionGenerale, blank=True, related_name="options_radio",
                                            verbose_name="Option choix unique")
     options_checkbox = models.ManyToManyField(OptionGenerale, blank=True, related_name="options_checkbox",
@@ -399,7 +401,7 @@ class Event(models.Model):
             }
         elif self.artists.all().count() > 0:
             artist_on_event : Artist_on_event = self.artists.all()[0]
-            tenant: Clien = artist_on_event.artist
+            tenant: Client = artist_on_event.artist
             with tenant_context(tenant):
                 img = Configuration.get_solo().img
 
@@ -435,7 +437,7 @@ class Event(models.Model):
             .count()
 
     def complet(self):
-        if self.reservations() >= Configuration.get_solo().jauge_max:
+        if self.reservations() >= self.jauge_max:
             return True
         else:
             return False
@@ -552,6 +554,12 @@ class PriceSold(models.Model):
             return self.id_price_stripe
 
         stripe.api_key = Configuration.get_solo().get_stripe_api()
+
+        recurring = False
+        if self.price.subscription_type == Price.YEAR:
+            recurring={"interval": "month"}
+        elif self.price.subscription_type == Price.MONTH:
+            recurring={"interval": "year"}
 
         price = stripe.Price.create(
             unit_amount=int("{0:.2f}".format(self.price.prix).replace('.', '')),
@@ -867,6 +875,8 @@ class Membership(models.Model):
 
     class Meta:
         unique_together = ('user', 'price')
+        verbose_name = _('Adhésion')
+        verbose_name_plural = _('Adhésions')
 
     def email(self):
         return self.user.email
@@ -923,3 +933,4 @@ class Membership(models.Model):
             return f"{self.last_name} {self.first_name}"
         else:
             return f"{self.last_name}"
+

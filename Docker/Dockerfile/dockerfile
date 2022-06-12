@@ -82,6 +82,7 @@ RUN python -m pip install -U channels
 RUN python -m pip install -U channels_redis
 
 RUN pip install mailjet_rest
+RUN pip install authlib
 
 RUN apt-get -y clean
 

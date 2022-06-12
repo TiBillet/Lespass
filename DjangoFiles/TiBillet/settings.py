@@ -280,11 +280,28 @@ CHANNEL_LAYERS = {
         },
     },
 }
-# Jet Menu
+
 # -------------------------------------/
-# JET_SIDE_MENU_COMPACT = True
-# JET_CHANGE_FORM_SIBLING_LINKS = False
-# settings.py
+# COMMUNECTER SSO oauth2
+# -------------------------------------/
+OAUTH_URL_WHITELISTS = []
+OAUTH_CLIENT_NAME = 'communecter'
+OAUTH_CLIENT = {
+    'client_id': os.environ.get('COMMUNECTER_SSO_CLIENTID'),
+    'client_secret': os.environ.get('COMMUNECTER_SSO_SECRET'),
+    'access_token_url': 'https://sso.communecter.org/oauth/token',
+    'authorize_url': 'https://sso.communecter.org/oauth/authorize',
+    'api_base_url': 'https://sso.communecter.org/oauth',
+    'redirect_uri': 'https://www.tibillet.org/api/user/oauth',
+    'client_kwargs': {
+        'scope': 'profile email',
+        'token_placement': 'header'
+    },
+    'userinfo_endpoint': 'user',
+}
+OAUTH_COOKIE_SESSION_ID = 'sso_session_id'
+# -------------------------------------/
+
 
 LOGGING = {
     'version': 1,

@@ -32,8 +32,16 @@ from BaseBillet.models import Configuration
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 
+from TiBillet import settings
+
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+from authlib.integrations.base_client import OAuthError
+from authlib.integrations.django_client import OAuth
+from authlib.oauth2.rfc6749 import OAuth2Token
+from django.shortcuts import redirect
+from django.utils.deprecation import MiddlewareMixin
 
 
 def decode_uid(pk):
@@ -192,3 +200,41 @@ class MeViewset(viewsets.ViewSet):
         else:
             permission_classes = [permissions.AllowAny]
         return [permission() for permission in permission_classes]
+
+
+
+class OAauthApi(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        def update_token(token, refresh_token, access_token):
+            request.session['token'] = token
+            return None
+
+        oauth = OAuth()
+        sso_client = oauth.register(
+            settings.OAUTH_CLIENT_NAME, overwrite=True, **settings.OAUTH_CLIENT, update_token=update_token
+        )
+        auth = sso_client.authorize_redirect(request, settings.OAUTH_CLIENT['redirect_uri'])
+        return Response(f"{auth}", status=status.HTTP_200_OK)
+
+class OAauthCallback(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        def update_token(token, refresh_token, access_token):
+            request.session['token'] = token
+            return None
+
+        oauth = OAuth()
+        sso_client = oauth.register(
+            settings.OAUTH_CLIENT_NAME, overwrite=True, **settings.OAUTH_CLIENT, update_token=update_token
+        )
+        import ipdb; ipdb.set_trace()
+        sso_client.authorize_access_token(request)
+
+
+'''
+https://raffinerie.django-local.org/api/user/oauth?code=1f974406422cc5b435f313c19287dd5600a23e48&user=5edd171c690864e6728b45f5&state=glVpK2O472OD7IUEOezwpJtR9dNRyi\
+'''
+
