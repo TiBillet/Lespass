@@ -238,10 +238,11 @@ class OAauthCallback(APIView):
         )
 
         # import ipdb; ipdb.set_trace()
-
-        auth = sso_client.authorize_access_token(request)
-        return Response(f"sso_client.authorize_access_token(request) : {auth}", status=status.HTTP_200_OK)
-
+        try:
+            auth = sso_client.authorize_access_token(request)
+            return Response(f"sso_client.authorize_access_token(request) : {auth}", status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(f"sso_client.authorize_access_token(request) : {e}", status=status.HTTP_400_BAD_REQUEST)
 
 '''
 https://raffinerie.django-local.org/api/user/oauth?code=1f974406422cc5b435f313c19287dd5600a23e48&user=5edd171c690864e6728b45f5&state=glVpK2O472OD7IUEOezwpJtR9dNRyi\
