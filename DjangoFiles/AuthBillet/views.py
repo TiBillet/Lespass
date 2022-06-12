@@ -215,7 +215,10 @@ class OAauthApi(APIView):
         sso_client = oauth.register(
             settings.OAUTH_CLIENT_NAME, overwrite=True, **settings.OAUTH_CLIENT, update_token=update_token
         )
-        auth = sso_client.authorize_redirect(request, settings.OAUTH_CLIENT['redirect_uri'])
+        redirect_base_url = f"https://{connection.tenant.get_primary_domain().domain}"
+        # auth = sso_client.authorize_redirect(request, settings.OAUTH_CLIENT['redirect_uri'])
+        auth = sso_client.authorize_redirect(request, redirect_base_url)
+
         return Response(f"{auth}", status=status.HTTP_200_OK)
 
 class OAauthCallback(APIView):
