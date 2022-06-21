@@ -219,8 +219,8 @@ class OAauthApi(APIView):
             update_token=update_token
         )
 
-        # redirect_uri = f"https://{connection.tenant.get_primary_domain().domain}/api/user/oauth"
-        redirect_uri = request.build_absolute_uri('/api/user/oauth')
+        redirect_uri = f"https://{connection.tenant.get_primary_domain().domain}/api/user/oauth"
+        # redirect_uri = request.build_absolute_uri('/api/user/oauth')
         logger.info(f"redirect_uri : {redirect_uri}")
 
         auth = sso_client.authorize_redirect(request, redirect_uri)
