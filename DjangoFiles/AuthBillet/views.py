@@ -5,6 +5,7 @@ import requests
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.db.utils import IntegrityError
+from django.http import HttpResponseRedirect
 from django.shortcuts import render
 
 # Create your views here.
@@ -218,34 +219,25 @@ class OAauthApi(APIView):
         # redirect_uri = request.build_absolute_uri('/api/user/oauth')
         logger.info(f"redirect_uri : {redirect_uri}")
 
-        # import ipdb; ipdb.set_trace()
-
         auth = sso_client.authorize_redirect(request, redirect_uri)
         # auth = sso_client.authorize_redirect(request, settings.OAUTH_CLIENT['redirect_uri'])
 
-        return Response(f"{auth}", status=status.HTTP_200_OK)
+        # return Response(f"{auth}", status=status.HTTP_200_OK)
+        return auth
 
 class OAauthCallback(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
 
-        import ipdb; ipdb.set_trace()
-
-
-        def update_token(token, refresh_token, access_token):
-            request.session['token'] = token
-            return None
+        # import ipdb; ipdb.set_trace()
 
         oauth = OAuth()
         sso_client = oauth.register(
-            settings.OAUTH_CLIENT_NAME,
-            overwrite=True,
             **settings.OAUTH_CLIENT,
-            update_token=update_token
         )
-
         # import ipdb; ipdb.set_trace()
+
         try:
             auth = sso_client.authorize_access_token(request)
             return Response(f"sso_client.authorize_access_token(request) : {auth}", status=status.HTTP_200_OK)
