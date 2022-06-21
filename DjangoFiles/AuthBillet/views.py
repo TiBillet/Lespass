@@ -213,13 +213,17 @@ class OAauthApi(APIView):
 
         oauth = OAuth()
         sso_client = oauth.register(
-            settings.OAUTH_CLIENT_NAME, overwrite=True, **settings.OAUTH_CLIENT, update_token=update_token
+            settings.OAUTH_CLIENT_NAME,
+            overwrite=True,
+            **settings.OAUTH_CLIENT,
+            update_token=update_token
         )
 
-        redirect_base_url = f"https://{connection.tenant.get_primary_domain().domain}/api/user/oauth"
-        logger.info(f"redirect_base_url : {redirect_base_url}")
+        # redirect_uri = f"https://{connection.tenant.get_primary_domain().domain}/api/user/oauth"
+        redirect_uri = request.build_absolute_uri('/api/user/oauth')
+        logger.info(f"redirect_uri : {redirect_uri}")
 
-        auth = sso_client.authorize_redirect(request, redirect_base_url)
+        auth = sso_client.authorize_redirect(request, redirect_uri)
         # auth = sso_client.authorize_redirect(request, settings.OAUTH_CLIENT['redirect_uri'])
 
         return Response(f"{auth}", status=status.HTTP_200_OK)
@@ -234,7 +238,10 @@ class OAauthCallback(APIView):
 
         oauth = OAuth()
         sso_client = oauth.register(
-            settings.OAUTH_CLIENT_NAME, overwrite=True, **settings.OAUTH_CLIENT, update_token=update_token
+            settings.OAUTH_CLIENT_NAME,
+            overwrite=True,
+            **settings.OAUTH_CLIENT,
+            update_token=update_token
         )
 
         # import ipdb; ipdb.set_trace()
