@@ -208,6 +208,7 @@ class OAauthApi(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
+        import ipdb; ipdb.set_trace()
 
         oauth = OAuth()
         sso_client = oauth.register(
