@@ -236,7 +236,8 @@ class OAauthCallback(APIView):
         sso_client = oauth.register(
             **settings.OAUTH_CLIENT,
         )
-        # import ipdb; ipdb.set_trace()
+
+        import ipdb; ipdb.set_trace()
 
         try:
             auth = sso_client.authorize_access_token(request)
