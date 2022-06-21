@@ -218,7 +218,7 @@ class OAauthApi(APIView):
         # redirect_uri = request.build_absolute_uri('/api/user/oauth')
         logger.info(f"redirect_uri : {redirect_uri}")
 
-        import ipdb; ipdb.set_trace()
+        # import ipdb; ipdb.set_trace()
 
         auth = sso_client.authorize_redirect(request, redirect_uri)
         # auth = sso_client.authorize_redirect(request, settings.OAUTH_CLIENT['redirect_uri'])
