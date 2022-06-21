@@ -229,6 +229,10 @@ class OAauthCallback(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
+
+        import ipdb; ipdb.set_trace()
+
+
         def update_token(token, refresh_token, access_token):
             request.session['token'] = token
             return None
