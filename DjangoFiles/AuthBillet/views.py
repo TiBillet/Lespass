@@ -30,9 +30,9 @@ from AuthBillet.serializers import MeSerializer, CreateUserValidator, CreateTerm
 from AuthBillet.utils import get_or_create_user, sender_mail_connect
 from BaseBillet.models import Configuration
 
-from django.utils.encoding import force_str
-from django.utils.http import urlsafe_base64_decode
-
+from django.utils.encoding import force_str, force_bytes
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from django.contrib.auth.tokens import default_token_generator
 from TiBillet import settings
 
 User = get_user_model()
@@ -43,6 +43,14 @@ from authlib.integrations.django_client import OAuth
 from authlib.oauth2.rfc6749 import OAuth2Token
 from django.shortcuts import redirect
 from django.utils.deprecation import MiddlewareMixin
+
+oauth = OAuth()
+sso_client = oauth.register(
+    **settings.OAUTH_CLIENT,
+)
+
+def encode_uid(pk):
+    return force_str(urlsafe_base64_encode(force_bytes(pk)))
 
 
 def decode_uid(pk):
@@ -208,46 +216,43 @@ class OAauthApi(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        # import ipdb; ipdb.set_trace()
-
-        oauth = OAuth()
-        sso_client = oauth.register(
-            **settings.OAUTH_CLIENT,
-        )
         communecter = oauth.create_client('communecter')
-
-        # redirect_uri = f"https://prout.tibillet.org/api/user/oauth"
-        redirect_uri = f"https://{connection.tenant.get_primary_domain().domain}/api/user/oauth"
-        # redirect_uri = request.build_absolute_uri('/api/user/oauth')
+        redirect_uri = request.build_absolute_uri('/api/user/oauth').replace('http://', 'https://')
         logger.info(f"redirect_uri : {redirect_uri}")
 
         auth = communecter.authorize_redirect(request, redirect_uri)
-        # auth = sso_client.authorize_redirect(request, settings.OAUTH_CLIENT['redirect_uri'])
-
-        # return Response(f"{auth}", status=status.HTTP_200_OK)
-        return auth
+        if type(auth) == HttpResponseRedirect :
+            if auth.status_code == 302:
+                return auth
+        else:
+            return Response('SSO "Communecter" non disponible. Essayez avec votre email', status=status.HTTP_404_NOT_FOUND)
 
 class OAauthCallback(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
+        token = oauth.communecter.authorize_access_token(request)
 
-        # import ipdb; ipdb.set_trace()
+        if token.get('access_token'):
+            user_info = oauth.communecter.get('/oauth/userinfo', token=token).json()
+            if user_info.get('email_verified') :
 
-        oauth = OAuth()
-        sso_client = oauth.register(
-            **settings.OAUTH_CLIENT,
-        )
+                user = get_or_create_user(
+                    user_info.get('email'),
+                    set_active=True,
+                    send_mail=False,
+                )
 
-        import ipdb; ipdb.set_trace()
+                uid = encode_uid(user.pk)
+                token = default_token_generator.make_token(user)
+                base_url = request.build_absolute_uri('/emailconfirmation').replace('http://', 'https://')
+                connexion_url = f"{base_url}/{uid}/{token}"
+                return HttpResponseRedirect(connexion_url)
 
-        try:
-            auth = sso_client.authorize_access_token(request)
-            return Response(f"sso_client.authorize_access_token(request) : {auth}", status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response(f"sso_client.authorize_access_token(request) : {e}", status=status.HTTP_400_BAD_REQUEST)
 
-'''
-https://raffinerie.django-local.org/api/user/oauth?code=1f974406422cc5b435f313c19287dd5600a23e48&user=5edd171c690864e6728b45f5&state=glVpK2O472OD7IUEOezwpJtR9dNRyi\
-'''
+            else :
+                return 'merci de vérifier votre email'
+        else :
+            return Response('Access not Ok', status=status.HTTP_401_UNAUTHORIZED)
+
 

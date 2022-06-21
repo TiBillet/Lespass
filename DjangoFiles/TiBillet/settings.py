@@ -295,7 +295,7 @@ OAUTH_CLIENT = {
     'api_base_url': 'https://sso.communecter.org/oauth',
     'redirect_uri': 'https://www.tibillet.org/api/user/oauth',
     'client_kwargs': {
-        'scope': 'profile email',
+        'scope': 'openid profile email',
         'token_placement': 'header'
     },
     'userinfo_endpoint': 'user',

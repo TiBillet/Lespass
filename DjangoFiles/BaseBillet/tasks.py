@@ -15,7 +15,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.db import connection
 
 from django.utils.encoding import force_bytes, force_str
-from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from django.utils.http import urlsafe_base64_encode
 
 from weasyprint import HTML, CSS
 from weasyprint.text.fonts import FontConfiguration

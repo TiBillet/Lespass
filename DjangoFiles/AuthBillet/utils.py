@@ -22,7 +22,7 @@ def sender_mail_connect(email, subject_mail=None):
         logger.error(f"validate_email_and_return_user erreur pour récuperer config : {email} - {base_url} : {e}")
 
 
-def get_or_create_user(email, password=None):
+def get_or_create_user(email, password=None, set_active=False, send_mail=True):
     """
     If user not created, set it inactive.
     Only the mail validation can set active the user.
@@ -43,12 +43,13 @@ def get_or_create_user(email, password=None):
         if password:
             user.set_password(password)
 
-        user.is_active = False
+        user.is_active = bool(set_active)
 
         user.client_achat.add(connection.tenant)
         user.save()
 
-        sender_mail_connect(user.email)
+        if bool(send_mail) :
+            sender_mail_connect(user.email)
 
         return user
 
