@@ -207,21 +207,18 @@ class OAauthApi(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        def update_token(token, refresh_token, access_token):
-            request.session['token'] = token
-            return None
 
         oauth = OAuth()
         sso_client = oauth.register(
-            settings.OAUTH_CLIENT_NAME,
-            overwrite=True,
             **settings.OAUTH_CLIENT,
-            update_token=update_token
         )
 
+        # redirect_uri = f"https://prout.tibillet.org/api/user/oauth"
         redirect_uri = f"https://{connection.tenant.get_primary_domain().domain}/api/user/oauth"
         # redirect_uri = request.build_absolute_uri('/api/user/oauth')
         logger.info(f"redirect_uri : {redirect_uri}")
+
+        # import ipdb; ipdb.set_trace()
 
         auth = sso_client.authorize_redirect(request, redirect_uri)
         # auth = sso_client.authorize_redirect(request, settings.OAUTH_CLIENT['redirect_uri'])
