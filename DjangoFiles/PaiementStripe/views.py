@@ -10,7 +10,7 @@ from django.utils import timezone
 from django.views import View
 from rest_framework import serializers
 
-from BaseBillet.models import Configuration, LigneArticle, Paiement_stripe, Reservation
+from BaseBillet.models import Configuration, LigneArticle, Paiement_stripe, Reservation, Price
 from django.utils.translation import gettext, gettext_lazy as _
 
 import logging
@@ -43,6 +43,7 @@ class creation_paiement_stripe():
         self.paiement_stripe_db = self._paiement_stripe_db()
         self.stripe_api_key = self._stripe_api_key()
         self.line_items = self._line_items()
+        self.mode = self._mode()
         self.return_url = self._return_url()
         self.checkout_session = self._checkout_session()
 
@@ -89,6 +90,15 @@ class creation_paiement_stripe():
                 }
             )
         return line_items
+
+    def _mode(self):
+        subscription_types = [Price.MONTH, Price.YEAR]
+        mode = 'subscription'
+        for ligne in self.liste_ligne_article:
+            if ligne.pricesold.price.subscription_type not in subscription_types :
+                mode = 'payment'
+        return mode
+
     def _return_url(self):
         '''
         Si la source est le QRCode, alors c'est encore le model MVC de django qui gère ça.
@@ -102,16 +112,19 @@ class creation_paiement_stripe():
             return "/stripe/return/"
 
     def _checkout_session(self):
-        checkout_session = stripe.checkout.Session.create(
-            success_url=f'{self.absolute_domain}{self.return_url}{self.paiement_stripe_db.uuid}',
-            cancel_url=f'{self.absolute_domain}{self.return_url}{self.paiement_stripe_db.uuid}',
-            payment_method_types=["card"],
-            customer_email=f'{self.user.email}',
-            line_items=self.line_items,
-            mode='payment',
-            metadata=self.metadata,
-            client_reference_id=f"{self.user.pk}",
-        )
+
+        data_checkout = {
+            'success_url' : f'{self.absolute_domain}{self.return_url}{self.paiement_stripe_db.uuid}',
+            'cancel_url' : f'{self.absolute_domain}{self.return_url}{self.paiement_stripe_db.uuid}',
+            'payment_method_types' : ["card"],
+            'customer_email' : f'{self.user.email}',
+            'line_items' : self.line_items,
+            'mode' : self.mode,
+            'metadata' : self.metadata,
+            'client_reference_id' : f"{self.user.pk}",
+        }
+        checkout_session = stripe.checkout.Session.create(**data_checkout)
+
         print("-"*40)
         print(f"Création d'un nouveau paiment stripe. Metadata : {self.metadata}")
         print(f"checkout_session.id {checkout_session.id} payment_intent : {checkout_session.payment_intent}")

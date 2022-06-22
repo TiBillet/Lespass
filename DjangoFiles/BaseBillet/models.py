@@ -25,6 +25,7 @@ from django.utils.translation import ugettext_lazy as _
 from stdimage import StdImageField
 from stdimage.validators import MaxSizeValidator, MinSizeValidator
 from django.db import connection
+from stripe.error import InvalidRequestError
 
 import AuthBillet.models
 from Customers.models import Client
@@ -243,12 +244,10 @@ class Configuration(SingletonModel):
         verbose_name=_("Template Meta")
     )
 
-
     ### MailJet ###
 
     activate_mailjet = models.BooleanField(default=False)
     email_confirm_template = models.IntegerField(default=3898061)
-
 
 
 class Product(models.Model):
@@ -293,6 +292,7 @@ class Product(models.Model):
                                          verbose_name=_("Type d'article"))
 
     send_to_cashless = models.BooleanField(default=False)
+
     # id_product_stripe = models.CharField(max_length=30, null=True, blank=True)
 
     def __str__(self):
@@ -305,7 +305,7 @@ class Price(models.Model):
 
     short_description = models.CharField(max_length=250, blank=True, null=True)
     long_description = models.TextField(blank=True, null=True)
-    
+
     name = models.CharField(max_length=50)
     prix = models.FloatField()
 
@@ -331,7 +331,6 @@ class Price(models.Model):
                                              related_name="adhesion_obligatoire",
                                              blank=True, null=True)
 
-
     NA, YEAR, MONTH, CIVIL = 'N', 'Y', 'M', 'C'
     SUB_CHOICES = [
         (NA, _('Non applicable')),
@@ -341,10 +340,10 @@ class Price(models.Model):
     ]
 
     subscription_type = models.CharField(max_length=1,
-                           choices=SUB_CHOICES,
-                           default=NA,
-                           verbose_name=_("durée d'abonnement"),
-                           )
+                                         choices=SUB_CHOICES,
+                                         default=NA,
+                                         verbose_name=_("durée d'abonnement"),
+                                         )
 
     def range_max(self):
         return range(self.max_per_user + 1)
@@ -354,6 +353,7 @@ class Price(models.Model):
 
     class Meta:
         unique_together = ('name', 'product')
+
 
 class Event(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
@@ -400,7 +400,7 @@ class Event(models.Model):
                 'thumbnail': self.img.thumbnail.url,
             }
         elif self.artists.all().count() > 0:
-            artist_on_event : Artist_on_event = self.artists.all()[0]
+            artist_on_event: Artist_on_event = self.artists.all()[0]
             tenant: Client = artist_on_event.artist
             with tenant_context(tenant):
                 img = Configuration.get_solo().img
@@ -466,6 +466,7 @@ class Artist_on_event(models.Model):
         with tenant_context(self.artist):
             return Configuration.get_solo()
 
+
 @receiver(post_save, sender=Artist_on_event)
 def add_to_public_event_directory(sender, instance: Artist_on_event, created, **kwargs):
     place = connection.tenant
@@ -477,7 +478,6 @@ def add_to_public_event_directory(sender, instance: Artist_on_event, created, **
             place=place,
             artist=artist,
         )
-
 
 
 class ProductSold(models.Model):
@@ -506,8 +506,8 @@ class ProductSold(models.Model):
         else:
             return f"{self.product.name} - {connection.tenant}"
 
-    def get_id_product_stripe(self):
-        if self.id_product_stripe:
+    def get_id_product_stripe(self, force=False):
+        if self.id_product_stripe and not force:
             return self.id_product_stripe
 
         stripe.api_key = Configuration.get_solo().get_stripe_api()
@@ -549,24 +549,37 @@ class PriceSold(models.Model):
     def __str__(self):
         return self.price.name
 
-    def get_id_price_stripe(self):
-        if self.id_price_stripe:
+    def get_id_price_stripe(self, force=False):
+        if self.id_price_stripe and not force:
             return self.id_price_stripe
 
         stripe.api_key = Configuration.get_solo().get_stripe_api()
 
-        recurring = False
-        if self.price.subscription_type == Price.YEAR:
-            recurring={"interval": "month"}
-        elif self.price.subscription_type == Price.MONTH:
-            recurring={"interval": "year"}
+        try :
+            product_stripe = self.productsold.get_id_product_stripe()
+            stripe.Product.retrieve(product_stripe)
+        except InvalidRequestError:
+            product_stripe = self.productsold.get_id_product_stripe(force=True)
 
-        price = stripe.Price.create(
-            unit_amount=int("{0:.2f}".format(self.price.prix).replace('.', '')),
-            currency="eur",
-            product=self.productsold.get_id_product_stripe(),
-            nickname=f"{self.price.name}",
-        )
+        data_stripe = {
+            'unit_amount': int("{0:.2f}".format(self.price.prix).replace('.', '')),
+            'currency': "eur",
+            'product': product_stripe,
+            'nickname': f"{self.price.name}",
+        }
+
+        if self.price.subscription_type == Price.MONTH:
+            data_stripe['recurring'] = {
+                "interval": "month",
+                "interval_count": 1
+            }
+        elif self.price.subscription_type == Price.YEAR:
+            data_stripe['recurring'] = {
+                "interval": "year",
+                "interval_count": 1
+            }
+
+        price = stripe.Price.create(**data_stripe)
 
         self.id_price_stripe = price.id
         self.save()
@@ -892,12 +905,12 @@ class Membership(models.Model):
     '''
 
     def deadline(self):
-        if self.last_contribution and self.price :
-            if self.price.subscription_type == Price.YEAR :
+        if self.last_contribution and self.price:
+            if self.price.subscription_type == Price.YEAR:
                 return self.last_contribution + timedelta(days=365)
-            if self.price.subscription_type == Price.MONTH :
+            if self.price.subscription_type == Price.MONTH:
                 return self.last_contribution + timedelta(days=31)
-            if self.price.subscription_type == Price.CIVIL :
+            if self.price.subscription_type == Price.CIVIL:
                 return datetime.strptime(f'{self.last_contribution.year}-12-31', '%Y-%m-%d').date()
 
         return None
@@ -907,6 +920,7 @@ class Membership(models.Model):
             if datetime.now().date() < self.deadline():
                 return True
         return False
+
     is_valid.boolean = True
 
     def price_name(self):
@@ -916,13 +930,13 @@ class Membership(models.Model):
 
     def product_name(self):
         if self.price:
-            if self.price.product :
+            if self.price.product:
                 return self.price.product.name
         return None
 
     def product_uuid(self):
         if self.price:
-            if self.price.product :
+            if self.price.product:
                 return self.price.product.uuid
         return None
 
@@ -933,4 +947,3 @@ class Membership(models.Model):
             return f"{self.last_name} {self.first_name}"
         else:
             return f"{self.last_name}"
-
