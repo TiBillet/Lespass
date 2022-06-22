@@ -302,24 +302,6 @@ OAUTH_CLIENT = {
 }
 OAUTH_COOKIE_SESSION_ID = 'sso_session_id'
 
-# AUTHLIB_OAUTH_CLIENTS = {
-#     'communecter': {
-#         'name':'communecter',
-#         'client_id': os.environ.get('COMMUNECTER_SSO_CLIENTID'),
-#         'client_secret': os.environ.get('COMMUNECTER_SSO_SECRET'),
-#         'request_token_url': 'https://sso.communecter.org/oauth/token',
-#         'request_token_params': None,
-#         'access_token_url': 'https://sso.communecter.org/oauth/token',
-#         'access_token_params': None,
-#         'refresh_token_url': None,
-#         'authorize_url': 'https://sso.communecter.org/oauth/authorize',
-#         'api_base_url': 'https://sso.communecter.org/oauth',
-#         'client_kwargs': {
-#             'scope': 'profile email',
-#             'token_placement': 'header'
-#         },
-#     }
-# }
 # -------------------------------------/
 
 

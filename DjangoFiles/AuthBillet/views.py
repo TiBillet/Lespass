@@ -245,13 +245,16 @@ class OAauthCallback(APIView):
 
                 uid = encode_uid(user.pk)
                 token = default_token_generator.make_token(user)
-                base_url = request.build_absolute_uri('/emailconfirmation').replace('http://', 'https://')
-                connexion_url = f"{base_url}/{uid}/{token}"
-                return HttpResponseRedirect(connexion_url)
+                redirect_uri = request.build_absolute_uri(f'/emailconfirmation/{uid}/{token}')\
+                    .replace('http://', 'https://')
+                return HttpResponseRedirect(redirect_uri)
 
 
             else :
-                return 'merci de vérifier votre email'
+                get_or_create_user(user_info.get('email'))
+                redirect_uri = request.build_absolute_uri().replace('http://', 'https://')
+                return HttpResponseRedirect(redirect_uri)
+
         else :
             return Response('Access not Ok', status=status.HTTP_401_UNAUTHORIZED)
 
