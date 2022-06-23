@@ -116,16 +116,16 @@ export const useLocalStore = defineStore({
     },
     async getMe(accessToken) {
       // console.log('-> action getMe, accessToken =', accessToken)
-      const apiMe = `/api/user/me/`
-      const options = {
-        method: 'GET',
-        cache: 'no-cache',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken} `
-        }
-      }
       try {
+        const apiMe = `/api/user/me/`
+        const options = {
+          method: 'GET',
+          cache: 'no-cache',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${window.accessToken} `
+          }
+        }
         const response = await fetch(domain + apiMe, options)
         // console.log('response =', response)
         if (response.status === 200) {

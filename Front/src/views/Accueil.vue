@@ -1,14 +1,14 @@
 <template>
-    <div class="container mt-5">
-      <div class="row">
-        <div class="col-lg-4 col-md-6 mb-2" v-for="(event, index) in events" :key="index">
-          <CardEvent :event="event" />
-        </div>
+  <div class="container mt-5">
+    <div class="row">
+      <div class="col-lg-4 col-md-6 mb-2" v-for="(event, index) in events" :key="index">
+        <CardEvent :event="event"/>
       </div>
     </div>
-    <div id="calendar" class="container">
-      <!-- <Calendar categorie-article="B"/> -->
-    </div>
+  </div>
+  <div id="calendar" class="container">
+    <!-- <Calendar categorie-article="B"/> -->
+  </div>
 </template>
 
 <script setup>

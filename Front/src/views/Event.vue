@@ -105,25 +105,6 @@ function formatBodyPost() {
     }
   }
 
-  // adhésion
-/*
-  if (adhesion.activation === true) {
-    console.log('adhesion =', adhesion)
-    const obj = {
-      uuid: adhesion.uuidPrix,
-      qty: 1,
-      customers: [{
-        first_name: adhesion.first_name,
-        last_name: adhesion.last_name,
-        phone: adhesion.phone,
-        postal_code: adhesion.postal_code,
-        birth_date: "1984-04-18"
-      }]
-    }
-    body.prices.push(obj)
-  }
-*/
-
   // gifts
   for (const giftKey in form.gifts) {
     const gift = form.gifts[giftKey]

@@ -222,7 +222,6 @@ function validerAdhesion(event) {
         postal_code: adhesion.value.postal_code,
         adhesion: adhesion.value.adhesion
       })
-
     } else {
       // formulaire non valide
       console.log('-> pas valide !')
