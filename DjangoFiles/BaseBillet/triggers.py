@@ -101,7 +101,6 @@ class action_article_paid_by_categorie:
     def trigger_A(self):
 
         logger.info(f"TRIGGER ADHESION")
-        logger.info(f"    Envoie celery task.send_membership_to_cashless")
 
         user = self.ligne_article.paiement_stripe.user
         price: Price = self.ligne_article.pricesold.price
@@ -118,6 +117,7 @@ class action_article_paid_by_categorie:
         membership.save()
 
         if product.send_to_cashless:
+            logger.info(f"    Envoie celery task.send_membership_to_cashless")
             data = {
                 "ligne_article_pk": self.ligne_article.pk,
             }

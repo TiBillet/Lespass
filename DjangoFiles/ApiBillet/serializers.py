@@ -578,7 +578,7 @@ class MembreValidator(serializers.Serializer):
         if not created:
             if self.fiche_membre.is_valid():
                 raise serializers.ValidationError(
-                    _(f"L'abonnement existe et est valide jusque : {self.fiche_membre.deadline()}"))
+                    _(f"Un abonnement sur ce mail existe déjà et est valide jusque : {self.fiche_membre.deadline()}"))
 
         if not self.fiche_membre.first_name:
             if not self.initial_data.get('first_name'):
