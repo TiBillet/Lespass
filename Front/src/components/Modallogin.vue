@@ -8,22 +8,38 @@
           <div class="card card-plain">
             <div class="card-header pb-0 text-left">
               <h3 class="font-weight-bolder text-info text-gradient">Connectez vous</h3>
-              <!-- <p class="mb-0">Entrez votre email</p> -->
             </div>
             <div class="card-body">
               <form role="form text-left" @submit.prevent="validerLogin($event)">
-                <div class="input-group mb-3">
+                <div class="input-group">
                   <input id="login-email" :value="adhesion.email" laria-describedby="email-addon" aria-label="Email"
                          class="form-control" placeholder="Email" type="email"
                          pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$" required>
                 </div>
                 <div class="text-center">
-                  <button class="btn btn-round bg-gradient-info btn-lg w-100 mt-4 mb-0 btn-sm" type="submit">Valider</button>
-                </div>
-                <div class="text-center mt-2">
-                  <a class="text-info" type="submit">Se connecter avec communecter</a>
+                  <button class="btn btn-round bg-gradient-info btn-lg w-75 mt-4 mb-0 h-46px" type="submit">Valider
+                  </button>
                 </div>
               </form>
+
+              <div class="d-flex flex-row justify-content-center mt-5 mb-3">
+                <hr class="text-dark w-50">
+              </div>
+
+              <div class="text-center mt-2 mb-3">
+                <!--  -->
+
+                <button class="btn btn-round bg-gradient-info btn-lg w-75 mt-4 mb-0 h-46px" type="button"
+                        @click="goCommunecter()">
+                  <div class="d-flex flex-row justify-content-center align-items-center">
+                    <img :src="communecterLogo">
+                    <div class="d-flex flex-column mb-0">
+                      <span>Se connecter à</span>
+                      <span>communecter</span>
+                    </div>
+                  </div>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -36,6 +52,10 @@
 import {storeToRefs} from 'pinia'
 import {useAllStore} from '@/stores/all'
 
+// asset
+// import communecterLogo from '@/assets/img/co-04.png'
+import communecterLogo from '@/assets/img/communecterLogo_31x28.png'
+
 // const {adhesion} = useLocalStore()
 const domain = `${location.protocol}//${location.host}`
 const {adhesion, loading, error} = storeToRefs(useAllStore())
@@ -46,7 +66,6 @@ async function validerLogin(event) {
     const email = document.querySelector('#login-email').value
     console.log('-> validerLogin, email =', email)
     adhesion.email = email
-
 
     const api = `/api/user/create/`
     try {
@@ -83,7 +102,14 @@ async function validerLogin(event) {
   }
   loading.value = false
 }
+
+function goCommunecter() {
+  location.href = '/api/user/requestoauth/'
+}
 </script>
 
-<style>
+<style scoped>
+.h-46px {
+  height: 46px;
+}
 </style>

@@ -1,7 +1,7 @@
 // store
 import {defineStore} from 'pinia'
 
-const domain = `${location.protocol}//${location.host}`
+const domain = `${window.location.protocol}//${window.location.host}`
 
 export const useAllStore = defineStore({
   id: 'all',

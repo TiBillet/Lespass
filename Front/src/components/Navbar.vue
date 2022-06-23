@@ -63,7 +63,7 @@
              role="button"
              data-bs-toggle="modal" data-bs-target="#modal-form-login">
             <i class="fa fa-user-circle-o me-1 text-white" aria-hidden="true"></i>
-            <h6 class="m-0 text-white">Se connecter</h6>
+            <h6 class="m-0 text-white" data-test-id="seConnecter">Se connecter</h6>
           </a>
         </li>
 
@@ -127,25 +127,6 @@ function disconnect() {
     status: ''
   }
 }
-
-/*
-function dateToFrenchFormat(dateString) {
-  const nomMois = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
-  const dateArray = dateString.split('T')[0].split('-')
-  const mois = nomMois[parseInt(dateArray[1])]
-  return dateArray[2] + ' ' + mois + ' ' + dateArray[0]
-}
-
-async function updateMe() {
-  if (window.accessToken !== '') {
-    loading.value = true
-    me.value = await getMe(window.accessToken)
-    loading.value = false
-    return {error: 0}
-  }
-  return {error: 1, message: 'Access token inconnu !'}
-}
-*/
 
 // menu transparant / non transparant
 window.addEventListener("scroll", () => {

@@ -34,7 +34,6 @@ const router = useRouter()
 
 // load events and update data header
 getEvents()
-
 </script>
 
 <style>
