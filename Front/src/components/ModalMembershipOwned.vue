@@ -1,7 +1,6 @@
 <template>
   <div class="modal fade" id="membership-owned-modal" tabindex="-1" role="dialog"
-       aria-labelledby="Exemple de message sous forme d'un modal."
-       aria-hidden="true">
+       aria-labelledby="memberships !" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl" role="document">
       <div class="modal-content">
         <div class="modal-header">
@@ -24,7 +23,7 @@
               <div class="d-flex justify-content-between align-items-center">
                 <h5>Email : {{ adhesion.email }}</h5>
                 <button class="btn btn-secondary btn-sm mt-4" aria-pressed="true"
-                        @click="cancelMembership(adhesion.price)">
+                        @click="confirmMembershipTermination(adhesion.price)">
                   <div class="d-flex justify-content-star align-items-center">
                     <div>Résilier</div>
                     <i class="fa fa-trash fa-fw ms-2" aria-hidden="true"></i>
@@ -37,6 +36,30 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn bg-gradient-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- confirmation résiliation -->
+  <div class="modal fade" id="membership-termination-modal" tabindex="-1" role="dialog"
+       aria-labelledby="Membership termination !" aria-hidden="true">
+    <div class="modal-dialog modal-danger modal-dialog-centered modal-" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h6 class="modal-title" id="modal-title-notification">Attention</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="py-3 text-center">
+            <i class="ni ni-bell-55 ni-3x"></i>
+            <h4 class="text-gradient text-danger mt-4">Etes-vous certain de vouloir résilier cette adhésion ?</h4>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-white" @click="cancelMembership()">Valider</button>
+          <button type="button" class="btn btn-link text-primary ml-auto" data-bs-dismiss="modal">Sortir</button>
         </div>
       </div>
     </div>
@@ -64,7 +87,21 @@ function dateToFrenchFormat(dateString) {
   }
 }
 
-async function cancelMembership(uuidPrice) {
+function confirmMembershipTermination(uuidPrice) {
+  const terminationModal = new bootstrap.Modal(document.querySelector('#membership-termination-modal'))
+  terminationModal.uuidPrice = uuidPrice
+  terminationModal.show()
+}
+
+async function cancelMembership() {
+  // récup uuid price
+  const terminationModal = document.querySelector('#membership-termination-modal')
+  const modal = bootstrap.Modal.getInstance(terminationModal)
+  console.log('modal =', modal.uuidPrice)
+
+  // effacer modal confirmation
+  modal.hide()
+
   const api = `/api/cancel_sub/`
   try {
     loading.value = true
@@ -73,9 +110,9 @@ async function cancelMembership(uuidPrice) {
       cache: 'no-cache',
       headers: {
         'Content-Type': 'application/json',
-         'Authorization': `Bearer ${accessToken} `
+        'Authorization': `Bearer ${accessToken} `
       },
-      body: JSON.stringify({'uuid_price': uuidPrice})
+      body: JSON.stringify({'uuid_price': modal.uuidPrice})
     })
     const retour = await response.json()
     console.log('retour =', retour)
@@ -86,7 +123,6 @@ async function cancelMembership(uuidPrice) {
     error.value = erreur
   }
 }
-
 </script>
 
 <style scoped>

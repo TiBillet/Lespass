@@ -1,5 +1,5 @@
 <template>
-  <Loading v-if="loading === true"/>
+  <Loading v-if="testLoading() === true"/>
   <Navbar/>
   <Header/>
   <p v-if="error !== null" class="text-dark">{{ error }}</p>
@@ -11,9 +11,9 @@
     -->
   <ModalMessage/>
   <Modallogin/>
-  <ModalMembershipOwned />
-  <ModalCardsList />
-  <ModalReservationList />
+  <ModalMembershipOwned/>
+  <ModalCardsList/>
+  <ModalReservationList/>
 </template>
 
 <script setup>
@@ -54,6 +54,19 @@ import '@/assets/js/now-design-system-pro.js'
 
 // console.log('dataHeader =', dataHeader)
 const {loading, error} = storeToRefs(useAllStore())
+
+// return loading value and lock/unlock scroll
+function testLoading() {
+  if (loading.value === true) {
+    document.querySelector('body').style.overflow = 'hidden'
+    document.body.style.userSelect = "none"
+    return true
+  } else {
+    document.querySelector('body').style.overflow = 'auto'
+    document.body.style.userSelect = "auto"
+    return false
+  }
+}
 </script>
 
 <style scoped>

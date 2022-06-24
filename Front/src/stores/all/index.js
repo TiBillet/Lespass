@@ -6,6 +6,8 @@ const domain = `${window.location.protocol}//${window.location.host}`
 export const useAllStore = defineStore({
   id: 'all',
   state: () => ({
+    loading: false,
+    error: null,
     language: 'fr',
     events: {},
     place: {},
@@ -24,9 +26,7 @@ export const useAllStore = defineStore({
       adhesion: '',
       // status: '',
       readConditions: false
-    },
-    loading: false,
-    error: null
+    }
   }),
   actions: {
     async getEvents() {
