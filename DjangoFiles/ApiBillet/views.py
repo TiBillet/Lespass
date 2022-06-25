@@ -29,17 +29,18 @@ from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSeria
     ReservationValidator, MembreValidator, ConfigurationSerializer, NewConfigSerializer, \
     EventCreateSerializer, TicketSerializer, OptionTicketSerializer, ChargeCashlessValidator, NewAdhesionValidator
 from AuthBillet.models import TenantAdminPermission, TibilletUser
+from AuthBillet.utils import get_or_create_user
 from BaseBillet.tasks import create_ticket_pdf, redirect_post_webhook_stripe_from_public
 from Customers.models import Client, Domain
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe, \
-    OptionGenerale, Membership
+    OptionGenerale, Membership, PriceSold
 from rest_framework import viewsets, permissions, status
 from django.db import connection, IntegrityError
 
 import os
 import logging
 
-from MetaBillet.models import EventDirectory
+from MetaBillet.models import EventDirectory, ProductDirectory
 
 logger = logging.getLogger(__name__)
 
@@ -336,7 +337,11 @@ class HereViewSet(viewsets.ViewSet):
         dict_return = {'uuid': f"{connection.tenant.uuid}"}
         dict_return.update(place_serialized.data)
 
-        products_adhesion = Product.objects.filter(categorie_article=Product.ADHESION)
+        products_adhesion = Product.objects.filter(
+            categorie_article=Product.ADHESION,
+            prices__isnull=False
+        ).distinct()
+
         if len(products_adhesion) > 0:
             products_serializer = ProductSerializer(products_adhesion, many=True)
             dict_return['membership_products'] = products_serializer.data
@@ -718,7 +723,6 @@ class MembershipViewset(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
-
 class TicketPdf(APIView):
     permission_classes = [AllowAny]
 
@@ -807,11 +811,12 @@ def paiment_stripe_validator(request, paiement_stripe):
         if paiement_stripe.status == Paiement_stripe.VALID or paiement_stripe.reservation.status == Reservation.VALID:
             serializer = TicketSerializer(paiement_stripe.reservation.tickets.filter(status=Ticket.NOT_SCANNED),
                                           many=True, context=request)
-            # import ipdb; ipdb.set_trace()
+
             data = {
                 "msg": 'Paiement validé. Billets envoyés par mail.',
                 "tickets": serializer.data,
             }
+
             return Response(
                 data,
                 status=status.HTTP_208_ALREADY_REPORTED
@@ -824,6 +829,7 @@ def paiment_stripe_validator(request, paiement_stripe):
     if paiement_stripe.status != Paiement_stripe.VALID:
 
         checkout_session = stripe.checkout.Session.retrieve(paiement_stripe.checkout_session_id_stripe)
+        paiement_stripe.customer_stripe = checkout_session.customer
 
         # Vérifie que les metatada soient cohérentes. #NTUI !
         if metatadata_valid(paiement_stripe, checkout_session):
@@ -831,7 +837,9 @@ def paiment_stripe_validator(request, paiement_stripe):
                 paiement_stripe.status = Paiement_stripe.PENDING
                 if datetime.now().timestamp() > checkout_session.expires_at:
                     paiement_stripe.status = Paiement_stripe.EXPIRE
+
                 paiement_stripe.save()
+
                 return Response(
                     _(f'stripe : {checkout_session.payment_status} - paiement : {paiement_stripe.status}'),
                     status=status.HTTP_402_PAYMENT_REQUIRED
@@ -850,6 +858,18 @@ def paiment_stripe_validator(request, paiement_stripe):
                 paiement_stripe.last_action = timezone.now()
                 paiement_stripe.traitement_en_cours = True
 
+                # On va chercher le numéro de l'abonnement stripe
+                # Et sa facture
+                if checkout_session.mode == 'subscription':
+                    if bool(checkout_session.subscription):
+                        paiement_stripe.subscription = checkout_session.subscription
+                        subscription = stripe.Subscription.retrieve(
+                            checkout_session.subscription,
+                        )
+                        paiement_stripe.invoice_stripe = subscription.latest_invoice
+
+
+                # TODO: ya pu de get, tout est POST, même la requete depuis le front vue.js
                 if request.method == 'GET':
                     paiement_stripe.source_traitement = Paiement_stripe.GET
                 else:
@@ -944,13 +964,19 @@ def paiment_stripe_validator(request, paiement_stripe):
 
 @permission_classes([permissions.AllowAny])
 class Webhook_stripe(APIView):
+
     def post(self, request):
         payload = request.data
-
+        logger.info(f" ")
+        logger.info(f"----- > Webhook_stripe : {payload.get('type')}")
+        logger.info(f" ")
         # c'est une requete depuis les webhook
         # configuré dans l'admin stripe
         if payload.get('type') == "checkout.session.completed":
-            logger.info(f"Webhook_stripe from stripe : {payload}")
+            logger.info(f" ")
+            logger.info(f"Webhook_stripe checkout.session.completed : {payload}")
+
+            # logger.info(f"   --> checkout.session.completed")
             tenant_uuid_in_metadata = payload["data"]["object"]["metadata"]["tenant"]
             # if connection.tenant.schema_name == "public":
             if f"{connection.tenant.uuid}" != tenant_uuid_in_metadata:
@@ -973,14 +999,87 @@ class Webhook_stripe(APIView):
 
             logger.info(f"checkout.session.completed : {payload}")
 
-            paiement_stripe = get_object_or_404(Paiement_stripe,
-                                                checkout_session_id_stripe=payload['data']['object']['id'])
+            paiement_stripe = get_object_or_404(
+                Paiement_stripe,
+                checkout_session_id_stripe=payload['data']['object']['id']
+            )
+
             return paiment_stripe_validator(request, paiement_stripe)
+
+
+        elif payload.get('type') == "charge.succeeded":
+            logger.info(f" ")
+            logger.info(f"Webhook_stripe charge.succeeded : {payload}")
+            description = payload['data']['object']['description']
+            logger.info(f"     description : {description}")
+            if description == 'Subscription update' :
+                invoice = payload['data']['object']['invoice']
+                logger.info(f"     invoice : {invoice}")
+                logger.info(f"     Nouvelle facture inconnue ! : {invoice}")
+
+
+
+
+        #     # TODO: rajouter l'id sub stripe dans l'objet abonnement
+        # elif payload.get('type') == "customer.subscription.created":
+        #     logger.info(f" ")
+        #     logger.info(f"Webhook_stripe customer.subscription.created : {payload}")
+        #     pass
+
+        # prélèvement automatique d'un abonnement.
+        elif payload.get('type') == "customer.subscription.updated":
+            logger.info(f" ")
+            logger.info(f"Webhook_stripe customer.subscription.updated : {payload}")
+
+            payload_object = payload['data']['object']
+            product_sold_stripe_id = payload_object['plan']['product']
+            invoice = payload_object['latest_invoice']
+
+            # La requete vient de stripe, le webhook envoi sur le tenant public
+            # On va chercher le tenant de l'abonnement grâce à l'id du product stripe
+            # dans la requete POST
+            with schema_context('public'):
+                product = ProductDirectory.objects.get(
+                    product_sold_stripe_id = product_sold_stripe_id,
+                )
+                place = product.place
+
+            # On a le tenant, on va chercher l'abonnement
+            with tenant_context(place):
+                try :
+                    membership = Membership.objects.get(
+                            stripe_id_subscription=payload_object['id']
+                        )
+                    last_stripe_invoice = membership.last_stripe_invoice
+                    if invoice != last_stripe_invoice :
+                        logger.info(    (f'    nouvelle facture arrivée : {invoice}'))
+                        #TODO: gerer la nouvelle facture en créant un nouveau paiement stripe et en le validant
+
+                    else :
+                        logger.info(    (f'    facture déja créée et comptabilisée : {invoice}'))
+
+                except Membership.DoesNotExist:
+                    logger.info(    (f'    Nouvelle adhésion, facture pas encore comptabilisée : {invoice}'))
+                except Exception:
+                    logger.error(    (f'    erreur dans Webhook_stripe customer.subscription.updated : {Exception}'))
+                    raise Exception
+
+                # configuration = Configuration.get_solo()
+                # stripe.api_key = configuration.get_stripe_api()
+                # customer_stripe = stripe.Customer.retrieve(id_customer_stripe)
+                # current_period_start = datetime.fromtimestamp(int(payload_object['current_period_start']))
+                # current_period_end = datetime.fromtimestamp(int(payload_object['current_period_end']))
+                # logger.info(f"     current_period_start : {current_period_start}")
+                # logger.info(f"     current_period_start : {current_period_end}")
+
+
+
+
 
         # c'est une requete depuis vue.js.
         post_from_front_vue_js = payload.get('uuid')
         if post_from_front_vue_js:
-            logger.info(f"Webhook_stripe from vue.js : {payload}")
+            logger.info(f"Webhook_stripe post_from_front_vue_js : {payload}")
             paiement_stripe = get_object_or_404(Paiement_stripe,
                                                 uuid=post_from_front_vue_js)
             return paiment_stripe_validator(request, paiement_stripe)

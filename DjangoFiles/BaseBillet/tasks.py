@@ -400,6 +400,13 @@ def terminal_pairing_celery_mailer(term_user_email, subject=None):
         raise Exception
 
 
+# @app.task
+# def abonnement_celery_mailer(abonnement_price_uuid: str, base_url):
+#     logger.info(f'      WORKDER CELERY app.task abonnement_celery_mailer : {abonnement_price_uuid}')
+#     config = Configuration.get_solo()
+
+
+
 @app.task
 def ticket_celery_mailer(reservation_uuid: str, base_url):
     logger.info(f'      WORKDER CELERY app.task ticket_celery_mailer : {reservation_uuid}')

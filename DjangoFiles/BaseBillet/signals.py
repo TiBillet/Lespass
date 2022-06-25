@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 ########################################################################
 
 
-######################## TRIGGER PAIEMENT STRIPE ########################
+######################## SIGNAL PAIEMENT STRIPE ########################
 
 
 def set_ligne_article_paid(old_instance, new_instance):
@@ -31,7 +31,7 @@ def set_ligne_article_paid(old_instance, new_instance):
     old_instance: Paiement_stripe
     new_instance: Paiement_stripe
 
-    logger.info(f"    TRIGGER PAIEMENT STRIPE set_ligne_article_paid {new_instance}.")
+    logger.info(f"    SIGNAL PAIEMENT STRIPE set_ligne_article_paid {new_instance}.")
     logger.info(f"        On passe toutes les lignes d'article non validées en payées !")
 
     lignes_article = new_instance.lignearticle_set.exclude(status=LigneArticle.VALID)
@@ -48,15 +48,15 @@ def set_ligne_article_paid(old_instance, new_instance):
 
 
 def expire_paiement_stripe(old_instance, new_instance):
-    logger.info(f"    TRIGGER PAIEMENT STRIPE expire_paiement_stripe {old_instance.status} to {new_instance.status}")
+    logger.info(f"    SIGNAL PAIEMENT STRIPE expire_paiement_stripe {old_instance.status} to {new_instance.status}")
     pass
 
 
 def valide_stripe_paiement(old_instance, new_instance):
-    logger.info(f"    TRIGGER PAIEMENT STRIPE valide_stripe_paiement {old_instance.status} to {new_instance.status}")
+    logger.info(f"    SIGNAL PAIEMENT STRIPE valide_stripe_paiement {old_instance.status} to {new_instance.status}")
 
 
-######################## TRIGGER LIGNE ARTICLE ########################
+######################## SIGNAL LIGNE ARTICLE ########################
 
 # post_save ici nécéssaire pour mettre a jour le status du paiement stripe en validé
 # si toutes les lignes articles sont save en VALID.
@@ -67,7 +67,7 @@ def set_paiement_stripe_valid(old_instance: LigneArticle, new_instance: LigneArt
         # Si paiement stripe :
         if new_instance.paiement_stripe:
             logger.info(
-                f"    TRIGGER LIGNE ARTICLE set_paiement_and_reservation_valid {new_instance.pricesold}. On test si toute les lignes sont validées")
+                f"    SIGNAL LIGNE ARTICLE set_paiement_and_reservation_valid {new_instance.pricesold}. On test si toute les lignes sont validées")
 
             # On exclut l'instance en cours, car elle n'est pas encore validée en DB : on est sur du signal pre_save
             # on teste ici : Si toutes les autres lignes sont valides et que celle ci l'est aussi.
@@ -124,10 +124,10 @@ def send_to_cashless(instance: LigneArticle):
 
 def check_paid(old_instance: LigneArticle, new_instance: LigneArticle):
     logger.info(
-        f"    TRIGGER LIGNE ARTICLE check_paid {old_instance.pricesold} new_instance status : {new_instance.status}")
+        f"    SIGNAL LIGNE ARTICLE check_paid {old_instance.pricesold} new_instance status : {new_instance.status}")
     action_article_paid_by_categorie(new_instance)
     logger.info(
-        f"    TRIGGER LIGNE ARTICLE check_paid {old_instance.pricesold} new_instance status : {new_instance.status}")
+        f"    SIGNAL LIGNE ARTICLE check_paid {old_instance.pricesold} new_instance status : {new_instance.status}")
     set_paiement_stripe_valid(old_instance, new_instance)
 
     '''
@@ -138,7 +138,7 @@ def check_paid(old_instance: LigneArticle, new_instance: LigneArticle):
     '''
 
 
-######################## TRIGGER RESERVATION ########################
+######################## SIGNAL RESERVATION ########################
 
 # @receiver(post_save, sender=Reservation)
 # def send_billet_to_mail(sender, instance: Reservation, **kwargs):
@@ -148,7 +148,7 @@ def send_billet_to_mail(old_instance: Reservation, new_instance: Reservation):
         # On prend aussi ceux qui sont déja activé ( avec les Q() )
         # pour pouvoir les envoyer par mail en cas de nouvelle demande
         for ticket in new_instance.tickets.filter(Q(status=Ticket.NOT_ACTIV) | Q(status=Ticket.NOT_SCANNED)):
-            logger.info(f'trigger_reservation, activation des tickets {ticket} NOT_SCANNED')
+            logger.info(f'signal_reservation, activation des tickets {ticket} NOT_SCANNED')
             ticket.status = Ticket.NOT_SCANNED
             ticket.save()
 
@@ -156,7 +156,7 @@ def send_billet_to_mail(old_instance: Reservation, new_instance: Reservation):
 
     # On vérifie que le mail n'a pas déja été envoyé
     if not new_instance.mail_send:
-        logger.info(f"    TRIGGER RESERVATION send_billet_to_mail {new_instance.status}")
+        logger.info(f"    SIGNAL RESERVATION send_billet_to_mail {new_instance.status}")
 
         if new_instance.user_commande.email:
             # import ipdb; ipdb.set_trace()
@@ -165,14 +165,14 @@ def send_billet_to_mail(old_instance: Reservation, new_instance: Reservation):
             # https://github.com/psf/requests/issues/5832
     else:
         logger.info(
-            f"    TRIGGER RESERVATION mail déja envoyé {new_instance} : {new_instance.mail_send} - status : {new_instance.status}")
+            f"    SIGNAL RESERVATION mail déja envoyé {new_instance} : {new_instance.mail_send} - status : {new_instance.status}")
         set_paiement_valid(old_instance, new_instance)
 
 
 def set_paiement_valid(old_instance: Reservation, new_instance: Reservation):
     if new_instance.mail_send:
         logger.info(
-            f"    TRIGGER RESERVATION set_paiement_valid Mail envoyé {new_instance.mail_send},"
+            f"    SIGNAL RESERVATION set_paiement_valid Mail envoyé {new_instance.mail_send},"
             f" on valide les paiements payés")
         for paiement in new_instance.paiements.filter(status=Paiement_stripe.PAID):
             paiement.status = Paiement_stripe.VALID
@@ -181,12 +181,12 @@ def set_paiement_valid(old_instance: Reservation, new_instance: Reservation):
 
 
 def error_in_mail(old_instance: Reservation, new_instance: Reservation):
-    logger.info(f"    TRIGGER RESERVATION error_in_mail")
+    logger.info(f"    SIGNAL RESERVATION error_in_mail")
     new_instance.paiements.all().update(traitement_en_cours=False)
     # TODO: Prévenir l'admin q'un billet a été acheté, mais pas envoyé
 
 
-######################## TRIGGER TIBILLETUSER ########################
+######################## SIGNAL TIBILLETUSER ########################
 
 def activator_free_reservation(old_instance: TibilletUser, new_instance: TibilletUser):
     logger.info(f"activator_free_reservation : {new_instance}")
@@ -202,10 +202,10 @@ def activator_free_reservation(old_instance: TibilletUser, new_instance: Tibille
             resa.status = Reservation.FREERES_USERACTIV
             resa.save()
 
-######################## MOTEUR TRIGGER ########################
+######################## MOTEUR SIGNAL ########################
 
 def error_regression(old_instance, new_instance):
-    logger.info(f"models_trigger erreur_regression {old_instance.status} to {new_instance.status}")
+    logger.info(f"models_signal erreur_regression {old_instance.status} to {new_instance.status}")
     logger.error(f"######################## error_regression ########################")
     # raise Exception('Regression de status impossible.')
     pass

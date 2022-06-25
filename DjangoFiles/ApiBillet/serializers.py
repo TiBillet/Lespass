@@ -550,7 +550,8 @@ class NewAdhesionValidator(serializers.Serializer):
 
 class MembreValidator(serializers.Serializer):
     adhesion = serializers.PrimaryKeyRelatedField(
-        queryset=Price.objects.filter(product__categorie_article=Product.ADHESION))
+        queryset=Price.objects.filter(product__categorie_article=Product.ADHESION)
+    )
 
     email = serializers.EmailField()
 
@@ -567,6 +568,10 @@ class MembreValidator(serializers.Serializer):
         return value
 
     def validate_email(self, value):
+        if not getattr(self, 'price', None) :
+            raise serializers.ValidationError(
+                    _(f"Pas de prix d'adésion"))
+
         user_paiement: TibilletUser = get_or_create_user(value)
         self.user = user_paiement
 

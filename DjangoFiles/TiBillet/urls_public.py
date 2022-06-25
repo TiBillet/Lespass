@@ -27,6 +27,7 @@ urlpatterns = [
     # on modifie la creation du token pour rajouter access_token dans la réponse pour Postman
     # re_path(r"^auth/token/login/?$", TokenCreateView_custom.as_view(), name="login"),
     # re_path(r'^auth/', include('djoser.urls')),
+
     path('admin/', public_admin_site.urls, name="public_admin_url"),
     path('api/webhook_stripe/', Webhook_stripe.as_view()),
     re_path(r'^api/user/terminal/(?P<token>[0-9]{6})/$', validate_token_terminal.as_view(), name='validate_token_terminal'),

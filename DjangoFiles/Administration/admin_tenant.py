@@ -466,6 +466,7 @@ class PaiementStripeAdmin(admin.ModelAdmin):
         'source_traitement',
         'source',
     )
+    readonly_fields = list_display
     ordering = ('-order_date',)
 
 

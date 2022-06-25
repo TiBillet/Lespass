@@ -94,7 +94,6 @@ class TokenRefreshViewCustom(TokenRefreshView):
             Surclassage de la fonction Refresh
             On s'assure ici que le refresh token d'un terminal provient
             bien de lui avec sa mac_adress et son unique_id
-
             '''
             # import ipdb; ipdb.set_trace()
             serializer = self.get_serializer(data=request.data)

@@ -29,7 +29,7 @@ from stripe.error import InvalidRequestError
 
 import AuthBillet.models
 from Customers.models import Client
-from MetaBillet.models import EventDirectory
+from MetaBillet.models import EventDirectory, ProductDirectory
 from QrcodeCashless.models import CarteCashless
 from TiBillet import settings
 import stripe
@@ -512,7 +512,8 @@ class ProductSold(models.Model):
 
         stripe.api_key = Configuration.get_solo().get_stripe_api()
 
-        domain_url = connection.tenant.domains.all()[0].domain
+        client = connection.tenant
+        domain_url = client.domains.all()[0].domain
         # noinspection PyUnresolvedReferences
         images = []
         if self.img():
@@ -523,6 +524,13 @@ class ProductSold(models.Model):
             images=images
         )
         self.id_product_stripe = product.id
+
+        with schema_context('public'):
+            product_directory, created = ProductDirectory.objects.get_or_create(
+                place=client,
+                product_sold_stripe_id = product.id,
+            )
+
         self.save()
 
         return self.id_product_stripe
@@ -764,6 +772,9 @@ class Paiement_stripe(models.Model):
     checkout_session_id_stripe = models.CharField(max_length=80, blank=True, null=True)
     payment_intent_id = models.CharField(max_length=80, blank=True, null=True)
     metadata_stripe = JSONField(blank=True, null=True)
+    customer_stripe =  models.CharField(max_length=20, blank=True, null=True)
+    invoice_stripe = models.CharField(max_length=27, blank=True, null=True)
+    subscription = models.CharField(max_length=28, blank=True, null=True)
 
     order_date = models.DateTimeField(auto_now_add=True, verbose_name="Date")
     last_action = models.DateTimeField(auto_now=True)
@@ -856,6 +867,16 @@ class Membership(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='membership')
     price = models.ForeignKey(Price, on_delete=models.PROTECT, related_name='user',
                               null=True, blank=True)
+
+    stripe_id_subscription = models.CharField(
+        max_length=28,
+        null=True, blank=True
+    )
+
+    last_stripe_invoice = models.CharField(
+        max_length=278,
+        null=True, blank=True
+    )
 
     date_added = models.DateTimeField(auto_now_add=True)
     first_contribution = models.DateField(null=True, blank=True)

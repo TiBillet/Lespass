@@ -30,6 +30,9 @@ urlpatterns = [
     re_path(r'^admin\/{0,}', staff_admin_site.urls, name="staff_admin_site"),
 
     re_path(r'api/user/', include('AuthBillet.urls')),
+
+    path('api/webhook_stripe/', Webhook_stripe.as_view()),
+
     re_path(r'api/', include('ApiBillet.urls')),
     re_path(r'qr/', include('QrcodeCashless.urls')),
 
@@ -37,10 +40,10 @@ urlpatterns = [
     re_path(r'(?P<numero_carte>^[qsdf974]{5}$)', include('QrcodeCashless.urls')),
 
     # catché par le front node JS, à supprimer prochainement
-    path('stripe/return/<uuid:uuid_paiement>', Webhook_stripe.as_view()),
+    # path('stripe/return/<uuid:uuid_paiement>', Webhook_stripe.as_view()),
 
     # tuto websocket
-    path('chat/', include('wsocket.urls')),
+    # path('chat/', include('wsocket.urls')),
 
     path('', include('BaseBillet.urls')),
 

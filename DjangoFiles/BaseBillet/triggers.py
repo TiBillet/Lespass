@@ -102,7 +102,8 @@ class action_article_paid_by_categorie:
 
         logger.info(f"TRIGGER ADHESION")
 
-        user = self.ligne_article.paiement_stripe.user
+        paiement_stripe = self.ligne_article.paiement_stripe
+        user = paiement_stripe.user
         price: Price = self.ligne_article.pricesold.price
         product: Product = self.ligne_article.pricesold.productsold.product
 
@@ -114,11 +115,24 @@ class action_article_paid_by_categorie:
         membership.first_contribution = datetime.datetime.now().date()
         membership.last_contribution = datetime.datetime.now().date()
         membership.contribution_value = self.ligne_article.pricesold.prix
+
+        if paiement_stripe.invoice_stripe :
+            membership.last_stripe_invoice = paiement_stripe.invoice_stripe
+
+        if paiement_stripe.subscription :
+            membership.stripe_id_subscription = paiement_stripe.subscription
+
         membership.save()
 
+        # C'est le cashless qui gère l'adhésion et l'envoi de mail
         if product.send_to_cashless:
             logger.info(f"    Envoie celery task.send_membership_to_cashless")
             data = {
                 "ligne_article_pk": self.ligne_article.pk,
             }
             task = send_membership_to_cashless.delay(data)
+
+        # TODO: C'est un abonnement autre que l'adhésion cashless, on gère l'envoi du contrat.
+        else :
+            logger.info(f"    TODO Envoie mail abonnement")
+            pass
