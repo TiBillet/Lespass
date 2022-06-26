@@ -41,6 +41,7 @@ import os
 import logging
 
 from MetaBillet.models import EventDirectory, ProductDirectory
+from PaiementStripe.views import new_entry_from_stripe_invoice
 
 logger = logging.getLogger(__name__)
 
@@ -825,8 +826,33 @@ def paiment_stripe_validator(request, paiement_stripe):
     configuration = Configuration.get_solo()
     stripe.api_key = configuration.get_stripe_api()
 
-    print(f"paiment_stripe_validator : {paiement_stripe.status}")
-    if paiement_stripe.status != Paiement_stripe.VALID:
+
+    # SI c'est une source depuis INVOICE,
+    # L'object vient d'être créé, on vérifie que la facture stripe
+    # est payée et on met en VALID.
+    if paiement_stripe.source == Paiement_stripe.INVOICE:
+        paiement_stripe.traitement_en_cours = True
+        invoice = stripe.Invoice.retrieve(paiement_stripe.invoice_stripe)
+
+        if invoice.status == 'paid':
+            paiement_stripe.status = Paiement_stripe.PAID
+            paiement_stripe.last_action = timezone.now()
+            paiement_stripe.traitement_en_cours = True
+            paiement_stripe.save()
+
+            return Response(
+                'invoice ok',
+                status=status.HTTP_202_ACCEPTED
+            )
+
+        else :
+            return Response(
+                _(f'stripe invoice : {invoice.status} - paiement : {paiement_stripe.status}'),
+                status=status.HTTP_402_PAYMENT_REQUIRED
+            )
+
+    # Sinon c'est un paiement stripe checkout
+    elif paiement_stripe.status != Paiement_stripe.VALID:
 
         checkout_session = stripe.checkout.Session.retrieve(paiement_stripe.checkout_session_id_stripe)
         paiement_stripe.customer_stripe = checkout_session.customer
@@ -858,6 +884,7 @@ def paiment_stripe_validator(request, paiement_stripe):
                 paiement_stripe.last_action = timezone.now()
                 paiement_stripe.traitement_en_cours = True
 
+                # Dans le cas d'un nouvel abonement
                 # On va chercher le numéro de l'abonnement stripe
                 # Et sa facture
                 if checkout_session.mode == 'subscription':
@@ -870,10 +897,10 @@ def paiment_stripe_validator(request, paiement_stripe):
 
 
                 # TODO: ya pu de get, tout est POST, même la requete depuis le front vue.js
-                if request.method == 'GET':
-                    paiement_stripe.source_traitement = Paiement_stripe.GET
-                else:
-                    paiement_stripe.source_traitement = Paiement_stripe.WEBHOOK
+                # if request.method == 'GET':
+                #     paiement_stripe.source_traitement = Paiement_stripe.GET
+                # else:
+                #     paiement_stripe.source_traitement = Paiement_stripe.WEBHOOK
 
                 paiement_stripe.save()
                 logger.info("*" * 30)
@@ -889,11 +916,15 @@ def paiment_stripe_validator(request, paiement_stripe):
         else:
             return Response(_(f'Erreur Meta'), status=status.HTTP_406_NOT_ACCEPTABLE)
 
-    # on vérifie que le status n'ai pas changé
-    paiement_stripe.refresh_from_db()
-    if paiement_stripe.source == Paiement_stripe.QRCODE:
 
-        # SI le paiement est valide, c'est que les presave et postsave
+    # on vérifie le changement de status
+    paiement_stripe.refresh_from_db()
+
+
+    # Paiement depuis QRCode carte
+    # on envoie au serveur cashless
+    if paiement_stripe.source == Paiement_stripe.QRCODE:
+        # Si le paiement est valide, c'est que les presave et postsave
         # ont validé la réponse du serveur cashless pour les recharges
         if paiement_stripe.status == Paiement_stripe.VALID:
             # on boucle ici pour récuperer l'uuid de la carte.
@@ -925,6 +956,7 @@ def paiment_stripe_validator(request, paiement_stripe):
 
 
 
+    # Derniere action : on crée et envoie les billets si besoin
     elif paiement_stripe.source == Paiement_stripe.API_BILLETTERIE:
         if paiement_stripe.reservation:
             if paiement_stripe.reservation.status == Reservation.VALID:
@@ -968,18 +1000,15 @@ class Webhook_stripe(APIView):
     def post(self, request):
         payload = request.data
         logger.info(f" ")
-        logger.info(f"----- > Webhook_stripe : {payload.get('type')}")
+        logger.info(f"Webhook_stripe --> {payload.get('type')}")
         logger.info(f" ")
+
         # c'est une requete depuis les webhook
         # configuré dans l'admin stripe
         if payload.get('type') == "checkout.session.completed":
-            logger.info(f" ")
             logger.info(f"Webhook_stripe checkout.session.completed : {payload}")
-
-            # logger.info(f"   --> checkout.session.completed")
             tenant_uuid_in_metadata = payload["data"]["object"]["metadata"]["tenant"]
 
-            # if connection.tenant.schema_name == "public":
 
             '''
             # Avant, nous re-créions une requete via celery sur le bon tenant
@@ -997,12 +1026,12 @@ class Webhook_stripe(APIView):
                 task = redirect_post_webhook_stripe_from_public.delay(url_redirect, request.data)
                 return Response(f"redirect to {url_redirect} with celery", status=status.HTTP_200_OK)
             '''
+
             if f"{connection.tenant.uuid}" != tenant_uuid_in_metadata:
                 with tenant_context(Client.objects.get(uuid=tenant_uuid_in_metadata)):
                     paiement_stripe = get_object_or_404(Paiement_stripe,
                                                         checkout_session_id_stripe=payload['data']['object']['id'])
                     return paiment_stripe_validator(request, paiement_stripe)
-
 
             paiement_stripe = get_object_or_404(
                 Paiement_stripe,
@@ -1011,70 +1040,65 @@ class Webhook_stripe(APIView):
             return paiment_stripe_validator(request, paiement_stripe)
 
 
-        elif payload.get('type') == "charge.succeeded":
+        # Prélèvement automatique d'un abonnement.
+        # elif payload.get('type') == "customer.subscription.updated":
+        elif payload.get('type') == "invoice.paid":
             logger.info(f" ")
-            logger.info(f"Webhook_stripe charge.succeeded : {payload}")
-            description = payload['data']['object']['description']
-            logger.info(f"     description : {description}")
-            if description == 'Subscription update' :
-                invoice = payload['data']['object']['invoice']
-                logger.info(f"     invoice : {invoice}")
-                logger.info(f"     Nouvelle facture inconnue ! : {invoice}")
-
-
-
-
-        #     # TODO: rajouter l'id sub stripe dans l'objet abonnement
-        # elif payload.get('type') == "customer.subscription.created":
-        #     logger.info(f" ")
-        #     logger.info(f"Webhook_stripe customer.subscription.created : {payload}")
-        #     pass
-
-        # prélèvement automatique d'un abonnement.
-        elif payload.get('type') == "customer.subscription.updated":
-            logger.info(f" ")
-            logger.info(f"Webhook_stripe customer.subscription.updated : {payload}")
-
+            logger.info(f"Webhook_stripe invoice.paid : {payload}")
             payload_object = payload['data']['object']
-            product_sold_stripe_id = payload_object['plan']['product']
-            invoice = payload_object['latest_invoice']
+            billing_reason = payload_object.get('billing_reason')
 
-            # La requete vient de stripe, le webhook envoi sur le tenant public
-            # On va chercher le tenant de l'abonnement grâce à l'id du product stripe
-            # dans la requete POST
-            with schema_context('public'):
-                product = ProductDirectory.objects.get(
-                    product_sold_stripe_id = product_sold_stripe_id,
-                )
-                place = product.place
+            # C'est un renouvellement d'abonnement
+            if billing_reason == 'subscription_cycle' \
+                    and payload_object.get('paid') :
 
-            # On a le tenant, on va chercher l'abonnement
-            with tenant_context(place):
-                try :
-                    membership = Membership.objects.get(
-                            stripe_id_subscription=payload_object['id']
-                        )
-                    last_stripe_invoice = membership.last_stripe_invoice
-                    if invoice != last_stripe_invoice :
-                        logger.info(    (f'    nouvelle facture arrivée : {invoice}'))
-                        #TODO: gerer la nouvelle facture en créant un nouveau paiement stripe et en le validant
+                product_sold_stripe_id = None
+                for line in payload_object['lines']['data']:
+                    product_sold_stripe_id = line['price']['product']
+                    break
 
-                    else :
-                        logger.info(    (f'    facture déja créée et comptabilisée : {invoice}'))
+                # On va chercher le tenant de l'abonnement grâce à l'id du product stripe
+                # dans la requete POST
+                with schema_context('public'):
+                    product_from_public_tenant = ProductDirectory.objects.get(
+                        product_sold_stripe_id = product_sold_stripe_id,
+                    )
+                    place = product_from_public_tenant.place
 
-                except Membership.DoesNotExist:
-                    logger.info(    (f'    Nouvelle adhésion, facture pas encore comptabilisée : {invoice}'))
-                except Exception:
-                    logger.error(    (f'    erreur dans Webhook_stripe customer.subscription.updated : {Exception}'))
-                    raise Exception
+                # On a le tenant ( place ), on va chercher l'abonnement
+                with tenant_context(place):
+                    invoice = payload_object['id']
+                    try :
+                        membership = Membership.objects.get(
+                                stripe_id_subscription=payload_object['subscription']
+                            )
+                        last_stripe_invoice = membership.last_stripe_invoice
 
-                # configuration = Configuration.get_solo()
-                # stripe.api_key = configuration.get_stripe_api()
-                # customer_stripe = stripe.Customer.retrieve(id_customer_stripe)
-                # current_period_start = datetime.fromtimestamp(int(payload_object['current_period_start']))
-                # current_period_end = datetime.fromtimestamp(int(payload_object['current_period_end']))
-                # logger.info(f"     current_period_start : {current_period_start}")
-                # logger.info(f"     current_period_start : {current_period_end}")
+                        # Même adhésion, mais facture différente :
+                        # C'est alors un renouvellement automatique.
+                        if invoice != last_stripe_invoice :
+                            logger.info(    (f'    nouvelle facture arrivée : {invoice}'))
+                            paiement_stripe = new_entry_from_stripe_invoice(membership.user, invoice)
+
+
+                            return paiment_stripe_validator(request, paiement_stripe)
+
+                        else :
+                            logger.info(    (f'    facture déja créée et comptabilisée : {invoice}'))
+
+                    except Membership.DoesNotExist:
+                        logger.info(    (f'    Nouvelle adhésion, facture pas encore comptabilisée : {invoice}'))
+                    except Exception:
+                        logger.error(    (f'    erreur dans Webhook_stripe customer.subscription.updated : {Exception}'))
+                        raise Exception
+
+                    # configuration = Configuration.get_solo()
+                    # stripe.api_key = configuration.get_stripe_api()
+                    # customer_stripe = stripe.Customer.retrieve(id_customer_stripe)
+                    # current_period_start = datetime.fromtimestamp(int(payload_object['current_period_start']))
+                    # current_period_end = datetime.fromtimestamp(int(payload_object['current_period_end']))
+                    # logger.info(f"     current_period_start : {current_period_start}")
+                    # logger.info(f"     current_period_start : {current_period_end}")
 
 
 

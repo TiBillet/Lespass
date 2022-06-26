@@ -3,6 +3,7 @@ from datetime import datetime
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
+from django.db import connection
 from django.http import HttpResponse, Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 import stripe
@@ -10,7 +11,7 @@ from django.utils import timezone
 from django.views import View
 from rest_framework import serializers
 
-from BaseBillet.models import Configuration, LigneArticle, Paiement_stripe, Reservation, Price
+from BaseBillet.models import Configuration, LigneArticle, Paiement_stripe, Reservation, Price, PriceSold
 from django.utils.translation import gettext, gettext_lazy as _
 
 import logging
@@ -26,12 +27,14 @@ class creation_paiement_stripe():
                  metadata: dict,
                  reservation: (Reservation, None),
                  source: str,
-                 absolute_domain: str
+                 absolute_domain: (str, None),
+                 invoice=None,
                  ) -> None:
 
         self.user = user
         self.email_paiement = user.email
         self.absolute_domain = absolute_domain
+        self.invoice = invoice
         self.liste_ligne_article = liste_ligne_article
         self.metadata = metadata
         self.reservation = reservation
@@ -55,14 +58,21 @@ class creation_paiement_stripe():
         return total
 
     def _paiement_stripe_db(self):
+        dict_paiement = {
+            'user' : self.user,
+            'total' : self.total,
+            'metadata_stripe' : self.metadata_json,
+            'reservation' : self.reservation,
+            'source' : self.source,
+            'status': Paiement_stripe.PENDING,
+        }
 
-        paiementStripeDb = Paiement_stripe.objects.create(
-            user=self.user,
-            total=self.total,
-            metadata_stripe=self.metadata_json,
-            reservation=self.reservation,
-            source=self.source,
-        )
+        if self.invoice:
+            dict_paiement['invoice_stripe'] = self.invoice.id
+            if bool(self.invoice.subscription):
+                dict_paiement['subscription'] = self.invoice.subscription
+
+        paiementStripeDb = Paiement_stripe.objects.create(**dict_paiement)
 
         for ligne_article in self.liste_ligne_article:
             ligne_article: LigneArticle
@@ -112,39 +122,86 @@ class creation_paiement_stripe():
             return "/stripe/return/"
 
     def _checkout_session(self):
+        if self.absolute_domain:
+            data_checkout = {
+                'success_url' : f'{self.absolute_domain}{self.return_url}{self.paiement_stripe_db.uuid}',
+                'cancel_url' : f'{self.absolute_domain}{self.return_url}{self.paiement_stripe_db.uuid}',
+                'payment_method_types' : ["card"],
+                'customer_email' : f'{self.user.email}',
+                'line_items' : self.line_items,
+                'mode' : self.mode,
+                'metadata' : self.metadata,
+                'client_reference_id' : f"{self.user.pk}",
+            }
+            checkout_session = stripe.checkout.Session.create(**data_checkout)
 
-        data_checkout = {
-            'success_url' : f'{self.absolute_domain}{self.return_url}{self.paiement_stripe_db.uuid}',
-            'cancel_url' : f'{self.absolute_domain}{self.return_url}{self.paiement_stripe_db.uuid}',
-            'payment_method_types' : ["card"],
-            'customer_email' : f'{self.user.email}',
-            'line_items' : self.line_items,
-            'mode' : self.mode,
-            'metadata' : self.metadata,
-            'client_reference_id' : f"{self.user.pk}",
-        }
-        checkout_session = stripe.checkout.Session.create(**data_checkout)
+            logger.info(" ")
+            logger.info("-"*40)
+            logger.info(f"Création d'un nouveau paiment stripe. Metadata : {self.metadata}")
+            logger.info(f"checkout_session.id {checkout_session.id} payment_intent : {checkout_session.payment_intent}")
+            logger.info("-"*40)
+            logger.info(" ")
 
-        logger.info(" ")
-        logger.info("-"*40)
-        logger.info(f"Création d'un nouveau paiment stripe. Metadata : {self.metadata}")
-        logger.info(f"checkout_session.id {checkout_session.id} payment_intent : {checkout_session.payment_intent}")
-        logger.info("-"*40)
-        logger.info(" ")
+            self.paiement_stripe_db.payment_intent_id = checkout_session.payment_intent
+            self.paiement_stripe_db.checkout_session_id_stripe = checkout_session.id
+            self.paiement_stripe_db.status = Paiement_stripe.PENDING
+            self.paiement_stripe_db.save()
 
-        self.paiement_stripe_db.payment_intent_id = checkout_session.payment_intent
-        self.paiement_stripe_db.checkout_session_id_stripe = checkout_session.id
-        self.paiement_stripe_db.status = Paiement_stripe.PENDING
-        self.paiement_stripe_db.save()
+            return checkout_session
 
-        return checkout_session
+        # Si il n'y a pas d'absolute domain
+        return None
 
     def is_valid(self):
-        if self.checkout_session.id and \
-                self.checkout_session.url:
+        if self.checkout_session :
+            if self.checkout_session.id and \
+                    self.checkout_session.url:
+                return True
+
+        # Pas besoin de checkout, c'est déja payé.
+        if self.invoice :
             return True
+
         else:
             return False
 
     def redirect_to_stripe(self):
-        return HttpResponseRedirect(self.checkout_session.url)
+        if self.checkout_session :
+            return HttpResponseRedirect(self.checkout_session.url)
+        else :
+            return None
+
+def new_entry_from_stripe_invoice(user, id_invoice):
+    config = Configuration.get_solo()
+    stripe.api_key  = config.get_stripe_api()
+    invoice = stripe.Invoice.retrieve(id_invoice)
+
+    lines = invoice.lines
+    lignes_articles = []
+    for line in lines['data']:
+        ligne_article = LigneArticle.objects.create(
+            pricesold=PriceSold.objects.get(id_price_stripe=line.price.id),
+            qty=line.quantity,
+        )
+        lignes_articles.append(ligne_article)
+
+    metadata = {
+        'tenant': f'{connection.tenant.uuid}',
+        'from_stripe_invoice': f"{invoice.id}",
+    }
+
+    new_paiement_stripe = creation_paiement_stripe(
+            user=user,
+            liste_ligne_article=lignes_articles,
+            metadata=metadata,
+            reservation=None,
+            source=Paiement_stripe.INVOICE,
+            invoice=invoice,
+            absolute_domain=None,
+        )
+
+    if new_paiement_stripe.is_valid():
+        paiement_stripe: Paiement_stripe = new_paiement_stripe.paiement_stripe_db
+        paiement_stripe.lignearticle_set.all().update(status=LigneArticle.UNPAID)
+
+        return paiement_stripe

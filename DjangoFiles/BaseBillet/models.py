@@ -794,12 +794,13 @@ class Paiement_stripe(models.Model):
     status = models.CharField(max_length=1, choices=STATUT_CHOICES, default=NON, verbose_name="Statut de la commande")
 
     traitement_en_cours = models.BooleanField(default=False)
-    NA, WEBHOOK, GET = 'N', 'W', 'G'
+    NA, WEBHOOK, GET, WEBHOOK_INVOICE = 'N', 'W', 'G', 'I'
 
     SOURCE_CHOICES = (
         (NA, _('Pas de traitement en cours')),
-        (WEBHOOK, _('Depuis webhook post stripe')),
+        (WEBHOOK, _('Depuis webhook stripe')),
         (GET, _('Depuis Get')),
+        (WEBHOOK_INVOICE, _('Depuis webhook invoice')),
     )
     source_traitement = models.CharField(max_length=1, choices=SOURCE_CHOICES, default=NA,
                                          verbose_name="Source de la commande")
@@ -807,10 +808,12 @@ class Paiement_stripe(models.Model):
     reservation = models.ForeignKey(Reservation, on_delete=models.PROTECT, blank=True, null=True,
                                     related_name="paiements")
 
-    QRCODE, API_BILLETTERIE = 'Q', 'B'
+    QRCODE, API_BILLETTERIE, INVOICE = 'Q', 'B', 'I'
     SOURCE_CHOICES = (
         (QRCODE, _('Depuis scan QR-Code')),
         (API_BILLETTERIE, _('Depuis billetterie')),
+        (INVOICE, _('Depuis invoice')),
+
     )
     source = models.CharField(max_length=1, choices=SOURCE_CHOICES, default=API_BILLETTERIE,
                               verbose_name="Source de la commande")

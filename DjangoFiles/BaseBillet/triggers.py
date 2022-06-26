@@ -136,3 +136,5 @@ class action_article_paid_by_categorie:
         else :
             logger.info(f"    TODO Envoie mail abonnement")
             pass
+
+        self.ligne_article.status = LigneArticle.VALID
