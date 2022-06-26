@@ -563,6 +563,7 @@ class MembreValidator(serializers.Serializer):
     birth_date = serializers.DateField(required=False)
     newsletter = serializers.BooleanField(required=False)
 
+
     def validate_adhesion(self, value):
         self.price = value
         return value
@@ -580,7 +581,9 @@ class MembreValidator(serializers.Serializer):
             price=self.price,
         )
 
+        # Si une adhésion existe déja
         if not created:
+            # Si elle est encore valide
             if self.fiche_membre.is_valid():
                 raise serializers.ValidationError(
                     _(f"Un abonnement sur ce mail existe déjà et est valide jusque : {self.fiche_membre.deadline()}"))

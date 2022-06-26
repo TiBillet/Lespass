@@ -910,6 +910,16 @@ class Membership(models.Model):
     phone = models.CharField(max_length=20, null=True, blank=True)
     commentaire = models.TextField(null=True, blank=True)
 
+    CANCELED, AUTO, ONCE = 'C', 'A', 'O'
+    STATUS_CHOICES = [
+        (ONCE, _('Paiement unique')),
+        (AUTO, _('Renouvellement automatique')),
+        (CANCELED, _('Annulée')),
+    ]
+
+    status = models.CharField(max_length=1, choices=STATUS_CHOICES, default=ONCE,
+                              verbose_name=_("Status"))
+
     class Meta:
         unique_together = ('user', 'price')
         verbose_name = _('Adhésion')
@@ -917,16 +927,6 @@ class Membership(models.Model):
 
     def email(self):
         return self.user.email
-
-    '''
-    subscription_type : 
-        SUB_CHOICES = [
-        (NA, _('Non applicable')),
-        (YEAR, _("365 Jours")),
-        (MONTH, _('31 Jours')),
-        (CIVIL, _('Fin decembre.')),
-    ]
-    '''
 
     def deadline(self):
         if self.last_contribution and self.price:

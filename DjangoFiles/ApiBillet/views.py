@@ -559,6 +559,29 @@ def borne_temps_4h():
     else:
         return debut_jour, lendemain_quatre_heure
 
+@permission_classes([permissions.IsAuthenticated])
+class Cancel_sub(APIView):
+    def post(self, request):
+        user = request.user
+        price = request.data.get('uuid_price')
+
+        membership = Membership.objects.get(
+            user=user,
+            price=price
+        )
+
+        if membership.status == Membership.AUTO :
+            config = Configuration.get_solo()
+            stripe.api_key = config.get_stripe_api()
+            stripe.Subscription.delete(membership.stripe_id_subscription)
+            membership.status = Membership.CANCELED
+            membership.save()
+
+            #TODO: envoyer un mail de confirmation d'annulation
+            return Response('Renouvellement automatique supprimé.', status=status.HTTP_200_OK)
+
+        return Response('Pas de renouvellement automatique sur cette adhésion.', status=status.HTTP_406_NOT_ACCEPTABLE)
+
 
 @permission_classes([TenantAdminPermission])
 class Gauge(APIView):

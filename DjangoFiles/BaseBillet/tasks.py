@@ -473,7 +473,7 @@ def send_membership_to_cashless(data):
 
         price_float = ligne_article.pricesold.prix
         price_obj = ligne_article.pricesold.price
-        membre, created = Membership.objects.get_or_create(user=user, price=price_obj)
+        membre = Membership.objects.get(user=user, price=price_obj)
 
         if not membre.first_contribution:
             membre.first_contribution = timezone.now().date()

@@ -121,6 +121,7 @@ class action_article_paid_by_categorie:
 
         if paiement_stripe.subscription :
             membership.stripe_id_subscription = paiement_stripe.subscription
+            membership.status = Membership.AUTO
 
         membership.save()
 

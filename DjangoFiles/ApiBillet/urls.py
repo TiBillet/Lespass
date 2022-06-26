@@ -1,7 +1,7 @@
 from django.urls import include, path, re_path
 from ApiBillet import views as api_view
 from rest_framework import routers
-from ApiBillet.views import TicketPdf, Webhook_stripe, Gauge
+from ApiBillet.views import TicketPdf, Webhook_stripe, Gauge, Cancel_sub
 
 router = routers.DefaultRouter()
 router.register(r'place', api_view.TenantViewSet, basename='place')
@@ -24,4 +24,5 @@ urlpatterns = [
     path('webhook_stripe/', Webhook_stripe.as_view()),
     path('webhook_stripe/<uuid:uuid_paiement>/', Webhook_stripe.as_view()),
     path('gauge/', Gauge.as_view()),
+    path('cancel_sub/', Cancel_sub.as_view()),
 ]

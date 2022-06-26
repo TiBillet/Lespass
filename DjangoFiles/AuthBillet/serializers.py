@@ -188,6 +188,7 @@ class MembershipSerializer(serializers.ModelSerializer):
             'first_contribution',
             'last_contribution',
             'deadline',
+            'status',
             'contribution_value',
             'last_action',
             'first_name',
