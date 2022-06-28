@@ -14,15 +14,16 @@
           <fieldset class="shadow-sm p-3 mb-5 bg-body rounded" v-for="(adhesion, index) in me.membership" :key="index">
             <legend>
               <h5 class="font-weight-bolder text-info text-gradient align-self-start w-85">
-                {{ adhesion.product_name }} - {{ adhesion.price_name }} {{ adhesion.contribution_value }} €
+                {{ adhesion.product_name }} - {{ adhesion.price_name }} {{ adhesion.contribution_value }} € -
               </h5>
             </legend>
             <div class="flex-row">
               <h5 class="text-capitalize">Nom / prénom : {{ adhesion.last_name }} {{ adhesion.first_name }}</h5>
               <h5>Inscription : {{ dateToFrenchFormat(adhesion.last_contribution) }}</h5>
               <h5>Echéance : {{ dateToFrenchFormat(adhesion.deadline) }}</h5>
+              <h5 class="mb-0">Email : {{ adhesion.email }}</h5>
               <div class="d-flex justify-content-between align-items-center">
-                <h5>Email : {{ adhesion.email }}</h5>
+                <div class="text-primary mbs-status">{{ showStatus(adhesion.status) }}</div>
                 <button v-if="adhesion.status === 'A'" class="btn btn-secondary btn-sm mt-4" aria-pressed="true"
                         @click="confirmMembershipTermination(adhesion.price)">
                   <div class="d-flex justify-content-star align-items-center">
@@ -77,6 +78,21 @@ const {me} = storeToRefs(useLocalStore())
 const {loading, error} = storeToRefs(useAllStore())
 const domain = `${location.protocol}//${location.host}`
 
+function showStatus(status) {
+  if (status === 'A') {
+    return 'Reconduction automatique.'
+  }
+
+  if (status === 'O') {
+    return 'Pas de reconduction.'
+  }
+
+  if (status === 'C') {
+    return 'Reconduction automatique annulée.'
+  }
+
+}
+
 function dateToFrenchFormat(dateString) {
   if (dateString !== null) {
     const nomMois = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
@@ -127,5 +143,7 @@ async function cancelMembership() {
 </script>
 
 <style scoped>
-
+.mbs-status {
+  font-size: 0.9rem;
+}
 </style>
