@@ -10,6 +10,7 @@
           </button>
         </div>
         <div class="modal-body">
+          <!-- les adhésions -->
           <fieldset class="shadow-sm p-3 mb-5 bg-body rounded" v-for="(adhesion, index) in me.membership" :key="index">
             <legend>
               <h5 class="font-weight-bolder text-info text-gradient align-self-start w-85">
@@ -22,7 +23,7 @@
               <h5>Echéance : {{ dateToFrenchFormat(adhesion.deadline) }}</h5>
               <div class="d-flex justify-content-between align-items-center">
                 <h5>Email : {{ adhesion.email }}</h5>
-                <button class="btn btn-secondary btn-sm mt-4" aria-pressed="true"
+                <button v-if="adhesion.status === 'A'" class="btn btn-secondary btn-sm mt-4" aria-pressed="true"
                         @click="confirmMembershipTermination(adhesion.price)">
                   <div class="d-flex justify-content-star align-items-center">
                     <div>Résilier</div>
