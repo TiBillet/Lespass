@@ -345,8 +345,8 @@ class Price(models.Model):
                                          verbose_name=_("durée d'abonnement"),
                                          )
 
-    def range_max(self):
-        return range(self.max_per_user + 1)
+    # def range_max(self):
+    #     return range(self.max_per_user + 1)
 
     def __str__(self):
         return f"{self.name}"
