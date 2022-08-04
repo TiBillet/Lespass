@@ -431,18 +431,31 @@ class Event(models.Model):
                                  verbose_name=_("Catégorie d'évènement"))
 
     def reservations(self):
+        '''
+        Renvoie toutes les réservations valide d'un évènement.
+        Compte les billets achetés/réservés.
+        '''
+
         return Ticket.objects.filter(reservation__event__pk=self.pk) \
             .exclude(status=Ticket.CREATED) \
             .exclude(status=Ticket.NOT_ACTIV) \
             .count()
 
     def complet(self):
+        '''
+        Un booléen pour savoir si l'évènement est complet ou pas.
+        '''
+
         if self.reservations() >= self.jauge_max:
             return True
         else:
             return False
 
     def save(self, *args, **kwargs):
+        '''
+        Transforme le titre le d'evenemennt en slug, pour en faire une url lisible
+        '''
+
         # self.slug = slugify(f"{self.name} {self.datetime} {str(self.uuid).partition('-')[0]}")[:50]
         self.slug = slugify(f"{self.name} {self.datetime.strftime('%D %R')}")
         super().save(*args, **kwargs)
