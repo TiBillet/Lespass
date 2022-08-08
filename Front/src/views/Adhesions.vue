@@ -35,18 +35,27 @@ import {useLocalStore} from '@/stores/local'
 
 // obtenir data adhesion
 const {getListAdhesions, getHeaderPlace} = useAllStore()
-// const {me} = storeToRefs(useLocalStore())
+const {iamMembershipOwned} = useLocalStore()
 
 let selectedProductUuid = ref('')
 
 function showFormAdhesion(productUuid) {
-  // update selcetd product uuid
-  selectedProductUuid.value = productUuid
+  console.log('-> fonc showFormAdhesion, productUuid =', productUuid)
 
-  // afficher modal formulaire adhésion
-  const elementModal = document.querySelector('#modal-form-adhesion')
-  const modal = new bootstrap.Modal(elementModal) // Returns a Bootstrap modal instance
-  modal.show()
+  if (iamMembershipOwned(productUuid) === false) {
+    // update selected product uuid
+    selectedProductUuid.value = productUuid
+
+    // afficher modal formulaire adhésion
+    const elementModal = document.querySelector('#modal-form-adhesion')
+    const modal = new bootstrap.Modal(elementModal) // Returns a Bootstrap modal instance
+    modal.show()
+  } else {
+    emitter.emit('modalMessage', {
+      titre: '!!!',
+      contenu: 'Vous êtes déjà adhérant !'
+    })
+  }
 }
 
 </script>

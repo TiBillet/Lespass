@@ -196,6 +196,14 @@ export const useLocalStore = defineStore({
       } catch (err) {
         return false
       }
+    },
+    iamMembershipOwned(productUuid) {
+      try {
+        this.me.membership.find(obj => obj.product_uuid === productUuid).product_uuid
+        return true
+      } catch (e) {
+        return false
+      }
     }
   },
   persist: {
