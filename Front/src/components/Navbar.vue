@@ -21,20 +21,13 @@
           </a>
           <!-- menu user -->
           <ul class="dropdown-menu w-100" aria-labelledby="menuUser">
-            <!-- déconnexion -->
-            <li v-if="refreshToken !== ''">
-              <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
-                 role="button" @click="disconnect()">
-                <i class="fa fa-sign-out text-dark" aria-hidden="true"></i>
-                <h6 class="m-0 text-dark">Deconnexion</h6>
-              </a>
-            </li>
-            <!-- assets -->
+
+            <!-- Cartes cashless -->
             <li v-if="infosCardExist() === true">
               <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
                  role="button" data-bs-toggle="modal" data-bs-target="#cards-list-modal">
                 <i class="fa fa-id-card-o fa-fw me-1 text-dark" aria-hidden="true"></i>
-                <h6 class="m-0 text-dark">Carte(s)</h6>
+                <h6 class="m-0 text-dark">Carte</h6>
               </a>
             </li>
             <!-- réservations -->
@@ -42,7 +35,7 @@
               <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
                  role="button" data-bs-toggle="modal" data-bs-target="#reservation-list-modal">
                 <i class="fa fa-ticket fa-fw me-1 text-dark tourne-ticket" aria-hidden="true"></i>
-                <h6 class="m-0 text-dark">Réservation(s)</h6>
+                <h6 class="m-0 text-dark">Réservations</h6>
               </a>
             </li>
 
@@ -51,9 +44,19 @@
               <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
                  role="button" data-bs-toggle="modal" data-bs-target="#membership-owned-modal">
                 <i class="fa fa-users fa-fw me-1 text-dark" aria-hidden="true"></i>
-                <h6 class="m-0 text-dark">Mes adhésions</h6>
+                <h6 class="m-0 text-dark">Adhésions</h6>
               </a>
             </li>
+
+            <!-- déconnexion -->
+            <li v-if="refreshToken !== ''">
+              <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
+                 role="button" @click="disconnect()">
+                <i class="fa fa-sign-out fa-fw me-1 text-dark" aria-hidden="true"></i>
+                <h6 class="m-0 text-dark">Deconnexion</h6>
+              </a>
+            </li>
+
           </ul>
         </li>
 
