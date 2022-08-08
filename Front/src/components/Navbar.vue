@@ -17,7 +17,7 @@
              id="menuUser"
              role="button" data-bs-toggle="dropdown" aria-expanded="false">
             <i class="fas fa-user me-1" aria-hidden="true"></i>
-            <h6 class="m-0 text-white">User</h6>
+            <h6 class="m-0 text-white">Mon compte</h6>
           </a>
           <!-- menu user -->
           <ul class="dropdown-menu w-100" aria-labelledby="menuUser">
