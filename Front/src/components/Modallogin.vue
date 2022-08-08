@@ -5,10 +5,17 @@
     <div class="modal-dialog modal-dialog-centered" role="document">
       <div class="modal-content">
         <div class="modal-body p-0">
-          <div class="card card-plain">
+          <div class="container card card-plain">
             <div class="card-header pb-0 text-left">
-              <h3 class="font-weight-bolder text-info text-gradient">Connectez vous</h3>
+              <h3 class="font-weight-bolder text-info text-gradient text-center">Connectez vous</h3>
+
+              <div class="d-flex flex-row justify-content-center">
+                <hr class="text-dark w-50">
+              </div>
+
+              <h3 class="font-weight-bolder text-info text-gradient text-center">avec votre e-mail</h3>
             </div>
+
             <div class="card-body">
               <form role="form" class="text-left" @submit.prevent="validerLogin($event)">
                 <div class="input-group">
@@ -16,24 +23,26 @@
                          class="form-control" placeholder="Email" type="email"
                          pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$" required>
                 </div>
+
                 <div class="text-center">
-                  <button class="btn btn-round bg-gradient-info btn-lg w-75 mt-4 mb-0 h-44px" type="submit">Valider
+                  <button class="btn btn-round bg-gradient-info btn-lg mt-4 mb-0 h-44px" type="submit">Valider
                   </button>
                 </div>
               </form>
 
-              <div class="d-flex flex-row justify-content-center mt-5 mb-3">
+              <div class="d-flex flex-row justify-content-center mt-4">
                 <hr class="text-dark w-50">
               </div>
 
-              <div class="text-center mt-2 mb-3">
-                <!--  -->
+              <div class="d-flex flex-row justify-content-center mt-2">
+                <h3 class="font-weight-bolder text-info text-gradient text-center">Avec communecter</h3>
+              </div>
 
-                <button class="btn btn-round bg-gradient-info w-75 mt-4 mb-0 h-44px" type="button"
+              <div class="text-center">
+                <button class="btn btn-round bg-gradient-info btn-lg" type="button"
                         @click="goCommunecter()">
                   <div class="d-flex flex-row justify-content-center align-items-center w-100">
-                    <img :src="communecterLogo" class="communecter-logo" alt="Logo de communecter !">
-                    <div class="">Se connecter à communecter</div>
+                    <img :src="communecterLogo" class="communecter-logo" alt="logo communecter">
                   </div>
                 </button>
               </div>
