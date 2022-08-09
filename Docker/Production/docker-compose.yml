@@ -83,13 +83,17 @@ services:
       - billetterie_django_prod
     links:
       - billetterie_django_prod:billetterie_django
+
     labels:
       - traefik.enable=true
       - traefik.docker.network=frontend
       - traefik.http.routers.billetterie_nginx_prod.tls.certresolver=letsencrypt
-      - traefik.http.routers.billetterie_nginx_prod.rule=HostRegexp(`{sub:[a-zA-Z0-9-]+}.${DOMAIN}`) || Host(`${DOMAIN}`)
-      - traefik.http.routers.billetterie_nginx_prod.entrypoints=websecure
+      - traefik.http.routers.billetterie_nginx_prod.tls.domains[0].main=${DOMAIN}
+      - traefik.http.routers.billetterie_nginx_prod.tls.domains[0].sans=*.${DOMAIN}
 
+      - traefik.http.routers.whoami.rule=HostRegexp(`{sub:[a-zA-Z0-9-]+}.${DOMAIN}`) || Host(`${DOMAIN}`)
+      - traefik.http.routers.whoami.entrypoints=websecure
+      
     networks:
       - frontend
     volumes:

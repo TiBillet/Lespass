@@ -25,7 +25,7 @@
           </div>
         </div>
         <div class="col-lg-4 d-flex align-items-center mt-lg-auto mt-2">
-          <button type="button" class="btn bg-gradient-primary w-100 mb-0">Rechercher</button>
+          <button type="button" class="btn bg-gradient-primary w-100 mb-0 disabled">Rechercher</button>
         </div>
       </div>
     </div>
