@@ -1,16 +1,9 @@
-# V2 IN ACTIVE BETA
-
-V1 ( deprecated ) here :
-https://github.com/TiBillet/TiBillet-Cashless-V1-DEPRECATED
-
-## Nous cherchons activement toute forme d'aide pour construire TiBillet ! N'hésitez pas à nous contacter :)
-
 # TiBillet
 
 Réseau événementiel et coopératif.
 
 TiBillet est un système de paiement sans contact Zéro Espèce ( Cashless ), de gestion d'évènements, de gestion de salles
-de restauration, d'engagement associatif et d'achat de billets en ligne … mais pas uniquement !
+de restauration, d'engagement associatif, de boutique et de reservation en ligne … mais pas uniquement !
 
 C'est aussi un outil de mise en réseau et de gestion d'une carte cashless locale et commune à plusieurs lieux.
 
@@ -20,7 +13,10 @@ pour en faire un réseau de musiciens, de lieux et pourquoi pas une monnaie loca
 La richesse de TiBillet, c’est de chercher à créer des zones d’échange, de créer une économie circulaire, sociale et
 solidaire, décentralisée et non spéculative à l'échelle d'un territoire.
 
-Pour en savoir plus : https://www.tibillet.re & https://wiki.tibillet.re
+TiBillet est en période de BETA et en expérimentation sur plusieurs lieux sur l'ile de la Réunion. Venez nous voir au
+Bisik, à la Raffinerie, et au Manapany Festival !
+
+Pour en savoir plus : https://wiki.tibillet.re
 
 ## Mindmap VF
 
@@ -52,7 +48,7 @@ https://run.tibillet.org
 
 ### Cashless démo ( nighty build ) :
 
-https://demo.cashless.tibillet.org
+https://democashless.betabillet.tech
 
 - login : adminou
 - password : miaoumiaou
@@ -62,9 +58,6 @@ https://demo.cashless.tibillet.org/wv/
 
 ## Introduction.
 
-TiBillet est en période de BETA et en expérimentation sur plusieurs lieux sur l'ile de la Réunion. Venez nous voir au
-Bisik, à la Raffinerie, et au Manapany Festival !
-
 Le présent dépot ne contient pas encore toutes les sources du projet en cours d'expérimentation :
 La billetterie est en cours de publication. Le Cashless est en cours d'audit de sécurité et sera publié sous licence
 libre ASAP.
@@ -72,8 +65,9 @@ libre ASAP.
 Mais ceci dit, si vous souhaitez l'expérimenter chez vous, n'hésitez pas à nous contacter. Toute aide et retour
 d'expérience sont les bienvenus.
 
-TiBillet est originalement construit par l'association des 3Peaks de Manapany : Créateurs du Manapany Surf Festival. Une
-société coopérative ( SCIC ) est en création pour porter juridiquement une fédération autour des acteurs de la
+TiBillet est originalement construit par l'association des 3Peaks de Manapany : Créateurs du Manapany Surf Festival. 
+
+La société coopérative ( SCIC TiBillet Coop ) a été créé pour porter juridiquement une fédération autour des acteurs de la
 solution :
 Developpeurs, utilisateurs, organisateurs, tiers-lieux et collectivités locales seront réunis autour d'une coopérative
 d'interet commun.
@@ -95,7 +89,7 @@ https://github.com/TiBillet/Traefik-reverse-proxy/tree/main/wildcard
 - Docker & docker-compose See https://docs.docker.com/ for installation.
 
 - copy env_example to .env and fill in the necessary variables.
-- 
+
 ```shell
 cd Docker/Production
 docker compose pull
@@ -103,7 +97,7 @@ docker compose up -d
 docker exec -ti billetterie_django tibinstall
 ```
 
-### Contribute :
+### For Contribution :
 
 1. Go talk to us in discord :)
 2. Accept the code of conduct.
@@ -203,14 +197,28 @@ https://www.mongodb.com/licensing/server-side-public-license
 
 https://webassets.mongodb.com/_com_assets/legal/SSPL-compared-to-AGPL.pdf
 
+
 # Crédits and développement :
 
 [AUTHORS.md](https://github.com/TiBillet/TiBillet/blob/main/AUTHORS.md)
 
-# Sponsors
+# THANKS & SPONSORS
 
-Many thanks to JetBrain !
+- La Raffinerie
+
+https://www.laraffinerie.re
+ 
+[![logo La Raffinerie](https://documentation.laraffinerie.re/images/thumb/c/c3/LogoRaffinerie.png/300px-LogoRaffinerie.png)](https://www.laraffinerie.re)
+
+- Communnecter.org
+
+https://www.communecter.org
+
+[![logo Communnecter](https://www.communecter.org/assets/94396c20/images/logos/logo-full.png)](https://www.communecter.org)
+
+- JetBrain
 
 https://jb.gg/OpenSourceSupport
 
-![](https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.svg)
+![logo JetBrain](https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.svg)
+
