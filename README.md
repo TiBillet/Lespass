@@ -16,7 +16,47 @@ solidaire, décentralisée et non spéculative à l'échelle d'un territoire.
 TiBillet est en période de BETA et en expérimentation sur plusieurs lieux sur l'ile de la Réunion. Venez nous voir au
 Bisik, à la Raffinerie, et au Manapany Festival !
 
-Pour en savoir plus : https://wiki.tibillet.re
+Pour en savoir plus : 
+- https://wiki.tibillet.re 
+
+Ou venez discuter avec nous ! 
+- https://discord.gg/7FJvtYx
+
+
+## Install :
+
+### For Production :
+
+You need
+- a wildcard ssl certificate. 
+It is possible to generate one with letsencrypt and a dns-challenge.
+You can use this repo for example :
+https://github.com/TiBillet/Traefik-reverse-proxy/tree/main/wildcard
+
+- Docker & docker-compose See https://docs.docker.com/ for installation.
+
+- copy env_example to .env and fill in the necessary variables.
+
+```shell
+cd Docker/Production
+docker compose pull
+docker compose up -d 
+docker exec -ti billetterie_django tibinstall
+```
+
+Root admin interface ( public tenant ) :
+- https://DOMAIN/admin
+
+Meta admin interface ( meta tenant ) :
+- https://META.DOMAIN/admin
+
+Where META is the string you pop within your .env
+
+
+### For Contribution :
+See below and go talk with us ! 
+- Discord : https://discord.gg/7FJvtYx
+
 
 ## Mindmap VF
 
@@ -44,7 +84,11 @@ Revenez plus tard ou passez nous voir sur le discord !
 
 ### Billetterie démo ( nighty build ) :
 
-https://run.tibillet.org
+Meta :
+- https://run.betabillet.tech
+
+Tenant 'Rafftou'
+- https://rafftou.betabillet.tech
 
 ### Cashless démo ( nighty build ) :
 
@@ -76,28 +120,8 @@ Venez discuter avec nous :
 
 - Discord : https://discord.gg/7FJvtYx
 
-## Install :
 
-### For Production :
-
-You need
-- a wildcard ssl certificate. 
-It is possible to generate one with letsencrypt and a dns-challenge.
-You can use this repo for example :
-https://github.com/TiBillet/Traefik-reverse-proxy/tree/main/wildcard
-
-- Docker & docker-compose See https://docs.docker.com/ for installation.
-
-- copy env_example to .env and fill in the necessary variables.
-
-```shell
-cd Docker/Production
-docker compose pull
-docker compose up -d 
-docker exec -ti billetterie_django tibinstall
-```
-
-### For Contribution :
+# Code with us !
 
 1. Go talk to us in discord :)
 2. Accept the code of conduct.
