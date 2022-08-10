@@ -69,7 +69,7 @@ class Configuration(SingletonModel):
 
     organisation = models.CharField(db_index=True, max_length=50, verbose_name=_("Nom de l'organisation"))
 
-    slug = models.SlugField(max_length=50)
+    slug = models.SlugField(max_length=50, default="")
 
     short_description = models.CharField(max_length=250, verbose_name=_("Description courte"))
     long_description = models.TextField(blank=True, null=True)
