@@ -50,7 +50,10 @@ And play with API :
 
 
 #### Optional : Django admin interface.
-Not recommended, direct acces to database. Prefer API
+
+not recommended because it is a direct access to the database without automatic process. 
+Prefer the api to administer your instance.
+
 Root admin interface ( public tenant ) :
 - https://DOMAIN/admin
 

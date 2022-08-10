@@ -249,6 +249,13 @@ class Configuration(SingletonModel):
     activate_mailjet = models.BooleanField(default=False)
     email_confirm_template = models.IntegerField(default=3898061)
 
+    def save(self, *args, **kwargs):
+        '''
+        Transforme le nom en slug, pour en faire une url lisible
+        '''
+
+        self.slug = slugify(f"{self.organisation}")
+        super().save(*args, **kwargs)
 
 class Product(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
