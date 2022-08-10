@@ -44,6 +44,13 @@ docker compose up -d
 docker exec -ti billetterie_django tibinstall
 ```
 
+And play with API :
+
+- https://documenter.getpostman.com/view/17519122/UVeDtTFC
+
+
+#### Optional : Django admin interface.
+Not recommended, direct acces to database. Prefer API
 Root admin interface ( public tenant ) :
 - https://DOMAIN/admin
 
