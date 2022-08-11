@@ -4,7 +4,7 @@
     <div class="card-header p-0 position-relative z-index-1">
       <a class="d-block">
         <img
-            class="img-fluid border-radius-md border-bottom-end-radius-0 border-bottom-start-radius-0 shadow"
+            class="img-fluid shadow border-radius-lg"
             :src="event.img_variations.med"
             loading="lazy"
             alt="Image de l'évènement !"/>
