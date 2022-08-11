@@ -32,7 +32,8 @@ import ModalReservationList from "@/components/ModalReservationList.vue"
 import {storeToRefs} from 'pinia'
 import {useAllStore} from '@/stores/all'
 
-import '@/assets/css/google_fonts_family_montserrat_400.700.200.css'
+// font monserrat
+import '@/assets/css/font_Montserrat_Open_Sans_Condensed.css'
 
 // Nucleo Icons (ui)
 import '@/assets/css/nucleo-icons.css'

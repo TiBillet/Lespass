@@ -1,5 +1,5 @@
 <template>
-  <component :is="layout">
+<component :is="layout">
     <router-view />
   </component>
 </template>
@@ -14,3 +14,4 @@ let layout = LayoutDefault
 
 <style>
 </style>
+<!--  -->
