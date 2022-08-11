@@ -17,11 +17,11 @@
 
     <!-- confirme email -->
     <div class="input-group mb-2 has-validation">
-      <span class="input-group-text" @click="inputFocus('profil-confirme-email')">Confirme email</span>
+      <span class="input-group-text" @click="inputFocus('profil-confirme-email')">Confirmez l'email</span>
       <input id="profil-confirme-email" :value="getEmail.confirme" type="email"
              @change.stop="updateEmail('emailConfirme', $event.target.value)"
              pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$"
-             class="form-control card-email-input" placeholder="Confirmer email" required>
+             class="form-control card-email-input" placeholder="Email" required>
       <div class="invalid-feedback">
         Merci de renseigner une adresse email valide et identique.
       </div>
