@@ -10,6 +10,7 @@ import stripe
 from django.utils import timezone
 from django.views import View
 from rest_framework import serializers
+from stripe.error import InvalidRequestError
 
 from BaseBillet.models import Configuration, LigneArticle, Paiement_stripe, Reservation, Price, PriceSold
 from django.utils.translation import gettext, gettext_lazy as _
@@ -89,13 +90,13 @@ class creation_paiement_stripe():
         else :
             raise serializers.ValidationError(_(f"No Stripe Api Key in configuration"))
 
-    def _line_items(self):
+    def _line_items(self, force=False):
         line_items = []
         for ligne in self.liste_ligne_article:
             ligne: LigneArticle
             line_items.append(
                 {
-                    "price": f"{ligne.pricesold.get_id_price_stripe()}",
+                    "price": f"{ligne.pricesold.get_id_price_stripe(force=force)}",
                     "quantity": int(ligne.qty),
                 }
             )
@@ -133,7 +134,15 @@ class creation_paiement_stripe():
                 'metadata' : self.metadata,
                 'client_reference_id' : f"{self.user.pk}",
             }
-            checkout_session = stripe.checkout.Session.create(**data_checkout)
+            
+            try :
+                checkout_session = stripe.checkout.Session.create(**data_checkout)
+            except InvalidRequestError:
+                # L'id stripe est mauvais
+                # probablement dû à un changement d'état de test/prod
+                # on force là creation de nouvel ID
+                data_checkout['line_items'] = self._line_items(force=True)
+                checkout_session = stripe.checkout.Session.create(**data_checkout)
 
             logger.info(" ")
             logger.info("-"*40)
