@@ -214,17 +214,18 @@ class TenantViewSet(viewsets.ViewSet):
             categories = [Client.ARTISTE]
 
         if request.data.get('categorie') not in categories:
-            raise serializers.ValidationError(_("categorie doit être une salle de spectacle"))
+            raise serializers.ValidationError(_("categorie ne correspond pas à l'url"))
 
         serializer = NewConfigSerializer(data=request.data, context={'request': request})
 
         if serializer.is_valid():
 
             futur_conf = serializer.validated_data
+            slug = slugify(futur_conf.get('organisation'))
             with schema_context('public'):
                 try:
                     tenant, created = Client.objects.get_or_create(
-                        schema_name=futur_conf.get('slug'),
+                        schema_name=slug,
                         name=futur_conf.get('organisation'),
                         categorie=request.data.get('categorie'),
                     )
@@ -236,7 +237,7 @@ class TenantViewSet(viewsets.ViewSet):
                             status=status.HTTP_409_CONFLICT)
 
                     domain, created = Domain.objects.get_or_create(
-                        domain=f"{futur_conf.get('slug')}.{os.getenv('DOMAIN')}",
+                        domain=f"{slug}.{os.getenv('DOMAIN')}",
                         tenant=tenant,
                         is_primary=True
                     )
@@ -249,6 +250,7 @@ class TenantViewSet(viewsets.ViewSet):
             with tenant_context(tenant):
                 conf = Configuration.get_solo()
                 serializer.update(instance=conf, validated_data=futur_conf)
+                conf.slug = slug
                 conf.stripe_api_key = os.environ.get('SRIPE_KEY')
                 conf.stripe_test_api_key = os.environ.get('SRIPE_KEY_TEST')
 

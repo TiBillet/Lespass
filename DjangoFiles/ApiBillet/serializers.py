@@ -177,7 +177,6 @@ class NewConfigSerializer(serializers.ModelSerializer):
         model = Configuration
         fields = [
             "organisation",
-            "slug",
             "short_description",
             "long_description",
             "adress",

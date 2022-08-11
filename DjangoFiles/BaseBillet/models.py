@@ -251,10 +251,10 @@ class Configuration(SingletonModel):
 
     def save(self, *args, **kwargs):
         '''
-        Transforme le nom en slug, pour en faire une url lisible
+        Transforme le nom en slug si vide, pour en faire une url lisible
         '''
-
-        self.slug = slugify(f"{self.organisation}")
+        if not self.slug:
+            self.slug = slugify(f"{self.organisation}")
         super().save(*args, **kwargs)
 
 class Product(models.Model):
