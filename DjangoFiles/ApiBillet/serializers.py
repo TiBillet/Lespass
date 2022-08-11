@@ -75,7 +75,7 @@ class ProductSerializer(serializers.ModelSerializer):
                 categorie_article=Product.ADHESION,
                 send_to_cashless=True
             )
-            if len(adhesion_to_cashless > 0):
+            if len(adhesion_to_cashless) > 0:
                 raise serializers.ValidationError(
                     _(f"Un article d'adhésion vers le cashless existe déja."))
 
