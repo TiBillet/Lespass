@@ -403,8 +403,9 @@ staff_admin_site.register(Ticket, TicketAdmin)
 class ProductAdmin(admin.ModelAdmin):
     list_display = (
         'name',
-        'publish',
         'img',
+        'poids',
+        'publish',
         'categorie_article',
         'send_to_cashless',
     )
