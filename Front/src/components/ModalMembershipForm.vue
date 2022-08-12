@@ -24,7 +24,7 @@
                       j'ai pris connaissance des <a class="text-info" @click="goStatus()">conditions générales</a>
                     </label>
                     <div class="invalid-feedback position-absolute">
-                      conditions non lues !
+                      Conditions non acceptées.
                     </div>
                   </div>
                 </div>
@@ -43,17 +43,8 @@
                       {{ price.name }} - {{ price.prix }}€
                     </label>
                     <div v-if="index === 0" class="invalid-feedback">
-                      Un tarif ?
+                      Merci de choisir un tarif.
                     </div>
-                  </div>
-                </div>
-
-                <!-- nom -->
-                <div class="input-group mb-2 has-validation">
-                  <span class="input-group-text" @click="inputFocus('adhesion-nom')">Nom</span>
-                  <input id="adhesion-nom" v-model="adhesion.last_name" type="text"
-                         class="form-control" aria-label="Nom pour l'adhésion" required>
-                  <div class=" invalid-feedback">Un nom svp !
                   </div>
                 </div>
 
@@ -62,7 +53,16 @@
                   <span class="input-group-text" @click="inputFocus('adhesion-prenom')">Prénom</span>
                   <input id="adhesion-prenom" v-model="adhesion.first_name" type="text"
                          class="form-control" aria-label="Prénom pour l'adhésion" required>
-                  <div class="invalid-feedback">Un prénom svp !</div>
+                  <div class="invalid-feedback">Merci de remplir votre prénom.</div>
+                </div>
+
+                <!-- nom -->
+                <div class="input-group mb-2 has-validation">
+                  <span class="input-group-text" @click="inputFocus('adhesion-nom')">Nom</span>
+                  <input id="adhesion-nom" v-model="adhesion.last_name" type="text"
+                         class="form-control" aria-label="Nom pour l'adhésion" required>
+                  <div class=" invalid-feedback">Merci de remplir votre nom.
+                  </div>
                 </div>
 
                 <!-- email -->
@@ -71,7 +71,7 @@
                   <input id="adhesion-email" v-model="adhesion.email" type="email"
                          pattern="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$" class="form-control" required>
                   <div class="invalid-feedback">
-                    Une adresse email valide svp !
+                    Merci de remplir votre email.
                   </div>
                 </div>
 
@@ -80,7 +80,7 @@
                   <span class="input-group-text" @click="inputFocus('adhesion-code-postal')">Code postal</span>
                   <input id="adhesion-code-postal" v-model="adhesion.postal_code"
                          type="number" class="form-control" aria-label="Code postal" required>
-                  <div class="invalid-feedback">Code postal svp !</div>
+                  <div class="invalid-feedback">Merci de remplir votre code postal.</div>
                 </div>
 
                 <!-- téléphone -->
@@ -89,7 +89,7 @@
                   <input id="adhesion-tel" v-model="adhesion.phone" type="tel"
                          class="form-control" pattern="^[0-9-+\s()]*$"
                          aria-label="Fixe ou Mobile" required>
-                  <div class="invalid-feedback">Un numéro de téléphone svp !</div>
+                  <div class="invalid-feedback">Merci de remplir votre numéro de téléphone.</div>
                 </div>
                 <p class="mb-2">Non obligatoire, uniquement utile pour vous envoyer les confirmations d'achats."</p>
 

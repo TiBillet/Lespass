@@ -62,8 +62,8 @@ function showFormAdhesion(productUuid) {
     modal.show()
   } else {
     emitter.emit('modalMessage', {
-      titre: '!!!',
-      contenu: 'Vous êtes déjà adhérant !'
+      titre: 'Adhésion à jour',
+      contenu: 'Vous êtes à jour de cette cotisation. Vous pouvez aller vérifier votre prochaine échéance dans votre compte'
     })
   }
 }
