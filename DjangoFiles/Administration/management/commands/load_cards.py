@@ -26,12 +26,12 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         cards_dict = {}
         input_file_find = False
-        if exists("/DjangoFiles/data/domains_and_cards.py"):
-            print("/DjangoFiles/data/domains_and_cards.py existe. On charge depuis ce fichier ?")
+        if exists("/DjangoFiles/data/domains_and_cards_betabillet.py"):
+            print("/DjangoFiles/data/domains_and_cards_betabillet.py existe. On charge depuis ce fichier ?")
             input_file_find = input('Y ? \n')
 
         if input_file_find == "Y":
-            from data.domains_and_cards import cards
+            from data.domains_and_cards_betabillet import cards
             cards_dict = cards
         else :
             for client in Client.objects.all():
