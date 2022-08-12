@@ -268,6 +268,8 @@ class Product(models.Model):
     terms_and_conditions_document = models.URLField(blank=True, null=True)
 
     publish = models.BooleanField(default=False)
+    poids = models.PositiveSmallIntegerField(default=0, verbose_name=_("Poids"))
+
 
     img = StdImageField(upload_to='images/',
                         null=True, blank=True,
@@ -304,6 +306,15 @@ class Product(models.Model):
 
     def __str__(self):
         return f"{self.name}"
+
+@receiver(post_save, sender=Product)
+def poids_Product(sender, instance: Product, created, **kwargs):
+    if created:
+        # poids d'apparition
+        if instance.poids == 0:
+            instance.poids = len(Product.objects.all()) + 1
+
+        instance.save()
 
 
 class Price(models.Model):
