@@ -23,6 +23,26 @@ Ou venez discuter avec nous !
 - https://discord.gg/7FJvtYx
 
 
+### Event démo ( nighty build ) :
+
+Meta :
+- https://run.betabillet.tech
+
+Tenant :
+- https://raffinerie.betabillet.tech
+
+### Cashless démo ( nighty build ) :
+
+admin :
+- https://democashless.betabillet.art
+
+  - login : adminou
+  - password : miaoumiaou
+
+UX ( logged ):
+- https://democashless.betabillet.art/wv
+
+
 ## Install :
 
 ### For Production :
@@ -43,16 +63,6 @@ docker compose pull
 docker compose up -d 
 docker exec -ti billetterie_django tibinstall
 ```
-
-And play with API :
-
-- https://documenter.getpostman.com/view/17519122/UVeDtTFC
-
-
-#### Optional : Django admin interface.
-
-not recommended because it is a direct access to the database without automatic process. 
-Prefer the api to administer your instance.
 
 Root admin interface ( public tenant ) :
 - https://DOMAIN/admin
@@ -86,49 +96,6 @@ on https://excalidraw.com/
 
 ![](Presentation/Design_Front_Cashless_APP.svg)
 
-## Instances de démonstration
-
-TiBillet bouge beaucoup en ce moment !
-Si les liens ci-dessous ne sont pas valide, c'est que nous avons les mains dans le cambouis :) 
-Revenez plus tard ou passez nous voir sur le discord ! 
-
-### Billetterie démo ( nighty build ) :
-
-Meta :
-- https://run.betabillet.tech
-
-Tenant 'Rafftou'
-- https://rafftou.betabillet.tech
-
-### Cashless démo ( nighty build ) :
-
-https://democashless.betabillet.tech
-
-- login : adminou
-- password : miaoumiaou
-
-Une fois sur la page d'administration, aller sur "Voir le site" pour découvrir l'interface cashless. Ou aller sur :
-https://demo.cashless.tibillet.org/wv/
-
-## Introduction.
-
-Le présent dépot ne contient pas encore toutes les sources du projet en cours d'expérimentation :
-La billetterie est en cours de publication. Le Cashless est en cours d'audit de sécurité et sera publié sous licence
-libre ASAP.
-
-Mais ceci dit, si vous souhaitez l'expérimenter chez vous, n'hésitez pas à nous contacter. Toute aide et retour
-d'expérience sont les bienvenus.
-
-TiBillet est originalement construit par l'association des 3Peaks de Manapany : Créateurs du Manapany Surf Festival. 
-
-La société coopérative ( SCIC TiBillet Coop ) a été créé pour porter juridiquement une fédération autour des acteurs de la
-solution :
-Developpeurs, utilisateurs, organisateurs, tiers-lieux et collectivités locales seront réunis autour d'une coopérative
-d'interet commun.
-
-Venez discuter avec nous :
-
-- Discord : https://discord.gg/7FJvtYx
 
 
 # Code with us !
@@ -213,15 +180,30 @@ rsp
 Test with ```www.$DOMAIN/admin``` and ```raffinerie.$DOMAIN/admin```
 
 
-# BACKEND API Documentation
+# API Documentation
 
 ### API Postman with example :
 
 https://documenter.getpostman.com/view/17519122/UVeDtTFC
 
-# FRONTEND
 
-Le frontend basé sur le framework Vue.js est en cours de développement. N'hésitez pas à nous contacter pour contribuer.
+Le présent dépot ne contient pas encore toutes les sources du projet en cours d'expérimentation :
+La billetterie est en cours de publication. Le Cashless est en cours d'audit de sécurité et sera publié sous licence
+libre ASAP.
+
+Mais ceci dit, si vous souhaitez l'expérimenter chez vous, n'hésitez pas à nous contacter. Toute aide et retour
+d'expérience sont les bienvenus.
+
+TiBillet est originalement construit par l'association des 3Peaks de Manapany : Créateurs du Manapany Surf Festival. 
+
+La société coopérative ( SCIC TiBillet Coop ) a été créé pour porter juridiquement une fédération autour des acteurs de la
+solution :
+Developpeurs, utilisateurs, organisateurs, tiers-lieux et collectivités locales seront réunis autour d'une coopérative
+d'interet commun.
+
+Venez discuter avec nous :
+
+- Discord : https://discord.gg/7FJvtYx
 
 # Licence :
 
