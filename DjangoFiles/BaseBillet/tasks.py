@@ -110,7 +110,7 @@ class CeleryMailerClass():
                 logger.info(f'      WORKER CELERY mail envoyé : {mail_return} - {self.email}')
                 logger.info(f'          title : {self.title}')
                 logger.info(f'          text : {self.text}')
-                logger.info(f'          html : {self.html[30:]}')
+                logger.info(f'          html : {str(self.html)[30:]}')
                 logger.info(f'          return_email : {self.return_email}')
             else:
                 logger.error(f'     WORKER CELERY mail non envoyé : {mail_return} - {self.email}')
