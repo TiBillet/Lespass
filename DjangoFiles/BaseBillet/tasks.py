@@ -106,6 +106,9 @@ class CeleryMailerClass():
             if mail_return == 1:
                 self.sended = True
                 logger.info(f'      WORKER CELERY mail envoyé : {mail_return} - {self.email}')
+                logger.info(f'          title : {self.title}')
+                logger.info(f'          text : {self.text[30:]}')
+                logger.info(f'          return_email : {self.return_email}')
             else:
                 logger.error(f'     WORKER CELERY mail non envoyé : {mail_return} - {self.email}')
 
@@ -296,30 +299,7 @@ def connexion_celery_mailer(user_email, base_url, subject=None):
         meta_domain = f"https://{meta.get_primary_domain().domain}"
         connexion_url = f"{meta_domain}/emailconfirmation/{uid}/{token}"
 
-    '''
-    # Moteur MailSend
-    if config.activate_mailjet:
-        context = {
-            "confirmation_link": f"{connexion_url}",
-            "place": f"{config.organisation}"
-        }
-        template = config.email_confirm_template
 
-        mail = MailJetSendator(
-            email=user.email,
-            template=template,
-            context={}
-        )
-        try:
-            mail.send()
-            logger.info(f"mail.sended : {mail.sended}")
-
-        except Exception as e:
-            logger.error(f"{timezone.now()} Erreur envoie de mail pour connexion {user.email} : {e}")
-            raise Exception
-    
-    else:
-    '''
 
     # Internal SMTP and html template
     if subject is None:
