@@ -81,6 +81,9 @@ class CeleryMailerClass():
             EMAIL_HOST_USER,
             EMAIL_HOST_PASSWORD,
             self.return_email,
+            self.title,
+            self.text,
+            self.email,
         ]):
             return True
         else:
