@@ -150,7 +150,7 @@ class create_user(APIView):
         email = validator.validated_data.get('email').lower()
         password = validator.validated_data.get('password')
 
-        user = get_or_create_user(email, password)
+        user = get_or_create_user(email, password, send_mail=False)
 
         if user:
             sender_mail_connect(user.email)
