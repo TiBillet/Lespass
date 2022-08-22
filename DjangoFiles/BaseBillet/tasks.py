@@ -82,7 +82,6 @@ class CeleryMailerClass():
             EMAIL_HOST_PASSWORD,
             self.return_email,
             self.title,
-            self.text,
             self.email,
         ]):
             return True
@@ -110,7 +109,8 @@ class CeleryMailerClass():
                 self.sended = True
                 logger.info(f'      WORKER CELERY mail envoyé : {mail_return} - {self.email}')
                 logger.info(f'          title : {self.title}')
-                logger.info(f'          text : {self.text[30:]}')
+                logger.info(f'          text : {self.text}')
+                logger.info(f'          html : {self.html[30:]}')
                 logger.info(f'          return_email : {self.return_email}')
             else:
                 logger.error(f'     WORKER CELERY mail non envoyé : {mail_return} - {self.email}')
