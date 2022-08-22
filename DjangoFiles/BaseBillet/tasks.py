@@ -66,11 +66,17 @@ class CeleryMailerClass():
         EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
         EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
 
+
+
         # Try except un peu degueulasse causé par l'envoie de task
         # depuis le tenant public pour l'envoi du mail d'appairage
         try:
             self.return_email = Configuration.get_solo().email
             assert self.return_email
+
+            # si email retour n'est pas le même nom de domain que le moteur, mail non envoyé.
+            assert self.return_email.partition("@")[2] == EMAIL_HOST_USER.partition("@")[2]
+
         except Exception as e:
             logger.info(f'  WORKDER CELERY : self.return_email {e}')
             self.return_email = "contact@tibillet.re"
