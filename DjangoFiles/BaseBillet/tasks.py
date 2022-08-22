@@ -273,10 +273,10 @@ def redirect_post_webhook_stripe_from_public(url, data):
 
 
 @app.task
-def connexion_celery_mailer(user_email, base_url, subject=None):
+def connexion_celery_mailer(user_email, base_url, title=None):
     """
 
-    :param subject: Sujet de l'email
+    :param title: Sujet de l'email
     :type user_email: str
     :type url: str
     :type tenant_name: str
@@ -295,23 +295,29 @@ def connexion_celery_mailer(user_email, base_url, subject=None):
         config = Configuration.get_solo()
         organisation = config.organisation
         img_orga = config.img.med
+        logger.info(f'connection.tenant.schema_name != "public" : {connection.tenant.schema_name}')
+        logger.info(f'    {organisation}')
+        logger.info(f'    {img_orga}')
     else:
         organisation = "TiBillet"
         img_orga = "Logo_Tibillet_Noir_Ombre_600px.png"
         meta = Client.objects.filter(categorie=Client.META).first()
         meta_domain = f"https://{meta.get_primary_domain().domain}"
         connexion_url = f"{meta_domain}/emailconfirmation/{uid}/{token}"
+        logger.info(f'connection.tenant.schema_name == "public" : {connection.tenant.schema_name}')
 
 
 
     # Internal SMTP and html template
-    if subject is None:
-        subject = f"{organisation} : Confirmez votre email et connectez vous !"
+    if title is None:
+        title = f"{organisation} : Confirmez votre email et connectez vous !"
+
+    logger.info(f'    title : {title}')
 
     try:
         mail = CeleryMailerClass(
             user.email,
-            subject,
+            title,
             template='mails/connexion.html',
             context={
                 'organisation': organisation,
