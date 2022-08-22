@@ -96,9 +96,9 @@ class CeleryMailerClass():
 
     def send(self):
         if self.html and self.config_valid():
-            logger.info(f'  WORKDER CELERY : send_mail')
+            logger.info(f'  WORKDER CELERY : send_mail - {self.title}')
             mail = EmailMultiAlternatives(
-                "Ceci est un mail de connection",
+                self.title,
                 self.text,
                 self.return_email,
                 [self.email, ],
