@@ -17,7 +17,7 @@ TiBillet est en période de BETA et en expérimentation sur plusieurs lieux sur 
 Bisik, à la Raffinerie, et au Manapany Festival !
 
 Pour en savoir plus : 
-- https://wiki.tibillet.re 
+- https://tibillet.github.io/documentation/
 
 Ou venez discuter avec nous ! 
 - https://discord.gg/7FJvtYx
