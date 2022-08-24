@@ -14,11 +14,13 @@
         </div>
       </div>
     </div>
-
     <!-- search -->
     <div v-if="routeName === 'Accueil'" class="container">
       <Search />
     </div>
+
+    <div class="container mt-5">{{ header.longDescription }}</div>
+
   </header>
 </template>
 

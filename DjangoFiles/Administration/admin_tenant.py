@@ -516,3 +516,5 @@ staff_admin_site.register(Membership, MembershipAdmin)
 
 
 staff_admin_site.register(OptionGenerale, admin.ModelAdmin)
+
+

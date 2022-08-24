@@ -9,6 +9,10 @@
         <CardArtist :data-artist="artist" class="mb-6"/>
       </div>
 
+       <div class="container">
+        <p>
+        </p>
+       </div>
 
       <form @submit.prevent="validerAchats($event)" class="needs-validation" novalidate>
         <!--
