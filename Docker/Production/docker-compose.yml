@@ -113,7 +113,7 @@ services:
       service: billetterie_nodejs
     volumes:
       - ../../documentation:/documentation
-    working_dir: /Front
+    working_dir: /documentation
     command: "bash /documentation/build.sh"
 
 # pour demo : jturbeaux@pm.me / eiXom5mo
