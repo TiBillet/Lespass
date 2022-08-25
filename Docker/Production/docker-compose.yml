@@ -99,6 +99,7 @@ services:
       - ./nginx:/etc/nginx/conf.d
 
   billetterie_nodejs_prod:
+    container_name: billetterie_nodejs_prod
     extends:
       file: ../compose/docker-compose-base.yml
       service: billetterie_nodejs
@@ -108,6 +109,7 @@ services:
     command: "bash /Front/build.sh"
 
   billetterie_nodejs_doc:
+    container_name: billetterie_nodejs_doc
     extends:
       file: ../compose/docker-compose-base.yml
       service: billetterie_nodejs
