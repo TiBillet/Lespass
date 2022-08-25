@@ -85,6 +85,7 @@ services:
       - billetterie_django_dev
     volumes:
       - ../../Front:/Front
+      - ../../documentation:/documentation
     working_dir: /Front
     command: "bash /Front/start.sh"
     networks:
