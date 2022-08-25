@@ -116,7 +116,7 @@ services:
     volumes:
       - ../../documentation:/documentation
     working_dir: /documentation
-    command: "bash /documentation/build.sh"
+    command: "bash /documentation/tibillet/build.sh"
 
 # pour demo : jturbeaux@pm.me / eiXom5mo
 
