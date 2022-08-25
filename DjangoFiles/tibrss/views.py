@@ -71,6 +71,6 @@ class LatestEntriesEvent(Feed):
     def item_enclosures(self, item: Event):
         if item.img :
             url_img = self.base_url + item.img.med.url
-            return [feedgenerator.Enclosure(url_img, str(item.img.size), f"image/jpg}")]
+            return [feedgenerator.Enclosure(url_img, str(item.img.size), "image/jpg")]
 
         return ""
