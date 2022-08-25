@@ -107,6 +107,15 @@ services:
     working_dir: /Front
     command: "bash /Front/build.sh"
 
+  billetterie_nodejs_doc:
+    extends:
+      file: ../compose/docker-compose-base.yml
+      service: billetterie_nodejs
+    volumes:
+      - ../../documentation:/documentation
+    working_dir: /Front
+    command: "bash /documentation/build.sh"
+
 # pour demo : jturbeaux@pm.me / eiXom5mo
 
 networks:
