@@ -408,6 +408,9 @@ class Event(models.Model):
                         delete_orphans=True
                         )
 
+    def url(self):
+        return f"https://{connection.tenant.get_primary_domain().domain}/event/{self.slug}/"
+
     # noinspection PyUnresolvedReferences
     def img_variations(self):
         if self.img:
