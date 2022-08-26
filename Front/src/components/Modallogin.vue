@@ -7,13 +7,13 @@
         <div class="modal-body p-0">
           <div class="container card card-plain">
             <div class="card-header pb-0 text-left">
-              <h3 class="font-weight-bolder text-info text-gradient text-center">Connectez vous</h3>
+              <h3 class="font-weight-bolder text-info text-center">Connectez vous</h3>
 
               <div class="d-flex flex-row justify-content-center">
                 <hr class="text-dark w-50">
               </div>
 
-              <h3 class="font-weight-bolder text-info text-gradient text-center">avec votre e-mail</h3>
+              <h4 class="font-weight-bolder text-info text-center">Avec votre e-mail</h4>
             </div>
 
             <div class="card-body">
@@ -35,10 +35,10 @@
               </div>
 
               <div class="d-flex flex-row justify-content-center mt-2">
-                <h3 class="font-weight-bolder text-info text-gradient text-center">Avec communecter</h3>
+                <h4 class="font-weight-bolder text-info text-center">Avec communecter</h4>
               </div>
 
-              <div class="text-center">
+              <div class="text-center mt-2">
                 <button class="btn btn-round bg-gradient-info btn-lg" type="button"
                         @click="goCommunecter()">
                   <div class="d-flex flex-row justify-content-center align-items-center w-100">
