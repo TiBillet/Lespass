@@ -18,6 +18,7 @@ services:
       - backend-billeterie
 
   billetterie_django_prod:
+    image: registry.3peaks.re/billetterie_django_prod:26-08-22-prod
     extends:
       file: ../compose/docker-compose-base.yml
       service: billetterie_django
@@ -35,19 +36,21 @@ services:
       - backend-billeterie
 
   billetterie_celery_prod:
+    image: registry.3peaks.re/billetterie_django_prod:26-08-22-prod
     extends:
       file: ../compose/docker-compose-base.yml
       service: billetterie_celery
-    command: "bash /DjangoFiles/launch_celery.sh"
     env_file: .env
     depends_on:
       - billetterie_django_prod
+      - billetterie_redis_prod
     links:
       - billetterie_postgres_prod:billetterie_postgres
       - billetterie_redis_prod:redis
     networks:
 #      - frontend
       - backend-billeterie
+    command: "bash /DjangoFiles/launch_celery.sh"
 
 
 #  billetterie_daphne_prod:
@@ -84,15 +87,24 @@ services:
     links:
       - billetterie_django_prod:billetterie_django
 
+    # Pour prod tibillet.re
     labels:
       - traefik.enable=true
       - traefik.docker.network=frontend
-      - traefik.http.routers.billetterie_nginx_prod.tls.certresolver=letsencrypt
-      - traefik.http.routers.billetterie_nginx_prod.tls.domains[0].main=${DOMAIN}
-      - traefik.http.routers.billetterie_nginx_prod.tls.domains[0].sans=*.${DOMAIN}
-      - traefik.http.routers.billetterie_nginx_prod.rule=HostRegexp(`{sub:[a-zA-Z0-9-]+}.${DOMAIN}`) || Host(`${DOMAIN}`)
-      - traefik.http.routers.billetterie_nginx_prod.entrypoints=websecure
-      
+      - traefik.http.routers.billetterie_nginx_prod.tls.certresolver=myresolver
+      - traefik.http.routers.billetterie_nginx_prod.rule=Host(`m.${DOMAIN}`) || Host(`www.${DOMAIN}`) || Host(`raffinerie.${DOMAIN}`) || Host(`bisik.${DOMAIN}`) || Host(`vavangart.${DOMAIN}`) || Host(`3peaks.${DOMAIN}`) || Host(`meta.${DOMAIN}`) || Host(`${DOMAIN}`)
+
+
+# Prod demo :
+#    labels:
+#      - traefik.enable=true
+#      - traefik.docker.network=frontend
+#      - traefik.http.routers.billetterie_nginx_prod.tls.certresolver=letsencrypt
+#      - traefik.http.routers.billetterie_nginx_prod.tls.domains[0].main=${DOMAIN}
+#      - traefik.http.routers.billetterie_nginx_prod.tls.domains[0].sans=*.${DOMAIN}
+#      - traefik.http.routers.billetterie_nginx_prod.rule=HostRegexp(`{sub:[a-zA-Z0-9-]+}.${DOMAIN}`) || Host(`${DOMAIN}`)
+#      - traefik.http.routers.billetterie_nginx_prod.entrypoints=websecure
+#
     networks:
       - frontend
     volumes:
