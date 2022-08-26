@@ -771,7 +771,7 @@ class ReservationValidator(serializers.Serializer):
         qui comporte les objets de la db a la place des strings.
         """
 
-        nbr_ticket = 0
+        self.nbr_ticket = 0
         self.prices_list = []
         for entry in value:
             logger.info(f"price entry : {entry}")
@@ -791,7 +791,7 @@ class ReservationValidator(serializers.Serializer):
                         raise serializers.ValidationError(_(f"L'utilisateur n'est pas membre"))
 
                 if price.product.categorie_article in [Product.BILLET, Product.FREERES]:
-                    nbr_ticket += entry['qty']
+                    self.nbr_ticket += entry['qty']
 
                     # les noms sont requis pour la billetterie
                     if not entry.get('customers'):
@@ -808,7 +808,8 @@ class ReservationValidator(serializers.Serializer):
             except ValueError as e:
                 raise serializers.ValidationError(_(f'qty doit être un entier ou un flottant : {e}'))
 
-        if nbr_ticket == 0:
+
+        if self.nbr_ticket == 0:
             raise serializers.ValidationError(_(f'pas de billet dans la reservation'))
 
         return value
@@ -817,6 +818,10 @@ class ReservationValidator(serializers.Serializer):
         event: Event = attrs.get('event')
         options = attrs.get('options')
         to_mail: bool = attrs.get('to_mail')
+
+        resas = event.reservations()
+        if resas + self.nbr_ticket > event.jauge_max:
+            raise serializers.ValidationError(_(f'Il ne reste que {resas} places disponibles'))
 
         # On check que les prices sont bien dans l'event original.
         for price_object in self.prices_list:
