@@ -307,6 +307,12 @@ class Product(models.Model):
     def __str__(self):
         return f"{self.name}"
 
+    class Meta:
+        ordering = ('poids',)
+        verbose_name = _('Produit')
+        verbose_name_plural = _('Produits')
+
+
 @receiver(post_save, sender=Product)
 def poids_Product(sender, instance: Product, created, **kwargs):
     if created:
@@ -371,7 +377,9 @@ class Price(models.Model):
 
     class Meta:
         unique_together = ('name', 'product')
-
+        ordering = ('prix',)
+        verbose_name = _('Tarif')
+        verbose_name_plural = _('Tarifs')
 
 class Event(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
@@ -791,9 +799,9 @@ class Ticket(models.Model):
     def options(self):
         return " - ".join([option.name for option in self.reservation.options.all()])
 
-    class meta:
-        ordering = ('-datetime',)
-
+    class Meta:
+        verbose_name = _('Réservation')
+        verbose_name_plural = _('Réservations')
 
 class Paiement_stripe(models.Model):
     """

@@ -26,6 +26,36 @@ class StaffAdminSite(AdminSite):
     site_title = "TiBillet Staff Admin"
     site_url = '/'
 
+
+    def get_app_list(self, request):
+        app_dict = self._build_app_dict(request)
+
+        ordering = {
+            "Billetterie": [
+                "Configuration",
+                "Evenements",
+                "Réservations",
+                "Adhésions",
+                "Produits",
+                "Tarifs",
+                "Paiement_stripes",
+                "Options Tickets",
+            ]
+        }
+
+        app_dict = self._build_app_dict(request)
+        # a.sort(key=lambda x: b.index(x[0]))
+        # Sort the apps alphabetically.
+        app_list = sorted(app_dict.values(), key=lambda x: x['name'].lower())
+
+        # Sort the models alphabetically within each app.
+        for app in app_list:
+            order = ordering.get(app['name'])
+            if order:
+                app['models'].sort(key=lambda x: order.index(x['name']))
+
+        return app_list
+
     def has_permission(self, request):
         """
         Removed check for is_staff.
@@ -42,7 +72,6 @@ class StaffAdminSite(AdminSite):
             return False
         except Exception as e:
             raise e
-
 
     # def get_app_list(self, request):
     #     import ipdb; ipdb.set_trace()
@@ -266,9 +295,9 @@ class ReservationAdmin(admin.ModelAdmin):
     )
     # readonly_fields = list_display
     # search_fields = ['event']
+
+
 # staff_admin_site.register(Reservation, ReservationAdmin)
-
-
 
 
 class EventFilter(SimpleListFilter):
@@ -293,10 +322,13 @@ class EventFilter(SimpleListFilter):
         else:
             return queryset.filter(reservation__event__uuid=self.value())
 
+
 def valider_ticket(modeladmin, request, queryset):
     queryset.update(status=Ticket.SCANNED)
 
+
 valider_ticket.short_description = "Valider le/les tickets"
+
 
 class TicketAdmin(admin.ModelAdmin):
     list_display = [
@@ -312,11 +344,12 @@ class TicketAdmin(admin.ModelAdmin):
     readonly_fields = list_display
     actions = [valider_ticket, ]
     ordering = ('-reservation__datetime',)
+
     # list_filter = [EventFilter, ]
 
     # list_filter = (
     #     EventFilter,
-        # 'reservation__uuid'
+    # 'reservation__uuid'
     # )
 
     search_fields = (
@@ -332,14 +365,13 @@ class TicketAdmin(admin.ModelAdmin):
             )
         elif obj.status == Ticket.SCANNED:
             return 'Validé'
-        else :
+        else:
             for choice in Reservation.TYPE_CHOICES:
                 if choice[0] == obj.reservation.status:
                     return choice[1]
 
     state.short_description = 'Etat'
     state.allow_tags = True
-
 
     def get_urls(self):
         urls = super().get_urls()
@@ -351,10 +383,6 @@ class TicketAdmin(admin.ModelAdmin):
             ),
         ]
         return custom_urls + urls
-
-
-
-
 
     def scanner(self, request, ticket_pk, *arg, **kwarg):
         print(ticket_pk)
@@ -514,7 +542,4 @@ class MembershipAdmin(admin.ModelAdmin):
 
 staff_admin_site.register(Membership, MembershipAdmin)
 
-
 staff_admin_site.register(OptionGenerale, admin.ModelAdmin)
-
-
