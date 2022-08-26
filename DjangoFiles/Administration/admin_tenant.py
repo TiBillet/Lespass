@@ -32,14 +32,13 @@ class StaffAdminSite(AdminSite):
 
         ordering = {
             "Billetterie": [
-                "Configuration",
-                "Evenements",
-                "Réservations",
-                "Adhésions",
+                "Paramètres",
+                "Options Tickets",
                 "Produits",
                 "Tarifs",
-                "Paiement_stripes",
-                "Options Tickets",
+                "Evenements",
+                "Paiements Stripe",
+                "Réservations",
             ]
         }
 
@@ -428,18 +427,39 @@ class TicketAdmin(admin.ModelAdmin):
 staff_admin_site.register(Ticket, TicketAdmin)
 
 
+class ProductAdminCustomForm(forms.ModelForm):
+    class Meta:
+        model = Product
+        fields = (
+            'name',
+            'categorie_article',
+            'short_description',
+            'long_description',
+            'img',
+            'poids',
+    )
+
+    def clean(self):
+        cleaned_data = self.cleaned_data
+        categorie = cleaned_data.get('categorie_article')
+        if categorie == Product.NONE:
+            raise forms.ValidationError(_("Merci de renseigner une catégorie pour cet article."))
+        return cleaned_data
+
+
 class ProductAdmin(admin.ModelAdmin):
+    exclude = ('publish',)
+    form = ProductAdminCustomForm
     list_display = (
         'name',
         'img',
         'poids',
-        'publish',
         'categorie_article',
-        'send_to_cashless',
     )
 
+
     list_editable = (
-        'publish',
+        'poids',
     )
 
 
@@ -498,6 +518,13 @@ class PaiementStripeAdmin(admin.ModelAdmin):
     readonly_fields = list_display
     ordering = ('-order_date',)
 
+    def has_delete_permission(self, request, obj=None):
+        # return request.user.is_superuser
+        return False
+
+    def has_add_permission(self, request):
+        return False
+
 
 staff_admin_site.register(Paiement_stripe, PaiementStripeAdmin)
 
@@ -540,6 +567,6 @@ class MembershipAdmin(admin.ModelAdmin):
     ordering = ('-date_added',)
 
 
-staff_admin_site.register(Membership, MembershipAdmin)
+# staff_admin_site.register(Membership, MembershipAdmin)
 
 staff_admin_site.register(OptionGenerale, admin.ModelAdmin)

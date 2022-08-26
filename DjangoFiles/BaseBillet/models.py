@@ -257,18 +257,24 @@ class Configuration(SingletonModel):
             self.slug = slugify(f"{self.organisation}")
         super().save(*args, **kwargs)
 
+    class Meta:
+        verbose_name = _('Paramètres')
+        verbose_name_plural = _('Paramètres')
+
+
 class Product(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
 
-    name = models.CharField(max_length=500, unique=True)
+    name = models.CharField(max_length=500, unique=True, verbose_name=_("Nom"))
 
-    short_description = models.CharField(max_length=250, blank=True, null=True)
-    long_description = models.TextField(blank=True, null=True)
+    short_description = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Description courte"))
+    long_description = models.TextField(blank=True, null=True, verbose_name=_("Description longue"))
 
     terms_and_conditions_document = models.URLField(blank=True, null=True)
 
     publish = models.BooleanField(default=False)
-    poids = models.PositiveSmallIntegerField(default=0, verbose_name=_("Poids"))
+    poids = models.PositiveSmallIntegerField(default=0, verbose_name=_("Poids"),
+                                             help_text="Ordre d'apparition du plus leger au plus lourd")
 
 
     img = StdImageField(upload_to='images/',
@@ -284,9 +290,10 @@ class Product(models.Model):
                         verbose_name=_('Image du produit'),
                         )
 
-    BILLET, PACK, RECHARGE_CASHLESS, VETEMENT, MERCH, ADHESION, DON, FREERES = 'B', 'P', 'R', 'T', 'M', 'A', 'D', 'F'
+    NONE, BILLET, PACK, RECHARGE_CASHLESS, VETEMENT, MERCH, ADHESION, DON, FREERES = 'N', 'B', 'P', 'R', 'T', 'M', 'A', 'D', 'F'
 
     CATEGORIE_ARTICLE_CHOICES = [
+        (NONE, _('Selectionnez une catégorie')),
         (BILLET, _('Billet')),
         (PACK, _("Pack d'objets")),
         (RECHARGE_CASHLESS, _('Recharge cashless')),
@@ -297,7 +304,7 @@ class Product(models.Model):
         (FREERES, _('Reservation gratuite'))
     ]
 
-    categorie_article = models.CharField(max_length=3, choices=CATEGORIE_ARTICLE_CHOICES, default=BILLET,
+    categorie_article = models.CharField(max_length=3, choices=CATEGORIE_ARTICLE_CHOICES, default=NONE,
                                          verbose_name=_("Type d'article"))
 
     send_to_cashless = models.BooleanField(default=False)
@@ -330,7 +337,7 @@ class Price(models.Model):
     short_description = models.CharField(max_length=250, blank=True, null=True)
     long_description = models.TextField(blank=True, null=True)
 
-    name = models.CharField(max_length=50)
+    name = models.CharField(max_length=50, verbose_name=_("Précisez le nom du Tarif"))
     prix = models.FloatField()
 
     NA, DIX, VINGT = 'NA', 'DX', 'VG'
@@ -872,6 +879,9 @@ class Paiement_stripe(models.Model):
         return " - ".join(
             [f"{ligne.product.name} {ligne.qty * ligne.product.prix}€" for ligne in self.lignearticle_set.all()])
 
+    class Meta:
+        verbose_name = _('Paiement Stripe')
+        verbose_name_plural = _('Paiements Stripe')
 
 class LigneArticle(models.Model):
     uuid = models.UUIDField(primary_key=True, db_index=True, default=uuid.uuid4)
