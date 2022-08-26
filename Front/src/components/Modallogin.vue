@@ -23,7 +23,7 @@
                          class="form-control" placeholder="Email" type="email"
                          pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$" required>
                 </div>
-
+                <p class="mt-2">Nul besoin de mot de passe : un email vous sera envoyé pour validation.</p>
                 <div class="text-center">
                   <button class="btn btn-round bg-gradient-info btn-lg mt-4 mb-0 h-44px" type="submit">Valider
                   </button>
