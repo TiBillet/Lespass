@@ -480,13 +480,21 @@ staff_admin_site.register(Product, ProductAdmin)
 
 class PriceAdmin(admin.ModelAdmin):
     list_display = (
-        'name',
         'product',
+        'name',
         'prix',
         'adhesion_obligatoire',
         'subscription_type'
     )
-    ordering = ('product', 'name')
+    ordering = ('product',)
+
+
+
+    def get_queryset(self, request):
+        # On retire les recharges cashless et l'article Don
+        # Pas besoin de les afficher, ils se créent automatiquement.
+        qs = super().get_queryset(request)
+        return qs.exclude(product__categorie_article__in=[Product.RECHARGE_CASHLESS, Product.DON])
 
 
 staff_admin_site.register(Price, PriceAdmin)
@@ -527,7 +535,7 @@ class PaiementStripeAdmin(admin.ModelAdmin):
         'source_traitement',
         'source',
     )
-    readonly_fields = list_display
+    # readonly_fields = list_display
     ordering = ('-order_date',)
 
     def has_delete_permission(self, request, obj=None):

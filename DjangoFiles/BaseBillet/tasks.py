@@ -300,7 +300,11 @@ def connexion_celery_mailer(user_email, base_url, title=None):
     if connection.tenant.schema_name != "public":
         config = Configuration.get_solo()
         organisation = config.organisation
-        img_orga = config.img.med
+
+        img_orga = ""
+        if config.img :
+            img_orga = config.img.med
+
         logger.info(f'connection.tenant.schema_name != "public" : {connection.tenant.schema_name}')
         logger.info(f'    {organisation}')
         logger.info(f'    {img_orga}')
