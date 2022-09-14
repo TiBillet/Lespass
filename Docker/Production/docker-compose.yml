@@ -97,9 +97,9 @@ services:
       - traefik.http.routers.billetterie_nginx_prod.entrypoints=websecure
 
       # Pour la documentation et tous les DNS de TiBillet :
-      - traefik.http.routers.nginx_doc.tls.certresolver=tlsresolver
-      - traefik.http.routers.nginx_doc.entrypoints=websecure
-      - traefik.http.routers.nginx_doc.rule=Host(`tibillet.com`) || Host(`www.tibillet.com`) || Host(`tibillet.org`) || Host(`www.tibillet.org`) || Host(`tibillet.co`) || Host(`www.tibillet.co`) || Host(`tibillet.fr`) || Host(`www.tibillet.fr`)
+#      - traefik.http.routers.nginx_doc.tls.certresolver=tlsresolver
+#      - traefik.http.routers.nginx_doc.entrypoints=websecure
+#      - traefik.http.routers.nginx_doc.rule=Host(`tibillet.com`) || Host(`www.tibillet.com`) || Host(`tibillet.org`) || Host(`www.tibillet.org`) || Host(`tibillet.co`) || Host(`www.tibillet.co`) || Host(`tibillet.fr`) || Host(`www.tibillet.fr`)
 
     networks:
       - frontend
