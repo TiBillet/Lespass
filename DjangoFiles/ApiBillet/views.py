@@ -380,7 +380,8 @@ class EventsViewSet(viewsets.ViewSet):
         tenant: Client = connection.tenant
         four_hour_before_now = datetime.now().date() - timedelta(hours=4)
 
-        if tenant.categorie == Client.SALLE_SPECTACLE:
+        production_places = [ Client.SALLE_SPECTACLE, Client.FESTIVAL]
+        if tenant.categorie in production_places:
             queryset = Event.objects.filter(datetime__gte=four_hour_before_now).order_by('datetime')
             events_serialized = EventSerializer(queryset, many=True, context={'request': request})
             return Response(events_serialized.data)
