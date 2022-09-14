@@ -126,7 +126,7 @@ services:
       file: ../compose/docker-compose-base.yml
       service: billetterie_nodejs
     volumes:
-      - ../../documentation:/documentation
+      - ../../../documentation:/documentation
     working_dir: /documentation/tibillet
     command: "bash /documentation/tibillet/build.sh"
 

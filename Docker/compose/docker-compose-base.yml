@@ -53,8 +53,7 @@ services:
       - ../../Front/Landing:/usr/share/nginx/landing
       - ../../DjangoFiles/www:/DjangoFiles/www
       - ../../DjangoFiles/logs:/DjangoFiles/logs
-      - ../../documentation:/documentation
-
+      - ../../../documentation:/documentation
 
   billetterie_nodejs:
     image: node:16-bullseye
