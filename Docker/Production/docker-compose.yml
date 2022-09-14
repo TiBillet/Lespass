@@ -96,10 +96,6 @@ services:
       - traefik.http.routers.billetterie_nginx_prod.rule=HostRegexp(`{sub:[a-zA-Z0-9-]+}.${DOMAIN}`) || Host(`${DOMAIN}`)
       - traefik.http.routers.billetterie_nginx_prod.entrypoints=websecure
 
-      # Pour la documentation et tous les DNS de TiBillet :
-#      - traefik.http.routers.nginx_doc.tls.certresolver=tlsresolver
-#      - traefik.http.routers.nginx_doc.entrypoints=websecure
-#      - traefik.http.routers.nginx_doc.rule=Host(`tibillet.com`) || Host(`www.tibillet.com`) || Host(`tibillet.org`) || Host(`www.tibillet.org`) || Host(`tibillet.co`) || Host(`www.tibillet.co`) || Host(`tibillet.fr`) || Host(`www.tibillet.fr`)
 
     networks:
       - frontend
@@ -116,15 +112,15 @@ services:
     working_dir: /Front
     command: "bash /Front/build.sh"
 
-  billetterie_nodejs_doc:
-    container_name: billetterie_nodejs_doc
-    extends:
-      file: ../compose/docker-compose-base.yml
-      service: billetterie_nodejs
-    volumes:
-      - ../../../documentation:/documentation
-    working_dir: /documentation/tibillet
-    command: "bash /documentation/tibillet/build.sh"
+#  billetterie_nodejs_doc:
+#    container_name: billetterie_nodejs_doc
+#    extends:
+#      file: ../compose/docker-compose-base.yml
+#      service: billetterie_nodejs
+#    volumes:
+#      - ../../../documentation:/documentation
+#    working_dir: /documentation/tibillet
+#    command: "bash /documentation/tibillet/build.sh"
 
 # pour demo : jturbeaux@pm.me / eiXom5mo
 
