@@ -88,7 +88,7 @@ def set_paiement_stripe_valid(old_instance: LigneArticle, new_instance: LigneArt
                 logger.info(
                     f"         len(lignes_meme_panier) {len(lignes_meme_panier)} != len(lignes_meme_panier_valide) {len(lignes_meme_panier_valide)} ")
 
-
+'''
 def send_to_cashless(instance: LigneArticle):
     logger.info(f"        send_to_cashless {instance.pricesold}")
     data_for_cashless = {'uuid_commande': instance.paiement_stripe.uuid}
@@ -120,6 +120,7 @@ def send_to_cashless(instance: LigneArticle):
             f"erreur réponse serveur cashless {r.status_code} {r.text} pour paiement stripe {instance.pricesold} uuid {instance.uuid}")
 
     return r.status_code
+'''
 
 
 def check_paid(old_instance: LigneArticle, new_instance: LigneArticle):

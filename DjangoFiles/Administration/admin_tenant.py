@@ -20,6 +20,10 @@ from django.contrib.auth.admin import UserAdmin
 
 from Customers.models import Client
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class StaffAdminSite(AdminSite):
     site_header = "TiBillet Staff Admin"
@@ -437,6 +441,7 @@ class ProductAdminCustomForm(forms.ModelForm):
             'long_description',
             'img',
             'poids',
+            'send_to_cashless',
     )
 
     def clean(self):
@@ -455,12 +460,19 @@ class ProductAdmin(admin.ModelAdmin):
         'img',
         'poids',
         'categorie_article',
+        'send_to_cashless',
     )
 
 
     list_editable = (
         'poids',
     )
+
+    def get_queryset(self, request):
+        # On retire les recharges cashless et l'article Don
+        # Pas besoin de les afficher, ils se créent automatiquement.
+        qs = super().get_queryset(request)
+        return qs.exclude(categorie_article__in=[Product.RECHARGE_CASHLESS, Product.DON])
 
 
 staff_admin_site.register(Product, ProductAdmin)

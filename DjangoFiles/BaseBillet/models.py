@@ -307,7 +307,10 @@ class Product(models.Model):
     categorie_article = models.CharField(max_length=3, choices=CATEGORIE_ARTICLE_CHOICES, default=NONE,
                                          verbose_name=_("Type d'article"))
 
-    send_to_cashless = models.BooleanField(default=False)
+    send_to_cashless = models.BooleanField(default=False,
+                                           verbose_name="Envoyer au cashless",
+                                           help_text="Article qui doit être envoyé pour une comptabilité au cashless. Ex : Adhésions",
+                                           )
 
     # id_product_stripe = models.CharField(max_length=30, null=True, blank=True)
 
