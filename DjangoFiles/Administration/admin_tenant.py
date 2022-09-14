@@ -185,7 +185,7 @@ class ConfigurationAdmin(SingletonModelAdmin):
         }),
         ('Billetterie', {
             'fields': (
-                'activer_billetterie',
+                # 'activer_billetterie',
                 # 'template_billetterie',
                 # 'template_meta',
                 'jauge_max',

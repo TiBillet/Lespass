@@ -13,10 +13,8 @@ def sender_mail_connect(email, subject_mail=None):
     # Si la billetterie est active, on envoie le mail de confirmation
     base_url = connection.tenant.get_primary_domain().domain
     try:
-        config = Configuration.get_solo()
-        if config.activer_billetterie:
-            logger.info(f"sender_mail_connect : {email} - {base_url}")
-            connexion_celery_mailer.delay(email, f"https://{base_url}", subject_mail)
+        logger.info(f"sender_mail_connect : {email} - {base_url}")
+        connexion_celery_mailer.delay(email, f"https://{base_url}", subject_mail)
 
     except Exception as e:
         logger.error(f"validate_email_and_return_user erreur pour récuperer config : {email} - {base_url} : {e}")

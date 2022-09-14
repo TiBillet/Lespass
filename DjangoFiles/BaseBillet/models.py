@@ -192,7 +192,7 @@ class Configuration(SingletonModel):
         else:
             return self.stripe_api_key
 
-    activer_billetterie = models.BooleanField(default=True, verbose_name=_("Activer la billetterie"))
+    # activer_billetterie = models.BooleanField(default=True, verbose_name=_("Activer la billetterie"))
 
     jauge_max = models.PositiveSmallIntegerField(default=50, verbose_name=_("Jauge maximale"))
 

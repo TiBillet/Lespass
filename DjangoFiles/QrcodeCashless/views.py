@@ -130,7 +130,7 @@ class index_scan(View):
                 'a_jour_cotisation': a_jour_cotisation,
                 # 'liste_assets': liste_assets,
                 'email': email,
-                'billetterie_bool': configuration.activer_billetterie,
+                # 'billetterie_bool': configuration.activer_billetterie,
             }
             logger.info(f"index scan data : {data}")
             return render(
