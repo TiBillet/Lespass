@@ -855,7 +855,7 @@ class Paiement_stripe(models.Model):
         (WEBHOOK_INVOICE, _('Depuis webhook invoice')),
     )
     source_traitement = models.CharField(max_length=1, choices=SOURCE_CHOICES, default=NA,
-                                         verbose_name="Source de la commande")
+                                         verbose_name="Source du traitement")
 
     reservation = models.ForeignKey(Reservation, on_delete=models.PROTECT, blank=True, null=True,
                                     related_name="paiements")
@@ -880,7 +880,7 @@ class Paiement_stripe(models.Model):
 
     def articles(self):
         return " - ".join(
-            [f"{ligne.product.name} {ligne.qty * ligne.product.prix}€" for ligne in self.lignearticle_set.all()])
+            [f"{ligne.pricesold.productsold.product.name} {ligne.pricesold.price.name} {ligne.qty * ligne.pricesold.price.prix}€" for ligne in self.lignearticle_set.all()])
 
     class Meta:
         verbose_name = _('Paiement Stripe')

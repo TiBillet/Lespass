@@ -534,8 +534,9 @@ class PaiementStripeAdmin(admin.ModelAdmin):
         'traitement_en_cours',
         'source_traitement',
         'source',
+        'articles',
     )
-    # readonly_fields = list_display
+    readonly_fields = list_display
     ordering = ('-order_date',)
 
     def has_delete_permission(self, request, obj=None):
