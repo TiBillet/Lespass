@@ -979,7 +979,7 @@ def paiment_stripe_validator(request, paiement_stripe):
             for ligne_article in paiement_stripe.lignearticle_set.all():
                 if ligne_article.carte:
                     messages.error(request,
-                                   f"Le paiement à bien été validé, merci !"
+                                   f"Le paiement à bien été validé, merci ! "
                                    f"Mais un problème est apparu avec la validation de la carte cashless. Merci de contacter un responsable.")
                     return HttpResponseRedirect(f"/qr/{ligne_article.carte.uuid}#erreurpaiement")
 

@@ -107,12 +107,7 @@ class action_article_paid_by_categorie:
         price: Price = self.ligne_article.pricesold.price
         product: Product = self.ligne_article.pricesold.productsold.product
 
-        # membership, created = Membership.objects.get_or_create(
-        #     user=user,
-        #     price=price
-        # )
-
-        membership = Membership.objects.get(
+        membership, created = Membership.objects.get_or_create(
             user=user,
             price=price
         )
