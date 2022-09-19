@@ -819,14 +819,19 @@ def paiment_stripe_validator(request, paiement_stripe):
         data = {
             "msg": 'Paiement validé. Création des billets et envoi par mail en cours.',
         }
+
         if paiement_stripe.reservation:
             serializer = TicketSerializer(paiement_stripe.reservation.tickets.all().exclude(status=Ticket.SCANNED),
                                           many=True)
             data["tickets"] = serializer.data
-        return Response(
-            data,
-            status=status.HTTP_226_IM_USED
-        )
+
+        # Si ce n'est pas une adhésion par QRCode,
+        # on renvoie vers le front en annonçant que le travail est en cours
+        if paiement_stripe.source != Paiement_stripe.QRCODE:
+            return Response(
+                data,
+                status=status.HTTP_226_IM_USED
+            )
 
     if paiement_stripe.reservation:
         if paiement_stripe.reservation.status == Reservation.PAID_ERROR:
@@ -910,7 +915,7 @@ def paiment_stripe_validator(request, paiement_stripe):
                 paiement_stripe.last_action = timezone.now()
                 paiement_stripe.traitement_en_cours = True
 
-                # Dans le cas d'un nouvel abonement
+                # Dans le cas d'un nouvel abonnement
                 # On va chercher le numéro de l'abonnement stripe
                 # Et sa facture
                 if checkout_session.mode == 'subscription':
