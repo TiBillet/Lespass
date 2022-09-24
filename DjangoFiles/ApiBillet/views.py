@@ -251,8 +251,8 @@ class TenantViewSet(viewsets.ViewSet):
                 conf = Configuration.get_solo()
                 serializer.update(instance=conf, validated_data=futur_conf)
                 conf.slug = slug
-                conf.stripe_api_key = os.environ.get('SRIPE_KEY')
-                conf.stripe_test_api_key = os.environ.get('SRIPE_KEY_TEST')
+                conf.stripe_api_key = os.environ.get('STRIPE_KEY')
+                conf.stripe_test_api_key = os.environ.get('STRIPE_KEY_TEST')
 
                 if os.environ.get('STRIPE_TEST') == "False":
                     conf.stripe_mode_test = False
