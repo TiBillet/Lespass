@@ -251,8 +251,8 @@ class TenantViewSet(viewsets.ViewSet):
                 conf = Configuration.get_solo()
                 serializer.update(instance=conf, validated_data=futur_conf)
                 conf.slug = slug
-                conf.stripe_api_key = os.environ.get('SRIPE_KEY')
-                conf.stripe_test_api_key = os.environ.get('SRIPE_KEY_TEST')
+                conf.stripe_api_key = os.environ.get('STRIPE_KEY')
+                conf.stripe_test_api_key = os.environ.get('STRIPE_KEY_TEST')
 
                 if os.environ.get('STRIPE_TEST') == "False":
                     conf.stripe_mode_test = False
@@ -380,7 +380,8 @@ class EventsViewSet(viewsets.ViewSet):
         tenant: Client = connection.tenant
         four_hour_before_now = datetime.now().date() - timedelta(hours=4)
 
-        if tenant.categorie == Client.SALLE_SPECTACLE:
+        production_places = [ Client.SALLE_SPECTACLE, Client.FESTIVAL]
+        if tenant.categorie in production_places:
             queryset = Event.objects.filter(datetime__gte=four_hour_before_now).order_by('datetime')
             events_serialized = EventSerializer(queryset, many=True, context={'request': request})
             return Response(events_serialized.data)
@@ -818,14 +819,19 @@ def paiment_stripe_validator(request, paiement_stripe):
         data = {
             "msg": 'Paiement validé. Création des billets et envoi par mail en cours.',
         }
+
         if paiement_stripe.reservation:
             serializer = TicketSerializer(paiement_stripe.reservation.tickets.all().exclude(status=Ticket.SCANNED),
                                           many=True)
             data["tickets"] = serializer.data
-        return Response(
-            data,
-            status=status.HTTP_226_IM_USED
-        )
+
+        # Si ce n'est pas une adhésion par QRCode,
+        # on renvoie vers le front en annonçant que le travail est en cours
+        if paiement_stripe.source != Paiement_stripe.QRCODE:
+            return Response(
+                data,
+                status=status.HTTP_226_IM_USED
+            )
 
     if paiement_stripe.reservation:
         if paiement_stripe.reservation.status == Reservation.PAID_ERROR:
@@ -909,7 +915,7 @@ def paiment_stripe_validator(request, paiement_stripe):
                 paiement_stripe.last_action = timezone.now()
                 paiement_stripe.traitement_en_cours = True
 
-                # Dans le cas d'un nouvel abonement
+                # Dans le cas d'un nouvel abonnement
                 # On va chercher le numéro de l'abonnement stripe
                 # Et sa facture
                 if checkout_session.mode == 'subscription':
@@ -969,6 +975,13 @@ def paiment_stripe_validator(request, paiement_stripe):
                     else:
                         return Response(f'VALID', status=status.HTTP_200_OK)
 
+        elif paiement_stripe.status == Paiement_stripe.PAID:
+            for ligne_article in paiement_stripe.lignearticle_set.all():
+                if ligne_article.carte:
+                    messages.error(request,
+                                   f"Le paiement à bien été validé, merci ! "
+                                   f"Mais un problème est apparu avec la validation de la carte cashless. Merci de contacter un responsable.")
+                    return HttpResponseRedirect(f"/qr/{ligne_article.carte.uuid}#erreurpaiement")
 
         else:
             # on boucle ici pour récuperer l'uuid de la carte.

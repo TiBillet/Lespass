@@ -20,6 +20,10 @@ from django.contrib.auth.admin import UserAdmin
 
 from Customers.models import Client
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class StaffAdminSite(AdminSite):
     site_header = "TiBillet Staff Admin"
@@ -185,7 +189,7 @@ class ConfigurationAdmin(SingletonModelAdmin):
         }),
         ('Billetterie', {
             'fields': (
-                'activer_billetterie',
+                # 'activer_billetterie',
                 # 'template_billetterie',
                 # 'template_meta',
                 'jauge_max',
@@ -437,6 +441,7 @@ class ProductAdminCustomForm(forms.ModelForm):
             'long_description',
             'img',
             'poids',
+            'send_to_cashless',
     )
 
     def clean(self):
@@ -455,6 +460,7 @@ class ProductAdmin(admin.ModelAdmin):
         'img',
         'poids',
         'categorie_article',
+        'send_to_cashless',
     )
 
 
@@ -462,19 +468,33 @@ class ProductAdmin(admin.ModelAdmin):
         'poids',
     )
 
+    def get_queryset(self, request):
+        # On retire les recharges cashless et l'article Don
+        # Pas besoin de les afficher, ils se créent automatiquement.
+        qs = super().get_queryset(request)
+        return qs.exclude(categorie_article__in=[Product.RECHARGE_CASHLESS, Product.DON])
+
 
 staff_admin_site.register(Product, ProductAdmin)
 
 
 class PriceAdmin(admin.ModelAdmin):
     list_display = (
-        'name',
         'product',
+        'name',
         'prix',
         'adhesion_obligatoire',
         'subscription_type'
     )
-    ordering = ('product', 'name')
+    ordering = ('product',)
+
+
+
+    def get_queryset(self, request):
+        # On retire les recharges cashless et l'article Don
+        # Pas besoin de les afficher, ils se créent automatiquement.
+        qs = super().get_queryset(request)
+        return qs.exclude(product__categorie_article__in=[Product.RECHARGE_CASHLESS, Product.DON])
 
 
 staff_admin_site.register(Price, PriceAdmin)
@@ -514,13 +534,14 @@ class PaiementStripeAdmin(admin.ModelAdmin):
         'traitement_en_cours',
         'source_traitement',
         'source',
+        'articles',
     )
     readonly_fields = list_display
     ordering = ('-order_date',)
 
     def has_delete_permission(self, request, obj=None):
-        # return request.user.is_superuser
-        return False
+        return request.user.is_superuser
+        # return False
 
     def has_add_permission(self, request):
         return False

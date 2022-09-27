@@ -192,7 +192,7 @@ class Configuration(SingletonModel):
         else:
             return self.stripe_api_key
 
-    activer_billetterie = models.BooleanField(default=True, verbose_name=_("Activer la billetterie"))
+    # activer_billetterie = models.BooleanField(default=True, verbose_name=_("Activer la billetterie"))
 
     jauge_max = models.PositiveSmallIntegerField(default=50, verbose_name=_("Jauge maximale"))
 
@@ -307,7 +307,10 @@ class Product(models.Model):
     categorie_article = models.CharField(max_length=3, choices=CATEGORIE_ARTICLE_CHOICES, default=NONE,
                                          verbose_name=_("Type d'article"))
 
-    send_to_cashless = models.BooleanField(default=False)
+    send_to_cashless = models.BooleanField(default=False,
+                                           verbose_name="Envoyer au cashless",
+                                           help_text="Article qui doit être envoyé pour une comptabilité au cashless. Ex : Adhésions",
+                                           )
 
     # id_product_stripe = models.CharField(max_length=30, null=True, blank=True)
 
@@ -852,7 +855,7 @@ class Paiement_stripe(models.Model):
         (WEBHOOK_INVOICE, _('Depuis webhook invoice')),
     )
     source_traitement = models.CharField(max_length=1, choices=SOURCE_CHOICES, default=NA,
-                                         verbose_name="Source de la commande")
+                                         verbose_name="Source du traitement")
 
     reservation = models.ForeignKey(Reservation, on_delete=models.PROTECT, blank=True, null=True,
                                     related_name="paiements")
@@ -877,7 +880,7 @@ class Paiement_stripe(models.Model):
 
     def articles(self):
         return " - ".join(
-            [f"{ligne.product.name} {ligne.qty * ligne.product.prix}€" for ligne in self.lignearticle_set.all()])
+            [f"{ligne.pricesold.productsold.product.name} {ligne.pricesold.price.name} {ligne.qty * ligne.pricesold.price.prix}€" for ligne in self.lignearticle_set.all()])
 
     class Meta:
         verbose_name = _('Paiement Stripe')

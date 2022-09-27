@@ -16,4 +16,4 @@ cd /DjangoFiles
 
 python manage.py collectstatic --noinput
 gunicorn TiBillet.wsgi --log-level=debug --access-logfile /DjangoFiles/logs/gunicorn.logs --log-file /DjangoFiles/logs/gunicorn.logs --error-logfile /DjangoFiles/logs/gunicorn.logs --log-level debug --capture-output --reload -w 5 -b 0.0.0.0:8000
-sleep 2400h
+#sleep 2400h

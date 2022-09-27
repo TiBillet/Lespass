@@ -130,7 +130,7 @@ class index_scan(View):
                 'a_jour_cotisation': a_jour_cotisation,
                 # 'liste_assets': liste_assets,
                 'email': email,
-                'billetterie_bool': configuration.activer_billetterie,
+                # 'billetterie_bool': configuration.activer_billetterie,
             }
             logger.info(f"index scan data : {data}")
             return render(
@@ -157,8 +157,6 @@ class index_scan(View):
             raise Http404
 
         data = request.POST
-        print(data)
-        # montant_adhesion = data.get('montant_adhesion')
         pk_adhesion = data.get('pk_adhesion')
         montant_recharge = data.get('montant_recharge')
 
@@ -251,6 +249,7 @@ class index_scan(View):
                 })
 
             sess.close()
+
 
             # Nouveau membre créé avec uniquement l'email
 

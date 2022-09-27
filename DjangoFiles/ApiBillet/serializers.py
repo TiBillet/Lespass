@@ -140,7 +140,7 @@ class ConfigurationSerializer(serializers.ModelSerializer):
             "twitter",
             "facebook",
             "instagram",
-            "activer_billetterie",
+            # "activer_billetterie",
             "adhesion_obligatoire",
             "button_adhesion",
             "map_img",

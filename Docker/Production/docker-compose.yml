@@ -87,15 +87,6 @@ services:
     links:
       - billetterie_django_prod:billetterie_django
 
-    # Pour prod tibillet.re
-#    labels:
-#      - traefik.enable=true
-#      - traefik.docker.network=frontend
-#      - traefik.http.routers.billetterie_nginx_prod.tls.certresolver=myresolver
-#      - traefik.http.routers.billetterie_nginx_prod.rule=Host(`m.${DOMAIN}`) || Host(`www.${DOMAIN}`) || Host(`raffinerie.${DOMAIN}`) || Host(`bisik.${DOMAIN}`) || Host(`vavangart.${DOMAIN}`) || Host(`3peaks.${DOMAIN}`) || Host(`meta.${DOMAIN}`) || Host(`${DOMAIN}`)
-#
-
-    # Prod demo :
     labels:
       - traefik.enable=true
       - traefik.docker.network=frontend
@@ -104,6 +95,7 @@ services:
       - traefik.http.routers.billetterie_nginx_prod.tls.domains[0].sans=*.${DOMAIN}
       - traefik.http.routers.billetterie_nginx_prod.rule=HostRegexp(`{sub:[a-zA-Z0-9-]+}.${DOMAIN}`) || Host(`${DOMAIN}`)
       - traefik.http.routers.billetterie_nginx_prod.entrypoints=websecure
+
 
     networks:
       - frontend
@@ -120,15 +112,15 @@ services:
     working_dir: /Front
     command: "bash /Front/build.sh"
 
-  billetterie_nodejs_doc:
-    container_name: billetterie_nodejs_doc
-    extends:
-      file: ../compose/docker-compose-base.yml
-      service: billetterie_nodejs
-    volumes:
-      - ../../documentation:/documentation
-    working_dir: /documentation/tibillet
-    command: "bash /documentation/tibillet/build.sh"
+#  billetterie_nodejs_doc:
+#    container_name: billetterie_nodejs_doc
+#    extends:
+#      file: ../compose/docker-compose-base.yml
+#      service: billetterie_nodejs
+#    volumes:
+#      - ../../../documentation:/documentation
+#    working_dir: /documentation/tibillet
+#    command: "bash /documentation/tibillet/build.sh"
 
 # pour demo : jturbeaux@pm.me / eiXom5mo
 
