@@ -80,7 +80,6 @@ SHARED_APPS = (
     'solo',
     'stdimage',
     'corsheaders',
-
 )
 
 # CodeLogin_app/settings.py
@@ -89,12 +88,14 @@ SHARED_APPS = (
 TENANT_APPS = (
     # The following Django contrib apps must be in TENANT_APPS
     'django.contrib.contenttypes',
+    'rest_framework_api_key',
     # your tenant-specific apps
     'BaseBillet',
     'ApiBillet',
     'PaiementStripe',
     'wsocket',
     'tibrss',
+
 )
 
 INSTALLED_APPS = list(SHARED_APPS) + [app for app in TENANT_APPS if app not in SHARED_APPS]

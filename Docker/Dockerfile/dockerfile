@@ -91,5 +91,5 @@ RUN python --version
 RUN django-admin --version
 RUN pip freeze
 
-# docker build -t registry.3peaks.re/tibillet_ticket:2022-09-13 .
-# docker push registry.3peaks.re/tibillet_ticket:2022-09-13
+# docker build -t registry.3peaks.re/tibillet_ticket:2022-09-27 .
+# docker push registry.3peaks.re/tibillet_ticket:2022-09-27

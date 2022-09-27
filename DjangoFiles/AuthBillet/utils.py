@@ -9,6 +9,20 @@ from BaseBillet.tasks import connexion_celery_mailer
 
 logger = logging.getLogger(__name__)
 
+def get_client_ip(request):
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    x_real_ip = request.META.get('HTTP_X_REAL_IP')
+
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
+    elif x_real_ip:
+        ip = x_real_ip
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+
+    return ip
+
+
 def sender_mail_connect(email, subject_mail=None):
     # Si la billetterie est active, on envoie le mail de confirmation
     base_url = connection.tenant.get_primary_domain().domain

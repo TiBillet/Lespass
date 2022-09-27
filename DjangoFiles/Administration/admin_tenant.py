@@ -1,4 +1,5 @@
 import datetime
+import uuid
 
 from django import forms
 from django.conf.urls import url
@@ -10,12 +11,14 @@ from django.http import HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils.html import format_html
+# from rest_framework_api_key.models import APIKey
+from rest_framework_api_key.models import APIKey
 from solo.admin import SingletonModelAdmin
 from django.utils.translation import ugettext_lazy as _
 
 from AuthBillet.models import HumanUser, SuperHumanUser, TermUser
 from BaseBillet.models import Configuration, Event, OptionGenerale, Product, Price, Reservation, LigneArticle, Ticket, \
-    Paiement_stripe, ProductSold, PriceSold, Membership
+    Paiement_stripe, ProductSold, PriceSold, Membership, ApiKey
 from django.contrib.auth.admin import UserAdmin
 
 from Customers.models import Client
@@ -30,7 +33,6 @@ class StaffAdminSite(AdminSite):
     site_title = "TiBillet Staff Admin"
     site_url = '/'
 
-
     def get_app_list(self, request):
         app_dict = self._build_app_dict(request)
 
@@ -43,6 +45,7 @@ class StaffAdminSite(AdminSite):
                 "Evenements",
                 "Paiements Stripe",
                 "Réservations",
+                "Api keys",
             ]
         }
 
@@ -141,6 +144,61 @@ class TermUserAdmin(UserAdminTibillet):
 
 
 staff_admin_site.register(TermUser, TermUserAdmin)
+
+class ApiKeyAdmin(admin.ModelAdmin):
+    readonly_fields = ["key",]
+    list_display = [
+        "name",
+        "created",
+        "ip",
+    ]
+
+    fields = [
+        "name",
+        "ip",
+        "revoquer_apikey",
+    ]
+
+    def save_model(self, request, instance, form, change):
+        # obj.user = request.user
+        ex_api_key = None
+        if instance.revoquer_apikey:
+            if instance.key:
+                ex_api_key = APIKey.objects.get(id=instance.key.id)
+                instance.key = None
+                messages.add_message(request, messages.WARNING, "API Key deleted")
+
+            else:
+                api_key = None
+                key = " "
+                # On affiche le string Key sur l'admin de django en message
+                # et django.message capitalize chaque message...
+                # Du coup, on fait bien gaffe à ce que je la clée générée ai bien une majusculle au début ...
+                while key[0].isupper() == False:
+                    api_key, key = APIKey.objects.create_key(name=instance.name)
+                    if key[0].isupper() == False:
+                        api_key.delete()
+
+                instance.key = api_key
+
+                messages.add_message(
+                    request,
+                    messages.SUCCESS,
+                    f"Copiez bien la clé suivante et mettez la en lieu sur ! Elle n'est pas enregistrée sur nos serveurs et ne sera affichée qu'une seule fois ici :"
+                )
+                messages.add_message(
+                    request,
+                    messages.WARNING,
+                    f"{key}"
+                )
+
+            instance.revoquer_apikey = False
+
+        super().save_model(request, instance, form, change)
+        if ex_api_key:
+            ex_api_key.delete()
+
+staff_admin_site.register(ApiKey, ApiKeyAdmin)
 
 
 ########################################################################
@@ -442,7 +500,7 @@ class ProductAdminCustomForm(forms.ModelForm):
             'img',
             'poids',
             'send_to_cashless',
-    )
+        )
 
     def clean(self):
         cleaned_data = self.cleaned_data
@@ -462,7 +520,6 @@ class ProductAdmin(admin.ModelAdmin):
         'categorie_article',
         'send_to_cashless',
     )
-
 
     list_editable = (
         'poids',
@@ -487,8 +544,6 @@ class PriceAdmin(admin.ModelAdmin):
         'subscription_type'
     )
     ordering = ('product',)
-
-
 
     def get_queryset(self, request):
         # On retire les recharges cashless et l'article Don

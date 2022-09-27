@@ -18,6 +18,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.db import connection
 from django.utils.translation import ugettext_lazy as _
+# from rest_framework_api_key.models import APIKey
+# from rest_framework_api_key.permissions import HasAPIKey
 from rest_framework_simplejwt.backends import TokenBackend
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from rest_framework_simplejwt.views import TokenViewBase, TokenRefreshView
@@ -27,7 +29,7 @@ from AuthBillet.models import TibilletUser, TenantAdminPermission, TermUser
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from AuthBillet.serializers import MeSerializer, CreateUserValidator, CreateTerminalValidator, TokenTerminalValidator
-from AuthBillet.utils import get_or_create_user, sender_mail_connect
+from AuthBillet.utils import get_or_create_user, sender_mail_connect, get_client_ip
 from BaseBillet.models import Configuration
 
 from django.utils.encoding import force_str, force_bytes
@@ -86,32 +88,53 @@ class TokenCreateView_custom(TokenCreateView):
 
 
 class TokenRefreshViewCustom(TokenRefreshView):
+    def post(self, request, *args, **kwargs):
+        super_return = super().post(request, *args, **kwargs)
+        '''
+        Surclassage de la fonction Refresh
+        On s'assure ici que le refresh token d'un terminal provient
+        bien de lui avec sa mac_adress et son unique_id
+        '''
+        # import ipdb; ipdb.set_trace()
+        serializer = self.get_serializer(data=request.data)
+        refresh = serializer.token_class(self.request.data.get('refresh'))
+        # user = TibilletUser.objects.get(pk=refresh['user_id'])
+        user = get_object_or_404(TibilletUser, pk=refresh['user_id'])
+
+        if user.espece == TibilletUser.TYPE_TERM:
+            try:
+                assert user.mac_adress_sended == request.data.get('mac_adress')
+                assert user.terminal_uuid == request.data.get('unique_id')
+            except AssertionError as e :
+                refresh.blacklist()
+                raise AuthenticationFailed(
+                    f"AssertionError",
+                )
+
+        return super_return
+
+'''
+class create_api_key(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, requests):
+        pass
 
 
-        def post(self, request, *args, **kwargs):
-            super_return = super().post(request, *args, **kwargs)
-            '''
-            Surclassage de la fonction Refresh
-            On s'assure ici que le refresh token d'un terminal provient
-            bien de lui avec sa mac_adress et son unique_id
-            '''
-            # import ipdb; ipdb.set_trace()
-            serializer = self.get_serializer(data=request.data)
-            refresh = serializer.token_class(self.request.data.get('refresh'))
-            # user = TibilletUser.objects.get(pk=refresh['user_id'])
-            user = get_object_or_404(TibilletUser, pk=refresh['user_id'])
 
-            if user.espece == TibilletUser.TYPE_TERM:
-                try:
-                    assert user.mac_adress_sended == request.data.get('mac_adress')
-                    assert user.terminal_uuid == request.data.get('unique_id')
-                except AssertionError as e :
-                    refresh.blacklist()
-                    raise AuthenticationFailed(
-                        f"AssertionError",
-                    )
-
-            return super_return
+# Encore en dev'
+class token_with_api_key(APIView):
+    # exemple :
+    # curl -H "Authorization: Api-Key WDW7GZ4L.fJq05uXsi3taK1WrGtLWDis761YPSMrp" -X POST --data "number_printed=01E31CBB&qty_oceco=10" https://tibillet.demo.nasjo.fr/api/oceco_endpoint
+    permission_classes = [HasAPIKey]
+    # throttle_classes = [UserRateThrottle, AnonRateThrottle]
+    def post(self, request):
+        key = request.META["HTTP_AUTHORIZATION"].split()[1]
+        config = Configuration.get_solo()
+        api_key = APIKey.objects.get_from_key(key)
+        ip = get_client_ip(request)
+        if api_key.name == "oceco_key" and ip == config.oceco_ip_white_list:
+            return Response('ok', status=status.HTTP_200_OK)
+'''
 
 
 class activate(APIView):

@@ -6,6 +6,7 @@ from django.utils import timezone
 from django.utils.translation import ugettext_lazy as _
 import uuid
 from django.contrib.auth.models import AbstractUser, Group, Permission
+from rest_framework_api_key.models import APIKey
 
 from Customers.models import Client
 from django.db import connection
@@ -323,3 +324,5 @@ class TerminalPairingToken(models.Model):
     user = models.ForeignKey(TermUser, on_delete=models.CASCADE)
     token = models.PositiveIntegerField()
     used = models.BooleanField(default=False)
+
+

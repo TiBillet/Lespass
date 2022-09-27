@@ -20,6 +20,7 @@ from django.db.models import JSONField
 
 from django.utils.text import slugify
 from django_tenants.utils import tenant_context, schema_context
+from rest_framework_api_key.models import APIKey
 from solo.models import SingletonModel
 from django.utils.translation import ugettext_lazy as _
 from stdimage import StdImageField
@@ -1026,3 +1027,28 @@ class Membership(models.Model):
             return f"{self.last_name} {self.first_name}"
         else:
             return f"{self.last_name}"
+
+
+
+class ApiKey(models.Model):
+    name = models.CharField(max_length=30, unique=True)
+
+
+    key = models.OneToOneField(APIKey,
+                               on_delete=models.CASCADE,
+                               blank=True, null=True,
+                               related_name="api_key"
+                               )
+
+    ip = models.GenericIPAddressField(
+        verbose_name="Ip source",
+    )
+
+    revoquer_apikey = models.BooleanField(
+        default=False,
+        verbose_name='Créer / Révoquer',
+        help_text="Selectionnez et validez pour générer ou supprimer une clé API. La clé ne sera affiché qu'a la création, notez la bien !"
+    )
+
+    created = models.DateTimeField(auto_now=True)
+

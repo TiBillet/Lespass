@@ -18,6 +18,8 @@ services:
       - backend-billeterie
 
   billetterie_django_dev:
+    image: registry.3peaks.re/tibillet_ticket:2022-09-27
+    container_name: billetterie_django
     extends:
       file: ../compose/docker-compose-base.yml
       service: billetterie_django
@@ -35,6 +37,8 @@ services:
       - backend-billeterie
 
   billetterie_celery_dev:
+    image: registry.3peaks.re/tibillet_ticket:2022-09-27
+    container_name: billetterie_celery
     extends:
       file: ../compose/docker-compose-base.yml
       service: billetterie_celery
