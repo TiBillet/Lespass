@@ -19,7 +19,8 @@ from rest_framework.views import APIView
 from django.db import connection
 from django.utils.translation import ugettext_lazy as _
 # from rest_framework_api_key.models import APIKey
-# from rest_framework_api_key.permissions import HasAPIKey
+from rest_framework_api_key.models import APIKey
+from rest_framework_api_key.permissions import HasAPIKey
 from rest_framework_simplejwt.backends import TokenBackend
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from rest_framework_simplejwt.views import TokenViewBase, TokenRefreshView
@@ -30,7 +31,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from AuthBillet.serializers import MeSerializer, CreateUserValidator, CreateTerminalValidator, TokenTerminalValidator
 from AuthBillet.utils import get_or_create_user, sender_mail_connect, get_client_ip
-from BaseBillet.models import Configuration
+from BaseBillet.models import Configuration, ApiKey
 
 from django.utils.encoding import force_str, force_bytes
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
@@ -118,7 +119,7 @@ class create_api_key(APIView):
     permission_classes = [permissions.IsAuthenticated]
     def get(self, requests):
         pass
-
+'''
 
 
 # Encore en dev'
@@ -132,9 +133,16 @@ class token_with_api_key(APIView):
         config = Configuration.get_solo()
         api_key = APIKey.objects.get_from_key(key)
         ip = get_client_ip(request)
-        if api_key.name == "oceco_key" and ip == config.oceco_ip_white_list:
-            return Response('ok', status=status.HTTP_200_OK)
-'''
+
+        tenant_apikey = get_object_or_404(ApiKey, key=api_key, ip=ip)
+
+        refresh = RefreshToken.for_user(request.user)
+        data = {
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+        }
+
+        return Response(data, status=status.HTTP_200_OK)
 
 
 class activate(APIView):
