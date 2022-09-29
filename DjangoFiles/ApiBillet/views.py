@@ -24,12 +24,13 @@ from rest_framework.response import Response
 from django.utils.translation import ugettext_lazy as _
 from django.utils.text import slugify
 from rest_framework.views import APIView
+from rest_framework_api_key.permissions import HasAPIKey
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
     ReservationValidator, MembreValidator, ConfigurationSerializer, NewConfigSerializer, \
     EventCreateSerializer, TicketSerializer, OptionTicketSerializer, ChargeCashlessValidator, NewAdhesionValidator
 from AuthBillet.models import TenantAdminPermission, TibilletUser
-from AuthBillet.utils import get_or_create_user
+from AuthBillet.utils import get_or_create_user, is_apikey_valid
 from BaseBillet.tasks import create_ticket_pdf, redirect_post_webhook_stripe_from_public
 from Customers.models import Client, Domain
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe, \
@@ -457,11 +458,17 @@ class EventsViewSet(viewsets.ViewSet):
         event.delete()
         return Response(('deleted'), status=status.HTTP_200_OK)
 
+
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             permission_classes = [permissions.AllowAny]
         else:
             permission_classes = [TenantAdminPermission]
+            # Si c'est une auth avec APIKEY,
+            # on vérifie avec notre propre moteur
+            if is_apikey_valid(self):
+                permission_classes = []
+
         return [permission() for permission in permission_classes]
 
 

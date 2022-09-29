@@ -1052,3 +1052,17 @@ class ApiKey(models.Model):
 
     created = models.DateTimeField(auto_now=True)
 
+
+    # En string : même nom que url basename
+    # exemple dans DjangoFiles/ApiBillet/urls.py
+    # router.register(r'events', api_view.EventsViewSet, basename='event')
+    # Pour créer de nouvelles authorisations,
+    # ajoutez un nouveau choice correspondant au basename du viewset.
+    NONE, EVENT = 'N', 'event'
+    AUTH_CHOICES = [
+        (NONE, _('Aucun acces')),
+        (EVENT, _("Creation d'évènements")),
+    ]
+
+    auth = models.CharField(max_length=20, choices=AUTH_CHOICES, default=NONE,
+                              verbose_name=_("Authorisation"))

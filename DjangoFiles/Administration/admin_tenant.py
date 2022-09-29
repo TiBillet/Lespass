@@ -151,10 +151,12 @@ class ApiKeyAdmin(admin.ModelAdmin):
         "name",
         "created",
         "ip",
+        "auth",
     ]
 
     fields = [
         "name",
+        "auth",
         "ip",
         "revoquer_apikey",
     ]

@@ -52,6 +52,7 @@ sso_client = oauth.register(
     **settings.OAUTH_CLIENT,
 )
 
+
 def encode_uid(pk):
     return force_str(urlsafe_base64_encode(force_bytes(pk)))
 
@@ -106,13 +107,14 @@ class TokenRefreshViewCustom(TokenRefreshView):
             try:
                 assert user.mac_adress_sended == request.data.get('mac_adress')
                 assert user.terminal_uuid == request.data.get('unique_id')
-            except AssertionError as e :
+            except AssertionError as e:
                 refresh.blacklist()
                 raise AuthenticationFailed(
                     f"AssertionError",
                 )
 
         return super_return
+
 
 '''
 class create_api_key(APIView):
@@ -122,27 +124,31 @@ class create_api_key(APIView):
 '''
 
 
-# Encore en dev'
-class token_with_api_key(APIView):
-    # exemple :
-    # curl -H "Authorization: Api-Key WDW7GZ4L.fJq05uXsi3taK1WrGtLWDis761YPSMrp" -X POST --data "number_printed=01E31CBB&qty_oceco=10" https://tibillet.demo.nasjo.fr/api/oceco_endpoint
+
+class test_api_key(APIView):
+    '''
+    exemple :
+    curl -H "Authorization: Api-Key HzwiP9dA.dz8Qic6P6MamtTv9yd8KGTUaxoGNH0tn" -X GET https://demo.betabillet.tech/user/keytest/
+    '''
     permission_classes = [HasAPIKey]
-    # throttle_classes = [UserRateThrottle, AnonRateThrottle]
-    def post(self, request):
+
+    def get(self, request):
         key = request.META["HTTP_AUTHORIZATION"].split()[1]
-        config = Configuration.get_solo()
         api_key = APIKey.objects.get_from_key(key)
+        tenant_apikey = get_object_or_404(ApiKey, key=api_key)
         ip = get_client_ip(request)
 
-        tenant_apikey = get_object_or_404(ApiKey, key=api_key, ip=ip)
-
-        refresh = RefreshToken.for_user(request.user)
         data = {
-            'refresh': str(refresh),
-            'access': str(refresh.access_token),
+            "auth": tenant_apikey.auth,
+            "ip_request": ip,
+            "ip_valid": ip == tenant_apikey.ip
         }
 
-        return Response(data, status=status.HTTP_200_OK)
+        return Response(
+            data,
+            status=status.HTTP_200_OK,
+        )
+
 
 
 class activate(APIView):
@@ -241,7 +247,6 @@ class MeViewset(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
-
 class OAauthApi(APIView):
     permission_classes = [AllowAny]
 
@@ -251,11 +256,13 @@ class OAauthApi(APIView):
         logger.info(f"redirect_uri : {redirect_uri}")
 
         auth = communecter.authorize_redirect(request, redirect_uri)
-        if type(auth) == HttpResponseRedirect :
+        if type(auth) == HttpResponseRedirect:
             if auth.status_code == 302:
                 return auth
         else:
-            return Response('SSO "Communecter" non disponible. Essayez avec votre email', status=status.HTTP_404_NOT_FOUND)
+            return Response('SSO "Communecter" non disponible. Essayez avec votre email',
+                            status=status.HTTP_404_NOT_FOUND)
+
 
 class OAauthCallback(APIView):
     permission_classes = [AllowAny]
@@ -265,7 +272,7 @@ class OAauthCallback(APIView):
 
         if token.get('access_token'):
             user_info = oauth.communecter.get('/oauth/userinfo', token=token).json()
-            if user_info.get('email_verified') :
+            if user_info.get('email_verified'):
 
                 user = get_or_create_user(
                     user_info.get('email'),
@@ -275,17 +282,15 @@ class OAauthCallback(APIView):
 
                 uid = encode_uid(user.pk)
                 token = default_token_generator.make_token(user)
-                redirect_uri = request.build_absolute_uri(f'/emailconfirmation/{uid}/{token}')\
+                redirect_uri = request.build_absolute_uri(f'/emailconfirmation/{uid}/{token}') \
                     .replace('http://', 'https://')
                 return HttpResponseRedirect(redirect_uri)
 
 
-            else :
+            else:
                 get_or_create_user(user_info.get('email'))
                 redirect_uri = request.build_absolute_uri().replace('http://', 'https://')
                 return HttpResponseRedirect(redirect_uri)
 
-        else :
+        else:
             return Response('Access not Ok', status=status.HTTP_401_UNAUTHORIZED)
-
-
