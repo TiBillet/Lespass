@@ -147,6 +147,7 @@ staff_admin_site.register(TermUser, TermUserAdmin)
 
 class ApiKeyAdmin(admin.ModelAdmin):
     readonly_fields = ["key",]
+
     list_display = [
         "name",
         "created",
