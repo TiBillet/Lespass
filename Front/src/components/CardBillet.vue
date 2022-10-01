@@ -4,7 +4,7 @@
             v-for="product in event.products.filter(prod => prod.categorie_article === 'F' || prod.categorie_article === 'B')"
             :key="product.uuid">
     <legend>
-      <img v-if="image === true" :src="product.img" class="image-product" alt="Image du billet !" :style="stImage">
+      <img v-if="image === true" :src="product.img" class="image-product" :alt="product.name" :style="stImage">
       <h3 v-else class="font-weight-bolder text-info text-gradient align-self-start">{{ product.name }}</h3>
     </legend>
     <!-- tous les produits de type billet -->
