@@ -1065,4 +1065,4 @@ class ApiKey(models.Model):
     ]
 
     auth = models.CharField(max_length=20, choices=AUTH_CHOICES, default=NONE,
-                              verbose_name=_("Authorisation"))
+                              verbose_name=_("Autorisation"))
