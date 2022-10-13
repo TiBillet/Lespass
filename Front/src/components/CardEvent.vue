@@ -13,7 +13,6 @@
 
     <div class="card-body">
 
-
       <span
           class="card-title mt-3 h5 d-block text-dark">
         {{ event.name }}
