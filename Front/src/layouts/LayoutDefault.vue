@@ -59,16 +59,20 @@ const {loading, error} = storeToRefs(useAllStore())
 // return loading value and lock/unlock scroll
 function testLoading() {
   if (loading.value === true) {
-    document.querySelector('body').style.overflow = 'hidden'
     document.body.style.userSelect = "none"
+    console.log('LayoutDefault.vue, testLoading, userSelect none !')
     return true
   } else {
-    document.querySelector('body').style.overflow = 'auto'
     document.body.style.userSelect = "auto"
+    console.log('LayoutDefault.vue, testLoading, userSelect auto !')
     return false
   }
 }
 </script>
 
-<style scoped>
+<style>
+body {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
 </style>

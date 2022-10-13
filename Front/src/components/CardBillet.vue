@@ -6,6 +6,7 @@
     <legend>
       <img v-if="image === true" :src="product.img" class="image-product" :alt="product.name" :style="stImage">
       <h3 v-else class="font-weight-bolder text-info text-gradient align-self-start">{{ product.name }}</h3>
+      <h6 v-if="product.short_description !== null" class="text-info">{{ product.short_description }}</h6>
     </legend>
     <!-- tous les produits de type billet -->
     <div v-for="price in product.prices" :key="price.uuid" class="mt-5">

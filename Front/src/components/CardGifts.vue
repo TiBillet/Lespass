@@ -55,9 +55,7 @@ const {enableGifts, getEnableGift, setEnableGift, getPriceGift, changePriceGift,
 
 // activation des dons de la liste 'props.enableNames'
 enableGifts(props.enableNames)
-
 </script>
 
 <style scoped>
-
 </style>

@@ -1,6 +1,6 @@
 <template>
-<component :is="layout">
-    <router-view />
+  <component :is="layout">
+    <router-view/>
   </component>
 </template>
 
@@ -13,5 +13,8 @@ let layout = LayoutDefault
 </script>
 
 <style>
+body {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
 </style>
-<!--  -->

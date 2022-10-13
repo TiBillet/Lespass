@@ -30,7 +30,7 @@
 // components
 import Search from '@/components/Search.vue'
 
-import { watch } from "vue"
+// import { watch } from "vue"
 
 // store
 import { storeToRefs } from 'pinia'
@@ -38,7 +38,9 @@ import { useAllStore } from '@/stores/all'
 
 const { routeName, header } = storeToRefs(useAllStore())
 
+/*
 watch(routeName, (newValue, oldValue) => {
   console.log('-> routeName:', newValue, oldValue)
 })
+ */
 </script>
