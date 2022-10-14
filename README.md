@@ -230,7 +230,7 @@ https://www.laraffinerie.re
 
 https://www.communecter.org
 
-[![logo Communnecter](https://www.communecter.org/assets/94396c20/images/logos/logo-full.png)](https://www.communecter.org)
+[![logo Communnecter](https://www.communecter.org/assets/d303d9a/images/logos/logo-full.png)](https://www.communecter.org)
 
 - JetBrain
 
