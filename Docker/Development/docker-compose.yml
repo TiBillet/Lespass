@@ -76,7 +76,8 @@ services:
 #    command: "bash /DjangoFiles/launch_ws.sh"
 
   billetterie_nodejs_dev:
-    image: node:16-bullseye
+    build: ./dockerfile_node
+#    image: node:16-bullseye
     container_name: billetterie_nodejs_dev
     hostname: billetterie_nodejs_dev
     ports:

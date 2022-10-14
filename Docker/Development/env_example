@@ -1,0 +1,23 @@
+#env
+DJANGO_SECRET='CHANGEME'
+POSTGRES_HOST='billetterie_postgres'
+POSTGRES_USER='ticket_postgres_user'
+POSTGRES_PASSWORD='CHANGEME'
+POSTGRES_DB='tibillet'
+
+CELERY_BROKER='redis://redis:6379/0'
+CELERY_BACKEND='redis://redis:6379/0'
+
+BORG_PASSPHRASE='CHANGEME'
+
+DEBUG_DJANGO=True
+TIME_ZONE='Indian/Reunion'
+
+DOMAIN='tibillet.local'
+PUBLIC='TiBillet Coop.'
+META='meta'
+
+# Stripe Tibillet
+STRIPE_KEY="CHANGEME"
+STRIPE_KEY_TEST="CHANGEME"
+STRIPE_TEST=True
