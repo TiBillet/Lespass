@@ -18,7 +18,7 @@ services:
       - backend-billeterie
 
   billetterie_django_dev:
-    image: registry.3peaks.re/tibillet_ticket:2022-09-27
+    image: tibillet/tibillet_django:2022-09-27
     container_name: billetterie_django
     extends:
       file: ../compose/docker-compose-base.yml
@@ -37,7 +37,7 @@ services:
       - backend-billeterie
 
   billetterie_celery_dev:
-    image: registry.3peaks.re/tibillet_ticket:2022-09-27
+    image: tibillet/tibillet_django:2022-09-27
     container_name: billetterie_celery
     extends:
       file: ../compose/docker-compose-base.yml
@@ -76,8 +76,8 @@ services:
 #    command: "bash /DjangoFiles/launch_ws.sh"
 
   billetterie_nodejs_dev:
-    build: ./dockerfile_node
 #    image: node:16-bullseye
+    image: tibillet/tibillet_node:2022-10-14
     container_name: billetterie_nodejs_dev
     hostname: billetterie_nodejs_dev
     ports:
