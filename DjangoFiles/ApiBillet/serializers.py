@@ -397,6 +397,7 @@ class EventSerializer(serializers.ModelSerializer):
         depth = 1
 
     def validate(self, attrs):
+
         products = self.initial_data.getlist('products')
 
         if products:

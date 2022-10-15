@@ -65,6 +65,10 @@ class TarifBilletViewSet(viewsets.ViewSet):
             permission_classes = [permissions.AllowAny]
         else:
             permission_classes = [TenantAdminPermission]
+            # Si c'est une auth avec APIKEY,
+            # on vérifie avec notre propre moteur
+            if is_apikey_valid(self):
+                permission_classes = []
         return [permission() for permission in permission_classes]
 
 
@@ -95,6 +99,10 @@ class ProductViewSet(viewsets.ViewSet):
             permission_classes = [permissions.AllowAny]
         else:
             permission_classes = [TenantAdminPermission]
+            # Si c'est une auth avec APIKEY,
+            # on vérifie avec notre propre moteur
+            if is_apikey_valid(self):
+                permission_classes = []
         return [permission() for permission in permission_classes]
 
 
@@ -204,7 +212,7 @@ class TenantViewSet(viewsets.ViewSet):
         user: TibilletUser = request.user
 
         if not user.can_create_tenant:
-            raise serializers.ValidationError(_("Vous n'avez pas la permission de créer de nouveaux lieux"))
+            raise serializers.ValidationError(_("Vous n'avez pas la permission de créer de nouvelles instances sur ce serveur."))
         if not request.data.get('categorie'):
             raise serializers.ValidationError(_("categorie est obligatoire"))
 
@@ -329,6 +337,10 @@ class TenantViewSet(viewsets.ViewSet):
             permission_classes = [permissions.AllowAny]
         else:
             permission_classes = [TenantAdminPermission]
+            # Si c'est une auth avec APIKEY,
+            # on vérifie avec notre propre moteur
+            if is_apikey_valid(self):
+                permission_classes = []
         return [permission() for permission in permission_classes]
 
 

@@ -1058,10 +1058,11 @@ class ApiKey(models.Model):
     # router.register(r'events', api_view.EventsViewSet, basename='event')
     # Pour créer de nouvelles authorisations,
     # ajoutez un nouveau choice correspondant au basename du viewset.
-    NONE, EVENT = 'N', 'event'
+    NONE, EVENT, TENANT = 'N', 'event', 'tenant'
     AUTH_CHOICES = [
         (NONE, _('Aucun acces')),
         (EVENT, _("Creation d'évènements")),
+        (TENANT, _("Creation de tenant")),
     ]
 
     auth = models.CharField(max_length=20, choices=AUTH_CHOICES, default=NONE,

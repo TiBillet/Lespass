@@ -30,3 +30,5 @@ class ProductDirectory(models.Model):
     product_sold_stripe_id = models.CharField(max_length=30, null=True, blank=True)
     place = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="product_place")
 
+
+

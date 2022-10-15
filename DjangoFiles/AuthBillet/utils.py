@@ -39,6 +39,7 @@ def is_apikey_valid(view):
         key = view.request.META["HTTP_AUTHORIZATION"].split()[1]
         api_key = APIKey.objects.get_from_key(key)
         tenant_apikey = get_object_or_404(ApiKey, key=api_key)
+
         ip = get_client_ip(view.request)
 
         logger.info(

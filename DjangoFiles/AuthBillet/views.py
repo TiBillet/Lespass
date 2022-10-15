@@ -138,6 +138,7 @@ class test_api_key(APIView):
         tenant_apikey = get_object_or_404(ApiKey, key=api_key)
         ip = get_client_ip(request)
 
+
         data = {
             "auth": tenant_apikey.auth,
             "ip_request": ip,
