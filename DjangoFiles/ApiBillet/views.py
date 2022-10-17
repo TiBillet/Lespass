@@ -7,14 +7,9 @@ import pytz
 import requests
 import stripe
 from django.contrib import messages
-from django.contrib.auth import get_user_model
 from django.http import HttpResponseRedirect, Http404, HttpResponse
-from django.shortcuts import render
 from django.utils import timezone
-from django.utils.encoding import force_str
-from django.utils.http import urlsafe_base64_decode
 from django_tenants.utils import schema_context, tenant_context
-from django_weasyprint import WeasyTemplateView
 from rest_framework import serializers
 from rest_framework.decorators import permission_classes
 from rest_framework.generics import get_object_or_404
@@ -24,17 +19,16 @@ from rest_framework.response import Response
 from django.utils.translation import ugettext_lazy as _
 from django.utils.text import slugify
 from rest_framework.views import APIView
-from rest_framework_api_key.permissions import HasAPIKey
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
     ReservationValidator, MembreValidator, ConfigurationSerializer, NewConfigSerializer, \
     EventCreateSerializer, TicketSerializer, OptionTicketSerializer, ChargeCashlessValidator, NewAdhesionValidator
 from AuthBillet.models import TenantAdminPermission, TibilletUser
-from AuthBillet.utils import get_or_create_user, is_apikey_valid
-from BaseBillet.tasks import create_ticket_pdf, redirect_post_webhook_stripe_from_public
+from AuthBillet.utils import user_apikey_valid
+from BaseBillet.tasks import create_ticket_pdf
 from Customers.models import Client, Domain
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe, \
-    OptionGenerale, Membership, PriceSold
+    OptionGenerale, Membership
 from rest_framework import viewsets, permissions, status
 from django.db import connection, IntegrityError
 
@@ -67,8 +61,10 @@ class TarifBilletViewSet(viewsets.ViewSet):
             permission_classes = [TenantAdminPermission]
             # Si c'est une auth avec APIKEY,
             # on vérifie avec notre propre moteur
-            if is_apikey_valid(self):
+            user_api = user_apikey_valid(self)
+            if user_api :
                 permission_classes = []
+                self.request.user = user_api
         return [permission() for permission in permission_classes]
 
 
@@ -78,7 +74,6 @@ class ProductViewSet(viewsets.ViewSet):
         serializer = ProductSerializer(
             Product.objects.all(),
             many=True, context={'request': request})
-        print(serializer.data)
         return Response(serializer.data)
 
     def create(self, request):
@@ -101,8 +96,10 @@ class ProductViewSet(viewsets.ViewSet):
             permission_classes = [TenantAdminPermission]
             # Si c'est une auth avec APIKEY,
             # on vérifie avec notre propre moteur
-            if is_apikey_valid(self):
+            user_api = user_apikey_valid(self)
+            if user_api :
                 permission_classes = []
+                self.request.user = user_api
         return [permission() for permission in permission_classes]
 
 
@@ -167,7 +164,6 @@ class ArtistViewSet(viewsets.ViewSet):
             conf = Configuration.get_solo()
             serializer = NewConfigSerializer(conf, data=request.data, partial=True)
             if serializer.is_valid():
-                print(serializer.validated_data)
                 serializer.update(conf, serializer.validated_data)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
 
@@ -212,7 +208,8 @@ class TenantViewSet(viewsets.ViewSet):
         user: TibilletUser = request.user
 
         if not user.can_create_tenant:
-            raise serializers.ValidationError(_("Vous n'avez pas la permission de créer de nouvelles instances sur ce serveur."))
+            raise serializers.ValidationError(
+                _("Vous n'avez pas la permission de créer de nouvelles instances sur ce serveur."))
         if not request.data.get('categorie'):
             raise serializers.ValidationError(_("categorie est obligatoire"))
 
@@ -255,7 +252,6 @@ class TenantViewSet(viewsets.ViewSet):
                 except Exception as e:
                     return Response(_(f"{e}"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
-            print(tenant)
             with tenant_context(tenant):
                 conf = Configuration.get_solo()
                 serializer.update(instance=conf, validated_data=futur_conf)
@@ -291,12 +287,8 @@ class TenantViewSet(viewsets.ViewSet):
             return Response(_(f"Not Allowed"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
         with tenant_context(tenant):
             conf = Configuration.get_solo()
-            print(type(request.data.get('img')))
-            print(request.data)
-            print(request.headers)
             serializer = NewConfigSerializer(conf, data=request.data, partial=True)
             if serializer.is_valid():
-                print(serializer.validated_data)
                 # serializer.save()
                 serializer.update(conf, serializer.validated_data)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -339,8 +331,10 @@ class TenantViewSet(viewsets.ViewSet):
             permission_classes = [TenantAdminPermission]
             # Si c'est une auth avec APIKEY,
             # on vérifie avec notre propre moteur
-            if is_apikey_valid(self):
+            user_api = user_apikey_valid(self)
+            if user_api :
                 permission_classes = []
+                self.request.user = user_api
         return [permission() for permission in permission_classes]
 
 
@@ -393,7 +387,7 @@ class EventsViewSet(viewsets.ViewSet):
         tenant: Client = connection.tenant
         four_hour_before_now = datetime.now().date() - timedelta(hours=4)
 
-        production_places = [ Client.SALLE_SPECTACLE, Client.FESTIVAL]
+        production_places = [Client.SALLE_SPECTACLE, Client.FESTIVAL]
         if tenant.categorie in production_places:
             queryset = Event.objects.filter(datetime__gte=four_hour_before_now).order_by('datetime')
             events_serialized = EventSerializer(queryset, many=True, context={'request': request})
@@ -442,7 +436,6 @@ class EventsViewSet(viewsets.ViewSet):
         return Response(serializer.data)
 
     def create(self, request):
-        print(request.data)
         serializer_create = EventCreateSerializer(data=request.data)
         if serializer_create.is_valid():
             # import ipdb; ipdb.set_trace()
@@ -450,14 +443,12 @@ class EventsViewSet(viewsets.ViewSet):
             serializer = EventSerializer(event)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-        print(serializer_create.errors)
+        logger.error(f"EventsViewSet : {serializer_create.errors}")
         return Response(serializer_create.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def update(self, request, pk=None):
         queryset = Event.objects.all().order_by('-datetime')
-        print(f"update : {pk}")
         event = get_object_or_404(queryset, pk=pk)
-        print(event)
         serializer = EventSerializer(event, data=request.data, partial=True)
         if serializer.is_valid(raise_exception=True):
             serializer.save()
@@ -470,7 +461,6 @@ class EventsViewSet(viewsets.ViewSet):
         event.delete()
         return Response(('deleted'), status=status.HTTP_200_OK)
 
-
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             permission_classes = [permissions.AllowAny]
@@ -478,15 +468,16 @@ class EventsViewSet(viewsets.ViewSet):
             permission_classes = [TenantAdminPermission]
             # Si c'est une auth avec APIKEY,
             # on vérifie avec notre propre moteur
-            if is_apikey_valid(self):
+            user_api = user_apikey_valid(self)
+            if user_api :
                 permission_classes = []
+                self.request.user = user_api
 
         return [permission() for permission in permission_classes]
 
 
 class ChargeCashless(viewsets.ViewSet):
     def create(self, request):
-        print(request.data)
         configuration = Configuration.get_solo()
         if not configuration.key_cashless or not configuration.server_cashless:
             return Response(_("Serveur cashless non présent dans configuration"),
@@ -546,7 +537,6 @@ class OptionTicket(viewsets.ViewSet):
         return Response(serializer.data)
 
     def create(self, request):
-        print(request.data)
         validator = OptionTicketSerializer(data=request.data, context={'request': request})
         if validator.is_valid():
             validator.save()
@@ -581,6 +571,7 @@ def borne_temps_4h():
     else:
         return debut_jour, lendemain_quatre_heure
 
+
 @permission_classes([permissions.IsAuthenticated])
 class Cancel_sub(APIView):
     def post(self, request):
@@ -592,14 +583,14 @@ class Cancel_sub(APIView):
             price=price
         )
 
-        if membership.status == Membership.AUTO :
+        if membership.status == Membership.AUTO:
             config = Configuration.get_solo()
             stripe.api_key = config.get_stripe_api()
             stripe.Subscription.delete(membership.stripe_id_subscription)
             membership.status = Membership.CANCELED
             membership.save()
 
-            #TODO: envoyer un mail de confirmation d'annulation
+            # TODO: envoyer un mail de confirmation d'annulation
             return Response('Renouvellement automatique supprimé.', status=status.HTTP_200_OK)
 
         return Response('Pas de renouvellement automatique sur cette adhésion.', status=status.HTTP_406_NOT_ACCEPTABLE)
@@ -728,7 +719,6 @@ def request_for_data_cashless(user: TibilletUser):
 class MembershipViewset(viewsets.ViewSet):
 
     def create(self, request):
-        print(request.data)
         membre_validator = MembreValidator(data=request.data, context={'request': request})
         if membre_validator.is_valid():
             adhesion_validator = NewAdhesionValidator(data=request.data, context={'request': request})
@@ -876,7 +866,6 @@ def paiment_stripe_validator(request, paiement_stripe):
     configuration = Configuration.get_solo()
     stripe.api_key = configuration.get_stripe_api()
 
-
     # SI c'est une source depuis INVOICE,
     # L'object vient d'être créé, on vérifie que la facture stripe
     # est payée et on met en VALID.
@@ -895,7 +884,7 @@ def paiment_stripe_validator(request, paiement_stripe):
                 status=status.HTTP_202_ACCEPTED
             )
 
-        else :
+        else:
             return Response(
                 _(f'stripe invoice : {invoice.status} - paiement : {paiement_stripe.status}'),
                 status=status.HTTP_402_PAYMENT_REQUIRED
@@ -945,7 +934,6 @@ def paiment_stripe_validator(request, paiement_stripe):
                         )
                         paiement_stripe.invoice_stripe = subscription.latest_invoice
 
-
                 # TODO: ya pu de get, tout est POST, même la requete depuis le front vue.js
                 # if request.method == 'GET':
                 #     paiement_stripe.source_traitement = Paiement_stripe.GET
@@ -966,10 +954,8 @@ def paiment_stripe_validator(request, paiement_stripe):
         else:
             return Response(_(f'Erreur Meta'), status=status.HTTP_406_NOT_ACCEPTABLE)
 
-
     # on vérifie le changement de status
     paiement_stripe.refresh_from_db()
-
 
     # Paiement depuis QRCode carte
     # on envoie au serveur cashless
@@ -1066,7 +1052,6 @@ class Webhook_stripe(APIView):
             logger.info(f"Webhook_stripe checkout.session.completed : {payload}")
             tenant_uuid_in_metadata = payload["data"]["object"]["metadata"]["tenant"]
 
-
             '''
             # Avant, nous re-créions une requete via celery sur le bon tenant
             if f"{connection.tenant.uuid}" != tenant_uuid_in_metadata:
@@ -1107,7 +1092,7 @@ class Webhook_stripe(APIView):
 
             # C'est un renouvellement d'abonnement
             if billing_reason == 'subscription_cycle' \
-                    and payload_object.get('paid') :
+                    and payload_object.get('paid'):
 
                 product_sold_stripe_id = None
                 for line in payload_object['lines']['data']:
@@ -1118,35 +1103,34 @@ class Webhook_stripe(APIView):
                 # dans la requete POST
                 with schema_context('public'):
                     product_from_public_tenant = ProductDirectory.objects.get(
-                        product_sold_stripe_id = product_sold_stripe_id,
+                        product_sold_stripe_id=product_sold_stripe_id,
                     )
                     place = product_from_public_tenant.place
 
                 # On a le tenant ( place ), on va chercher l'abonnement
                 with tenant_context(place):
                     invoice = payload_object['id']
-                    try :
+                    try:
                         membership = Membership.objects.get(
-                                stripe_id_subscription=payload_object['subscription']
-                            )
+                            stripe_id_subscription=payload_object['subscription']
+                        )
                         last_stripe_invoice = membership.last_stripe_invoice
 
                         # Même adhésion, mais facture différente :
                         # C'est alors un renouvellement automatique.
-                        if invoice != last_stripe_invoice :
-                            logger.info(    (f'    nouvelle facture arrivée : {invoice}'))
+                        if invoice != last_stripe_invoice:
+                            logger.info((f'    nouvelle facture arrivée : {invoice}'))
                             paiement_stripe = new_entry_from_stripe_invoice(membership.user, invoice)
-
 
                             return paiment_stripe_validator(request, paiement_stripe)
 
-                        else :
-                            logger.info(    (f'    facture déja créée et comptabilisée : {invoice}'))
+                        else:
+                            logger.info((f'    facture déja créée et comptabilisée : {invoice}'))
 
                     except Membership.DoesNotExist:
-                        logger.info(    (f'    Nouvelle adhésion, facture pas encore comptabilisée : {invoice}'))
+                        logger.info((f'    Nouvelle adhésion, facture pas encore comptabilisée : {invoice}'))
                     except Exception:
-                        logger.error(    (f'    erreur dans Webhook_stripe customer.subscription.updated : {Exception}'))
+                        logger.error((f'    erreur dans Webhook_stripe customer.subscription.updated : {Exception}'))
                         raise Exception
 
                     # configuration = Configuration.get_solo()
@@ -1156,10 +1140,6 @@ class Webhook_stripe(APIView):
                     # current_period_end = datetime.fromtimestamp(int(payload_object['current_period_end']))
                     # logger.info(f"     current_period_start : {current_period_start}")
                     # logger.info(f"     current_period_start : {current_period_end}")
-
-
-
-
 
         # c'est une requete depuis vue.js.
         post_from_front_vue_js = payload.get('uuid')

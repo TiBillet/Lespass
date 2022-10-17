@@ -1,32 +1,22 @@
-import json
 import logging
-
-import requests
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
-from django.db.utils import IntegrityError
 from django.http import HttpResponseRedirect
-from django.shortcuts import render
 
 # Create your views here.
-from rest_framework import status, permissions, viewsets, serializers
-from rest_framework.decorators import permission_classes
+from rest_framework import status, permissions, viewsets
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.db import connection
 from django.utils.translation import ugettext_lazy as _
-# from rest_framework_api_key.models import APIKey
 from rest_framework_api_key.models import APIKey
 from rest_framework_api_key.permissions import HasAPIKey
-from rest_framework_simplejwt.backends import TokenBackend
-from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
-from rest_framework_simplejwt.views import TokenViewBase, TokenRefreshView
+from rest_framework_simplejwt.views import TokenRefreshView
 
 from ApiBillet.views import request_for_data_cashless
-from AuthBillet.models import TibilletUser, TenantAdminPermission, TermUser
+from AuthBillet.models import TibilletUser
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from AuthBillet.serializers import MeSerializer, CreateUserValidator, CreateTerminalValidator, TokenTerminalValidator
@@ -41,11 +31,7 @@ from TiBillet import settings
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
-from authlib.integrations.base_client import OAuthError
 from authlib.integrations.django_client import OAuth
-from authlib.oauth2.rfc6749 import OAuth2Token
-from django.shortcuts import redirect
-from django.utils.deprecation import MiddlewareMixin
 
 oauth = OAuth()
 sso_client = oauth.register(
@@ -140,7 +126,7 @@ class test_api_key(APIView):
 
 
         data = {
-            "auth": tenant_apikey.auth,
+            "auth": tenant_apikey.permissions(),
             "ip_request": ip,
             "ip_valid": ip == tenant_apikey.ip
         }

@@ -1032,7 +1032,9 @@ class Membership(models.Model):
 
 class ApiKey(models.Model):
     name = models.CharField(max_length=30, unique=True)
-
+    user = models.OneToOneField(settings.AUTH_USER_MODEL,
+                                on_delete=models.CASCADE,
+                                blank=True, null=True)
 
     key = models.OneToOneField(APIKey,
                                on_delete=models.CASCADE,
@@ -1057,13 +1059,18 @@ class ApiKey(models.Model):
     # exemple dans DjangoFiles/ApiBillet/urls.py
     # router.register(r'events', api_view.EventsViewSet, basename='event')
     # Pour créer de nouvelles authorisations,
-    # ajoutez un nouveau choice correspondant au basename du viewset.
-    NONE, EVENT, TENANT = 'N', 'event', 'tenant'
-    AUTH_CHOICES = [
-        (NONE, _('Aucun acces')),
-        (EVENT, _("Creation d'évènements")),
-        (TENANT, _("Creation de tenant")),
-    ]
+    # ajoutez un nouvel objet dans le dictionnaire permission correspondant au basename du viewset.
 
-    auth = models.CharField(max_length=20, choices=AUTH_CHOICES, default=NONE,
-                              verbose_name=_("Autorisation"))
+    event = models.BooleanField(default=False, verbose_name="Creation d'évènements")
+    product = models.BooleanField(default=False, verbose_name="Creation de produits")
+    place = models.BooleanField(default=False, verbose_name="Creation de nouvelles instances lieux")
+    artist = models.BooleanField(default=False, verbose_name="Creation de nouvelles instances artiste")
+
+    def permissions(self):
+        return {
+            "event": self.event,
+            "product": self.product,
+            "price": self.product,
+            "place": self.place,
+            "artist": self.artist,
+        }

@@ -239,7 +239,7 @@ class ArtistEventCreateSerializer(serializers.Serializer):
         return value
 
     def validate(self, attrs):
-        logger.info(f"ArtistEventCreateSerializer : {self.artiste_event_db}")
+        # logger.info(f"ArtistEventCreateSerializer : {self.artiste_event_db}")
         return self.artiste_event_db
 
 
@@ -277,7 +277,7 @@ class EventCreateSerializer(serializers.Serializer):
     img_url = serializers.URLField(required=False)
 
     def validate_artists(self, value):
-        logger.info(f"validate_artists : {value}")
+        # logger.info(f"validate_artists : {value}")
         return value
 
     def validate_products(self, value):
@@ -503,7 +503,7 @@ class NewAdhesionValidator(serializers.Serializer):
     email = serializers.EmailField()
 
     def validate_email(self, value):
-        logger.info(f"NewAdhesionValidator validate email : {value}")
+        # logger.info(f"NewAdhesionValidator validate email : {value}")
         user_paiement: TibilletUser = get_or_create_user(value)
         self.user = user_paiement
         return user_paiement.email

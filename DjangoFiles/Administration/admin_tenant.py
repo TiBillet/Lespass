@@ -152,14 +152,18 @@ class ApiKeyAdmin(admin.ModelAdmin):
         "name",
         "created",
         "ip",
-        "auth",
+        "permissions",
+        "user"
     ]
 
     fields = [
         "name",
-        "auth",
         "ip",
         "revoquer_apikey",
+        "event",
+        "product",
+        "place",
+        "artist"
     ]
 
     def save_model(self, request, instance, form, change):
@@ -196,6 +200,8 @@ class ApiKeyAdmin(admin.ModelAdmin):
                 )
 
             instance.revoquer_apikey = False
+
+        instance.user = request.user
 
         super().save_model(request, instance, form, change)
         if ex_api_key:

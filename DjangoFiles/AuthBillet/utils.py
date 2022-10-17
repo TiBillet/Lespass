@@ -30,7 +30,7 @@ def get_client_ip(request):
     return ip
 
 
-def is_apikey_valid(view):
+def user_apikey_valid(view):
     # En string : On vérifie que view.basename == url.basename
     # exemple dans DjangoFiles/ApiBillet/urls.py
     # router.register(r'events', api_view.EventsViewSet, basename='event')
@@ -44,15 +44,17 @@ def is_apikey_valid(view):
 
         logger.info(
             f"is_apikey_valid : "
-            f"{ip} == {tenant_apikey.ip} "
-            f"- "
-            f"{view.basename } == {tenant_apikey.auth}"
+            f"ip request : {ip} - ip apikey : {tenant_apikey.ip} - "
+            f"basename : {view.basename} : {tenant_apikey.permissions().get(view.basename)} - "
+            f"permission : {tenant_apikey.permissions()}"
         )
 
-        return all([
+        if all([
             ip == tenant_apikey.ip,
-            view.basename == tenant_apikey.auth
-        ])
+            tenant_apikey.permissions().get(view.basename)
+        ]):
+            return tenant_apikey.user
+
     except:
         return False
 
