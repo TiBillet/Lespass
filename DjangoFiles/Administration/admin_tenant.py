@@ -18,7 +18,7 @@ from django.utils.translation import ugettext_lazy as _
 
 from AuthBillet.models import HumanUser, SuperHumanUser, TermUser
 from BaseBillet.models import Configuration, Event, OptionGenerale, Product, Price, Reservation, LigneArticle, Ticket, \
-    Paiement_stripe, ProductSold, PriceSold, Membership, ApiKey
+    Paiement_stripe, ProductSold, PriceSold, Membership, ApiKey, Webhook
 from django.contrib.auth.admin import UserAdmin
 
 from Customers.models import Client
@@ -46,6 +46,7 @@ class StaffAdminSite(AdminSite):
                 "Paiements Stripe",
                 "Réservations",
                 "Api keys",
+                "Webhooks",
             ]
         }
 
@@ -210,6 +211,24 @@ class ApiKeyAdmin(admin.ModelAdmin):
             ex_api_key.delete()
 
 staff_admin_site.register(ApiKey, ApiKeyAdmin)
+
+class WebhookAdmin(admin.ModelAdmin):
+    readonly_fields = ['last_response',]
+    fields = [
+        "url",
+        "active",
+        "event",
+        "last_response",
+    ]
+
+    list_display = [
+        "url",
+        "active",
+        "event",
+        "last_response",
+    ]
+
+staff_admin_site.register(Webhook, WebhookAdmin)
 
 
 ########################################################################

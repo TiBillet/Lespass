@@ -8,7 +8,7 @@ from django.dispatch import receiver
 # from ApiBillet.thread_mailer import ThreadMaileur
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, LigneArticle, Ticket, Product, Configuration, Paiement_stripe
-from BaseBillet.tasks import ticket_celery_mailer
+from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation
 
 # from TiBillet import settings
 from BaseBillet.triggers import action_article_paid_by_categorie
@@ -144,6 +144,9 @@ def check_paid(old_instance: LigneArticle, new_instance: LigneArticle):
 # @receiver(post_save, sender=Reservation)
 # def send_billet_to_mail(sender, instance: Reservation, **kwargs):
 def send_billet_to_mail(old_instance: Reservation, new_instance: Reservation):
+    # On check les webhooks
+    webhook_reservation.delay(new_instance.pk)
+
     # On active les tickets
     if new_instance.tickets:
         # On prend aussi ceux qui sont déja activé ( avec les Q() )
@@ -171,6 +174,7 @@ def send_billet_to_mail(old_instance: Reservation, new_instance: Reservation):
 
 
 def set_paiement_valid(old_instance: Reservation, new_instance: Reservation):
+    # On envoie les mails
     if new_instance.mail_send:
         logger.info(
             f"    SIGNAL RESERVATION set_paiement_valid Mail envoyé {new_instance.mail_send},"

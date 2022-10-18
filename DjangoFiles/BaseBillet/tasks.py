@@ -3,6 +3,7 @@ import json
 import os
 import random
 import smtplib
+
 from io import BytesIO
 
 import requests
@@ -24,14 +25,14 @@ from django.template.loader import render_to_string, get_template
 from django.utils import timezone
 
 from AuthBillet.models import TibilletUser, TerminalPairingToken
-from BaseBillet.models import Reservation, Ticket, Configuration, Membership, LigneArticle
+from BaseBillet.models import Reservation, Ticket, Configuration, Membership, LigneArticle, Webhook
 from Customers.models import Client
 from TiBillet.celery import app
 
 import logging
 
-
 logger = logging.getLogger(__name__)
+
 
 def encode_uid(pk):
     return force_str(urlsafe_base64_encode(force_bytes(pk)))
@@ -65,8 +66,6 @@ class CeleryMailerClass():
         EMAIL_PORT = os.environ.get('EMAIL_PORT')
         EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
         EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
-
-
 
         # Try except un peu degueulasse causé par l'envoie de task
         # depuis le tenant public pour l'envoi du mail d'appairage
@@ -302,7 +301,7 @@ def connexion_celery_mailer(user_email, base_url, title=None):
         organisation = config.organisation
 
         img_orga = ""
-        if config.img :
+        if config.img:
             img_orga = config.img.med
 
         logger.info(f'connection.tenant.schema_name != "public" : {connection.tenant.schema_name}')
@@ -315,8 +314,6 @@ def connexion_celery_mailer(user_email, base_url, title=None):
         meta_domain = f"https://{meta.get_primary_domain().domain}"
         connexion_url = f"{meta_domain}/emailconfirmation/{uid}/{token}"
         logger.info(f'connection.tenant.schema_name == "public" : {connection.tenant.schema_name}')
-
-
 
     # Internal SMTP and html template
     if title is None:
@@ -405,7 +402,6 @@ def terminal_pairing_celery_mailer(term_user_email, subject=None):
 #     config = Configuration.get_solo()
 
 
-
 @app.task
 def ticket_celery_mailer(reservation_uuid: str, base_url):
     logger.info(f'      WORKDER CELERY app.task ticket_celery_mailer : {reservation_uuid}')
@@ -466,7 +462,7 @@ def send_membership_to_cashless(data):
     if not configuration.server_cashless or not configuration.key_cashless:
         logger.warning(f'Pas de configuration cashless')
 
-    else :
+    else:
         ligne_article = LigneArticle.objects.get(pk=data.get('ligne_article_pk'))
         user = ligne_article.paiement_stripe.user
 
@@ -519,6 +515,25 @@ def send_membership_to_cashless(data):
 
         except Exception as e:
             raise Exception(f'Exception request send_membership_to_cashless {type(e)} : {e} ')
+
+
+@app.task
+def webhook_reservation(reservation_pk):
+    logger.info(f"webhook_reservation : {reservation_pk} {timezone.now()} info")
+    webhooks = Webhook.objects.filter(event=Webhook.RESERVATION_V)
+    if webhooks.count() > 0 :
+        reservation = Reservation.objects.get(pk=reservation_pk)
+        data = {
+            "object": "reservation",
+            "uuid": f"{reservation.uuid}",
+            "state": f"{reservation.status}",
+            "datetime": f"{reservation.datetime}",
+        }
+
+        for webhook in webhooks:
+            response = requests.request("POST", webhook.url, data=data)
+            webhook.last_response = response
+            webhook.save()
 
 
 @app.task

@@ -1078,3 +1078,17 @@ class ApiKey(models.Model):
             "reservation": self.reservation,
             "ticket": self.ticket,
         }
+
+
+class Webhook(models.Model):
+    active = models.BooleanField(default=False)
+    url = models.URLField()
+
+    RESERVATION_V = "RV"
+    EVENT_CHOICES = [
+        (RESERVATION_V, _('Réservation validée')),
+    ]
+
+    event = models.CharField(max_length=2, choices=EVENT_CHOICES, default=RESERVATION_V,
+                              verbose_name=_("Évènement"))
+    last_response = models.TextField(null=True, blank=True)
