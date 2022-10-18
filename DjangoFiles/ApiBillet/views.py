@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 # Refactor for get_permission
 # Si c'est list/retrieve -> pour tout le monde
 # Sinon, on vérifie la clé api
-def get_permission_Api_LR(self):
+def get_permission_Api_LR_Any(self):
 
     # Si c'est une auth avec APIKEY,
     # on vérifie avec notre propre moteur
@@ -59,6 +59,19 @@ def get_permission_Api_LR(self):
     else:
         permission_classes = [TenantAdminPermission]
 
+    return [permission() for permission in permission_classes]
+
+
+def get_permission_Api_LR_Admin(self):
+    user_api = user_apikey_valid(self)
+    if user_api:
+        permission_classes = []
+        self.request.user = user_api
+
+    elif self.action in ['list', 'retrieve']:
+        permission_classes = [TenantAdminPermission]
+    else:
+        permission_classes = [permissions.AllowAny]
     return [permission() for permission in permission_classes]
 
 
@@ -78,7 +91,7 @@ class TarifBilletViewSet(viewsets.ViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_permissions(self):
-        return get_permission_Api_LR(self)
+        return get_permission_Api_LR_Any(self)
 
 
 class ProductViewSet(viewsets.ViewSet):
@@ -103,7 +116,7 @@ class ProductViewSet(viewsets.ViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_permissions(self):
-        return get_permission_Api_LR(self)
+        return get_permission_Api_LR_Any(self)
 
 
 '''
@@ -328,7 +341,7 @@ class TenantViewSet(viewsets.ViewSet):
         return Response(place_serialized_with_uuid)
 
     def get_permissions(self):
-        return get_permission_Api_LR(self)
+        return get_permission_Api_LR_Any(self)
 
 
 
@@ -353,7 +366,7 @@ class HereViewSet(viewsets.ViewSet):
         return Response(dict_return)
 
     def get_permissions(self):
-        return get_permission_Api_LR(self)
+        return get_permission_Api_LR_Any(self)
 
 
 
@@ -366,7 +379,7 @@ class EventsSlugViewSet(viewsets.ViewSet):
         return Response(serializer.data)
 
     def get_permissions(self):
-        return get_permission_Api_LR(self)
+        return get_permission_Api_LR_Any(self)
 
 
 
@@ -451,7 +464,7 @@ class EventsViewSet(viewsets.ViewSet):
         return Response(('deleted'), status=status.HTTP_200_OK)
 
     def get_permissions(self):
-        return get_permission_Api_LR(self)
+        return get_permission_Api_LR_Any(self)
 
 
 
@@ -493,6 +506,12 @@ class ReservationViewset(viewsets.ViewSet):
         serializer = ReservationSerializer(queryset, many=True, context={'request': request})
         return Response(serializer.data)
 
+    def retrieve(self, request, pk=None):
+        queryset = Reservation.objects.all().order_by('-datetime')
+        resa = get_object_or_404(queryset, pk=pk)
+        serializer = ReservationSerializer(resa)
+        return Response(serializer.data)
+
     def create(self, request):
 
         # import ipdb; ipdb.set_trace()
@@ -504,16 +523,8 @@ class ReservationViewset(viewsets.ViewSet):
         return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_permissions(self):
-        user_api = user_apikey_valid(self)
-        if user_api:
-            permission_classes = []
-            self.request.user = user_api
+        return get_permission_Api_LR_Admin(self)
 
-        elif self.action in ['list']:
-            permission_classes = [TenantAdminPermission]
-        else:
-            permission_classes = [permissions.AllowAny]
-        return [permission() for permission in permission_classes]
 
 
 class OptionTicket(viewsets.ViewSet):
@@ -617,9 +628,15 @@ class TicketViewset(viewsets.ViewSet):
         serializer = TicketSerializer(queryset, many=True, context={'request': request})
         return Response(serializer.data)
 
+    def retrieve(self, request, pk=None):
+        queryset = Ticket.objects.all()
+        ticket = get_object_or_404(queryset, pk=pk)
+        serializer = TicketSerializer(ticket)
+        return Response(serializer.data)
+
+
     def get_permissions(self):
-        permission_classes = [TenantAdminPermission]
-        return [permission() for permission in permission_classes]
+        return get_permission_Api_LR_Admin(self)
 
 
 def maj_membership_from_cashless(user: TibilletUser, data: dict):
