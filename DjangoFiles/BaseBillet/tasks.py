@@ -523,7 +523,7 @@ def webhook_reservation(reservation_pk):
     webhooks = Webhook.objects.filter(event=Webhook.RESERVATION_V)
     if webhooks.count() > 0 :
         reservation = Reservation.objects.get(pk=reservation_pk)
-        data = {
+        json = {
             "object": "reservation",
             "uuid": f"{reservation.uuid}",
             "state": f"{reservation.status}",
@@ -532,7 +532,7 @@ def webhook_reservation(reservation_pk):
 
         for webhook in webhooks:
             try :
-                response = requests.request("POST", webhook.url, data=data, timeout=2)
+                response = requests.request("POST", webhook.url, data=json, timeout=2)
                 webhook.last_response = f"{timezone.now()} - status code {response.status_code} - {response.text}"
             except Exception as e :
                 logger.error(f"webhook_reservation ERROR : {reservation_pk} {timezone.now()} {e}")
