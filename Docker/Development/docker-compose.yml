@@ -100,8 +100,8 @@ services:
     extends:
       file: ../compose/docker-compose-base.yml
       service: billetterie_nginx
-#    ports:
-#      - 80:80
+    ports:
+      - 8004:80
     env_file: .env
     depends_on:
       - billetterie_django_dev

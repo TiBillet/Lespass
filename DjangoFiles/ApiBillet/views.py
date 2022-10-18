@@ -599,7 +599,7 @@ class Cancel_sub(APIView):
 @permission_classes([TenantAdminPermission])
 class Gauge(APIView):
 
-    # API pour avoir l'état de la jauge ( GAUGE in inglishe ) et des billets scannés.
+    # API pour avoir l'état de la jauge (GAUGE in inglishe) et des billets scannés.
     def get(self, request):
         config = Configuration.get_solo()
         debut_jour, lendemain_quatre_heure = borne_temps_4h()
