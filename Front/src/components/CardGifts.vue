@@ -13,7 +13,7 @@
              @change="setEnableGift(product.uuid, $event.target.checked)">
       <label class="form-check-label text-dark" :for="`don${product.uuid}`">
         Je donne un euro de plus pour soutenir les actions de la coopérative <a
-          href="https://wiki.tibillet.re">TiBillet</a> en faveur de la culture et de l'économie sociale et solidaire.
+          href="https://tibillet.org">TiBillet</a> en faveur de la culture et de l'économie sociale et solidaire.
       </label>
     </div>
 

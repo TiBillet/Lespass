@@ -163,7 +163,9 @@ class ApiKeyAdmin(admin.ModelAdmin):
         "event",
         "product",
         "place",
-        "artist"
+        "artist",
+        "reservation",
+        "ticket",
     ]
 
     def save_model(self, request, instance, form, change):

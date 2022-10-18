@@ -41,7 +41,30 @@ from PaiementStripe.views import new_entry_from_stripe_invoice
 logger = logging.getLogger(__name__)
 
 
+# Refactor for get_permission
+# Si c'est list/retrieve -> pour tout le monde
+# Sinon, on vérifie la clé api
+def get_permission_Api_LR(self):
+
+    # Si c'est une auth avec APIKEY,
+    # on vérifie avec notre propre moteur
+    # Si l'user est rendu, la clé est valide
+    user_api = user_apikey_valid(self)
+    if user_api :
+        permission_classes = []
+        self.request.user = user_api
+
+    elif self.action in ['list', 'retrieve']:
+        permission_classes = [permissions.AllowAny]
+    else:
+        permission_classes = [TenantAdminPermission]
+
+    return [permission() for permission in permission_classes]
+
+
 class TarifBilletViewSet(viewsets.ViewSet):
+
+
     def list(self, request):
         queryset = Price.objects.all().order_by('prix')
         serializer = PriceSerializer(queryset, many=True, context={'request': request})
@@ -55,17 +78,7 @@ class TarifBilletViewSet(viewsets.ViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
-            permission_classes = [permissions.AllowAny]
-        else:
-            permission_classes = [TenantAdminPermission]
-            # Si c'est une auth avec APIKEY,
-            # on vérifie avec notre propre moteur
-            user_api = user_apikey_valid(self)
-            if user_api :
-                permission_classes = []
-                self.request.user = user_api
-        return [permission() for permission in permission_classes]
+        return get_permission_Api_LR(self)
 
 
 class ProductViewSet(viewsets.ViewSet):
@@ -90,17 +103,7 @@ class ProductViewSet(viewsets.ViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
-            permission_classes = [permissions.AllowAny]
-        else:
-            permission_classes = [TenantAdminPermission]
-            # Si c'est une auth avec APIKEY,
-            # on vérifie avec notre propre moteur
-            user_api = user_apikey_valid(self)
-            if user_api :
-                permission_classes = []
-                self.request.user = user_api
-        return [permission() for permission in permission_classes]
+        return get_permission_Api_LR(self)
 
 
 '''
@@ -325,17 +328,8 @@ class TenantViewSet(viewsets.ViewSet):
         return Response(place_serialized_with_uuid)
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
-            permission_classes = [permissions.AllowAny]
-        else:
-            permission_classes = [TenantAdminPermission]
-            # Si c'est une auth avec APIKEY,
-            # on vérifie avec notre propre moteur
-            user_api = user_apikey_valid(self)
-            if user_api :
-                permission_classes = []
-                self.request.user = user_api
-        return [permission() for permission in permission_classes]
+        return get_permission_Api_LR(self)
+
 
 
 class HereViewSet(viewsets.ViewSet):
@@ -359,11 +353,9 @@ class HereViewSet(viewsets.ViewSet):
         return Response(dict_return)
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
-            permission_classes = [permissions.AllowAny]
-        else:
-            permission_classes = [TenantAdminPermission]
-        return [permission() for permission in permission_classes]
+        return get_permission_Api_LR(self)
+
+
 
 
 class EventsSlugViewSet(viewsets.ViewSet):
@@ -374,11 +366,8 @@ class EventsSlugViewSet(viewsets.ViewSet):
         return Response(serializer.data)
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
-            permission_classes = [permissions.AllowAny]
-        else:
-            permission_classes = [TenantAdminPermission]
-        return [permission() for permission in permission_classes]
+        return get_permission_Api_LR(self)
+
 
 
 class EventsViewSet(viewsets.ViewSet):
@@ -462,18 +451,10 @@ class EventsViewSet(viewsets.ViewSet):
         return Response(('deleted'), status=status.HTTP_200_OK)
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
-            permission_classes = [permissions.AllowAny]
-        else:
-            permission_classes = [TenantAdminPermission]
-            # Si c'est une auth avec APIKEY,
-            # on vérifie avec notre propre moteur
-            user_api = user_apikey_valid(self)
-            if user_api :
-                permission_classes = []
-                self.request.user = user_api
+        return get_permission_Api_LR(self)
 
-        return [permission() for permission in permission_classes]
+
+
 
 
 class ChargeCashless(viewsets.ViewSet):
@@ -523,7 +504,12 @@ class ReservationViewset(viewsets.ViewSet):
         return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_permissions(self):
-        if self.action in ['list']:
+        user_api = user_apikey_valid(self)
+        if user_api:
+            permission_classes = []
+            self.request.user = user_api
+
+        elif self.action in ['list']:
             permission_classes = [TenantAdminPermission]
         else:
             permission_classes = [permissions.AllowAny]

@@ -1065,6 +1065,8 @@ class ApiKey(models.Model):
     product = models.BooleanField(default=False, verbose_name="Creation de produits")
     place = models.BooleanField(default=False, verbose_name="Creation de nouvelles instances lieux")
     artist = models.BooleanField(default=False, verbose_name="Creation de nouvelles instances artiste")
+    reservation = models.BooleanField(default=False, verbose_name="Lister les reservations")
+    ticket = models.BooleanField(default=False, verbose_name="Lister et valider les billets")
 
     def permissions(self):
         return {
@@ -1073,4 +1075,6 @@ class ApiKey(models.Model):
             "price": self.product,
             "place": self.place,
             "artist": self.artist,
+            "reservation": self.reservation,
+            "ticket": self.ticket,
         }

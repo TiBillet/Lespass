@@ -45,7 +45,7 @@
             <h6 class="font-weight-bolder text-sm">Coopérative</h6>
             <ul class="flex-column ms-n3 nav">
               <li class="nav-item">
-                <a class="nav-link" href="https://wiki.tibillet.re" target="_blank">
+                <a class="nav-link" href="https://tibillet.org" target="_blank">
                   A Propos
                 </a>
               </li>
