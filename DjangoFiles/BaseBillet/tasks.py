@@ -532,7 +532,10 @@ def webhook_reservation(reservation_pk):
 
         for webhook in webhooks:
             response = requests.request("POST", webhook.url, data=data)
-            webhook.last_response = response
+            try :
+                webhook.last_response = f"{timezone.now()} - status code {response.status_code} - {response.text}"
+            except Exception as e :
+                webhook.last_response = f"{timezone.now()} - {e}"
             webhook.save()
 
 

@@ -11,9 +11,8 @@ app = Flask(__name__)
 def test_slash():
     if request.method == 'POST':
         print(f"@app.route('/' : {request.form}")
-        import ipdb; ipdb.set_trace()
 
-    return Response("Print sended", status=200, mimetype='application/json')
+    return Response(f"Okay FLASK : {request.form}", status=200, mimetype='application/json')
 
 
 if __name__ == '__main__':
