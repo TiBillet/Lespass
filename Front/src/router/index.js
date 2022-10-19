@@ -1,10 +1,9 @@
+// store
+import {useAllStore} from '@/stores/all'
+
 // gère les routes(pages)
 import {createRouter, createWebHistory} from 'vue-router'
 import Accueil from '../views/Accueil.vue'
-
-// store
-import {useLocalStore} from '@/stores/local'
-import {useAllStore} from '@/stores/all'
 
 const domain = `${location.protocol}//${location.host}`
 
@@ -27,18 +26,18 @@ const routes = [
     component: {}
   },
   {
+    // /search/screens -> /search?q=screens
+    path: '/iframeevent/:slug',
+    name: 'IframeEvent',
+    component: () => import(/* webpackChunkName: "IframeEvent" */ '../views/Event.vue'),
+  },
+  {
     path: '/event/:slug',
     name: 'Event',
     // route level code-splitting
     // this generates a separate chunk (about.[hash].js) for this route
     // which is lazy-loaded when the route is visited.
-    component: () => import(/* webpackChunkName: "Event" */ '../views/Event.vue'),
-    // chargement synchrone des données lieu et évènements avant d'entrer dans la vue
-    /*
-    async beforeEnter(to, from) {
-      await loadEventBySlug(to.params.slug)
-    }
-     */
+    component: () => import(/* webpackChunkName: "Event" */ '../views/Event.vue')
   },
   {
     path: '/artist/:slug',
@@ -88,6 +87,13 @@ router.beforeEach((to, from, next) => {
   let nouvelleRoute = '/'
   if (from.name !== undefined) {
     nouvelleRoute = from.path
+  }
+
+  // par défaut le header et la navbar son affiché
+  const {setIdentitySite} = useAllStore()
+  setIdentitySite(true)
+  if (to.name === "IframeEvent") {
+    setIdentitySite(false)
   }
 
   // intercepte la route "NotFound" et redirige sur le wiki tibillet

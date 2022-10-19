@@ -29,6 +29,10 @@ export default defineConfig({
     hmr: {
       protocol: 'wss',
       port: 443
+    },
+    watch: {
+      usePolling: true
     }
+
   }
 })

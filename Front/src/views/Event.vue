@@ -31,7 +31,7 @@
         les dons sont désactivés par défaut
         l'attribut enable-names permet d'activer une liste de don par son nom (attention: nom unique !!)
         -->
-        <!-- <CardGifts :enable-names="['Don']"/> -->
+         <CardGifts :enable-names="['Don']"/>
 
         <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
       </form>
@@ -62,19 +62,21 @@ import CardGifts from '@/components/CardGifts.vue'
 // state event
 const {event, forms} = storeToRefs(useEventStore())
 // actions
-const {getEventBySlug} = useEventStore()
+const {updateEmail,getEventBySlug} = useEventStore()
 // state adhésion
 let {setEtapeStripe} = useLocalStore()
+
+const {setIdentitySite} = useAllStore()
 // state "all" for loading components
 const {adhesion, loading, error} = storeToRefs(useAllStore())
 
 const route = useRoute()
 const slug = route.params.slug
-
-// const emit = defineEmits(['update:layout'])
+const email = route.query.email
 
 // load event
-getEventBySlug(slug)
+getEventBySlug(slug, email)
+
 
 // formatage des données POST events
 function formatBodyPost() {

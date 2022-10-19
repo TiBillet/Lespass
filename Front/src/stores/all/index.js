@@ -6,6 +6,7 @@ const domain = `${window.location.protocol}//${window.location.host}`
 export const useAllStore = defineStore({
   id: 'all',
   state: () => ({
+    identitySite: true,
     loading: false,
     error: null,
     language: 'fr',
@@ -29,6 +30,9 @@ export const useAllStore = defineStore({
     }
   }),
   actions: {
+    setIdentitySite(value) {
+      this.identitySite = value
+    },
     async getEvents() {
       this.error = null
       this.events = {}

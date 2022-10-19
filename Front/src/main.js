@@ -11,4 +11,4 @@ window.accessToken = ''
 const pinia = createPinia()
 pinia.use(piniaPluginPersistedstate)
 const app = createApp(App)
-app.use(router).use(pinia).mount('#app')
+app.use(pinia).use(router).mount('#app')

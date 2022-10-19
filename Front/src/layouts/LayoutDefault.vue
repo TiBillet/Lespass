@@ -1,8 +1,7 @@
 <template>
-<!--  <Loading v-if="testLoading() === true"/>-->
   <Loading v-if="testLoading()"/>
-  <Navbar/>
-  <Header/>
+  <Navbar v-if="identitySite"/>
+  <Header v-if="identitySite"/>
   <p v-if="error !== null" class="text-dark">{{ error }}</p>
   <div>
     <slot/>
@@ -57,7 +56,7 @@ import '@/assets/css/now-design-system-pro.min.css'
 import '@/assets/js/now-design-system-pro.js'
 
 // console.log('dataHeader =', dataHeader)
-const {loading, error} = storeToRefs(useAllStore())
+const {identitySite, loading, error} = storeToRefs(useAllStore())
 
 // return loading value and lock/unlock scroll
 function testLoading() {

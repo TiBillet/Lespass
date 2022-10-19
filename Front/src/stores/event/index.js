@@ -1,5 +1,4 @@
 import {defineStore} from 'pinia'
-import {useLocalStore} from '@/stores/local'
 import {useAllStore} from '@/stores/all'
 
 const domain = `${location.protocol}//${location.host}`
@@ -13,7 +12,7 @@ export const useEventStore = defineStore({
     error: null
   }),
   actions: {
-    async getEventBySlug(slug) {
+    async getEventBySlug(slug, email) {
       const urlApi = `/api/eventslug/${slug}`
       this.error = null
       this.event = {}
@@ -33,7 +32,7 @@ export const useEventStore = defineStore({
           }
         }
         this.event = retour
-        this.initEventForm()
+        this.initEventForm(email)
         // updata data header
         this.getEventHeader()
 
@@ -49,7 +48,7 @@ export const useEventStore = defineStore({
       }
     },
     // init le formulaire d'un évènement (CardBillet, CardOptions)
-    initEventForm() {
+    initEventForm(email) {
       // console.log('-> action initEventForm !')
       const allStore = useAllStore()
       // init data form / event uuid
@@ -91,6 +90,11 @@ export const useEventStore = defineStore({
             enable: false
           })
         }
+      }
+      console.log('email =', email)
+      if (email !== undefined) {
+        this.updateEmail('emailConfirme', email)
+        this.updateEmail('email', email)
       }
     },
     generateUUIDUsingMathRandom() {
