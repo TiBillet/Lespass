@@ -1,5 +1,6 @@
 <template>
-  <Loading v-if="testLoading() === true"/>
+<!--  <Loading v-if="testLoading() === true"/>-->
+  <Loading v-if="testLoading()"/>
   <Navbar/>
   <Header/>
   <p v-if="error !== null" class="text-dark">{{ error }}</p>
@@ -61,11 +62,12 @@ const {loading, error} = storeToRefs(useAllStore())
 // return loading value and lock/unlock scroll
 function testLoading() {
   if (loading.value === true) {
-    document.body.style.userSelect = "none"
+    document.body.style.overflow = "hidden"
     console.log('LayoutDefault.vue, testLoading, userSelect none !')
     return true
   } else {
-    document.body.style.userSelect = "auto"
+    document.body.style.overflowX = "hidden"
+    document.body.style.overflowY = "auto"
     console.log('LayoutDefault.vue, testLoading, userSelect auto !')
     return false
   }
