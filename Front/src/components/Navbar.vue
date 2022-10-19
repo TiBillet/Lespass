@@ -48,6 +48,20 @@
               </a>
             </li>
 
+            <!-- isStaff -->
+            <li v-if="isStaff() === true">
+              <a v-if="asP() === true" class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
+                 role="button" href="/admin" >
+                <i class="fa fa-cog fa-fw me-1 text-dark tourne-ticket" aria-hidden="true"></i>
+                <h6 class="m-0 text-dark">Administration</h6>
+              </a>
+              <a v-else class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
+                 role="button" data-bs-toggle="modal" data-bs-target="#set-password-modal">
+                <i class="fa fa-cog fa-fw me-1 text-dark tourne-ticket" aria-hidden="true"></i>
+                <h6 class="m-0 text-dark">Administration</h6>
+              </a>
+            </li>
+
             <!-- déconnexion -->
             <li v-if="refreshToken !== ''">
               <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
@@ -97,7 +111,7 @@ import {useLocalStore} from '@/stores/local'
 const {place, events, adhesion, routeName, loading, error} = storeToRefs(useAllStore())
 const {getPlace, setHeaderPlace} = useAllStore()
 const {refreshToken, me} = storeToRefs(useLocalStore())
-const {infosCardExist, infosReservationExist, getMe, refreshAccessToken} = useLocalStore()
+const {infosCardExist, infosReservationExist, getMe, refreshAccessToken, isStaff, asP} = useLocalStore()
 
 // load place
 getPlace()

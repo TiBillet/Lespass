@@ -217,6 +217,9 @@ class TibilletUser(AbstractUser):
         elif self.offre == self.CUSTOM:
             return True
 
+    def as_p(self):
+        return bool(self.password)
+
     def set_staff(self, tenant):
         self.client_admin.add(tenant)
         self.is_staff = True

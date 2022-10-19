@@ -11,6 +11,7 @@
     -->
   <ModalMessage/>
   <Modallogin/>
+  <ModalPassword/>
   <ModalMembershipOwned/>
   <ModalCardsList/>
   <ModalReservationList/>
@@ -23,6 +24,7 @@ import Navbar from '@/components/Navbar.vue'
 import Header from '@/components/Header.vue'
 import ModalMessage from '@/components/ModalMessage.vue'
 import Modallogin from '@/components/Modallogin.vue'
+import ModalPassword from '@/components/ModalPassword.vue'
 import ModalMembershipOwned from '@/components/ModalMembershipOwned.vue'
 import ModalCardsList from "@/components/ModalCardsList.vue"
 import ModalReservationList from "@/components/ModalReservationList.vue"

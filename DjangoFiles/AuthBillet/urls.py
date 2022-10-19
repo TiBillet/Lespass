@@ -4,7 +4,7 @@ from AuthBillet import views as auth_view
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView, TokenVerifyView
 
 from AuthBillet.views import create_user, create_terminal_user, TokenRefreshViewCustom, OAauthApi, OAauthCallback, \
-    test_api_key
+    test_api_key, SetPassword
 from rest_framework import routers
 
 router = routers.DefaultRouter()
@@ -17,6 +17,7 @@ urlpatterns = [
     path('token/refresh/', TokenRefreshViewCustom.as_view(), name='token_refresh'),
 
     path('keytest/', test_api_key.as_view(), name='test_api_key'),
+    path('setpassword/', SetPassword.as_view(), name='setpassword'),
 
     path('token/verify/', TokenVerifyView.as_view(), name='token_verify'),
     path('create/', create_user.as_view(), name='create_user'),

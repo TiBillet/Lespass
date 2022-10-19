@@ -234,6 +234,13 @@ class MeViewset(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
+class SetPassword(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def post(self, request):
+        logger.info(request.data)
+        return Response('SetPassword',
+                        status=status.HTTP_200_OK)
+
 class OAauthApi(APIView):
     permission_classes = [AllowAny]
 
