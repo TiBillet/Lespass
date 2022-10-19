@@ -24,7 +24,7 @@ from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSeria
     ReservationValidator, MembreValidator, ConfigurationSerializer, NewConfigSerializer, \
     EventCreateSerializer, TicketSerializer, OptionTicketSerializer, ChargeCashlessValidator, NewAdhesionValidator
 from AuthBillet.models import TenantAdminPermission, TibilletUser
-from AuthBillet.utils import user_apikey_valid
+from AuthBillet.utils import user_apikey_valid, get_or_create_user
 from BaseBillet.tasks import create_ticket_pdf
 from Customers.models import Client, Domain
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe, \
@@ -286,7 +286,14 @@ class TenantViewSet(viewsets.ViewSet):
                     conf.logo.save(serializer.logo_name, serializer.logo_img.fp)
 
                 conf.save()
-                user.client_admin.add(tenant)
+                # user.client_admin.add(tenant)
+
+                email_nouveau_tenant = futur_conf.get('email')
+                if email_nouveau_tenant :
+                    user_from_email_nouveau_tenant = get_or_create_user(email_nouveau_tenant)
+                    user_from_email_nouveau_tenant.client_admin.add(tenant)
+                    user_from_email_nouveau_tenant.is_staff = True
+                    user_from_email_nouveau_tenant.save()
 
                 place_serialized = ConfigurationSerializer(Configuration.get_solo(), context={'request': request})
                 place_serialized_with_uuid = {'uuid': f"{tenant.uuid}"}

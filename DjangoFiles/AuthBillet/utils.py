@@ -95,6 +95,7 @@ def get_or_create_user(email, password=None, set_active=False, send_mail=True):
         user.is_active = bool(set_active)
 
         user.client_achat.add(connection.tenant)
+        user.client_source = connection.tenant
         user.save()
 
         if bool(send_mail):
