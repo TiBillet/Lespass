@@ -27,6 +27,9 @@
                   <input id="admin-password-bis" laria-describedby="admin-password-bis" aria-label="Password"
                          class="form-control" placeholder="Password" type="password"
                          required>
+                  <div class="invalid-feedback">
+                    Merci de renseigner un mot de passe identique.
+                  </div>
                 </div>
                 <p class="mt-2">Notez le bien, il vous sera demandé à la page suivante :)</p>
                 <div class="text-center">
@@ -57,39 +60,46 @@ async function validerPassword(event) {
   if (event.target.checkValidity() === true) {
     // enregistre l'email dans le storeUser
     const password = document.querySelector('#admin-password').value
-    console.log(password)
+    const password_bis = document.querySelector('#admin-password-bis').value
+    if (password === password_bis) {
 
-    const api = `/api/user/setpassword/`
-    try {
-      loading.value = true
-      const response = await fetch(domain + api, {
-        method: 'POST',
-        cache: 'no-cache',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({password: password})
-      })
-      const retour = await response.json()
-      console.log('retour =', retour)
-      // if (response.status === 201 || response.status === 401 || response.status === 202) {
-
-      if (response.status === 200) {
-        // ferme le modal
-        const elementModal = document.querySelector('#set-password-modal')
-        const modal = bootstrap.Modal.getInstance(elementModal) // Returns a Bootstrap modal instance
-        modal.hide()
-        // message de succès
-        emitter.emit('modalMessage', {
-          titre: 'Validation',
-          contenu: retour
+      const api = `/api/user/SetPasswordIfEmpty/`
+      try {
+        loading.value = true
+        const response = await fetch(domain + api, {
+          method: 'POST',
+          cache: 'no-cache',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${window.accessToken} `,
+          },
+          body: JSON.stringify({password: password})
         })
-      } else {
-        throw new Error(`Erreur lors de la création du mot de passe. Contactez l'administration.`)
+        const retour = await response.json()
+        console.log('retour =', retour)
+        // if (response.status === 201 || response.status === 401 || response.status === 202) {
+
+        if (response.status === 200) {
+          // ferme le modal
+          const elementModal = document.querySelector('#set-password-modal')
+          const modal = bootstrap.Modal.getInstance(elementModal) // Returns a Bootstrap modal instance
+          modal.hide()
+          // message de succès
+          emitter.emit('modalMessage', {
+            titre: 'Validation',
+            contenu: retour
+          })
+        } else {
+          throw new Error(`Erreur lors de la création du mot de passe. Contactez l'administration.`)
+        }
+      } catch (erreur) {
+        console.log('-> validerPassword, erreur :', erreur)
+        error.value = erreur
       }
-    } catch (erreur) {
-      console.log('-> validerPassword, erreur :', erreur)
-      error.value = erreur
+    } else {
+      const confirmePass = document.querySelector(`#admin-password-bis`)
+      confirmePass.parentNode.querySelector('.invalid-feedback').style.display = 'block'
+      confirmePass.scrollIntoView({behavior: 'smooth', inline: 'center', block: 'center'})
     }
   }
   loading.value = false

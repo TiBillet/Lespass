@@ -233,13 +233,33 @@ class MeViewset(viewsets.ViewSet):
             permission_classes = [permissions.AllowAny]
         return [permission() for permission in permission_classes]
 
-
-class SetPassword(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-    def post(self, request):
-        logger.info(request.data)
+'''
+class SetPassword(viewsets.ViewSet):
+    def create(self, request):
+        logger.info(f"SetPassword {request.data}")
         return Response('SetPassword',
                         status=status.HTTP_200_OK)
+
+    def get_permissions(self):
+        permission_classes = [permissions.IsAuthenticated]
+        return [permission() for permission in permission_classes]
+'''
+
+class SetPasswordIfEmpty(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def post(self, request):
+        user: TibilletUser = request.user
+        if not user.password :
+            if request.data.get('password') :
+                if len(request.data.get('password')) > 8 :
+                    user.set_password(request.data.get('password'))
+                    user.save()
+
+                    return Response('Password set',
+                                    status=status.HTTP_200_OK)
+
+        return Response('Not allowed',
+                        status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 class OAauthApi(APIView):
     permission_classes = [AllowAny]
