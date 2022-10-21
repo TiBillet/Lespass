@@ -460,11 +460,13 @@ class Event(models.Model):
     FESTIVAL = "FES"
     REUNION = "REU"
     CONFERENCE = "CON"
+    RESTAURATION = "RES"
     TYPE_CHOICES = [
         (CONCERT, _('Concert')),
         (FESTIVAL, _('Festival')),
         (REUNION, _('Réunion')),
         (CONFERENCE, _('Conférence')),
+        (RESTAURATION, _('Restauration')),
     ]
 
     categorie = models.CharField(max_length=3, choices=TYPE_CHOICES, default=CONCERT,

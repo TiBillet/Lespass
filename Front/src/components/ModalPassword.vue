@@ -81,14 +81,16 @@ async function validerPassword(event) {
 
         if (response.status === 200) {
           // ferme le modal
-          const elementModal = document.querySelector('#set-password-modal')
-          const modal = bootstrap.Modal.getInstance(elementModal) // Returns a Bootstrap modal instance
-          modal.hide()
+          // const elementModal = document.querySelector('#set-password-modal')
+          // const modal = bootstrap.Modal.getInstance(elementModal) // Returns a Bootstrap modal instance
+          // modal.hide();
+          goAdmin();
           // message de succès
-          emitter.emit('modalMessage', {
-            titre: 'Validation',
-            contenu: retour
-          })
+          // emitter.emit('modalMessage', {
+          //   titre: 'Validation',
+          //   contenu: retour
+          // })
+
         } else {
           throw new Error(`Erreur lors de la création du mot de passe. Contactez l'administration.`)
         }
