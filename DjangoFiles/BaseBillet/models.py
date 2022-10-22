@@ -291,13 +291,14 @@ class Product(models.Model):
                         verbose_name=_('Image du produit'),
                         )
 
-    NONE, BILLET, PACK, RECHARGE_CASHLESS, VETEMENT, MERCH, ADHESION, DON, FREERES = 'N', 'B', 'P', 'R', 'T', 'M', 'A', 'D', 'F'
+    NONE, BILLET, PACK, RECHARGE_CASHLESS, RECHARGE_SUSPENDUE, VETEMENT, MERCH, ADHESION, DON, FREERES = 'N', 'B', 'P', 'R', 'S', 'T', 'M', 'A', 'D', 'F'
 
     CATEGORIE_ARTICLE_CHOICES = [
         (NONE, _('Selectionnez une catégorie')),
         (BILLET, _('Billet')),
         (PACK, _("Pack d'objets")),
         (RECHARGE_CASHLESS, _('Recharge cashless')),
+        (RECHARGE_SUSPENDUE, _('Recharge suspendue')),
         (VETEMENT, _('Vetement')),
         (MERCH, _('Merchandasing')),
         (ADHESION, _('Adhésions et abonnements')),
@@ -307,6 +308,8 @@ class Product(models.Model):
 
     categorie_article = models.CharField(max_length=3, choices=CATEGORIE_ARTICLE_CHOICES, default=NONE,
                                          verbose_name=_("Type d'article"))
+
+    archive = models.BooleanField(default=False)
 
     send_to_cashless = models.BooleanField(default=False,
                                            verbose_name="Envoyer au cashless",
@@ -413,6 +416,8 @@ class Event(models.Model):
                                            verbose_name="Option choix unique")
     options_checkbox = models.ManyToManyField(OptionGenerale, blank=True, related_name="options_checkbox",
                                               verbose_name="Options choix multiple")
+
+    recharge_cashless = models.BooleanField(default=False)
 
     img = StdImageField(upload_to='images/',
                         validators=[MaxSizeValidator(1920, 1920)],

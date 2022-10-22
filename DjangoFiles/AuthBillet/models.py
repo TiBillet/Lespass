@@ -189,7 +189,11 @@ class TibilletUser(AbstractUser):
 
     ##### END user terminaux ####
 
-    objects = TibilletManager()
+    ##### Pour les user humain ####
+
+
+    ##### END user humain ####
+
 
     def achat(self):
         return " ".join([achat["schema_name"] for achat in self.client_achat.values("schema_name")])
@@ -229,6 +233,7 @@ class TibilletUser(AbstractUser):
     def __str__(self):
         return self.email
 
+    objects = TibilletManager()
 
 # ---------------------------------------------------------------------------------------------------------------------
 

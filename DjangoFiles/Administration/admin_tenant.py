@@ -346,6 +346,14 @@ class EventAdmin(admin.ModelAdmin):
     )
     search_fields = ['name']
 
+    # pour selectionner uniquement les articles ventes et retour consigne
+    def formfield_for_manytomany(self, db_field, request, **kwargs):
+        if db_field.name == "products":
+            kwargs["queryset"] = Product.objects \
+                .exclude(categorie_article__in=(Product.RECHARGE_CASHLESS, Product.DON, Product.ADHESION, Product.FREERES)) \
+                .exclude(archive=True)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
     def save_form(self, request, form, change):
         # import ipdb; ipdb.set_trace()
         return super().save_form(request, form, change)
@@ -560,6 +568,7 @@ class ProductAdmin(admin.ModelAdmin):
         # Pas besoin de les afficher, ils se créent automatiquement.
         qs = super().get_queryset(request)
         return qs.exclude(categorie_article__in=[Product.RECHARGE_CASHLESS, Product.DON])
+
 
 
 staff_admin_site.register(Product, ProductAdmin)

@@ -388,6 +388,7 @@ class EventSerializer(serializers.ModelSerializer):
             'products',
             'options_radio',
             'options_checkbox',
+            'recharge_cashless',
             'img_variations',
             'reservations',
             'complet',
