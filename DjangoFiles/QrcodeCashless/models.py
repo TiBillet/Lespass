@@ -37,6 +37,8 @@ class Asset(models.Model):
     origin = models.ForeignKey(Customers_Client, on_delete=models.PROTECT)
     name = models.CharField(max_length=50, null=False, blank=False)
 
+    class Meta:
+        unique_together = [['origin', 'name']]
 
 
 class CarteCashless(models.Model):
@@ -73,14 +75,14 @@ class Wallet(models.Model):
 
     qty = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     card = models.ForeignKey(
-        CarteCashless, related_name='assets', on_delete=models.PROTECT)
+        CarteCashless, on_delete=models.PROTECT)
     asset = models.ForeignKey(Asset, on_delete=models.PROTECT)
     last_date_used = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = [['asset', 'card']]
-        verbose_name = 'Asset'
-        verbose_name_plural = 'Portefeuilles'
+        verbose_name = 'Wallet'
+        verbose_name_plural = 'Wallets'
 
     def __str__(self):
         return f'{self.asset.name}, {self.qty}'
