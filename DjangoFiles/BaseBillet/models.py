@@ -1,21 +1,16 @@
-import os
 import uuid
 from datetime import timedelta, datetime
+from decimal import Decimal
 
 import requests
-from django import forms
-from django.contrib.auth import get_user_model
 from django.db import models
-from django.db.models.aggregates import Sum
 
 # Create your models here.
 from django.db.models import Q
-from django.db.models.signals import post_save, pre_save
+from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.urls import reverse
-from django.utils import timezone
 
-# from django.contrib.postgres.fields import JSONField
 from django.db.models import JSONField
 
 from django.utils.text import slugify
@@ -205,6 +200,9 @@ class Configuration(SingletonModel):
                                                       blank=True,
                                                       related_name="checkbox")
 
+
+    ######### CASHLESS #########
+
     server_cashless = models.URLField(
         max_length=300,
         blank=True,
@@ -218,6 +216,29 @@ class Configuration(SingletonModel):
         null=True,
         verbose_name=_("Clé d'API du serveur cashless")
     )
+
+    def check_serveur_cashless(self):
+        if self.server_cashless and self.key_cashless:
+            sess = requests.Session()
+            try:
+                r = sess.get(
+                    f'{self.server_cashless}/api/check_apikey',
+                    headers={
+                        'Authorization': f'Api-Key {self.key_cashless}'
+                    },
+                    timeout=1,
+                )
+                sess.close()
+                logger.info(f"check_serveur_cashless : {r.status_code} {r.text}")
+                if r.status_code == 200 :
+                    if r.json().get('bill'):
+                        return True
+            except:
+                ...
+        return False
+
+    ######### END CASHLESS #########
+
 
     ARNAUD, MASSIVELY, BLK_MVC = 'arnaud_mvc', 'html5up-masseively', 'blk-pro-mvc'
     CHOICE_TEMPLATE = [
@@ -478,10 +499,10 @@ class Event(models.Model):
                                  verbose_name=_("Catégorie d'évènement"))
 
     def reservations(self):
-        '''
+        """
         Renvoie toutes les réservations valide d'un évènement.
         Compte les billets achetés/réservés.
-        '''
+        """
 
         return Ticket.objects.filter(reservation__event__pk=self.pk) \
             .exclude(status=Ticket.CREATED) \
@@ -489,23 +510,33 @@ class Event(models.Model):
             .count()
 
     def complet(self):
-        '''
+        """
         Un booléen pour savoir si l'évènement est complet ou pas.
-        '''
+        """
 
         if self.reservations() >= self.jauge_max:
             return True
         else:
             return False
 
+    def check_serveur_cashless(self):
+        config = Configuration.get_solo()
+        return config.check_serveur_cashless()
+
     def save(self, *args, **kwargs):
-        '''
+        """
         Transforme le titre le d'evenemennt en slug, pour en faire une url lisible
-        '''
+        """
 
         # self.slug = slugify(f"{self.name} {self.datetime} {str(self.uuid).partition('-')[0]}")[:50]
         self.slug = slugify(f"{self.name} {self.datetime.strftime('%D %R')}")
+
+        # On vérifie que le serveur cashless soit configuré et atteignable
+        if self.recharge_cashless:
+            self.recharge_cashless = self.check_serveur_cashless()
+
         super().save(*args, **kwargs)
+
 
     def __str__(self):
         return f"{self.datetime.strftime('%d/%m')} {self.name}"
@@ -657,6 +688,8 @@ class PriceSold(models.Model):
         self.id_price_stripe = None
         self.save()
 
+    def total(self):
+        return Decimal(self.prix) * Decimal(self.qty_solded)
     # class meta:
     #     unique_together = [['productsold', 'price']]
 

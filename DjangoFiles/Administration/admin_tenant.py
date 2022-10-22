@@ -126,8 +126,6 @@ staff_admin_site.register(HumanUser, HumanUserAdmin)
 
 class SuperHumanUserAdmin(UserAdminTibillet):
     def save_model(self, request, obj, form, change):
-        super(SuperHumanUserAdmin, self).save_model(request, obj, form, change)
-
         staff_group = Group.objects.get_or_create(name="staff")[0]
         obj.groups.add(staff_group)
         obj.client_achat.add(request.tenant)
@@ -146,8 +144,9 @@ class TermUserAdmin(UserAdminTibillet):
 
 staff_admin_site.register(TermUser, TermUserAdmin)
 
+
 class ApiKeyAdmin(admin.ModelAdmin):
-    readonly_fields = ["key",]
+    readonly_fields = ["key", ]
 
     list_display = [
         "name",
@@ -210,10 +209,12 @@ class ApiKeyAdmin(admin.ModelAdmin):
         if ex_api_key:
             ex_api_key.delete()
 
+
 staff_admin_site.register(ApiKey, ApiKeyAdmin)
 
+
 class WebhookAdmin(admin.ModelAdmin):
-    readonly_fields = ['last_response',]
+    readonly_fields = ['last_response', ]
     fields = [
         "url",
         "active",
@@ -227,6 +228,7 @@ class WebhookAdmin(admin.ModelAdmin):
         "event",
         "last_response",
     ]
+
 
 staff_admin_site.register(Webhook, WebhookAdmin)
 
@@ -299,6 +301,16 @@ class ConfigurationAdmin(SingletonModelAdmin):
         # }),
     )
 
+    def save_model(self, request, obj, form, change):
+        obj: Configuration
+        if obj.server_cashless and obj.key_cashless:
+            if obj.check_serveur_cashless():
+                messages.add_message(request, messages.INFO, f"Cashless server ONLINE")
+            else:
+                messages.add_message(request, messages.ERROR, "Cashless server OFFLINE or BAD KEY")
+
+        super().save_model(request, obj, form, change)
+
 
 staff_admin_site.register(Configuration, ConfigurationAdmin)
 
@@ -332,6 +344,7 @@ class EventAdmin(admin.ModelAdmin):
                 'jauge_max',
                 'options_radio',
                 'options_checkbox',
+                'recharge_cashless',
             )
         }),
     )
@@ -350,13 +363,24 @@ class EventAdmin(admin.ModelAdmin):
     def formfield_for_manytomany(self, db_field, request, **kwargs):
         if db_field.name == "products":
             kwargs["queryset"] = Product.objects \
-                .exclude(categorie_article__in=(Product.RECHARGE_CASHLESS, Product.DON, Product.ADHESION, Product.FREERES)) \
+                .exclude(
+                categorie_article__in=(Product.RECHARGE_CASHLESS, Product.DON, Product.ADHESION, Product.FREERES)) \
                 .exclude(archive=True)
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
-    def save_form(self, request, form, change):
+    def save_model(self, request, obj, form, change):
+        # On check si le cashless est opé.
+        if obj.recharge_cashless:
+            config = Configuration.get_solo()
+            if config.check_serveur_cashless():
+                messages.add_message(request, messages.INFO, f"Cashless server ONLINE")
+            else:
+                obj.recharge_cashless = False
+                messages.add_message(request, messages.ERROR, "Cashless server OFFLINE or BAD KEY")
+
+        super().save_model(request, obj, form, change)
+
         # import ipdb; ipdb.set_trace()
-        return super().save_form(request, form, change)
 
 
 staff_admin_site.register(Event, EventAdmin)
@@ -568,7 +592,6 @@ class ProductAdmin(admin.ModelAdmin):
         # Pas besoin de les afficher, ils se créent automatiquement.
         qs = super().get_queryset(request)
         return qs.exclude(categorie_article__in=[Product.RECHARGE_CASHLESS, Product.DON])
-
 
 
 staff_admin_site.register(Product, ProductAdmin)

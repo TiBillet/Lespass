@@ -72,17 +72,17 @@ class CarteCashless(models.Model):
 
 class Wallet(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-
-    qty = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    card = models.ForeignKey(
-        CarteCashless, on_delete=models.PROTECT)
     asset = models.ForeignKey(Asset, on_delete=models.PROTECT)
+    qty = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     last_date_used = models.DateTimeField(auto_now=True)
 
-    class Meta:
-        unique_together = [['asset', 'card']]
-        verbose_name = 'Wallet'
-        verbose_name_plural = 'Wallets'
+    # Un wallet peut avoir une carte ET/OU un user
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True)
+    card = models.ForeignKey(
+        CarteCashless,
+        on_delete=models.PROTECT,
+        null=True, blank=True
+    )
 
     def __str__(self):
         return f'{self.asset.name}, {self.qty}'

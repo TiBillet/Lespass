@@ -1,29 +1,53 @@
 import datetime
 
 import requests
-# from django.db import connection
-from django.contrib.auth import get_user_model
-from django.db.models import Q
-from django.db.models.signals import post_save, pre_save
-from django.dispatch import receiver
-# from django.utils import timezone
+from django.db import connection
 
-# from ApiBillet.thread_mailer import ThreadMaileur
-from django.utils import timezone
-
-from BaseBillet.models import Reservation, LigneArticle, Ticket, Product, Configuration, Paiement_stripe, Membership, \
-    Price
+from BaseBillet.models import LigneArticle, Product, Configuration, Membership, Price
 from BaseBillet.tasks import send_membership_to_cashless
 
-# from TiBillet import settings
-
 import logging
+
+from Customers.models import Client
+from QrcodeCashless.models import Asset, Wallet
 
 logger = logging.getLogger(__name__)
 
 
-class action_article_paid_by_categorie:
-    '''
+def increment_to_cashless_serveur(action):
+    logger.info(f"TRIGGER RECHARGE_CASHLESS")
+    configuration = Configuration.get_solo()
+    if not configuration.server_cashless or not configuration.key_cashless:
+        logger.error(f"triggers/increment_to_cashless_serveur - No cashless config for {connection.tenant}")
+        raise Exception(f'triggers/increment_to_cashless_serveur - No cashless config for {connection.tenant}')
+
+    action.data_for_cashless['card_uuid'] = action.ligne_article.carte.uuid
+    action.data_for_cashless['qty'] = action.ligne_article.pricesold.prix
+
+    data = action.data_for_cashless
+
+    sess = requests.Session()
+    r = sess.post(
+        f'{configuration.server_cashless}/api/chargecard',
+        headers={
+            'Authorization': f'Api-Key {configuration.key_cashless}'
+        },
+        data=data,
+    )
+
+    sess.close()
+
+    if r.status_code == 202:
+        action.ligne_article.status = LigneArticle.VALID
+        logger.info(f"rechargement cashless ok {r.status_code} {r.text}")
+        # set_paiement_and_reservation_valid(None, self.ligne_article)
+    else:
+        logger.error(f"erreur réponse serveur cashless {r.status_code} {r.text}")
+    return r.status_code, r.text
+
+
+class ActionArticlePaidByCategorie:
+    """
     BILLET, PACK, RECHARGE_CASHLESS, VETEMENT, MERCH, ADHESION = 'B', 'P', 'R', 'T', 'M', 'A'
         CATEGORIE_ARTICLE_CHOICES = [
             (BILLET, _('Billet')),
@@ -35,9 +59,9 @@ class action_article_paid_by_categorie:
         ]
 
     Trigged action by categorie when Article is PAID
-    '''
+    """
 
-    def __init__(self, ligne_article: LigneArticle, **kwargs):
+    def __init__(self, ligne_article: LigneArticle):
         self.ligne_article = ligne_article
         self.categorie = self.ligne_article.pricesold.productsold.product.categorie_article
 
@@ -67,35 +91,25 @@ class action_article_paid_by_categorie:
 
     # Category RECHARGE_CASHLESS
     def trigger_R(self):
-        logger.info(f"TRIGGER RECHARGE_CASHLESS")
-        configuration = Configuration.get_solo()
-        if not configuration.server_cashless or not configuration.key_cashless:
-            raise Exception(f'Pas de configuration cashless')
+        cashless_serveur_response = increment_to_cashless_serveur(self)
+        logger.info(f"TRIGGER RECHARGE_CASHLESS : {cashless_serveur_response}")
 
-        self.data_for_cashless['card_uuid'] = self.ligne_article.carte.uuid
-        self.data_for_cashless['qty'] = self.ligne_article.pricesold.prix
+    # Category RECHARGE SUSPENDUE
+    def trigger_S(self):
+        logger.info(f"TRIGGER RECHARGE_SUSPENDUE")
 
-        data = self.data_for_cashless
-
-        sess = requests.Session()
-        r = sess.post(
-            f'{configuration.server_cashless}/api/chargecard',
-            headers={
-                'Authorization': f'Api-Key {configuration.key_cashless}'
-            },
-            data=data,
+        root = Client.objects.get(categorie=Client.ROOT)
+        asset, created = Asset.objects.get_or_create(
+            origin = root,
+            name = "Stripe"
         )
+        wallet, created = Wallet.objects.get_or_create(
+            asset = asset,
+            user = self.ligne_article.paiement_stripe.user
+        )
+        wallet += wallet.qty + self.ligne_article.pricesold.total()
+        wallet.save()
 
-        sess.close()
-        logger.info(
-            f"        demande au serveur cashless pour {data}. réponse : {r.status_code} ")
-
-        if r.status_code == 202:
-            self.ligne_article.status = LigneArticle.VALID
-            # set_paiement_and_reservation_valid(None, self.ligne_article)
-        else:
-            logger.error(
-                f"erreur réponse serveur cashless {r.status_code} {r.text}")
 
     # Categorie ADHESION
     def trigger_A(self):
@@ -116,10 +130,10 @@ class action_article_paid_by_categorie:
         membership.last_contribution = datetime.datetime.now().date()
         membership.contribution_value = self.ligne_article.pricesold.prix
 
-        if paiement_stripe.invoice_stripe :
+        if paiement_stripe.invoice_stripe:
             membership.last_stripe_invoice = paiement_stripe.invoice_stripe
 
-        if paiement_stripe.subscription :
+        if paiement_stripe.subscription:
             membership.stripe_id_subscription = paiement_stripe.subscription
             membership.status = Membership.AUTO
 
@@ -131,10 +145,10 @@ class action_article_paid_by_categorie:
             data = {
                 "ligne_article_pk": self.ligne_article.pk,
             }
-            task = send_membership_to_cashless.delay(data)
+            send_membership_to_cashless.delay(data)
 
         # TODO: C'est un abonnement autre que l'adhésion cashless, on gère l'envoi du contrat.
-        else :
+        else:
             logger.info(f"    TODO Envoie mail abonnement")
             pass
 

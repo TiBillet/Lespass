@@ -11,7 +11,7 @@ from BaseBillet.models import Reservation, LigneArticle, Ticket, Product, Config
 from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation
 
 # from TiBillet import settings
-from BaseBillet.triggers import action_article_paid_by_categorie
+from BaseBillet.triggers import ActionArticlePaidByCategorie
 
 import logging
 
@@ -126,7 +126,7 @@ def send_to_cashless(instance: LigneArticle):
 def check_paid(old_instance: LigneArticle, new_instance: LigneArticle):
     logger.info(
         f"    SIGNAL LIGNE ARTICLE check_paid {old_instance.pricesold} new_instance status : {new_instance.status}")
-    action_article_paid_by_categorie(new_instance)
+    ActionArticlePaidByCategorie(new_instance)
     logger.info(
         f"    SIGNAL LIGNE ARTICLE check_paid {old_instance.pricesold} new_instance status : {new_instance.status}")
     set_paiement_stripe_valid(old_instance, new_instance)
