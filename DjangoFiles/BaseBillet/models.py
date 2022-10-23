@@ -955,6 +955,9 @@ class LigneArticle(models.Model):
     class Meta:
         ordering = ('-datetime',)
 
+    def total(self):
+        return Decimal(self.pricesold.prix) * Decimal(self.qty)
+
     def status_stripe(self):
         if self.paiement_stripe:
             return self.paiement_stripe.status

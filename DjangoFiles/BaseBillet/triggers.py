@@ -14,17 +14,17 @@ from QrcodeCashless.models import Asset, Wallet
 logger = logging.getLogger(__name__)
 
 
-def increment_to_cashless_serveur(action):
+def increment_to_cashless_serveur(vente):
     logger.info(f"TRIGGER RECHARGE_CASHLESS")
     configuration = Configuration.get_solo()
     if not configuration.server_cashless or not configuration.key_cashless:
         logger.error(f"triggers/increment_to_cashless_serveur - No cashless config for {connection.tenant}")
         raise Exception(f'triggers/increment_to_cashless_serveur - No cashless config for {connection.tenant}')
 
-    action.data_for_cashless['card_uuid'] = action.ligne_article.carte.uuid
-    action.data_for_cashless['qty'] = action.ligne_article.pricesold.prix
+    vente.data_for_cashless['card_uuid'] = vente.ligne_article.carte.uuid
+    vente.data_for_cashless['qty'] = vente.ligne_article.pricesold.prix
 
-    data = action.data_for_cashless
+    data = vente.data_for_cashless
 
     sess = requests.Session()
     r = sess.post(
@@ -38,7 +38,7 @@ def increment_to_cashless_serveur(action):
     sess.close()
 
     if r.status_code == 202:
-        action.ligne_article.status = LigneArticle.VALID
+        vente.ligne_article.status = LigneArticle.VALID
         logger.info(f"rechargement cashless ok {r.status_code} {r.text}")
         # set_paiement_and_reservation_valid(None, self.ligne_article)
     else:
@@ -46,18 +46,25 @@ def increment_to_cashless_serveur(action):
     return r.status_code, r.text
 
 
+def increment_suspend_to_cashless_serveur(vente):
+    root = Client.objects.get(categorie=Client.ROOT)
+    asset, created = Asset.objects.get_or_create(
+        origin=root,
+        name="Stripe"
+    )
+    wallet, created = Wallet.objects.get_or_create(
+        asset=asset,
+        user=vente.ligne_article.paiement_stripe.user
+    )
+
+    logger.info(f"    WALLET : {wallet.qty} + {vente.ligne_article.total()}")
+
+    wallet.qty += vente.ligne_article.total()
+    wallet.save()
+
+
 class ActionArticlePaidByCategorie:
     """
-    BILLET, PACK, RECHARGE_CASHLESS, VETEMENT, MERCH, ADHESION = 'B', 'P', 'R', 'T', 'M', 'A'
-        CATEGORIE_ARTICLE_CHOICES = [
-            (BILLET, _('Billet')),
-            (PACK, _("Pack d'objets")),
-            (RECHARGE_CASHLESS, _('Recharge cashless')),
-            (VETEMENT, _('Vetement')),
-            (MERCH, _('Merchandasing')),
-            (ADHESION, ('Adhésion')),
-        ]
-
     Trigged action by categorie when Article is PAID
     """
 
@@ -91,25 +98,13 @@ class ActionArticlePaidByCategorie:
 
     # Category RECHARGE_CASHLESS
     def trigger_R(self):
-        cashless_serveur_response = increment_to_cashless_serveur(self)
-        logger.info(f"TRIGGER RECHARGE_CASHLESS : {cashless_serveur_response}")
+        reponse_cashless_serveur = increment_to_cashless_serveur(self)
+        logger.info(f"TRIGGER RECHARGE_CASHLESS : {reponse_cashless_serveur}")
 
     # Category RECHARGE SUSPENDUE
     def trigger_S(self):
         logger.info(f"TRIGGER RECHARGE_SUSPENDUE")
-
-        root = Client.objects.get(categorie=Client.ROOT)
-        asset, created = Asset.objects.get_or_create(
-            origin = root,
-            name = "Stripe"
-        )
-        wallet, created = Wallet.objects.get_or_create(
-            asset = asset,
-            user = self.ligne_article.paiement_stripe.user
-        )
-        wallet += wallet.qty + self.ligne_article.pricesold.total()
-        wallet.save()
-
+        reponse_cashless_serveur = increment_suspend_to_cashless_serveur(self)
 
     # Categorie ADHESION
     def trigger_A(self):
