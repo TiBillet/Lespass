@@ -26,6 +26,8 @@
 
         <CardEmail/>
 
+        <CardChargeCashless/>
+
         <!--
         Don(s):
         les dons sont désactivés par défaut
@@ -57,6 +59,7 @@ import CardArtist from '@/components/CardArtist.vue'
 import CardBillet from '@/components/CardBillet.vue'
 import CardOptions from '@/components/CardOptions.vue'
 import CardEmail from '@/components/CardEmail.vue'
+import CardChargeCashless from '@/components/CardChargeCashless.vue'
 import CardGifts from '@/components/CardGifts.vue'
 
 // state event

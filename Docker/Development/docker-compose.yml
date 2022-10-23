@@ -81,7 +81,7 @@ services:
     container_name: billetterie_nodejs_dev
     hostname: billetterie_nodejs_dev
     ports:
-      - "3000:3000"
+      - 3000:3000
     environment:
       DEV: 1
       TIMEZONE: Indian/Reunion
