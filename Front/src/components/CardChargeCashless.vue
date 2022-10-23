@@ -10,10 +10,10 @@
     <div class="input-group mb-2">
       <span class="input-group-text" @click="inputFocus('charge_cashless')">Montant (€) : </span>
       <input id="charge_cashless"
-             :value="getChargeCashless.chargeCashless"
-             @change.stop="updateChargeCashless('chargeCashless', $event.target.value)"
-             name="charge_cashless" type="number"
-             class="form-control" placeholder="cashless">
+             :value="getChargeCashless"
+             @change.stop="updateChargeCashless($event.target.value)"
+             type="number"
+             class="form-control">
     </div>
 
   </fieldset>
@@ -24,7 +24,7 @@
 // store
 import {useEventStore} from '@/stores/event'
 
-const {getChargeCashless} = useEventStore()
+const {updateChargeCashless, getChargeCashless} = useEventStore()
 
 // function inputFocus(id) {
 //   document.querySelector(`#${id}`).focus()

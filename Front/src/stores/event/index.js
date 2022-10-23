@@ -213,6 +213,11 @@ export const useEventStore = defineStore({
             // console.log('-> fonc updateEmail !')
             this.forms.find(obj => obj.event === this.event.uuid)[emailType] = value
         },
+        updateChargeCashless(value){
+            console.log(value)
+            this.forms.find(obj => obj.event === this.event.uuid)["chargeCashless"] = value
+            console.log(this.forms)
+        },
         enableGifts(list) {
             if (list !== undefined && list.length > 0) {
                 const gifts = this.forms.find(obj => obj.event === this.event.uuid).gifts

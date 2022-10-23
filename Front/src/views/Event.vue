@@ -94,6 +94,7 @@ function formatBodyPost() {
   const body = {
     event: form.event,
     email: form.email,
+    chargeCashless: form.chargeCashless,
     prices,
     options: []
   }
@@ -124,6 +125,8 @@ function formatBodyPost() {
       })
     }
   }
+
+  // charge cashless
   return body
 }
 

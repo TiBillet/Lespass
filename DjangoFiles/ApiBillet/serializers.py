@@ -433,7 +433,7 @@ class EventSerializer(serializers.ModelSerializer):
             instance.products.add(gift_product)
 
         if instance.recharge_cashless :
-            recharge_suspendue, created = Product.objects.get_or_create(categorie_article=Product.RECHARGE_SUSPENDUE, name="Cashless")
+            recharge_suspendue, created = Product.objects.get_or_create(categorie_article=Product.RECHARGE_SUSPENDUE, name="Recharge cashless")
             recharge_suspendue_price, created = Price.objects.get_or_create(product=recharge_suspendue, prix=1, name="charge")
             instance.products.add(recharge_suspendue)
 
@@ -757,6 +757,9 @@ class ReservationValidator(serializers.Serializer):
     event = serializers.PrimaryKeyRelatedField(queryset=Event.objects.all())
     options = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(), many=True, allow_null=True)
     prices = serializers.JSONField(required=True)
+    chargeCashless = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+
+
 
     def validate_event(self, value):
         event: Event = value
@@ -819,6 +822,20 @@ class ReservationValidator(serializers.Serializer):
 
         if self.nbr_ticket == 0:
             raise serializers.ValidationError(_(f'pas de billet dans la reservation'))
+
+        return value
+
+    def validate_chargeCashless(self, value):
+        if value > 0 :
+            recharge_suspendue, created = Product.objects.get_or_create(categorie_article=Product.RECHARGE_SUSPENDUE,
+                                                                        name="Recharge cashless")
+            recharge_suspendue_price, created = Price.objects.get_or_create(product=recharge_suspendue, prix=1,
+                                                                            name="charge")
+            price_object = {
+                'price': recharge_suspendue_price,
+                'qty': float(value),
+            }
+            self.prices_list.append(price_object)
 
         return value
 
