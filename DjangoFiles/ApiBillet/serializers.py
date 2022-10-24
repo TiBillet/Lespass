@@ -828,8 +828,8 @@ class ReservationValidator(serializers.Serializer):
         if value > 0 :
             recharge_suspendue, created = Product.objects.get_or_create(categorie_article=Product.RECHARGE_SUSPENDUE,
                                                                         name="Recharge cashless")
-            recharge_suspendue_price, created = Price.objects.get_or_create(product=recharge_suspendue, prix=1,
-                                                                            name="charge")
+            recharge_suspendue_price = Price.objects.get(product=recharge_suspendue, prix=1,
+                                                                            name="On ticket")
             price_object = {
                 'price': recharge_suspendue_price,
                 'qty': float(value),
