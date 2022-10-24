@@ -275,7 +275,7 @@ class EventCreateSerializer(serializers.Serializer):
     long_description = serializers.CharField(required=False)
     short_description = serializers.CharField(required=False, max_length=100)
     img_url = serializers.URLField(required=False)
-    recharge_cashless = serializers.BooleanField(required=False)
+    # recharge_cashless = serializers.BooleanField(required=False)
 
     def validate_artists(self, value):
         # logger.info(f"validate_artists : {value}")
@@ -389,7 +389,6 @@ class EventSerializer(serializers.ModelSerializer):
             'products',
             'options_radio',
             'options_checkbox',
-            'recharge_cashless',
             'img_variations',
             'reservations',
             'complet',
@@ -432,10 +431,10 @@ class EventSerializer(serializers.ModelSerializer):
             gift_price, created = Price.objects.get_or_create(product=gift_product, prix=1, name="Don")
             instance.products.add(gift_product)
 
-        if instance.recharge_cashless :
-            recharge_suspendue, created = Product.objects.get_or_create(categorie_article=Product.RECHARGE_SUSPENDUE, name="Recharge cashless")
-            recharge_suspendue_price, created = Price.objects.get_or_create(product=recharge_suspendue, prix=1, name="charge")
-            instance.products.add(recharge_suspendue)
+        # if instance.recharge_cashless :
+        #     recharge_suspendue, created = Product.objects.get_or_create(categorie_article=Product.RECHARGE_SUSPENDUE, name="Recharge cashless")
+        #     recharge_suspendue_price, created = Price.objects.get_or_create(product=recharge_suspendue, prix=1, name="charge")
+        #     instance.products.add(recharge_suspendue)
 
         if reservation_free:
             free_reservation, created = Product.objects.get_or_create(categorie_article=Product.FREERES,
@@ -851,6 +850,7 @@ class ReservationValidator(serializers.Serializer):
         # On check que les prices sont bien dans l'event original.
         for price_object in self.prices_list:
             if price_object['price'].product not in event.products.all():
+                logger.error(f'Article non présent dans event : {price_object["price"].product.name}')
                 raise serializers.ValidationError(_(f'Article non disponible'))
 
         # On check que les options sont bien dans l'event original.

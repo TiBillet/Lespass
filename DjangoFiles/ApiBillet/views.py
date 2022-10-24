@@ -429,6 +429,8 @@ class ReservationViewset(viewsets.ViewSet):
         validator = ReservationValidator(data=request.data, context={'request': request})
         if validator.is_valid():
             return Response(validator.data, status=status.HTTP_201_CREATED)
+
+        logger.error(f"ReservationViewset CREATE ERROR : {validator.errors}")
         return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_permissions(self):

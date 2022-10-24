@@ -344,7 +344,6 @@ class EventAdmin(admin.ModelAdmin):
                 'jauge_max',
                 'options_radio',
                 'options_checkbox',
-                'recharge_cashless',
             )
         }),
     )
@@ -370,13 +369,13 @@ class EventAdmin(admin.ModelAdmin):
 
     def save_model(self, request, obj, form, change):
         # On check si le cashless est opé.
-        if obj.recharge_cashless:
-            config = Configuration.get_solo()
-            if config.check_serveur_cashless():
-                messages.add_message(request, messages.INFO, f"Cashless server ONLINE")
-            else:
-                obj.recharge_cashless = False
-                messages.add_message(request, messages.ERROR, "Cashless server OFFLINE or BAD KEY")
+        # if obj.recharge_cashless:
+        #     config = Configuration.get_solo()
+        #     if config.check_serveur_cashless():
+        #         messages.add_message(request, messages.INFO, f"Cashless server ONLINE")
+        #     else:
+        #         obj.recharge_cashless = False
+        #         messages.add_message(request, messages.ERROR, "Cashless server OFFLINE or BAD KEY")
 
         super().save_model(request, obj, form, change)
 

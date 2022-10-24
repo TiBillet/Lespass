@@ -438,8 +438,6 @@ class Event(models.Model):
     options_checkbox = models.ManyToManyField(OptionGenerale, blank=True, related_name="options_checkbox",
                                               verbose_name="Options choix multiple")
 
-    recharge_cashless = models.BooleanField(default=False)
-
     img = StdImageField(upload_to='images/',
                         validators=[MaxSizeValidator(1920, 1920)],
                         blank=True, null=True,
@@ -532,8 +530,8 @@ class Event(models.Model):
         self.slug = slugify(f"{self.name} {self.datetime.strftime('%D %R')}")
 
         # On vérifie que le serveur cashless soit configuré et atteignable
-        if self.recharge_cashless:
-            self.recharge_cashless = self.check_serveur_cashless()
+        # if self.recharge_cashless:
+        #     self.recharge_cashless = self.check_serveur_cashless()
 
         super().save(*args, **kwargs)
 
