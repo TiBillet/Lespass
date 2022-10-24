@@ -303,9 +303,7 @@ export const useEventStore = defineStore({
       return {email, confirme}
     },
     getChargeCashless: (state) => {
-      console.log('-> fonc getChargeCashless !')
       const form = state.forms.find(obj => obj.event === state.event.uuid)
-      console.log('form.chargeCashless =', form.chargeCashless)
       return form.chargeCashless
     }
   },

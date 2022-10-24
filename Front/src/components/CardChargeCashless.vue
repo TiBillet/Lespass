@@ -11,11 +11,9 @@
     <!-- email -->
     <div class="input-group mb-2">
       <span class="input-group-text" @click="inputFocus('charge_cashless')">Montant (€) : </span>
-      <input id="charge_cashless"
-             :value="getChargeCashless"
-             @change.stop="updateChargeCashless($event.target.value)"
-             type="number"
-             class="form-control">
+      <input id="charge_cashless" :value="getChargeCashless"
+             @change.stop="updateChargeCashless($event.target.value)" type="number"
+             :data-uuid="product.uuid" class="form-control">
     </div>
 
   </fieldset>
