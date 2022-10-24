@@ -26,9 +26,9 @@ import {useEventStore} from '@/stores/event'
 
 const {updateChargeCashless, getChargeCashless} = useEventStore()
 
-// function inputFocus(id) {
-//   document.querySelector(`#${id}`).focus()
-// }
+function inputFocus(id) {
+  document.querySelector(`#${id}`).focus()
+}
 </script>
 
 <style scoped>
