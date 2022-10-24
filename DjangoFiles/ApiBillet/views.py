@@ -510,12 +510,11 @@ class Load_cards(APIView):
         for line in csv_data:
             list_csv.append(line)
 
-        # import ipdb; ipdb.set_trace()
         # on saucissonne l'url d'une ligne au pif :
         part = list_csv[1][0].partition('/qr/')
         base_url = f"{part[0]}{part[1]}"
 
-        if self.is_string_an_url(base_url):
+        if self.is_string_an_url(base_url) and uuid.UUID(part[2]) :
             detail_carte, created = Detail.objects.get_or_create(
                 base_url=base_url,
                 origine=connection.tenant,
@@ -548,8 +547,9 @@ class Load_cards(APIView):
                 except:
                     pass
 
-        return Response('Cartes chargées', status=status.HTTP_200_OK)
+            return Response('Cartes chargées', status=status.HTTP_200_OK)
 
+        return Response('Mauvais formatage de fichier.', status=status.HTTP_406_NOT_ACCEPTABLE)
         # import ipdb; ipdb.set_trace()
 
 
