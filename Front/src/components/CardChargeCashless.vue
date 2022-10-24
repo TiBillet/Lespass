@@ -1,5 +1,7 @@
 <template>
-  <fieldset class="col shadow-sm p-3 mb-5 bg-body rounded">
+    <fieldset class="shadow-sm p-3 mb-5 bg-body rounded"
+            v-for="product in event.products.filter(prod => prod.categorie_article === 'S')"
+            :key="product.uuid">
     <legend>
       <h3 class="font-weight-bolder text-info text-gradient align-self-start">Cashless</h3>
       <p>Les organisateurs du lieux utilisent un système de carte cashless. C'est gratuit, valable à vie
@@ -22,9 +24,11 @@
 <script setup>
 
 // store
+import {storeToRefs} from 'pinia'
 import {useEventStore} from '@/stores/event'
 
 const {updateChargeCashless, getChargeCashless} = useEventStore()
+const {event} = storeToRefs(useEventStore())
 
 function inputFocus(id) {
   document.querySelector(`#${id}`).focus()
