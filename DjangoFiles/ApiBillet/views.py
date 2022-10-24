@@ -1,12 +1,17 @@
 # Create your views here.
+import csv
 import json
+import uuid
+from io import StringIO
+
 from datetime import datetime, timedelta
 import dateutil.parser
-
 import pytz
 import requests
 import stripe
 from django.contrib import messages
+from django.core.exceptions import ValidationError
+from django.core.validators import URLValidator
 from django.http import HttpResponseRedirect, Http404, HttpResponse
 from django.utils import timezone
 from django_tenants.utils import schema_context, tenant_context
@@ -37,6 +42,7 @@ import logging
 
 from MetaBillet.models import EventDirectory, ProductDirectory
 from PaiementStripe.views import new_entry_from_stripe_invoice
+from QrcodeCashless.models import Detail, CarteCashless
 
 logger = logging.getLogger(__name__)
 
@@ -478,6 +484,73 @@ def borne_temps_4h():
         return debut_jour - timedelta(days=1), debut_jour
     else:
         return debut_jour, lendemain_quatre_heure
+
+@permission_classes([permissions.IsAuthenticated])
+class Load_cards(APIView):
+
+    def is_string_an_url(self, url_string):
+        validate_url = URLValidator()
+
+        try:
+            validate_url(url_string)
+        except ValidationError as e:
+            return False
+        return True
+
+    def post(self, request):
+        try :
+            gen = request.data['generation']
+            content_csv_file = request.data['csv'].read().decode()
+            file = StringIO(content_csv_file)
+            csv_data = csv.reader(file, delimiter=",")
+        except:
+            return Response('Mauvais fichiers', status=status.HTTP_406_NOT_ACCEPTABLE)
+
+        list_csv = []
+        for line in csv_data:
+            list_csv.append(line)
+
+        # import ipdb; ipdb.set_trace()
+        # on saucissonne l'url d'une ligne au pif :
+        part = list_csv[1][0].partition('/qr/')
+        base_url = f"{part[0]}{part[1]}"
+
+        if self.is_string_an_url(base_url):
+            detail_carte, created = Detail.objects.get_or_create(
+                base_url=base_url,
+                origine=connection.tenant,
+                generation=int(gen),
+            )
+
+            numline = 1
+            for line in list_csv:
+                print(numline)
+                part = line[0].partition('/qr/')
+                try:
+                    uuid_url = uuid.UUID(part[2])
+                    print(f"base_url : {base_url}")
+                    print(f"uuid_url : {uuid_url}")
+                    print(f"number : {line[1]}")
+                    print(f"tag_id : {line[2]}")
+
+                    # if str(uuid_url).partition('-')[0].upper() != line[1]:
+                    #     print('ERROR PRINT != uuid')
+                    #     break
+
+                    carte, created = CarteCashless.objects.get_or_create(
+                        tag_id=line[2],
+                        uuid=uuid_url,
+                        number=line[1],
+                        detail=detail_carte,
+                    )
+
+                    numline += 1
+                except:
+                    pass
+
+        return Response('Cartes chargées', status=status.HTTP_200_OK)
+
+        # import ipdb; ipdb.set_trace()
 
 
 @permission_classes([permissions.IsAuthenticated])
