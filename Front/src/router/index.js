@@ -1,5 +1,6 @@
 // store
 import {useAllStore} from '@/stores/all'
+import {useLocalStore} from '@/stores/local'
 
 // gère les routes(pages)
 import {createRouter, createWebHistory} from 'vue-router'
