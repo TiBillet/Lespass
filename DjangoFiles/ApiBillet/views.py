@@ -694,7 +694,8 @@ def request_for_data_cashless(user: TibilletUser):
                 return {'erreur': f"{response.status_code} : {response.text}"}
 
             data = json.loads(response.content)
-            membership = maj_membership_from_cashless(user, data)
+            if data.get('a_jour_cotisation'):
+                membership = maj_membership_from_cashless(user, data)
             return data
 
         except Exception as e:
