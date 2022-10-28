@@ -74,7 +74,10 @@ class ActionArticlePaidByCategorie:
 
         self.data_for_cashless = {}
         if ligne_article.paiement_stripe:
-            self.data_for_cashless = {'uuid_commande': ligne_article.paiement_stripe.uuid}
+            self.data_for_cashless = {
+                'uuid_commande': ligne_article.paiement_stripe.uuid,
+                'email' : ligne_article.paiement_stripe.user.email
+            }
 
         try:
             # on met en majuscule et on rajoute _ au début du nom de la catégorie.

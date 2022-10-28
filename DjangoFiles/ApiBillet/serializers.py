@@ -516,6 +516,12 @@ class NewAdhesionValidator(serializers.Serializer):
 
     def validate(self, attrs):
         price_adhesion: Price = attrs.get('adhesion')
+
+        if price_adhesion.product.send_to_cashless :
+            config = Configuration.get_solo()
+            if not config.check_serveur_cashless():
+                raise serializers.ValidationError(_(f"Le serveur cashless n'est pas disponible. Merci d'essayer ultérieurement"))
+
         user: TibilletUser = self.user
 
         metadata = {
