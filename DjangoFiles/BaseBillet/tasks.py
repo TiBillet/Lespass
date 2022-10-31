@@ -7,6 +7,7 @@ import smtplib
 from io import BytesIO
 
 import requests
+from django_tenants.utils import tenant_context
 from requests.exceptions import ConnectionError
 
 import segno
@@ -27,6 +28,7 @@ from django.utils import timezone
 from AuthBillet.models import TibilletUser, TerminalPairingToken
 from BaseBillet.models import Reservation, Ticket, Configuration, Membership, LigneArticle, Webhook
 from Customers.models import Client
+from QrcodeCashless.models import Wallet
 from TiBillet.celery import app
 
 import logging
@@ -538,6 +540,42 @@ def webhook_reservation(reservation_pk):
                 logger.error(f"webhook_reservation ERROR : {reservation_pk} {timezone.now()} {e}")
                 webhook.last_response = f"{timezone.now()} - {e}"
             webhook.save()
+
+
+@app.task
+def wallet_update_celery(wallet_pk):
+    fed_clients = []
+    fed_clients.append(connection.tenant)
+    wallet = Wallet.objects.get(pk=wallet_pk)
+    card = wallet.card
+
+    for tenant in fed_clients:
+        with tenant_context(tenant):
+            config = Configuration.get_solo()
+            url_cashless = config.server_cashless
+
+            data = {
+                "uuid_card": card.uuid,
+                "wallet_value": wallet.qty
+            }
+
+
+            sess = requests.Session()
+            r = sess.post(
+                f'{url_cashless}/api/updatewallet',
+                headers={
+                    'Authorization': f'Api-Key {config.key_cashless}'
+                },
+                data=data,
+            )
+
+            sess.close()
+            logger.info(
+                f"        wallet_update_celery : pour {data}. réponse : {r.status_code} ")
+
+            if r.status_code not in [200,]:
+                logger.error(
+                    f"wallet_update_celery erreur réponse serveur cashless {r.status_code} {r.text}")
 
 
 @app.task

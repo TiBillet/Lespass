@@ -46,12 +46,17 @@ def increment_to_cashless_serveur(vente):
     return r.status_code, r.text
 
 
-def increment_suspend_to_cashless_serveur(vente):
+def increment_stripe_token(vente):
+    # On incrémente la valeur du wallet Stripe de la carte.
+    # Cela déclenceh un post save qui lance une requete celery
+    # pour alerter tous les cashless fédérés
+
     root = Client.objects.get(categorie=Client.ROOT)
     asset, created = Asset.objects.get_or_create(
         origin=root,
         name="Stripe"
     )
+
     wallet, created = Wallet.objects.get_or_create(
         asset=asset,
         user=vente.ligne_article.paiement_stripe.user
@@ -107,7 +112,7 @@ class ActionArticlePaidByCategorie:
     # Category RECHARGE SUSPENDUE
     def trigger_S(self):
         logger.info(f"TRIGGER RECHARGE_SUSPENDUE")
-        reponse_cashless_serveur = increment_suspend_to_cashless_serveur(self)
+        reponse_cashless_serveur = increment_stripe_token(self)
 
     # Categorie ADHESION
     def trigger_A(self):
