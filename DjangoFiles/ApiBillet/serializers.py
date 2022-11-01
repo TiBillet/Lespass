@@ -762,7 +762,7 @@ class ReservationValidator(serializers.Serializer):
     event = serializers.PrimaryKeyRelatedField(queryset=Event.objects.all())
     options = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(), many=True, allow_null=True)
     prices = serializers.JSONField(required=True)
-    chargeCashless = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    # chargeCashless = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
 
 
 
@@ -830,19 +830,20 @@ class ReservationValidator(serializers.Serializer):
 
         return value
 
-    def validate_chargeCashless(self, value):
-        if value > 0 :
-            recharge_suspendue, created = Product.objects.get_or_create(categorie_article=Product.RECHARGE_SUSPENDUE,
-                                                                        name="Recharge cashless")
-            recharge_suspendue_price = Price.objects.get(product=recharge_suspendue, prix=1,
-                                                                            name="On ticket")
-            price_object = {
-                'price': recharge_suspendue_price,
-                'qty': float(value),
-            }
-            self.prices_list.append(price_object)
+    # def validate_chargeCashless(self, value):
+    #     if value > 0 :
+    #         recharge_suspendue, created = Product.objects.get_or_create(categorie_article=Product.RECHARGE_SUSPENDUE,
+    #                                                                     name="Recharge cashless")
+    #         recharge_suspendue_price = Price.objects.get(product=recharge_suspendue, prix=1,
+    #                                                                         name="On ticket")
+    #         price_object = {
+    #             'price': recharge_suspendue_price,
+    #             'qty': float(value),
+    #         }
+    #         self.prices_list.append(price_object)
+    #
+    #     return value
 
-        return value
 
     def validate(self, attrs):
         event: Event = attrs.get('event')

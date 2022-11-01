@@ -543,7 +543,7 @@ def webhook_reservation(reservation_pk):
 
 
 @app.task
-def wallet_update_celery(wallet_pk):
+def stripe_wallet_update_celery(wallet_pk):
     fed_clients = []
     fed_clients.append(connection.tenant)
     wallet = Wallet.objects.get(pk=wallet_pk)
@@ -556,7 +556,7 @@ def wallet_update_celery(wallet_pk):
 
             data = {
                 "uuid_card": card.uuid,
-                "wallet_value": wallet.qty
+                "stripe_wallet_value": wallet.qty
             }
 
 

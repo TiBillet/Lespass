@@ -84,6 +84,7 @@ RUN pip install mailjet_rest
 RUN pip install authlib
 
 RUN pip install djangorestframework-api-key
+RUN pip install flower
 
 RUN apt-get -y clean
 
