@@ -331,11 +331,12 @@ def pre_save_signal_status(sender, instance, **kwargs):
 
 @receiver(pre_save, sender=Wallet)
 def wallet_update_to_celery(sender, instance: Wallet, **kwargs):
-    if instance.asset.is_federated:
-        old_instance = sender.objects.get(pk=instance.pk)
-        new_instance = instance
+    if instance.card :
+        if instance.asset.is_federated:
+            old_instance = sender.objects.get(pk=instance.pk)
+            new_instance = instance
 
-        if old_instance.qty != new_instance.qty:
-            logger.info(f"wallet_update_celery : need update cashless serveur")
-            # update all cashless serveur
-            stripe_wallet_update_celery.delay(instance.pk)
+            if old_instance.qty != new_instance.qty:
+                logger.info(f"wallet_update_celery : need update cashless serveur")
+                # update all cashless serveur
+                stripe_wallet_update_celery.delay(instance.pk)

@@ -54,7 +54,8 @@ def increment_stripe_token(vente):
     root = Client.objects.get(categorie=Client.ROOT)
     asset, created = Asset.objects.get_or_create(
         origin=root,
-        name="Stripe"
+        name="Stripe",
+        is_federated=True,
     )
 
     wallet, created = Wallet.objects.get_or_create(

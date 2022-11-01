@@ -50,6 +50,8 @@ class Asset(models.Model):
     class Meta:
         unique_together = [['origin', 'name']]
 
+    def __str__(self):
+        return self.name
 
 class CarteCashless(models.Model):
     tag_id = models.CharField(
