@@ -70,7 +70,7 @@ class ProductSerializer(serializers.ModelSerializer):
         if not attrs.get('img') and img_url:
             self.img_name, self.img_img = get_img_from_url(img_url)
 
-        if attrs.get('send_to_cashless') and attrs.get('categorie_article') == Product.ADHESION :
+        if attrs.get('send_to_cashless') and attrs.get('categorie_article') == Product.ADHESION:
             adhesion_to_cashless = Product.objects.filter(
                 categorie_article=Product.ADHESION,
                 send_to_cashless=True
@@ -78,7 +78,6 @@ class ProductSerializer(serializers.ModelSerializer):
             if len(adhesion_to_cashless) > 0:
                 raise serializers.ValidationError(
                     _(f"Un article d'adhésion vers le cashless existe déja."))
-
 
         return super().validate(attrs)
 
@@ -275,6 +274,7 @@ class EventCreateSerializer(serializers.Serializer):
     long_description = serializers.CharField(required=False)
     short_description = serializers.CharField(required=False, max_length=100)
     img_url = serializers.URLField(required=False)
+
     # recharge_cashless = serializers.BooleanField(required=False)
 
     def validate_artists(self, value):
@@ -517,10 +517,11 @@ class NewAdhesionValidator(serializers.Serializer):
     def validate(self, attrs):
         price_adhesion: Price = attrs.get('adhesion')
 
-        if price_adhesion.product.send_to_cashless :
+        if price_adhesion.product.send_to_cashless:
             config = Configuration.get_solo()
             if not config.check_serveur_cashless():
-                raise serializers.ValidationError(_(f"Le serveur cashless n'est pas disponible. Merci d'essayer ultérieurement"))
+                raise serializers.ValidationError(
+                    _(f"Le serveur cashless n'est pas disponible. Merci d'essayer ultérieurement"))
 
         user: TibilletUser = self.user
 
@@ -575,15 +576,14 @@ class MembreValidator(serializers.Serializer):
     birth_date = serializers.DateField(required=False)
     newsletter = serializers.BooleanField(required=False)
 
-
     def validate_adhesion(self, value):
         self.price = value
         return value
 
     def validate_email(self, value):
-        if not getattr(self, 'price', None) :
+        if not getattr(self, 'price', None):
             raise serializers.ValidationError(
-                    _(f"Pas de prix d'adésion"))
+                _(f"Pas de prix d'adésion"))
 
         user_paiement: TibilletUser = get_or_create_user(value)
         self.user = user_paiement
@@ -762,9 +762,6 @@ class ReservationValidator(serializers.Serializer):
     event = serializers.PrimaryKeyRelatedField(queryset=Event.objects.all())
     options = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(), many=True, allow_null=True)
     prices = serializers.JSONField(required=True)
-    # chargeCashless = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
-
-
 
     def validate_event(self, value):
         event: Event = value
@@ -773,7 +770,14 @@ class ReservationValidator(serializers.Serializer):
         return value
 
     def validate_email(self, value):
+        # On vérifie que l'utilisateur connecté et l'email correspondent bien.
+        request = self.context.get('request')
         self.user_commande = get_or_create_user(value)
+
+        if request.user.is_authenticated:
+            if request.user.email != request.user:
+                raise serializers.ValidationError(_(f"L'email ne correspond pas à l'utilisateur connecté."))
+
         return self.user_commande.email
 
     def validate_prices(self, value):
@@ -824,7 +828,6 @@ class ReservationValidator(serializers.Serializer):
             except ValueError as e:
                 raise serializers.ValidationError(_(f'qty doit être un entier ou un flottant : {e}'))
 
-
         if self.nbr_ticket == 0:
             raise serializers.ValidationError(_(f'pas de billet dans la reservation'))
 
@@ -843,7 +846,6 @@ class ReservationValidator(serializers.Serializer):
     #         self.prices_list.append(price_object)
     #
     #     return value
-
 
     def validate(self, attrs):
         event: Event = attrs.get('event')

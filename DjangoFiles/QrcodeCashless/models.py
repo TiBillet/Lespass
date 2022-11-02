@@ -88,15 +88,19 @@ class Wallet(models.Model):
 
     last_date_used = models.DateTimeField(auto_now=True)
 
-    # Un wallet peut avoir une carte ET/OU un user
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True)
+    # Un wallet DOIT avoir un user
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
 
-    card = models.ForeignKey(
-        CarteCashless,
-        on_delete=models.PROTECT,
-        null=True, blank=True
-    )
+    sync = models.JSONField(null=True, blank=True)
+
+    # card = models.ForeignKey(
+    #     CarteCashless,
+    #     on_delete=models.PROTECT,
+    #     null=True, blank=True
+    # )
 
     def __str__(self):
         return f'{self.asset.name}, {self.qty}'
 
+    class Meta:
+        unique_together = [['asset', 'user']]

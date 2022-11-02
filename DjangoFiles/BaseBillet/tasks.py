@@ -523,7 +523,7 @@ def send_membership_to_cashless(data):
 def webhook_reservation(reservation_pk):
     logger.info(f"webhook_reservation : {reservation_pk} {timezone.now()} info")
     webhooks = Webhook.objects.filter(event=Webhook.RESERVATION_V)
-    if webhooks.count() > 0 :
+    if webhooks.count() > 0:
         reservation = Reservation.objects.get(pk=reservation_pk)
         json = {
             "object": "reservation",
@@ -533,13 +533,33 @@ def webhook_reservation(reservation_pk):
         }
 
         for webhook in webhooks:
-            try :
+            try:
                 response = requests.request("POST", webhook.url, data=json, timeout=2)
                 webhook.last_response = f"{timezone.now()} - status code {response.status_code} - {response.text}"
-            except Exception as e :
+            except Exception as e:
                 logger.error(f"webhook_reservation ERROR : {reservation_pk} {timezone.now()} {e}")
                 webhook.last_response = f"{timezone.now()} - {e}"
             webhook.save()
+
+
+@app.task
+def request_server_cashless(url, key, data):
+    sess = requests.Session()
+    r = sess.post(
+        f'{url}/api/updatewallet',
+        headers={
+            'Authorization': f'Api-Key {key}'
+        },
+        data=data,
+    )
+
+    sess.close()
+    logger.info(
+        f"        wallet_update_celery : pour {data}. réponse : {r.status_code} ")
+
+    if r.status_code not in [200, ]:
+        logger.error(
+            f"wallet_update_celery erreur réponse serveur cashless {r.status_code} {r.text}")
 
 
 @app.task
@@ -547,35 +567,22 @@ def stripe_wallet_update_celery(wallet_pk):
     fed_clients = []
     fed_clients.append(connection.tenant)
     wallet = Wallet.objects.get(pk=wallet_pk)
-    card = wallet.card
 
     for tenant in fed_clients:
         with tenant_context(tenant):
             config = Configuration.get_solo()
-            url_cashless = config.server_cashless
+            url = f"{config.server_cashless}/api/updatewallet"
 
             data = {
-                "uuid_card": card.uuid,
+                "email": wallet.user.email,
                 "stripe_wallet_value": wallet.qty
             }
 
-
-            sess = requests.Session()
-            r = sess.post(
-                f'{url_cashless}/api/updatewallet',
-                headers={
-                    'Authorization': f'Api-Key {config.key_cashless}'
-                },
-                data=data,
+            request_server_cashless.delay(
+                url,
+                config.key_cashless,
+                data,
             )
-
-            sess.close()
-            logger.info(
-                f"        wallet_update_celery : pour {data}. réponse : {r.status_code} ")
-
-            if r.status_code not in [200,]:
-                logger.error(
-                    f"wallet_update_celery erreur réponse serveur cashless {r.status_code} {r.text}")
 
 
 @app.task
