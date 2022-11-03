@@ -26,7 +26,7 @@
 
       <CardEmail/>
 
-<!--      <CardChargeCashless/>-->
+      <!--      <CardChargeCashless/>-->
 
       <!--
       Don(s):
@@ -203,30 +203,43 @@ function validerAchats(domEvent) {
             'Content-Type': 'application/json'
           }
         }
-        console.log('options =', options)
+        console.log('options =', JSON.stringify(options, null, 2))
 
         // chargement
         loading.value = true
 
         // lance la/les réservation(s)
         fetch(urlApi, options).then(response => {
-          if (response.status !== 201) {
-            throw new Error(`${response.status} - ${response.statusText}`)
+          // erreurs
+          if (response.status >= 400 && response.status <= 599) {
+            let typeErreur = 'Client'
+            if (response.status >= 500) {
+              typeErreur = 'Serveur'
+            }
+            throw new Error(`${typeErreur}, ${response.status} - ${response.statusText}`)
           }
           return response.json()
         }).then((response) => {
           loading.value = false
           // console.log('-> /api/reservations/, response =', response)
-          console.log('-> /api/reservations/, response =', response)
-          console.log('-> /api/reservations/, response checkout_url =', response.checkout_url)
+          // console.log('-> /api/reservations/, response =', response)
+          // console.log('-> /api/reservations/, response checkout_url =', response.checkout_url)
 
 
           if (response.checkout_url !== undefined) {
             // enregistre "l'étape stripe"
             setEtapeStripe('attente_stripe_reservation')
 
-            // redirection vers stripe
+            // paiement, redirection vers stripe
             window.location.assign(response.checkout_url)
+          } else {
+            // paiement sans stripe, exemple: réservation gratuite
+            emitter.emit('modalMessage', {
+              typeMsg: 'success',
+              titre: 'Succès',
+              dynamic: true,
+              contenu: '<h3>Réservation validée !</h3>'
+            })
           }
         }).catch((erreur) => {
           loading.value = false
@@ -235,7 +248,7 @@ function validerAchats(domEvent) {
             titre: 'Erreur(s)',
             // contenu = html => dynamic = true
             dynamic: true,
-            contenu: '<h3>'+erreur+'</h3>',
+            contenu: '<h3>' + erreur + '</h3>',
             typeMsg: 'warning',
           })
         })
