@@ -99,7 +99,7 @@ export const useLocalStore = defineStore({
                     window.accessToken = retour.access
                     this.refreshToken = retour.refresh
                     this.me = await this.getMe(window.accessToken)
-                    // console.log('-> retourMe:', retourMe)
+                     console.log('-> emailActivation, retour =', retour)
                     mainStore.loading = false
                 } else {
                     throw new Error(`Erreur conrfirmation mail !`)
@@ -127,7 +127,7 @@ export const useLocalStore = defineStore({
                     }
                 }
                 const response = await fetch(domain + apiMe, options)
-                // console.log('response =', response)
+                // console.log('-> getMe, response =', response)
                 if (response.status === 200) {
                     return await response.json()
                 } else {
