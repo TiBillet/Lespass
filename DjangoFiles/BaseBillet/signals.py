@@ -8,12 +8,14 @@ from django.dispatch import receiver
 # from ApiBillet.thread_mailer import ThreadMaileur
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, LigneArticle, Ticket, Product, Configuration, Paiement_stripe
-from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation
+from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation, stripe_wallet_update_celery
 
 # from TiBillet import settings
 from BaseBillet.triggers import ActionArticlePaidByCategorie
 
 import logging
+
+from QrcodeCashless.models import Wallet
 
 logger = logging.getLogger(__name__)
 
@@ -324,3 +326,22 @@ def pre_save_signal_status(sender, instance, **kwargs):
                     if not callable(trigger_function):
                         raise Exception(f'Fonction {trigger_function} is not callable. Disdonc !?')
                     trigger_function(old_instance, new_instance)
+
+
+
+@receiver(pre_save, sender=Wallet)
+def wallet_update_to_celery(sender, instance: Wallet, **kwargs):
+    # Si ça n'est pas la création :
+    if not instance._state.adding:
+        if instance.asset.is_federated:
+            old_instance = sender.objects.get(pk=instance.pk)
+            new_instance = instance
+
+            if old_instance.qty != new_instance.qty:
+
+                logger.info(f"wallet_update_celery : need update cashless serveur")
+                # update all cashless serveur
+                stripe_wallet_update_celery.delay(instance.pk)
+
+            # else :
+            # TODO: JSONFields les réponses des serveur cashless

@@ -45,6 +45,7 @@ class StaffAdminSite(AdminSite):
                 "Evenements",
                 "Paiements Stripe",
                 "Réservations",
+                "Adhésions",
                 "Api keys",
                 "Webhooks",
             ]
@@ -704,6 +705,6 @@ class MembershipAdmin(admin.ModelAdmin):
     ordering = ('-date_added',)
 
 
-# staff_admin_site.register(Membership, MembershipAdmin)
+staff_admin_site.register(Membership, MembershipAdmin)
 
 staff_admin_site.register(OptionGenerale, admin.ModelAdmin)

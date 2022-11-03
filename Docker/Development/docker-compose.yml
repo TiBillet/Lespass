@@ -18,7 +18,7 @@ services:
       - backend-billeterie
 
   billetterie_django_dev:
-    image: tibillet/tibillet_django:2022-09-27
+    image: tibillet/tibillet_django:2022-10-01
     container_name: billetterie_django
     extends:
       file: ../compose/docker-compose-base.yml
@@ -37,12 +37,14 @@ services:
       - backend-billeterie
 
   billetterie_celery_dev:
-    image: tibillet/tibillet_django:2022-09-27
+    image: tibillet/tibillet_django:2022-10-01
     container_name: billetterie_celery
     extends:
       file: ../compose/docker-compose-base.yml
       service: billetterie_celery
     env_file: .env
+    ports:
+      - 5566:5566
     depends_on:
       - billetterie_django_dev
       - billetterie_redis_dev

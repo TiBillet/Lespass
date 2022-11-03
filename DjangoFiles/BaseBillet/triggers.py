@@ -46,12 +46,22 @@ def increment_to_cashless_serveur(vente):
     return r.status_code, r.text
 
 
-def increment_suspend_to_cashless_serveur(vente):
+def increment_stripe_token(vente):
+    # On incrémente la valeur du wallet Stripe de la carte.
+    # Cela déclenche un post save qui lance une requete celery
+    # pour alerter tous les cashless fédérés
+
+    user = vente.ligne_article.paiement_stripe.user
+
+    # On va chercher l'asset Stripe primaire.
     root = Client.objects.get(categorie=Client.ROOT)
     asset, created = Asset.objects.get_or_create(
         origin=root,
-        name="Stripe"
+        name="Stripe",
+        is_federated=True,
     )
+
+    # Un seul wallet par user
     wallet, created = Wallet.objects.get_or_create(
         asset=asset,
         user=vente.ligne_article.paiement_stripe.user
@@ -60,7 +70,10 @@ def increment_suspend_to_cashless_serveur(vente):
     logger.info(f"    WALLET : {wallet.qty} + {vente.ligne_article.total()}")
 
     wallet.qty += vente.ligne_article.total()
+
     wallet.save()
+    # et pouf, ça lance le /DjangoFiles/BaseBillet/signals.py/wallet_update_to_celery
+    # qui va informer tous les serveurs cashless qu'un wallet stripe est disponible
 
 
 class ActionArticlePaidByCategorie:
@@ -74,7 +87,10 @@ class ActionArticlePaidByCategorie:
 
         self.data_for_cashless = {}
         if ligne_article.paiement_stripe:
-            self.data_for_cashless = {'uuid_commande': ligne_article.paiement_stripe.uuid}
+            self.data_for_cashless = {
+                'uuid_commande': ligne_article.paiement_stripe.uuid,
+                'email' : ligne_article.paiement_stripe.user.email
+            }
 
         try:
             # on met en majuscule et on rajoute _ au début du nom de la catégorie.
@@ -104,7 +120,7 @@ class ActionArticlePaidByCategorie:
     # Category RECHARGE SUSPENDUE
     def trigger_S(self):
         logger.info(f"TRIGGER RECHARGE_SUSPENDUE")
-        reponse_cashless_serveur = increment_suspend_to_cashless_serveur(self)
+        reponse_cashless_serveur = increment_stripe_token(self)
 
     # Categorie ADHESION
     def trigger_A(self):

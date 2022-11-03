@@ -26,7 +26,7 @@
 
       <CardEmail/>
 
-      <CardChargeCashless/>
+<!--      <CardChargeCashless/>-->
 
       <!--
       Don(s):
@@ -210,21 +210,23 @@ function validerAchats(domEvent) {
 
         // lance la/les réservation(s)
         fetch(urlApi, options).then(response => {
-          return response
-        }).then((response) => {
-          loading.value = false
-          console.log('-> /api/reservations/, retour =', response)
-
-          if (response.status !== 200) {
+          if (response.status !== 201) {
             throw new Error(`${response.status} - ${response.statusText}`)
           }
+          return response.json()
+        }).then((response) => {
+          loading.value = false
+          // console.log('-> /api/reservations/, response =', response)
+          console.log('-> /api/reservations/, response =', response)
+          console.log('-> /api/reservations/, response checkout_url =', response.checkout_url)
 
-          if (retour.checkout_url !== undefined) {
+
+          if (response.checkout_url !== undefined) {
             // enregistre "l'étape stripe"
             setEtapeStripe('attente_stripe_reservation')
 
             // redirection vers stripe
-            window.location.assign(retour.checkout_url)
+            window.location.assign(response.checkout_url)
           }
         }).catch((erreur) => {
           loading.value = false

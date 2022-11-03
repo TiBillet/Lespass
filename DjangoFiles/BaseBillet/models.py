@@ -200,7 +200,6 @@ class Configuration(SingletonModel):
                                                       blank=True,
                                                       related_name="checkbox")
 
-
     ######### CASHLESS #########
 
     server_cashless = models.URLField(
@@ -230,15 +229,14 @@ class Configuration(SingletonModel):
                 )
                 sess.close()
                 logger.info(f"check_serveur_cashless : {r.status_code} {r.text}")
-                if r.status_code == 200 :
+                if r.status_code == 200:
                     if r.json().get('bill'):
                         return True
             except:
-                ...
+                pass
         return False
 
     ######### END CASHLESS #########
-
 
     ARNAUD, MASSIVELY, BLK_MVC = 'arnaud_mvc', 'html5up-masseively', 'blk-pro-mvc'
     CHOICE_TEMPLATE = [
@@ -297,7 +295,6 @@ class Product(models.Model):
     publish = models.BooleanField(default=False)
     poids = models.PositiveSmallIntegerField(default=0, verbose_name=_("Poids"),
                                              help_text="Ordre d'apparition du plus leger au plus lourd")
-
 
     img = StdImageField(upload_to='images/',
                         null=True, blank=True,
@@ -415,6 +412,7 @@ class Price(models.Model):
         ordering = ('prix',)
         verbose_name = _('Tarif')
         verbose_name_plural = _('Tarifs')
+
 
 class Event(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
@@ -535,7 +533,6 @@ class Event(models.Model):
 
         super().save(*args, **kwargs)
 
-
     def __str__(self):
         return f"{self.datetime.strftime('%d/%m')} {self.name}"
 
@@ -617,7 +614,7 @@ class ProductSold(models.Model):
         with schema_context('public'):
             product_directory, created = ProductDirectory.objects.get_or_create(
                 place=client,
-                product_sold_stripe_id = product.id,
+                product_sold_stripe_id=product.id,
             )
 
         self.save()
@@ -652,7 +649,7 @@ class PriceSold(models.Model):
 
         stripe.api_key = Configuration.get_solo().get_stripe_api()
 
-        try :
+        try:
             product_stripe = self.productsold.get_id_product_stripe()
             stripe.Product.retrieve(product_stripe)
         except InvalidRequestError:
@@ -852,6 +849,7 @@ class Ticket(models.Model):
         verbose_name = _('Réservation')
         verbose_name_plural = _('Réservations')
 
+
 class Paiement_stripe(models.Model):
     """
     La commande
@@ -863,7 +861,7 @@ class Paiement_stripe(models.Model):
     checkout_session_id_stripe = models.CharField(max_length=80, blank=True, null=True)
     payment_intent_id = models.CharField(max_length=80, blank=True, null=True)
     metadata_stripe = JSONField(blank=True, null=True)
-    customer_stripe =  models.CharField(max_length=20, blank=True, null=True)
+    customer_stripe = models.CharField(max_length=20, blank=True, null=True)
     invoice_stripe = models.CharField(max_length=27, blank=True, null=True)
     subscription = models.CharField(max_length=28, blank=True, null=True)
 
@@ -919,11 +917,14 @@ class Paiement_stripe(models.Model):
 
     def articles(self):
         return " - ".join(
-            [f"{ligne.pricesold.productsold.product.name} {ligne.pricesold.price.name} {ligne.qty * ligne.pricesold.price.prix}€" for ligne in self.lignearticle_set.all()])
+            [
+                f"{ligne.pricesold.productsold.product.name} {ligne.pricesold.price.name} {ligne.qty * ligne.pricesold.price.prix}€"
+                for ligne in self.lignearticle_set.all()])
 
     class Meta:
         verbose_name = _('Paiement Stripe')
         verbose_name_plural = _('Paiements Stripe')
+
 
 class LigneArticle(models.Model):
     uuid = models.UUIDField(primary_key=True, db_index=True, default=uuid.uuid4)
@@ -1070,7 +1071,6 @@ class Membership(models.Model):
             return f"{self.last_name}"
 
 
-
 class ApiKey(models.Model):
     name = models.CharField(max_length=30, unique=True)
     user = models.OneToOneField(settings.AUTH_USER_MODEL,
@@ -1094,7 +1094,6 @@ class ApiKey(models.Model):
     )
 
     created = models.DateTimeField(auto_now=True)
-
 
     # En string : même nom que url basename
     # exemple dans DjangoFiles/ApiBillet/urls.py
@@ -1131,5 +1130,5 @@ class Webhook(models.Model):
     ]
 
     event = models.CharField(max_length=2, choices=EVENT_CHOICES, default=RESERVATION_V,
-                              verbose_name=_("Évènement"))
+                             verbose_name=_("Évènement"))
     last_response = models.TextField(null=True, blank=True)

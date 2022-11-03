@@ -32,7 +32,7 @@ export const useLocalStore = defineStore({
 
             // reservation(s)
             if (this.stripeEtape === 'attente_stripe_reservation') {
-                messageValidation = `<h2>Réservation(s) OK !</h2>`
+                messageValidation = `<h2>Paiement validé.</h2>`
                 messageErreur = `Retour stripe pour une/des réservation(s):`
             }
 

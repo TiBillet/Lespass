@@ -1,7 +1,7 @@
 <template>
     <fieldset class="shadow-sm p-3 mb-5 bg-body rounded"
             v-for="product in event.products.filter(prod => prod.categorie_article === 'S')"
-            :key="product.uuid">
+            :key="product.prices[0].uuid">
     <legend>
       <h3 class="font-weight-bolder text-info text-gradient align-self-start">Cashless</h3>
       <p>Les organisateurs du lieux utilisent un système de carte cashless. C'est gratuit, valable à vie
@@ -13,7 +13,7 @@
       <span class="input-group-text" @click="inputFocus('charge_cashless')">Montant (€) : </span>
       <input id="charge_cashless" :value="getChargeCashless"
              @change.stop="updateChargeCashless($event.target.value)" type="number"
-             :data-uuid="product.uuid" class="form-control">
+             :data-uuid="product.prices[0].uuid" class="form-control">
     </div>
 
   </fieldset>
