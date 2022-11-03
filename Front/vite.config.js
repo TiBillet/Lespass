@@ -21,6 +21,7 @@ export default defineConfig({
     // pour exposer le port d'un conteneur docker
     host: true,
     port: 3000,
+    // https: true,
     strictPort: true,
     proxy: {
       '/api': urlLieu,
@@ -28,7 +29,8 @@ export default defineConfig({
     },
     hmr: {
       protocol: 'wss',
-      port: 443
+      port: 3000,
+      clientPort: 443
     },
     watch: {
       usePolling: true

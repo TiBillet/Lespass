@@ -19,7 +19,7 @@
 
     <div v-if="getEnableGift(product.uuid) === true">
       <!-- prix -->
-      <div class="input-group mb-2 has-validation">
+      <div class="input-group mb-2 has-validation" style="display: none">
         <div class="col form-check" v-for="(price, index) in product.prices" :key="index">
           <!-- getPriceGift(product.uuid) -->
           <input v-if="getPriceGift(product.uuid) === price.uuid"
