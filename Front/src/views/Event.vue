@@ -221,11 +221,6 @@ function validerAchats(domEvent) {
           return response.json()
         }).then((response) => {
           loading.value = false
-          // console.log('-> /api/reservations/, response =', response)
-          // console.log('-> /api/reservations/, response =', response)
-          // console.log('-> /api/reservations/, response checkout_url =', response.checkout_url)
-
-
           if (response.checkout_url !== undefined) {
             // enregistre "l'étape stripe"
             setEtapeStripe('attente_stripe_reservation')
