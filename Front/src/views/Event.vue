@@ -92,7 +92,7 @@ function formatBodyPost() {
   // init body with prices ticket
   const body = {
     event: form.event,
-    email: form.email,
+    email: document.querySelector(`#profil-email`).value,
     chargeCashless: form.chargeCashless,
     prices,
     options: []

@@ -30,7 +30,7 @@ export const useEventStore = defineStore({
 
         for (const productKey in retour.products) {
           const product = retour.products[productKey]
-          console.log('-> product =', product)
+          // console.log('-> product =', product)
           // les produits peuvent ils être affiché (attention tous les produits ne sont pas encore gérés)
           // cashless
           if (product.categorie_article === 'S' && product.prices.length > 0) {
@@ -221,10 +221,6 @@ export const useEventStore = defineStore({
         form.options_checkbox[i].activation = false
       }
     },
-    updateEmail(emailType, value) {
-      // console.log('-> fonc updateEmail !')
-      this.forms.find(obj => obj.event === this.event.uuid)[emailType] = value
-    },
     updateChargeCashless(value) {
       // console.log('updateCashless =', value)
       this.forms.find(obj => obj.event === this.event.uuid).chargeCashless = parseFloat(value)
@@ -306,12 +302,6 @@ export const useEventStore = defineStore({
         nb_options_checkbox,
         nb_options_radio
       }
-    },
-    getEmail: (state) => {
-      const form = state.forms.find(obj => obj.event === state.event.uuid)
-      const email = form.email
-      const confirme = form.emailConfirme
-      return {email, confirme}
     },
     getChargeCashless: (state) => {
       const form = state.forms.find(obj => obj.event === state.event.uuid)
