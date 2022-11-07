@@ -48,7 +48,7 @@ const routes = [
   {
     path: '/adhesions/',
     name: 'Adhesions',
-    component: () => import(/* webpackChunkName: "Artist" */ '@/views/Adhesions.vue')
+    component: () => import(/* webpackChunkName: "Adhesions" */ '@/views/Adhesions.vue')
   },
   {
     // route interceptée

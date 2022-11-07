@@ -61,21 +61,16 @@ const {identitySite, loading, error} = storeToRefs(useAllStore())
 // return loading value and lock/unlock scroll
 function testLoading() {
   if (loading.value === true) {
-    document.body.style.overflow = "hidden"
-    console.log('LayoutDefault.vue, testLoading, userSelect none !')
+    document.body.style.overflowX = "hidden"
+    document.body.style.overflowY = "hidden"
+    // console.log('LayoutDefault.vue, testLoading, userSelect none !')
     return true
   } else {
     document.body.style.overflowX = "hidden"
     document.body.style.overflowY = "auto"
-    console.log('LayoutDefault.vue, testLoading, userSelect auto !')
+    // console.log('LayoutDefault.vue, testLoading, userSelect auto !')
     return false
   }
 }
 </script>
-
-<style>
-body {
-  overflow-x: hidden;
-  overflow-y: auto;
-}
-</style>
+<style></style>
