@@ -26,13 +26,13 @@ export const useLocalStore = defineStore({
 
             // adhésion
             if (this.stripeEtape === 'attente_stripe_adhesion') {
-                messageValidation = `<h2>Adhésion OK !</h2>`
+                messageValidation = `<h3>Adhésion OK !</h3>`
                 messageErreur = `Retour stripe pour l'adhésion:`
             }
 
             // reservation(s)
             if (this.stripeEtape === 'attente_stripe_reservation') {
-                messageValidation = `<h2>Paiement validé.</h2>`
+                messageValidation = `<h3>Paiement validé.</h3>`
                 messageErreur = `Retour stripe pour une/des réservation(s):`
             }
 
@@ -55,6 +55,7 @@ export const useLocalStore = defineStore({
                 emitter.emit('modalMessage', {
                     titre: 'Succès',
                     dynamic: true,
+                    typeMsg: 'success',
                     contenu: messageValidation
                 })
             }).catch(function (erreur) {

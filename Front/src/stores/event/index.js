@@ -7,6 +7,10 @@ export const useEventStore = defineStore({
   id: 'event',
   state: () => ({
     event: {},
+    showProduct: {
+      cashless: false,
+      gift: false
+    },
     forms: [],
     loading: false,
     error: null
@@ -24,9 +28,16 @@ export const useEventStore = defineStore({
         }
         const retour = await response.json()
 
-        // ajout d'une propriété 'customers' à chaque prix
         for (const productKey in retour.products) {
           const product = retour.products[productKey]
+          console.log('-> product =', product)
+          // les produits peuvent ils être affiché (attention tous les produits ne sont pas encore gérés)
+          // cashless
+          if (product.categorie_article === 'S' && product.prices.length > 0) {
+            this.showProduct.cashless = true
+          }
+
+          // ajout d'une propriété 'customers' à chaque prix
           for (const prixKey in product.prices) {
             product.prices[prixKey]['customers'] = []
           }

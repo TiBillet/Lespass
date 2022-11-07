@@ -26,7 +26,7 @@
 
       <CardEmail/>
 
-      <!--      <CardChargeCashless/>-->
+      <CardChargeCashless v-if="showProduct.cashless"/>
 
       <!--
       Don(s):
@@ -63,7 +63,7 @@ import CardChargeCashless from '@/components/CardChargeCashless.vue'
 import CardGifts from '@/components/CardGifts.vue'
 
 // state event
-const {event, forms} = storeToRefs(useEventStore())
+const {event, forms, showProduct} = storeToRefs(useEventStore())
 // actions
 const {updateEmail, getEventBySlug} = useEventStore()
 // state adhésion
@@ -79,7 +79,6 @@ const email = route.query.email
 
 // load event
 getEventBySlug(slug, email)
-
 
 // formatage des données POST events
 function formatBodyPost() {
@@ -183,10 +182,13 @@ function validerAchats(domEvent) {
         buyEnable = true
       }
 
+      /*
       // cashless présent et valeur supérieure à 0
       if (document.querySelector('#charge_cashless') !== null && parseFloat(document.querySelector('#charge_cashless').value) > 0) {
         buyEnable = true
       }
+
+       */
 
       // lancement achat
       if (buyEnable === true) {
@@ -250,8 +252,10 @@ function validerAchats(domEvent) {
       } else {
         // aucun produit sélectionné
         emitter.emit('modalMessage', {
-          titre: '?',
-          contenu: `Aucun produit sélectionné !`
+          titre: '? ? ?',
+          dynamic: true,
+          typeMsg: 'warning',
+          contenu: '<h3>Aucune réservation !</h3>'
         })
       }
     }
