@@ -129,14 +129,28 @@ class ProductViewSet(viewsets.ViewSet):
 class TenantViewSet(viewsets.ViewSet):
 
     def create(self, request):
-        user: TibilletUser = request.user
 
+        # On teste les prérequis :
+        # User peut créer de nouveaux tenants ?
+        user: TibilletUser = request.user
         if not user.can_create_tenant:
             raise serializers.ValidationError(
                 _("Vous n'avez pas la permission de créer de nouvelles instances sur ce serveur."))
+
+        # Le slug est-il disponible ?
+        try :
+            slug = slugify(request.data.get('organisation'))
+            Client.objects.get(schema_name=slug)
+            return Response(
+                {f"{slug} exist : Conflict"},
+                status=status.HTTP_409_CONFLICT)
+        except Client.DoesNotExist:
+            pass
+
+
+        # L'url correspond bien à la catégorie choisie ?
         if not request.data.get('categorie'):
             raise serializers.ValidationError(_("categorie est obligatoire"))
-
         categories = []
         if 'place' in request.get_full_path():
             categories = [Client.SALLE_SPECTACLE, Client.FESTIVAL]
@@ -206,6 +220,7 @@ class TenantViewSet(viewsets.ViewSet):
                 place_serialized = ConfigurationSerializer(Configuration.get_solo(), context={'request': request})
                 place_serialized_with_uuid = {'uuid': f"{tenant.uuid}"}
                 place_serialized_with_uuid.update(place_serialized.data)
+
             return Response(place_serialized_with_uuid, status=status.HTTP_201_CREATED)
 
         logger.info(f"serializer.errors : {serializer.errors}")
