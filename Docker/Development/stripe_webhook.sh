@@ -8,4 +8,4 @@
 
 ## RUN :
 
-stripe listen --forward-to https://m.django-local.org --skip-verify
+stripe listen --forward-to https://m.django-local.org/api/webhook_stripe/ --skip-verify

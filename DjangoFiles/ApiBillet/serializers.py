@@ -1,6 +1,7 @@
 import datetime
 
 import requests
+import stripe
 from PIL import Image
 from django.db import connection
 from io import BytesIO
@@ -24,6 +25,7 @@ from PaiementStripe.views import creation_paiement_stripe
 import logging
 
 from QrcodeCashless.models import CarteCashless
+from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
 
@@ -178,25 +180,63 @@ class NewConfigSerializer(serializers.ModelSerializer):
             "organisation",
             "short_description",
             "long_description",
-            "adress",
-            "postal_code",
-            "city",
-            "phone",
-            "email",
-            "site_web",
-            "twitter",
-            "facebook",
-            "instagram",
-            "adhesion_obligatoire",
-            "button_adhesion",
-            "map_img",
-            "carte_restaurant",
-            "img",
-            "logo",
+            "stripe_connect_account",
+            # "adress",
+            # "postal_code",
+            # "city",
+            # "phone",
+            # "email",
+            # "site_web",
+            # "twitter",
+            # "facebook",
+            # "instagram",
+            # "adhesion_obligatoire",
+            # "button_adhesion",
+            # "map_img",
+            # "carte_restaurant",
+            # "img",
+            # "logo",
         ]
+
+    def validate_stripe_connect_account(self, value):
+        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+        try :
+            info_stripe = stripe.Account.retrieve(value)
+            details_submitted = info_stripe.details_submitted
+
+            if not details_submitted:
+                meta = Client.objects.filter(categorie=Client.META)[0]
+                meta_url = meta.get_primary_domain().domain
+
+                try :
+                    account_link = stripe.AccountLink.create(
+                        account=value,
+                        refresh_url=f"https://{meta_url}/api/onboard_stripe_return/{value}",
+                        return_url=f"https://{meta_url}/api/onboard_stripe_return/{value}",
+                        type="account_onboarding",
+                    )
+
+                    url_onboard = account_link.get('url')
+                    raise serializers.ValidationError(
+                        _(f'{url_onboard}'))
+                except:
+                    raise serializers.ValidationError(
+                        _(f'stripe account valid but no detail submitted'))
+
+            self.info_stripe = info_stripe
+
+            return value
+
+        except:
+            raise serializers.ValidationError(
+                _(f'stripe account not valid'))
 
     def validate(self, attrs):
         logger.info(f"validate : {attrs}")
+
+        if not attrs.get('stripe_connect_account') or not getattr(self, 'info_stripe', None):
+            raise serializers.ValidationError(
+                _(f'stripe account not send nor valid'))
 
         # On cherche la source de l'image principale :
         img_url = self.initial_data.get('img_url')
@@ -213,6 +253,8 @@ class NewConfigSerializer(serializers.ModelSerializer):
                 _(f'img doit contenir un fichier, ou logo_url doit contenir une url valide'))
         if not attrs.get('logo') and logo_url:
             self.logo_name, self.logo_img = get_img_from_url(logo_url)
+
+
 
         return super().validate(attrs)
 

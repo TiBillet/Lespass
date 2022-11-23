@@ -193,33 +193,23 @@ class TenantViewSet(viewsets.ViewSet):
 
             with tenant_context(tenant):
                 rootConf = RootConfiguration.get_solo()
-                stripe.api_key = rootConf.get_stripe_api()
-
-                acc_connect = stripe.Account.create(
-                    type="standard",
-                    country="FR",
-                    email=futur_conf.get('email'),
-                )
-                id_acc_connect = acc_connect.get('id')
-
-                account_link = stripe.AccountLink.create(
-                  account=id_acc_connect,
-                  refresh_url=f"https://{domain.domain}/stripe/onboard",
-                  return_url=f"https://{domain.domain}/stripe/onboard",
-                  type="account_onboarding",
-                )
-
-                url_onboard = account_link.get('url')
-
                 conf = Configuration.get_solo()
+                info_stripe = serializer.info_stripe
+
                 serializer.update(instance=conf, validated_data=futur_conf)
+
                 conf.slug = slug
+
+                conf.email = info_stripe.email
+                conf.phone = info_stripe.business_profile.support_phone
+                conf.site_web = info_stripe.business_profile.url
+
                 conf.stripe_mode_test = rootConf.stripe_mode_test
 
                 if rootConf.stripe_mode_test :
-                    conf.stripe_connect_account_test = id_acc_connect
+                    conf.stripe_connect_account_test = info_stripe.id
                 else :
-                    conf.stripe_connect_account = id_acc_connect
+                    conf.stripe_connect_account = info_stripe.id
 
                 if getattr(serializer, 'img_img', None):
                     conf.img.save(serializer.img_name, serializer.img_img.fp)
@@ -229,12 +219,10 @@ class TenantViewSet(viewsets.ViewSet):
                 conf.save()
                 # user.client_admin.add(tenant)
 
-                email_nouveau_tenant = futur_conf.get('email')
-                if email_nouveau_tenant :
-                    user_from_email_nouveau_tenant = get_or_create_user(email_nouveau_tenant)
-                    user_from_email_nouveau_tenant.client_admin.add(tenant)
-                    user_from_email_nouveau_tenant.is_staff = True
-                    user_from_email_nouveau_tenant.save()
+                user_from_email_nouveau_tenant = get_or_create_user(conf.email)
+                user_from_email_nouveau_tenant.client_admin.add(tenant)
+                user_from_email_nouveau_tenant.is_staff = True
+                user_from_email_nouveau_tenant.save()
 
                 place_serialized = ConfigurationSerializer(Configuration.get_solo(), context={'request': request})
                 place_serialized_with_uuid = {'uuid': f"{tenant.uuid}"}
@@ -1093,7 +1081,8 @@ class Onboard_stripe_return(APIView):
     def get(self, request, id_acc_connect):
         details_submitted = info_stripe(id_acc_connect).details_submitted
         if details_submitted :
-            return HttpResponseRedirect(f"/")
+            #TODO : Créer le formulaire de création de tenant
+            return HttpResponseRedirect(f"/onboardreturn/{id_acc_connect}/")
         else :
             return HttpResponseRedirect(f"{account_link(id_acc_connect=id_acc_connect)}")
 
@@ -1115,6 +1104,7 @@ class Webhook_stripe(APIView):
     def post(self, request):
         payload = request.data
         logger.info(f" ")
+        # logger.info(f"Webhook_stripe --> {payload}")
         logger.info(f"Webhook_stripe --> {payload.get('type')}")
         logger.info(f" ")
 
@@ -1223,7 +1213,7 @@ class Webhook_stripe(APIView):
 
         # Réponse pour l'api stripe qui envoie des webhook pour tout autre que la validation de paiement.
         # Si on renvoie une erreur, ils suppriment le webhook de leur côté.
-        return Response('Pouple', status=status.HTTP_202_ACCEPTED)
+        return Response('Pouple', status=status.HTTP_207_MULTI_STATUS)
 
     def get(self, request, uuid_paiement):
         logger.info("*" * 30)
