@@ -43,6 +43,7 @@ import logging
 from MetaBillet.models import EventDirectory, ProductDirectory
 from PaiementStripe.views import new_entry_from_stripe_invoice
 from QrcodeCashless.models import Detail, CarteCashless
+from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
 
@@ -191,16 +192,34 @@ class TenantViewSet(viewsets.ViewSet):
                     return Response(_(f"{e}"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
             with tenant_context(tenant):
+                rootConf = RootConfiguration.get_solo()
+                stripe.api_key = rootConf.get_stripe_api()
+
+                acc_connect = stripe.Account.create(
+                    type="standard",
+                    country="FR",
+                    email=futur_conf.get('email'),
+                )
+                id_acc_connect = acc_connect.get('id')
+
+                account_link = stripe.AccountLink.create(
+                  account=id_acc_connect,
+                  refresh_url=f"https://{domain.domain}/stripe/onboard",
+                  return_url=f"https://{domain.domain}/stripe/onboard",
+                  type="account_onboarding",
+                )
+
+                url_onboard = account_link.get('url')
+
                 conf = Configuration.get_solo()
                 serializer.update(instance=conf, validated_data=futur_conf)
                 conf.slug = slug
-                conf.stripe_api_key = os.environ.get('STRIPE_KEY')
-                conf.stripe_test_api_key = os.environ.get('STRIPE_KEY_TEST')
+                conf.stripe_mode_test = rootConf.stripe_mode_test
 
-                if os.environ.get('STRIPE_TEST') == "False":
-                    conf.stripe_mode_test = False
-                if os.environ.get('STRIPE_TEST') == "True":
-                    conf.stripe_mode_test = True
+                if rootConf.stripe_mode_test :
+                    conf.stripe_connect_account_test = id_acc_connect
+                else :
+                    conf.stripe_connect_account = id_acc_connect
 
                 if getattr(serializer, 'img_img', None):
                     conf.img.save(serializer.img_name, serializer.img_img.fp)
@@ -1039,6 +1058,55 @@ def paiment_stripe_validator(request, paiement_stripe):
             )
 
     raise Http404(f'{paiement_stripe.status}')
+
+def info_stripe(id_acc_connect):
+    stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+    info_stripe = stripe.Account.retrieve(id_acc_connect)
+    return info_stripe
+
+def account_link(id_acc_connect=False):
+    rootConf = RootConfiguration.get_solo()
+    stripe.api_key = rootConf.get_stripe_api()
+
+    meta = Client.objects.filter(categorie=Client.META)[0]
+    meta_url = meta.get_primary_domain().domain
+
+    if not id_acc_connect :
+        acc_connect = stripe.Account.create(
+            type="standard",
+            country="FR",
+        )
+        id_acc_connect = acc_connect.get('id')
+
+    account_link = stripe.AccountLink.create(
+        account=id_acc_connect,
+        refresh_url=f"https://{meta_url}/api/onboard_stripe_return/{id_acc_connect}",
+        return_url=f"https://{meta_url}/api/onboard_stripe_return/{id_acc_connect}",
+        type="account_onboarding",
+    )
+
+    url_onboard = account_link.get('url')
+    return url_onboard
+
+@permission_classes([permissions.AllowAny])
+class Onboard_stripe_return(APIView):
+    def get(self, request, id_acc_connect):
+        details_submitted = info_stripe(id_acc_connect).details_submitted
+        if details_submitted :
+            return HttpResponseRedirect(f"/")
+        else :
+            return HttpResponseRedirect(f"{account_link(id_acc_connect=id_acc_connect)}")
+
+    def post(self, request):
+        # On récupère les infos du formulaire post Stripe
+        # GOGOGOGO SERIALIZER
+        return HttpResponseRedirect(f"/")
+
+
+@permission_classes([permissions.AllowAny])
+class Onboard(APIView):
+    def get(self, request):
+        return Response(f"{account_link()}", status=status.HTTP_202_ACCEPTED)
 
 
 @permission_classes([permissions.AllowAny])

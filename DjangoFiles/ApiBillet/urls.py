@@ -1,7 +1,7 @@
 from django.urls import include, path, re_path
 from ApiBillet import views as api_view
 from rest_framework import routers
-from ApiBillet.views import TicketPdf, Webhook_stripe, Gauge, Cancel_sub, Load_cards
+from ApiBillet.views import TicketPdf, Webhook_stripe, Gauge, Cancel_sub, Load_cards, Onboard_stripe_return, Onboard
 
 router = routers.DefaultRouter()
 router.register(r'place', api_view.TenantViewSet, basename='place')
@@ -21,6 +21,8 @@ urlpatterns = [
     path('', include(router.urls)),
     # download ticket :
     path('ticket/pdf/<uuid:pk_uuid>', TicketPdf.as_view(), name='ticket_uuid_to_pdf'),
+    path('onboard', Onboard.as_view()),
+    path('onboard_stripe_return/<str:id_acc_connect>', Onboard_stripe_return.as_view()),
     path('webhook_stripe/', Webhook_stripe.as_view()),
     path('webhook_stripe/<uuid:uuid_paiement>/', Webhook_stripe.as_view()),
     path('gauge/', Gauge.as_view()),

@@ -86,6 +86,7 @@ RUN pip install authlib
 RUN pip install djangorestframework-api-key
 RUN pip install flower
 
+
 RUN apt-get -y clean
 
 RUN python --version

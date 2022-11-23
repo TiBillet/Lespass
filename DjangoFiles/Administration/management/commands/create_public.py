@@ -42,6 +42,9 @@ class Command(BaseCommand):
         )
         tenant_public.save()
 
+        if not created:
+            raise Exception("Public already installed")
+
         domain_public, created = Domain.objects.get_or_create(
             domain= f'{os.getenv("DOMAIN")}',
             tenant = tenant_public,

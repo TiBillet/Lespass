@@ -32,6 +32,8 @@ import stripe
 
 import logging
 
+from root_billet.models import RootConfiguration
+
 logger = logging.getLogger(__name__)
 
 
@@ -180,6 +182,7 @@ class Configuration(SingletonModel):
 
     stripe_connect_account = models.CharField(max_length=21, blank=True, null=True)
     stripe_connect_account_test = models.CharField(max_length=21, blank=True, null=True)
+    stripe_payouts_enabled = models.BooleanField(default=False)
 
     stripe_api_key = models.CharField(max_length=110, blank=True, null=True)
     stripe_test_api_key = models.CharField(max_length=110, blank=True, null=True)
@@ -191,6 +194,24 @@ class Configuration(SingletonModel):
             return self.stripe_test_api_key
         else:
             return self.stripe_api_key
+
+    def get_stripe_connect_account(self):
+        if self.stripe_mode_test:
+            return self.stripe_connect_account_test
+        else:
+            return self.stripe_connect_account
+
+
+    def get_stripe_payouts(self):
+        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+        id_acc_connect = self.get_stripe_connect_account()
+
+        if id_acc_connect :
+            info_stripe = stripe.Account.retrieve(id_acc_connect)
+            self.stripe_payouts_enabled = info_stripe.get('payout_enabled')
+            self.save()
+
+        return self.stripe_payouts_enabled
 
     # activer_billetterie = models.BooleanField(default=True, verbose_name=_("Activer la billetterie"))
 
