@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+docker compose down --remove-orphans
+sudo rm -rf ../../Postgres/dbdata
+docker compose up -d
+sleep 5
+
+docker compose exec billetterie_django_dev python /DjangoFiles/manage.py collectstatic --noinput
+docker compose exec billetterie_django_dev python /DjangoFiles/manage.py migrate
+docker compose exec billetterie_django_dev python /DjangoFiles/manage.py create_public
+echo "Création du super utilisateur :"
+docker compose exec billetterie_django_dev python /DjangoFiles/manage.py create_tenant_superuser -s public
+docker compose exec billetterie_django_dev bash
+

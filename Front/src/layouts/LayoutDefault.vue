@@ -15,6 +15,7 @@
   <ModalMembershipOwned/>
   <ModalCardsList/>
   <ModalReservationList/>
+  <ModalOnboard/>
 </template>
 
 <script setup>
@@ -28,6 +29,7 @@ import ModalPassword from '@/components/ModalPassword.vue'
 import ModalMembershipOwned from '@/components/ModalMembershipOwned.vue'
 import ModalCardsList from "@/components/ModalCardsList.vue"
 import ModalReservationList from "@/components/ModalReservationList.vue"
+import ModalOnboard from "@/components/ModalOnboard.vue"
 // import Footer from '@/components/Footer.vue'
 
 // store

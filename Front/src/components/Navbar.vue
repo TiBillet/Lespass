@@ -4,12 +4,13 @@
       <!-- lieu -->
       <div class="navbar-brand">
         <a href="/" class="navbar-brand d-flex justify-content-between align-items-center">
-          <h6 class="m-0 text-white">{{ place.organisation }}</h6>
+          <h6 v-if="place.categorie !== 'M'" class="m-0 text-white">{{ place.organisation }}</h6>
+          <h6 v-else class="m-0 text-white">Agenda TiBillet</h6>
         </a>
       </div>
 
       <!-- partie droite -->
-      <ul class="navbar-nav d-flex flex-row-reverse ms-auto d-block">
+      <ul v-if="place.categorie !== 'M'" class="navbar-nav d-flex flex-row-reverse ms-auto d-block">
         <!-- user -->
         <!-- <li v-if="adhesion.status === 'membership' || refreshToken !== ''" class="nav-item dropdown"> -->
         <li v-if="refreshToken !== ''" class="nav-item dropdown">
@@ -50,8 +51,9 @@
 
             <!-- isStaff -->
             <li v-if="isStaff() === true">
-              <a v-if="asP() === true" class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
-                 role="button" href="/admin" >
+              <a v-if="asP() === true"
+                 class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
+                 role="button" href="/admin">
                 <i class="fa fa-cog fa-fw me-1 text-dark tourne-ticket" aria-hidden="true"></i>
                 <h6 class="m-0 text-dark">Administration</h6>
               </a>
@@ -94,6 +96,17 @@
           </a>
         </li>
 
+      </ul>
+
+      <ul v-else class="navbar-nav d-flex flex-row-reverse ms-auto d-block">
+        <li class="nav-item">
+          <a class="nav-link ps-1 d-flex justify-content-between align-items-center"
+             role="button"
+             data-bs-toggle="modal" data-bs-target="#modal-onboard" >
+            <i class="fa fa-plane me-1 text-white" aria-hidden="true"></i>
+            <h6 class="m-0 text-white" data-test-id="seConnecter">Créer son espace</h6>
+          </a>
+        </li>
       </ul>
 
     </div>

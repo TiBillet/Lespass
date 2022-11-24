@@ -43,6 +43,7 @@ import logging
 from MetaBillet.models import EventDirectory, ProductDirectory
 from PaiementStripe.views import new_entry_from_stripe_invoice
 from QrcodeCashless.models import Detail, CarteCashless
+from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
 
@@ -129,14 +130,28 @@ class ProductViewSet(viewsets.ViewSet):
 class TenantViewSet(viewsets.ViewSet):
 
     def create(self, request):
-        user: TibilletUser = request.user
 
+        # On teste les prérequis :
+        # User peut créer de nouveaux tenants ?
+        user: TibilletUser = request.user
         if not user.can_create_tenant:
             raise serializers.ValidationError(
                 _("Vous n'avez pas la permission de créer de nouvelles instances sur ce serveur."))
+
+        # Le slug est-il disponible ?
+        try :
+            slug = slugify(request.data.get('organisation'))
+            Client.objects.get(schema_name=slug)
+            return Response(
+                {f"{slug} exist : Conflict"},
+                status=status.HTTP_409_CONFLICT)
+        except Client.DoesNotExist:
+            pass
+
+
+        # L'url correspond bien à la catégorie choisie ?
         if not request.data.get('categorie'):
             raise serializers.ValidationError(_("categorie est obligatoire"))
-
         categories = []
         if 'place' in request.get_full_path():
             categories = [Client.SALLE_SPECTACLE, Client.FESTIVAL]
@@ -177,16 +192,24 @@ class TenantViewSet(viewsets.ViewSet):
                     return Response(_(f"{e}"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
             with tenant_context(tenant):
+                rootConf = RootConfiguration.get_solo()
                 conf = Configuration.get_solo()
-                serializer.update(instance=conf, validated_data=futur_conf)
-                conf.slug = slug
-                conf.stripe_api_key = os.environ.get('STRIPE_KEY')
-                conf.stripe_test_api_key = os.environ.get('STRIPE_KEY_TEST')
+                info_stripe = serializer.info_stripe
 
-                if os.environ.get('STRIPE_TEST') == "False":
-                    conf.stripe_mode_test = False
-                if os.environ.get('STRIPE_TEST') == "True":
-                    conf.stripe_mode_test = True
+                serializer.update(instance=conf, validated_data=futur_conf)
+
+                conf.slug = slug
+
+                conf.email = info_stripe.email
+                conf.phone = info_stripe.business_profile.support_phone
+                conf.site_web = info_stripe.business_profile.url
+
+                conf.stripe_mode_test = rootConf.stripe_mode_test
+
+                if rootConf.stripe_mode_test :
+                    conf.stripe_connect_account_test = info_stripe.id
+                else :
+                    conf.stripe_connect_account = info_stripe.id
 
                 if getattr(serializer, 'img_img', None):
                     conf.img.save(serializer.img_name, serializer.img_img.fp)
@@ -196,16 +219,15 @@ class TenantViewSet(viewsets.ViewSet):
                 conf.save()
                 # user.client_admin.add(tenant)
 
-                email_nouveau_tenant = futur_conf.get('email')
-                if email_nouveau_tenant :
-                    user_from_email_nouveau_tenant = get_or_create_user(email_nouveau_tenant)
-                    user_from_email_nouveau_tenant.client_admin.add(tenant)
-                    user_from_email_nouveau_tenant.is_staff = True
-                    user_from_email_nouveau_tenant.save()
+                user_from_email_nouveau_tenant = get_or_create_user(conf.email)
+                user_from_email_nouveau_tenant.client_admin.add(tenant)
+                user_from_email_nouveau_tenant.is_staff = True
+                user_from_email_nouveau_tenant.save()
 
                 place_serialized = ConfigurationSerializer(Configuration.get_solo(), context={'request': request})
                 place_serialized_with_uuid = {'uuid': f"{tenant.uuid}"}
                 place_serialized_with_uuid.update(place_serialized.data)
+
             return Response(place_serialized_with_uuid, status=status.HTTP_201_CREATED)
 
         logger.info(f"serializer.errors : {serializer.errors}")
@@ -1025,6 +1047,56 @@ def paiment_stripe_validator(request, paiement_stripe):
 
     raise Http404(f'{paiement_stripe.status}')
 
+def info_stripe(id_acc_connect):
+    stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+    info_stripe = stripe.Account.retrieve(id_acc_connect)
+    return info_stripe
+
+def account_link(id_acc_connect=False):
+    rootConf = RootConfiguration.get_solo()
+    stripe.api_key = rootConf.get_stripe_api()
+
+    meta = Client.objects.filter(categorie=Client.META)[0]
+    meta_url = meta.get_primary_domain().domain
+
+    if not id_acc_connect :
+        acc_connect = stripe.Account.create(
+            type="standard",
+            country="FR",
+        )
+        id_acc_connect = acc_connect.get('id')
+
+    account_link = stripe.AccountLink.create(
+        account=id_acc_connect,
+        refresh_url=f"https://{meta_url}/api/onboard_stripe_return/{id_acc_connect}",
+        return_url=f"https://{meta_url}/api/onboard_stripe_return/{id_acc_connect}",
+        type="account_onboarding",
+    )
+
+    url_onboard = account_link.get('url')
+    return url_onboard
+
+@permission_classes([permissions.AllowAny])
+class Onboard_stripe_return(APIView):
+    def get(self, request, id_acc_connect):
+        details_submitted = info_stripe(id_acc_connect).details_submitted
+        if details_submitted :
+            #TODO : Créer le formulaire de création de tenant
+            return HttpResponseRedirect(f"/onboardreturn/{id_acc_connect}/")
+        else :
+            return HttpResponseRedirect(f"{account_link(id_acc_connect=id_acc_connect)}")
+
+    def post(self, request):
+        # On récupère les infos du formulaire post Stripe
+        # GOGOGOGO SERIALIZER
+        return HttpResponseRedirect(f"/")
+
+
+@permission_classes([permissions.AllowAny])
+class Onboard(APIView):
+    def get(self, request):
+        return Response(f"{account_link()}", status=status.HTTP_202_ACCEPTED)
+
 
 @permission_classes([permissions.AllowAny])
 class Webhook_stripe(APIView):
@@ -1032,6 +1104,7 @@ class Webhook_stripe(APIView):
     def post(self, request):
         payload = request.data
         logger.info(f" ")
+        # logger.info(f"Webhook_stripe --> {payload}")
         logger.info(f"Webhook_stripe --> {payload.get('type')}")
         logger.info(f" ")
 
@@ -1140,7 +1213,7 @@ class Webhook_stripe(APIView):
 
         # Réponse pour l'api stripe qui envoie des webhook pour tout autre que la validation de paiement.
         # Si on renvoie une erreur, ils suppriment le webhook de leur côté.
-        return Response('Pouple', status=status.HTTP_202_ACCEPTED)
+        return Response('Pouple', status=status.HTTP_207_MULTI_STATUS)
 
     def get(self, request, uuid_paiement):
         logger.info("*" * 30)
