@@ -66,6 +66,11 @@ const routes = [
     path: '/status',
     name: 'StatusPlace',
     component: () => import(/* webpackChunkName: "StatusPlace" */ '../views/StatusPlace.vue')
+  },
+  {
+    path: '/onboardreturn/:accstripe/',
+    name: 'OnboardReturn',
+    component: () => import(/* webpackChunkName: "OnboardReturn" */ '../views/OnboardReturn.vue')
   }
 ]
 
@@ -120,6 +125,24 @@ router.beforeEach((to, from, next) => {
       })
     }
     redirection = true
+  }
+
+    // intercepte la route "EmailConfirmation" et active l'email
+  if (to.name === "OnboardReturn") {
+    console.log(`-> OnboardReturn`)
+    const accStripe = to.params.accstripe
+    console.log('accstripe =', accStripe)
+    if (accStripe !== undefined) {
+
+      const {accStripe} = useLocalStore()
+
+    } else {
+      emitter.emit('message', {
+        tmp: 6,
+        typeMsg: 'danger',
+        contenu: `Compte stripe non valide. Merci de contacter un administrateur`
+      })
+    }
   }
 
   // intercepte retour de stripe

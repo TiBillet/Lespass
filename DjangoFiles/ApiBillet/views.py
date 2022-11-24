@@ -186,6 +186,7 @@ class TenantViewSet(viewsets.ViewSet):
                         tenant=tenant,
                         is_primary=True
                     )
+
                 except IntegrityError as e:
                     return Response(_(f"{e}"), status=status.HTTP_400_BAD_REQUEST)
                 except Exception as e:
@@ -219,7 +220,7 @@ class TenantViewSet(viewsets.ViewSet):
                 conf.save()
                 # user.client_admin.add(tenant)
 
-                user_from_email_nouveau_tenant = get_or_create_user(conf.email)
+                user_from_email_nouveau_tenant = get_or_create_user(conf.email, force_mail=True)
                 user_from_email_nouveau_tenant.client_admin.add(tenant)
                 user_from_email_nouveau_tenant.is_staff = True
                 user_from_email_nouveau_tenant.save()
