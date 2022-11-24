@@ -1085,7 +1085,7 @@ class Onboard_stripe_return(APIView):
             #TODO : Créer le formulaire de création de tenant
             return HttpResponseRedirect(f"/onboardreturn/{id_acc_connect}/")
         else :
-            return HttpResponseRedirect(f"{account_link(id_acc_connect=id_acc_connect)}")
+            return Response(f"{account_link()}", status=status.HTTP_206_PARTIAL_CONTENT)
 
     def post(self, request):
         # On récupère les infos du formulaire post Stripe

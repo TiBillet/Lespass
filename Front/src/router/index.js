@@ -127,23 +127,6 @@ router.beforeEach((to, from, next) => {
     redirection = true
   }
 
-    // intercepte la route "EmailConfirmation" et active l'email
-  if (to.name === "OnboardReturn") {
-    console.log(`-> OnboardReturn`)
-    const accStripe = to.params.accstripe
-    console.log('accstripe =', accStripe)
-    if (accStripe !== undefined) {
-
-      const {accStripe} = useLocalStore()
-
-    } else {
-      emitter.emit('message', {
-        tmp: 6,
-        typeMsg: 'danger',
-        contenu: `Compte stripe non valide. Merci de contacter un administrateur`
-      })
-    }
-  }
 
   // intercepte retour de stripe
   if (to.name === "StripeReturn") {

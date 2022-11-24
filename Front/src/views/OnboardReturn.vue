@@ -6,11 +6,19 @@
 
 <script setup>
 
+import {onMounted, onUnmounted} from 'vue'
 import {useRoute} from 'vue-router'
 const route = useRoute()
 
 const accStripe = route.params.accstripe
-console.log(accStripe)
+
+// bloque le scroll
+onMounted(() => {
+  if (accStripe !== undefined) {
+    console.log("On Mounted accStripe : ", accStripe)
+  }
+})
+
 
 </script>
 
