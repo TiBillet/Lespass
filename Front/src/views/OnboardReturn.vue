@@ -1,9 +1,5 @@
 <template>
-  <div class="container">
-    <h1>Page OnboardReturn {{ accStripe }}</h1>
-  </div>
   <ModalOnboardReturn :accStripe="accStripe"/>
-
 </template>
 
 <script setup>

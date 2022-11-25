@@ -104,6 +104,11 @@ function checkConditions() {
   tenant.value.readConditions = document.querySelector(`#read-conditions`).checked
 }
 
+function getDomainName(hostName)
+{
+    return hostName.substring(hostName.lastIndexOf(".", hostName.lastIndexOf(".") - 1) + 1);
+}
+
 function SubmitTenant(data) {
   // console.log(`-> fonc postAdhesionModal !`)
   const domain = `${location.protocol}//${location.host}`
@@ -134,11 +139,8 @@ function SubmitTenant(data) {
     }
     return response.json()
   }).then(retour => {
-    loading.value = false,
-        emitter.emit('modalMessage', {
-          titre: 'Création validée',
-          contenu: "Merci de valider votre email. N'oubliez pas de regarder dans vos spam si vous ne l'avez pas reçu !"
-        })
+    // const domain = `${location.protocol}//${location.host}`
+    window.location = (`${location.protocol}//${tenant.value.organisation}.${getDomainName(location.host)}`);
   }).catch(function (error) {
     console.log(error)
   })
