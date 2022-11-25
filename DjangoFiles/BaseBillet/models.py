@@ -621,7 +621,7 @@ class ProductSold(models.Model):
         if self.id_product_stripe and not force:
             return self.id_product_stripe
 
-        stripe.api_key = Configuration.get_solo().get_stripe_api()
+        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
 
         client = connection.tenant
         domain_url = client.domains.all()[0].domain
@@ -672,7 +672,7 @@ class PriceSold(models.Model):
         if self.id_price_stripe and not force:
             return self.id_price_stripe
 
-        stripe.api_key = Configuration.get_solo().get_stripe_api()
+        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
 
         try:
             product_stripe = self.productsold.get_id_product_stripe()

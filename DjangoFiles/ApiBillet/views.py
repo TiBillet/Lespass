@@ -589,8 +589,7 @@ class Cancel_sub(APIView):
         )
 
         if membership.status == Membership.AUTO:
-            config = Configuration.get_solo()
-            stripe.api_key = config.get_stripe_api()
+            stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
             stripe.Subscription.delete(membership.stripe_id_subscription)
             membership.status = Membership.CANCELED
             membership.save()
@@ -875,8 +874,8 @@ def paiment_stripe_validator(request, paiement_stripe):
                 status=status.HTTP_208_ALREADY_REPORTED
             )
 
-    configuration = Configuration.get_solo()
-    stripe.api_key = configuration.get_stripe_api()
+    # configuration = Configuration.get_solo()
+    stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
 
     # SI c'est une source depuis INVOICE,
     # L'object vient d'être créé, on vérifie que la facture stripe

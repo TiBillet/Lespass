@@ -17,6 +17,8 @@ from django.utils.translation import gettext, gettext_lazy as _
 
 import logging
 
+from root_billet.models import RootConfiguration
+
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
@@ -83,7 +85,7 @@ class creation_paiement_stripe():
         return paiementStripeDb
 
     def _stripe_api_key(self):
-        api_key = self.configuration.get_stripe_api()
+        api_key = RootConfiguration.get_solo().get_stripe_api()
         if api_key:
             stripe.api_key = api_key
             return stripe.api_key
@@ -181,8 +183,7 @@ class creation_paiement_stripe():
             return None
 
 def new_entry_from_stripe_invoice(user, id_invoice):
-    config = Configuration.get_solo()
-    stripe.api_key  = config.get_stripe_api()
+    stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
     invoice = stripe.Invoice.retrieve(id_invoice)
 
     lines = invoice.lines
