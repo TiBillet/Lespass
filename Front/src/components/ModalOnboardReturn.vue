@@ -23,14 +23,12 @@
                   <div class="invalid-feedback">Merci de remplir le nom de votre organisation.</div>
                 </div>
 
-
                 <label for="short_description">Une courte description.</label>
                 <div class="input-group mb-2 has-validation">
                   <input id="short_description" v-model="tenant.short_description" type="text"
                          class="form-control" aria-label="Prénom pour l'adhésion" required>
                   <div class="invalid-feedback">Une description courte.</div>
                 </div>
-
 
                 <label for="img_url">L'url de l'image de la bannière.</label>
                 <div class="input-group mb-2 has-validation">
@@ -60,7 +58,8 @@
                   </div>
                 </div>
 
-                <p class="text-justify">Un mail de validation sera envoyé dés la procédure de création terminée. Pensez à regarder
+                <p class="text-justify">Un mail de validation sera envoyé dés la procédure de création terminée. Pensez
+                  à regarder
                   dans vos spams si non reçu !</p>
 
                 <div class="text-center">
@@ -99,15 +98,14 @@ function inputFocus(id) {
   document.querySelector(`#${id}`).focus()
 }
 
-
 function checkConditions() {
   tenant.value.readConditions = document.querySelector(`#read-conditions`).checked
 }
 
-function getDomainName(hostName)
-{
-    return hostName.substring(hostName.lastIndexOf(".", hostName.lastIndexOf(".") - 1) + 1);
-}
+// function getDomainName(hostName)
+// {
+//     return hostName.substring(hostName.lastIndexOf(".", hostName.lastIndexOf(".") - 1) + 1);
+// }
 
 function SubmitTenant(data) {
   // console.log(`-> fonc postAdhesionModal !`)
@@ -139,8 +137,10 @@ function SubmitTenant(data) {
     }
     return response.json()
   }).then(retour => {
+    // console.log(retour)
+    console.log("domain : ", retour.domain)
     // const domain = `${location.protocol}//${location.host}`
-    window.location = (`${location.protocol}//${tenant.value.organisation}.${getDomainName(location.host)}`);
+    window.location = (`https://${retour.domain}`);
   }).catch(function (error) {
     console.log(error)
   })

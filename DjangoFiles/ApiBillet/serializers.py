@@ -148,13 +148,16 @@ class ConfigurationSerializer(serializers.ModelSerializer):
             "carte_restaurant",
             "img_variations",
             "logo_variations",
+            "domain",
+            "categorie",
         ]
         read_only_fields = fields
 
-    def to_representation(self, instance):
-        representation = super().to_representation(instance)
-        representation['categorie'] = connection.tenant.categorie
-        return representation
+    # def to_representation(self, instance):
+    #     representation = super().to_representation(instance)
+    #     representation['domain'] = connection.tenant.get_primary_domain().domain
+    #     representation['categorie'] = connection.tenant.categorie
+    #     return representation
 
 
 # class NewConfigSerializer(serializers.Serializer):

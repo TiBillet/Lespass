@@ -190,10 +190,7 @@ class Configuration(SingletonModel):
     stripe_mode_test = models.BooleanField(default=True)
 
     def get_stripe_api(self):
-        if self.stripe_mode_test:
-            return self.stripe_test_api_key
-        else:
-            return self.stripe_api_key
+        return RootConfiguration.get_solo().get_stripe_api()
 
     def get_stripe_connect_account(self):
         if self.stripe_mode_test:
@@ -293,6 +290,14 @@ class Configuration(SingletonModel):
 
     activate_mailjet = models.BooleanField(default=False)
     email_confirm_template = models.IntegerField(default=3898061)
+
+    ### Tenant fields :
+
+    def domain(self):
+        return connection.tenant.get_primary_domain().domain
+
+    def categorie(self):
+        return connection.tenant.categorie
 
     def save(self, *args, **kwargs):
         '''
