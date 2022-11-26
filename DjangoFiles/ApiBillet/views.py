@@ -10,6 +10,7 @@ import pytz
 import requests
 import stripe
 from django.contrib import messages
+from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
 from django.http import HttpResponseRedirect, Http404, HttpResponse
@@ -220,9 +221,12 @@ class TenantViewSet(viewsets.ViewSet):
                 conf.save()
                 # user.client_admin.add(tenant)
 
+                staff_group = Group.objects.get(name="staff")
+
                 user_from_email_nouveau_tenant = get_or_create_user(conf.email, force_mail=True)
                 user_from_email_nouveau_tenant.client_admin.add(tenant)
                 user_from_email_nouveau_tenant.is_staff = True
+                user_from_email_nouveau_tenant.groups.add(staff_group)
                 user_from_email_nouveau_tenant.save()
 
                 place_serialized = ConfigurationSerializer(Configuration.get_solo(), context={'request': request})

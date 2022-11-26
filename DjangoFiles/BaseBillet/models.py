@@ -1096,7 +1096,7 @@ class Membership(models.Model):
             return f"{self.last_name}"
 
 
-class ApiKey(models.Model):
+class ExternalApiKey(models.Model):
     name = models.CharField(max_length=30, unique=True)
     user = models.OneToOneField(settings.AUTH_USER_MODEL,
                                 on_delete=models.CASCADE,
@@ -1133,7 +1133,7 @@ class ApiKey(models.Model):
     reservation = models.BooleanField(default=False, verbose_name="Lister les reservations")
     ticket = models.BooleanField(default=False, verbose_name="Lister et valider les billets")
 
-    def permissions(self):
+    def api_permissions(self):
         return {
             "event": self.event,
             "product": self.product,
@@ -1144,6 +1144,9 @@ class ApiKey(models.Model):
             "ticket": self.ticket,
         }
 
+    class Meta:
+        verbose_name = _('Api key')
+        verbose_name_plural = _('Api keys')
 
 class Webhook(models.Model):
     active = models.BooleanField(default=False)
