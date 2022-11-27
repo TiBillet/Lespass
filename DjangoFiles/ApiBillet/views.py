@@ -907,8 +907,12 @@ def paiment_stripe_validator(request, paiement_stripe):
 
     # Sinon c'est un paiement stripe checkout
     elif paiement_stripe.status != Paiement_stripe.VALID:
+        config = Configuration.get_solo()
+        checkout_session = stripe.checkout.Session.retrieve(
+            paiement_stripe.checkout_session_id_stripe,
+            stripe_account=config.get_stripe_connect_account()
+        )
 
-        checkout_session = stripe.checkout.Session.retrieve(paiement_stripe.checkout_session_id_stripe)
         paiement_stripe.customer_stripe = checkout_session.customer
 
         # Vérifie que les metatada soient cohérentes. #NTUI !

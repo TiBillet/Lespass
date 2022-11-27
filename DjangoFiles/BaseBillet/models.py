@@ -627,6 +627,7 @@ class ProductSold(models.Model):
             return self.id_product_stripe
 
         stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+        config = Configuration.get_solo()
 
         client = connection.tenant
         domain_url = client.domains.all()[0].domain
@@ -637,6 +638,7 @@ class ProductSold(models.Model):
 
         product = stripe.Product.create(
             name=f"{self.nickname()}",
+            stripe_account=config.get_stripe_connect_account(),
             images=images
         )
         self.id_product_stripe = product.id
@@ -678,7 +680,7 @@ class PriceSold(models.Model):
             return self.id_price_stripe
 
         stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-
+        config = Configuration.get_solo()
         try:
             product_stripe = self.productsold.get_id_product_stripe()
             stripe.Product.retrieve(product_stripe)
@@ -689,6 +691,7 @@ class PriceSold(models.Model):
             'unit_amount': int("{0:.2f}".format(self.price.prix).replace('.', '')),
             'currency': "eur",
             'product': product_stripe,
+            'stripe_account' : config.get_stripe_connect_account(),
             'nickname': f"{self.price.name}",
         }
 
