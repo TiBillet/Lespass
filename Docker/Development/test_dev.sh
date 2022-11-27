@@ -8,6 +8,7 @@ docker compose exec billetterie_django_dev python /DjangoFiles/manage.py collect
 docker compose exec billetterie_django_dev python /DjangoFiles/manage.py migrate
 docker compose exec billetterie_django_dev python /DjangoFiles/manage.py create_public
 echo "Création du super utilisateur :"
-docker compose exec billetterie_django_dev python /DjangoFiles/manage.py create_tenant_superuser -s public
+docker compose exec billetterie_django_dev python /DjangoFiles/manage.py create_tenant_superuser -s public --username root --email root@root.root
+docker compose exec billetterie_django_dev python /DjangoFiles/manage.py test_user
 docker compose exec billetterie_django_dev bash
 
