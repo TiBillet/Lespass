@@ -618,9 +618,9 @@ class ProductSold(models.Model):
 
     def nickname(self):
         if self.product.categorie_article == Product.BILLET:
-            return f"{self.event.name} - {connection.tenant} - {self.event.datetime.strftime('%D')}"
+            return f"{self.event.name} {self.event.datetime.strftime('%D')} - {self.product.name}"
         else:
-            return f"{self.product.name} - {connection.tenant}"
+            return f"{self.product.name}"
 
     def get_id_product_stripe(self, force=False):
         if self.id_product_stripe and not force:

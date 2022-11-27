@@ -491,7 +491,7 @@ class EventSerializer(serializers.ModelSerializer):
 
         if article_payant:
             gift_product, created = Product.objects.get_or_create(categorie_article=Product.DON, name="Don")
-            gift_price, created = Price.objects.get_or_create(product=gift_product, prix=1, name="Don")
+            gift_price, created = Price.objects.get_or_create(product=gift_product, prix=1, name="Coopérative TiBillet")
             instance.products.add(gift_product)
 
         # if instance.recharge_cashless :
