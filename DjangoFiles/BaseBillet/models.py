@@ -190,10 +190,7 @@ class Configuration(SingletonModel):
     stripe_mode_test = models.BooleanField(default=True)
 
     def get_stripe_api(self):
-        if self.stripe_mode_test:
-            return self.stripe_test_api_key
-        else:
-            return self.stripe_api_key
+        return RootConfiguration.get_solo().get_stripe_api()
 
     def get_stripe_connect_account(self):
         if self.stripe_mode_test:
@@ -293,6 +290,14 @@ class Configuration(SingletonModel):
 
     activate_mailjet = models.BooleanField(default=False)
     email_confirm_template = models.IntegerField(default=3898061)
+
+    ### Tenant fields :
+
+    def domain(self):
+        return connection.tenant.get_primary_domain().domain
+
+    def categorie(self):
+        return connection.tenant.categorie
 
     def save(self, *args, **kwargs):
         '''
@@ -613,15 +618,16 @@ class ProductSold(models.Model):
 
     def nickname(self):
         if self.product.categorie_article == Product.BILLET:
-            return f"{self.event.name} - {connection.tenant} - {self.event.datetime.strftime('%D')}"
+            return f"{self.event.name} {self.event.datetime.strftime('%D')} - {self.product.name}"
         else:
-            return f"{self.product.name} - {connection.tenant}"
+            return f"{self.product.name}"
 
     def get_id_product_stripe(self, force=False):
         if self.id_product_stripe and not force:
             return self.id_product_stripe
 
-        stripe.api_key = Configuration.get_solo().get_stripe_api()
+        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+        config = Configuration.get_solo()
 
         client = connection.tenant
         domain_url = client.domains.all()[0].domain
@@ -632,6 +638,7 @@ class ProductSold(models.Model):
 
         product = stripe.Product.create(
             name=f"{self.nickname()}",
+            stripe_account=config.get_stripe_connect_account(),
             images=images
         )
         self.id_product_stripe = product.id
@@ -672,8 +679,8 @@ class PriceSold(models.Model):
         if self.id_price_stripe and not force:
             return self.id_price_stripe
 
-        stripe.api_key = Configuration.get_solo().get_stripe_api()
-
+        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+        config = Configuration.get_solo()
         try:
             product_stripe = self.productsold.get_id_product_stripe()
             stripe.Product.retrieve(product_stripe)
@@ -684,6 +691,7 @@ class PriceSold(models.Model):
             'unit_amount': int("{0:.2f}".format(self.price.prix).replace('.', '')),
             'currency': "eur",
             'product': product_stripe,
+            'stripe_account' : config.get_stripe_connect_account(),
             'nickname': f"{self.price.name}",
         }
 
@@ -1096,7 +1104,7 @@ class Membership(models.Model):
             return f"{self.last_name}"
 
 
-class ApiKey(models.Model):
+class ExternalApiKey(models.Model):
     name = models.CharField(max_length=30, unique=True)
     user = models.OneToOneField(settings.AUTH_USER_MODEL,
                                 on_delete=models.CASCADE,
@@ -1133,7 +1141,7 @@ class ApiKey(models.Model):
     reservation = models.BooleanField(default=False, verbose_name="Lister les reservations")
     ticket = models.BooleanField(default=False, verbose_name="Lister et valider les billets")
 
-    def permissions(self):
+    def api_permissions(self):
         return {
             "event": self.event,
             "product": self.product,
@@ -1144,6 +1152,9 @@ class ApiKey(models.Model):
             "ticket": self.ticket,
         }
 
+    class Meta:
+        verbose_name = _('Api key')
+        verbose_name_plural = _('Api keys')
 
 class Webhook(models.Model):
     active = models.BooleanField(default=False)

@@ -10,7 +10,7 @@ from rest_framework_api_key.models import APIKey, AbstractAPIKey
 from rest_framework_api_key.permissions import BaseHasAPIKey, KeyParser
 
 from AuthBillet.models import TibilletUser
-from BaseBillet.models import Configuration, ApiKey
+from BaseBillet.models import Configuration, ExternalApiKey
 from BaseBillet.tasks import connexion_celery_mailer
 
 logger = logging.getLogger(__name__)
@@ -38,20 +38,20 @@ def user_apikey_valid(view):
     try :
         key = view.request.META["HTTP_AUTHORIZATION"].split()[1]
         api_key = APIKey.objects.get_from_key(key)
-        tenant_apikey = get_object_or_404(ApiKey, key=api_key)
+        tenant_apikey = get_object_or_404(ExternalApiKey, key=api_key)
 
         ip = get_client_ip(view.request)
 
         logger.info(
             f"is_apikey_valid : "
             f"ip request : {ip} - ip apikey : {tenant_apikey.ip} - "
-            f"basename : {view.basename} : {tenant_apikey.permissions().get(view.basename)} - "
-            f"permission : {tenant_apikey.permissions()}"
+            f"basename : {view.basename} : {tenant_apikey.api_permissions().get(view.basename)} - "
+            f"permission : {tenant_apikey.api_permissions()}"
         )
 
         if all([
             ip == tenant_apikey.ip,
-            tenant_apikey.permissions().get(view.basename)
+            tenant_apikey.api_permissions().get(view.basename)
         ]):
             return tenant_apikey.user
 

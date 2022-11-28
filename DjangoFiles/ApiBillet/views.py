@@ -10,6 +10,7 @@ import pytz
 import requests
 import stripe
 from django.contrib import messages
+from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
 from django.http import HttpResponseRedirect, Http404, HttpResponse
@@ -133,10 +134,10 @@ class TenantViewSet(viewsets.ViewSet):
 
         # On teste les prérequis :
         # User peut créer de nouveaux tenants ?
-        user: TibilletUser = request.user
-        if not user.can_create_tenant:
-            raise serializers.ValidationError(
-                _("Vous n'avez pas la permission de créer de nouvelles instances sur ce serveur."))
+        # user: TibilletUser = request.user
+        # if not user.can_create_tenant:
+        #     raise serializers.ValidationError(
+        #         _("Vous n'avez pas la permission de créer de nouvelles instances sur ce serveur."))
 
         # Le slug est-il disponible ?
         try :
@@ -220,9 +221,12 @@ class TenantViewSet(viewsets.ViewSet):
                 conf.save()
                 # user.client_admin.add(tenant)
 
+                staff_group = Group.objects.get(name="staff")
+
                 user_from_email_nouveau_tenant = get_or_create_user(conf.email, force_mail=True)
                 user_from_email_nouveau_tenant.client_admin.add(tenant)
                 user_from_email_nouveau_tenant.is_staff = True
+                user_from_email_nouveau_tenant.groups.add(staff_group)
                 user_from_email_nouveau_tenant.save()
 
                 place_serialized = ConfigurationSerializer(Configuration.get_solo(), context={'request': request})
@@ -234,20 +238,20 @@ class TenantViewSet(viewsets.ViewSet):
         logger.info(f"serializer.errors : {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def update(self, request, pk=None):
-        tenant = get_object_or_404(Client, pk=pk)
-        user: TibilletUser = request.user
-        if tenant not in user.client_admin.all():
-            return Response(_(f"Not Allowed"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
-        with tenant_context(tenant):
-            conf = Configuration.get_solo()
-            serializer = NewConfigSerializer(conf, data=request.data, partial=True)
-            if serializer.is_valid():
-                # serializer.save()
-                serializer.update(conf, serializer.validated_data)
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    # def update(self, request, pk=None):
+    #     tenant = get_object_or_404(Client, pk=pk)
+    #     user: TibilletUser = request.user
+    #     if tenant not in user.client_admin.all():
+    #         return Response(_(f"Not Allowed"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
+    #     with tenant_context(tenant):
+    #         conf = Configuration.get_solo()
+    #         serializer = NewConfigSerializer(conf, data=request.data, partial=True)
+    #         if serializer.is_valid():
+    #             # serializer.save()
+    #             serializer.update(conf, serializer.validated_data)
+    #             return Response(serializer.data, status=status.HTTP_201_CREATED)
+    #
+    #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def list(self, request):
         places_serialized_with_uuid = []
@@ -279,7 +283,8 @@ class TenantViewSet(viewsets.ViewSet):
         return Response(place_serialized_with_uuid)
 
     def get_permissions(self):
-        return get_permission_Api_LR_Any(self)
+        permission_classes = [permissions.AllowAny]
+        return [permission() for permission in permission_classes]
 
 
 
@@ -588,8 +593,7 @@ class Cancel_sub(APIView):
         )
 
         if membership.status == Membership.AUTO:
-            config = Configuration.get_solo()
-            stripe.api_key = config.get_stripe_api()
+            stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
             stripe.Subscription.delete(membership.stripe_id_subscription)
             membership.status = Membership.CANCELED
             membership.save()
@@ -874,8 +878,8 @@ def paiment_stripe_validator(request, paiement_stripe):
                 status=status.HTTP_208_ALREADY_REPORTED
             )
 
-    configuration = Configuration.get_solo()
-    stripe.api_key = configuration.get_stripe_api()
+    # configuration = Configuration.get_solo()
+    stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
 
     # SI c'est une source depuis INVOICE,
     # L'object vient d'être créé, on vérifie que la facture stripe
@@ -903,8 +907,12 @@ def paiment_stripe_validator(request, paiement_stripe):
 
     # Sinon c'est un paiement stripe checkout
     elif paiement_stripe.status != Paiement_stripe.VALID:
+        config = Configuration.get_solo()
+        checkout_session = stripe.checkout.Session.retrieve(
+            paiement_stripe.checkout_session_id_stripe,
+            stripe_account=config.get_stripe_connect_account()
+        )
 
-        checkout_session = stripe.checkout.Session.retrieve(paiement_stripe.checkout_session_id_stripe)
         paiement_stripe.customer_stripe = checkout_session.customer
 
         # Vérifie que les metatada soient cohérentes. #NTUI !
@@ -1082,15 +1090,11 @@ class Onboard_stripe_return(APIView):
     def get(self, request, id_acc_connect):
         details_submitted = info_stripe(id_acc_connect).details_submitted
         if details_submitted :
+            logger.info(f"details_submitted : {details_submitted}")
             #TODO : Créer le formulaire de création de tenant
             return HttpResponseRedirect(f"/onboardreturn/{id_acc_connect}/")
         else :
             return Response(f"{account_link()}", status=status.HTTP_206_PARTIAL_CONTENT)
-
-    def post(self, request):
-        # On récupère les infos du formulaire post Stripe
-        # GOGOGOGO SERIALIZER
-        return HttpResponseRedirect(f"/")
 
 
 @permission_classes([permissions.AllowAny])

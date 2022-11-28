@@ -7,5 +7,5 @@ cp -r /nonfree/js/now-design* /Front/src/assets/js/
 cp -r /nonfree/fonts/nucleo* /Front/src/assets/fonts/
 
 npm install
-#npm run dev
-sleep 30d
+npm run dev
+#sleep 30d

@@ -148,13 +148,16 @@ class ConfigurationSerializer(serializers.ModelSerializer):
             "carte_restaurant",
             "img_variations",
             "logo_variations",
+            "domain",
+            "categorie",
         ]
         read_only_fields = fields
 
-    def to_representation(self, instance):
-        representation = super().to_representation(instance)
-        representation['categorie'] = connection.tenant.categorie
-        return representation
+    # def to_representation(self, instance):
+    #     representation = super().to_representation(instance)
+    #     representation['domain'] = connection.tenant.get_primary_domain().domain
+    #     representation['categorie'] = connection.tenant.categorie
+    #     return representation
 
 
 # class NewConfigSerializer(serializers.Serializer):
@@ -197,18 +200,29 @@ class NewConfigSerializer(serializers.ModelSerializer):
             # "img",
             # "logo",
         ]
+        # # un seul tenant par compte stripe, sauf en test
+        # if rootConf.stripe_mode_test :
+        #     for tenant in Client.objects.all():
+        #         with tenant_context(tenant):
+        #             config = Configuration.get_solo()
+        #             if config.stripe_connect_account == value:
+        #                 raise serializers.ValidationError(
+        #                     _(f'Stripe account already connected to one Tenant. Please send mail to contact@tibillet.re to upgrade your plan.'))
 
     def validate_stripe_connect_account(self, value):
-        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-        try :
+        rootConf = RootConfiguration.get_solo()
+        stripe.api_key = rootConf.get_stripe_api()
+
+        try:
             info_stripe = stripe.Account.retrieve(value)
             details_submitted = info_stripe.details_submitted
 
             if not details_submitted:
+
                 meta = Client.objects.filter(categorie=Client.META)[0]
                 meta_url = meta.get_primary_domain().domain
 
-                try :
+                try:
                     account_link = stripe.AccountLink.create(
                         account=value,
                         refresh_url=f"https://{meta_url}/api/onboard_stripe_return/{value}",
@@ -223,13 +237,22 @@ class NewConfigSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError(
                         _(f'stripe account valid but no detail submitted'))
 
+            # un seul tenant par compte stripe, sauf en test
+            if not rootConf.stripe_mode_test:
+                for tenant in Client.objects.all().exclude(categorie__in=[Client.META, Client.ROOT]):
+                    with tenant_context(tenant):
+                        config = Configuration.get_solo()
+                        if config.stripe_connect_account == value:
+                            raise serializers.ValidationError(
+                                _(f'Stripe account already connected to one Tenant. Please send mail to contact@tibillet.re to upgrade your plan.'))
+
             self.info_stripe = info_stripe
 
             return value
 
-        except:
+        except Exception as e:
             raise serializers.ValidationError(
-                _(f'stripe account not valid'))
+                _(f'stripe account not valid : {e}'))
 
     def validate(self, attrs):
         logger.info(f"validate : {attrs}")
@@ -253,8 +276,6 @@ class NewConfigSerializer(serializers.ModelSerializer):
                 _(f'img doit contenir un fichier, ou logo_url doit contenir une url valide'))
         if not attrs.get('logo') and logo_url:
             self.logo_name, self.logo_img = get_img_from_url(logo_url)
-
-
 
         return super().validate(attrs)
 
@@ -470,7 +491,7 @@ class EventSerializer(serializers.ModelSerializer):
 
         if article_payant:
             gift_product, created = Product.objects.get_or_create(categorie_article=Product.DON, name="Don")
-            gift_price, created = Price.objects.get_or_create(product=gift_product, prix=1, name="Don")
+            gift_price, created = Price.objects.get_or_create(product=gift_product, prix=1, name="Coopérative TiBillet")
             instance.products.add(gift_product)
 
         # if instance.recharge_cashless :

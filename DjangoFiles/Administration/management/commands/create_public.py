@@ -1,6 +1,7 @@
 from os.path import exists
 
 import stripe
+from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from django.utils.text import slugify
 from django_tenants.utils import tenant_context
@@ -86,3 +87,6 @@ class Command(BaseCommand):
             rootConfig.stripe_test_api_key = stripe_test_api_key
             rootConfig.stripe_mode_test = stripe_mode_test
             rootConfig.save()
+
+
+        call_command('check_permissions')

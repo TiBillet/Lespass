@@ -21,7 +21,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from AuthBillet.serializers import MeSerializer, CreateUserValidator, CreateTerminalValidator, TokenTerminalValidator
 from AuthBillet.utils import get_or_create_user, sender_mail_connect, get_client_ip
-from BaseBillet.models import Configuration, ApiKey
+from BaseBillet.models import Configuration, ExternalApiKey
 
 from django.utils.encoding import force_str, force_bytes
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
@@ -121,12 +121,12 @@ class test_api_key(APIView):
     def get(self, request):
         key = request.META["HTTP_AUTHORIZATION"].split()[1]
         api_key = APIKey.objects.get_from_key(key)
-        tenant_apikey = get_object_or_404(ApiKey, key=api_key)
+        tenant_apikey = get_object_or_404(ExternalApiKey, key=api_key)
         ip = get_client_ip(request)
 
 
         data = {
-            "auth": tenant_apikey.permissions(),
+            "auth": tenant_apikey.api_permissions(),
             "ip_request": ip,
             "ip_valid": ip == tenant_apikey.ip
         }
