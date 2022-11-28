@@ -15,8 +15,7 @@
           <span v-else>{{ message.contenu }}</span>
         </div>
         <div class="modal-footer">
-          <button type=" button
-        " class="btn bg-gradient-secondary" data-bs-dismiss="modal">Fermer</button>
+          <button type="button" class="btn bg-gradient-secondary modal-footer-bt-fermer" data-bs-dismiss="modal">Fermer</button>
       </div>
     </div>
   </div>
