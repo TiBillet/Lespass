@@ -1,6 +1,6 @@
 <template>
 
-  <fieldset class="shadow-sm p-3 mb-5 bg-body rounded"
+  <fieldset class="shadow-sm p-3 mb-5 bg-body rounded test-card-billet"
             v-for="product in event.products.filter(prod => prod.categorie_article === 'F' || prod.categorie_article === 'B')"
             :key="product.uuid">
     <legend>
@@ -18,17 +18,17 @@
           <h4 class="font-weight-bolder text-info text-gradient align-self-start">{{ price.name.toLowerCase() }} :
             {{ price.prix }} €</h4>
           <button
-              v-if="stop(price.uuid, price.stock, price.max_per_user) === false" class="btn btn-primary ms-3"
+              v-if="stop(price.uuid, price.stock, price.max_per_user) === false" class="btn btn-primary ms-3 test-card-billet-bt-add"
               type="button" @click.stop="addCustomer(price.uuid)">
             <i class="fas fa-plus"></i>
           </button>
         </div>
         <!-- clients -->
-        <div class="input-group mb-1"
+        <div class="input-group mb-1 test-card-billet-input-group"
              v-for="(customer, index) in getCustomersByUuidPrix(price.uuid)" :key="index">
-          <input type="text" :value="customer.last_name" placeholder="Nom" aria-label="Nom" class="form-control"
+          <input type="text" :value="customer.last_name" placeholder="Nom" aria-label="Nom" class="form-control test-card-billet-input-group-nom"
                  @keyup="updateCustomer(price.uuid, customer.uuid, $event.target.value,'last_name')" required>
-          <input type="text" :value="customer.first_name" placeholder="Prénom" aria-label="Prénom" class="form-control"
+          <input type="text" :value="customer.first_name" placeholder="Prénom" aria-label="Prénom" class="form-control test-card-billet-input-group-prenom"
                  @keyup="updateCustomer(price.uuid, customer.uuid, $event.target.value,'first_name')" required>
           <button class="btn btn-primary mb-0" type="button" @click="deleteCustomer(price.uuid, customer.uuid)"
                   style="border-top-right-radius: 30px; border-bottom-right-radius: 30px;">
