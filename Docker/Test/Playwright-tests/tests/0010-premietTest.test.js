@@ -5,7 +5,7 @@ test.use({viewport: {width: 1400, height: 1300}})
 let page
 const urlTester = 'https://raffinerie.django-local.org/iframeevent/ziskakan-011828-1830/'
 
-test.describe.only('Acceuil.', () => {
+test.describe.skip('Acceuil.', () => {
   test('Formulaire réservation puis stripe.', async ({browser}) => {
     // 1 - connexion appareil client
     page = await browser.newPage()
