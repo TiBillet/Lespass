@@ -1,8 +1,11 @@
 import {expect, test} from '@playwright/test'
+import * as dotenv from 'dotenv'
+dotenv.config('../.env')
 
 test.use({viewport: {width: 1400, height: 1300}})
 
 let page
+const email = process.env.TEST_MAIL
 const urlTester = 'https://raffinerie.django-local.org/iframeevent/ziskakan-011828-1830/'
 
 test.describe.skip('Acceuil.', () => {
@@ -28,10 +31,10 @@ test.describe.skip('Acceuil.', () => {
     await page.locator('.test-card-billet div section', {hasText: reservation}).locator('.test-card-billet-input-group .test-card-billet-input-group-prenom').fill('Jean')
 
     // profil-email
-    await page.locator('#profil-email').fill('filaos974@hotmail.com')
+    await page.locator('#profil-email').fill(email)
 
     // profil-confirme-email
-    await page.locator('#profil-confirme-email').fill('filaos974@hotmail.com')
+    await page.locator('#profil-confirme-email').fill(email)
 
     // valider formulaire
     await Promise.all([

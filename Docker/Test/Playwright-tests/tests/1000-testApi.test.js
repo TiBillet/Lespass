@@ -1,5 +1,8 @@
 import {test} from '@playwright/test'
+import * as dotenv from 'dotenv'
+dotenv.config('../.env')
 
+const email = process.env.TEST_MAIL
 
 test.describe('Api.', () => {
   test('Place rafftou create', async ({request}) => {
