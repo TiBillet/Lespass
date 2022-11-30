@@ -39,15 +39,6 @@ const config = {
 
     ignoreHTTPSErrors: true,
 
-    // All requests we send go to this API endpoint.
-    baseURL: 'https://raffinerie.django-local.org',
-    extraHTTPHeaders: {
-      // We set this header per GitHub guidelines.
-      'Accept': 'application/vnd.github.v3+json',
-      // Add authorization token to all requests.
-      // Assuming personal access token available in the environment.
-      'Authorization': `Api-Key  ${process.env.API_KEY_BILLETTERIE}`
-    }
   },
 
   /* Configure projects for major browsers */
