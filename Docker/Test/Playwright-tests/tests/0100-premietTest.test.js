@@ -6,7 +6,8 @@ test.use({viewport: {width: 1400, height: 1300}})
 
 let page
 const email = process.env.TEST_MAIL
-const urlTester = 'https://raffinerie.django-local.org/iframeevent/ziskakan-011828-1830/'
+// const urlTester = 'https://raffinerie.django-local.org/iframeevent/ziskakan-011828-1830/'
+const urlTester = 'https://raffinerie.django-local.org'
 
 test.describe.skip('Acceuil.', () => {
   test('Formulaire réservation puis stripe.', async ({browser}) => {
@@ -19,6 +20,11 @@ test.describe.skip('Acceuil.', () => {
     // première connexion
     await page.goto(urlTester)
 
+    await page.pause()
+
+    await page.pause()
+    await page.close()
+    /*
     const reservation = 'demi tarif : 5 €'
 
     // ajouter une réservation à l'article "gratuite"
@@ -54,8 +60,10 @@ test.describe.skip('Acceuil.', () => {
     await page.locator('form fieldset input[placeholder="CVC"]').fill('424')
     await page.locator('form #billingName').fill('4242')
     await page.locator('form div[class="SubmitButton-IconContainer"]').click()
-  })
 
+     */
+  })
+/*
   test('Retour formulaire stripe', async ({browser}) => {
     await page.waitForNavigation()
     // attend l'affichage d'un modal
@@ -72,4 +80,5 @@ test.describe.skip('Acceuil.', () => {
 
     await page.close()
   })
+ */
 })
