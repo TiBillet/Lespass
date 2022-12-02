@@ -1,15 +1,15 @@
 import {expect, test} from '@playwright/test'
 import * as dotenv from 'dotenv'
+
 dotenv.config('../.env')
 
 test.use({viewport: {width: 1400, height: 1300}})
 
 let page
-const email = process.env.TEST_MAIL
-// const urlTester = 'https://raffinerie.django-local.org/iframeevent/ziskakan-011828-1830/'
+const email = process.env.EMAIL
 const urlTester = 'https://raffinerie.django-local.org'
 
-test.describe.skip('Acceuil.', () => {
+test.describe('Acceuil.', () => {
   test('Formulaire réservation puis stripe.', async ({browser}) => {
     // 1 - connexion appareil client
     page = await browser.newPage()
@@ -20,21 +20,29 @@ test.describe.skip('Acceuil.', () => {
     // première connexion
     await page.goto(urlTester)
 
-    await page.pause()
+    // tester iframeevent, récupérer le premier évènement et remplacer dans son href "event" par "iframeevent"
+    await page.evaluate(() => {
+      const ele = (document.querySelectorAll('.test-card-event-container')[0]).querySelector('.test-card-event .card-body a')
+      let href = ele.href
+      ele.href = href.replace('event', 'iframeevent')
+    })
 
-    await page.pause()
-    await page.close()
-    /*
-    const reservation = 'demi tarif : 5 €'
+    // aller à l'évènement
+    await Promise.all([
+      page.waitForResponse('https://raffinerie.django-local.org/iframeevent/**'),
+      page.locator('.test-card-event-container').first().locator('.test-card-event .card-body a').click()
+    ])
 
-    // ajouter une réservation à l'article "gratuite"
-    await page.locator('.test-card-billet div section', {hasText: reservation}).locator('div button').click()
+    const firstReservation = page.locator('.test-card-billet section ').first()
+
+    // ajouter une réservation au premier tarif
+    await firstReservation.locator('.test-card-billet-bt-add').click()
 
     // input nom = 'Durand'
-    await page.locator('.test-card-billet div section', {hasText: reservation}).locator('.test-card-billet-input-group .test-card-billet-input-group-nom').fill('Durand')
+    await firstReservation.locator('.test-card-billet-input-group .test-card-billet-input-group-nom').fill('Durand')
 
     // input prénom = 'Jean'
-    await page.locator('.test-card-billet div section', {hasText: reservation}).locator('.test-card-billet-input-group .test-card-billet-input-group-prenom').fill('Jean')
+    await firstReservation.locator('.test-card-billet-input-group .test-card-billet-input-group-prenom').fill('Jean')
 
     // profil-email
     await page.locator('#profil-email').fill(email)
@@ -61,9 +69,8 @@ test.describe.skip('Acceuil.', () => {
     await page.locator('form #billingName').fill('4242')
     await page.locator('form div[class="SubmitButton-IconContainer"]').click()
 
-     */
   })
-/*
+
   test('Retour formulaire stripe', async ({browser}) => {
     await page.waitForNavigation()
     // attend l'affichage d'un modal
@@ -80,5 +87,5 @@ test.describe.skip('Acceuil.', () => {
 
     await page.close()
   })
- */
+
 })

@@ -14,7 +14,8 @@ dotenv.config('../.env')
 
 const email = process.env.TEST_MAIL
 let tokenBilletterie, uuidS = []
-test.describe('Api pop db.', () => {
+
+test.describe.skip('Api pop db.', () => {
   test('GeT Root JWT Token', async ({request}) => {
     const response = await request.post(process.env.URL_ROOT + '/api/user/token/', {
       headers: {
@@ -79,9 +80,33 @@ test.describe('Api pop db.', () => {
     uuidS.push({name: 'Ziskakan', uuid: retour.uuid})
   })
 
+  test('Artist Balaphonik create', async ({request}) => {
+    const response = await request.post(process.env.URL_META + '/api/artist/', {
+      headers: {
+        "Content-Type": "application/json"
+      },
+      data: {
+        organisation: "Balaphonik Sound System",
+        short_description: "Balaphonik Sound System fait danser les corps, ressource et rafraîchit les esprits.",
+        long_description: "Multi-instrumentiste, Alex a participé à des projets musicaux variés. Usant tous les genres, du métal au gnawa et du reggae au hiphop, il étudie le rythme sous toutes ses formes, à travers ses rencontres et ses voyages.",
+        phone: "0692929292",
+        email: "jturbeaux+ziz@pm.me",
+        site_web: "https://balaphonik.wixsite.com/balaphonik",
+        postal_code: "97410",
+        img_url: "https://www.festival-arbre-creux.fr/wp-content/uploads/2019/05/balaphonik-3.jpg",
+        logo_url: "https://i.ytimg.com/vi/HkRYJg7dnNM/hqdefault.jpg",
+        categorie: "A",
+        stripe_connect_account: process.env.ID_STRIPE
+      }
+    })
+    expect(response.ok()).toBeTruthy()
+    const retour = await response.json()
+    uuidS.push({name: 'Balaphonik', uuid: retour.uuid})
+  })
+
   test('Product Billet Create', async ({request}) => {
     const url = 'https://' + process.env.SLUG_PLACE_RAFFINERIE + '.' + process.env.DOMAIN + '/api/products/'
-    console.log('url =', url)
+    // console.log('url =', url)
     const response = await request.post(url, {
       headers: {
         "Content-Type": "application/json",
@@ -97,10 +122,9 @@ test.describe('Api pop db.', () => {
     })
     expect(response.ok()).toBeTruthy()
     const retour = await response.json()
-    console.log('retour =', retour)
     // mémorise le uuid du produit 'Billet'
     uuidS.push({name: 'Billet', uuid: retour.uuid})
-    console.log('uuidS =', uuidS)
+    // console.log('uuidS =', uuidS)
   })
 
   test('Prices Billet demi tarif Create', async ({request}) => {
@@ -146,7 +170,8 @@ test.describe('Api pop db.', () => {
   })
 
 
-  test('Events Create with OPT ART', async ({request}) => {
+  // Ziskakan
+  test('Events Create with OPT ART - Ziskakan', async ({request}) => {
     const url = 'https://' + process.env.SLUG_PLACE_RAFFINERIE + '.' + process.env.DOMAIN + '/api/events/'
     const uuidArtist = uuidS.find(product => product.name === 'Ziskakan').uuid
     const uuidBillet = uuidS.find(product => product.name === 'Billet').uuid
@@ -174,6 +199,39 @@ test.describe('Api pop db.', () => {
       }
     })
     expect(response.ok()).toBeTruthy()
-    console.log('response =', response)
+    // console.log('response =', response)
   })
+
+  // Balaphonik
+  test('Events Create with OPT ART - Balaphonik', async ({request}) => {
+    const url = 'https://' + process.env.SLUG_PLACE_RAFFINERIE + '.' + process.env.DOMAIN + '/api/events/'
+    const uuidArtist = uuidS.find(product => product.name === 'Balaphonik').uuid
+    const uuidBillet = uuidS.find(product => product.name === 'Billet').uuid
+    const response = await request.post(url, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: 'Bearer ' + tokenBilletterie
+      },
+      data: {
+        datetime: randomDate(),
+        short_description: "description courte de Balaphonik",
+        long_description: "Ceci est une longue description e Balaphonik",
+        artists: [
+          {
+            uuid: uuidArtist,
+            datetime: randomDate()
+          }
+        ],
+        products: [
+          uuidBillet
+        ],
+        options_checkbox: [],
+        options_radio: [],
+        stripe_connect_account: process.env.ID_STRIPE
+      }
+    })
+    expect(response.ok()).toBeTruthy()
+    // console.log('response =', response)
+  })
+
 })
