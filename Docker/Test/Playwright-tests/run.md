@@ -32,7 +32,7 @@ npx playwright test --reporter=line
 
 ### Lancer un test
 ```
-npx playwright test 0010-contexte_loginHardware.test.js
+npx playwright test 0010-xxxxxxxxxxxx.test.js
 ```
 
 ### Voir le raport
