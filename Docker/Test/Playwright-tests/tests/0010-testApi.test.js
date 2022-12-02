@@ -15,7 +15,7 @@ dotenv.config('../.env')
 const email = process.env.TEST_MAIL
 let tokenBilletterie, uuidS = []
 
-test.describe.skip('Api pop db.', () => {
+test.describe('Api pop db.', () => {
   test('GeT Root JWT Token', async ({request}) => {
     const response = await request.post(process.env.URL_ROOT + '/api/user/token/', {
       headers: {
