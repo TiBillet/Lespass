@@ -1119,23 +1119,7 @@ class Webhook_stripe(APIView):
             logger.info(f"Webhook_stripe checkout.session.completed : {payload}")
             tenant_uuid_in_metadata = payload["data"]["object"]["metadata"]["tenant"]
 
-            '''
-            # Avant, nous re-créions une requete via celery sur le bon tenant
-            if f"{connection.tenant.uuid}" != tenant_uuid_in_metadata:
-                with tenant_context(Client.objects.get(uuid=tenant_uuid_in_metadata)):
-                    paiement_stripe = get_object_or_404(Paiement_stripe,
-                                                        checkout_session_id_stripe=payload['data']['object']['id'])
-
-                tenant = Client.objects.get(uuid=tenant_uuid_in_metadata)
-                url_redirect = f"https://{tenant.domains.all().first().domain}{request.path}"
-
-                # On lance la requete nous même aussi,
-                # de telle sorte que ça soit déja validé
-                # lorsque le client arrive sur la page de redirection
-                task = redirect_post_webhook_stripe_from_public.delay(url_redirect, request.data)
-                return Response(f"redirect to {url_redirect} with celery", status=status.HTTP_200_OK)
-            '''
-
+            # On utilise les metadata du paiement stripe pour savoir de quel tenant cela vient.
             if f"{connection.tenant.uuid}" != tenant_uuid_in_metadata:
                 with tenant_context(Client.objects.get(uuid=tenant_uuid_in_metadata)):
                     paiement_stripe = get_object_or_404(Paiement_stripe,
