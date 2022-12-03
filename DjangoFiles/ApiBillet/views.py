@@ -950,14 +950,10 @@ def paiment_stripe_validator(request, paiement_stripe):
                         paiement_stripe.subscription = checkout_session.subscription
                         subscription = stripe.Subscription.retrieve(
                             checkout_session.subscription,
+                            stripe_account=config.get_stripe_connect_account()
                         )
                         paiement_stripe.invoice_stripe = subscription.latest_invoice
 
-                # TODO: ya pu de get, tout est POST, même la requete depuis le front vue.js
-                # if request.method == 'GET':
-                #     paiement_stripe.source_traitement = Paiement_stripe.GET
-                # else:
-                #     paiement_stripe.source_traitement = Paiement_stripe.WEBHOOK
 
                 paiement_stripe.save()
                 logger.info("*" * 30)
@@ -1137,6 +1133,9 @@ class Webhook_stripe(APIView):
         # elif payload.get('type') == "customer.subscription.updated":
         elif payload.get('type') == "invoice.paid":
             logger.info(f" ")
+            logger.info(payload)
+            logger.info(f" ")
+
             logger.info(f"Webhook_stripe invoice.paid : {payload}")
             payload_object = payload['data']['object']
             billing_reason = payload_object.get('billing_reason')
@@ -1184,13 +1183,6 @@ class Webhook_stripe(APIView):
                         logger.error((f'    erreur dans Webhook_stripe customer.subscription.updated : {Exception}'))
                         raise Exception
 
-                    # configuration = Configuration.get_solo()
-                    # stripe.api_key = configuration.get_stripe_api()
-                    # customer_stripe = stripe.Customer.retrieve(id_customer_stripe)
-                    # current_period_start = datetime.fromtimestamp(int(payload_object['current_period_start']))
-                    # current_period_end = datetime.fromtimestamp(int(payload_object['current_period_end']))
-                    # logger.info(f"     current_period_start : {current_period_start}")
-                    # logger.info(f"     current_period_start : {current_period_end}")
 
         # c'est une requete depuis vue.js.
         post_from_front_vue_js = payload.get('uuid')

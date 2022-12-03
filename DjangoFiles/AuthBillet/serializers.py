@@ -203,6 +203,7 @@ class MembershipSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+
 class MeReservationSerializer(serializers.ModelSerializer):
     tickets = MeTicketsSerializer(many=True)
 
@@ -220,9 +221,11 @@ class MeReservationSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+# noinspection PyUnresolvedReferences
 class MeSerializer(serializers.ModelSerializer):
     reservations = serializers.SerializerMethodField()
-    membership = MembershipSerializer(many=True)
+    membership = serializers.SerializerMethodField()
+    # membership = MembershipSerializer(many=True )
 
     # On filtre les reservation : pas plus vieille qu'une semaine.
     def get_reservations(self, user):
@@ -234,6 +237,11 @@ class MeSerializer(serializers.ModelSerializer):
         last_week = datetime.datetime.now().date() - datetime.timedelta(days=7)
         qs = Reservation.objects.filter(user_commande=user, datetime__gt=last_week, status__in=reservation_valide)
         serializer = MeReservationSerializer(instance=qs, many=True)
+        return serializer.data
+
+    def get_membership(self, user: TibilletUser):
+        qs = user.membership.filter(first_contribution__isnull=False)
+        serializer = MembershipSerializer(instance=qs, many=True)
         return serializer.data
 
     class Meta:

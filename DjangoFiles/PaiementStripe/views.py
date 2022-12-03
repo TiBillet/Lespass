@@ -36,6 +36,7 @@ class creation_paiement_stripe():
                  invoice=None,
                  ) -> None:
 
+        self.fee = False
         self.user = user
         self.email_paiement = user.email
         self.absolute_domain = absolute_domain
@@ -54,7 +55,6 @@ class creation_paiement_stripe():
         self.mode = self._mode()
         self.return_url = self._return_url()
         self.checkout_session = self._checkout_session()
-        self.fee = False
         self.suspended_cashless = False
 
     def _total(self):
