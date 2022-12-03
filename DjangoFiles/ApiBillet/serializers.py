@@ -1024,7 +1024,7 @@ class ReservationValidator(serializers.Serializer):
                     reservation.status = Reservation.FREERES_USERACTIV
                 # Sinon on attend que l'user ai vérifié son email.
                 # La fonctione presave du fichier BaseBillet.signals
-                # mettra a jour le statut de la réservation et enverra le billet dés validation de l'email
+                # mettra à jour le statut de la réservation et enverra le billet dés validation de l'email
                 else:
                     reservation.status = Reservation.FREERES
                 reservation.save()
