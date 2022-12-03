@@ -594,7 +594,11 @@ class Cancel_sub(APIView):
 
         if membership.status == Membership.AUTO:
             stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-            stripe.Subscription.delete(membership.stripe_id_subscription)
+            config = Configuration.get_solo()
+            stripe.Subscription.delete(
+                membership.stripe_id_subscription,
+                stripe_account=config.get_stripe_connect_account(),
+            )
             membership.status = Membership.CANCELED
             membership.save()
 
@@ -1132,9 +1136,9 @@ class Webhook_stripe(APIView):
         # Prélèvement automatique d'un abonnement.
         # elif payload.get('type') == "customer.subscription.updated":
         elif payload.get('type') == "invoice.paid":
-            logger.info(f" ")
-            logger.info(payload)
-            logger.info(f" ")
+            # logger.info(f" ")
+            # logger.info(payload)
+            # logger.info(f" ")
 
             logger.info(f"Webhook_stripe invoice.paid : {payload}")
             payload_object = payload['data']['object']
