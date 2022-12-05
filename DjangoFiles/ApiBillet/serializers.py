@@ -24,7 +24,7 @@ from PaiementStripe.views import creation_paiement_stripe
 
 import logging
 
-from QrcodeCashless.models import CarteCashless
+from QrcodeCashless.models import CarteCashless, Detail
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
@@ -768,6 +768,25 @@ def line_article_recharge(carte, qty):
     )
     return ligne_article_recharge
 
+
+class DetailCashlessCardsValidator(serializers.ModelSerializer):
+    class Meta:
+        model = Detail
+        fields = [
+            "base_url",
+            "origine",
+            "generation",
+        ]
+
+
+class CashlessCardsValidator(serializers.ModelSerializer):
+    class Meta:
+        model = CarteCashless
+        fields = [
+            "tag_id",
+            "uuid",
+            "number",
+        ]
 
 class ChargeCashlessValidator(serializers.Serializer):
     uuid = serializers.UUIDField()

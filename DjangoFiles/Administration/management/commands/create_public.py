@@ -19,20 +19,18 @@ class Command(BaseCommand):
         stripe_api_key = os.environ.get('STRIPE_KEY')
         stripe_test_api_key = os.environ.get('STRIPE_KEY_TEST')
 
+        # Au moins une des deux cléf.
+        if not any([stripe_api_key, stripe_test_api_key]):
+            raise Exception("Need Stripe Api Key in .env file")
+
         stripe_mode_test = True
         if os.environ.get('STRIPE_TEST') == "False":
             stripe_mode_test = False
-
-        if not all([stripe_api_key, stripe_test_api_key]):
-            raise Exception("Need Stripe Api Key in .env file")
-        else :
-            try :
-                stripe.api_key = stripe_api_key
-                stripe.Product.list()
-                stripe.api_key = stripe_test_api_key
-                stripe.Product.list()
-            except:
-                raise Exception("Stripe Api Key not valid")
+            stripe.api_key = stripe_api_key
+            stripe.Product.list()
+        else:
+            stripe.api_key = stripe_test_api_key
+            stripe.Product.list()
 
 
         tenant_public, created = Client.objects.get_or_create(

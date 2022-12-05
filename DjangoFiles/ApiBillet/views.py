@@ -28,8 +28,9 @@ from rest_framework.views import APIView
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
     ReservationValidator, MembreValidator, ConfigurationSerializer, NewConfigSerializer, \
-    EventCreateSerializer, TicketSerializer, OptionTicketSerializer, ChargeCashlessValidator, NewAdhesionValidator
-from AuthBillet.models import TenantAdminPermission, TibilletUser
+    EventCreateSerializer, TicketSerializer, OptionTicketSerializer, ChargeCashlessValidator, NewAdhesionValidator, \
+    DetailCashlessCardsValidator
+from AuthBillet.models import TenantAdminPermission, TibilletUser, RootPermission
 from AuthBillet.utils import user_apikey_valid, get_or_create_user
 from BaseBillet.tasks import create_ticket_pdf
 from Customers.models import Client, Domain
@@ -412,6 +413,29 @@ class EventsViewSet(viewsets.ViewSet):
 
 
 
+class DetailCashlessCards(viewsets.ViewSet):
+    def create(self, request):
+        validator = DetailCashlessCardsValidator(data=request.data, context={'request': request})
+        if validator.is_valid():
+            logger.info('Detail valide')
+            validator.save()
+            # serializer.save()
+            return Response(validator.data, status=status.HTTP_201_CREATED)
+        return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def get_permissions(self):
+        permission_classes = [RootPermission]
+        return [permission() for permission in permission_classes]
+
+
+class CashlessCards(viewsets.ViewSet):
+    def create(self, request):
+        pass
+
+    def get_permissions(self):
+        permission_classes = [RootPermission]
+        return [permission() for permission in permission_classes]
+
 
 class ChargeCashless(viewsets.ViewSet):
     def create(self, request):
@@ -513,8 +537,12 @@ def borne_temps_4h():
     else:
         return debut_jour, lendemain_quatre_heure
 
+
+
+
+'''
 @permission_classes([permissions.IsAuthenticated])
-class Load_cards(APIView):
+class LoadCardsFromCsv(APIView):
 
     def is_string_an_url(self, url_string):
         validate_url = URLValidator()
@@ -579,6 +607,7 @@ class Load_cards(APIView):
 
         return Response('Mauvais formatage de fichier.', status=status.HTTP_406_NOT_ACCEPTABLE)
         # import ipdb; ipdb.set_trace()
+'''
 
 
 @permission_classes([permissions.IsAuthenticated])
