@@ -124,14 +124,6 @@ export const useEventStore = defineStore({
         return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
       })
     },
-    getCustomersByUuidPrix(priceUuid) {
-      // console.log('-> fonc getCustomersByUuidPrix !')
-      try {
-        return this.forms.find(obj => obj.event === this.event.uuid).prices.find(obj => obj.uuid === priceUuid).customers
-      } catch (e) {
-        return []
-      }
-    },
     addCustomer(priceUuid) {
       // console.log('-> fonc addCustomer !')
       let prix = this.forms.find(obj => obj.event === this.event.uuid).prices
@@ -174,8 +166,11 @@ export const useEventStore = defineStore({
     },
     stop(priceUuid, stock, maxPerUser) {
       // console.log('-> fonc stop !')
-      const price = this.forms.find(obj => obj.event === this.event.uuid).prices.find(obj2 => obj2.uuid === priceUuid)
       // --- gestion de l'affichage du bouton "+" ---
+      let price = undefined
+      if (this.forms.length > 0) {
+        price = this.forms.find(obj => obj.event === this.event.uuid).prices.find(obj2 => obj2.uuid === priceUuid)
+      }
       // aucun ajout
       if (price === undefined) {
         return false
@@ -275,6 +270,16 @@ export const useEventStore = defineStore({
 
   },
   getters: {
+    getCustomersByUuidPrix(state) {
+      return (priceUuid) => {
+        // console.log('-> fonc getCustomersByUuidPrix !')
+        try {
+          return this.forms.find(obj => obj.event === this.event.uuid).prices.find(obj => obj.uuid === priceUuid).customers
+        } catch (e) {
+          return []
+        }
+      }
+    },
     getExistGift: (state) => {
       let retour = false
       if (state.event.products.filter(prod => prod.categorie_article === 'D').length > 0) {

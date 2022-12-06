@@ -77,6 +77,7 @@ const email = route.query.email
 // load event
 getEventBySlug(slug, email)
 
+
 // formatage des données POST events
 function formatBodyPost() {
   // console.log('-> fonc formatBodyPost !')
@@ -214,7 +215,14 @@ function validerAchats(domEvent) {
           loading.value = false
           if (response.checkout_url !== undefined) {
             // active "l'étape stripe"
-            setEtapeStripe(event.value.uuid)
+            if (route.path.indexOf('embed') !== -1) {
+              // reste sur l'event
+              setEtapeStripe({formEventUuid: event.value.uuid, nextPath: route.path})
+            } else {
+              // va à l'accueil
+              setEtapeStripe({formEventUuid: event.value.uuid, nextPath: '/'})
+            }
+
 
             // paiement, redirection vers stripe
             window.location.assign(response.checkout_url)

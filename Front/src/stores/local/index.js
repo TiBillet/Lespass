@@ -64,13 +64,10 @@ export const useLocalStore = defineStore({
         if (this.stripeEtape !== null) {
           const eventStore = useEventStore()
           // this.stripeEtape = uuid du formulaire
-          eventStore.deleteForm(this.stripeEtape)
-          // désactive "l'étape stripe"
-          this.stripeEtape = null
+          eventStore.deleteForm(this.stripeEtape.formEventUuid)
         }
       }).catch(function (erreur) {
         console.log('/api/webhook_stripe/ -> erreur: ', erreur)
-        this.stripeEtape = null
         emitter.emit('modalMessage', {
           titre: 'Erreur',
           dynamic: true,

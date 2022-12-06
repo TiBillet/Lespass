@@ -9,7 +9,7 @@ let page
 const email = process.env.EMAIL
 const urlTester = 'https://raffinerie.django-local.org'
 
-test.describe('Route iframeevent.', () => {
+test.describe('Route event/embed/.', () => {
   test('Formulaire réservation puis stripe.', async ({browser}) => {
     page = await browser.newPage()
 
