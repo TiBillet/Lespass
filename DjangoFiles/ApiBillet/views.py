@@ -28,8 +28,9 @@ from rest_framework.views import APIView
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
     ReservationValidator, MembreValidator, ConfigurationSerializer, NewConfigSerializer, \
-    EventCreateSerializer, TicketSerializer, OptionTicketSerializer, ChargeCashlessValidator, NewAdhesionValidator
-from AuthBillet.models import TenantAdminPermission, TibilletUser
+    EventCreateSerializer, TicketSerializer, OptionTicketSerializer, ChargeCashlessValidator, NewAdhesionValidator, \
+    DetailCashlessCardsValidator
+from AuthBillet.models import TenantAdminPermission, TibilletUser, RootPermission
 from AuthBillet.utils import user_apikey_valid, get_or_create_user
 from BaseBillet.tasks import create_ticket_pdf
 from Customers.models import Client, Domain
@@ -412,6 +413,29 @@ class EventsViewSet(viewsets.ViewSet):
 
 
 
+class DetailCashlessCards(viewsets.ViewSet):
+    def create(self, request):
+        validator = DetailCashlessCardsValidator(data=request.data, context={'request': request})
+        if validator.is_valid():
+            logger.info('Detail valide')
+            validator.save()
+            # serializer.save()
+            return Response(validator.data, status=status.HTTP_201_CREATED)
+        return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def get_permissions(self):
+        permission_classes = [RootPermission]
+        return [permission() for permission in permission_classes]
+
+
+class CashlessCards(viewsets.ViewSet):
+    def create(self, request):
+        pass
+
+    def get_permissions(self):
+        permission_classes = [RootPermission]
+        return [permission() for permission in permission_classes]
+
 
 class ChargeCashless(viewsets.ViewSet):
     def create(self, request):
@@ -513,8 +537,12 @@ def borne_temps_4h():
     else:
         return debut_jour, lendemain_quatre_heure
 
+
+
+
+'''
 @permission_classes([permissions.IsAuthenticated])
-class Load_cards(APIView):
+class LoadCardsFromCsv(APIView):
 
     def is_string_an_url(self, url_string):
         validate_url = URLValidator()
@@ -579,6 +607,7 @@ class Load_cards(APIView):
 
         return Response('Mauvais formatage de fichier.', status=status.HTTP_406_NOT_ACCEPTABLE)
         # import ipdb; ipdb.set_trace()
+'''
 
 
 @permission_classes([permissions.IsAuthenticated])
@@ -594,7 +623,11 @@ class Cancel_sub(APIView):
 
         if membership.status == Membership.AUTO:
             stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-            stripe.Subscription.delete(membership.stripe_id_subscription)
+            config = Configuration.get_solo()
+            stripe.Subscription.delete(
+                membership.stripe_id_subscription,
+                stripe_account=config.get_stripe_connect_account(),
+            )
             membership.status = Membership.CANCELED
             membership.save()
 
@@ -950,14 +983,10 @@ def paiment_stripe_validator(request, paiement_stripe):
                         paiement_stripe.subscription = checkout_session.subscription
                         subscription = stripe.Subscription.retrieve(
                             checkout_session.subscription,
+                            stripe_account=config.get_stripe_connect_account()
                         )
                         paiement_stripe.invoice_stripe = subscription.latest_invoice
 
-                # TODO: ya pu de get, tout est POST, même la requete depuis le front vue.js
-                # if request.method == 'GET':
-                #     paiement_stripe.source_traitement = Paiement_stripe.GET
-                # else:
-                #     paiement_stripe.source_traitement = Paiement_stripe.WEBHOOK
 
                 paiement_stripe.save()
                 logger.info("*" * 30)
@@ -1119,23 +1148,7 @@ class Webhook_stripe(APIView):
             logger.info(f"Webhook_stripe checkout.session.completed : {payload}")
             tenant_uuid_in_metadata = payload["data"]["object"]["metadata"]["tenant"]
 
-            '''
-            # Avant, nous re-créions une requete via celery sur le bon tenant
-            if f"{connection.tenant.uuid}" != tenant_uuid_in_metadata:
-                with tenant_context(Client.objects.get(uuid=tenant_uuid_in_metadata)):
-                    paiement_stripe = get_object_or_404(Paiement_stripe,
-                                                        checkout_session_id_stripe=payload['data']['object']['id'])
-
-                tenant = Client.objects.get(uuid=tenant_uuid_in_metadata)
-                url_redirect = f"https://{tenant.domains.all().first().domain}{request.path}"
-
-                # On lance la requete nous même aussi,
-                # de telle sorte que ça soit déja validé
-                # lorsque le client arrive sur la page de redirection
-                task = redirect_post_webhook_stripe_from_public.delay(url_redirect, request.data)
-                return Response(f"redirect to {url_redirect} with celery", status=status.HTTP_200_OK)
-            '''
-
+            # On utilise les metadata du paiement stripe pour savoir de quel tenant cela vient.
             if f"{connection.tenant.uuid}" != tenant_uuid_in_metadata:
                 with tenant_context(Client.objects.get(uuid=tenant_uuid_in_metadata)):
                     paiement_stripe = get_object_or_404(Paiement_stripe,
@@ -1152,7 +1165,10 @@ class Webhook_stripe(APIView):
         # Prélèvement automatique d'un abonnement.
         # elif payload.get('type') == "customer.subscription.updated":
         elif payload.get('type') == "invoice.paid":
-            logger.info(f" ")
+            # logger.info(f" ")
+            # logger.info(payload)
+            # logger.info(f" ")
+
             logger.info(f"Webhook_stripe invoice.paid : {payload}")
             payload_object = payload['data']['object']
             billing_reason = payload_object.get('billing_reason')
@@ -1200,13 +1216,6 @@ class Webhook_stripe(APIView):
                         logger.error((f'    erreur dans Webhook_stripe customer.subscription.updated : {Exception}'))
                         raise Exception
 
-                    # configuration = Configuration.get_solo()
-                    # stripe.api_key = configuration.get_stripe_api()
-                    # customer_stripe = stripe.Customer.retrieve(id_customer_stripe)
-                    # current_period_start = datetime.fromtimestamp(int(payload_object['current_period_start']))
-                    # current_period_end = datetime.fromtimestamp(int(payload_object['current_period_end']))
-                    # logger.info(f"     current_period_start : {current_period_start}")
-                    # logger.info(f"     current_period_start : {current_period_end}")
 
         # c'est une requete depuis vue.js.
         post_from_front_vue_js = payload.get('uuid')

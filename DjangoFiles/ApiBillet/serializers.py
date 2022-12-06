@@ -24,7 +24,7 @@ from PaiementStripe.views import creation_paiement_stripe
 
 import logging
 
-from QrcodeCashless.models import CarteCashless
+from QrcodeCashless.models import CarteCashless, Detail
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
@@ -769,6 +769,25 @@ def line_article_recharge(carte, qty):
     return ligne_article_recharge
 
 
+class DetailCashlessCardsValidator(serializers.ModelSerializer):
+    class Meta:
+        model = Detail
+        fields = [
+            "base_url",
+            "origine",
+            "generation",
+        ]
+
+
+class CashlessCardsValidator(serializers.ModelSerializer):
+    class Meta:
+        model = CarteCashless
+        fields = [
+            "tag_id",
+            "uuid",
+            "number",
+        ]
+
 class ChargeCashlessValidator(serializers.Serializer):
     uuid = serializers.UUIDField()
     qty = serializers.IntegerField()
@@ -1024,7 +1043,7 @@ class ReservationValidator(serializers.Serializer):
                     reservation.status = Reservation.FREERES_USERACTIV
                 # Sinon on attend que l'user ai vérifié son email.
                 # La fonctione presave du fichier BaseBillet.signals
-                # mettra a jour le statut de la réservation et enverra le billet dés validation de l'email
+                # mettra à jour le statut de la réservation et enverra le billet dés validation de l'email
                 else:
                     reservation.status = Reservation.FREERES
                 reservation.save()

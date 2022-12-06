@@ -105,7 +105,12 @@ def get_or_create_user(email, password=None, set_active=False, send_mail=True, f
     else:
         if user.email_error:
             return False
+
         if force_mail:
+            sender_mail_connect(user.email)
+        elif user.is_active == False:
+            # Si l'utilisateur est inactif, il n'a pas encore validé son mail
+            # Si la demande vient après la création, on relance le mail de validation.
             sender_mail_connect(user.email)
 
     return user

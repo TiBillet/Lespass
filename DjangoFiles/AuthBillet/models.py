@@ -15,6 +15,12 @@ from rest_framework import permissions
 
 
 
+class RootPermission(permissions.BasePermission):
+    message = 'No root'
+
+    def has_permission(self, request, view):
+        return request.user.is_superuser
+
 
 class TenantAdminPermission(permissions.BasePermission):
     message = 'No admin in tenant'
