@@ -252,6 +252,10 @@ export const useEventStore = defineStore({
       let gift = this.forms.find(obj => obj.event === this.event.uuid).gifts.find(obj2 => obj2.uuidGift === uuidGift)
       gift.enable = value
     },
+    deleteForm(uuid) {
+      const newForms = this.forms.filter(obj => obj.event !== uuid)
+      this.forms = newForms
+    },
     getEventHeader() {
       // console.log('-> action getHeaderEvent')
       let urlImage
