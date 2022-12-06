@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class Detail(models.Model):
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     img = StdImageField(upload_to='images/',
                         null=True, blank=True,
                         validators=[MaxSizeValidator(1920, 1920)],
