@@ -1,7 +1,4 @@
 <template>
-  <!-- info getEventHeader en tant qu'action () est contractuel, le getter donne des données antérieures -->
-  <!-- <Header :data-header="getEventHeader()"/> -->
-
   <div v-if="Object.entries(event).length > 0" class="container mt-5">
 
     <!-- artistes -->
@@ -182,14 +179,6 @@ function validerAchats(domEvent) {
         buyEnable = true
       }
 
-      /*
-      // cashless présent et valeur supérieure à 0
-      if (document.querySelector('#charge_cashless') !== null && parseFloat(document.querySelector('#charge_cashless').value) > 0) {
-        buyEnable = true
-      }
-
-       */
-
       // lancement achat
       if (buyEnable === true) {
         const body = JSON.stringify(formatBodyPost())
@@ -224,8 +213,8 @@ function validerAchats(domEvent) {
         }).then((response) => {
           loading.value = false
           if (response.checkout_url !== undefined) {
-            // enregistre "l'étape stripe"
-            setEtapeStripe('attente_stripe_reservation')
+            // active "l'étape stripe"
+            setEtapeStripe(event.value.uuid)
 
             // paiement, redirection vers stripe
             window.location.assign(response.checkout_url)
@@ -240,7 +229,8 @@ function validerAchats(domEvent) {
           }
         }).catch((erreur) => {
           loading.value = false
-          setEtapeStripe('attente_stripe_desactivee')
+          // désactive "l'étape stripe"
+          setEtapeStripe(null)
           emitter.emit('modalMessage', {
             titre: 'Erreur(s)',
             // contenu = html => dynamic = true

@@ -1,5 +1,6 @@
 import {defineStore} from 'pinia'
 import {useAllStore} from '@/stores/all'
+import {useEventStore} from '@/stores/event'
 
 const domain = `${location.protocol}//${location.host}`
 
@@ -13,7 +14,7 @@ export const useLocalStore = defineStore({
       reservations: [],
       membership: []
     },
-    stripeEtape: ''
+    stripeEtape: null
   }),
   actions: {
     // status 226 = 'Paiement validé. Création des billets et envoi par mail en cours.' côté serveur
@@ -32,7 +33,7 @@ export const useLocalStore = defineStore({
       }
 
       // reservation(s)
-      if (this.stripeEtape === 'attente_stripe_reservation') {
+      if (this.stripeEtape !== null) {
         messageValidation = `<h3>Paiement validé.</h3>`
         messageErreur = `Retour stripe pour une/des réservation(s):`
       }
@@ -59,9 +60,17 @@ export const useLocalStore = defineStore({
           typeMsg: 'success',
           contenu: messageValidation
         })
+        // supprimer le formulaire de la réservation validée
+        if (this.stripeEtape !== null) {
+          const eventStore = useEventStore()
+          // this.stripeEtape = uuid du formulaire
+          eventStore.deleteForm(this.stripeEtape)
+          // désactive "l'étape stripe"
+          this.stripeEtape = null
+        }
       }).catch(function (erreur) {
-        this.stripeEtape = ''
         console.log('/api/webhook_stripe/ -> erreur: ', erreur)
+        this.stripeEtape = null
         emitter.emit('modalMessage', {
           titre: 'Erreur',
           dynamic: true,
@@ -235,7 +244,7 @@ export const useLocalStore = defineStore({
       }
     }
   },
-   getters: {
+  getters: {
     getEmail: (state) => {
       return state.email
     }

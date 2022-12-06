@@ -28,9 +28,9 @@ const routes = [
   },
   {
     // /search/screens -> /search?q=screens
-    path: '/iframeevent/:slug',
-    name: 'IframeEvent',
-    component: () => import(/* webpackChunkName: "IframeEvent" */ '../views/Event.vue'),
+    path: '/event/embed/:slug',
+    name: 'EventEmbed',
+    component: () => import(/* webpackChunkName: "Event" */ '../views/Event.vue'),
   },
   {
     path: '/event/:slug',
@@ -98,7 +98,7 @@ router.beforeEach((to, from, next) => {
   // par défaut le header et la navbar son affiché
   const {setIdentitySite} = useAllStore()
   setIdentitySite(true)
-  if (to.name === "IframeEvent") {
+  if (to.name === "EventEmbed") {
     setIdentitySite(false)
   }
 
