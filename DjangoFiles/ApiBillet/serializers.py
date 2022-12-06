@@ -1,4 +1,5 @@
 import datetime
+import uuid
 
 import requests
 import stripe
@@ -778,15 +779,67 @@ class DetailCashlessCardsValidator(serializers.ModelSerializer):
             "generation",
         ]
 
-
-class CashlessCardsValidator(serializers.ModelSerializer):
+class DetailCashlessCardsSerializer(serializers.ModelSerializer):
     class Meta:
-        model = CarteCashless
+        model = Detail
         fields = [
-            "tag_id",
+            "base_url",
+            "origine",
+            "generation",
             "uuid",
-            "number",
         ]
+
+
+
+class CashlessCardsValidator(serializers.Serializer):
+    # detail_uuid = serializers.UUIDField()
+    generation = serializers.IntegerField(required=True)
+    url = serializers.URLField(required=True)
+    detail = serializers.UUIDField(required=False)
+    tag_id = serializers.CharField(required=True)
+    number = serializers.CharField(required=True)
+
+    def validate_generation(self, value):
+        self.generation = int(value)
+        return value
+
+    def validate_url(self, value):
+
+        part = value.partition('/qr/')
+        base_url = f"{part[0]}{part[1]}"
+        uuid_qrcode = part[2]
+
+        # On teste si l'uuid est valide
+        assert uuid.UUID(uuid_qrcode, version=4)
+
+        # On teste que la db Detail existe bien en amont
+        self.detail_from_db = get_object_or_404(Detail, base_url=base_url, generation=self.generation)
+
+        return value
+
+    def validate_detail(self, value):
+        detailDb = get_object_or_404(Detail, uuid=value)
+
+        if self.detail_from_db != detailDb :
+            raise serializers.ValidationError(_(f'erreur url carte != detail uuid'))
+
+        return value
+
+    # def to_representation(self, data):
+        # data contiendra la liste d'objets à représenter
+        # representation = super().to_representation(data)
+
+        # for obj in representation:
+        #     obj['uuid_qrcode'] = self.uuid_qrcode
+        #     obj['detail'] = self.detail
+        # return representation
+
+    def validate(self, attrs):
+        if not attrs.get('detail') and self.detail_from_db :
+            attrs['detail'] = self.detail_from_db.uuid
+        validation = super().validate(attrs)
+        return validation
+
 
 class ChargeCashlessValidator(serializers.Serializer):
     uuid = serializers.UUIDField()

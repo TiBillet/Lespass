@@ -29,7 +29,7 @@ from rest_framework.views import APIView
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
     ReservationValidator, MembreValidator, ConfigurationSerializer, NewConfigSerializer, \
     EventCreateSerializer, TicketSerializer, OptionTicketSerializer, ChargeCashlessValidator, NewAdhesionValidator, \
-    DetailCashlessCardsValidator
+    DetailCashlessCardsValidator, DetailCashlessCardsSerializer, CashlessCardsValidator
 from AuthBillet.models import TenantAdminPermission, TibilletUser, RootPermission
 from AuthBillet.utils import user_apikey_valid, get_or_create_user
 from BaseBillet.tasks import create_ticket_pdf
@@ -417,10 +417,12 @@ class DetailCashlessCards(viewsets.ViewSet):
     def create(self, request):
         validator = DetailCashlessCardsValidator(data=request.data, context={'request': request})
         if validator.is_valid():
-            logger.info('Detail valide')
-            validator.save()
-            # serializer.save()
-            return Response(validator.data, status=status.HTTP_201_CREATED)
+            with schema_context('public'):
+                logger.info('Detail valide')
+                detailC = validator.save()
+                serializer = DetailCashlessCardsSerializer(detailC)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+
         return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_permissions(self):
@@ -428,9 +430,39 @@ class DetailCashlessCards(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
-class CashlessCards(viewsets.ViewSet):
+class Loadcardsfromdict(viewsets.ViewSet):
     def create(self, request):
-        pass
+        # logger.info(request.data)
+        validator = CashlessCardsValidator(data=request.data, many=True)
+        if validator.is_valid():
+            prems = validator.data[0]
+            detail = Detail.objects.get(uuid=prems.get('detail'))
+            for carte in validator.data:
+                part = carte.get('url').partition('/qr/')
+                base_url = f"{part[0]}{part[1]}"
+                uuid_qrcode = uuid.UUID(part[2], version=4)
+                if detail.uuid == uuid.UUID(carte.get('detail'), version=4) and base_url == detail.base_url :
+                    try:
+                        carte, created = CarteCashless.objects.get_or_create(
+                            tag_id=carte['tag_id'],
+                            uuid=uuid_qrcode,
+                            number=carte['number'],
+                            detail=detail,
+                        )
+                        logger.info(f"{created}: {carte}")
+
+                    except Exception as e:
+                        logger.error(e)
+                        Response(_(f"Erreur d'importation {e}"),
+                            status=status.HTTP_406_NOT_ACCEPTABLE)
+                else:
+                    Response(_(f"Erreur d'importation : Detail ne correspond pas"),
+                             status=status.HTTP_406_NOT_ACCEPTABLE)
+
+            return Response("poulpe", status=status.HTTP_200_OK)
+
+        return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
     def get_permissions(self):
         permission_classes = [RootPermission]
