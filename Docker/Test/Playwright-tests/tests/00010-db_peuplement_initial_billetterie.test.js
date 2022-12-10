@@ -1,38 +1,13 @@
 import {expect, test} from '@playwright/test'
-import * as dotenv from 'dotenv'
-import moment from 'moment'
+import {getRootJWT, randomDate} from '../mesModules/commun.js'
 
-function randomDate() {
-  const dateR = moment()
-  const randomNbDays = (Math.random() * 365) + 1
-  dateR.add(randomNbDays, 'days')
-  dateR.format("YYYY-MM-DD")
-  return dateR
-}
-
-dotenv.config('../.env')
 
 const email = process.env.TEST_MAIL
 let tokenBilletterie, uuidS = []
 
-test.describe('Api pop db.', () => {
-  test('GeT Root JWT Token', async ({request}) => {
-    const response = await request.post(process.env.URL_ROOT + '/api/user/token/', {
-      headers: {
-        "Content-Type": "application/json"
-      },
-      data: {
-        username: process.env.EMAIL_ROOT,
-        password: process.env.PASSWORD_ROOT
-      }
-    })
-
-    const retour = await response.json()
-    tokenBilletterie = retour.access
-    expect(response.ok()).toBeTruthy()
-  })
-
+test.describe('Peuplement initial de la db "billetterie".', () => {
   test('Place rafftou create', async ({request}) => {
+    tokenBilletterie = await getRootJWT()
     const response = await request.post(process.env.URL_META + '/api/place/', {
       headers: {
         "Content-Type": "application/json"

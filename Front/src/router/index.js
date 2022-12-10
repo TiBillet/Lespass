@@ -130,14 +130,20 @@ router.beforeEach((to, from, next) => {
 
   // intercepte retour de stripe
   if (to.name === "StripeReturn") {
+    const localstore = useLocalStore()
     // console.log('--------------------------------------------------------------------------------------------------')
     // console.log('Interception "StripeReturn" !')
     // console.log('to =', to)
+
+
+    // redirection en fonction de l'url provenant stripeEtape définie dans Event.vue
+    // console.log('stripeEtape =', localstore.stripeEtape)
+    nouvelleRoute = localstore.stripeEtape.nextPath
+
     const uuidStripe = to.params.id
     // console.log('uuidStripe =', uuidStripe)
     if (uuidStripe !== undefined) {
-      const {postStripeReturn} = useLocalStore()
-      postStripeReturn(uuidStripe)
+      localstore.postStripeReturn(uuidStripe)
     } else {
       emitter.emit('message', {
         tmp: 6,
@@ -145,12 +151,10 @@ router.beforeEach((to, from, next) => {
         contenu: `Retour stipe, erreur: id indéfini !`
       })
     }
-    nouvelleRoute = '/'
     redirection = true
   }
 
   if (redirection === true) {
-
     next({
       path: nouvelleRoute,
       replace: true
