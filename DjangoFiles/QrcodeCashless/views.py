@@ -84,8 +84,8 @@ class index_scan(View):
     def get(self, request, uuid):
         logger.info(f'index_scan : {uuid}')
 
-        # dette technique ...
-        # pour rediriger les premières générations de qrcode
+        # Dette technique ...
+        # Pour rediriger les premières générations de qrcode
         # m.tibillet.re et raffinerie
         address = request.build_absolute_uri()
         host = address.partition('://')[2]
@@ -115,7 +115,10 @@ class index_scan(View):
                     his['date'] = datetime.fromisoformat(his['date'])
 
             data = {
-                'tarifs_adhesion': Price.objects.filter(product__categorie_article=Product.ADHESION),
+                'tarifs_adhesion': Price.objects.filter(
+                    product__categorie_article=Product.ADHESION,
+                    product__send_to_cashless=True,
+                ),
                 'adhesion_obligatoire': configuration.adhesion_obligatoire,
                 'history': json_reponse.get('history'),
                 'carte_resto': configuration.carte_restaurant,

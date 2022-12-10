@@ -198,12 +198,11 @@ class Configuration(SingletonModel):
         else:
             return self.stripe_connect_account
 
-
     def get_stripe_payouts(self):
         stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
         id_acc_connect = self.get_stripe_connect_account()
 
-        if id_acc_connect :
+        if id_acc_connect:
             info_stripe = stripe.Account.retrieve(id_acc_connect)
             self.stripe_payouts_enabled = info_stripe.get('payout_enabled')
             self.save()
@@ -430,6 +429,11 @@ class Price(models.Model):
                                          default=NA,
                                          verbose_name=_("durée d'abonnement"),
                                          )
+    recurring_payment = models.BooleanField(default=False,
+                                           verbose_name="Paiement récurrent",
+                                           help_text="Paiement récurrent avec Stripe, "
+                                                     "ne peux être utilisé avec un autre article dans le panier",
+                                           )
 
     # def range_max(self):
     #     return range(self.max_per_user + 1)
@@ -691,7 +695,7 @@ class PriceSold(models.Model):
             'unit_amount': int("{0:.2f}".format(self.price.prix).replace('.', '')),
             'currency': "eur",
             'product': product_stripe,
-            'stripe_account' : config.get_stripe_connect_account(),
+            'stripe_account': config.get_stripe_connect_account(),
             'nickname': f"{self.price.name}",
         }
 
@@ -1155,6 +1159,7 @@ class ExternalApiKey(models.Model):
     class Meta:
         verbose_name = _('Api key')
         verbose_name_plural = _('Api keys')
+
 
 class Webhook(models.Model):
     active = models.BooleanField(default=False)

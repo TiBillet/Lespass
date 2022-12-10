@@ -233,7 +233,6 @@ class WebhookAdmin(admin.ModelAdmin):
 
 staff_admin_site.register(Webhook, WebhookAdmin)
 
-
 ########################################################################
 class ConfigurationAdmin(SingletonModelAdmin):
     # readonly_fields = []
@@ -253,22 +252,22 @@ class ConfigurationAdmin(SingletonModelAdmin):
                 'map_img',
             )
         }),
-        ('Restaurant', {
-            'fields': (
-                'carte_restaurant',
-            ),
-        }),
-        ('Social', {
-            'fields': (
-                'twitter',
-                'facebook',
-                'instagram',
-            ),
-        }),
+        # ('Restaurant', {
+        #     'fields': (
+        #         'carte_restaurant',
+        #     ),
+        # }),
+        # ('Social', {
+        #     'fields': (
+        #         'twitter',
+        #         'facebook',
+        #         'instagram',
+        #     ),
+        # }),
         ('Adhésions', {
             'fields': (
                 'adhesion_obligatoire',
-                'button_adhesion',
+                # 'button_adhesion',
             ),
         }),
         ('Paiements', {
@@ -284,8 +283,8 @@ class ConfigurationAdmin(SingletonModelAdmin):
                 # 'template_billetterie',
                 # 'template_meta',
                 'jauge_max',
-                'option_generale_radio',
-                'option_generale_checkbox',
+                # 'option_generale_radio',
+                # 'option_generale_checkbox',
             ),
         }),
         ('Cashless', {
@@ -603,7 +602,8 @@ class PriceAdmin(admin.ModelAdmin):
         'name',
         'prix',
         'adhesion_obligatoire',
-        'subscription_type'
+        'subscription_type',
+        'recurring_payment'
     )
     ordering = ('product',)
 

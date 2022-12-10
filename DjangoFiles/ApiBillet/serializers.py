@@ -105,7 +105,8 @@ class PriceSerializer(serializers.ModelSerializer):
             'stock',
             'max_per_user',
             'adhesion_obligatoire',
-            'subscription_type'
+            'subscription_type',
+            'recurring_payment'
         ]
 
         read_only_fields = [

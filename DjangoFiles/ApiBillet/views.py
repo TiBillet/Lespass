@@ -54,12 +54,11 @@ logger = logging.getLogger(__name__)
 # Si c'est list/retrieve -> pour tout le monde
 # Sinon, on vérifie la clé api
 def get_permission_Api_LR_Any(self):
-
     # Si c'est une auth avec APIKEY,
     # on vérifie avec notre propre moteur
     # Si l'user est rendu, la clé est valide
     user_api = user_apikey_valid(self)
-    if user_api :
+    if user_api:
         permission_classes = []
         self.request.user = user_api
 
@@ -85,7 +84,6 @@ def get_permission_Api_LR_Admin(self):
 
 
 class TarifBilletViewSet(viewsets.ViewSet):
-
 
     def list(self, request):
         queryset = Price.objects.all().order_by('prix')
@@ -128,7 +126,6 @@ class ProductViewSet(viewsets.ViewSet):
         return get_permission_Api_LR_Any(self)
 
 
-
 class TenantViewSet(viewsets.ViewSet):
 
     def create(self, request):
@@ -141,7 +138,7 @@ class TenantViewSet(viewsets.ViewSet):
         #         _("Vous n'avez pas la permission de créer de nouvelles instances sur ce serveur."))
 
         # Le slug est-il disponible ?
-        try :
+        try:
             slug = slugify(request.data.get('organisation'))
             Client.objects.get(schema_name=slug)
             return Response(
@@ -149,7 +146,6 @@ class TenantViewSet(viewsets.ViewSet):
                 status=status.HTTP_409_CONFLICT)
         except Client.DoesNotExist:
             pass
-
 
         # L'url correspond bien à la catégorie choisie ?
         if not request.data.get('categorie'):
@@ -209,9 +205,9 @@ class TenantViewSet(viewsets.ViewSet):
 
                 conf.stripe_mode_test = rootConf.stripe_mode_test
 
-                if rootConf.stripe_mode_test :
+                if rootConf.stripe_mode_test:
                     conf.stripe_connect_account_test = info_stripe.id
-                else :
+                else:
                     conf.stripe_connect_account = info_stripe.id
 
                 if getattr(serializer, 'img_img', None):
@@ -288,7 +284,6 @@ class TenantViewSet(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
-
 class HereViewSet(viewsets.ViewSet):
 
     def list(self, request):
@@ -313,8 +308,6 @@ class HereViewSet(viewsets.ViewSet):
         return get_permission_Api_LR_Any(self)
 
 
-
-
 class EventsSlugViewSet(viewsets.ViewSet):
     def retrieve(self, request, pk=None):
         queryset = Event.objects.all().order_by('-datetime')
@@ -324,7 +317,6 @@ class EventsSlugViewSet(viewsets.ViewSet):
 
     def get_permissions(self):
         return get_permission_Api_LR_Any(self)
-
 
 
 class EventsViewSet(viewsets.ViewSet):
@@ -411,8 +403,6 @@ class EventsViewSet(viewsets.ViewSet):
         return get_permission_Api_LR_Any(self)
 
 
-
-
 class DetailCashlessCards(viewsets.ViewSet):
     def create(self, request):
         validator = DetailCashlessCardsValidator(data=request.data, context={'request': request})
@@ -430,9 +420,14 @@ class DetailCashlessCards(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
+
+
+
+
 class Loadcardsfromdict(viewsets.ViewSet):
     def create(self, request):
         # logger.info(request.data)
+
         validator = CashlessCardsValidator(data=request.data, many=True)
         if validator.is_valid():
             prems = validator.data[0]
@@ -441,7 +436,7 @@ class Loadcardsfromdict(viewsets.ViewSet):
                 part = carte.get('url').partition('/qr/')
                 base_url = f"{part[0]}{part[1]}"
                 uuid_qrcode = uuid.UUID(part[2], version=4)
-                if detail.uuid == uuid.UUID(carte.get('detail'), version=4) and base_url == detail.base_url :
+                if detail.uuid == uuid.UUID(carte.get('detail'), version=4) and base_url == detail.base_url:
                     try:
                         carte, created = CarteCashless.objects.get_or_create(
                             tag_id=carte['tag_id'],
@@ -454,7 +449,7 @@ class Loadcardsfromdict(viewsets.ViewSet):
                     except Exception as e:
                         logger.error(e)
                         Response(_(f"Erreur d'importation {e}"),
-                            status=status.HTTP_406_NOT_ACCEPTABLE)
+                                 status=status.HTTP_406_NOT_ACCEPTABLE)
                 else:
                     Response(_(f"Erreur d'importation : Detail ne correspond pas"),
                              status=status.HTTP_406_NOT_ACCEPTABLE)
@@ -462,7 +457,6 @@ class Loadcardsfromdict(viewsets.ViewSet):
             return Response("poulpe", status=status.HTTP_200_OK)
 
         return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
     def get_permissions(self):
         permission_classes = [RootPermission]
@@ -512,7 +506,6 @@ class ReservationViewset(viewsets.ViewSet):
         return Response(serializer.data)
 
     def create(self, request):
-
         # import ipdb; ipdb.set_trace()
         logger.info(f"ReservationViewset CREATE : {request.data}")
 
@@ -525,7 +518,6 @@ class ReservationViewset(viewsets.ViewSet):
 
     def get_permissions(self):
         return get_permission_Api_LR_Admin(self)
-
 
 
 class OptionTicket(viewsets.ViewSet):
@@ -568,8 +560,6 @@ def borne_temps_4h():
         return debut_jour - timedelta(days=1), debut_jour
     else:
         return debut_jour, lendemain_quatre_heure
-
-
 
 
 '''
@@ -709,7 +699,6 @@ class TicketViewset(viewsets.ViewSet):
         ticket = get_object_or_404(queryset, pk=pk)
         serializer = TicketSerializer(ticket)
         return Response(serializer.data)
-
 
     def get_permissions(self):
         return get_permission_Api_LR_Admin(self)
@@ -1019,7 +1008,6 @@ def paiment_stripe_validator(request, paiement_stripe):
                         )
                         paiement_stripe.invoice_stripe = subscription.latest_invoice
 
-
                 paiement_stripe.save()
                 logger.info("*" * 30)
                 logger.info(
@@ -1117,10 +1105,12 @@ def paiment_stripe_validator(request, paiement_stripe):
 
     raise Http404(f'{paiement_stripe.status}')
 
+
 def info_stripe(id_acc_connect):
     stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
     info_stripe = stripe.Account.retrieve(id_acc_connect)
     return info_stripe
+
 
 def account_link(id_acc_connect=False):
     rootConf = RootConfiguration.get_solo()
@@ -1129,7 +1119,7 @@ def account_link(id_acc_connect=False):
     meta = Client.objects.filter(categorie=Client.META)[0]
     meta_url = meta.get_primary_domain().domain
 
-    if not id_acc_connect :
+    if not id_acc_connect:
         acc_connect = stripe.Account.create(
             type="standard",
             country="FR",
@@ -1146,15 +1136,15 @@ def account_link(id_acc_connect=False):
     url_onboard = account_link.get('url')
     return url_onboard
 
+
 @permission_classes([permissions.AllowAny])
 class Onboard_stripe_return(APIView):
     def get(self, request, id_acc_connect):
         details_submitted = info_stripe(id_acc_connect).details_submitted
-        if details_submitted :
+        if details_submitted:
             logger.info(f"details_submitted : {details_submitted}")
-            #TODO : Créer le formulaire de création de tenant
             return HttpResponseRedirect(f"/onboardreturn/{id_acc_connect}/")
-        else :
+        else:
             return Response(f"{account_link()}", status=status.HTTP_206_PARTIAL_CONTENT)
 
 
@@ -1247,7 +1237,6 @@ class Webhook_stripe(APIView):
                     except Exception:
                         logger.error((f'    erreur dans Webhook_stripe customer.subscription.updated : {Exception}'))
                         raise Exception
-
 
         # c'est une requete depuis vue.js.
         post_from_front_vue_js = payload.get('uuid')
