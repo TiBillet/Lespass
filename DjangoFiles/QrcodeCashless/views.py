@@ -118,7 +118,7 @@ class index_scan(View):
                 'tarifs_adhesion': Price.objects.filter(
                     product__categorie_article=Product.ADHESION,
                     product__send_to_cashless=True,
-                ),
+                ).order_by('recurring_payment'),
                 'adhesion_obligatoire': configuration.adhesion_obligatoire,
                 'history': json_reponse.get('history'),
                 'carte_resto': configuration.carte_restaurant,

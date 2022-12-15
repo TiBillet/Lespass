@@ -576,6 +576,36 @@ class Event(models.Model):
         verbose_name = _('Evenement')
         verbose_name_plural = _('Evenements')
 
+@receiver(post_save, sender=Event)
+def add_to_public_event_directory(sender, instance: Event, created, **kwargs):
+    """
+    Vérifie que le priceSold est créé pour chaque price de chaque product présent dans l'évènement
+    """
+    for product in instance.products.all():
+        # On va chercher le stripe id du product
+        productsold, created = ProductSold.objects.get_or_create(
+            event=instance,
+            product=product
+        )
+
+        if created:
+            productsold.get_id_product_stripe()
+        logger.info(
+            f"productsold {productsold.nickname()} created : {created} - {productsold.get_id_product_stripe()}")
+
+        for price in product.prices.all():
+            # On va chercher le stripe id du price
+
+            pricesold, created = PriceSold.objects.get_or_create(
+                productsold=productsold,
+                prix=price.prix,
+                price=price,
+            )
+
+            if created:
+                pricesold.get_id_price_stripe()
+            logger.info(f"pricesold {pricesold.price.name} created : {created} - {pricesold.get_id_price_stripe()}")
+
 
 class Artist_on_event(models.Model):
     artist = models.ForeignKey(Client, on_delete=models.PROTECT)
@@ -699,12 +729,15 @@ class PriceSold(models.Model):
             'nickname': f"{self.price.name}",
         }
 
-        if self.price.subscription_type == Price.MONTH:
+        if self.price.subscription_type == Price.MONTH\
+                and self.price.recurring_payment :
             data_stripe['recurring'] = {
                 "interval": "month",
                 "interval_count": 1
             }
-        elif self.price.subscription_type == Price.YEAR:
+
+        elif self.price.subscription_type == Price.YEAR\
+                and self.price.recurring_payment :
             data_stripe['recurring'] = {
                 "interval": "year",
                 "interval_count": 1
@@ -725,6 +758,13 @@ class PriceSold(models.Model):
     # class meta:
     #     unique_together = [['productsold', 'price']]
 
+# @receiver(post_save, sender=OptionGenerale)
+# def poids_option_generale(sender, instance: OptionGenerale, created, **kwargs):
+
+    # def save(self, force_insert=False, force_update=False, using=None,
+    #          update_fields=None):
+    #     if not self.id_price_stripe :
+    #         logger.info(f"PriceSold : {self.price.name} - Stripe : {self.get_id_price_stripe()}")
 
 class Reservation(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)

@@ -118,10 +118,11 @@ class creation_paiement_stripe():
 
     def _mode(self):
         subscription_types = [Price.MONTH, Price.YEAR]
-        mode = 'subscription'
+        mode = 'payment'
         for ligne in self.liste_ligne_article:
-            if ligne.pricesold.price.subscription_type not in subscription_types:
-                mode = 'payment'
+            price = ligne.pricesold.price
+            if price.subscription_type in subscription_types and price.recurring_payment :
+                mode = 'subscription'
         return mode
 
     def _return_url(self):
