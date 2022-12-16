@@ -1,5 +1,6 @@
 import datetime
 import uuid
+from decimal import Decimal
 
 import requests
 import stripe
@@ -572,6 +573,7 @@ class NewAdhesionValidator(serializers.Serializer):
     adhesion = serializers.PrimaryKeyRelatedField(
         queryset=Price.objects.filter(product__categorie_article=Product.ADHESION))
     email = serializers.EmailField()
+    gift = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
 
     def validate_email(self, value):
         # logger.info(f"NewAdhesionValidator validate email : {value}")
@@ -597,7 +599,7 @@ class NewAdhesionValidator(serializers.Serializer):
         self.metadata = metadata
 
         ligne_article_adhesion = LigneArticle.objects.create(
-            pricesold=get_or_create_price_sold(price_adhesion, None),
+            pricesold=get_or_create_price_sold(price_adhesion, None, gift=attrs.get('gift')),
             qty=1,
         )
 
@@ -717,13 +719,13 @@ def create_ticket(pricesold, customer, reservation):
     return ticket
 
 
-def get_or_create_price_sold(price: Price, event: Event):
+def get_or_create_price_sold(price: Price, event: Event, gift=None):
     """
     Générateur des objets PriceSold pour envoi à Stripe.
     Price + Event = PriceSold
 
     On va chercher l'objet prix générique.
-    On lie le prix générique a l'event
+    On lie le prix générique à l'event
     pour générer la clé et afficher le bon nom sur stripe
     """
 
@@ -736,10 +738,15 @@ def get_or_create_price_sold(price: Price, event: Event):
         productsold.get_id_product_stripe()
     logger.info(f"productsold {productsold.nickname()} created : {created} - {productsold.get_id_product_stripe()}")
 
+    prix = price.prix
+    if gift:
+        prix = price.prix + gift
+
     pricesold, created = PriceSold.objects.get_or_create(
         productsold=productsold,
-        prix=price.prix,
+        prix=prix,
         price=price,
+        gift=gift
     )
 
     if created:
@@ -920,11 +927,11 @@ class ReservationValidator(serializers.Serializer):
         """
         On vérifie ici :
           que chaque article existe et a une quantité valide.
-          qu'il existe au moins un billet pour la reservation.
-          que chaque billet possède un nom/prenom
+          Qu'il existe au moins un billet pour la reservation.
+          Que chaque billet possède un nom/prenom
 
         On remplace le json reçu par une liste de dictionnaire
-        qui comporte les objets de la db a la place des strings.
+        qui comporte les objets de la db à la place des strings.
         """
 
         self.nbr_ticket = 0
@@ -1017,7 +1024,7 @@ class ReservationValidator(serializers.Serializer):
                 reservation.options.add(option)
 
         self.reservation = reservation
-        # Ici on construit :
+        # Ici, on construit :
         #   price_sold pour lier l'event à la vente
         #   ligne article pour envoi en paiement
         #   Ticket nominatif
@@ -1027,7 +1034,7 @@ class ReservationValidator(serializers.Serializer):
         for price_object in self.prices_list:
             price_generique: Price = price_object['price']
             qty = price_object.get('qty')
-            total_checkout += qty * price_generique.prix
+            total_checkout += Decimal(qty) * price_generique.prix
 
             pricesold: PriceSold = get_or_create_price_sold(price_generique, event)
 
@@ -1095,7 +1102,7 @@ class ReservationValidator(serializers.Serializer):
                 # Si l'utilisateur est actif, il a vérifié son email.
                 if self.user_commande.is_active:
                     reservation.status = Reservation.FREERES_USERACTIV
-                # Sinon on attend que l'user ai vérifié son email.
+                # Sinon, on attend que l'user ait vérifié son email.
                 # La fonctione presave du fichier BaseBillet.signals
                 # mettra à jour le statut de la réservation et enverra le billet dés validation de l'email
                 else:

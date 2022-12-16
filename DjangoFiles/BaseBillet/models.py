@@ -392,7 +392,7 @@ class Price(models.Model):
     long_description = models.TextField(blank=True, null=True)
 
     name = models.CharField(max_length=50, verbose_name=_("Précisez le nom du Tarif"))
-    prix = models.FloatField()
+    prix = models.DecimalField(max_digits=6, decimal_places=2)
 
     NA, DIX, VINGT = 'NA', 'DX', 'VG'
     TVA_CHOICES = [
@@ -691,8 +691,6 @@ class ProductSold(models.Model):
         self.id_product_stripe = None
         self.save()
 
-    # class meta:
-    #     unique_together = [['event', 'product']]
 
 
 class PriceSold(models.Model):
@@ -704,7 +702,8 @@ class PriceSold(models.Model):
     price = models.ForeignKey(Price, on_delete=models.PROTECT)
 
     qty_solded = models.SmallIntegerField(default=0)
-    prix = models.FloatField()
+    prix = models.DecimalField(max_digits=6, decimal_places=2)
+    gift = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
 
     def __str__(self):
         return self.price.name
@@ -722,7 +721,7 @@ class PriceSold(models.Model):
             product_stripe = self.productsold.get_id_product_stripe(force=True)
 
         data_stripe = {
-            'unit_amount': int("{0:.2f}".format(self.price.prix).replace('.', '')),
+            'unit_amount': f"{int(Decimal(self.prix) * 100)}",
             'currency': "eur",
             'product': product_stripe,
             'stripe_account': config.get_stripe_connect_account(),

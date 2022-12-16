@@ -1184,8 +1184,17 @@ class Webhook_stripe(APIView):
             return paiment_stripe_validator(request, paiement_stripe)
 
 
-        # Prélèvement automatique d'un abonnement.
+        # Prélèvement automatique d'un abonnement :
         # elif payload.get('type') == "customer.subscription.updated":
+        #     # on récupère le don dans le paiement récurent si besoin
+        #     logger.info(f"Webhook_stripe customer.subscription.updated : {payload['data']['object']['id']}")
+        #     logger.info(f"")
+        #     logger.info(f"")
+        #     logger.info(f"{payload}")
+        #     logger.info(f"")
+        #     logger.info(f"")
+
+
         elif payload.get('type') == "invoice.paid":
             # logger.info(f" ")
             # logger.info(payload)
