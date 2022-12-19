@@ -209,6 +209,18 @@ class index_scan(View):
                 ligne_articles.append(ligne_article_adhesion)
                 metadata['pk_adhesion'] = str(price_adhesion.pk)
 
+            if data.get('gift') == 'on':
+                metadata['gift'] = 'True'
+
+                gift_product, created = Product.objects.get_or_create(categorie_article=Product.DON, name="Don pour la coopérative")
+                gift_price, created = Price.objects.get_or_create(product=gift_product, prix=1,
+                                                                      name="1 euros")
+                ligne_article_gift = LigneArticle.objects.create(
+                    pricesold=get_or_create_price_sold(gift_price, None),
+                    qty=1,
+                )
+                ligne_articles.append(ligne_article_gift)
+
             if len(ligne_articles) > 0:
                 new_paiement_stripe = creation_paiement_stripe(
                     user=user,

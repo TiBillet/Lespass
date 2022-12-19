@@ -104,6 +104,12 @@ class ActionArticlePaidByCategorie:
         except Exception as exc:
             logger.error(f"category_trigger ERROR : {exc} - {type(exc)}")
 
+    # Category DON
+    def trigger_D(self):
+        # On a besoin de valider la ligne article pour que le paiement soit validé
+        self.ligne_article.status = LigneArticle.VALID
+        logger.info(f"TRIGGER DON")
+
     # Category BILLET
     def trigger_B(self):
         logger.info(f"TRIGGER BILLET")

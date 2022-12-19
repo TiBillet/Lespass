@@ -69,7 +69,8 @@ def set_paiement_stripe_valid(old_instance: LigneArticle, new_instance: LigneArt
         # Si paiement stripe :
         if new_instance.paiement_stripe:
             logger.info(
-                f"    SIGNAL LIGNE ARTICLE set_paiement_and_reservation_valid {new_instance.pricesold}. On test si toute les lignes sont validées")
+                f"    SIGNAL LIGNE ARTICLE set_paiement_stripe_valid {new_instance.pricesold}. "
+                f"On test si toute les lignes sont validées")
 
             # On exclut l'instance en cours, car elle n'est pas encore validée en DB : on est sur du signal pre_save
             # on teste ici : Si toutes les autres lignes sont valides et que celle ci l'est aussi.
@@ -90,55 +91,21 @@ def set_paiement_stripe_valid(old_instance: LigneArticle, new_instance: LigneArt
                 logger.info(
                     f"         len(lignes_meme_panier) {len(lignes_meme_panier)} != len(lignes_meme_panier_valide) {len(lignes_meme_panier_valide)} ")
 
-'''
-def send_to_cashless(instance: LigneArticle):
-    logger.info(f"        send_to_cashless {instance.pricesold}")
-    data_for_cashless = {'uuid_commande': instance.paiement_stripe.uuid}
-    data_for_cashless['uuid'] = instance.carte.uuid
 
-    if instance.pricesold.productsold.product.categorie_article == Product.RECHARGE_CASHLESS:
-        data_for_cashless['recharge_qty'] = instance.pricesold.prix
-
-    if instance.pricesold.productsold.product.categorie_article == Product.ADHESION:
-        data_for_cashless['tarif_adhesion'] = instance.pricesold.prix
-
-    # s'il y a des données à envoyer au serveur cashless :
-    sess = requests.Session()
-    configuration = Configuration.get_solo()
-    r = sess.post(
-        f'{configuration.server_cashless}/api/billetterie_endpoint',
-        headers={
-            'Authorization': f'Api-Key {configuration.key_cashless}'
-        },
-        data=data_for_cashless,
-    )
-
-    sess.close()
-    logger.info(
-        f"        demande au serveur cashless pour {instance.pricesold}. réponse : {r.status_code} ")
-
-    if r.status_code != 200:
-        logger.error(
-            f"erreur réponse serveur cashless {r.status_code} {r.text} pour paiement stripe {instance.pricesold} uuid {instance.uuid}")
-
-    return r.status_code
-'''
 
 
 def check_paid(old_instance: LigneArticle, new_instance: LigneArticle):
-    logger.info(
-        f"    SIGNAL LIGNE ARTICLE check_paid {old_instance.pricesold} new_instance status : {new_instance.status}")
+    # Fonction qui passe les artcle de payé en validé, en fonction de sa catégorie
     ActionArticlePaidByCategorie(new_instance)
+
+    # logger.info(
+    #     f"    SIGNAL LIGNE ARTICLE check_paid {old_instance.pricesold} new_instance status : {new_instance.status}")
+
     logger.info(
         f"    SIGNAL LIGNE ARTICLE check_paid {old_instance.pricesold} new_instance status : {new_instance.status}")
     set_paiement_stripe_valid(old_instance, new_instance)
 
-    '''
-    if new_instance.pricesold.productsold.product.categorie_article in \
-            [Product.RECHARGE_CASHLESS, Product.ADHESION]:
-        if send_to_cashless(new_instance) == 200:
-            new_instance.status = LigneArticle.VALID
-    '''
+
 
 
 ######################## SIGNAL RESERVATION ########################
@@ -197,7 +164,7 @@ def error_in_mail(old_instance: Reservation, new_instance: Reservation):
 
 def activator_free_reservation(old_instance: TibilletUser, new_instance: TibilletUser):
     logger.info(f"activator_free_reservation : {new_instance}")
-    if connection.tenant.schema_name != "public" :
+    if connection.tenant.schema_name != "public":
         free_reservation = Reservation.objects.filter(
             user_commande=new_instance,
             to_mail=True,
@@ -208,6 +175,7 @@ def activator_free_reservation(old_instance: TibilletUser, new_instance: Tibille
             print(f"    {resa}")
             resa.status = Reservation.FREERES_USERACTIV
             resa.save()
+
 
 ######################## MOTEUR SIGNAL ########################
 
@@ -265,10 +233,10 @@ PRE_SAVE_TRANSITIONS = {
     'RESERVATION': {
         Reservation.CREATED: {
             Reservation.PAID: send_billet_to_mail,
-            Reservation.FREERES_USERACTIV : send_billet_to_mail,
+            Reservation.FREERES_USERACTIV: send_billet_to_mail,
         },
-        Reservation.FREERES:{
-            Reservation.FREERES_USERACTIV : send_billet_to_mail,
+        Reservation.FREERES: {
+            Reservation.FREERES_USERACTIV: send_billet_to_mail,
         },
         Reservation.FREERES_USERACTIV: {
             Reservation.FREERES_USERACTIV: send_billet_to_mail,
@@ -328,7 +296,6 @@ def pre_save_signal_status(sender, instance, **kwargs):
                     trigger_function(old_instance, new_instance)
 
 
-
 @receiver(pre_save, sender=Wallet)
 def wallet_update_to_celery(sender, instance: Wallet, **kwargs):
     # Si ça n'est pas la création :
@@ -338,7 +305,6 @@ def wallet_update_to_celery(sender, instance: Wallet, **kwargs):
             new_instance = instance
 
             if old_instance.qty != new_instance.qty:
-
                 logger.info(f"wallet_update_celery : need update cashless serveur")
                 # update all cashless serveur
                 stripe_wallet_update_celery.delay(instance.pk)

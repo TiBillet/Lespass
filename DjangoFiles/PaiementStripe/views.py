@@ -112,10 +112,17 @@ class creation_paiement_stripe():
             if ligne.pricesold.price.product.categorie_article == ligne.pricesold.price.product.DON :
                 self.fee += Decimal(ligne.qty)
 
-            if ligne.pricesold.price.recurring_payment and ligne.pricesold.gift :
-                # On calcule le pourcentage de gift dans le prix du paiement :
-                self.application_fee_percent = int(round((Decimal(ligne.pricesold.gift) * 100 ) / Decimal(ligne.pricesold.prix),2))
-                logger.info(f"application_fee_percent : {self.application_fee_percent}")
+            if ligne.pricesold.gift :
+                # C'est un paiement récurent, Stripe n'accepte que les pourcentages.
+                if ligne.pricesold.price.recurring_payment :
+                    # On calcule le pourcentage de gift dans le prix du paiement :
+                    self.application_fee_percent = int(round((Decimal(ligne.pricesold.gift) * 100 ) / Decimal(ligne.pricesold.prix),2))
+                    logger.info(f"application_fee_percent : {self.application_fee_percent}")
+
+                # C'est un paiement en une seule fois :
+                else:
+                    self.fee += Decimal(ligne.pricesold.gift)
+
 
             # Si on a une recharge cashless en ligne
             if ligne.pricesold.price.product.categorie_article == ligne.pricesold.price.product.RECHARGE_SUSPENDUE :

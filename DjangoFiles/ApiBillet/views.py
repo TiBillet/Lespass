@@ -1031,20 +1031,20 @@ def paiment_stripe_validator(request, paiement_stripe):
         # Si le paiement est valide, c'est que les presave et postsave
         # ont validé la réponse du serveur cashless pour les recharges
         if paiement_stripe.status == Paiement_stripe.VALID:
+            lignes_articles = paiement_stripe.lignearticle_set.all()
             # on boucle ici pour récuperer l'uuid de la carte.
-            for ligne_article in paiement_stripe.lignearticle_set.all():
-                if ligne_article.carte:
+            for ligne_article in lignes_articles:
+                carte = ligne_article.carte
+                if carte :
                     if request.method == 'GET':
-                        metadata_stripe_json = paiement_stripe.metadata_stripe
-                        metadata_stripe = json.loads(str(metadata_stripe_json))
-                        # import ipdb; ipdb.set_trace()
-                        for ligne_article in paiement_stripe.lignearticle_set.all():
+                        # On re-boucle pour récuperer les noms des articles vendus afin de les afficher sur le front
+                        for ligneArticle in lignes_articles:
                             messages.success(request,
-                                             f"{ligne_article.pricesold.price.product.name} : {ligne_article.pricesold.price.name}")
+                                             f"{ligneArticle.pricesold.price.product.name} : {ligneArticle.pricesold.price.name}")
 
                         messages.success(request, f"Paiement validé. Merci !")
 
-                        return HttpResponseRedirect(f"/qr/{ligne_article.carte.uuid}#success")
+                        return HttpResponseRedirect(f"/qr/{carte.uuid}#success")
                     else:
                         return Response(f'VALID', status=status.HTTP_200_OK)
 

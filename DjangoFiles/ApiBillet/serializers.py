@@ -196,7 +196,7 @@ class NewConfigSerializer(serializers.ModelSerializer):
             # "twitter",
             # "facebook",
             # "instagram",
-            # "adhesion_obligatoire",
+            "adhesion_obligatoire",
             # "button_adhesion",
             # "map_img",
             # "carte_restaurant",
@@ -493,7 +493,7 @@ class EventSerializer(serializers.ModelSerializer):
                     article_payant = True
 
         if article_payant:
-            gift_product, created = Product.objects.get_or_create(categorie_article=Product.DON, name="Don")
+            gift_product, created = Product.objects.get_or_create(categorie_article=Product.DON, name="Don pour la coopérative")
             gift_price, created = Price.objects.get_or_create(product=gift_product, prix=1, name="Coopérative TiBillet")
             instance.products.add(gift_product)
 
