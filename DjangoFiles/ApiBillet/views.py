@@ -978,10 +978,11 @@ def paiment_stripe_validator(request, paiement_stripe):
 
                 paiement_stripe.save()
 
-                return Response(
-                    _(f'stripe : {checkout_session.payment_status} - paiement : {paiement_stripe.status}'),
-                    status=status.HTTP_402_PAYMENT_REQUIRED
-                )
+                if paiement_stripe.source != Paiement_stripe.QRCODE:
+                    return Response(
+                        _(f'stripe : {checkout_session.payment_status} - paiement : {paiement_stripe.status}'),
+                        status=status.HTTP_402_PAYMENT_REQUIRED
+                    )
 
             elif checkout_session.payment_status == "paid":
 

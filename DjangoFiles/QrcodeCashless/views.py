@@ -175,7 +175,7 @@ class index_scan(View):
             metadata['recharge_carte_uuid'] = str(carte.uuid)
 
             if montant_recharge:
-                #TODO: Checker si l'image existe. Sinon erreur lorsqu'on change l'image ensuite ...
+                # TODO: Checker si l'image existe. Sinon erreur lorsqu'on change l'image ensuite ...
                 product, created = Product.objects.get_or_create(
                     name=f"Recharge Carte {carte.detail.origine.name} v{carte.detail.generation}",
                     categorie_article=Product.RECHARGE_CASHLESS,
@@ -198,23 +198,35 @@ class index_scan(View):
 
                 metadata['recharge_carte_montant'] = str(montant_recharge)
 
+            price_adhesion = None
             if pk_adhesion:
                 price_adhesion = Price.objects.get(pk=data.get('pk_adhesion'))
+
+                if data.get('gift') == "on" and price_adhesion.recurring_payment :
+                    price_sold = get_or_create_price_sold(price_adhesion, None, gift=1)
+                    metadata['gift'] = 'True'
+                else :
+                    price_sold = get_or_create_price_sold(price_adhesion, None)
+
+                ligne = {
+                    "pricesold": price_sold,
+                    "qty": 1,
+                    "carte": carte,
+                }
+
                 # noinspection PyTypeChecker
-                ligne_article_adhesion = LigneArticle.objects.create(
-                    pricesold=get_or_create_price_sold(price_adhesion, None),
-                    qty=1,
-                    carte=carte,
-                )
+                ligne_article_adhesion = LigneArticle.objects.create(**ligne)
+
                 ligne_articles.append(ligne_article_adhesion)
                 metadata['pk_adhesion'] = str(price_adhesion.pk)
 
-            if data.get('gift') == 'on':
+            if data.get('gift') == 'on' and not getattr(price_adhesion, 'recurring_payment', None):
                 metadata['gift'] = 'True'
 
-                gift_product, created = Product.objects.get_or_create(categorie_article=Product.DON, name="Don pour la coopérative")
+                gift_product, created = Product.objects.get_or_create(categorie_article=Product.DON,
+                                                                      name="Don pour la coopérative")
                 gift_price, created = Price.objects.get_or_create(product=gift_product, prix=1,
-                                                                      name="1 euros")
+                                                                  name="1 euros")
                 ligne_article_gift = LigneArticle.objects.create(
                     pricesold=get_or_create_price_sold(gift_price, None),
                     qty=1,
@@ -264,7 +276,6 @@ class index_scan(View):
                 })
 
             sess.close()
-
 
             # Nouveau membre créé avec uniquement l'email
 

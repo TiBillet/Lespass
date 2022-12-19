@@ -304,7 +304,7 @@
                         {#                               required="True"/>#}
                     </div>
 
-                    <div class="field">
+                    <div class="field" id="field_montant_recharge">
                         <h4>Voulez vous recharger votre carte en même temps ? Laissez vide si non.</h4>
                         <label for="montant_recharge">Recharge cashless (€) :</label>
                         <input id="montant_recharge" type="number" name="montant_recharge"/>
@@ -416,14 +416,10 @@
             document.getElementById("text_name_adhesion").textContent = "{{ tarif.name | safe }}";
             document.getElementById("text_tarif_adhesion").textContent = "{{ tarif.prix }}€";
 
-            // Si l'adhésion est un abonnement mensuel ou annuel :
-            if ({{ tarif.subscription_type }} == "M" || {{ tarif.subscription_type   }} == "Y"
-        )
-            {
-                document.getElementById("text_name_adhesion").textContent += " ({{ tarif.duree }} mois)";
-                document.getElementById("text_tarif_adhesion").textContent += " ({{ tarif.duree }} mois)";
-            }
-        }
+            {% if tarif.recurring_payment %}
+                document.getElementById("field_montant_recharge").hidden = true;
+            {% endif %}
+        };
 
     {% endfor %}
 </script>
