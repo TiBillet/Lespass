@@ -18,7 +18,7 @@ from django.utils.translation import ugettext_lazy as _
 
 from AuthBillet.models import HumanUser, SuperHumanUser, TermUser
 from BaseBillet.models import Configuration, Event, OptionGenerale, Product, Price, Reservation, LigneArticle, Ticket, \
-    Paiement_stripe, ProductSold, PriceSold, Membership, ApiKey, Webhook
+    Paiement_stripe, ProductSold, PriceSold, Membership, ExternalApiKey, Webhook
 from django.contrib.auth.admin import UserAdmin
 
 from Customers.models import Client
@@ -45,6 +45,7 @@ class StaffAdminSite(AdminSite):
                 "Evenements",
                 "Paiements Stripe",
                 "Réservations",
+                "Adhésions",
                 "Api keys",
                 "Webhooks",
             ]
@@ -126,8 +127,6 @@ staff_admin_site.register(HumanUser, HumanUserAdmin)
 
 class SuperHumanUserAdmin(UserAdminTibillet):
     def save_model(self, request, obj, form, change):
-        super(SuperHumanUserAdmin, self).save_model(request, obj, form, change)
-
         staff_group = Group.objects.get_or_create(name="staff")[0]
         obj.groups.add(staff_group)
         obj.client_achat.add(request.tenant)
@@ -146,14 +145,15 @@ class TermUserAdmin(UserAdminTibillet):
 
 staff_admin_site.register(TermUser, TermUserAdmin)
 
-class ApiKeyAdmin(admin.ModelAdmin):
-    readonly_fields = ["key",]
+
+class ExtApiKeyAdmin(admin.ModelAdmin):
+    readonly_fields = ["key", ]
 
     list_display = [
         "name",
         "created",
         "ip",
-        "permissions",
+        "api_permissions",
         "user"
     ]
 
@@ -210,10 +210,12 @@ class ApiKeyAdmin(admin.ModelAdmin):
         if ex_api_key:
             ex_api_key.delete()
 
-staff_admin_site.register(ApiKey, ApiKeyAdmin)
+
+staff_admin_site.register(ExternalApiKey, ExtApiKeyAdmin)
+
 
 class WebhookAdmin(admin.ModelAdmin):
-    readonly_fields = ['last_response',]
+    readonly_fields = ['last_response', ]
     fields = [
         "url",
         "active",
@@ -228,8 +230,8 @@ class WebhookAdmin(admin.ModelAdmin):
         "last_response",
     ]
 
-staff_admin_site.register(Webhook, WebhookAdmin)
 
+staff_admin_site.register(Webhook, WebhookAdmin)
 
 ########################################################################
 class ConfigurationAdmin(SingletonModelAdmin):
@@ -250,22 +252,22 @@ class ConfigurationAdmin(SingletonModelAdmin):
                 'map_img',
             )
         }),
-        ('Restaurant', {
-            'fields': (
-                'carte_restaurant',
-            ),
-        }),
-        ('Social', {
-            'fields': (
-                'twitter',
-                'facebook',
-                'instagram',
-            ),
-        }),
+        # ('Restaurant', {
+        #     'fields': (
+        #         'carte_restaurant',
+        #     ),
+        # }),
+        # ('Social', {
+        #     'fields': (
+        #         'twitter',
+        #         'facebook',
+        #         'instagram',
+        #     ),
+        # }),
         ('Adhésions', {
             'fields': (
                 'adhesion_obligatoire',
-                'button_adhesion',
+                # 'button_adhesion',
             ),
         }),
         ('Paiements', {
@@ -281,8 +283,8 @@ class ConfigurationAdmin(SingletonModelAdmin):
                 # 'template_billetterie',
                 # 'template_meta',
                 'jauge_max',
-                'option_generale_radio',
-                'option_generale_checkbox',
+                # 'option_generale_radio',
+                # 'option_generale_checkbox',
             ),
         }),
         ('Cashless', {
@@ -298,6 +300,16 @@ class ConfigurationAdmin(SingletonModelAdmin):
         #     ),
         # }),
     )
+
+    def save_model(self, request, obj, form, change):
+        obj: Configuration
+        if obj.server_cashless and obj.key_cashless:
+            if obj.check_serveur_cashless():
+                messages.add_message(request, messages.INFO, f"Cashless server ONLINE")
+            else:
+                messages.add_message(request, messages.ERROR, "Cashless server OFFLINE or BAD KEY")
+
+        super().save_model(request, obj, form, change)
 
 
 staff_admin_site.register(Configuration, ConfigurationAdmin)
@@ -350,13 +362,24 @@ class EventAdmin(admin.ModelAdmin):
     def formfield_for_manytomany(self, db_field, request, **kwargs):
         if db_field.name == "products":
             kwargs["queryset"] = Product.objects \
-                .exclude(categorie_article__in=(Product.RECHARGE_CASHLESS, Product.DON, Product.ADHESION, Product.FREERES)) \
+                .exclude(
+                categorie_article__in=(Product.RECHARGE_CASHLESS, Product.DON, Product.ADHESION, Product.FREERES)) \
                 .exclude(archive=True)
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
-    def save_form(self, request, form, change):
+    def save_model(self, request, obj, form, change):
+        # On check si le cashless est opé.
+        # if obj.recharge_cashless:
+        #     config = Configuration.get_solo()
+        #     if config.check_serveur_cashless():
+        #         messages.add_message(request, messages.INFO, f"Cashless server ONLINE")
+        #     else:
+        #         obj.recharge_cashless = False
+        #         messages.add_message(request, messages.ERROR, "Cashless server OFFLINE or BAD KEY")
+
+        super().save_model(request, obj, form, change)
+
         # import ipdb; ipdb.set_trace()
-        return super().save_form(request, form, change)
 
 
 staff_admin_site.register(Event, EventAdmin)
@@ -570,7 +593,6 @@ class ProductAdmin(admin.ModelAdmin):
         return qs.exclude(categorie_article__in=[Product.RECHARGE_CASHLESS, Product.DON])
 
 
-
 staff_admin_site.register(Product, ProductAdmin)
 
 
@@ -580,7 +602,8 @@ class PriceAdmin(admin.ModelAdmin):
         'name',
         'prix',
         'adhesion_obligatoire',
-        'subscription_type'
+        'subscription_type',
+        'recurring_payment'
     )
     ordering = ('product',)
 
@@ -682,6 +705,6 @@ class MembershipAdmin(admin.ModelAdmin):
     ordering = ('-date_added',)
 
 
-# staff_admin_site.register(Membership, MembershipAdmin)
+staff_admin_site.register(Membership, MembershipAdmin)
 
 staff_admin_site.register(OptionGenerale, admin.ModelAdmin)

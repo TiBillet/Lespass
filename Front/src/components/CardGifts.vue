@@ -12,14 +12,18 @@
       <input v-else class="form-check-input" type="checkbox" :id="`don${product.uuid}`"
              @change="setEnableGift(product.uuid, $event.target.checked)">
       <label class="form-check-label text-dark" :for="`don${product.uuid}`">
-        Je donne un euro de plus pour soutenir les actions de la coopérative <a
-          href="https://tibillet.org">TiBillet</a> en faveur de la culture et de l'économie sociale et solidaire.
+        Je donne un euro de plus pour soutenir les actions de la coopérative
+        <a target="_blank" href="https://tibillet.org">TiBillet</a> en faveur de la culture et de l'économie sociale et
+        solidaire.
       </label>
+      <p>
+        <a target="_blank" href="https://tibillet.org">En savoir plus sur la coopérative.</a>
+      </p>
     </div>
 
     <div v-if="getEnableGift(product.uuid) === true">
       <!-- prix -->
-      <div class="input-group mb-2 has-validation">
+      <div class="input-group mb-2 has-validation" style="display: none">
         <div class="col form-check" v-for="(price, index) in product.prices" :key="index">
           <!-- getPriceGift(product.uuid) -->
           <input v-if="getPriceGift(product.uuid) === price.uuid"

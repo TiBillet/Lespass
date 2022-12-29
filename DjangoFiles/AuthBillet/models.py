@@ -15,6 +15,12 @@ from rest_framework import permissions
 
 
 
+class RootPermission(permissions.BasePermission):
+    message = 'No root'
+
+    def has_permission(self, request, view):
+        return request.user.is_superuser
+
 
 class TenantAdminPermission(permissions.BasePermission):
     message = 'No admin in tenant'
@@ -201,25 +207,25 @@ class TibilletUser(AbstractUser):
     def administre(self):
         return " ".join([admin["schema_name"] for admin in self.client_admin.values("schema_name")])
 
-    def new_tenant_authorised(self):
-
-        # si l'user est déja staff ou root, c'est qu'il a déja une billetterie.
-        if self.offre in [self.PUBLIC, self.FREE, self.PREMIUM]:
-            if len(self.client_admin.all()) > 0:
-                # superuser peut toujours.
-                return self.is_superuser
-            else:
-                return True
-
-        elif self.offre == self.ENTREPRISE:
-            if len(self.client_admin.all()) > 4:
-                # superuser peut toujours.
-                return self.is_superuser
-            else:
-                return True
-
-        elif self.offre == self.CUSTOM:
-            return True
+    # def new_tenant_authorised(self):
+    #
+    #     # si l'user est déja staff ou root, c'est qu'il a déja une billetterie.
+    #     if self.offre in [self.PUBLIC, self.FREE, self.PREMIUM]:
+    #         if len(self.client_admin.all()) > 0:
+    #             # superuser peut toujours.
+    #             return self.is_superuser
+    #         else:
+    #             return True
+    #
+    #     elif self.offre == self.ENTREPRISE:
+    #         if len(self.client_admin.all()) > 4:
+    #             # superuser peut toujours.
+    #             return self.is_superuser
+    #         else:
+    #             return True
+    #
+    #     elif self.offre == self.CUSTOM:
+    #         return True
 
     def as_p(self):
         return bool(self.password)

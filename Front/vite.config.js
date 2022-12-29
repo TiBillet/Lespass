@@ -3,7 +3,7 @@ import vue from '@vitejs/plugin-vue'
 // const path = require('path')
 import {resolve} from 'path'
 
-let urlLieu = 'http://raffinerie.django-local.org:8002'
+let urlLieu = 'http://billetistan.django-local.org:8002'
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -18,9 +18,10 @@ export default defineConfig({
     minify: false
   },
   server: {
-    // pour exposer le port d'un container docker
+    // pour exposer le port d'un conteneur docker
     host: true,
     port: 3000,
+    // https: true,
     strictPort: true,
     proxy: {
       '/api': urlLieu,
@@ -28,7 +29,8 @@ export default defineConfig({
     },
     hmr: {
       protocol: 'wss',
-      port: 443
+      port: 3000,
+      clientPort: 443
     },
     watch: {
       usePolling: true

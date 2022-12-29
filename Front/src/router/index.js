@@ -28,9 +28,9 @@ const routes = [
   },
   {
     // /search/screens -> /search?q=screens
-    path: '/iframeevent/:slug',
-    name: 'IframeEvent',
-    component: () => import(/* webpackChunkName: "IframeEvent" */ '../views/Event.vue'),
+    path: '/event/embed/:slug',
+    name: 'EventEmbed',
+    component: () => import(/* webpackChunkName: "Event" */ '../views/Event.vue'),
   },
   {
     path: '/event/:slug',
@@ -48,7 +48,7 @@ const routes = [
   {
     path: '/adhesions/',
     name: 'Adhesions',
-    component: () => import(/* webpackChunkName: "Artist" */ '@/views/Adhesions.vue')
+    component: () => import(/* webpackChunkName: "Adhesions" */ '@/views/Adhesions.vue')
   },
   {
     // route interceptée
@@ -66,6 +66,11 @@ const routes = [
     path: '/status',
     name: 'StatusPlace',
     component: () => import(/* webpackChunkName: "StatusPlace" */ '../views/StatusPlace.vue')
+  },
+  {
+    path: '/onboardreturn/:accstripe/',
+    name: 'OnboardReturn',
+    component: () => import(/* webpackChunkName: "OnboardReturn" */ '../views/OnboardReturn.vue')
   }
 ]
 
@@ -93,7 +98,7 @@ router.beforeEach((to, from, next) => {
   // par défaut le header et la navbar son affiché
   const {setIdentitySite} = useAllStore()
   setIdentitySite(true)
-  if (to.name === "IframeEvent") {
+  if (to.name === "EventEmbed") {
     setIdentitySite(false)
   }
 
@@ -122,16 +127,23 @@ router.beforeEach((to, from, next) => {
     redirection = true
   }
 
+
   // intercepte retour de stripe
   if (to.name === "StripeReturn") {
+    const localstore = useLocalStore()
     // console.log('--------------------------------------------------------------------------------------------------')
     // console.log('Interception "StripeReturn" !')
     // console.log('to =', to)
+
+
+    // redirection en fonction de l'url provenant stripeEtape définie dans Event.vue
+    // console.log('stripeEtape =', localstore.stripeEtape)
+    nouvelleRoute = localstore.stripeEtape.nextPath
+
     const uuidStripe = to.params.id
     // console.log('uuidStripe =', uuidStripe)
     if (uuidStripe !== undefined) {
-      const {postStripeReturn} = useLocalStore()
-      postStripeReturn(uuidStripe)
+      localstore.postStripeReturn(uuidStripe)
     } else {
       emitter.emit('message', {
         tmp: 6,
@@ -139,12 +151,10 @@ router.beforeEach((to, from, next) => {
         contenu: `Retour stipe, erreur: id indéfini !`
       })
     }
-    nouvelleRoute = '/'
     redirection = true
   }
 
   if (redirection === true) {
-
     next({
       path: nouvelleRoute,
       replace: true

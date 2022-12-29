@@ -3,6 +3,7 @@ from django.contrib.auth.models import Group
 
 from django.contrib.admin import AdminSite
 from django.contrib.auth.admin import UserAdmin, GroupAdmin
+from solo.admin import SingletonModelAdmin
 
 from Customers.models import Client, Domain
 from AuthBillet.models import TibilletUser, HumanUser, TermUser, SuperHumanUser
@@ -14,6 +15,8 @@ from QrcodeCashless.models import Detail, CarteCashless
 
 # from boutique.models import Category, Product, Tag, VAT, Event, LandingPageContent, Price
 # from solo.admin import SingletonModelAdmin
+from root_billet.models import RootConfiguration
+
 
 class PublicAdminSite(AdminSite):
     site_header = "TiBillet Public Admin"
@@ -176,3 +179,6 @@ public_admin_site.register(CarteCashless, CarteCashlessAdmin)
 
 public_admin_site.register(ProductDirectory, admin.ModelAdmin)
 public_admin_site.register(EventDirectory, admin.ModelAdmin)
+public_admin_site.register(RootConfiguration, SingletonModelAdmin)
+
+

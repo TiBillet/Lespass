@@ -12,7 +12,7 @@
         </div>
         <!-- contenu  -->
         <div class="modal-body">
-          <fieldset class="shadow-sm p-3 mb-5 bg-body rounded" v-for="(card, index) in me.cashless.cards" :key="index">
+          <fieldset class="shadow-sm p-3 mb-5 bg-body rounded" v-for="(card, index) in me.cashless?.cards" :key="index">
             <legend>
               <h5 class="font-weight-bolder text-info text-gradient align-self-start w-85">Numéro {{ card.number }}</h5>
             </legend>

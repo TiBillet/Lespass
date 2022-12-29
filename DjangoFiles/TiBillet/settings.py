@@ -76,6 +76,7 @@ SHARED_APPS = (
     'django_extensions',
     'Administration',
     'MetaBillet',
+    'root_billet',
 
     'solo',
     'stdimage',

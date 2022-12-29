@@ -1,6 +1,6 @@
 <!--inspiré de card4 : https://demos.creative-tim.com/now-ui-design-system-pro/sections/page-sections/general-cards.html-->
 <template>
-  <div class="card">
+  <div class="card test-card-event">
     <div class="card-header p-0 position-relative z-index-1">
       <a class="d-block">
         <img

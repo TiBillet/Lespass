@@ -1,21 +1,16 @@
-import os
 import uuid
 from datetime import timedelta, datetime
+from decimal import Decimal
 
 import requests
-from django import forms
-from django.contrib.auth import get_user_model
 from django.db import models
-from django.db.models.aggregates import Sum
 
 # Create your models here.
 from django.db.models import Q
-from django.db.models.signals import post_save, pre_save
+from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.urls import reverse
-from django.utils import timezone
 
-# from django.contrib.postgres.fields import JSONField
 from django.db.models import JSONField
 
 from django.utils.text import slugify
@@ -36,6 +31,8 @@ from TiBillet import settings
 import stripe
 
 import logging
+
+from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
 
@@ -183,15 +180,34 @@ class Configuration(SingletonModel):
     mollie_api_key = models.CharField(max_length=50,
                                       blank=True, null=True)
 
+    stripe_connect_account = models.CharField(max_length=21, blank=True, null=True)
+    stripe_connect_account_test = models.CharField(max_length=21, blank=True, null=True)
+    stripe_payouts_enabled = models.BooleanField(default=False)
+
     stripe_api_key = models.CharField(max_length=110, blank=True, null=True)
     stripe_test_api_key = models.CharField(max_length=110, blank=True, null=True)
+
     stripe_mode_test = models.BooleanField(default=True)
 
     def get_stripe_api(self):
+        return RootConfiguration.get_solo().get_stripe_api()
+
+    def get_stripe_connect_account(self):
         if self.stripe_mode_test:
-            return self.stripe_test_api_key
+            return self.stripe_connect_account_test
         else:
-            return self.stripe_api_key
+            return self.stripe_connect_account
+
+    def get_stripe_payouts(self):
+        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+        id_acc_connect = self.get_stripe_connect_account()
+
+        if id_acc_connect:
+            info_stripe = stripe.Account.retrieve(id_acc_connect)
+            self.stripe_payouts_enabled = info_stripe.get('payout_enabled')
+            self.save()
+
+        return self.stripe_payouts_enabled
 
     # activer_billetterie = models.BooleanField(default=True, verbose_name=_("Activer la billetterie"))
 
@@ -204,6 +220,8 @@ class Configuration(SingletonModel):
     option_generale_checkbox = models.ManyToManyField(OptionGenerale,
                                                       blank=True,
                                                       related_name="checkbox")
+
+    ######### CASHLESS #########
 
     server_cashless = models.URLField(
         max_length=300,
@@ -218,6 +236,29 @@ class Configuration(SingletonModel):
         null=True,
         verbose_name=_("Clé d'API du serveur cashless")
     )
+
+    def check_serveur_cashless(self):
+        logger.info(f"On check le serveur cashless. Adresse : {self.server_cashless}")
+        if self.server_cashless and self.key_cashless:
+            sess = requests.Session()
+            try:
+                r = sess.get(
+                    f'{self.server_cashless}/api/check_apikey',
+                    headers={
+                        'Authorization': f'Api-Key {self.key_cashless}'
+                    },
+                    timeout=1,
+                )
+                sess.close()
+                logger.info(f"    check_serveur_cashless : {r.status_code} {r.text}")
+                if r.status_code == 200:
+                    if r.json().get('bill'):
+                        return True
+            except:
+                pass
+        return False
+
+    ######### END CASHLESS #########
 
     ARNAUD, MASSIVELY, BLK_MVC = 'arnaud_mvc', 'html5up-masseively', 'blk-pro-mvc'
     CHOICE_TEMPLATE = [
@@ -250,6 +291,14 @@ class Configuration(SingletonModel):
     activate_mailjet = models.BooleanField(default=False)
     email_confirm_template = models.IntegerField(default=3898061)
 
+    ### Tenant fields :
+
+    def domain(self):
+        return connection.tenant.get_primary_domain().domain
+
+    def categorie(self):
+        return connection.tenant.categorie
+
     def save(self, *args, **kwargs):
         '''
         Transforme le nom en slug si vide, pour en faire une url lisible
@@ -276,7 +325,6 @@ class Product(models.Model):
     publish = models.BooleanField(default=False)
     poids = models.PositiveSmallIntegerField(default=0, verbose_name=_("Poids"),
                                              help_text="Ordre d'apparition du plus leger au plus lourd")
-
 
     img = StdImageField(upload_to='images/',
                         null=True, blank=True,
@@ -345,7 +393,7 @@ class Price(models.Model):
     long_description = models.TextField(blank=True, null=True)
 
     name = models.CharField(max_length=50, verbose_name=_("Précisez le nom du Tarif"))
-    prix = models.FloatField()
+    prix = models.DecimalField(max_digits=6, decimal_places=2)
 
     NA, DIX, VINGT = 'NA', 'DX', 'VG'
     TVA_CHOICES = [
@@ -382,6 +430,11 @@ class Price(models.Model):
                                          default=NA,
                                          verbose_name=_("durée d'abonnement"),
                                          )
+    recurring_payment = models.BooleanField(default=False,
+                                           verbose_name="Paiement récurrent",
+                                           help_text="Paiement récurrent avec Stripe, "
+                                                     "ne peux être utilisé avec un autre article dans le panier",
+                                           )
 
     # def range_max(self):
     #     return range(self.max_per_user + 1)
@@ -394,6 +447,7 @@ class Price(models.Model):
         ordering = ('prix',)
         verbose_name = _('Tarif')
         verbose_name_plural = _('Tarifs')
+
 
 class Event(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
@@ -416,8 +470,6 @@ class Event(models.Model):
                                            verbose_name="Option choix unique")
     options_checkbox = models.ManyToManyField(OptionGenerale, blank=True, related_name="options_checkbox",
                                               verbose_name="Options choix multiple")
-
-    recharge_cashless = models.BooleanField(default=False)
 
     img = StdImageField(upload_to='images/',
                         validators=[MaxSizeValidator(1920, 1920)],
@@ -478,10 +530,10 @@ class Event(models.Model):
                                  verbose_name=_("Catégorie d'évènement"))
 
     def reservations(self):
-        '''
+        """
         Renvoie toutes les réservations valide d'un évènement.
         Compte les billets achetés/réservés.
-        '''
+        """
 
         return Ticket.objects.filter(reservation__event__pk=self.pk) \
             .exclude(status=Ticket.CREATED) \
@@ -489,22 +541,31 @@ class Event(models.Model):
             .count()
 
     def complet(self):
-        '''
+        """
         Un booléen pour savoir si l'évènement est complet ou pas.
-        '''
+        """
 
         if self.reservations() >= self.jauge_max:
             return True
         else:
             return False
 
+    def check_serveur_cashless(self):
+        config = Configuration.get_solo()
+        return config.check_serveur_cashless()
+
     def save(self, *args, **kwargs):
-        '''
+        """
         Transforme le titre le d'evenemennt en slug, pour en faire une url lisible
-        '''
+        """
 
         # self.slug = slugify(f"{self.name} {self.datetime} {str(self.uuid).partition('-')[0]}")[:50]
         self.slug = slugify(f"{self.name} {self.datetime.strftime('%D %R')}")
+
+        # On vérifie que le serveur cashless soit configuré et atteignable
+        # if self.recharge_cashless:
+        #     self.recharge_cashless = self.check_serveur_cashless()
+
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -515,6 +576,36 @@ class Event(models.Model):
         ordering = ('datetime',)
         verbose_name = _('Evenement')
         verbose_name_plural = _('Evenements')
+
+@receiver(post_save, sender=Event)
+def add_to_public_event_directory(sender, instance: Event, created, **kwargs):
+    """
+    Vérifie que le priceSold est créé pour chaque price de chaque product présent dans l'évènement
+    """
+    for product in instance.products.all():
+        # On va chercher le stripe id du product
+        productsold, created = ProductSold.objects.get_or_create(
+            event=instance,
+            product=product
+        )
+
+        if created:
+            productsold.get_id_product_stripe()
+        logger.info(
+            f"productsold {productsold.nickname()} created : {created} - {productsold.get_id_product_stripe()}")
+
+        for price in product.prices.all():
+            # On va chercher le stripe id du price
+
+            pricesold, created = PriceSold.objects.get_or_create(
+                productsold=productsold,
+                prix=price.prix,
+                price=price,
+            )
+
+            if created:
+                pricesold.get_id_price_stripe()
+            logger.info(f"pricesold {pricesold.price.name} created : {created} - {pricesold.get_id_price_stripe()}")
 
 
 class Artist_on_event(models.Model):
@@ -562,15 +653,16 @@ class ProductSold(models.Model):
 
     def nickname(self):
         if self.product.categorie_article == Product.BILLET:
-            return f"{self.event.name} - {connection.tenant} - {self.event.datetime.strftime('%D')}"
+            return f"{self.event.name} {self.event.datetime.strftime('%D')} - {self.product.name}"
         else:
-            return f"{self.product.name} - {connection.tenant}"
+            return f"{self.product.name}"
 
     def get_id_product_stripe(self, force=False):
         if self.id_product_stripe and not force:
             return self.id_product_stripe
 
-        stripe.api_key = Configuration.get_solo().get_stripe_api()
+        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+        config = Configuration.get_solo()
 
         client = connection.tenant
         domain_url = client.domains.all()[0].domain
@@ -581,6 +673,7 @@ class ProductSold(models.Model):
 
         product = stripe.Product.create(
             name=f"{self.nickname()}",
+            stripe_account=config.get_stripe_connect_account(),
             images=images
         )
         self.id_product_stripe = product.id
@@ -588,7 +681,7 @@ class ProductSold(models.Model):
         with schema_context('public'):
             product_directory, created = ProductDirectory.objects.get_or_create(
                 place=client,
-                product_sold_stripe_id = product.id,
+                product_sold_stripe_id=product.id,
             )
 
         self.save()
@@ -599,8 +692,6 @@ class ProductSold(models.Model):
         self.id_product_stripe = None
         self.save()
 
-    # class meta:
-    #     unique_together = [['event', 'product']]
 
 
 class PriceSold(models.Model):
@@ -612,7 +703,8 @@ class PriceSold(models.Model):
     price = models.ForeignKey(Price, on_delete=models.PROTECT)
 
     qty_solded = models.SmallIntegerField(default=0)
-    prix = models.FloatField()
+    prix = models.DecimalField(max_digits=6, decimal_places=2)
+    gift = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
 
     def __str__(self):
         return self.price.name
@@ -621,27 +713,31 @@ class PriceSold(models.Model):
         if self.id_price_stripe and not force:
             return self.id_price_stripe
 
-        stripe.api_key = Configuration.get_solo().get_stripe_api()
-
-        try :
+        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+        config = Configuration.get_solo()
+        try:
             product_stripe = self.productsold.get_id_product_stripe()
             stripe.Product.retrieve(product_stripe)
         except InvalidRequestError:
             product_stripe = self.productsold.get_id_product_stripe(force=True)
 
         data_stripe = {
-            'unit_amount': int("{0:.2f}".format(self.price.prix).replace('.', '')),
+            'unit_amount': f"{int(Decimal(self.prix) * 100)}",
             'currency': "eur",
             'product': product_stripe,
+            'stripe_account': config.get_stripe_connect_account(),
             'nickname': f"{self.price.name}",
         }
 
-        if self.price.subscription_type == Price.MONTH:
+        if self.price.subscription_type == Price.MONTH\
+                and self.price.recurring_payment :
             data_stripe['recurring'] = {
                 "interval": "month",
                 "interval_count": 1
             }
-        elif self.price.subscription_type == Price.YEAR:
+
+        elif self.price.subscription_type == Price.YEAR\
+                and self.price.recurring_payment :
             data_stripe['recurring'] = {
                 "interval": "year",
                 "interval_count": 1
@@ -657,9 +753,18 @@ class PriceSold(models.Model):
         self.id_price_stripe = None
         self.save()
 
+    def total(self):
+        return Decimal(self.prix) * Decimal(self.qty_solded)
     # class meta:
     #     unique_together = [['productsold', 'price']]
 
+# @receiver(post_save, sender=OptionGenerale)
+# def poids_option_generale(sender, instance: OptionGenerale, created, **kwargs):
+
+    # def save(self, force_insert=False, force_update=False, using=None,
+    #          update_fields=None):
+    #     if not self.id_price_stripe :
+    #         logger.info(f"PriceSold : {self.price.name} - Stripe : {self.get_id_price_stripe()}")
 
 class Reservation(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
@@ -821,6 +926,7 @@ class Ticket(models.Model):
         verbose_name = _('Réservation')
         verbose_name_plural = _('Réservations')
 
+
 class Paiement_stripe(models.Model):
     """
     La commande
@@ -832,7 +938,7 @@ class Paiement_stripe(models.Model):
     checkout_session_id_stripe = models.CharField(max_length=80, blank=True, null=True)
     payment_intent_id = models.CharField(max_length=80, blank=True, null=True)
     metadata_stripe = JSONField(blank=True, null=True)
-    customer_stripe =  models.CharField(max_length=20, blank=True, null=True)
+    customer_stripe = models.CharField(max_length=20, blank=True, null=True)
     invoice_stripe = models.CharField(max_length=27, blank=True, null=True)
     subscription = models.CharField(max_length=28, blank=True, null=True)
 
@@ -888,11 +994,14 @@ class Paiement_stripe(models.Model):
 
     def articles(self):
         return " - ".join(
-            [f"{ligne.pricesold.productsold.product.name} {ligne.pricesold.price.name} {ligne.qty * ligne.pricesold.price.prix}€" for ligne in self.lignearticle_set.all()])
+            [
+                f"{ligne.pricesold.productsold.product.name} {ligne.pricesold.price.name} {ligne.qty * ligne.pricesold.price.prix}€"
+                for ligne in self.lignearticle_set.all()])
 
     class Meta:
         verbose_name = _('Paiement Stripe')
         verbose_name_plural = _('Paiements Stripe')
+
 
 class LigneArticle(models.Model):
     uuid = models.UUIDField(primary_key=True, db_index=True, default=uuid.uuid4)
@@ -921,6 +1030,9 @@ class LigneArticle(models.Model):
 
     class Meta:
         ordering = ('-datetime',)
+
+    def total(self):
+        return Decimal(self.pricesold.prix) * Decimal(self.qty)
 
     def status_stripe(self):
         if self.paiement_stripe:
@@ -1036,8 +1148,7 @@ class Membership(models.Model):
             return f"{self.last_name}"
 
 
-
-class ApiKey(models.Model):
+class ExternalApiKey(models.Model):
     name = models.CharField(max_length=30, unique=True)
     user = models.OneToOneField(settings.AUTH_USER_MODEL,
                                 on_delete=models.CASCADE,
@@ -1061,7 +1172,6 @@ class ApiKey(models.Model):
 
     created = models.DateTimeField(auto_now=True)
 
-
     # En string : même nom que url basename
     # exemple dans DjangoFiles/ApiBillet/urls.py
     # router.register(r'events', api_view.EventsViewSet, basename='event')
@@ -1075,7 +1185,7 @@ class ApiKey(models.Model):
     reservation = models.BooleanField(default=False, verbose_name="Lister les reservations")
     ticket = models.BooleanField(default=False, verbose_name="Lister et valider les billets")
 
-    def permissions(self):
+    def api_permissions(self):
         return {
             "event": self.event,
             "product": self.product,
@@ -1085,6 +1195,10 @@ class ApiKey(models.Model):
             "reservation": self.reservation,
             "ticket": self.ticket,
         }
+
+    class Meta:
+        verbose_name = _('Api key')
+        verbose_name_plural = _('Api keys')
 
 
 class Webhook(models.Model):
@@ -1097,5 +1211,5 @@ class Webhook(models.Model):
     ]
 
     event = models.CharField(max_length=2, choices=EVENT_CHOICES, default=RESERVATION_V,
-                              verbose_name=_("Évènement"))
+                             verbose_name=_("Évènement"))
     last_response = models.TextField(null=True, blank=True)

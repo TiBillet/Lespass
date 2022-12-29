@@ -7,6 +7,10 @@ export const useEventStore = defineStore({
   id: 'event',
   state: () => ({
     event: {},
+    showProduct: {
+      cashless: false,
+      gift: false
+    },
     forms: [],
     loading: false,
     error: null
@@ -24,9 +28,16 @@ export const useEventStore = defineStore({
         }
         const retour = await response.json()
 
-        // ajout d'une propriété 'customers' à chaque prix
         for (const productKey in retour.products) {
           const product = retour.products[productKey]
+          // console.log('-> product =', product)
+          // les produits peuvent ils être affiché (attention tous les produits ne sont pas encore gérés)
+          // cashless
+          if (product.categorie_article === 'S' && product.prices.length > 0) {
+            this.showProduct.cashless = true
+          }
+
+          // ajout d'une propriété 'customers' à chaque prix
           for (const prixKey in product.prices) {
             product.prices[prixKey]['customers'] = []
           }
@@ -63,7 +74,8 @@ export const useEventStore = defineStore({
           emailConfirme: allStore.adhesAllmail,
           options_radio: this.event.options_radio,
           options_checkbox: this.event.options_checkbox,
-          prices: []
+          prices: [],
+          chargeCashless: 0
         })
         form = this.forms.find(obj => obj.event === this.event.uuid)
 
@@ -112,14 +124,6 @@ export const useEventStore = defineStore({
         return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
       })
     },
-    getCustomersByUuidPrix(priceUuid) {
-      // console.log('-> fonc getCustomersByUuidPrix !')
-      try {
-        return this.forms.find(obj => obj.event === this.event.uuid).prices.find(obj => obj.uuid === priceUuid).customers
-      } catch (e) {
-        return []
-      }
-    },
     addCustomer(priceUuid) {
       // console.log('-> fonc addCustomer !')
       let prix = this.forms.find(obj => obj.event === this.event.uuid).prices
@@ -162,8 +166,11 @@ export const useEventStore = defineStore({
     },
     stop(priceUuid, stock, maxPerUser) {
       // console.log('-> fonc stop !')
-      const price = this.forms.find(obj => obj.event === this.event.uuid).prices.find(obj2 => obj2.uuid === priceUuid)
       // --- gestion de l'affichage du bouton "+" ---
+      let price = undefined
+      if (this.forms.length > 0) {
+        price = this.forms.find(obj => obj.event === this.event.uuid).prices.find(obj2 => obj2.uuid === priceUuid)
+      }
       // aucun ajout
       if (price === undefined) {
         return false
@@ -209,9 +216,9 @@ export const useEventStore = defineStore({
         form.options_checkbox[i].activation = false
       }
     },
-    updateEmail(emailType, value) {
-      // console.log('-> fonc updateEmail !')
-      this.forms.find(obj => obj.event === this.event.uuid)[emailType] = value
+    updateChargeCashless(value) {
+      // console.log('updateCashless =', value)
+      this.forms.find(obj => obj.event === this.event.uuid).chargeCashless = parseFloat(value)
     },
     enableGifts(list) {
       if (list !== undefined && list.length > 0) {
@@ -240,6 +247,10 @@ export const useEventStore = defineStore({
       let gift = this.forms.find(obj => obj.event === this.event.uuid).gifts.find(obj2 => obj2.uuidGift === uuidGift)
       gift.enable = value
     },
+    deleteForm(uuid) {
+      const newForms = this.forms.filter(obj => obj.event !== uuid)
+      this.forms = newForms
+    },
     getEventHeader() {
       // console.log('-> action getHeaderEvent')
       let urlImage
@@ -259,6 +270,16 @@ export const useEventStore = defineStore({
 
   },
   getters: {
+    getCustomersByUuidPrix(state) {
+      return (priceUuid) => {
+        // console.log('-> fonc getCustomersByUuidPrix !')
+        try {
+          return this.forms.find(obj => obj.event === this.event.uuid).prices.find(obj => obj.uuid === priceUuid).customers
+        } catch (e) {
+          return []
+        }
+      }
+    },
     getExistGift: (state) => {
       let retour = false
       if (state.event.products.filter(prod => prod.categorie_article === 'D').length > 0) {
@@ -291,11 +312,9 @@ export const useEventStore = defineStore({
         nb_options_radio
       }
     },
-    getEmail: (state) => {
+    getChargeCashless: (state) => {
       const form = state.forms.find(obj => obj.event === state.event.uuid)
-      const email = form.email
-      const confirme = form.emailConfirme
-      return {email, confirme}
+      return form.chargeCashless
     }
   },
   persist: {

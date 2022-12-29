@@ -1,12 +1,18 @@
 # Create your views here.
+import csv
 import json
+import uuid
+from io import StringIO
+
 from datetime import datetime, timedelta
 import dateutil.parser
-
 import pytz
 import requests
 import stripe
 from django.contrib import messages
+from django.contrib.auth.models import Group
+from django.core.exceptions import ValidationError
+from django.core.validators import URLValidator
 from django.http import HttpResponseRedirect, Http404, HttpResponse
 from django.utils import timezone
 from django_tenants.utils import schema_context, tenant_context
@@ -22,8 +28,9 @@ from rest_framework.views import APIView
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
     ReservationValidator, MembreValidator, ConfigurationSerializer, NewConfigSerializer, \
-    EventCreateSerializer, TicketSerializer, OptionTicketSerializer, ChargeCashlessValidator, NewAdhesionValidator
-from AuthBillet.models import TenantAdminPermission, TibilletUser
+    EventCreateSerializer, TicketSerializer, OptionTicketSerializer, ChargeCashlessValidator, NewAdhesionValidator, \
+    DetailCashlessCardsValidator, DetailCashlessCardsSerializer, CashlessCardsValidator
+from AuthBillet.models import TenantAdminPermission, TibilletUser, RootPermission
 from AuthBillet.utils import user_apikey_valid, get_or_create_user
 from BaseBillet.tasks import create_ticket_pdf
 from Customers.models import Client, Domain
@@ -37,6 +44,8 @@ import logging
 
 from MetaBillet.models import EventDirectory, ProductDirectory
 from PaiementStripe.views import new_entry_from_stripe_invoice
+from QrcodeCashless.models import Detail, CarteCashless
+from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
 
@@ -45,12 +54,11 @@ logger = logging.getLogger(__name__)
 # Si c'est list/retrieve -> pour tout le monde
 # Sinon, on vérifie la clé api
 def get_permission_Api_LR_Any(self):
-
     # Si c'est une auth avec APIKEY,
     # on vérifie avec notre propre moteur
     # Si l'user est rendu, la clé est valide
     user_api = user_apikey_valid(self)
-    if user_api :
+    if user_api:
         permission_classes = []
         self.request.user = user_api
 
@@ -76,7 +84,6 @@ def get_permission_Api_LR_Admin(self):
 
 
 class TarifBilletViewSet(viewsets.ViewSet):
-
 
     def list(self, request):
         queryset = Price.objects.all().order_by('prix')
@@ -119,18 +126,30 @@ class ProductViewSet(viewsets.ViewSet):
         return get_permission_Api_LR_Any(self)
 
 
-
 class TenantViewSet(viewsets.ViewSet):
 
     def create(self, request):
-        user: TibilletUser = request.user
 
-        if not user.can_create_tenant:
-            raise serializers.ValidationError(
-                _("Vous n'avez pas la permission de créer de nouvelles instances sur ce serveur."))
+        # On teste les prérequis :
+        # User peut créer de nouveaux tenants ?
+        # user: TibilletUser = request.user
+        # if not user.can_create_tenant:
+        #     raise serializers.ValidationError(
+        #         _("Vous n'avez pas la permission de créer de nouvelles instances sur ce serveur."))
+
+        # Le slug est-il disponible ?
+        try:
+            slug = slugify(request.data.get('organisation'))
+            Client.objects.get(schema_name=slug)
+            return Response(
+                {f"{slug} exist : Conflict"},
+                status=status.HTTP_409_CONFLICT)
+        except Client.DoesNotExist:
+            pass
+
+        # L'url correspond bien à la catégorie choisie ?
         if not request.data.get('categorie'):
             raise serializers.ValidationError(_("categorie est obligatoire"))
-
         categories = []
         if 'place' in request.get_full_path():
             categories = [Client.SALLE_SPECTACLE, Client.FESTIVAL]
@@ -165,22 +184,31 @@ class TenantViewSet(viewsets.ViewSet):
                         tenant=tenant,
                         is_primary=True
                     )
+
                 except IntegrityError as e:
                     return Response(_(f"{e}"), status=status.HTTP_400_BAD_REQUEST)
                 except Exception as e:
                     return Response(_(f"{e}"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
             with tenant_context(tenant):
+                rootConf = RootConfiguration.get_solo()
                 conf = Configuration.get_solo()
-                serializer.update(instance=conf, validated_data=futur_conf)
-                conf.slug = slug
-                conf.stripe_api_key = os.environ.get('STRIPE_KEY')
-                conf.stripe_test_api_key = os.environ.get('STRIPE_KEY_TEST')
+                info_stripe = serializer.info_stripe
 
-                if os.environ.get('STRIPE_TEST') == "False":
-                    conf.stripe_mode_test = False
-                if os.environ.get('STRIPE_TEST') == "True":
-                    conf.stripe_mode_test = True
+                serializer.update(instance=conf, validated_data=futur_conf)
+
+                conf.slug = slug
+
+                conf.email = info_stripe.email
+                conf.phone = info_stripe.business_profile.support_phone
+                conf.site_web = info_stripe.business_profile.url
+
+                conf.stripe_mode_test = rootConf.stripe_mode_test
+
+                if rootConf.stripe_mode_test:
+                    conf.stripe_connect_account_test = info_stripe.id
+                else:
+                    conf.stripe_connect_account = info_stripe.id
 
                 if getattr(serializer, 'img_img', None):
                     conf.img.save(serializer.img_name, serializer.img_img.fp)
@@ -190,35 +218,37 @@ class TenantViewSet(viewsets.ViewSet):
                 conf.save()
                 # user.client_admin.add(tenant)
 
-                email_nouveau_tenant = futur_conf.get('email')
-                if email_nouveau_tenant :
-                    user_from_email_nouveau_tenant = get_or_create_user(email_nouveau_tenant)
-                    user_from_email_nouveau_tenant.client_admin.add(tenant)
-                    user_from_email_nouveau_tenant.is_staff = True
-                    user_from_email_nouveau_tenant.save()
+                staff_group = Group.objects.get(name="staff")
+
+                user_from_email_nouveau_tenant = get_or_create_user(conf.email, force_mail=True)
+                user_from_email_nouveau_tenant.client_admin.add(tenant)
+                user_from_email_nouveau_tenant.is_staff = True
+                user_from_email_nouveau_tenant.groups.add(staff_group)
+                user_from_email_nouveau_tenant.save()
 
                 place_serialized = ConfigurationSerializer(Configuration.get_solo(), context={'request': request})
                 place_serialized_with_uuid = {'uuid': f"{tenant.uuid}"}
                 place_serialized_with_uuid.update(place_serialized.data)
+
             return Response(place_serialized_with_uuid, status=status.HTTP_201_CREATED)
 
         logger.info(f"serializer.errors : {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def update(self, request, pk=None):
-        tenant = get_object_or_404(Client, pk=pk)
-        user: TibilletUser = request.user
-        if tenant not in user.client_admin.all():
-            return Response(_(f"Not Allowed"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
-        with tenant_context(tenant):
-            conf = Configuration.get_solo()
-            serializer = NewConfigSerializer(conf, data=request.data, partial=True)
-            if serializer.is_valid():
-                # serializer.save()
-                serializer.update(conf, serializer.validated_data)
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    # def update(self, request, pk=None):
+    #     tenant = get_object_or_404(Client, pk=pk)
+    #     user: TibilletUser = request.user
+    #     if tenant not in user.client_admin.all():
+    #         return Response(_(f"Not Allowed"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
+    #     with tenant_context(tenant):
+    #         conf = Configuration.get_solo()
+    #         serializer = NewConfigSerializer(conf, data=request.data, partial=True)
+    #         if serializer.is_valid():
+    #             # serializer.save()
+    #             serializer.update(conf, serializer.validated_data)
+    #             return Response(serializer.data, status=status.HTTP_201_CREATED)
+    #
+    #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def list(self, request):
         places_serialized_with_uuid = []
@@ -250,8 +280,8 @@ class TenantViewSet(viewsets.ViewSet):
         return Response(place_serialized_with_uuid)
 
     def get_permissions(self):
-        return get_permission_Api_LR_Any(self)
-
+        permission_classes = [permissions.AllowAny]
+        return [permission() for permission in permission_classes]
 
 
 class HereViewSet(viewsets.ViewSet):
@@ -278,8 +308,6 @@ class HereViewSet(viewsets.ViewSet):
         return get_permission_Api_LR_Any(self)
 
 
-
-
 class EventsSlugViewSet(viewsets.ViewSet):
     def retrieve(self, request, pk=None):
         queryset = Event.objects.all().order_by('-datetime')
@@ -289,7 +317,6 @@ class EventsSlugViewSet(viewsets.ViewSet):
 
     def get_permissions(self):
         return get_permission_Api_LR_Any(self)
-
 
 
 class EventsViewSet(viewsets.ViewSet):
@@ -376,7 +403,64 @@ class EventsViewSet(viewsets.ViewSet):
         return get_permission_Api_LR_Any(self)
 
 
+class DetailCashlessCards(viewsets.ViewSet):
+    def create(self, request):
+        validator = DetailCashlessCardsValidator(data=request.data, context={'request': request})
+        if validator.is_valid():
+            with schema_context('public'):
+                logger.info('Detail valide')
+                detailC = validator.save()
+                serializer = DetailCashlessCardsSerializer(detailC)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+        return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def get_permissions(self):
+        permission_classes = [RootPermission]
+        return [permission() for permission in permission_classes]
+
+
+
+
+
+
+class Loadcardsfromdict(viewsets.ViewSet):
+    def create(self, request):
+        # logger.info(request.data)
+
+        validator = CashlessCardsValidator(data=request.data, many=True)
+        if validator.is_valid():
+            prems = validator.data[0]
+            detail = Detail.objects.get(uuid=prems.get('detail'))
+            for carte in validator.data:
+                part = carte.get('url').partition('/qr/')
+                base_url = f"{part[0]}{part[1]}"
+                uuid_qrcode = uuid.UUID(part[2], version=4)
+                if detail.uuid == uuid.UUID(carte.get('detail'), version=4) and base_url == detail.base_url:
+                    try:
+                        carte, created = CarteCashless.objects.get_or_create(
+                            tag_id=carte['tag_id'],
+                            uuid=uuid_qrcode,
+                            number=carte['number'],
+                            detail=detail,
+                        )
+                        logger.info(f"{created}: {carte}")
+
+                    except Exception as e:
+                        logger.error(e)
+                        Response(_(f"Erreur d'importation {e}"),
+                                 status=status.HTTP_406_NOT_ACCEPTABLE)
+                else:
+                    Response(_(f"Erreur d'importation : Detail ne correspond pas"),
+                             status=status.HTTP_406_NOT_ACCEPTABLE)
+
+            return Response("poulpe", status=status.HTTP_200_OK)
+
+        return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def get_permissions(self):
+        permission_classes = [RootPermission]
+        return [permission() for permission in permission_classes]
 
 
 class ChargeCashless(viewsets.ViewSet):
@@ -422,18 +506,18 @@ class ReservationViewset(viewsets.ViewSet):
         return Response(serializer.data)
 
     def create(self, request):
-
         # import ipdb; ipdb.set_trace()
         logger.info(f"ReservationViewset CREATE : {request.data}")
 
         validator = ReservationValidator(data=request.data, context={'request': request})
         if validator.is_valid():
             return Response(validator.data, status=status.HTTP_201_CREATED)
+
+        logger.error(f"ReservationViewset CREATE ERROR : {validator.errors}")
         return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_permissions(self):
         return get_permission_Api_LR_Admin(self)
-
 
 
 class OptionTicket(viewsets.ViewSet):
@@ -478,6 +562,76 @@ def borne_temps_4h():
         return debut_jour, lendemain_quatre_heure
 
 
+'''
+@permission_classes([permissions.IsAuthenticated])
+class LoadCardsFromCsv(APIView):
+
+    def is_string_an_url(self, url_string):
+        validate_url = URLValidator()
+
+        try:
+            validate_url(url_string)
+        except ValidationError as e:
+            return False
+        return True
+
+    def post(self, request):
+        try :
+            gen = request.data['generation']
+            content_csv_file = request.data['csv'].read().decode()
+            file = StringIO(content_csv_file)
+            csv_data = csv.reader(file, delimiter=",")
+        except:
+            return Response('Mauvais fichiers', status=status.HTTP_406_NOT_ACCEPTABLE)
+
+        list_csv = []
+        for line in csv_data:
+            list_csv.append(line)
+
+        # on saucissonne l'url d'une ligne au pif :
+        part = list_csv[1][0].partition('/qr/')
+        base_url = f"{part[0]}{part[1]}"
+
+        if self.is_string_an_url(base_url) and uuid.UUID(part[2]) :
+            detail_carte, created = Detail.objects.get_or_create(
+                base_url=base_url,
+                origine=connection.tenant,
+                generation=int(gen),
+            )
+
+            numline = 1
+            for line in list_csv:
+                print(numline)
+                part = line[0].partition('/qr/')
+                try:
+                    uuid_url = uuid.UUID(part[2])
+                    print(f"base_url : {base_url}")
+                    print(f"uuid_url : {uuid_url}")
+                    print(f"number : {line[1]}")
+                    print(f"tag_id : {line[2]}")
+
+                    # if str(uuid_url).partition('-')[0].upper() != line[1]:
+                    #     print('ERROR PRINT != uuid')
+                    #     break
+
+                    carte, created = CarteCashless.objects.get_or_create(
+                        tag_id=line[2],
+                        uuid=uuid_url,
+                        number=line[1],
+                        detail=detail_carte,
+                    )
+
+                    numline += 1
+                except:
+                    pass
+
+            return Response('Cartes chargées', status=status.HTTP_200_OK)
+
+        return Response('Mauvais formatage de fichier.', status=status.HTTP_406_NOT_ACCEPTABLE)
+        # import ipdb; ipdb.set_trace()
+'''
+
+
 @permission_classes([permissions.IsAuthenticated])
 class Cancel_sub(APIView):
     def post(self, request):
@@ -490,9 +644,12 @@ class Cancel_sub(APIView):
         )
 
         if membership.status == Membership.AUTO:
+            stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
             config = Configuration.get_solo()
-            stripe.api_key = config.get_stripe_api()
-            stripe.Subscription.delete(membership.stripe_id_subscription)
+            stripe.Subscription.delete(
+                membership.stripe_id_subscription,
+                stripe_account=config.get_stripe_connect_account(),
+            )
             membership.status = Membership.CANCELED
             membership.save()
 
@@ -542,7 +699,6 @@ class TicketViewset(viewsets.ViewSet):
         ticket = get_object_or_404(queryset, pk=pk)
         serializer = TicketSerializer(ticket)
         return Response(serializer.data)
-
 
     def get_permissions(self):
         return get_permission_Api_LR_Admin(self)
@@ -619,7 +775,8 @@ def request_for_data_cashless(user: TibilletUser):
                 return {'erreur': f"{response.status_code} : {response.text}"}
 
             data = json.loads(response.content)
-            membership = maj_membership_from_cashless(user, data)
+            if data.get('a_jour_cotisation'):
+                membership = maj_membership_from_cashless(user, data)
             return data
 
         except Exception as e:
@@ -636,7 +793,11 @@ class MembershipViewset(viewsets.ViewSet):
             adhesion_validator = NewAdhesionValidator(data=request.data, context={'request': request})
             if adhesion_validator.is_valid():
                 return Response(adhesion_validator.data, status=status.HTTP_201_CREATED)
+
+            logger.error(f'adhesion_validator.errors : {adhesion_validator.errors}')
             return Response(adhesion_validator.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        logger.error(f'membre_validator.errors : {membre_validator.errors}')
         return Response(membre_validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
     # TODO: gerer en interne, pas avec le cashless
@@ -775,8 +936,8 @@ def paiment_stripe_validator(request, paiement_stripe):
                 status=status.HTTP_208_ALREADY_REPORTED
             )
 
-    configuration = Configuration.get_solo()
-    stripe.api_key = configuration.get_stripe_api()
+    # configuration = Configuration.get_solo()
+    stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
 
     # SI c'est une source depuis INVOICE,
     # L'object vient d'être créé, on vérifie que la facture stripe
@@ -804,8 +965,12 @@ def paiment_stripe_validator(request, paiement_stripe):
 
     # Sinon c'est un paiement stripe checkout
     elif paiement_stripe.status != Paiement_stripe.VALID:
+        config = Configuration.get_solo()
+        checkout_session = stripe.checkout.Session.retrieve(
+            paiement_stripe.checkout_session_id_stripe,
+            stripe_account=config.get_stripe_connect_account()
+        )
 
-        checkout_session = stripe.checkout.Session.retrieve(paiement_stripe.checkout_session_id_stripe)
         paiement_stripe.customer_stripe = checkout_session.customer
 
         # Vérifie que les metatada soient cohérentes. #NTUI !
@@ -817,10 +982,11 @@ def paiment_stripe_validator(request, paiement_stripe):
 
                 paiement_stripe.save()
 
-                return Response(
-                    _(f'stripe : {checkout_session.payment_status} - paiement : {paiement_stripe.status}'),
-                    status=status.HTTP_402_PAYMENT_REQUIRED
-                )
+                if paiement_stripe.source != Paiement_stripe.QRCODE:
+                    return Response(
+                        _(f'stripe : {checkout_session.payment_status} - paiement : {paiement_stripe.status}'),
+                        status=status.HTTP_402_PAYMENT_REQUIRED
+                    )
 
             elif checkout_session.payment_status == "paid":
 
@@ -843,14 +1009,9 @@ def paiment_stripe_validator(request, paiement_stripe):
                         paiement_stripe.subscription = checkout_session.subscription
                         subscription = stripe.Subscription.retrieve(
                             checkout_session.subscription,
+                            stripe_account=config.get_stripe_connect_account()
                         )
                         paiement_stripe.invoice_stripe = subscription.latest_invoice
-
-                # TODO: ya pu de get, tout est POST, même la requete depuis le front vue.js
-                # if request.method == 'GET':
-                #     paiement_stripe.source_traitement = Paiement_stripe.GET
-                # else:
-                #     paiement_stripe.source_traitement = Paiement_stripe.WEBHOOK
 
                 paiement_stripe.save()
                 logger.info("*" * 30)
@@ -875,20 +1036,20 @@ def paiment_stripe_validator(request, paiement_stripe):
         # Si le paiement est valide, c'est que les presave et postsave
         # ont validé la réponse du serveur cashless pour les recharges
         if paiement_stripe.status == Paiement_stripe.VALID:
+            lignes_articles = paiement_stripe.lignearticle_set.all()
             # on boucle ici pour récuperer l'uuid de la carte.
-            for ligne_article in paiement_stripe.lignearticle_set.all():
-                if ligne_article.carte:
+            for ligne_article in lignes_articles:
+                carte = ligne_article.carte
+                if carte :
                     if request.method == 'GET':
-                        metadata_stripe_json = paiement_stripe.metadata_stripe
-                        metadata_stripe = json.loads(str(metadata_stripe_json))
-                        # import ipdb; ipdb.set_trace()
-                        for ligne_article in paiement_stripe.lignearticle_set.all():
+                        # On re-boucle pour récuperer les noms des articles vendus afin de les afficher sur le front
+                        for ligneArticle in lignes_articles:
                             messages.success(request,
-                                             f"{ligne_article.pricesold.price.product.name} : {ligne_article.pricesold.price.name}")
+                                             f"{ligneArticle.pricesold.price.product.name} : {ligneArticle.pricesold.price.name}")
 
                         messages.success(request, f"Paiement validé. Merci !")
 
-                        return HttpResponseRedirect(f"/qr/{ligne_article.carte.uuid}#success")
+                        return HttpResponseRedirect(f"/qr/{carte.uuid}#success")
                     else:
                         return Response(f'VALID', status=status.HTTP_200_OK)
 
@@ -896,8 +1057,9 @@ def paiment_stripe_validator(request, paiement_stripe):
             for ligne_article in paiement_stripe.lignearticle_set.all():
                 if ligne_article.carte:
                     messages.error(request,
-                                   f"Le paiement à bien été validé, merci ! "
-                                   f"Mais un problème est apparu avec la validation de la carte cashless. Merci de contacter un responsable.")
+                                   f"Le paiement à bien été validé "
+                                   f"mais un problème est apparu avec votre carte cashless. "
+                                   f"Merci de contacter un responsable.")
                     return HttpResponseRedirect(f"/qr/{ligne_article.carte.uuid}#erreurpaiement")
 
         else:
@@ -949,12 +1111,61 @@ def paiment_stripe_validator(request, paiement_stripe):
     raise Http404(f'{paiement_stripe.status}')
 
 
+def info_stripe(id_acc_connect):
+    stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+    info_stripe = stripe.Account.retrieve(id_acc_connect)
+    return info_stripe
+
+
+def account_link(id_acc_connect=False):
+    rootConf = RootConfiguration.get_solo()
+    stripe.api_key = rootConf.get_stripe_api()
+
+    meta = Client.objects.filter(categorie=Client.META)[0]
+    meta_url = meta.get_primary_domain().domain
+
+    if not id_acc_connect:
+        acc_connect = stripe.Account.create(
+            type="standard",
+            country="FR",
+        )
+        id_acc_connect = acc_connect.get('id')
+
+    account_link = stripe.AccountLink.create(
+        account=id_acc_connect,
+        refresh_url=f"https://{meta_url}/api/onboard_stripe_return/{id_acc_connect}",
+        return_url=f"https://{meta_url}/api/onboard_stripe_return/{id_acc_connect}",
+        type="account_onboarding",
+    )
+
+    url_onboard = account_link.get('url')
+    return url_onboard
+
+
+@permission_classes([permissions.AllowAny])
+class Onboard_stripe_return(APIView):
+    def get(self, request, id_acc_connect):
+        details_submitted = info_stripe(id_acc_connect).details_submitted
+        if details_submitted:
+            logger.info(f"details_submitted : {details_submitted}")
+            return HttpResponseRedirect(f"/onboardreturn/{id_acc_connect}/")
+        else:
+            return Response(f"{account_link()}", status=status.HTTP_206_PARTIAL_CONTENT)
+
+
+@permission_classes([permissions.AllowAny])
+class Onboard(APIView):
+    def get(self, request):
+        return Response(f"{account_link()}", status=status.HTTP_202_ACCEPTED)
+
+
 @permission_classes([permissions.AllowAny])
 class Webhook_stripe(APIView):
 
     def post(self, request):
         payload = request.data
         logger.info(f" ")
+        # logger.info(f"Webhook_stripe --> {payload}")
         logger.info(f"Webhook_stripe --> {payload.get('type')}")
         logger.info(f" ")
 
@@ -964,23 +1175,7 @@ class Webhook_stripe(APIView):
             logger.info(f"Webhook_stripe checkout.session.completed : {payload}")
             tenant_uuid_in_metadata = payload["data"]["object"]["metadata"]["tenant"]
 
-            '''
-            # Avant, nous re-créions une requete via celery sur le bon tenant
-            if f"{connection.tenant.uuid}" != tenant_uuid_in_metadata:
-                with tenant_context(Client.objects.get(uuid=tenant_uuid_in_metadata)):
-                    paiement_stripe = get_object_or_404(Paiement_stripe,
-                                                        checkout_session_id_stripe=payload['data']['object']['id'])
-
-                tenant = Client.objects.get(uuid=tenant_uuid_in_metadata)
-                url_redirect = f"https://{tenant.domains.all().first().domain}{request.path}"
-
-                # On lance la requete nous même aussi,
-                # de telle sorte que ça soit déja validé
-                # lorsque le client arrive sur la page de redirection
-                task = redirect_post_webhook_stripe_from_public.delay(url_redirect, request.data)
-                return Response(f"redirect to {url_redirect} with celery", status=status.HTTP_200_OK)
-            '''
-
+            # On utilise les metadata du paiement stripe pour savoir de quel tenant cela vient.
             if f"{connection.tenant.uuid}" != tenant_uuid_in_metadata:
                 with tenant_context(Client.objects.get(uuid=tenant_uuid_in_metadata)):
                     paiement_stripe = get_object_or_404(Paiement_stripe,
@@ -994,10 +1189,22 @@ class Webhook_stripe(APIView):
             return paiment_stripe_validator(request, paiement_stripe)
 
 
-        # Prélèvement automatique d'un abonnement.
+        # Prélèvement automatique d'un abonnement :
         # elif payload.get('type') == "customer.subscription.updated":
+        #     # on récupère le don dans le paiement récurent si besoin
+        #     logger.info(f"Webhook_stripe customer.subscription.updated : {payload['data']['object']['id']}")
+        #     logger.info(f"")
+        #     logger.info(f"")
+        #     logger.info(f"{payload}")
+        #     logger.info(f"")
+        #     logger.info(f"")
+
+
         elif payload.get('type') == "invoice.paid":
-            logger.info(f" ")
+            # logger.info(f" ")
+            # logger.info(payload)
+            # logger.info(f" ")
+
             logger.info(f"Webhook_stripe invoice.paid : {payload}")
             payload_object = payload['data']['object']
             billing_reason = payload_object.get('billing_reason')
@@ -1045,14 +1252,6 @@ class Webhook_stripe(APIView):
                         logger.error((f'    erreur dans Webhook_stripe customer.subscription.updated : {Exception}'))
                         raise Exception
 
-                    # configuration = Configuration.get_solo()
-                    # stripe.api_key = configuration.get_stripe_api()
-                    # customer_stripe = stripe.Customer.retrieve(id_customer_stripe)
-                    # current_period_start = datetime.fromtimestamp(int(payload_object['current_period_start']))
-                    # current_period_end = datetime.fromtimestamp(int(payload_object['current_period_end']))
-                    # logger.info(f"     current_period_start : {current_period_start}")
-                    # logger.info(f"     current_period_start : {current_period_end}")
-
         # c'est une requete depuis vue.js.
         post_from_front_vue_js = payload.get('uuid')
         if post_from_front_vue_js:
@@ -1063,7 +1262,7 @@ class Webhook_stripe(APIView):
 
         # Réponse pour l'api stripe qui envoie des webhook pour tout autre que la validation de paiement.
         # Si on renvoie une erreur, ils suppriment le webhook de leur côté.
-        return Response('Pouple', status=status.HTTP_202_ACCEPTED)
+        return Response('Pouple', status=status.HTTP_207_MULTI_STATUS)
 
     def get(self, request, uuid_paiement):
         logger.info("*" * 30)

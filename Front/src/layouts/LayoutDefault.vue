@@ -1,5 +1,5 @@
 <template>
-  <Loading v-if="testLoading()"/>
+  <Loading v-if="loading"/>
   <Navbar v-if="identitySite"/>
   <Header v-if="identitySite"/>
   <p v-if="error !== null" class="text-dark">{{ error }}</p>
@@ -15,6 +15,7 @@
   <ModalMembershipOwned/>
   <ModalCardsList/>
   <ModalReservationList/>
+  <ModalOnboard/>
 </template>
 
 <script setup>
@@ -28,6 +29,7 @@ import ModalPassword from '@/components/ModalPassword.vue'
 import ModalMembershipOwned from '@/components/ModalMembershipOwned.vue'
 import ModalCardsList from "@/components/ModalCardsList.vue"
 import ModalReservationList from "@/components/ModalReservationList.vue"
+import ModalOnboard from "@/components/ModalOnboard.vue"
 // import Footer from '@/components/Footer.vue'
 
 // store
@@ -57,25 +59,5 @@ import '@/assets/js/now-design-system-pro.js'
 
 // console.log('dataHeader =', dataHeader)
 const {identitySite, loading, error} = storeToRefs(useAllStore())
-
-// return loading value and lock/unlock scroll
-function testLoading() {
-  if (loading.value === true) {
-    document.body.style.overflow = "hidden"
-    console.log('LayoutDefault.vue, testLoading, userSelect none !')
-    return true
-  } else {
-    document.body.style.overflowX = "hidden"
-    document.body.style.overflowY = "auto"
-    console.log('LayoutDefault.vue, testLoading, userSelect auto !')
-    return false
-  }
-}
 </script>
-
-<style>
-body {
-  overflow-x: hidden;
-  overflow-y: auto;
-}
-</style>
+<style></style>

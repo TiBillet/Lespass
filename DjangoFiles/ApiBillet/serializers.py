@@ -1,6 +1,9 @@
 import datetime
+import uuid
+from decimal import Decimal
 
 import requests
+import stripe
 from PIL import Image
 from django.db import connection
 from io import BytesIO
@@ -23,7 +26,8 @@ from PaiementStripe.views import creation_paiement_stripe
 
 import logging
 
-from QrcodeCashless.models import CarteCashless
+from QrcodeCashless.models import CarteCashless, Detail
+from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +74,7 @@ class ProductSerializer(serializers.ModelSerializer):
         if not attrs.get('img') and img_url:
             self.img_name, self.img_img = get_img_from_url(img_url)
 
-        if attrs.get('send_to_cashless') and attrs.get('categorie_article') == Product.ADHESION :
+        if attrs.get('send_to_cashless') and attrs.get('categorie_article') == Product.ADHESION:
             adhesion_to_cashless = Product.objects.filter(
                 categorie_article=Product.ADHESION,
                 send_to_cashless=True
@@ -78,7 +82,6 @@ class ProductSerializer(serializers.ModelSerializer):
             if len(adhesion_to_cashless) > 0:
                 raise serializers.ValidationError(
                     _(f"Un article d'adhésion vers le cashless existe déja."))
-
 
         return super().validate(attrs)
 
@@ -103,7 +106,8 @@ class PriceSerializer(serializers.ModelSerializer):
             'stock',
             'max_per_user',
             'adhesion_obligatoire',
-            'subscription_type'
+            'subscription_type',
+            'recurring_payment'
         ]
 
         read_only_fields = [
@@ -147,13 +151,16 @@ class ConfigurationSerializer(serializers.ModelSerializer):
             "carte_restaurant",
             "img_variations",
             "logo_variations",
+            "domain",
+            "categorie",
         ]
         read_only_fields = fields
 
-    def to_representation(self, instance):
-        representation = super().to_representation(instance)
-        representation['categorie'] = connection.tenant.categorie
-        return representation
+    # def to_representation(self, instance):
+    #     representation = super().to_representation(instance)
+    #     representation['domain'] = connection.tenant.get_primary_domain().domain
+    #     representation['categorie'] = connection.tenant.categorie
+    #     return representation
 
 
 # class NewConfigSerializer(serializers.Serializer):
@@ -179,25 +186,83 @@ class NewConfigSerializer(serializers.ModelSerializer):
             "organisation",
             "short_description",
             "long_description",
-            "adress",
-            "postal_code",
-            "city",
-            "phone",
-            "email",
-            "site_web",
-            "twitter",
-            "facebook",
-            "instagram",
+            "stripe_connect_account",
+            # "adress",
+            # "postal_code",
+            # "city",
+            # "phone",
+            # "email",
+            # "site_web",
+            # "twitter",
+            # "facebook",
+            # "instagram",
             "adhesion_obligatoire",
-            "button_adhesion",
-            "map_img",
-            "carte_restaurant",
-            "img",
-            "logo",
+            # "button_adhesion",
+            # "map_img",
+            # "carte_restaurant",
+            # "img",
+            # "logo",
         ]
+        # # un seul tenant par compte stripe, sauf en test
+        # if rootConf.stripe_mode_test :
+        #     for tenant in Client.objects.all():
+        #         with tenant_context(tenant):
+        #             config = Configuration.get_solo()
+        #             if config.stripe_connect_account == value:
+        #                 raise serializers.ValidationError(
+        #                     _(f'Stripe account already connected to one Tenant. Please send mail to contact@tibillet.re to upgrade your plan.'))
+
+    def validate_stripe_connect_account(self, value):
+        rootConf = RootConfiguration.get_solo()
+        stripe.api_key = rootConf.get_stripe_api()
+
+        try:
+            info_stripe = stripe.Account.retrieve(value)
+            details_submitted = info_stripe.details_submitted
+
+            if not details_submitted:
+
+                meta = Client.objects.filter(categorie=Client.META)[0]
+                meta_url = meta.get_primary_domain().domain
+
+                try:
+                    account_link = stripe.AccountLink.create(
+                        account=value,
+                        refresh_url=f"https://{meta_url}/api/onboard_stripe_return/{value}",
+                        return_url=f"https://{meta_url}/api/onboard_stripe_return/{value}",
+                        type="account_onboarding",
+                    )
+
+                    url_onboard = account_link.get('url')
+                    raise serializers.ValidationError(
+                        _(f'{url_onboard}'))
+                except:
+                    raise serializers.ValidationError(
+                        _(f'stripe account valid but no detail submitted'))
+
+            # un seul tenant par compte stripe, sauf en test
+            if not rootConf.stripe_mode_test:
+                for tenant in Client.objects.all().exclude(categorie__in=[Client.META, Client.ROOT]):
+                    with tenant_context(tenant):
+                        config = Configuration.get_solo()
+                        if config.stripe_connect_account == value:
+                            raise serializers.ValidationError(
+                                _(f'Stripe account already connected to one Tenant. Please send mail to contact@tibillet.re to upgrade your plan.'))
+
+            self.info_stripe = info_stripe
+
+            return value
+
+        except Exception as e:
+            raise serializers.ValidationError(
+                _(f'stripe account not valid : {e}'))
 
     def validate(self, attrs):
         logger.info(f"validate : {attrs}")
+
+        if not attrs.get('stripe_connect_account') or not getattr(self, 'info_stripe', None):
+            raise serializers.ValidationError(
+                _(f'stripe account not send nor valid'))
 
         # On cherche la source de l'image principale :
         img_url = self.initial_data.get('img_url')
@@ -275,6 +340,8 @@ class EventCreateSerializer(serializers.Serializer):
     long_description = serializers.CharField(required=False)
     short_description = serializers.CharField(required=False, max_length=100)
     img_url = serializers.URLField(required=False)
+
+    # recharge_cashless = serializers.BooleanField(required=False)
 
     def validate_artists(self, value):
         # logger.info(f"validate_artists : {value}")
@@ -388,7 +455,6 @@ class EventSerializer(serializers.ModelSerializer):
             'products',
             'options_radio',
             'options_checkbox',
-            'recharge_cashless',
             'img_variations',
             'reservations',
             'complet',
@@ -427,9 +493,14 @@ class EventSerializer(serializers.ModelSerializer):
                     article_payant = True
 
         if article_payant:
-            gift_product, created = Product.objects.get_or_create(categorie_article=Product.DON, name="Don")
-            gift_price, created = Price.objects.get_or_create(product=gift_product, prix=1, name="Don")
+            gift_product, created = Product.objects.get_or_create(categorie_article=Product.DON, name="Don pour la coopérative")
+            gift_price, created = Price.objects.get_or_create(product=gift_product, prix=1, name="Coopérative TiBillet")
             instance.products.add(gift_product)
+
+        # if instance.recharge_cashless :
+        #     recharge_suspendue, created = Product.objects.get_or_create(categorie_article=Product.RECHARGE_SUSPENDUE, name="Recharge cashless")
+        #     recharge_suspendue_price, created = Price.objects.get_or_create(product=recharge_suspendue, prix=1, name="charge")
+        #     instance.products.add(recharge_suspendue)
 
         if reservation_free:
             free_reservation, created = Product.objects.get_or_create(categorie_article=Product.FREERES,
@@ -502,6 +573,18 @@ class NewAdhesionValidator(serializers.Serializer):
     adhesion = serializers.PrimaryKeyRelatedField(
         queryset=Price.objects.filter(product__categorie_article=Product.ADHESION))
     email = serializers.EmailField()
+    gift = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+
+    def validate_adhesion(self, value: Price):
+
+        # Si c'est une adhésion à envoyer au serveur cashless, on vérifie qu'il soit up
+        if value.product.send_to_cashless:
+            config = Configuration.get_solo()
+            if not config.check_serveur_cashless():
+                raise serializers.ValidationError(
+                    _(f"Le serveur cashless n'est pas disponible ( check serveur false ). Merci d'essayer ultérieurement"))
+
+        return value
 
     def validate_email(self, value):
         # logger.info(f"NewAdhesionValidator validate email : {value}")
@@ -511,6 +594,7 @@ class NewAdhesionValidator(serializers.Serializer):
 
     def validate(self, attrs):
         price_adhesion: Price = attrs.get('adhesion')
+
         user: TibilletUser = self.user
 
         metadata = {
@@ -520,7 +604,7 @@ class NewAdhesionValidator(serializers.Serializer):
         self.metadata = metadata
 
         ligne_article_adhesion = LigneArticle.objects.create(
-            pricesold=get_or_create_price_sold(price_adhesion, None),
+            pricesold=get_or_create_price_sold(price_adhesion, None, gift=attrs.get('gift')),
             qty=1,
         )
 
@@ -564,15 +648,14 @@ class MembreValidator(serializers.Serializer):
     birth_date = serializers.DateField(required=False)
     newsletter = serializers.BooleanField(required=False)
 
-
     def validate_adhesion(self, value):
         self.price = value
         return value
 
     def validate_email(self, value):
-        if not getattr(self, 'price', None) :
+        if not getattr(self, 'price', None):
             raise serializers.ValidationError(
-                    _(f"Pas de prix d'adésion"))
+                _(f"Pas de prix d'adésion"))
 
         user_paiement: TibilletUser = get_or_create_user(value)
         self.user = user_paiement
@@ -641,13 +724,13 @@ def create_ticket(pricesold, customer, reservation):
     return ticket
 
 
-def get_or_create_price_sold(price: Price, event: Event):
+def get_or_create_price_sold(price: Price, event: Event, gift=None):
     """
     Générateur des objets PriceSold pour envoi à Stripe.
     Price + Event = PriceSold
 
     On va chercher l'objet prix générique.
-    On lie le prix générique a l'event
+    On lie le prix générique à l'event
     pour générer la clé et afficher le bon nom sur stripe
     """
 
@@ -660,10 +743,15 @@ def get_or_create_price_sold(price: Price, event: Event):
         productsold.get_id_product_stripe()
     logger.info(f"productsold {productsold.nickname()} created : {created} - {productsold.get_id_product_stripe()}")
 
+    prix = price.prix
+    if gift:
+        prix = price.prix + gift
+
     pricesold, created = PriceSold.objects.get_or_create(
         productsold=productsold,
-        prix=price.prix,
+        prix=prix,
         price=price,
+        gift=gift
     )
 
     if created:
@@ -693,6 +781,77 @@ def line_article_recharge(carte, qty):
         carte=carte,
     )
     return ligne_article_recharge
+
+
+class DetailCashlessCardsValidator(serializers.ModelSerializer):
+    class Meta:
+        model = Detail
+        fields = [
+            "base_url",
+            "origine",
+            "generation",
+        ]
+
+class DetailCashlessCardsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Detail
+        fields = [
+            "base_url",
+            "origine",
+            "generation",
+            "uuid",
+        ]
+
+
+
+class CashlessCardsValidator(serializers.Serializer):
+    # detail_uuid = serializers.UUIDField()
+    generation = serializers.IntegerField(required=True)
+    url = serializers.URLField(required=True)
+    detail = serializers.UUIDField(required=False)
+    tag_id = serializers.CharField(required=True)
+    number = serializers.CharField(required=True)
+
+    def validate_generation(self, value):
+        self.generation = int(value)
+        return value
+
+    def validate_url(self, value):
+
+        part = value.partition('/qr/')
+        base_url = f"{part[0]}{part[1]}"
+        uuid_qrcode = part[2]
+
+        # On teste si l'uuid est valide
+        assert uuid.UUID(uuid_qrcode, version=4)
+
+        # On teste que la db Detail existe bien en amont
+        self.detail_from_db = get_object_or_404(Detail, base_url=base_url, generation=self.generation)
+
+        return value
+
+    def validate_detail(self, value):
+        detailDb = get_object_or_404(Detail, uuid=value)
+
+        if self.detail_from_db != detailDb :
+            raise serializers.ValidationError(_(f'erreur url carte != detail uuid'))
+
+        return value
+
+    # def to_representation(self, data):
+        # data contiendra la liste d'objets à représenter
+        # representation = super().to_representation(data)
+
+        # for obj in representation:
+        #     obj['uuid_qrcode'] = self.uuid_qrcode
+        #     obj['detail'] = self.detail
+        # return representation
+
+    def validate(self, attrs):
+        if not attrs.get('detail') and self.detail_from_db :
+            attrs['detail'] = self.detail_from_db.uuid
+        validation = super().validate(attrs)
+        return validation
 
 
 class ChargeCashlessValidator(serializers.Serializer):
@@ -759,18 +918,25 @@ class ReservationValidator(serializers.Serializer):
         return value
 
     def validate_email(self, value):
+        # On vérifie que l'utilisateur connecté et l'email correspondent bien.
+        request = self.context.get('request')
         self.user_commande = get_or_create_user(value)
+
+        if request.user.is_authenticated:
+            if request.user.email != request.user:
+                raise serializers.ValidationError(_(f"L'email ne correspond pas à l'utilisateur connecté."))
+
         return self.user_commande.email
 
     def validate_prices(self, value):
         """
         On vérifie ici :
           que chaque article existe et a une quantité valide.
-          qu'il existe au moins un billet pour la reservation.
-          que chaque billet possède un nom/prenom
+          Qu'il existe au moins un billet pour la reservation.
+          Que chaque billet possède un nom/prenom
 
         On remplace le json reçu par une liste de dictionnaire
-        qui comporte les objets de la db a la place des strings.
+        qui comporte les objets de la db à la place des strings.
         """
 
         self.nbr_ticket = 0
@@ -810,11 +976,24 @@ class ReservationValidator(serializers.Serializer):
             except ValueError as e:
                 raise serializers.ValidationError(_(f'qty doit être un entier ou un flottant : {e}'))
 
-
         if self.nbr_ticket == 0:
             raise serializers.ValidationError(_(f'pas de billet dans la reservation'))
 
         return value
+
+    # def validate_chargeCashless(self, value):
+    #     if value > 0 :
+    #         recharge_suspendue, created = Product.objects.get_or_create(categorie_article=Product.RECHARGE_SUSPENDUE,
+    #                                                                     name="Recharge cashless")
+    #         recharge_suspendue_price = Price.objects.get(product=recharge_suspendue, prix=1,
+    #                                                                         name="On ticket")
+    #         price_object = {
+    #             'price': recharge_suspendue_price,
+    #             'qty': float(value),
+    #         }
+    #         self.prices_list.append(price_object)
+    #
+    #     return value
 
     def validate(self, attrs):
         event: Event = attrs.get('event')
@@ -828,6 +1007,7 @@ class ReservationValidator(serializers.Serializer):
         # On check que les prices sont bien dans l'event original.
         for price_object in self.prices_list:
             if price_object['price'].product not in event.products.all():
+                logger.error(f'Article non présent dans event : {price_object["price"].product.name}')
                 raise serializers.ValidationError(_(f'Article non disponible'))
 
         # On check que les options sont bien dans l'event original.
@@ -849,7 +1029,7 @@ class ReservationValidator(serializers.Serializer):
                 reservation.options.add(option)
 
         self.reservation = reservation
-        # Ici on construit :
+        # Ici, on construit :
         #   price_sold pour lier l'event à la vente
         #   ligne article pour envoi en paiement
         #   Ticket nominatif
@@ -859,7 +1039,7 @@ class ReservationValidator(serializers.Serializer):
         for price_object in self.prices_list:
             price_generique: Price = price_object['price']
             qty = price_object.get('qty')
-            total_checkout += qty * price_generique.prix
+            total_checkout += Decimal(qty) * price_generique.prix
 
             pricesold: PriceSold = get_or_create_price_sold(price_generique, event)
 
@@ -927,9 +1107,9 @@ class ReservationValidator(serializers.Serializer):
                 # Si l'utilisateur est actif, il a vérifié son email.
                 if self.user_commande.is_active:
                     reservation.status = Reservation.FREERES_USERACTIV
-                # Sinon on attend que l'user ai vérifié son email.
+                # Sinon, on attend que l'user ait vérifié son email.
                 # La fonctione presave du fichier BaseBillet.signals
-                # mettra a jour le statut de la réservation et enverra le billet dés validation de l'email
+                # mettra à jour le statut de la réservation et enverra le billet dés validation de l'email
                 else:
                     reservation.status = Reservation.FREERES
                 reservation.save()

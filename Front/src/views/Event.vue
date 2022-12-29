@@ -1,42 +1,41 @@
 <template>
-    <!-- info getEventHeader en tant qu'action () est contractuel, le getter donne des données antérieures -->
-    <!-- <Header :data-header="getEventHeader()"/> -->
+  <div v-if="Object.entries(event).length > 0" class="container mt-5">
 
-    <div v-if="Object.entries(event).length > 0" class="container mt-5">
-
-      <!-- artistes -->
-      <div v-for="(artist, index) in event.artists" :key="index">
-        <CardArtist :data-artist="artist" class="mb-6"/>
-      </div>
-
-       <div class="container">
-        <p>
-        </p>
-       </div>
-
-      <form @submit.prevent="validerAchats($event)" class="needs-validation" novalidate>
-        <!--
-        Billet(s)
-        Si attribut "image", une image est affiché à la place du nom
-        Attribut 'style-image' gère les propriétées(css) de l'image (pas obligaoire, style par défaut)
-         -->
-        <CardBillet :image="true" :style-image="{height: '30px',width: 'auto'}"/>
-
-        <CardOptions/>
-
-        <CardEmail/>
-
-        <!--
-        Don(s):
-        les dons sont désactivés par défaut
-        l'attribut enable-names permet d'activer une liste de don par son nom (attention: nom unique !!)
-        -->
-         <CardGifts :enable-names="['Don']"/>
-
-        <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
-      </form>
-
+    <!-- artistes -->
+    <div v-for="(artist, index) in event.artists" :key="index">
+      <CardArtist :data-artist="artist" class="mb-6"/>
     </div>
+
+    <div class="container">
+      <p>
+      </p>
+    </div>
+
+    <form @submit.prevent="validerAchats($event)" class="needs-validation" novalidate>
+      <!--
+      Billet(s)
+      Si attribut "image", une image est affiché à la place du nom
+      Attribut 'style-image' gère les propriétées(css) de l'image (pas obligaoire, style par défaut)
+       -->
+      <CardBillet :image="true" :style-image="{height: '30px',width: 'auto'}"/>
+
+      <CardOptions/>
+
+      <CardEmail/>
+
+      <CardChargeCashless v-if="showProduct.cashless"/>
+
+      <!--
+      Don(s):
+      les dons sont désactivés par défaut
+      l'attribut enable-names permet d'activer une liste de don par son nom (attention: nom unique !!)
+      -->
+      <CardGifts :enable-names="['Don']"/>
+
+      <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
+    </form>
+
+  </div>
 </template>
 
 <script setup>
@@ -57,12 +56,13 @@ import CardArtist from '@/components/CardArtist.vue'
 import CardBillet from '@/components/CardBillet.vue'
 import CardOptions from '@/components/CardOptions.vue'
 import CardEmail from '@/components/CardEmail.vue'
+import CardChargeCashless from '@/components/CardChargeCashless.vue'
 import CardGifts from '@/components/CardGifts.vue'
 
 // state event
-const {event, forms} = storeToRefs(useEventStore())
+const {event, forms, showProduct} = storeToRefs(useEventStore())
 // actions
-const {updateEmail,getEventBySlug} = useEventStore()
+const {updateEmail, getEventBySlug} = useEventStore()
 // state adhésion
 let {setEtapeStripe} = useLocalStore()
 
@@ -90,7 +90,8 @@ function formatBodyPost() {
   // init body with prices ticket
   const body = {
     event: form.event,
-    email: form.email,
+    email: document.querySelector(`#profil-email`).value,
+    chargeCashless: form.chargeCashless,
     prices,
     options: []
   }
@@ -121,6 +122,15 @@ function formatBodyPost() {
       })
     }
   }
+
+  // charge cashless qty = valeur de l'input
+  if (document.querySelector('#charge_cashless') !== null && parseFloat(document.querySelector('#charge_cashless').value) > 0) {
+    body.prices.push({
+      uuid: document.querySelector('#charge_cashless').getAttribute('data-uuid'),
+      qty: parseFloat(document.querySelector('#charge_cashless').value)
+    })
+  }
+
   return body
 }
 
@@ -162,13 +172,14 @@ function validerAchats(domEvent) {
       // vérifier qu'il y a au moins un achat pour valider un POST
       let buyEnable = false
       const form = forms.value.find(obj => obj.event === event.value.uuid)
-      console.log('formulaire =', JSON.stringify(form, null, 2))
+      // console.log('formulaire =', JSON.stringify(form, null, 2))
       if (form.prices.length > 0) {
         buyEnable = true
       }
       if (adhesion.activation === true) {
         buyEnable = true
       }
+
       // lancement achat
       if (buyEnable === true) {
         const body = JSON.stringify(formatBodyPost())
@@ -184,44 +195,65 @@ function validerAchats(domEvent) {
             'Content-Type': 'application/json'
           }
         }
-        console.log('options =', options)
+        console.log('options =', JSON.stringify(options, null, 2))
 
         // chargement
         loading.value = true
 
-        // enregistre "l'étape stripe"
-        setEtapeStripe('attente_stripe_reservation')
-
         // lance la/les réservation(s)
         fetch(urlApi, options).then(response => {
-          if (response.status !== 201 && response.status !== 400) {
-            throw new Error(`${response.status} - ${response.statusText}`)
+          // erreurs
+          if (response.status >= 400 && response.status <= 599) {
+            let typeErreur = 'Client'
+            if (response.status >= 500) {
+              typeErreur = 'Serveur'
+            }
+            throw new Error(`${typeErreur}, ${response.status} - ${response.statusText}`)
           }
           return response.json()
-        }).then(retour => {
-          console.log('-> /api/reservations/, retour =', retour)
-          if (retour.checkout_url !== undefined) {
-            // redirection vers stripe
-            window.location.assign(retour.checkout_url)
-          } else {
+        }).then((response) => {
+          loading.value = false
+          if (response.checkout_url !== undefined) {
+            // active "l'étape stripe"
+            if (route.path.indexOf('embed') !== -1) {
+              // reste sur l'event
+              setEtapeStripe({formEventUuid: event.value.uuid, nextPath: route.path})
+            } else {
+              // va à l'accueil
+              setEtapeStripe({formEventUuid: event.value.uuid, nextPath: '/'})
+            }
 
-            loading.value = false
-            // let contenuMessage = JSON.stringify(retour, null, 2)
+
+            // paiement, redirection vers stripe
+            window.location.assign(response.checkout_url)
+          } else {
+            // paiement sans stripe, exemple: réservation gratuite
             emitter.emit('modalMessage', {
+              typeMsg: 'success',
               titre: 'Succès',
               dynamic: true,
-              contenu: `<h5>Réservation de l'évènement ok !<h5>`
+              contenu: '<h3>Réservation validée !</h3>'
             })
           }
-        }).catch(function (erreur) {
+        }).catch((erreur) => {
           loading.value = false
-          error.value = `Event, réservation produits erreur: ${erreur}`
+          // désactive "l'étape stripe"
+          setEtapeStripe(null)
+          emitter.emit('modalMessage', {
+            titre: 'Erreur(s)',
+            // contenu = html => dynamic = true
+            dynamic: true,
+            contenu: '<h3>' + erreur + '</h3>',
+            typeMsg: 'warning',
+          })
         })
       } else {
         // aucun produit sélectionné
         emitter.emit('modalMessage', {
-          titre: '?',
-          contenu: `Aucun produit sélectionné !`
+          titre: '? ? ?',
+          dynamic: true,
+          typeMsg: 'warning',
+          contenu: '<h3>Aucune réservation !</h3>'
         })
       }
     }

@@ -15,7 +15,7 @@
 
             </div>
 
-            <div class="card-body">
+            <div class="card-body has-validation">
               <form role="form" class="text-left" @submit.prevent="validerPassword($event)">
                 <div class="input-group">
                   <input id="admin-password" laria-describedby="admin-password" aria-label="Password"
@@ -23,9 +23,9 @@
                          required>
                 </div>
 
-                <div class="input-group mt-2">
+                <div class="input-group mt-2 has-validation">
                   <input id="admin-password-bis" laria-describedby="admin-password-bis" aria-label="Password"
-                         class="form-control" placeholder="Password" type="password"
+                         class="form-control" placeholder="Confirmez le mot de passe" type="password"
                          required>
                   <div class="invalid-feedback">
                     Merci de renseigner un mot de passe identique.
