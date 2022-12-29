@@ -793,7 +793,11 @@ class MembershipViewset(viewsets.ViewSet):
             adhesion_validator = NewAdhesionValidator(data=request.data, context={'request': request})
             if adhesion_validator.is_valid():
                 return Response(adhesion_validator.data, status=status.HTTP_201_CREATED)
+
+            logger.error(f'adhesion_validator.errors : {adhesion_validator.errors}')
             return Response(adhesion_validator.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        logger.error(f'membre_validator.errors : {membre_validator.errors}')
         return Response(membre_validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
     # TODO: gerer en interne, pas avec le cashless

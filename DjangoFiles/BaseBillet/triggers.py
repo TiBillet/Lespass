@@ -72,6 +72,7 @@ def increment_stripe_token(vente):
     wallet.qty += vente.ligne_article.total()
 
     wallet.save()
+
     # et pouf, ça lance le /DjangoFiles/BaseBillet/signals.py/wallet_update_to_celery
     # qui va informer tous les serveurs cashless qu'un wallet stripe est disponible
 
@@ -125,8 +126,8 @@ class ActionArticlePaidByCategorie:
 
     # Category RECHARGE SUSPENDUE
     def trigger_S(self):
-        logger.info(f"TRIGGER RECHARGE_SUSPENDUE")
         reponse_cashless_serveur = increment_stripe_token(self)
+        logger.info(f"TRIGGER RECHARGE_SUSPENDUE")
 
     # Categorie ADHESION
     def trigger_A(self):

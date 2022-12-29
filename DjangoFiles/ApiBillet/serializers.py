@@ -575,6 +575,17 @@ class NewAdhesionValidator(serializers.Serializer):
     email = serializers.EmailField()
     gift = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
 
+    def validate_adhesion(self, value: Price):
+
+        # Si c'est une adhésion à envoyer au serveur cashless, on vérifie qu'il soit up
+        if value.product.send_to_cashless:
+            config = Configuration.get_solo()
+            if not config.check_serveur_cashless():
+                raise serializers.ValidationError(
+                    _(f"Le serveur cashless n'est pas disponible ( check serveur false ). Merci d'essayer ultérieurement"))
+
+        return value
+
     def validate_email(self, value):
         # logger.info(f"NewAdhesionValidator validate email : {value}")
         user_paiement: TibilletUser = get_or_create_user(value)
@@ -583,12 +594,6 @@ class NewAdhesionValidator(serializers.Serializer):
 
     def validate(self, attrs):
         price_adhesion: Price = attrs.get('adhesion')
-
-        if price_adhesion.product.send_to_cashless:
-            config = Configuration.get_solo()
-            if not config.check_serveur_cashless():
-                raise serializers.ValidationError(
-                    _(f"Le serveur cashless n'est pas disponible. Merci d'essayer ultérieurement"))
 
         user: TibilletUser = self.user
 

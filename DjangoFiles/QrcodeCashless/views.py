@@ -254,6 +254,7 @@ class index_scan(View):
 
         # Email seul sans montant, c'est une adhésion
         elif data.get('email'):
+            user = get_or_create_user(data.get('email'))
             logger.info(f'send_mail_to_cashless_for_membership : {data}')
             sess = requests.Session()
             configuration = Configuration.get_solo()
@@ -270,7 +271,7 @@ class index_scan(View):
                 data={
                     'prenom': data.get('prenom'),
                     'name': data.get('name'),
-                    'email': data.get('email'),
+                    'email': user.email,
                     'tel': data.get('tel'),
                     'uuid_carte': uuid_carte,
                 })

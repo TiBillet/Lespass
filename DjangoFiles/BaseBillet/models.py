@@ -238,6 +238,7 @@ class Configuration(SingletonModel):
     )
 
     def check_serveur_cashless(self):
+        logger.info(f"On check le serveur cashless. Adresse : {self.server_cashless}")
         if self.server_cashless and self.key_cashless:
             sess = requests.Session()
             try:
@@ -249,7 +250,7 @@ class Configuration(SingletonModel):
                     timeout=1,
                 )
                 sess.close()
-                logger.info(f"check_serveur_cashless : {r.status_code} {r.text}")
+                logger.info(f"    check_serveur_cashless : {r.status_code} {r.text}")
                 if r.status_code == 200:
                     if r.json().get('bill'):
                         return True
