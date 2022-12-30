@@ -141,6 +141,7 @@ class TenantViewSet(viewsets.ViewSet):
         try:
             slug = slugify(request.data.get('organisation'))
             Client.objects.get(schema_name=slug)
+            logger.warning(f"{slug} exist : Conflict")
             return Response(
                 {f"{slug} exist : Conflict"},
                 status=status.HTTP_409_CONFLICT)
@@ -200,8 +201,8 @@ class TenantViewSet(viewsets.ViewSet):
                 conf.slug = slug
 
                 conf.email = info_stripe.email
-                conf.phone = info_stripe.business_profile.support_phone
                 conf.site_web = info_stripe.business_profile.url
+                conf.phone = info_stripe.business_profile.support_phone
 
                 conf.stripe_mode_test = rootConf.stripe_mode_test
 

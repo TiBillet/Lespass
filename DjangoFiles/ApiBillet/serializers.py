@@ -249,6 +249,16 @@ class NewConfigSerializer(serializers.ModelSerializer):
                             raise serializers.ValidationError(
                                 _(f'Stripe account already connected to one Tenant. Please send mail to contact@tibillet.re to upgrade your plan.'))
 
+            if not info_stripe.email:
+                raise serializers.ValidationError(
+                    _(f'Please set email in your stripe account'))
+            if not info_stripe.business_profile.support_phone:
+                raise serializers.ValidationError(
+                    _(f'Please set phone number in your stripe account'))
+            if not info_stripe.business_profile.url :
+                raise serializers.ValidationError(
+                    _(f'Please set website in your stripe account'))
+
             self.info_stripe = info_stripe
 
             return value
@@ -493,7 +503,8 @@ class EventSerializer(serializers.ModelSerializer):
                     article_payant = True
 
         if article_payant:
-            gift_product, created = Product.objects.get_or_create(categorie_article=Product.DON, name="Don pour la coopérative")
+            gift_product, created = Product.objects.get_or_create(categorie_article=Product.DON,
+                                                                  name="Don pour la coopérative")
             gift_price, created = Price.objects.get_or_create(product=gift_product, prix=1, name="Coopérative TiBillet")
             instance.products.add(gift_product)
 
@@ -792,6 +803,7 @@ class DetailCashlessCardsValidator(serializers.ModelSerializer):
             "generation",
         ]
 
+
 class DetailCashlessCardsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Detail
@@ -801,7 +813,6 @@ class DetailCashlessCardsSerializer(serializers.ModelSerializer):
             "generation",
             "uuid",
         ]
-
 
 
 class CashlessCardsValidator(serializers.Serializer):
@@ -833,22 +844,22 @@ class CashlessCardsValidator(serializers.Serializer):
     def validate_detail(self, value):
         detailDb = get_object_or_404(Detail, uuid=value)
 
-        if self.detail_from_db != detailDb :
+        if self.detail_from_db != detailDb:
             raise serializers.ValidationError(_(f'erreur url carte != detail uuid'))
 
         return value
 
     # def to_representation(self, data):
-        # data contiendra la liste d'objets à représenter
-        # representation = super().to_representation(data)
+    # data contiendra la liste d'objets à représenter
+    # representation = super().to_representation(data)
 
-        # for obj in representation:
-        #     obj['uuid_qrcode'] = self.uuid_qrcode
-        #     obj['detail'] = self.detail
-        # return representation
+    # for obj in representation:
+    #     obj['uuid_qrcode'] = self.uuid_qrcode
+    #     obj['detail'] = self.detail
+    # return representation
 
     def validate(self, attrs):
-        if not attrs.get('detail') and self.detail_from_db :
+        if not attrs.get('detail') and self.detail_from_db:
             attrs['detail'] = self.detail_from_db.uuid
         validation = super().validate(attrs)
         return validation
