@@ -1126,7 +1126,7 @@ def account_link(id_acc_connect=False):
 
     if not id_acc_connect:
         acc_connect = stripe.Account.create(
-            type="standard",
+            type="express",
             country="FR",
         )
         id_acc_connect = acc_connect.get('id')

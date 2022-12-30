@@ -37,7 +37,7 @@ class creation_paiement_stripe():
                  ) -> None:
 
         self.fee = 0
-        self.application_fee_percent = None
+        self.application_fee_percent = 0
         self.get_fee_in_subscription = {}
         self.user = user
         self.email_paiement = user.email
@@ -52,7 +52,7 @@ class creation_paiement_stripe():
         self.total = self._total()
         self.metadata_json = json.dumps(self.metadata)
         self.paiement_stripe_db = self._paiement_stripe_db()
-        self.stripe_api_key = self._stripe_api_key()
+        # self.stripe_api_key = self._stripe_api_key()
         self.line_items = self._line_items()
         self.mode = self._mode()
         self.return_url = self._return_url()
@@ -62,7 +62,7 @@ class creation_paiement_stripe():
     def _total(self):
         total = 0
         for ligne in self.liste_ligne_article:
-            total += float(ligne.qty) * float(ligne.pricesold.prix)
+            total += Decimal(ligne.qty) * Decimal(ligne.pricesold.prix)
         return total
 
     def _paiement_stripe_db(self):
@@ -89,15 +89,21 @@ class creation_paiement_stripe():
 
         return paiementStripeDb
 
-    def _stripe_api_key(self):
-        api_key = RootConfiguration.get_solo().get_stripe_api()
-        if api_key:
-            stripe.api_key = api_key
-            return stripe.api_key
-        else:
-            raise serializers.ValidationError(_(f"No Stripe Api Key in configuration"))
+    # def _stripe_api_key(self):
+    #     api_key = RootConfiguration.get_solo().get_stripe_api()
+    #     if api_key:
+    #         stripe.api_key = api_key
+    #         return stripe.api_key
+    #     else:
+    #         raise serializers.ValidationError(_(f"No Stripe Api Key in configuration"))
 
     def _line_items(self, force=False):
+        """
+        Retourne une liste de dictionnaire avec l'objet line_item de stripe et la quantitée à payer.
+
+        :param force: Force la création de l'id Stripe
+        :return:
+        """
         line_items = []
         for ligne in self.liste_ligne_article:
             ligne: LigneArticle
@@ -108,40 +114,57 @@ class creation_paiement_stripe():
                 }
             )
 
-            # Si on a un article don
-            if ligne.pricesold.price.product.categorie_article == ligne.pricesold.price.product.DON :
-                self.fee += Decimal(ligne.qty)
-
-            if ligne.pricesold.gift :
-                # C'est un paiement récurent, Stripe n'accepte que les pourcentages.
-                if ligne.pricesold.price.recurring_payment :
-                    # On calcule le pourcentage de gift dans le prix du paiement :
-                    self.application_fee_percent = int(round((Decimal(ligne.pricesold.gift) * 100 ) / Decimal(ligne.pricesold.prix),2))
-                    logger.info(f"application_fee_percent : {self.application_fee_percent}")
-
-                # C'est un paiement en une seule fois :
-                else:
-                    self.fee += Decimal(ligne.pricesold.gift)
-
-
-            # Si on a une recharge cashless en ligne
-            if ligne.pricesold.price.product.categorie_article == ligne.pricesold.price.product.RECHARGE_SUSPENDUE :
-                self.suspended_cashless = ligne.qty
-
         return line_items
 
     def _mode(self):
+        """
+        Mode Stripe payment ou subscription
+        :return: string
+        """
+
         subscription_types = [Price.MONTH, Price.YEAR]
         mode = 'payment'
         for ligne in self.liste_ligne_article:
             price = ligne.pricesold.price
-            if price.subscription_type in subscription_types and price.recurring_payment :
+            if price.subscription_type in subscription_types and price.recurring_payment:
                 mode = 'subscription'
         return mode
 
+    def gift(self):
+        """
+        Vérifie les dons dans les paiements.
+        Créé les variables pour le checkout Stripe
+
+        Fee_percent est pour les paiements récurent (Abonnement, adhésion) ; Stripe n'accepte que les pourcentages.
+        Gift est un article Don ajouté lors d'un paiement en une seule fois (recharge, billet, etc ...)
+        """
+        fee_percent = 0
+        fee_int = 0
+
+        for ligne in self.liste_ligne_article:
+            ligne: LigneArticle
+
+            # Si on a un article don
+            if ligne.pricesold.price.product.categorie_article == ligne.pricesold.price.product.DON:
+                fee_int += Decimal(ligne.qty) * Decimal(ligne.pricesold.prix)
+
+            if ligne.pricesold.gift:
+                if ligne.pricesold.price.recurring_payment:
+                    # C'est un paiement récurent, Stripe n'accepte que les pourcentages.
+                    # On calcule le pourcentage de gift dans le prix du paiement :
+                    fee_percent = int(
+                        round((Decimal(ligne.pricesold.gift) * 100) / Decimal(ligne.pricesold.prix), 2))
+                    logger.info(f"application_fee_percent : {fee_percent}")
+
+                # C'est un paiement en une seule fois :
+                else:
+                    fee_int += Decimal(ligne.pricesold.gift)
+
+        return {"fee_percent": fee_percent, "fee_int": fee_int}
+
     def _return_url(self):
         '''
-        Si la source est le QRCode, alors c'est encore le model MVC de django qui gère ça.
+        Si la source est le QRCode, alors c'est encore le model MVT de django qui gère ça.
         Sinon, c'est un paiement via la billetterie vue.js
         :return:
         '''
@@ -151,51 +174,73 @@ class creation_paiement_stripe():
         else:
             return "/stripe/return/"
 
+    def stripe_account(self):
+        """
+        Détermine quel compte Stripe utiliser pour le paiement en cours.
+
+        Si le paiement contient une recharge fédérée, alors le compte Stripe Root est utilisé et la méthode retourne None.
+        Sinon, le compte Stripe de l'association est utilisée et la méthode retourne True, et ajoute le stripe accout dans le dictionnaire de checkout.
+
+        :return: bool or None
+        """
+
+        for ligne in self.liste_ligne_article:
+            ligne: LigneArticle
+            if ligne.pricesold.price.product.categorie_article == ligne.pricesold.price.product.RECHARGE_SUSPENDUE:
+                return None
+
+        # S'il n'y a aucune recharge fédérée, on utilise le compte Stripe de l'association.
+        self.dict_checkout['stripe_account'] = f"{self.configuration.get_stripe_connect_account()}"
+        return True
+
+    def dict_checkout_creator(self):
+        """
+        Retourne un dict pour la création de la session de paiement
+        https://stripe.com/docs/api/checkout/sessions/create
+        :return: dict
+        """
+
+        data_checkout = {
+            'success_url': f'{self.absolute_domain}{self.return_url}{self.paiement_stripe_db.uuid}',
+            'cancel_url': f'{self.absolute_domain}{self.return_url}{self.paiement_stripe_db.uuid}',
+            'payment_method_types': ["card"],
+            'customer_email': f'{self.user.email}',
+            'line_items': self.line_items,
+            'mode': self.mode,
+            'metadata': self.metadata,
+            'client_reference_id': f"{self.user.pk}",
+        }
+
+        if self.application_fee_percent:
+            subscription_data = {
+                'application_fee_percent': self.application_fee_percent,
+            }
+            data_checkout['subscription_data'] = subscription_data
+
+        elif self.fee > 0:
+            amount = int(Decimal(self.fee) * 100)
+            data_checkout['payment_intent_data'] = {
+                'application_fee_amount': f"{amount}",
+            }
+
+        self.dict_checkout = data_checkout
+
+        return data_checkout
 
     def _checkout_session(self):
         if self.absolute_domain:
-            data_checkout = {
-                'success_url': f'{self.absolute_domain}{self.return_url}{self.paiement_stripe_db.uuid}',
-                'cancel_url': f'{self.absolute_domain}{self.return_url}{self.paiement_stripe_db.uuid}',
-                'payment_method_types': ["card"],
-                'customer_email': f'{self.user.email}',
-                'line_items': self.line_items,
-                'mode': self.mode,
-                'metadata': self.metadata,
-                'client_reference_id': f"{self.user.pk}",
-                'stripe_account' : f"{self.configuration.get_stripe_connect_account()}",
-            }
+            data_checkout = self.dict_checkout_creator()
 
-            if self.application_fee_percent :
-                subscription_data = {
-                    # 'items': [{
-                    #     'plan': 'plan_id',
-                    # }],
-                    'application_fee_percent': self.application_fee_percent,
-                }
-                data_checkout['subscription_data'] = subscription_data
+            try:
+                checkout_session = stripe.checkout.Session.create(**data_checkout)
 
-            #     data_checkout['payment_intent_data'] = {
-            #                       'application_fee_percent': f"{self.application_fee_percent}",
-            #                   }
-
-            if self.fee > 0:
-                amount = int(Decimal(self.fee) * 100)
-                data_checkout['payment_intent_data'] = {
-                                  'application_fee_amount': f"{amount}",
-                              }
-
-
-
-            # try:
-            checkout_session = stripe.checkout.Session.create(**data_checkout)
-
-            # except InvalidRequestError:
+            except InvalidRequestError as e:
                 # L'id stripe est mauvais
                 # probablement dû à un changement d'état de test/prod
                 # on force là creation de nouvel ID
-                # data_checkout['line_items'] = self._line_items(force=True)
-                # checkout_session = stripe.checkout.Session.create(**data_checkout)
+                logger.error(f"InvalidRequestError on checkout session creation : {e}")
+                data_checkout['line_items'] = self._line_items(force=True)
+                checkout_session = stripe.checkout.Session.create(**data_checkout)
 
             logger.info(" ")
             logger.info("-" * 40)
@@ -267,7 +312,6 @@ def new_entry_from_stripe_invoice(user, id_invoice):
         paiement_stripe.lignearticle_set.all().update(status=LigneArticle.UNPAID)
 
         return paiement_stripe
-
 
 #
 # def get_fee_in_subscription(subscription_id, priceSold_id):
