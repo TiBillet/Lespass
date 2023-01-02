@@ -198,12 +198,11 @@ class Configuration(SingletonModel):
         else:
             return self.stripe_connect_account
 
-
     def get_stripe_payouts(self):
         stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
         id_acc_connect = self.get_stripe_connect_account()
 
-        if id_acc_connect :
+        if id_acc_connect:
             info_stripe = stripe.Account.retrieve(id_acc_connect)
             self.stripe_payouts_enabled = info_stripe.get('payout_enabled')
             self.save()
@@ -239,6 +238,7 @@ class Configuration(SingletonModel):
     )
 
     def check_serveur_cashless(self):
+        logger.info(f"On check le serveur cashless. Adresse : {self.server_cashless}")
         if self.server_cashless and self.key_cashless:
             sess = requests.Session()
             try:
@@ -250,7 +250,7 @@ class Configuration(SingletonModel):
                     timeout=1,
                 )
                 sess.close()
-                logger.info(f"check_serveur_cashless : {r.status_code} {r.text}")
+                logger.info(f"    check_serveur_cashless : {r.status_code} {r.text}")
                 if r.status_code == 200:
                     if r.json().get('bill'):
                         return True
@@ -393,7 +393,7 @@ class Price(models.Model):
     long_description = models.TextField(blank=True, null=True)
 
     name = models.CharField(max_length=50, verbose_name=_("Précisez le nom du Tarif"))
-    prix = models.FloatField()
+    prix = models.DecimalField(max_digits=6, decimal_places=2)
 
     NA, DIX, VINGT = 'NA', 'DX', 'VG'
     TVA_CHOICES = [
@@ -430,6 +430,11 @@ class Price(models.Model):
                                          default=NA,
                                          verbose_name=_("durée d'abonnement"),
                                          )
+    recurring_payment = models.BooleanField(default=False,
+                                           verbose_name="Paiement récurrent",
+                                           help_text="Paiement récurrent avec Stripe, "
+                                                     "ne peux être utilisé avec un autre article dans le panier",
+                                           )
 
     # def range_max(self):
     #     return range(self.max_per_user + 1)
@@ -572,6 +577,36 @@ class Event(models.Model):
         verbose_name = _('Evenement')
         verbose_name_plural = _('Evenements')
 
+@receiver(post_save, sender=Event)
+def add_to_public_event_directory(sender, instance: Event, created, **kwargs):
+    """
+    Vérifie que le priceSold est créé pour chaque price de chaque product présent dans l'évènement
+    """
+    for product in instance.products.all():
+        # On va chercher le stripe id du product
+        productsold, created = ProductSold.objects.get_or_create(
+            event=instance,
+            product=product
+        )
+
+        if created:
+            productsold.get_id_product_stripe()
+        logger.info(
+            f"productsold {productsold.nickname()} created : {created} - {productsold.get_id_product_stripe()}")
+
+        for price in product.prices.all():
+            # On va chercher le stripe id du price
+
+            pricesold, created = PriceSold.objects.get_or_create(
+                productsold=productsold,
+                prix=price.prix,
+                price=price,
+            )
+
+            if created:
+                pricesold.get_id_price_stripe()
+            logger.info(f"pricesold {pricesold.price.name} created : {created} - {pricesold.get_id_price_stripe()}")
+
 
 class Artist_on_event(models.Model):
     artist = models.ForeignKey(Client, on_delete=models.PROTECT)
@@ -657,8 +692,6 @@ class ProductSold(models.Model):
         self.id_product_stripe = None
         self.save()
 
-    # class meta:
-    #     unique_together = [['event', 'product']]
 
 
 class PriceSold(models.Model):
@@ -670,7 +703,8 @@ class PriceSold(models.Model):
     price = models.ForeignKey(Price, on_delete=models.PROTECT)
 
     qty_solded = models.SmallIntegerField(default=0)
-    prix = models.FloatField()
+    prix = models.DecimalField(max_digits=6, decimal_places=2)
+    gift = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
 
     def __str__(self):
         return self.price.name
@@ -688,19 +722,22 @@ class PriceSold(models.Model):
             product_stripe = self.productsold.get_id_product_stripe(force=True)
 
         data_stripe = {
-            'unit_amount': int("{0:.2f}".format(self.price.prix).replace('.', '')),
+            'unit_amount': f"{int(Decimal(self.prix) * 100)}",
             'currency': "eur",
             'product': product_stripe,
-            'stripe_account' : config.get_stripe_connect_account(),
+            'stripe_account': config.get_stripe_connect_account(),
             'nickname': f"{self.price.name}",
         }
 
-        if self.price.subscription_type == Price.MONTH:
+        if self.price.subscription_type == Price.MONTH\
+                and self.price.recurring_payment :
             data_stripe['recurring'] = {
                 "interval": "month",
                 "interval_count": 1
             }
-        elif self.price.subscription_type == Price.YEAR:
+
+        elif self.price.subscription_type == Price.YEAR\
+                and self.price.recurring_payment :
             data_stripe['recurring'] = {
                 "interval": "year",
                 "interval_count": 1
@@ -721,6 +758,13 @@ class PriceSold(models.Model):
     # class meta:
     #     unique_together = [['productsold', 'price']]
 
+# @receiver(post_save, sender=OptionGenerale)
+# def poids_option_generale(sender, instance: OptionGenerale, created, **kwargs):
+
+    # def save(self, force_insert=False, force_update=False, using=None,
+    #          update_fields=None):
+    #     if not self.id_price_stripe :
+    #         logger.info(f"PriceSold : {self.price.name} - Stripe : {self.get_id_price_stripe()}")
 
 class Reservation(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
@@ -1155,6 +1199,7 @@ class ExternalApiKey(models.Model):
     class Meta:
         verbose_name = _('Api key')
         verbose_name_plural = _('Api keys')
+
 
 class Webhook(models.Model):
     active = models.BooleanField(default=False)

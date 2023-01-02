@@ -22,7 +22,7 @@ class index(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        return HttpResponseRedirect('https://www.tibillet.re')
+        return HttpResponseRedirect('https://tibillet.org')
 
         # configuration = Configuration.get_solo()
         # if not configuration.activer_billetterie:

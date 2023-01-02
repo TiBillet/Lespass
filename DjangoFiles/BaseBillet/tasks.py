@@ -565,6 +565,8 @@ def request_server_cashless(url, key, data):
 @app.task
 def stripe_wallet_update_celery(wallet_pk):
     fed_clients = []
+
+    # TODO: Ajouter tous les tenants fédérés
     fed_clients.append(connection.tenant)
     wallet = Wallet.objects.get(pk=wallet_pk)
 

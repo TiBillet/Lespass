@@ -84,8 +84,8 @@ class index_scan(View):
     def get(self, request, uuid):
         logger.info(f'index_scan : {uuid}')
 
-        # dette technique ...
-        # pour rediriger les premières générations de qrcode
+        # Dette technique ...
+        # Pour rediriger les premières générations de qrcode
         # m.tibillet.re et raffinerie
         address = request.build_absolute_uri()
         host = address.partition('://')[2]
@@ -115,7 +115,10 @@ class index_scan(View):
                     his['date'] = datetime.fromisoformat(his['date'])
 
             data = {
-                'tarifs_adhesion': Price.objects.filter(product__categorie_article=Product.ADHESION),
+                'tarifs_adhesion': Price.objects.filter(
+                    product__categorie_article=Product.ADHESION,
+                    product__send_to_cashless=True,
+                ).order_by('recurring_payment'),
                 'adhesion_obligatoire': configuration.adhesion_obligatoire,
                 'history': json_reponse.get('history'),
                 'carte_resto': configuration.carte_restaurant,
@@ -172,7 +175,7 @@ class index_scan(View):
             metadata['recharge_carte_uuid'] = str(carte.uuid)
 
             if montant_recharge:
-                #TODO: Checker si l'image existe. Sinon erreur lorsqu'on change l'image ensuite ...
+                # TODO: Checker si l'image existe. Sinon erreur lorsqu'on change l'image ensuite ...
                 product, created = Product.objects.get_or_create(
                     name=f"Recharge Carte {carte.detail.origine.name} v{carte.detail.generation}",
                     categorie_article=Product.RECHARGE_CASHLESS,
@@ -195,16 +198,40 @@ class index_scan(View):
 
                 metadata['recharge_carte_montant'] = str(montant_recharge)
 
+            price_adhesion = None
             if pk_adhesion:
                 price_adhesion = Price.objects.get(pk=data.get('pk_adhesion'))
+
+                if data.get('gift') == "on" and price_adhesion.recurring_payment :
+                    price_sold = get_or_create_price_sold(price_adhesion, None, gift=1)
+                    metadata['gift'] = 'True'
+                else :
+                    price_sold = get_or_create_price_sold(price_adhesion, None)
+
+                ligne = {
+                    "pricesold": price_sold,
+                    "qty": 1,
+                    "carte": carte,
+                }
+
                 # noinspection PyTypeChecker
-                ligne_article_adhesion = LigneArticle.objects.create(
-                    pricesold=get_or_create_price_sold(price_adhesion, None),
-                    qty=1,
-                    carte=carte,
-                )
+                ligne_article_adhesion = LigneArticle.objects.create(**ligne)
+
                 ligne_articles.append(ligne_article_adhesion)
                 metadata['pk_adhesion'] = str(price_adhesion.pk)
+
+            if data.get('gift') == 'on' and not getattr(price_adhesion, 'recurring_payment', None):
+                metadata['gift'] = 'True'
+
+                gift_product, created = Product.objects.get_or_create(categorie_article=Product.DON,
+                                                                      name="Don pour la coopérative")
+                gift_price, created = Price.objects.get_or_create(product=gift_product, prix=1,
+                                                                  name="1 euros")
+                ligne_article_gift = LigneArticle.objects.create(
+                    pricesold=get_or_create_price_sold(gift_price, None),
+                    qty=1,
+                )
+                ligne_articles.append(ligne_article_gift)
 
             if len(ligne_articles) > 0:
                 new_paiement_stripe = creation_paiement_stripe(
@@ -227,6 +254,7 @@ class index_scan(View):
 
         # Email seul sans montant, c'est une adhésion
         elif data.get('email'):
+            user = get_or_create_user(data.get('email'))
             logger.info(f'send_mail_to_cashless_for_membership : {data}')
             sess = requests.Session()
             configuration = Configuration.get_solo()
@@ -243,13 +271,12 @@ class index_scan(View):
                 data={
                     'prenom': data.get('prenom'),
                     'name': data.get('name'),
-                    'email': data.get('email'),
+                    'email': user.email,
                     'tel': data.get('tel'),
                     'uuid_carte': uuid_carte,
                 })
 
             sess.close()
-
 
             # Nouveau membre créé avec uniquement l'email
 

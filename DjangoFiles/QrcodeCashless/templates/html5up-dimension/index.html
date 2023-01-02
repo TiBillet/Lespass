@@ -39,9 +39,9 @@
                     <li><a href="/media/{{ carte_resto }}">Restaurant</a></li>
                 {% endif %}
 
-{#                {% if billetterie_bool %}#}
-{#                    <li><a href="/">Billetterie</a></li>#}
-{#                {% endif %}#}
+                {#                {% if billetterie_bool %}#}
+                {#                    <li><a href="/">Billetterie</a></li>#}
+                {#                {% endif %}#}
 
                 {% if site_web %}
                     <li><a href="{{ site_web }}">Site web</a></li>
@@ -261,12 +261,20 @@
                     <h4>Payer en ligne avec un vrai robot :</h4>
                     {% for tarif in tarifs_adhesion %}
                         <ul class="actions">
-                            <li><a id="adh_{{ tarif.name | slugify }}" href="#paiementadhesionenligne"
-                                   class="button primary field">{{ tarif.product.name }} {{ tarif.name }} {{ tarif.prix | floatformat:2 | intcomma }}€</a>
+                            <li>
+                                {% if tarif.recurring_payment %}
+                                    <h6>Paiement récurent. Annulable à tout moment sans frais ni obligations :</h6>
+                                {% endif %}
+                                <a id="adh_{{ tarif.name | slugify }}" href="#paiementadhesionenligne"
+                                   class="button primary field">
+                                    {{ tarif.product.name }} {{ tarif.name }} {{ tarif.prix | floatformat:'-2' | intcomma }}€
+                                </a>
                             </li>
                         </ul>
+
                     {% endfor %}
-                    <h4>Payer à l'accueil de l'association avec un vrai humain :</h4>
+
+                    <h4>Ou payer à l'accueil de l'association avec un vrai humain :</h4>
                     <ul class="actions">
                         <li><a href="#" class="button primary field">CONTINUER</a></li>
                     </ul>
@@ -292,15 +300,23 @@
                     <div class="field" style="display: none">
                         <input id="pk_adhesion" type="text" name="pk_adhesion"
                                required="True"/>
-{#                        <input id="montant_adhesion" type="number" step="any" name="montant_adhesion"#}
-{#                               required="True"/>#}
+                        {#                        <input id="montant_adhesion" type="number" step="any" name="montant_adhesion"#}
+                        {#                               required="True"/>#}
                     </div>
 
-                    <div class="field">
+                    <div class="field" id="field_montant_recharge">
                         <h4>Voulez vous recharger votre carte en même temps ? Laissez vide si non.</h4>
                         <label for="montant_recharge">Recharge cashless (€) :</label>
                         <input id="montant_recharge" type="number" name="montant_recharge"/>
                     </div>
+
+                    <div class="field">
+                        <input type="checkbox" id="gift" name="gift" checked="true">
+                        <label for="gift">Je donne 1 euro de plus pour soutenir la coopérative Tibillet en faveur de
+                            l'économie
+                            sociale et solidaire.</label>
+                    </div>
+
                 </div>
                 <ul class="actions">
                     <li><input type="submit" value="Payer" class="primary"/></li>
@@ -397,9 +413,13 @@
             console.log('adh_{{ tarif.name | slugify }}')
             {#document.getElementById("montant_adhesion").value = "{{ tarif.prix }}";#}
             document.getElementById("pk_adhesion").value = "{{ tarif.pk }}";
-            document.getElementById("text_name_adhesion").textContent = "{{ tarif.name }}";
+            document.getElementById("text_name_adhesion").textContent = "{{ tarif.name | safe }}";
             document.getElementById("text_tarif_adhesion").textContent = "{{ tarif.prix }}€";
-        }
+
+            {% if tarif.recurring_payment %}
+                document.getElementById("field_montant_recharge").hidden = true;
+            {% endif %}
+        };
 
     {% endfor %}
 </script>

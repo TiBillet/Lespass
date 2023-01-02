@@ -1,4 +1,4 @@
-python /DjangoFiles/manage.py collectstatic
+python /DjangoFiles/manage.py collectstatic --no-input
 python /DjangoFiles/manage.py migrate
 python /DjangoFiles/manage.py create_public
 echo "Création du super utilisateur :"

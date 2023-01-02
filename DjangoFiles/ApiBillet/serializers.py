@@ -1,5 +1,6 @@
 import datetime
 import uuid
+from decimal import Decimal
 
 import requests
 import stripe
@@ -105,7 +106,8 @@ class PriceSerializer(serializers.ModelSerializer):
             'stock',
             'max_per_user',
             'adhesion_obligatoire',
-            'subscription_type'
+            'subscription_type',
+            'recurring_payment'
         ]
 
         read_only_fields = [
@@ -194,7 +196,7 @@ class NewConfigSerializer(serializers.ModelSerializer):
             # "twitter",
             # "facebook",
             # "instagram",
-            # "adhesion_obligatoire",
+            "adhesion_obligatoire",
             # "button_adhesion",
             # "map_img",
             # "carte_restaurant",
@@ -246,6 +248,16 @@ class NewConfigSerializer(serializers.ModelSerializer):
                         if config.stripe_connect_account == value:
                             raise serializers.ValidationError(
                                 _(f'Stripe account already connected to one Tenant. Please send mail to contact@tibillet.re to upgrade your plan.'))
+
+            if not info_stripe.email:
+                raise serializers.ValidationError(
+                    _(f'Please set email in your stripe account'))
+            if not info_stripe.business_profile.support_phone:
+                raise serializers.ValidationError(
+                    _(f'Please set phone number in your stripe account'))
+            if not info_stripe.business_profile.url :
+                raise serializers.ValidationError(
+                    _(f'Please set website in your stripe account'))
 
             self.info_stripe = info_stripe
 
@@ -491,7 +503,8 @@ class EventSerializer(serializers.ModelSerializer):
                     article_payant = True
 
         if article_payant:
-            gift_product, created = Product.objects.get_or_create(categorie_article=Product.DON, name="Don")
+            gift_product, created = Product.objects.get_or_create(categorie_article=Product.DON,
+                                                                  name="Don pour la coopérative")
             gift_price, created = Price.objects.get_or_create(product=gift_product, prix=1, name="Coopérative TiBillet")
             instance.products.add(gift_product)
 
@@ -571,6 +584,18 @@ class NewAdhesionValidator(serializers.Serializer):
     adhesion = serializers.PrimaryKeyRelatedField(
         queryset=Price.objects.filter(product__categorie_article=Product.ADHESION))
     email = serializers.EmailField()
+    gift = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+
+    def validate_adhesion(self, value: Price):
+
+        # Si c'est une adhésion à envoyer au serveur cashless, on vérifie qu'il soit up
+        if value.product.send_to_cashless:
+            config = Configuration.get_solo()
+            if not config.check_serveur_cashless():
+                raise serializers.ValidationError(
+                    _(f"Le serveur cashless n'est pas disponible ( check serveur false ). Merci d'essayer ultérieurement"))
+
+        return value
 
     def validate_email(self, value):
         # logger.info(f"NewAdhesionValidator validate email : {value}")
@@ -581,12 +606,6 @@ class NewAdhesionValidator(serializers.Serializer):
     def validate(self, attrs):
         price_adhesion: Price = attrs.get('adhesion')
 
-        if price_adhesion.product.send_to_cashless:
-            config = Configuration.get_solo()
-            if not config.check_serveur_cashless():
-                raise serializers.ValidationError(
-                    _(f"Le serveur cashless n'est pas disponible. Merci d'essayer ultérieurement"))
-
         user: TibilletUser = self.user
 
         metadata = {
@@ -596,7 +615,7 @@ class NewAdhesionValidator(serializers.Serializer):
         self.metadata = metadata
 
         ligne_article_adhesion = LigneArticle.objects.create(
-            pricesold=get_or_create_price_sold(price_adhesion, None),
+            pricesold=get_or_create_price_sold(price_adhesion, None, gift=attrs.get('gift')),
             qty=1,
         )
 
@@ -716,13 +735,13 @@ def create_ticket(pricesold, customer, reservation):
     return ticket
 
 
-def get_or_create_price_sold(price: Price, event: Event):
+def get_or_create_price_sold(price: Price, event: Event, gift=None):
     """
     Générateur des objets PriceSold pour envoi à Stripe.
     Price + Event = PriceSold
 
     On va chercher l'objet prix générique.
-    On lie le prix générique a l'event
+    On lie le prix générique à l'event
     pour générer la clé et afficher le bon nom sur stripe
     """
 
@@ -735,10 +754,15 @@ def get_or_create_price_sold(price: Price, event: Event):
         productsold.get_id_product_stripe()
     logger.info(f"productsold {productsold.nickname()} created : {created} - {productsold.get_id_product_stripe()}")
 
+    prix = price.prix
+    if gift:
+        prix = price.prix + gift
+
     pricesold, created = PriceSold.objects.get_or_create(
         productsold=productsold,
-        prix=price.prix,
+        prix=prix,
         price=price,
+        gift=gift
     )
 
     if created:
@@ -779,6 +803,7 @@ class DetailCashlessCardsValidator(serializers.ModelSerializer):
             "generation",
         ]
 
+
 class DetailCashlessCardsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Detail
@@ -788,7 +813,6 @@ class DetailCashlessCardsSerializer(serializers.ModelSerializer):
             "generation",
             "uuid",
         ]
-
 
 
 class CashlessCardsValidator(serializers.Serializer):
@@ -820,22 +844,22 @@ class CashlessCardsValidator(serializers.Serializer):
     def validate_detail(self, value):
         detailDb = get_object_or_404(Detail, uuid=value)
 
-        if self.detail_from_db != detailDb :
+        if self.detail_from_db != detailDb:
             raise serializers.ValidationError(_(f'erreur url carte != detail uuid'))
 
         return value
 
     # def to_representation(self, data):
-        # data contiendra la liste d'objets à représenter
-        # representation = super().to_representation(data)
+    # data contiendra la liste d'objets à représenter
+    # representation = super().to_representation(data)
 
-        # for obj in representation:
-        #     obj['uuid_qrcode'] = self.uuid_qrcode
-        #     obj['detail'] = self.detail
-        # return representation
+    # for obj in representation:
+    #     obj['uuid_qrcode'] = self.uuid_qrcode
+    #     obj['detail'] = self.detail
+    # return representation
 
     def validate(self, attrs):
-        if not attrs.get('detail') and self.detail_from_db :
+        if not attrs.get('detail') and self.detail_from_db:
             attrs['detail'] = self.detail_from_db.uuid
         validation = super().validate(attrs)
         return validation
@@ -919,11 +943,11 @@ class ReservationValidator(serializers.Serializer):
         """
         On vérifie ici :
           que chaque article existe et a une quantité valide.
-          qu'il existe au moins un billet pour la reservation.
-          que chaque billet possède un nom/prenom
+          Qu'il existe au moins un billet pour la reservation.
+          Que chaque billet possède un nom/prenom
 
         On remplace le json reçu par une liste de dictionnaire
-        qui comporte les objets de la db a la place des strings.
+        qui comporte les objets de la db à la place des strings.
         """
 
         self.nbr_ticket = 0
@@ -1016,7 +1040,7 @@ class ReservationValidator(serializers.Serializer):
                 reservation.options.add(option)
 
         self.reservation = reservation
-        # Ici on construit :
+        # Ici, on construit :
         #   price_sold pour lier l'event à la vente
         #   ligne article pour envoi en paiement
         #   Ticket nominatif
@@ -1026,7 +1050,7 @@ class ReservationValidator(serializers.Serializer):
         for price_object in self.prices_list:
             price_generique: Price = price_object['price']
             qty = price_object.get('qty')
-            total_checkout += qty * price_generique.prix
+            total_checkout += Decimal(qty) * price_generique.prix
 
             pricesold: PriceSold = get_or_create_price_sold(price_generique, event)
 
@@ -1094,7 +1118,7 @@ class ReservationValidator(serializers.Serializer):
                 # Si l'utilisateur est actif, il a vérifié son email.
                 if self.user_commande.is_active:
                     reservation.status = Reservation.FREERES_USERACTIV
-                # Sinon on attend que l'user ai vérifié son email.
+                # Sinon, on attend que l'user ait vérifié son email.
                 # La fonctione presave du fichier BaseBillet.signals
                 # mettra à jour le statut de la réservation et enverra le billet dés validation de l'email
                 else:
