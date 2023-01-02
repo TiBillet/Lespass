@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+docker network create frontend
 docker compose down --remove-orphans
 sudo rm -rf ../../Postgres/dbdata
 

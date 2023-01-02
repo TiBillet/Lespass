@@ -1,0 +1,14 @@
+version: '3.3'
+services:
+  playwright:
+    build: docker_playwright
+    container_name: playwright
+    env_file: .env
+    working_dir: /Playwright-tests
+    volumes:
+      - ./tests:/Playwright-tests/tests
+      - ./mesModules:/Playwright-tests/mesModules
+      - ./.env:/Playwright-tests/.env
+      - ./playwright.config.js:/Playwright-tests/playwright.config.js
+    tty: true
+    command: "/bin/bash"

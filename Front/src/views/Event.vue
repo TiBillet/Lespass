@@ -1,5 +1,5 @@
 <template>
-  <div v-if="Object.entries(event).length > 0" class="container mt-5">
+  <div v-if="Object.entries(event).length > 0" class="container mt-5 test-view-event">
 
     <!-- artistes -->
     <div v-for="(artist, index) in event.artists" :key="index">

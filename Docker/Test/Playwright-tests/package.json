@@ -8,10 +8,14 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@playwright/test": "^1.28.1"
+    "@playwright/test": "^1.29.1"
   },
   "dependencies": {
     "dotenv": "^16.0.3",
     "moment": "^2.29.4"
+  },
+  "volta": {
+    "node": "18.12.1",
+    "npm": "9.2.0"
   }
 }
