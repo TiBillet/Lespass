@@ -462,61 +462,67 @@ def ticket_celery_mailer(reservation_uuid: str, base_url):
 def send_membership_to_cashless(data):
     configuration = Configuration.get_solo()
     if not configuration.server_cashless or not configuration.key_cashless:
-        logger.warning(f'Pas de configuration cashless')
+        logger.error(f'Pas de configuration cashless')
+        raise Exception(f'Fonction send_membership_to_cashless : Pas de configuration cashless')
 
-    else:
-        ligne_article = LigneArticle.objects.get(pk=data.get('ligne_article_pk'))
-        user = ligne_article.paiement_stripe.user
+    ligne_article = LigneArticle.objects.get(pk=data.get('ligne_article_pk'))
+    user = ligne_article.paiement_stripe.user
 
-        price_float = ligne_article.pricesold.prix
-        price_obj = ligne_article.pricesold.price
-        membre = Membership.objects.get(user=user, price=price_obj)
+    price_obj = ligne_article.pricesold.price
+    price_decimal = ligne_article.pricesold.prix
 
-        if not membre.first_contribution:
-            membre.first_contribution = timezone.now().date()
+    # Si c'est un price avec un don intégré (comme une adhésion récurente)
+    # On garde 1€ pour l'instance
+    if ligne_article.pricesold.gift:
+        price_decimal += -1
 
-        membre.last_contribution = timezone.now().date()
-        membre.contribution_value = price_float
-        membre.save()
+    membre = Membership.objects.get(user=user, price=price_obj)
 
-        data = {
-            "email": membre.email(),
-            "adhesion": price_float,
-            "uuid_commande": ligne_article.paiement_stripe.uuid,
-            "first_name": membre.first_name,
-            "last_name": membre.last_name,
-            "phone": membre.phone,
-            "postal_code": membre.postal_code,
-            "birth_date": membre.birth_date,
-        }
+    if not membre.first_contribution:
+        membre.first_contribution = timezone.now().date()
 
-        try:
+    membre.last_contribution = timezone.now().date()
+    membre.contribution_value = price_decimal
+    membre.save()
 
-            sess = requests.Session()
-            r = sess.post(
-                f'{configuration.server_cashless}/api/membership',
-                headers={
-                    'Authorization': f'Api-Key {configuration.key_cashless}'
-                },
-                data=data,
-            )
+    data = {
+        "email": membre.email(),
+        "adhesion": price_decimal,
+        "uuid_commande": ligne_article.paiement_stripe.uuid,
+        "first_name": membre.first_name,
+        "last_name": membre.last_name,
+        "phone": membre.phone,
+        "postal_code": membre.postal_code,
+        "birth_date": membre.birth_date,
+    }
 
-            sess.close()
-            logger.info(
-                f"        demande au serveur cashless pour {data}. réponse : {r.status_code} ")
+    try:
 
-            if r.status_code in [200, 201, 202]:
-                ligne_article.status = LigneArticle.VALID
-            else:
-                logger.error(
-                    f"erreur réponse serveur cashless {r.status_code} {r.text}")
+        sess = requests.Session()
+        r = sess.post(
+            f'{configuration.server_cashless}/api/membership',
+            headers={
+                'Authorization': f'Api-Key {configuration.key_cashless}'
+            },
+            data=data,
+        )
 
-        except ConnectionError as e:
+        sess.close()
+        logger.info(
+            f"        demande au serveur cashless pour {data}. réponse : {r.status_code} ")
+
+        if r.status_code in [200, 201, 202]:
+            ligne_article.status = LigneArticle.VALID
+        else:
             logger.error(
-                f"ConnectionError serveur cashless {configuration.server_cashless} : {e}")
+                f"erreur réponse serveur cashless {r.status_code} {r.text}")
 
-        except Exception as e:
-            raise Exception(f'Exception request send_membership_to_cashless {type(e)} : {e} ')
+    except ConnectionError as e:
+        logger.error(
+            f"ConnectionError serveur cashless {configuration.server_cashless} : {e}")
+
+    except Exception as e:
+        raise Exception(f'Exception request send_membership_to_cashless {type(e)} : {e} ')
 
 
 @app.task
@@ -580,6 +586,7 @@ def stripe_wallet_update_celery(wallet_pk):
                 "stripe_wallet_value": wallet.qty
             }
 
+            #TODO: Suivre ceci avec Flower et surveiller les erreurs.
             request_server_cashless.delay(
                 url,
                 config.key_cashless,

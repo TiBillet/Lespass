@@ -175,7 +175,7 @@ class TenantViewSet(viewsets.ViewSet):
                     )
 
                     if not created:
-                        # raise serializers.ValidationError(_("Vous n'avez pas la permission de créer de nouveaux lieux"))
+                        logger.error(f"{futur_conf.get('organisation')} existe déja")
                         return Response(_(json.dumps(
                             {"uuid": f"{tenant.uuid}", "msg": f"{futur_conf.get('organisation')} existe déja"})),
                             status=status.HTTP_409_CONFLICT)
@@ -187,8 +187,10 @@ class TenantViewSet(viewsets.ViewSet):
                     )
 
                 except IntegrityError as e:
+                    logger.error(e)
                     return Response(_(f"{e}"), status=status.HTTP_400_BAD_REQUEST)
                 except Exception as e:
+                    logger.error(e)
                     return Response(_(f"{e}"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
             with tenant_context(tenant):
@@ -421,10 +423,6 @@ class DetailCashlessCards(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
-
-
-
-
 class Loadcardsfromdict(viewsets.ViewSet):
     def create(self, request):
         # logger.info(request.data)
@@ -649,7 +647,7 @@ class Cancel_sub(APIView):
             config = Configuration.get_solo()
             stripe.Subscription.delete(
                 membership.stripe_id_subscription,
-                stripe_account=config.get_stripe_connect_account(),
+                # stripe_account=config.get_stripe_connect_account(),
             )
             membership.status = Membership.CANCELED
             membership.save()
@@ -969,7 +967,7 @@ def paiment_stripe_validator(request, paiement_stripe):
         config = Configuration.get_solo()
         checkout_session = stripe.checkout.Session.retrieve(
             paiement_stripe.checkout_session_id_stripe,
-            stripe_account=config.get_stripe_connect_account()
+            # stripe_account=config.get_stripe_connect_account()
         )
 
         paiement_stripe.customer_stripe = checkout_session.customer
@@ -1010,7 +1008,7 @@ def paiment_stripe_validator(request, paiement_stripe):
                         paiement_stripe.subscription = checkout_session.subscription
                         subscription = stripe.Subscription.retrieve(
                             checkout_session.subscription,
-                            stripe_account=config.get_stripe_connect_account()
+                            # stripe_account=config.get_stripe_connect_account()
                         )
                         paiement_stripe.invoice_stripe = subscription.latest_invoice
 
@@ -1041,7 +1039,7 @@ def paiment_stripe_validator(request, paiement_stripe):
             # on boucle ici pour récuperer l'uuid de la carte.
             for ligne_article in lignes_articles:
                 carte = ligne_article.carte
-                if carte :
+                if carte:
                     if request.method == 'GET':
                         # On re-boucle pour récuperer les noms des articles vendus afin de les afficher sur le front
                         for ligneArticle in lignes_articles:
@@ -1112,13 +1110,39 @@ def paiment_stripe_validator(request, paiement_stripe):
     raise Http404(f'{paiement_stripe.status}')
 
 
-def info_stripe(id_acc_connect):
+
+@permission_classes([permissions.AllowAny])
+class UpdateFederatedAsset(APIView):
+    def post(self, request):
+        """
+        Reception d'une demande d'update d'un portefeuille fédéré d'une carte cashless.
+        On vérifie vers le serveur cashless ou vient la requete que la valeur est bonne (NTUI!)
+        On met à jour la valeur en base de donnée sur la billetterie.
+        Ensuite, on met à jour dans tous les serveurs cashless fédéré
+
+        :param request:
+            data = {
+                "card_uuid_qrcode": carte.uuid_qrcode,
+                "qty": new_qty,
+                "domain": config.domaine_cashless,
+                }
+        :return:
+        """
+
+        # import ipdb; ipdb.set_trace()
+        data = request.data
+        logger.info(f"UpdateFederatedAsset : {data}")
+        carte = get_object_or_404(CarteCashless, uuid=data['card_uuid_qrcode'])
+        return Response(f"{carte.uuid}", status=status.HTTP_202_ACCEPTED)
+
+
+def info_connected_account_stripe(id_acc_connect):
     stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
     info_stripe = stripe.Account.retrieve(id_acc_connect)
     return info_stripe
 
 
-def account_link(id_acc_connect=False):
+def create_account_link_for_onboard(id_acc_connect=False):
     rootConf = RootConfiguration.get_solo()
     stripe.api_key = rootConf.get_stripe_api()
 
@@ -1127,7 +1151,7 @@ def account_link(id_acc_connect=False):
 
     if not id_acc_connect:
         acc_connect = stripe.Account.create(
-            type="express",
+            type="standard",
             country="FR",
         )
         id_acc_connect = acc_connect.get('id')
@@ -1146,18 +1170,19 @@ def account_link(id_acc_connect=False):
 @permission_classes([permissions.AllowAny])
 class Onboard_stripe_return(APIView):
     def get(self, request, id_acc_connect):
-        details_submitted = info_stripe(id_acc_connect).details_submitted
+        details_submitted = info_connected_account_stripe(id_acc_connect).details_submitted
         if details_submitted:
             logger.info(f"details_submitted : {details_submitted}")
             return HttpResponseRedirect(f"/onboardreturn/{id_acc_connect}/")
         else:
-            return Response(f"{account_link()}", status=status.HTTP_206_PARTIAL_CONTENT)
+            return Response(f"{create_account_link_for_onboard()}", status=status.HTTP_206_PARTIAL_CONTENT)
 
 
 @permission_classes([permissions.AllowAny])
 class Onboard(APIView):
     def get(self, request):
-        return Response(f"{account_link()}", status=status.HTTP_202_ACCEPTED)
+        return Response(f"{create_account_link_for_onboard()}", status=status.HTTP_202_ACCEPTED)
+
 
 
 @permission_classes([permissions.AllowAny])
@@ -1199,7 +1224,6 @@ class Webhook_stripe(APIView):
         #     logger.info(f"{payload}")
         #     logger.info(f"")
         #     logger.info(f"")
-
 
         elif payload.get('type') == "invoice.paid":
             # logger.info(f" ")

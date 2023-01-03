@@ -90,19 +90,34 @@ class Wallet(models.Model):
 
     last_date_used = models.DateTimeField(auto_now=True)
 
-    # Un wallet DOIT avoir un user
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    # Un wallet DOIT avoir un user ou une carte
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True)
+    # La carte seule est dans le cas d'un festival ou l'utilisateur n'a pas lié
+    # son billet ni payé en ligne au moins une fois (email nécéssaire)
+    card = models.ForeignKey(CarteCashless, on_delete=models.PROTECT, null=True, blank=True)
 
     sync = models.JSONField(null=True, blank=True)
-
-    # card = models.ForeignKey(
-    #     CarteCashless,
-    #     on_delete=models.PROTECT,
-    #     null=True, blank=True
-    # )
 
     def __str__(self):
         return f'{self.asset.name}, {self.qty}'
 
     class Meta:
         unique_together = [['asset', 'user']]
+
+    def save(self, force_insert=False, force_update=False, using=None, update_fields=None):
+        # On vérifie que le wallet possède soit un User, soit une carte.
+        if self.user is None and self.card is None:
+            raise ValueError('Wallet must have a user or a card')
+
+        # Si la carte à un user, on l'associe au wallet
+        if self.card.user is not None:
+            if not self.user :
+                self.user = self.card.user
+
+            # Si l'utilisateur de la carte est différent de celui du wallet
+            elif self.user != self.card.user:
+                raise ValueError('Wallet user must be the same as the card user')
+
+        super().save(force_insert, force_update, using, update_fields)
+
+

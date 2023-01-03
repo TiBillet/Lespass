@@ -12,7 +12,7 @@ from rest_framework import status
 
 from ApiBillet.serializers import get_or_create_user, get_or_create_price_sold, get_near_event_by_date
 from BaseBillet.models import Configuration, Product, LigneArticle, Price, Paiement_stripe, ProductSold, Event
-from PaiementStripe.views import creation_paiement_stripe
+from PaiementStripe.views import CreationPaiementStripe
 from QrcodeCashless.models import CarteCashless
 
 import logging
@@ -107,7 +107,11 @@ class index_scan(View):
 
         if reponse_server_cashless.status_code == 200:
             json_reponse = json.loads(reponse_server_cashless.json())
+
             email = json_reponse.get('email')
+            if carte.user:
+                email = carte.user.email
+
             a_jour_cotisation = json_reponse.get('a_jour_cotisation')
 
             if json_reponse.get('history'):
@@ -178,7 +182,7 @@ class index_scan(View):
                 # TODO: Checker si l'image existe. Sinon erreur lorsqu'on change l'image ensuite ...
                 product, created = Product.objects.get_or_create(
                     name=f"Recharge Carte {carte.detail.origine.name} v{carte.detail.generation}",
-                    categorie_article=Product.RECHARGE_CASHLESS,
+                    categorie_article=Product.RECHARGE_FEDERATED,
                     img=carte.detail.img,
                 )
 
@@ -234,7 +238,7 @@ class index_scan(View):
                 ligne_articles.append(ligne_article_gift)
 
             if len(ligne_articles) > 0:
-                new_paiement_stripe = creation_paiement_stripe(
+                new_paiement_stripe = CreationPaiementStripe(
                     user=user,
                     liste_ligne_article=ligne_articles,
                     metadata=metadata,

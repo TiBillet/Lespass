@@ -22,7 +22,7 @@ from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, Paiement_stripe, \
     PriceSold, ProductSold, Artist_on_event, OptionGenerale, Membership
 from Customers.models import Client
-from PaiementStripe.views import creation_paiement_stripe
+from PaiementStripe.views import CreationPaiementStripe
 
 import logging
 
@@ -619,7 +619,7 @@ class NewAdhesionValidator(serializers.Serializer):
             qty=1,
         )
 
-        new_paiement_stripe = creation_paiement_stripe(
+        new_paiement_stripe = CreationPaiementStripe(
             user=user,
             liste_ligne_article=[ligne_article_adhesion, ],
             metadata=metadata,
@@ -890,7 +890,7 @@ class ChargeCashlessValidator(serializers.Serializer):
         }
         self.metadata = metadata
 
-        new_paiement_stripe = creation_paiement_stripe(
+        new_paiement_stripe = CreationPaiementStripe(
             user=user,
             liste_ligne_article=[line_article_recharge(self.card, qty)],
             metadata=metadata,
@@ -1076,7 +1076,7 @@ class ReservationValidator(serializers.Serializer):
                 'tenant': f'{connection.tenant.uuid}',
             }
 
-            new_paiement_stripe = creation_paiement_stripe(
+            new_paiement_stripe = CreationPaiementStripe(
                 user=self.user_commande,
                 liste_ligne_article=list_line_article_sold,
                 metadata=metadata,

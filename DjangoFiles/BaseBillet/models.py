@@ -315,7 +315,7 @@ class Configuration(SingletonModel):
 class Product(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
 
-    name = models.CharField(max_length=500, unique=True, verbose_name=_("Nom"))
+    name = models.CharField(max_length=500, verbose_name=_("Nom"))
 
     short_description = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Description courte"))
     long_description = models.TextField(blank=True, null=True, verbose_name=_("Description longue"))
@@ -339,14 +339,14 @@ class Product(models.Model):
                         verbose_name=_('Image du produit'),
                         )
 
-    NONE, BILLET, PACK, RECHARGE_CASHLESS, RECHARGE_SUSPENDUE, VETEMENT, MERCH, ADHESION, DON, FREERES = 'N', 'B', 'P', 'R', 'S', 'T', 'M', 'A', 'D', 'F'
+    NONE, BILLET, PACK, RECHARGE_CASHLESS, RECHARGE_FEDERATED, VETEMENT, MERCH, ADHESION, DON, FREERES = 'N', 'B', 'P', 'R', 'S', 'T', 'M', 'A', 'D', 'F'
 
     CATEGORIE_ARTICLE_CHOICES = [
         (NONE, _('Selectionnez une catégorie')),
         (BILLET, _('Billet')),
         (PACK, _("Pack d'objets")),
         (RECHARGE_CASHLESS, _('Recharge cashless')),
-        (RECHARGE_SUSPENDUE, _('Recharge suspendue')),
+        (RECHARGE_FEDERATED, _('Recharge suspendue')),
         (VETEMENT, _('Vetement')),
         (MERCH, _('Merchandasing')),
         (ADHESION, _('Adhésions et abonnements')),
@@ -373,7 +373,7 @@ class Product(models.Model):
         ordering = ('poids',)
         verbose_name = _('Produit')
         verbose_name_plural = _('Produits')
-
+        unique_together = ('categorie_article', 'name')
 
 @receiver(post_save, sender=Product)
 def poids_Product(sender, instance: Product, created, **kwargs):
@@ -662,7 +662,7 @@ class ProductSold(models.Model):
             return self.id_product_stripe
 
         stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-        config = Configuration.get_solo()
+        # config = Configuration.get_solo()
 
         client = connection.tenant
         domain_url = client.domains.all()[0].domain
@@ -673,7 +673,7 @@ class ProductSold(models.Model):
 
         product = stripe.Product.create(
             name=f"{self.nickname()}",
-            stripe_account=config.get_stripe_connect_account(),
+            # stripe_account=config.get_stripe_connect_account(),
             images=images
         )
         self.id_product_stripe = product.id
@@ -714,7 +714,7 @@ class PriceSold(models.Model):
             return self.id_price_stripe
 
         stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-        config = Configuration.get_solo()
+        # config = Configuration.get_solo()
         try:
             product_stripe = self.productsold.get_id_product_stripe()
             stripe.Product.retrieve(product_stripe)
@@ -725,7 +725,7 @@ class PriceSold(models.Model):
             'unit_amount': f"{int(Decimal(self.prix) * 100)}",
             'currency': "eur",
             'product': product_stripe,
-            'stripe_account': config.get_stripe_connect_account(),
+            # 'stripe_account': config.get_stripe_connect_account(),
             'nickname': f"{self.price.name}",
         }
 

@@ -298,7 +298,8 @@ def pre_save_signal_status(sender, instance, **kwargs):
 
 @receiver(pre_save, sender=Wallet)
 def wallet_update_to_celery(sender, instance: Wallet, **kwargs):
-    # Si ça n'est pas la création :
+    # Ne pas lancer à la création
+    # Le modèle se re-save une seconde fois, à la validation du paiement.
     if not instance._state.adding:
         if instance.asset.is_federated:
             old_instance = sender.objects.get(pk=instance.pk)
