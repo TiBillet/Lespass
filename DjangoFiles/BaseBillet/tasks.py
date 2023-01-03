@@ -549,48 +549,58 @@ def webhook_reservation(reservation_pk):
 
 
 @app.task
-def request_server_cashless(url, key, data):
+def request_server_cashless_updateFed(url: str = None, key: str = None, data: dict = None) -> requests.status_codes:
     sess = requests.Session()
     r = sess.post(
-        f'{url}/api/updatewallet',
+        f'{url}/api/updatefedwallet',
+        data=data,
         headers={
             'Authorization': f'Api-Key {key}'
-        },
-        data=data,
+        }
     )
 
     sess.close()
-    logger.info(
-        f"        wallet_update_celery : pour {data}. réponse : {r.status_code} ")
 
     if r.status_code not in [200, ]:
         logger.error(
-            f"wallet_update_celery erreur réponse serveur cashless {r.status_code} {r.text}")
+            f"request_server_cashless_updateFed {r.status_code} {r.text}")
+        raise Exception(f"request_server_cashless_updateFed {r.status_code} {r.text}")
+
+    return r.status_code
 
 
 @app.task
 def stripe_wallet_update_celery(wallet_pk):
+    # On récupère toute les url des serveurs cashless fédérés
+    public_tenant_categorie = [Client.META, Client.ROOT]
     fed_clients = []
 
-    # TODO: Ajouter tous les tenants fédérés
-    fed_clients.append(connection.tenant)
-    wallet = Wallet.objects.get(pk=wallet_pk)
-
-    for tenant in fed_clients:
+    for tenant in Client.objects.exclude(categorie__in=public_tenant_categorie):
         with tenant_context(tenant):
-            config = Configuration.get_solo()
-            url = f"{config.server_cashless}/api/updatewallet"
+            configuration = Configuration.get_solo()
+            if configuration.server_cashless and configuration.key_cashless:
+                fed_clients.append({
+                    'shema_name': tenant.schema_name,
+                    'url': configuration.server_cashless,
+                    'key': configuration.key_cashless,
+                })
 
-            data = {
-                "email": wallet.user.email,
-                "stripe_wallet_value": wallet.qty
-            }
+    meta_tenant = Client.objects.filter(categorie=Client.META).first()
+    with tenant_context(meta_tenant):
+        wallet = Wallet.objects.get(pk=wallet_pk)
+        data = {
+            "email": wallet.user.email,
+            "stripe_wallet_value": wallet.qty,
+        }
 
-            #TODO: Suivre ceci avec Flower et surveiller les erreurs.
-            request_server_cashless.delay(
-                url,
-                config.key_cashless,
-                data,
+        if wallet.card:
+            data['card_uuid'] = wallet.card.uuid
+
+        for fed_client in fed_clients:
+            request_server_cashless_updateFed.delay(
+                url=fed_client['url'],
+                key=fed_client['key'],
+                data=data,
             )
 
 

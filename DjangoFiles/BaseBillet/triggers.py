@@ -149,7 +149,7 @@ def increment_federated_wallet(vente):
     cashless_card = ligne_article.carte
     wallet = get_federated_wallet(cashless_card=cashless_card, user=user)
 
-    logger.info(f"    WALLET : {wallet.qty} + {ligne_article.total()}")
+    logger.debug(f"    triggers.increment_federated_wallet - WALLET : {wallet.qty} + {ligne_article.total()}")
 
     wallet.qty += ligne_article.total()
     wallet.save()
