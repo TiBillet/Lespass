@@ -66,7 +66,7 @@ test.describe.only('Peuplement initial de la db "billetterie".', () => {
     const products = dataDb.filter(obj => obj.typeData === 'product')
     for (const productR of products) {
       console.log('Création produit', productR.value.name)
-      const url = `http://${productR.place}.${process.env.DOMAIN}:8002/api/products/`
+      const url = `https://${productR.place}.${process.env.DOMAIN}/api/products/`
       response = await request.post(url, {
         headers: {
           "Content-Type": "application/json",
@@ -89,7 +89,7 @@ test.describe.only('Peuplement initial de la db "billetterie".', () => {
     const prices = dataDb.filter(obj => obj.typeData === 'price')
     for (const priceR of prices) {
       console.log('Création du prix', priceR.value.name)
-      const url = `http://${priceR.place}.${process.env.DOMAIN}:8002/api/prices/`
+      const url = `https://${priceR.place}.${process.env.DOMAIN}/api/prices/`
       const uuidProduct = products.find(obj => obj.value.name === priceR.productName).value.uuid
       priceR.value['product'] = uuidProduct
       // console.log('url =', url)
@@ -116,7 +116,8 @@ test.describe.only('Peuplement initial de la db "billetterie".', () => {
     const events = dataDb.filter(obj => obj.typeData === 'event')
     for (const eventR of events) {
       console.log("Création d'un évènement.")
-      const url = `http://${eventR.place}.${process.env.DOMAIN}:8002/api/events/`
+      const url = `https://${eventR.place}.${process.env.DOMAIN}/api/events/`
+      console.log('url =', url)
       // init
       let dataEvent = {
         datetime: randomDate(),

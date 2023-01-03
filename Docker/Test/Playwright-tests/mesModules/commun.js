@@ -3,8 +3,11 @@ import moment from 'moment'
 import * as dotenv from 'dotenv'
 import * as fs from 'node:fs'
 
+test.use({ignoreHTTPSErrors: true})
+
 // ajoute les variables de .env aux variables d'environnement, accessibles par process.env.XXXXX
 dotenv.config({path: './.env'})
+
 // console.log('env =', process.env)
 /**
  * Retourne la date d'aujourd'hui + un nombre aléatoire(1 à 365) de jours
@@ -28,7 +31,8 @@ export const getRootJWT = async function () {
       baseURL: process.env.URL_ROOT,
       ignoreHTTPSErrors: true
     })
-    const response = await context.post(process.env.URL_META + '/api/user/token/', {
+
+    const response = await context.post('/api/user/token/', {
       headers: {
         "Content-Type": "application/json"
       },
