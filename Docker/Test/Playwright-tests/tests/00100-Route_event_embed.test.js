@@ -7,7 +7,7 @@ test.use({viewport: {width: 1400, height: 1300}})
 
 let page
 const email = process.env.EMAIL
-const urlTester = 'http://raffinerie.django-local.org:8002'
+const urlTester = 'https://raffinerie.django-local.org'
 
 test.describe('Route event/embed/.', () => {
   test('Formulaire réservation puis stripe.', async ({browser}) => {

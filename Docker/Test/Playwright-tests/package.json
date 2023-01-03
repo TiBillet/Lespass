@@ -7,10 +7,8 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "devDependencies": {
-    "@playwright/test": "^1.29.1"
-  },
   "dependencies": {
+    "@playwright/test": "^1.29.1",
     "dotenv": "^16.0.3",
     "moment": "^2.29.4"
   },

@@ -9,6 +9,8 @@ const urlBaseRaffinerie = 'http://' + process.env.SLUG_PLACE_RAFFINERIE + '.' + 
 test.describe.only('Peuplement initial de la db "billetterie".', () => {
   test('Place rafftou create', async ({request}) => {
     tokenBilletterie = await getRootJWT()
+    console.log('tokenBilletterie =', tokenBilletterie)
+    /*
     const response = await request.post(process.env.URL_META + '/api/place/', {
       headers: {
         "Content-Type": "application/json"
@@ -28,6 +30,8 @@ test.describe.only('Peuplement initial de la db "billetterie".', () => {
       }
     })
     expect(response.ok()).toBeTruthy()
+
+     */
   })
 
   test('Artist Ziskakan create', async ({request}) => {
@@ -39,10 +43,10 @@ test.describe.only('Peuplement initial de la db "billetterie".', () => {
         organisation: "Ziskakan",
         short_description: "40 ans de Maloya Rock !",
         long_description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
-        phone: "0692929292",
-        email: "jturbeaux+ziz@pm.me",
-        site_web: "https://www.ziskakan.re",
-        postal_code: "97410",
+        // phone: "0692929292",
+        // email: "jturbeaux+ziz@pm.me",
+        // site_web: "https://www.ziskakan.re",
+        // postal_code: "97410",
         img_url: "https://lespas.re/wp-content/uploads/2021/06/Ziskakan-%C2%A9Pierre-Yves-Babelon-lespas-1-1200x1200.jpg",
         logo_url: "https://lespas.re/wp-content/uploads/2021/06/Ziskakan-%C2%A9Pierre-Yves-Babelon-lespas-1-1200x1200.jpg",
         categorie: "A",

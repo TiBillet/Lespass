@@ -19,6 +19,7 @@ volta install npm@8.19.2
 ## installer les dépendences de playwright
 ```
 npm i
+npx playwright install
 ```
 
 ## Lancer les Tests
