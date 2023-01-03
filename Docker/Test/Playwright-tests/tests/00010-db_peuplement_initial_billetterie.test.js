@@ -1,217 +1,167 @@
 import {expect, test} from '@playwright/test'
-import {getRootJWT, randomDate} from '../mesModules/commun.js'
-
+import {getRootJWT, randomDate, initData, getData, updateData} from '../mesModules/commun.js'
+// commun.js avant dataPeuplementInit.json, pour les variables d'environnement
 
 const email = process.env.TEST_MAIL
-let tokenBilletterie, uuidS = []
-const urlBaseRaffinerie = 'http://' + process.env.SLUG_PLACE_RAFFINERIE + '.' + process.env.DOMAIN + ':8002'
+let tokenBilletterie
+
 
 test.describe.only('Peuplement initial de la db "billetterie".', () => {
-  test('Place rafftou create', async ({request}) => {
+  test('Get root token', async ({request}) => {
     tokenBilletterie = await getRootJWT()
     console.log('tokenBilletterie =', tokenBilletterie)
-    /*
-    const response = await request.post(process.env.URL_META + '/api/place/', {
-      headers: {
-        "Content-Type": "application/json"
-      },
-      data: {
-        organisation: "Raffinerie",
-        short_description: "Tiers-lieux eco-culturel du Billetistan",
-        long_description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
-        phone: "0692929292",
-        email: process.env.EMAIL,
-        site_web: "https://laraffinerie.re/",
-        postal_code: "97410",
-        img_url: "https://picsum.photos/1920/1080.jpg",
-        logo_url: "https://picsum.photos/300/300.jpg",
-        categorie: "S",
-        stripe_connect_account: process.env.ID_STRIPE
-      }
-    })
-    expect(response.ok()).toBeTruthy()
 
-     */
   })
 
-  test('Artist Ziskakan create', async ({request}) => {
-    const response = await request.post(process.env.URL_META + '/api/artist/', {
-      headers: {
-        "Content-Type": "application/json"
-      },
-      data: {
-        organisation: "Ziskakan",
-        short_description: "40 ans de Maloya Rock !",
-        long_description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
-        // phone: "0692929292",
-        // email: "jturbeaux+ziz@pm.me",
-        // site_web: "https://www.ziskakan.re",
-        // postal_code: "97410",
-        img_url: "https://lespas.re/wp-content/uploads/2021/06/Ziskakan-%C2%A9Pierre-Yves-Babelon-lespas-1-1200x1200.jpg",
-        logo_url: "https://lespas.re/wp-content/uploads/2021/06/Ziskakan-%C2%A9Pierre-Yves-Babelon-lespas-1-1200x1200.jpg",
-        categorie: "A",
-        stripe_connect_account: process.env.ID_STRIPE
-      }
-    })
-    expect(response.ok()).toBeTruthy()
-    const retour = await response.json()
-    // console.log('retour artist =', retour)
-    // mémorise le uuid de l'artiste 'Ziskakan'
-    uuidS.push({name: 'Ziskakan', uuid: retour.uuid})
+  test('initData', async ({request}) => {
+    // ne faire qu'une fois si l'on veut garder en état le cheminement des tests
+    await initData()
   })
 
-  test('Artist Balaphonik create', async ({request}) => {
-    const response = await request.post(process.env.URL_META + '/api/artist/', {
-      headers: {
-        "Content-Type": "application/json"
-      },
-      data: {
-        organisation: "Balaphonik Sound System",
-        short_description: "Balaphonik Sound System fait danser les corps, ressource et rafraîchit les esprits.",
-        long_description: "Multi-instrumentiste, Alex a participé à des projets musicaux variés. Usant tous les genres, du métal au gnawa et du reggae au hiphop, il étudie le rythme sous toutes ses formes, à travers ses rencontres et ses voyages.",
-        phone: "0692929292",
-        email: "jturbeaux+ziz@pm.me",
-        site_web: "https://balaphonik.wixsite.com/balaphonik",
-        postal_code: "97410",
-        img_url: "https://www.festival-arbre-creux.fr/wp-content/uploads/2019/05/balaphonik-3.jpg",
-        logo_url: "https://i.ytimg.com/vi/HkRYJg7dnNM/hqdefault.jpg",
-        categorie: "A",
-        stripe_connect_account: process.env.ID_STRIPE
-      }
-    })
-    expect(response.ok()).toBeTruthy()
-    const retour = await response.json()
-    uuidS.push({name: 'Balaphonik', uuid: retour.uuid})
+  test('Create places', async ({request}) => {
+    const dataDb = getData()
+    let response
+    const places = dataDb.filter(obj => obj.typeData === 'place')
+    for (const placeR of places) {
+      // ajout, donc modification
+      placeR.value['stripe_connect_account'] = process.env.ID_STRIPE
+      console.log('Création du lieu ', placeR.value.organisation)
+      response = await request.post(process.env.URL_META + '/api/place/', {
+        headers: {
+          "Content-Type": "application/json"
+        },
+        data: placeR.value
+      })
+      expect(response.ok()).toBeTruthy()
+    }
+    // maj pour garder le state db dans les prochains tests
+    updateData(dataDb)
   })
 
-  test('Product Billet Create', async ({request}) => {
-    const url = urlBaseRaffinerie + '/api/products/'
-    // console.log('url =', url)
-    const response = await request.post(url, {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: 'Bearer ' + tokenBilletterie
-      },
-      data: {
-        name: "Billet",
-        publish: true,
-        img_url: "https://picsum.photos/600/400.jpg",
-        categorie_article: "B",
-        stripe_connect_account: process.env.ID_STRIPE
-      }
-    })
-    expect(response.ok()).toBeTruthy()
-    const retour = await response.json()
-    // mémorise le uuid du produit 'Billet'
-    uuidS.push({name: 'Billet', uuid: retour.uuid})
-    // console.log('uuidS =', uuidS)
+  test('Create artist', async ({request}) => {
+    const dataDb = getData()
+    let response
+    const artists = dataDb.filter(obj => obj.typeData === 'artist')
+    for (const artistR of artists) {
+      artistR.value['stripe_connect_account'] = process.env.ID_STRIPE
+      console.log('Création artiste', artistR.value.organisation)
+      response = await request.post(process.env.URL_META + '/api/artist/', {
+        headers: {
+          "Content-Type": "application/json"
+        },
+        data: artistR.value
+      })
+      expect(response.ok()).toBeTruthy()
+      const retour = await response.json()
+      // console.log('retour artist =', retour)
+      // mémorise le uuid de l'artiste 'Ziskakan'
+      artistR.value['uuid'] = retour.uuid
+    }
+    updateData(dataDb)
   })
 
-  test('Prices Billet demi tarif Create', async ({request}) => {
-    const url = urlBaseRaffinerie + '/api/prices/'
-    const uuid = uuidS.find(product => product.name === 'Billet').uuid
-    const response = await request.post(url, {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: 'Bearer ' + tokenBilletterie
-      },
-      data: {
-        name: "Demi Tarif",
-        prix: "5",
-        vat: "NA",
-        max_per_user: "10",
-        stock: "10",
-        product: uuid,
-        stripe_connect_account: process.env.ID_STRIPE
-      }
-    })
-    expect(response.ok()).toBeTruthy()
+  test('Create product', async ({request}) => {
+    const dataDb = getData()
+    let response
+    const products = dataDb.filter(obj => obj.typeData === 'product')
+    for (const productR of products) {
+      console.log('Création produit', productR.value.name)
+      const url = `http://${productR.place}.${process.env.DOMAIN}:8002/api/products/`
+      response = await request.post(url, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: 'Bearer ' + tokenBilletterie
+        },
+        data: productR.value
+      })
+      expect(response.ok()).toBeTruthy()
+      const retour = await response.json()
+      // mémorise le uuid du produit
+      productR.value['uuid'] = retour.uuid
+    }
+    updateData(dataDb)
   })
 
-  test('Prices Billet plein tarif Create', async ({request}) => {
-    const url = urlBaseRaffinerie + '/api/prices/'
-    const uuid = uuidS.find(product => product.name === 'Billet').uuid
-    const response = await request.post(url, {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: 'Bearer ' + tokenBilletterie
-      },
-      data: {
-        name: "Plein Tarif",
-        prix: "10",
-        vat: "NA",
-        max_per_user: "10",
-        stock: "10",
-        product: uuid,
-        stripe_connect_account: process.env.ID_STRIPE
-      }
-    })
-    expect(response.ok()).toBeTruthy()
+  test('Create price', async ({request}) => {
+    const dataDb = getData()
+    let response
+    const products = dataDb.filter(obj => obj.typeData === 'product')
+    const prices = dataDb.filter(obj => obj.typeData === 'price')
+    for (const priceR of prices) {
+      console.log('Création du prix', priceR.value.name)
+      const url = `http://${priceR.place}.${process.env.DOMAIN}:8002/api/prices/`
+      const uuidProduct = products.find(obj => obj.value.name === priceR.productName).value.uuid
+      priceR.value['product'] = uuidProduct
+      // console.log('url =', url)
+      // console.log('priceR =', priceR)
+      response = await request.post(url, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: 'Bearer ' + tokenBilletterie
+        },
+        data: priceR.value
+      })
+      expect(response.ok()).toBeTruthy()
+    }
+    updateData(dataDb)
+    // TODO: + adhesion_obligatoire
   })
 
 
-  // Ziskakan
   test('Events Create with OPT ART - Ziskakan', async ({request}) => {
-    const url = urlBaseRaffinerie + '/api/events/'
-    const uuidArtist = uuidS.find(product => product.name === 'Ziskakan').uuid
-    const uuidBillet = uuidS.find(product => product.name === 'Billet').uuid
-    const response = await request.post(url, {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: 'Bearer ' + tokenBilletterie
-      },
-      data: {
+    const dataDb = getData()
+    let response
+    const artists = dataDb.filter(obj => obj.typeData === 'artist')
+    const products = dataDb.filter(obj => obj.typeData === 'product')
+    const events = dataDb.filter(obj => obj.typeData === 'event')
+    for (const eventR of events) {
+      console.log("Création d'un évènement.")
+      const url = `http://${eventR.place}.${process.env.DOMAIN}:8002/api/events/`
+      // init
+      let dataEvent = {
         datetime: randomDate(),
-        short_description: "description courte",
-        long_description: "Ceci est une longue description",
-        artists: [
-          {
-            uuid: uuidArtist,
-            datetime: randomDate()
-          }
-        ],
-        products: [
-          uuidBillet
-        ],
-        options_checkbox: [],
-        options_radio: [],
-        stripe_connect_account: process.env.ID_STRIPE
+        short_description: eventR.short_description,
+        long_description: eventR.long_description,
       }
-    })
-    expect(response.ok()).toBeTruthy()
-    // console.log('response =', response)
-  })
 
-  // Balaphonik
-  test('Events Create with OPT ART - Balaphonik', async ({request}) => {
-    const url = urlBaseRaffinerie + '/api/events/'
-    const uuidArtist = uuidS.find(product => product.name === 'Balaphonik').uuid
-    const uuidBillet = uuidS.find(product => product.name === 'Billet').uuid
-    const response = await request.post(url, {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: 'Bearer ' + tokenBilletterie
-      },
-      data: {
-        datetime: randomDate(),
-        short_description: "description courte de Balaphonik",
-        long_description: "Ceci est une longue description e Balaphonik",
-        artists: [
-          {
-            uuid: uuidArtist,
-            datetime: randomDate()
-          }
-        ],
-        products: [
-          uuidBillet
-        ],
-        options_checkbox: [],
-        options_radio: [],
-        stripe_connect_account: process.env.ID_STRIPE
+      // les artistes
+      dataEvent['artists'] = []
+      for (const artist of eventR.artists) {
+        // console.log('artist =', artist)
+        const uuidArtist = artists.find(obj => obj.value.organisation === artist).value.uuid
+        const datetime = randomDate()
+        dataEvent.artists.push({
+          uuid: uuidArtist,
+          datetime
+        })
       }
-    })
-    expect(response.ok()).toBeTruthy()
-    // console.log('response =', response)
+
+      // les produits
+      dataEvent['products'] = []
+      for (const product of eventR.products) {
+        // console.log('product =', product)
+        const uuidProduct = products.find(obj => obj.value.name === product).value.uuid
+        dataEvent.products.push(uuidProduct)
+      }
+
+      // TODO: options_checkbox
+      dataEvent['options_checkbox'] = []
+      // TODO: options_radio
+      dataEvent['options_radio'] = []
+
+      dataEvent['stripe_connect_account'] = process.env.ID_STRIPE
+
+      // console.log('dataEvent =', dataEvent)
+
+      response = await request.post(url, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: 'Bearer ' + tokenBilletterie
+        },
+        data: dataEvent
+      })
+      expect(response.ok()).toBeTruthy()
+    }
   })
 
 })
