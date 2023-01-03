@@ -8,4 +8,4 @@
 
 ## RUN :
 
-stripe listen --forward-to https://m.tibillet.localhost/api/webhook_stripe/ --skip-verify
+stripe listen --forward-to https://tibillet.localhost/api/webhook_stripe/ --skip-verify

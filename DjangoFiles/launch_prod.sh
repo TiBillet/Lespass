@@ -1,4 +1,3 @@
-#mkdir /root/.ssh
 #touch /root/.ssh/known_hosts
 
 #ssh-keyscan aaa.3peaks.re >> /root/.ssh/known_hosts

@@ -7,7 +7,7 @@ test.use({viewport: {width: 1400, height: 1300}})
 
 let page
 const email = process.env.EMAIL
-const urlTester = 'https://raffinerie.django-local.org'
+const urlTester = 'https://demo.tibillet.localhost'
 
 test.describe('Route event/embed/.', () => {
   test('Formulaire réservation puis stripe.', async ({browser}) => {
@@ -30,7 +30,7 @@ test.describe('Route event/embed/.', () => {
 
     // aller à l'évènement
     await Promise.all([
-      page.waitForResponse('https://raffinerie.django-local.org/event/embed/**'),
+      page.waitForResponse('https://demo.tibillet.localhost/event/embed/**'),
       page.locator('.test-card-event-container').first().locator('.test-card-event .card-body a').click()
     ])
 
