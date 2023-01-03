@@ -1,0 +1,239 @@
+[
+  {
+    "typeData": "place",
+    "value": {
+      "organisation": "Demo",
+      "short_description": "Les scène oniriques du Billetistan",
+      "long_description": "Ah ben ça alors ! Un nouveau lieu dans un espace virtuel !",
+      "img_url": "https://picsum.photos/1920/1080.jpg",
+      "logo_url": "https://picsum.photos/300/300.jpg",
+      "categorie": "S",
+      "adhesion_obligatoire": true
+    }
+  },
+  {
+    "typeData": "place",
+    "value": {
+      "organisation": "Billetistan",
+      "short_description": "Grand scène du Billetistan",
+      "img_url": "https://picsum.photos/1920/1080.jpg",
+      "logo_url": "https://picsum.photos/300/300.jpg",
+      "categorie": "S",
+      "adhesion_obligatoire": true
+    }
+  },
+  {
+    "typeData": "artist",
+    "value": {
+      "organisation": "Ziskakan",
+      "short_description": "40 ans de Maloya Rock !",
+      "long_description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
+      "img_url": "https://lespas.re/wp-content/uploads/2021/06/Ziskakan-%C2%A9Pierre-Yves-Babelon-lespas-1-1200x1200.jpg",
+      "logo_url": "https://lespas.re/wp-content/uploads/2021/06/Ziskakan-%C2%A9Pierre-Yves-Babelon-lespas-1-1200x1200.jpg",
+      "categorie": "A"
+    }
+  },
+  {
+    "typeData": "artist",
+    "value": {
+      "organisation": "Balaphonik Sound System",
+      "short_description": "Balaphonik Sound System fait danser les corps, ressource et rafraîchit les esprits.",
+      "long_description": "Multi-instrumentiste, Alex a participé à des projets musicaux variés. Usant tous les genres, du métal au gnawa et du reggae au hiphop, il étudie le rythme sous toutes ses formes, à travers ses rencontres et ses voyages.",
+      "img_url": "https://www.festival-arbre-creux.fr/wp-content/uploads/2019/05/balaphonik-3.jpg",
+      "logo_url": "https://i.ytimg.com/vi/HkRYJg7dnNM/hqdefault.jpg",
+      "categorie": "A"
+    }
+  },
+  {
+    "typeData": "product",
+    "place": "demo",
+    "value": {
+      "name": "Adhésion Asso",
+      "publish": true,
+      "img_url": "https://picsum.photos/300/300.jpg",
+      "categorie_article": "A",
+      "send_to_cashless": true
+    }
+  },
+  {
+    "typeData": "product",
+    "place": "demo",
+    "value": {
+      "name": "Recharge cashless",
+      "publish": true,
+      "img_url": "https://picsum.photos/300/300.jpg",
+      "categorie_article": "S"
+    }
+  },
+  {
+    "typeData": "product",
+    "place": "demo",
+    "value": {
+      "name": "Abonnement AMAC Asso",
+      "publish": true,
+      "img_url": "https://picsum.photos/1920/1080",
+      "categorie_article": "A",
+      "short_description": "Association pour le maintient d'une activité culturelle",
+      "long_description": "Soutenez les conditions de la crétion artistique en s'abonnant à l'Amac et bénéficiez de réduction sur tout les évènements."
+    }
+  },
+  {
+    "typeData": "product",
+    "place": "demo",
+    "value": {
+      "name": "Abonnement AMAP",
+      "publish": true,
+      "img_url": "https://picsum.photos/1920/1080",
+      "categorie_article": "A",
+      "short_description": "Association pour le maintient d'une activité paysanne"
+    }
+  },
+  {
+    "typeData": "product",
+    "place": "demo",
+    "value": {
+      "name": "Billet",
+      "publish": true,
+      "img_url": "https://picsum.photos/600/400.jpg",
+      "categorie_article": "B"
+    }
+  },
+  {
+    "typeData": "product",
+    "place": "demo",
+    "value": {
+      "name": "Tshirt",
+      "publish": true,
+      "img_url": "https://picsum.photos/600/400.jpg",
+      "categorie_article": "T"
+    }
+  },
+  {
+    "typeData": "price",
+    "productName": "Billet",
+    "place": "demo",
+    "value": {
+      "name": "Demi Tarif",
+      "prix": "5",
+      "vat": "NA",
+      "max_per_user": "10",
+      "stock": "10"
+    }
+  },
+  {
+    "typeData": "price",
+    "productName": "Billet",
+    "place": "demo",
+    "value": {
+      "name": "Plein Tarif",
+      "prix": "10",
+      "vat": "NA",
+      "max_per_user": "10"
+    }
+  },
+  {
+    "typeData": "price",
+    "productName": "Tshirt",
+    "place": "demo",
+    "value": {
+      "name": "L",
+      "short_description": "Taille L",
+      "long_description": "Un tshirt L !",
+      "prix": "25",
+      "vat": "NA",
+      "max_per_user": "10",
+      "stock": "30"
+    }
+  },
+  {
+    "typeData": "price",
+    "productName": "Adhésion Asso",
+    "place": "demo",
+    "value": {
+      "name": "Plein Tarif",
+      "prix": "20",
+      "subscription_type": "Y"
+    }
+  },
+  {
+    "typeData": "price",
+    "productName": "Adhésion Asso",
+    "place": "demo",
+    "value": {
+      "name": "Tarif solidaire",
+      "prix": "10",
+      "subscription_type": "Y"
+    }
+  },
+  {
+    "typeData": "price",
+    "productName": "Adhésion Asso",
+    "place": "demo",
+    "value": {
+      "name": "récurente par mois",
+      "prix": "2",
+      "subscription_type": "M",
+      "recurring_payment": true
+    }
+  },
+  {
+    "typeData": "price",
+    "productName": "Abonnement AMAP",
+    "place": "demo",
+    "value": {
+      "name": "Amap A l'année",
+      "prix": "360",
+      "short_description": "Payez à l'année",
+      "subscription_type": "Y"
+    }
+  },
+  {
+    "typeData": "price",
+    "productName": "Abonnement AMAP",
+    "place": "demo",
+    "value": {
+      "name": "Amap par mois",
+      "prix": "30",
+      "short_description": "Payez au mois",
+      "subscription_type": "M",
+      "recurring_payment": true
+    }
+  },
+  {
+    "typeData": "price",
+    "productName": "Abonnement AMAC Asso",
+    "place": "demo",
+    "value": {
+      "name": "Par mois",
+      "prix": "16",
+      "short_description": "Payez au mois",
+      "subscription_type": "M"
+    }
+  },
+  {
+    "typeData": "event",
+    "place": "demo",
+    "artists": [
+      "Ziskakan"
+    ],
+    "short_description": "Lorem ipsum dolor",
+    "long_description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec ipsum lectus, ultrices vel placerat et, finibus ultricies dolor. Integer facilisis fermentum placerat. Nam malesuada fermentum nunc ac consectetur. Donec velit tortor, feugiat in euismod eu, semper blandit lacus. Nunc ultricies lorem sed libero bibendum, id vestibulum massa lacinia. In hac habitasse platea dictumst. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam interdum lacinia metus, nec rutrum diam congue ut. Phasellus accumsan at leo ac eleifend. Phasellus cursus vitae tortor vestibulum faucibus. Pellentesque dictum libero ut tellus tristique condimentum. ",
+    "products": [
+      "Billet",
+      "Recharge cashless"
+    ]
+  },
+  {
+    "typeData": "event",
+    "place": "demo",
+    "artists": [
+      "Balaphonik Sound System"
+    ],
+    "short_description": "Courte description",
+    "long_description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec ipsum lectus, ultrices vel placerat et, finibus ultricies dolor. Integer facilisis fermentum placerat. Nam malesuada fermentum nunc ac consectetur. Donec velit tortor, feugiat in euismod eu, semper blandit lacus. Nunc ultricies lorem sed libero bibendum, id vestibulum massa lacinia. In hac habitasse platea dictumst. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam interdum lacinia metus, nec rutrum diam congue ut. Phasellus accumsan at leo ac eleifend. Phasellus cursus vitae tortor vestibulum faucibus. Pellentesque dictum libero ut tellus tristique condimentum. ",
+    "products": [
+      "Billet",
+      "Abonnement AMAP"
+    ]
+  }
+]
