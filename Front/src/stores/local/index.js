@@ -63,8 +63,8 @@ export const useLocalStore = defineStore({
         // supprimer le formulaire de la réservation validée
         if (this.stripeEtape !== null) {
           const eventStore = useEventStore()
-          // this.stripeEtape = uuid du formulaire
-          eventStore.deleteForm(this.stripeEtape.formEventUuid)
+          // efface les réservations
+          eventStore.deleteAllCustomersFromPrices(this.stripeEtape.formEventUuid)
         }
       }).catch(function (erreur) {
         console.log('/api/webhook_stripe/ -> erreur: ', erreur)

@@ -4,10 +4,13 @@ import {getRootJWT, randomDate} from '../mesModules/commun.js'
 
 const email = process.env.TEST_MAIL
 let tokenBilletterie, uuidS = []
+const urlBaseRaffinerie = 'http://' + process.env.SLUG_PLACE_RAFFINERIE + '.' + process.env.DOMAIN + ':8002'
 
-test.describe('Peuplement initial de la db "billetterie".', () => {
+test.describe.only('Peuplement initial de la db "billetterie".', () => {
   test('Place rafftou create', async ({request}) => {
     tokenBilletterie = await getRootJWT()
+    console.log('tokenBilletterie =', tokenBilletterie)
+    /*
     const response = await request.post(process.env.URL_META + '/api/place/', {
       headers: {
         "Content-Type": "application/json"
@@ -27,6 +30,8 @@ test.describe('Peuplement initial de la db "billetterie".', () => {
       }
     })
     expect(response.ok()).toBeTruthy()
+
+     */
   })
 
   test('Artist Ziskakan create', async ({request}) => {
@@ -38,10 +43,10 @@ test.describe('Peuplement initial de la db "billetterie".', () => {
         organisation: "Ziskakan",
         short_description: "40 ans de Maloya Rock !",
         long_description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
-        phone: "0692929292",
-        email: "jturbeaux+ziz@pm.me",
-        site_web: "https://www.ziskakan.re",
-        postal_code: "97410",
+        // phone: "0692929292",
+        // email: "jturbeaux+ziz@pm.me",
+        // site_web: "https://www.ziskakan.re",
+        // postal_code: "97410",
         img_url: "https://lespas.re/wp-content/uploads/2021/06/Ziskakan-%C2%A9Pierre-Yves-Babelon-lespas-1-1200x1200.jpg",
         logo_url: "https://lespas.re/wp-content/uploads/2021/06/Ziskakan-%C2%A9Pierre-Yves-Babelon-lespas-1-1200x1200.jpg",
         categorie: "A",
@@ -80,7 +85,7 @@ test.describe('Peuplement initial de la db "billetterie".', () => {
   })
 
   test('Product Billet Create', async ({request}) => {
-    const url = 'https://' + process.env.SLUG_PLACE_RAFFINERIE + '.' + process.env.DOMAIN + '/api/products/'
+    const url = urlBaseRaffinerie + '/api/products/'
     // console.log('url =', url)
     const response = await request.post(url, {
       headers: {
@@ -103,7 +108,7 @@ test.describe('Peuplement initial de la db "billetterie".', () => {
   })
 
   test('Prices Billet demi tarif Create', async ({request}) => {
-    const url = 'https://' + process.env.SLUG_PLACE_RAFFINERIE + '.' + process.env.DOMAIN + '/api/prices/'
+    const url = urlBaseRaffinerie + '/api/prices/'
     const uuid = uuidS.find(product => product.name === 'Billet').uuid
     const response = await request.post(url, {
       headers: {
@@ -124,7 +129,7 @@ test.describe('Peuplement initial de la db "billetterie".', () => {
   })
 
   test('Prices Billet plein tarif Create', async ({request}) => {
-    const url = 'https://' + process.env.SLUG_PLACE_RAFFINERIE + '.' + process.env.DOMAIN + '/api/prices/'
+    const url = urlBaseRaffinerie + '/api/prices/'
     const uuid = uuidS.find(product => product.name === 'Billet').uuid
     const response = await request.post(url, {
       headers: {
@@ -147,7 +152,7 @@ test.describe('Peuplement initial de la db "billetterie".', () => {
 
   // Ziskakan
   test('Events Create with OPT ART - Ziskakan', async ({request}) => {
-    const url = 'https://' + process.env.SLUG_PLACE_RAFFINERIE + '.' + process.env.DOMAIN + '/api/events/'
+    const url = urlBaseRaffinerie + '/api/events/'
     const uuidArtist = uuidS.find(product => product.name === 'Ziskakan').uuid
     const uuidBillet = uuidS.find(product => product.name === 'Billet').uuid
     const response = await request.post(url, {
@@ -179,7 +184,7 @@ test.describe('Peuplement initial de la db "billetterie".', () => {
 
   // Balaphonik
   test('Events Create with OPT ART - Balaphonik', async ({request}) => {
-    const url = 'https://' + process.env.SLUG_PLACE_RAFFINERIE + '.' + process.env.DOMAIN + '/api/events/'
+    const url = urlBaseRaffinerie + '/api/events/'
     const uuidArtist = uuidS.find(product => product.name === 'Balaphonik').uuid
     const uuidBillet = uuidS.find(product => product.name === 'Billet').uuid
     const response = await request.post(url, {

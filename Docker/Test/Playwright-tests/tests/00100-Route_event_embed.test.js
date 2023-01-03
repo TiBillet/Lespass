@@ -1,7 +1,7 @@
 import {expect, test} from '@playwright/test'
 import * as dotenv from 'dotenv'
 
-dotenv.config('../.env')
+dotenv.config({path: './.env'})
 
 test.use({viewport: {width: 1400, height: 1300}})
 
@@ -19,6 +19,8 @@ test.describe('Route event/embed/.', () => {
     // première connexion
     await page.goto(urlTester)
 
+    await page.pause()
+
     // tester iframeevent, récupérer le premier évènement et remplacer dans son href "event" par "iframeevent"
     await page.evaluate(() => {
       const ele = (document.querySelectorAll('.test-card-event-container')[0]).querySelector('.test-card-event .card-body a')
@@ -31,6 +33,12 @@ test.describe('Route event/embed/.', () => {
       page.waitForResponse('https://demo.tibillet.localhost/event/embed/**'),
       page.locator('.test-card-event-container').first().locator('.test-card-event .card-body a').click()
     ])
+
+    // url contient /event/embed/
+    expect(page.url()).toContain('event/embed')
+
+    // la barre de navigation n'est pas présente
+    await expect(page.locator('#navbar')).not.toBeVisible()
 
     const firstReservation = page.locator('.test-card-billet section ').first()
 
@@ -82,9 +90,21 @@ test.describe('Route event/embed/.', () => {
     // sortir du modal
     await page.locator('.modal-footer-bt-fermer').click()
 
-    await expect(page.locator('.page-header .container', {hasText: 'Raffinerie'})).toBeVisible()
+    // retour sur la page /event/embed/slug-xxxxxx
+    await expect(page.locator('.test-view-event', {hasText: 'Valider la réservation'})).toBeVisible()
+
+     // url contient /event/embed/
+    expect(page.url()).toContain('event/embed')
+
+    // la barre de navigation n'est pas présente
+    await expect(page.locator('#navbar')).not.toBeVisible()
+
+    // aucun champ input visible
+    const customers = await page.evaluate(() => {
+      return document.querySelectorAll('.test-card-billet-input-group').length
+    })
+    expect(customers).toEqual(0)
 
     await page.close()
   })
-
 })

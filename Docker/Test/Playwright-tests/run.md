@@ -1,6 +1,22 @@
-# playwright
+# Playwright
 
-## installer les modules nodejs
+## installation de node et npm par Volta
+### Installer Volta
+```
+curl https://get.volta.sh | bash
+```
+
+### Installer une vesrion donnée de nodejs (18.12.1)
+```
+volta install node@18.12.1
+```
+
+### Installer une vesrion donnée de npm (8.19.2)
+```
+volta install npm@8.19.2
+```
+
+## installer les dépendences de playwright
 ```
 npm i
 npx playwright install
@@ -47,3 +63,11 @@ test.describe.only
 test.describe.skip
 
 ### ".only" et ".skip" peuvent être utilisé à l'intérieur d'un groupe "test.describe"
+
+### Fixer une version de nodej et npm pour un projet
+- Aller à la racine du projet, un fichier package.json doit existé, le cas échéant "npm init -y".   
+- Fixer la versionde node à "18.12.1" et la version de npm à "8.19.2":
+```
+volta pin node@18.12.1
+volta pin npm@8.19.2
+```

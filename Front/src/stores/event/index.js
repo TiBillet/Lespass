@@ -247,9 +247,9 @@ export const useEventStore = defineStore({
       let gift = this.forms.find(obj => obj.event === this.event.uuid).gifts.find(obj2 => obj2.uuidGift === uuidGift)
       gift.enable = value
     },
-    deleteForm(uuid) {
-      const newForms = this.forms.filter(obj => obj.event !== uuid)
-      this.forms = newForms
+    deleteAllCustomersFromPrices(uuid) {
+      const form = this.forms.find(obj => obj.event === uuid)
+      form.prices = []
     },
     getEventHeader() {
       // console.log('-> action getHeaderEvent')
