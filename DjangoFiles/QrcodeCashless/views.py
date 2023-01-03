@@ -67,7 +67,7 @@ class index_scan(View):
         sess = requests.Session()
         try:
             reponse = sess.post(
-                f'{configuration.server_cashless}/api/billetterie_endpoint',
+                f'{configuration.server_cashless}/api/billetterie_endpointbilletterie_endpoint',
                 headers={
                     'Authorization': f'Api-Key {configuration.key_cashless}'
                 },

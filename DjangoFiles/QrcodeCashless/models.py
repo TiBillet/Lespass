@@ -67,7 +67,8 @@ class CarteCashless(models.Model):
         blank=True, null=True,
         verbose_name='Uuid',
         unique=True,
-        editable=False
+        editable=False,
+        db_index=True,
     )
 
     number = models.CharField(
