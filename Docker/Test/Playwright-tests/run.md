@@ -23,18 +23,26 @@ npx playwright install
 ```
 
 ## Lancer les Tests
-1 - Lancer le script pour la mise en place de l'infrastucture de la billetterie (db non peuplée):  
+### 1 - Lancer le script pour la mise en place de l'infrastucture de la billetterie (db non peuplée):  
 ```
 cd .../TiBillet/Docker/Development/
 ./test_dev.sh
 ```
+Attention: ne pas utiliser postman pour peupler la db, le fichier de tests 00010-db_peuplement_initial_billetterie.test.js
+le fait.
 
-2 - Lancer le peuplement de la base de données et le test "iframeevent"
+### 2 - Lancer les tests playwright:
+#### Avec le container docker
+```
+cd .../TiBillet/Docker/Test/Playwright-tests
+docker compose up -d
+npx playwright test --reporter=line
+```
+
+#### En locale (débug graphique)
 ```
 cd .../TiBillet/Docker/Test/Playwright-tests
 npx playwright test --headed
-   #ou sans navigateur
-npx playwright test
 ```
 
 ## Infos

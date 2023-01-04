@@ -1,6 +1,0 @@
-#!/bin/bash
-echo "172.17.0.1      www.tibillet.localhost" >> /etc/hosts
-echo "172.17.0.1      agenda.tibillet.localhost" >> /etc/hosts
-echo "172.17.0.1      tibillet.localhost" >> /etc/hosts
-echo "172.17.0.1      tibillet.localhost" >> /etc/hosts
-echo "172.17.0.1      demo.tibillet.localhost" >> /etc/hosts

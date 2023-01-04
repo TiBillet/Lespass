@@ -6,7 +6,7 @@ const email = process.env.TEST_MAIL
 let tokenBilletterie
 
 
-test.describe.only('Peuplement initial de la db "billetterie".', () => {
+test.describe('Peuplement initial de la db "billetterie".', () => {
   test('Get root token', async ({request}) => {
     tokenBilletterie = await getRootJWT()
     console.log('tokenBilletterie =', tokenBilletterie)

@@ -9,7 +9,7 @@ let page
 const email = process.env.EMAIL
 const urlTester = 'https://demo.tibillet.localhost'
 
-test.describe('Route event/embed/.', () => {
+test.describe('Réservation event/embed/.', () => {
   test('Formulaire réservation puis stripe.', async ({browser}) => {
     page = await browser.newPage()
 
@@ -19,7 +19,7 @@ test.describe('Route event/embed/.', () => {
     // première connexion
     await page.goto(urlTester)
 
-    await page.pause()
+    // await page.pause()
 
     // tester iframeevent, récupérer le premier évènement et remplacer dans son href "event" par "iframeevent"
     await page.evaluate(() => {
@@ -34,8 +34,8 @@ test.describe('Route event/embed/.', () => {
       page.locator('.test-card-event-container').first().locator('.test-card-event .card-body a').click()
     ])
 
-    // url contient /event/embed/
-    expect(page.url()).toContain('event/embed')
+    // url contient "/event/embed/"
+    await expect(page).toHaveURL(/\/event\/embed\//)
 
     // la barre de navigation n'est pas présente
     await expect(page.locator('#navbar')).not.toBeVisible()
@@ -93,7 +93,7 @@ test.describe('Route event/embed/.', () => {
     // retour sur la page /event/embed/slug-xxxxxx
     await expect(page.locator('.test-view-event', {hasText: 'Valider la réservation'})).toBeVisible()
 
-     // url contient /event/embed/
+    // url contient /event/embed/
     expect(page.url()).toContain('event/embed')
 
     // la barre de navigation n'est pas présente
