@@ -1,46 +1,53 @@
 # Playwright
 
 ## installation de node et npm par Volta
+
+Aler dans le dossier /Docker/Test/Playwright-tests
+
 ### Installer Volta
-```
+```bash
 curl https://get.volta.sh | bash
 ```
+Relancez un nouveau terminal
 
 ### Installer une vesrion donnée de nodejs (18.12.1)
-```
+```bash
 volta install node@18.12.1
 ```
 
 ### Installer une vesrion donnée de npm (8.19.2)
-```
+```bash
 volta install npm@8.19.2
 ```
 
 ## installer les dépendences de playwright
-```
+```bash
 npm i
 npx playwright install
 ```
 
 ## Lancer les Tests
 ### 1 - Lancer le script pour la mise en place de l'infrastucture de la billetterie (db non peuplée):  
-```
+```bash
 cd .../TiBillet/Docker/Development/
 ./test_dev.sh
+# Une fois le script terminé, nous somme a l'intérieur du conteneur :
+# Lancer le serveur Django :
+rsp # alias pour python3 manage.py runserver 0.0.0.0:8002
 ```
 Attention: ne pas utiliser postman pour peupler la db, le fichier de tests 00010-db_peuplement_initial_billetterie.test.js
 le fait.
 
 ### 2 - Lancer les tests playwright:
-#### Avec le container docker
-```
+#### Dans un conteneur docker
+```bash
 cd .../TiBillet/Docker/Test/Playwright-tests
 docker compose up -d
 npx playwright test --reporter=line
 ```
 
-#### En locale (débug graphique)
-```
+#### En local (débug graphique)
+```bash
 cd .../TiBillet/Docker/Test/Playwright-tests
 npx playwright test --headed
 ```

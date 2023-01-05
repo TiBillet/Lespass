@@ -163,6 +163,7 @@ class CarteCashlessAdmin(admin.ModelAdmin):
         'tag_id',
         'uuid',
         'number',
+        'user',
         'get_origin',
     )
 
