@@ -1144,9 +1144,10 @@ class Membership(models.Model):
             return self.pseudo
         elif self.first_name:
             return f"{self.last_name} {self.first_name}"
-        else:
+        elif self.last_name:
             return f"{self.last_name}"
-
+        else:
+            return f"{self.user}"
 
 class ExternalApiKey(models.Model):
     name = models.CharField(max_length=30, unique=True)

@@ -71,7 +71,12 @@ def sender_mail_connect(email, subject_mail=None):
         logger.error(f"validate_email_and_return_user erreur pour récuperer config : {email} - {base_url} : {e}")
 
 
-def get_or_create_user(email, password=None, set_active=False, send_mail=True, force_mail=False):
+def get_or_create_user(email,
+                       password=None,
+                       set_active=False,
+                       send_mail=True,
+                       force_mail=False
+                       ) -> TibilletUser or None:
     """
     If user not created, set it inactive.
     Only the mail validation can set active the user.
@@ -104,13 +109,14 @@ def get_or_create_user(email, password=None, set_active=False, send_mail=True, f
 
     else:
         if user.email_error:
-            return False
+            return None
 
         if force_mail:
             sender_mail_connect(user.email)
         elif user.is_active == False:
             # Si l'utilisateur est inactif, il n'a pas encore validé son mail
             # Si la demande vient après la création, on relance le mail de validation.
+            logger.debug("utilisateur est inactif, il n'a pas encore validé son mail, on lance le mail de validation")
             sender_mail_connect(user.email)
 
     return user

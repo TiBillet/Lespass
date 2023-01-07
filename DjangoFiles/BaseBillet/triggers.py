@@ -224,12 +224,20 @@ class ActionArticlePaidByCategorie:
         price: Price = self.ligne_article.pricesold.price
         product: Product = self.ligne_article.pricesold.productsold.product
 
-        membership, created = Membership.objects.get_or_create(
+        # On check s'il n'y a pas déjà une fiche membre avec le "price" correspondant
+        membership = Membership.objects.filter(
             user=user,
             price=price
-        )
+        ).first()
 
-        membership.first_contribution = datetime.datetime.now().date()
+        if not membership:
+            membership, created = Membership.objects.get_or_create(
+                user=user,
+            )
+            if not membership.first_contribution:
+                membership.first_contribution = datetime.datetime.now().date()
+            membership.price = price
+
         membership.last_contribution = datetime.datetime.now().date()
         membership.contribution_value = self.ligne_article.pricesold.prix
 

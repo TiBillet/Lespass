@@ -1246,10 +1246,14 @@ class Webhook_stripe(APIView):
                 # On va chercher le tenant de l'abonnement grâce à l'id du product stripe
                 # dans la requete POST
                 with schema_context('public'):
-                    product_from_public_tenant = ProductDirectory.objects.get(
-                        product_sold_stripe_id=product_sold_stripe_id,
-                    )
-                    place = product_from_public_tenant.place
+                    try:
+                        product_from_public_tenant = ProductDirectory.objects.get(
+                            product_sold_stripe_id=product_sold_stripe_id,
+                        )
+                        place = product_from_public_tenant.place
+                    except ProductDirectory.DoesNotExist:
+                        logger.error(f"Webhook_stripe invoice.paid DoesNotExist : product_sold_stripe_id {product_sold_stripe_id}, serveur de test ?")
+                        return Response('ProductDirectory DoesNotExist, serveur de test ?', status=status.HTTP_204_NO_CONTENT)
 
                 # On a le tenant ( place ), on va chercher l'abonnement
                 with tenant_context(place):
