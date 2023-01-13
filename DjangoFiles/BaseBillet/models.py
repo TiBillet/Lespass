@@ -26,7 +26,7 @@ from stripe.error import InvalidRequestError
 import AuthBillet.models
 from Customers.models import Client
 from MetaBillet.models import EventDirectory, ProductDirectory
-from QrcodeCashless.models import CarteCashless
+from QrcodeCashless.models import CarteCashless, FederatedCashless, Asset
 from TiBillet import settings
 import stripe
 
@@ -253,9 +253,30 @@ class Configuration(SingletonModel):
                 logger.info(f"    check_serveur_cashless : {r.status_code} {r.text}")
                 if r.status_code == 200:
                     if r.json().get('bill'):
+                        # On récupère l'asset fédéré Stripe
+                        asset, created = Asset.objects.get_or_create(
+                            origin=Client.objects.get(categorie=Client.ROOT),
+                            name="Stripe",
+                            is_federated=True,
+                        )
+                        logger.info(f"    check_serveur_cashless : {asset} - Created {created}")
+
+                        # on l'enregistre dans une table tenant public
+                        fed_cash_conf, created = FederatedCashless.objects.get_or_create(
+                            client=connection.tenant,
+                            asset=asset,
+                        )
+
+                        if self.key_cashless != fed_cash_conf.key_cashless \
+                                or self.server_cashless != fed_cash_conf.server_cashless:
+                            fed_cash_conf.key_cashless=self.key_cashless
+                            fed_cash_conf.server_cashless=self.server_cashless
+                            fed_cash_conf.save()
+
                         return True
-            except:
-                pass
+            except Exception as e:
+                # import ipdb; ipdb.set_trace()
+                logger.error(f"    ERROR check_serveur_cashless : {e}")
         return False
 
     ######### END CASHLESS #########
@@ -375,6 +396,7 @@ class Product(models.Model):
         verbose_name_plural = _('Produits')
         unique_together = ('categorie_article', 'name')
 
+
 @receiver(post_save, sender=Product)
 def poids_Product(sender, instance: Product, created, **kwargs):
     if created:
@@ -431,10 +453,10 @@ class Price(models.Model):
                                          verbose_name=_("durée d'abonnement"),
                                          )
     recurring_payment = models.BooleanField(default=False,
-                                           verbose_name="Paiement récurrent",
-                                           help_text="Paiement récurrent avec Stripe, "
-                                                     "ne peux être utilisé avec un autre article dans le panier",
-                                           )
+                                            verbose_name="Paiement récurrent",
+                                            help_text="Paiement récurrent avec Stripe, "
+                                                      "ne peux être utilisé avec un autre article dans le panier",
+                                            )
 
     # def range_max(self):
     #     return range(self.max_per_user + 1)
@@ -550,13 +572,13 @@ class Event(models.Model):
         else:
             return False
 
-    def check_serveur_cashless(self):
-        config = Configuration.get_solo()
-        return config.check_serveur_cashless()
+    # def check_serveur_cashless(self):
+    #     config = Configuration.get_solo()
+    #     return config.check_serveur_cashless()
 
     def save(self, *args, **kwargs):
         """
-        Transforme le titre le d'evenemennt en slug, pour en faire une url lisible
+        Transforme le titre de l'evenemennt en slug, pour en faire une url lisible
         """
 
         # self.slug = slugify(f"{self.name} {self.datetime} {str(self.uuid).partition('-')[0]}")[:50]
@@ -576,6 +598,7 @@ class Event(models.Model):
         ordering = ('datetime',)
         verbose_name = _('Evenement')
         verbose_name_plural = _('Evenements')
+
 
 @receiver(post_save, sender=Event)
 def add_to_public_event_directory(sender, instance: Event, created, **kwargs):
@@ -693,7 +716,6 @@ class ProductSold(models.Model):
         self.save()
 
 
-
 class PriceSold(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
 
@@ -729,15 +751,15 @@ class PriceSold(models.Model):
             'nickname': f"{self.price.name}",
         }
 
-        if self.price.subscription_type == Price.MONTH\
-                and self.price.recurring_payment :
+        if self.price.subscription_type == Price.MONTH \
+                and self.price.recurring_payment:
             data_stripe['recurring'] = {
                 "interval": "month",
                 "interval_count": 1
             }
 
-        elif self.price.subscription_type == Price.YEAR\
-                and self.price.recurring_payment :
+        elif self.price.subscription_type == Price.YEAR \
+                and self.price.recurring_payment:
             data_stripe['recurring'] = {
                 "interval": "year",
                 "interval_count": 1
@@ -758,13 +780,14 @@ class PriceSold(models.Model):
     # class meta:
     #     unique_together = [['productsold', 'price']]
 
+
 # @receiver(post_save, sender=OptionGenerale)
 # def poids_option_generale(sender, instance: OptionGenerale, created, **kwargs):
 
-    # def save(self, force_insert=False, force_update=False, using=None,
-    #          update_fields=None):
-    #     if not self.id_price_stripe :
-    #         logger.info(f"PriceSold : {self.price.name} - Stripe : {self.get_id_price_stripe()}")
+# def save(self, force_insert=False, force_update=False, using=None,
+#          update_fields=None):
+#     if not self.id_price_stripe :
+#         logger.info(f"PriceSold : {self.price.name} - Stripe : {self.get_id_price_stripe()}")
 
 class Reservation(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
@@ -1148,6 +1171,7 @@ class Membership(models.Model):
             return f"{self.last_name}"
         else:
             return f"{self.user}"
+
 
 class ExternalApiKey(models.Model):
     name = models.CharField(max_length=30, unique=True)

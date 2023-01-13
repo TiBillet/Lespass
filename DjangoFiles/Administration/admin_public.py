@@ -1,17 +1,18 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.contrib.auth.models import Group
 
 from django.contrib.admin import AdminSite
 from django.contrib.auth.admin import UserAdmin, GroupAdmin
+from django_tenants.utils import tenant_context
 from solo.admin import SingletonModelAdmin
 
+from BaseBillet.models import Configuration
 from Customers.models import Client, Domain
 from AuthBillet.models import TibilletUser, HumanUser, TermUser, SuperHumanUser
 from django.utils.translation import gettext, gettext_lazy as _
 
 from MetaBillet.models import EventDirectory, ProductDirectory
-from QrcodeCashless.models import Detail, CarteCashless
-
+from QrcodeCashless.models import Detail, CarteCashless, FederatedCashless
 
 # from boutique.models import Category, Product, Tag, VAT, Event, LandingPageContent, Price
 # from solo.admin import SingletonModelAdmin
@@ -181,5 +182,38 @@ public_admin_site.register(CarteCashless, CarteCashlessAdmin)
 public_admin_site.register(ProductDirectory, admin.ModelAdmin)
 public_admin_site.register(EventDirectory, admin.ModelAdmin)
 public_admin_site.register(RootConfiguration, SingletonModelAdmin)
+
+class FederatedCashlessAdmin(admin.ModelAdmin):
+    list_display = (
+        'client',
+        'asset',
+        'server_cashless',
+        'cashless_up',
+    )
+
+    def cashless_up(self, obj):
+        with tenant_context(obj.client):
+            conf = Configuration.get_solo()
+            return conf.check_serveur_cashless()
+
+    def save_model(self, request, obj, form, change):
+        obj: FederatedCashless
+        if obj.server_cashless and obj.key_cashless:
+            with tenant_context(obj.client):
+                conf = Configuration.get_solo()
+                if obj.key_cashless != conf.key_cashless \
+                        or obj.server_cashless != conf.server_cashless:
+                    conf.key_cashless = obj.key_cashless
+                    conf.server_cashless = obj.server_cashless
+
+                    if conf.check_serveur_cashless():
+                        messages.add_message(request, messages.INFO, f"Cashless server ONLINE")
+                    else:
+                        messages.add_message(request, messages.ERROR, "Cashless server OFFLINE or BAD KEY")
+
+        super().save_model(request, obj, form, change)
+
+
+public_admin_site.register(FederatedCashless, FederatedCashlessAdmin)
 
 

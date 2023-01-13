@@ -1115,16 +1115,19 @@ def paiment_stripe_validator(request, paiement_stripe):
 class UpdateFederatedAsset(APIView):
     def post(self, request):
         """
-        Reception d'une demande d'update d'un portefeuille fédéré d'une carte cashless.
+        Reception d'une demande d'update d'un portefeuille fédéré d'une carte cashless depuis un serveur cashless.
         On vérifie vers le serveur cashless ou vient la requete que la valeur est bonne (NTUI!)
+        Ce qui nous permet de mettre ce poitn d'API en allowAny, de toute façon, on va vérifier !
+
         On met à jour la valeur en base de donnée sur la billetterie.
         Ensuite, on met à jour dans tous les serveurs cashless fédéré
 
         :param request:
             data = {
-                "card_uuid_qrcode": carte.uuid_qrcode,
-                "qty": new_qty,
-                "domain": config.domaine_cashless,
+                "card_uuid_qrcode": f"{carte.uuid_qrcode}",
+                "old_qty": old_qty,
+                "new_qty": f"{asset_federated.qty}",
+                "domain": f"{config.domaine_cashless}",
                 }
         :return:
         """
@@ -1133,6 +1136,12 @@ class UpdateFederatedAsset(APIView):
         data = request.data
         logger.info(f"UpdateFederatedAsset : {data}")
         carte = get_object_or_404(CarteCashless, uuid=data['card_uuid_qrcode'])
+        old_qty = data['old_qty']
+        new_qty = data['new_qty']
+        domain = data['domain']
+
+        logger.info(f"UpdateFederatedAsset : {carte} {old_qty} {new_qty} {domain}")
+
         return Response(f"{carte.uuid}", status=status.HTTP_202_ACCEPTED)
 
 

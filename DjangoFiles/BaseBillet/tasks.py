@@ -577,12 +577,12 @@ def stripe_wallet_update_celery(wallet_pk):
 
     for tenant in Client.objects.exclude(categorie__in=public_tenant_categorie):
         with tenant_context(tenant):
-            configuration = Configuration.get_solo()
-            if configuration.server_cashless and configuration.key_cashless:
+            tenant_configuration = Configuration.get_solo()
+            if tenant_configuration.server_cashless and tenant_configuration.key_cashless:
                 fed_clients.append({
                     'shema_name': tenant.schema_name,
-                    'url': configuration.server_cashless,
-                    'key': configuration.key_cashless,
+                    'url': tenant_configuration.server_cashless,
+                    'key': tenant_configuration.key_cashless,
                 })
 
     meta_tenant = Client.objects.filter(categorie=Client.META).first()
