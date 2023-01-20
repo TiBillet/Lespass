@@ -2,7 +2,7 @@
 import csv
 import json
 import uuid
-from io import StringIO
+from decimal import Decimal
 
 from datetime import datetime, timedelta
 import dateutil.parser
@@ -44,7 +44,8 @@ import logging
 
 from MetaBillet.models import EventDirectory, ProductDirectory
 from PaiementStripe.views import new_entry_from_stripe_invoice
-from QrcodeCashless.models import Detail, CarteCashless
+from QrcodeCashless.models import Detail, CarteCashless, Wallet
+from QrcodeCashless.views import WalletValidator
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
@@ -1117,7 +1118,7 @@ class UpdateFederatedAsset(APIView):
         """
         Reception d'une demande d'update d'un portefeuille fédéré d'une carte cashless depuis un serveur cashless.
         On vérifie vers le serveur cashless ou vient la requete que la valeur est bonne (NTUI!)
-        Ce qui nous permet de mettre ce poitn d'API en allowAny, de toute façon, on va vérifier !
+        Ce qui nous permet de mettre ce point d'API en allowAny, de toute façon, on va vérifier !
 
         On met à jour la valeur en base de donnée sur la billetterie.
         Ensuite, on met à jour dans tous les serveurs cashless fédéré
@@ -1132,13 +1133,45 @@ class UpdateFederatedAsset(APIView):
         :return:
         """
 
-        # import ipdb; ipdb.set_trace()
         data = request.data
-        logger.info(f"UpdateFederatedAsset : {data}")
+        logger.info(f"UpdateFederatedAsset REQUEST : {data}")
         carte = get_object_or_404(CarteCashless, uuid=data['card_uuid_qrcode'])
-        old_qty = data['old_qty']
-        new_qty = data['new_qty']
+        old_qty = Decimal(data['old_qty'])
+        new_qty = Decimal(data['new_qty'])
+
+        #TODO: Verifier le domaine avec configuration.server_cashless
+        # En test, on a 127.17....
         domain = data['domain']
+
+        wallet_stripe = carte.wallet_set.get(asset__is_federated = True)
+
+        if wallet_stripe.qty == old_qty and wallet_stripe.qty != new_qty :
+            logger.info(f"UpdateFederatedAsset NEED MAJ : {carte} - {wallet_stripe.qty} == {old_qty}")
+            # On utilise la class qui va vérifier si tout existe et qui récupère les assets dans le serveur cashless
+            validated_wallet = WalletValidator(uuid=carte.uuid)
+            carte_from_cashless = validated_wallet.carte_serveur_cashless
+
+            new_qty_verified = None
+            for asset in carte_from_cashless.get('assets'):
+                if asset['categorie_mp'] == 'SF' :
+                    new_qty_verified = Decimal(asset['qty'])
+
+            if new_qty_verified == new_qty :
+                wallet_stripe.qty = new_qty
+                wallet_stripe.save()
+                logger.info(f"UpdateFederatedAsset MAJ : {carte} - {wallet_stripe.qty} == {new_qty}")
+            else:
+                logger.error(f"UpdateFederatedAsset ERREUR : {carte} - {new_qty_verified} != {new_qty}")
+                return Response(
+                    f"UpdateFederatedAsset ERROR new_qty_verified : {carte} - wallet {wallet_stripe.qty}, old {old_qty}, new {new_qty}, new_verified {new_qty_verified}",
+                    status=status.HTTP_400_BAD_REQUEST)
+
+
+        elif wallet_stripe.qty == new_qty:
+            logger.info(f"UpdateFederatedAsset NO MAJ : {carte} - {wallet_stripe.qty} == {new_qty}")
+        else :
+            logger.error(f"UpdateFederatedAsset ERROR : {carte} - wallet {wallet_stripe.qty} != old {old_qty} != new {new_qty}")
+            return Response(f"UpdateFederatedAsset ERROR : {carte} - wallet {wallet_stripe.qty} != old {old_qty} != new {new_qty}", status=status.HTTP_400_BAD_REQUEST)
 
         logger.info(f"UpdateFederatedAsset : {carte} {old_qty} {new_qty} {domain}")
 

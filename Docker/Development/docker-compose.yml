@@ -44,7 +44,8 @@ services:
       service: billetterie_celery
     env_file: .env
     ports:
-      - 5566:5566
+      # Pour flower :
+      - 5555:5555
     depends_on:
       - billetterie_django_dev
       - billetterie_redis_dev

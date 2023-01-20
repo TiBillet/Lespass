@@ -548,29 +548,38 @@ def webhook_reservation(reservation_pk):
             webhook.save()
 
 
-@app.task
-def request_server_cashless_updateFed(url: str = None, key: str = None, data: dict = None) -> requests.status_codes:
+#TODO: checker les retry sur les bonnes exceptions
+@app.task(
+    bind=True,
+    default_retry_delay=2,
+    retry_backoff=True,
+    max_retries=10,
+)
+def request_server_cashless_updateFed(self, url: str = None, key: str = None, data: dict = None) -> requests.status_codes:
     sess = requests.Session()
-    r = sess.post(
-        f'{url}/api/updatefedwallet',
-        data=data,
-        headers={
-            'Authorization': f'Api-Key {key}'
-        }
-    )
+    try:
+        r = sess.post(
+            f'{url}/api/updatefedwallet',
+            data=data,
+            headers={
+                'Authorization': f'Api-Key {key}'
+            }
+        )
 
-    sess.close()
+        sess.close()
 
-    if r.status_code not in [200, ]:
-        logger.error(
-            f"request_server_cashless_updateFed {r.status_code} {r.text}")
-        raise Exception(f"request_server_cashless_updateFed {r.status_code} {r.text}")
+        if r.status_code not in [200, 208]:
+            logger.error(
+                f"request_server_cashless_updateFed {r.status_code} {r.text}")
+            raise self.retry(exc=Exception(f"request_server_cashless_updateFed {r.status_code} {r.text}"))
+    except Exception as e:
+        raise self.retry(exc=e)
 
     return r.status_code
 
 
 @app.task
-def stripe_wallet_update_celery(wallet_pk):
+def get_fedinstance_and_launch_request(wallet_pk):
     # On récupère toute les url des serveurs cashless fédérés
     public_tenant_categorie = [Client.META, Client.ROOT]
     fed_clients = []

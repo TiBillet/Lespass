@@ -8,7 +8,7 @@ from django.dispatch import receiver
 # from ApiBillet.thread_mailer import ThreadMaileur
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, LigneArticle, Ticket, Product, Configuration, Paiement_stripe
-from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation, stripe_wallet_update_celery
+from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation, get_fedinstance_and_launch_request
 
 # from TiBillet import settings
 from BaseBillet.triggers import ActionArticlePaidByCategorie
@@ -308,7 +308,7 @@ def wallet_update_to_celery(sender, instance: Wallet, **kwargs):
             if old_instance.qty != new_instance.qty:
                 logger.info(f"wallet_update_celery : need update cashless serveur")
                 # update all cashless serveur
-                stripe_wallet_update_celery.delay(instance.pk)
+                get_fedinstance_and_launch_request.delay(instance.pk)
 
             # else :
             # TODO: JSONFields les réponses des serveur cashless

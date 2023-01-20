@@ -160,6 +160,7 @@ def check_carte_serveur_cashless(config, uuid: str) -> dict or HttpResponse:
             data={
                 'uuid': f'{uuid}',
             })
+
     except requests.exceptions.ConnectionError:
         reponse = HttpResponse("Serveur non disponible. Merci de revenir ultérieurement.",
                                status=status.HTTP_503_SERVICE_UNAVAILABLE)
