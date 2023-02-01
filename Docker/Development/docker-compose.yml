@@ -32,6 +32,13 @@ services:
     links:
       - billetterie_postgres_dev:billetterie_postgres
       - billetterie_redis_dev:redis
+    extra_hosts:
+      - "demo.cashless.tibillet.localhost:172.17.0.1"
+      - "test.cashless.tibillet.localhost:172.17.0.1"
+      - "billetistan.cashless.tibillet.localhost:172.17.0.1"
+      - "demo.tibillet.localhost:172.17.0.1"
+      - "billetistan.tibillet.localhost:172.17.0.1"
+      - "tibillet.localhost:172.17.0.1"
     networks:
       - frontend
       - backend-billeterie
@@ -52,6 +59,13 @@ services:
     links:
       - billetterie_postgres_dev:billetterie_postgres
       - billetterie_redis_dev:redis
+    extra_hosts:
+      - "demo.cashless.tibillet.localhost:172.17.0.1"
+      - "test.cashless.tibillet.localhost:172.17.0.1"
+      - "billetistan.cashless.tibillet.localhost:172.17.0.1"
+      - "demo.tibillet.localhost:172.17.0.1"
+      - "billetistan.tibillet.localhost:172.17.0.1"
+      - "tibillet.localhost:172.17.0.1"
     networks:
 #      - frontend
       - backend-billeterie

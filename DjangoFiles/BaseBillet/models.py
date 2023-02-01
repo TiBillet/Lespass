@@ -1,3 +1,5 @@
+import os
+
 import uuid
 from datetime import timedelta, datetime
 from decimal import Decimal
@@ -245,9 +247,12 @@ class Configuration(SingletonModel):
                 r = sess.get(
                     f'{self.server_cashless}/api/check_apikey',
                     headers={
-                        'Authorization': f'Api-Key {self.key_cashless}'
+                        'Authorization': f'Api-Key {self.key_cashless}',
+                        'Origin': self.domain(),
+
                     },
                     timeout=1,
+                    verify=bool(not settings.DEBUG),
                 )
                 sess.close()
                 logger.info(f"    check_serveur_cashless : {r.status_code} {r.text}")
@@ -257,6 +262,7 @@ class Configuration(SingletonModel):
                         asset, created = Asset.objects.get_or_create(
                             origin=Client.objects.get(categorie=Client.ROOT),
                             name="Stripe",
+                            categorie=Asset.STRIPE_FED,
                             is_federated=True,
                         )
                         logger.info(f"    check_serveur_cashless : {asset} - Created {created}")
@@ -269,8 +275,8 @@ class Configuration(SingletonModel):
 
                         if self.key_cashless != fed_cash_conf.key_cashless \
                                 or self.server_cashless != fed_cash_conf.server_cashless:
-                            fed_cash_conf.key_cashless=self.key_cashless
-                            fed_cash_conf.server_cashless=self.server_cashless
+                            fed_cash_conf.key_cashless = self.key_cashless
+                            fed_cash_conf.server_cashless = self.server_cashless
                             fed_cash_conf.save()
 
                         return True

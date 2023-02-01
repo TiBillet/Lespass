@@ -28,7 +28,8 @@ from django.utils import timezone
 from AuthBillet.models import TibilletUser, TerminalPairingToken
 from BaseBillet.models import Reservation, Ticket, Configuration, Membership, LigneArticle, Webhook
 from Customers.models import Client
-from QrcodeCashless.models import Wallet
+from QrcodeCashless.models import Wallet, SyncFederatedLog
+from TiBillet import settings
 from TiBillet.celery import app
 
 import logging
@@ -79,7 +80,7 @@ class CeleryMailerClass():
             assert self.return_email.partition("@")[2] == EMAIL_HOST_USER.partition("@")[2]
 
         except Exception as e:
-            logger.info(f'  WORKDER CELERY : self.return_email {e}')
+            logger.warning(f'  WORKDER CELERY : self.return_email {e}')
             self.return_email = "contact@tibillet.re"
 
         if all([
@@ -114,11 +115,11 @@ class CeleryMailerClass():
 
             if mail_return == 1:
                 self.sended = True
-                logger.info(f'      WORKER CELERY mail envoyé : {mail_return} - {self.email}')
-                logger.info(f'          title : {self.title}')
-                logger.info(f'          text : {self.text}')
-                logger.info(f'          html len : {len(str(self.html))}')
-                logger.info(f'          return_email : {self.return_email}')
+                # logger.info(f'      WORKER CELERY mail envoyé : {mail_return} - {self.email}')
+                # logger.info(f'          title : {self.title}')
+                # logger.info(f'          text : {self.text}')
+                # logger.info(f'          html len : {len(str(self.html))}')
+                # logger.info(f'          return_email : {self.return_email}')
             else:
                 logger.error(f'     WORKER CELERY mail non envoyé : {mail_return} - {self.email}')
 
@@ -153,7 +154,7 @@ class MailJetSendator():
             self.return_email = Configuration.get_solo().email
             assert self.return_email
         except Exception as e:
-            logger.info(f'  WORKDER CELERY : self.return_email {e}')
+            logger.warning(f'  WORKDER CELERY : self.return_email {e}')
             self.return_email = "contact@tibillet.re"
 
         if all([api_key,
@@ -505,6 +506,7 @@ def send_membership_to_cashless(data):
                 'Authorization': f'Api-Key {configuration.key_cashless}'
             },
             data=data,
+            verify=bool(not settings.DEBUG),
         )
 
         sess.close()
@@ -553,63 +555,118 @@ def webhook_reservation(reservation_pk):
     bind=True,
     default_retry_delay=2,
     retry_backoff=True,
-    max_retries=10,
-)
-def request_server_cashless_updateFed(self, url: str = None, key: str = None, data: dict = None) -> requests.status_codes:
-    sess = requests.Session()
+    max_retries=10)
+def request_server_cashless_updateFed(self,
+                                      fed_client: dict = None,
+                                      data: dict = None,
+                                      sync_log_pk: str = None,
+                                      ) -> requests.status_codes:
+
+    logger.info(f"request_server_cashless_updateFed {fed_client} - {connection.tenant} - {timezone.now()}")
+    sync_log = SyncFederatedLog.objects.get(pk=sync_log_pk)
+    uuid = fed_client['tenant_uuid']
+
     try:
+        url = fed_client['url']
+        key = fed_client['key']
+
+        sess = requests.Session()
         r = sess.post(
             f'{url}/api/updatefedwallet',
             data=data,
             headers={
                 'Authorization': f'Api-Key {key}'
-            }
+            },
+            verify=bool(not settings.DEBUG),
+
         )
 
         sess.close()
 
+        msg = f"REPONSE DE {fed_client} DEPUIS CELERY fed_client {uuid} request_server_cashless_updateFed {r.status_code} {r.text}"
+        logger.info(f"    {msg}")
         if r.status_code not in [200, 208]:
-            logger.error(
-                f"request_server_cashless_updateFed {r.status_code} {r.text}")
-            raise self.retry(exc=Exception(f"request_server_cashless_updateFed {r.status_code} {r.text}"))
-    except Exception as e:
-        raise self.retry(exc=e)
+            erreur = f"ERREUR {msg}"
+            logger.error(erreur)
+            sync_log.etat_client_sync[uuid]['status'] = erreur
+            sync_log.save()
+            raise Exception(erreur)
+            # raise self.retry(exc=Exception(f"request_server_cashless_updateFed {r.status_code} {r.text}"))
 
-    return r.status_code
+        sync_log.refresh_from_db()
+        logger.info(f'    sync_log.etat_client_sync : {sync_log.etat_client_sync}')
+        sync_log.etat_client_sync[uuid]['status'] = r.status_code
+        sync_log.save()
+
+    except Exception as e:
+        logger.error(
+            f"request_server_cashless_updateFed {e}")
+        sync_log.etat_client_sync[uuid]['status'] = f"{e}"
+        sync_log.save()
+
+        # raise self.retry(exc=e)
+        raise Exception(f"request_server_cashless_updateFed {e}")
+
+    return f"{url} - {r.status_code}"
 
 
 @app.task
 def get_fedinstance_and_launch_request(wallet_pk):
+    logger.info("get_fedinstance_and_launch_request")
+    wallet = Wallet.objects.get(pk=wallet_pk)
+
+    #TODO: GET OR CREATE SYNC LOG
+    # On récupère l'instance de log :
+    sync_log = SyncFederatedLog.objects.filter(wallet=wallet, new_qty=wallet.qty).last()
+    logger.info(f"get_fedinstance_and_launch_request : {timezone.now()} synclog : {sync_log}")
+
+    dict_syncLog = getattr(sync_log, 'etat_client_sync', {})
+
     # On récupère toute les url des serveurs cashless fédérés
     public_tenant_categorie = [Client.META, Client.ROOT]
     fed_clients = []
 
     for tenant in Client.objects.exclude(categorie__in=public_tenant_categorie):
         with tenant_context(tenant):
+
             tenant_configuration = Configuration.get_solo()
             if tenant_configuration.server_cashless and tenant_configuration.key_cashless:
+                logger.info(f"    SCHEMA NAME ADDED to syncLog : {tenant.schema_name}")
+
+                dict_syncLog[f"{tenant.uuid}"] = {
+                    'shema_name': tenant.schema_name,
+                    'status': 'pending',
+                }
+
                 fed_clients.append({
                     'shema_name': tenant.schema_name,
+                    'tenant_uuid': tenant.uuid,
                     'url': tenant_configuration.server_cashless,
                     'key': tenant_configuration.key_cashless,
                 })
 
+    logger.info(f"    dict_syncLog : {dict_syncLog}")
+    sync_log.refresh_from_db()
+    sync_log.etat_client_sync = dict_syncLog
+    sync_log.save()
+
+    # On retourne sur le meta tenant
     meta_tenant = Client.objects.filter(categorie=Client.META).first()
     with tenant_context(meta_tenant):
-        wallet = Wallet.objects.get(pk=wallet_pk)
+
         data = {
             "email": wallet.user.email,
-            "stripe_wallet_value": wallet.qty,
+            "old_qty": sync_log.old_qty,
+            "new_qty": wallet.qty,
+            "uuid_sync_log" : sync_log.uuid,
+            "card_uuid": wallet.card.uuid
         }
-
-        if wallet.card:
-            data['card_uuid'] = wallet.card.uuid
 
         for fed_client in fed_clients:
             request_server_cashless_updateFed.delay(
-                url=fed_client['url'],
-                key=fed_client['key'],
+                fed_client=fed_client,
                 data=data,
+                sync_log_pk=sync_log.pk,
             )
 
 

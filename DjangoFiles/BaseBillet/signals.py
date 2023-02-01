@@ -298,7 +298,9 @@ def pre_save_signal_status(sender, instance, **kwargs):
 
 @receiver(pre_save, sender=Wallet)
 def wallet_update_to_celery(sender, instance: Wallet, **kwargs):
-    # Ne pas lancer à la création
+    # Pre save pour récupérer old_qty
+
+    # instance._state.adding = Ne pas lancer à la création
     # Le modèle se re-save une seconde fois, à la validation du paiement.
     if not instance._state.adding:
         if instance.asset.is_federated:
@@ -310,5 +312,3 @@ def wallet_update_to_celery(sender, instance: Wallet, **kwargs):
                 # update all cashless serveur
                 get_fedinstance_and_launch_request.delay(instance.pk)
 
-            # else :
-            # TODO: JSONFields les réponses des serveur cashless

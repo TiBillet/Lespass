@@ -29,7 +29,8 @@ from rest_framework.views import APIView
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
     ReservationValidator, MembreValidator, ConfigurationSerializer, NewConfigSerializer, \
     EventCreateSerializer, TicketSerializer, OptionTicketSerializer, ChargeCashlessValidator, NewAdhesionValidator, \
-    DetailCashlessCardsValidator, DetailCashlessCardsSerializer, CashlessCardsValidator
+    DetailCashlessCardsValidator, DetailCashlessCardsSerializer, CashlessCardsValidator, \
+    UpdateFederatedAssetFromCashlessValidator
 from AuthBillet.models import TenantAdminPermission, TibilletUser, RootPermission
 from AuthBillet.utils import user_apikey_valid, get_or_create_user
 from BaseBillet.tasks import create_ticket_pdf
@@ -44,7 +45,7 @@ import logging
 
 from MetaBillet.models import EventDirectory, ProductDirectory
 from PaiementStripe.views import new_entry_from_stripe_invoice
-from QrcodeCashless.models import Detail, CarteCashless, Wallet
+from QrcodeCashless.models import Detail, CarteCashless, Wallet, Asset, SyncFederatedLog
 from QrcodeCashless.views import WalletValidator
 from root_billet.models import RootConfiguration
 
@@ -1112,8 +1113,9 @@ def paiment_stripe_validator(request, paiement_stripe):
 
 
 
+
 @permission_classes([permissions.AllowAny])
-class UpdateFederatedAsset(APIView):
+class UpdateFederatedAssetFromCashless(APIView):
     def post(self, request):
         """
         Reception d'une demande d'update d'un portefeuille fédéré d'une carte cashless depuis un serveur cashless.
@@ -1122,60 +1124,80 @@ class UpdateFederatedAsset(APIView):
 
         On met à jour la valeur en base de donnée sur la billetterie.
         Ensuite, on met à jour dans tous les serveurs cashless fédéré
-
-        :param request:
-            data = {
-                "card_uuid_qrcode": f"{carte.uuid_qrcode}",
-                "old_qty": old_qty,
-                "new_qty": f"{asset_federated.qty}",
-                "domain": f"{config.domaine_cashless}",
-                }
-        :return:
         """
 
-        data = request.data
-        logger.info(f"UpdateFederatedAsset REQUEST : {data}")
-        carte = get_object_or_404(CarteCashless, uuid=data['card_uuid_qrcode'])
-        old_qty = Decimal(data['old_qty'])
-        new_qty = Decimal(data['new_qty'])
+        validator = UpdateFederatedAssetFromCashlessValidator(data=request.data)
+        if not validator.is_valid():
+            logger.error(f"UpdateFederatedAssetFromCashless ERREUR validator.errors : {validator.errors} : request.data {request.data}")
+            # import ipdb; ipdb.set_trace()
+            return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        #TODO: Verifier le domaine avec configuration.server_cashless
-        # En test, on a 127.17....
-        domain = data['domain']
+        validated_data = validator.data
+        wallet_stripe: Wallet = validated_data['wallet_stripe']
+        carte: CarteCashless = validated_data['card']
 
-        wallet_stripe = carte.wallet_set.get(asset__is_federated = True)
+        old_qty = validated_data['old_qty']
+        new_qty = validated_data['new_qty']
+        domain = validated_data['domain']
+        uuid_log = validated_data['uuid_commande']
 
-        if wallet_stripe.qty == old_qty and wallet_stripe.qty != new_qty :
-            logger.info(f"UpdateFederatedAsset NEED MAJ : {carte} - {wallet_stripe.qty} == {old_qty}")
+        # On log l'action
+        logger.info(f"UpdateFederatedAssetFromCashless validated_data : {validated_data}")
+        syncLog: SyncFederatedLog = validated_data['syncLog']
+
+        # Une nouvelle vente a été faites sur un cashless avec la monnaie fédérée.
+        # On va vérifier coté cashless si la valeur reçue est bonne (NTUI!)
+        if wallet_stripe.qty == old_qty and wallet_stripe.qty != new_qty:
+            logger.info(f"UpdateFederatedAssetFromCashless NEED MAJ : {carte} - {wallet_stripe.qty} == {old_qty}")
+
             # On utilise la class qui va vérifier si tout existe et qui récupère les assets dans le serveur cashless
             validated_wallet = WalletValidator(uuid=carte.uuid)
-            carte_from_cashless = validated_wallet.carte_serveur_cashless
+            dict_carte_from_cashless = validated_wallet.carte_serveur_cashless
 
             new_qty_verified = None
-            for asset in carte_from_cashless.get('assets'):
-                if asset['categorie_mp'] == 'SF' :
+            for asset in dict_carte_from_cashless.get('assets'):
+                if asset['categorie_mp'] == 'SF':
                     new_qty_verified = Decimal(asset['qty'])
 
-            if new_qty_verified == new_qty :
+            # La valeur reçue par l'api allowAny correspond
+            # à la valeur du serveur cashless
+            # vérifié grâce à une API avec clé d'authentification
+            if new_qty_verified == new_qty:
+
                 wallet_stripe.qty = new_qty
                 wallet_stripe.save()
-                logger.info(f"UpdateFederatedAsset MAJ : {carte} - {wallet_stripe.qty} == {new_qty}")
+                #TODO: logger
+                logger.info(f"UpdateFederatedAssetFromCashless MAJ : {carte} - {wallet_stripe.qty} == {new_qty} - {domain}")
+                return Response(f"log {syncLog.uuid}", status=status.HTTP_202_ACCEPTED)
+
+            # La valeur reçue est différente de celle du serveur cashless
+            # NTUI ???
             else:
-                logger.error(f"UpdateFederatedAsset ERREUR : {carte} - {new_qty_verified} != {new_qty}")
+                logger.error(f"UpdateFederatedAssetFromCashless ERREUR : {carte} - {new_qty_verified} != {new_qty}")
                 return Response(
-                    f"UpdateFederatedAsset ERROR new_qty_verified : {carte} - wallet {wallet_stripe.qty}, old {old_qty}, new {new_qty}, new_verified {new_qty_verified}",
-                    status=status.HTTP_400_BAD_REQUEST)
+                    f"UpdateFederatedAssetFromCashless ERROR new_qty_verified : {carte} - wallet {wallet_stripe.qty}, old {old_qty}, new {new_qty}, new_verified {new_qty_verified}",
+                    status=status.HTTP_406_NOT_ACCEPTABLE)
 
 
+        # Pas besoin de mise à jour.
         elif wallet_stripe.qty == new_qty:
-            logger.info(f"UpdateFederatedAsset NO MAJ : {carte} - {wallet_stripe.qty} == {new_qty}")
-        else :
-            logger.error(f"UpdateFederatedAsset ERROR : {carte} - wallet {wallet_stripe.qty} != old {old_qty} != new {new_qty}")
-            return Response(f"UpdateFederatedAsset ERROR : {carte} - wallet {wallet_stripe.qty} != old {old_qty} != new {new_qty}", status=status.HTTP_400_BAD_REQUEST)
+            logger.info(f"UpdateFederatedAssetFromCashless NO MAJ : {carte} - {wallet_stripe.qty} == {new_qty}")
+            tenant_uuid = str(connection.tenant.uuid)
+            syncLog.etat_client_sync[tenant_uuid]['return'] = True
+            syncLog.etat_client_sync[tenant_uuid]['return_value'] = f"{new_qty}"
+            syncLog.save()
+            return Response(f"NO NEED TO UPDATE - log {syncLog.uuid} already reported", status=status.HTTP_208_ALREADY_REPORTED)
 
-        logger.info(f"UpdateFederatedAsset : {carte} {old_qty} {new_qty} {domain}")
+        # La valeur old est différente de celle du serveur cashless
+        erreur = f"UpdateFederatedAssetFromCashless ERROR : " \
+                 f"log {syncLog.uuid} - carte {carte} - " \
+                 f"billetterie wallet {wallet_stripe.qty} != cashless old {old_qty} ou new {new_qty}"
+        syncLog.etat_client_sync = erreur
+        syncLog.save()
 
-        return Response(f"{carte.uuid}", status=status.HTTP_202_ACCEPTED)
+        logger.error(erreur)
+
+        return Response(erreur, status=status.HTTP_409_CONFLICT)
 
 
 def info_connected_account_stripe(id_acc_connect):
@@ -1226,7 +1248,6 @@ class Onboard(APIView):
         return Response(f"{create_account_link_for_onboard()}", status=status.HTTP_202_ACCEPTED)
 
 
-
 @permission_classes([permissions.AllowAny])
 class Webhook_stripe(APIView):
 
@@ -1245,7 +1266,8 @@ class Webhook_stripe(APIView):
 
             # On utilise les metadata du paiement stripe pour savoir de quel tenant cela vient.
             if f"{connection.tenant.uuid}" != tenant_uuid_in_metadata:
-                with tenant_context(Client.objects.get(uuid=tenant_uuid_in_metadata)):
+                tenant = get_object_or_404(Client, uuid=tenant_uuid_in_metadata)
+                with tenant_context(tenant):
                     paiement_stripe = get_object_or_404(Paiement_stripe,
                                                         checkout_session_id_stripe=payload['data']['object']['id'])
                     return paiment_stripe_validator(request, paiement_stripe)
@@ -1294,8 +1316,10 @@ class Webhook_stripe(APIView):
                         )
                         place = product_from_public_tenant.place
                     except ProductDirectory.DoesNotExist:
-                        logger.error(f"Webhook_stripe invoice.paid DoesNotExist : product_sold_stripe_id {product_sold_stripe_id}, serveur de test ?")
-                        return Response('ProductDirectory DoesNotExist, serveur de test ?', status=status.HTTP_204_NO_CONTENT)
+                        logger.error(
+                            f"Webhook_stripe invoice.paid DoesNotExist : product_sold_stripe_id {product_sold_stripe_id}, serveur de test ?")
+                        return Response('ProductDirectory DoesNotExist, serveur de test ?',
+                                        status=status.HTTP_204_NO_CONTENT)
 
                 # On a le tenant ( place ), on va chercher l'abonnement
                 with tenant_context(place):

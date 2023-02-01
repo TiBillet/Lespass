@@ -17,9 +17,11 @@ from ApiBillet.serializers import get_or_create_user, get_or_create_price_sold, 
 from BaseBillet.models import Configuration, Product, LigneArticle, Price, Paiement_stripe, ProductSold, Event, \
     Membership
 from PaiementStripe.views import CreationPaiementStripe
-from QrcodeCashless.models import CarteCashless
+from QrcodeCashless.models import CarteCashless, SyncFederatedLog
 
 import logging
+
+from TiBillet import settings
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +87,7 @@ class gen_one_bisik(View):
 END Dette technique ...
 '''
 
+
 #
 # def check_adhesion_state(config: Configuration, data: dict) -> requests.Response:
 #     """
@@ -113,6 +116,10 @@ END Dette technique ...
 #
 #     return response
 
+
+class SyncWallet():
+    def __init__(self):
+        self.config = Configuration.get_solo()
 
 
 def check_carte_local(uuid):
@@ -159,7 +166,9 @@ def check_carte_serveur_cashless(config, uuid: str) -> dict or HttpResponse:
             },
             data={
                 'uuid': f'{uuid}',
-            })
+            },
+            verify=bool(not settings.DEBUG)
+        )
 
     except requests.exceptions.ConnectionError:
         reponse = HttpResponse("Serveur non disponible. Merci de revenir ultérieurement.",
@@ -186,7 +195,7 @@ def check_carte_serveur_cashless(config, uuid: str) -> dict or HttpResponse:
 
 
 class GetMembership():
-    def __init__(self, user, config: Configuration= None, form_data: dict =None, cashless_card: CarteCashless = None):
+    def __init__(self, user, config: Configuration = None, form_data: dict = None, cashless_card: CarteCashless = None):
 
         self.user = user
         self.cashless_card = cashless_card
@@ -218,7 +227,6 @@ class GetMembership():
 
         self.reponse_sync_data = self.get_and_sync_user_data()
 
-
     def get_and_sync_user_data(self):
         """
         Synchronise les données de l'utilisateur avec celles du serveur cashless
@@ -236,7 +244,7 @@ class GetMembership():
         # Utile lorsque la personne veut "payer avec un vrai humain", cela envoie l'info des input de la page avant le paiement,
         # pour pouvoir être retrouvé sur la page d'admin du cashless.
 
-        if self.cashless_card and self.user :
+        if self.cashless_card and self.user:
             data = {
                 'email': self.user.email,
                 'prenom': self.first_name,
@@ -252,15 +260,17 @@ class GetMembership():
                 headers={
                     'Authorization': f'Api-Key {self.config.key_cashless}'
                 },
-                data=data)
+                data=data,
+                verify=bool(not settings.DEBUG)
+            )
 
             sess.close()
-            logger.info(f"{timezone.now()} get_and_sync_user_data -> /api/billetterie_qrcode_adhesion : {response.status_code} - {response.content}")
+            logger.info(
+                f"{timezone.now()} get_and_sync_user_data -> /api/billetterie_qrcode_adhesion : {response.status_code} - {response.content}")
             return response
 
         logger.info(f"**5** get_and_sync_user_data")
         return False
-
 
     def _first_name(self):
         if self.membership.first_name:
@@ -404,7 +414,7 @@ class WalletValidator:
         # ) if self.user else None
 
     def fiche_membre(self):
-        if self.user :
+        if self.user:
             return GetMembership(
                 self.user,
                 self.config,
@@ -430,7 +440,6 @@ class WalletValidator:
 
         email = first_true(trusted_order)
 
-
         if email:
             user = get_or_create_user(email, send_mail=False)
             self.carte_local.user = user
@@ -449,6 +458,7 @@ class WalletValidator:
                     headers={
                         'Authorization': f'Api-Key {self.config.key_cashless}'
                     },
+                    verify=bool(not settings.DEBUG),
                     data=data)
                 sess.close()
 
@@ -473,6 +483,30 @@ END NFC
 '''
 
 
+class getSyncLog():
+    def __init__(self,
+                 uuid=None,
+                 old_qty=None,
+                 new_qty=None,
+                 card=None,
+                 asset=None,
+                 client_source=None,
+                 categorie=None,
+                 ):
+        self.uuid = uuid
+        self.old_qty = old_qty
+        self.new_qty = new_qty
+        self.card = card
+        self.asset = asset
+        self.client_source = client_source
+        self.categorie = categorie
+
+    def syncLogDb(self):
+        if self.uuid:
+            return SyncFederatedLog.objects.get(uuid=self.uuid)
+        return None
+
+
 class index_scan(View):
     """
     Vue pour les scans de QrCode des cartes cashless
@@ -486,6 +520,8 @@ class index_scan(View):
 
     def get(self, request, uuid):
         config = self.configuration
+        if not config.check_serveur_cashless():
+            return HttpResponse("Serveur non joignable, merci de revenir ultérieurement.")
 
         # Au cas où ce sont des cartes V1 du bisik & de la raffinerie :/
         check_dette_technique(request)
@@ -527,6 +563,8 @@ class index_scan(View):
     def post(self, request, uuid):
         # carte = check_carte_local(uuid)
         config = self.configuration
+        if not config.check_serveur_cashless():
+            return HttpResponse("Serveur non joignable, merci de revenir ultérieurement.")
 
         # On récupère les données du formulaire
         data = request.POST
@@ -537,8 +575,6 @@ class index_scan(View):
         carte = wallet.carte_local
         user = wallet.user
         email = wallet.user.email
-
-
 
         if not wallet.is_valid():
             for error in wallet.errors:
@@ -632,18 +668,17 @@ class index_scan(View):
         if fiche_membre:
             messages.success(request, f"{data.get('email')}", extra_tags='email')
             # partial information :
-            if not fiche_membre.detail_submitted :
-                if fiche_membre.first_name :
+            if not fiche_membre.detail_submitted:
+                if fiche_membre.first_name:
                     messages.success(request, f"Email déja connu. prenom déja connu", extra_tags='prenom')
-                if fiche_membre.last_name :
+                if fiche_membre.last_name:
                     messages.success(request, f"Email déja connu. Name déja connu", extra_tags='name')
-                if fiche_membre.phone :
+                if fiche_membre.phone:
                     messages.success(request, f"Email déja connu. Téléphone déja connu", extra_tags='phone')
                 return HttpResponseRedirect(f'#demande_nom_prenom_tel')
 
             # messages.success(request, f"Carte liée au membre {data.get('email')}")
             return HttpResponseRedirect(f'#adhesionsuccess')
-
 
         messages.error(request,
                        f'erreur fin de fichier')

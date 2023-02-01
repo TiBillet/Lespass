@@ -12,7 +12,7 @@ from AuthBillet.models import TibilletUser, HumanUser, TermUser, SuperHumanUser
 from django.utils.translation import gettext, gettext_lazy as _
 
 from MetaBillet.models import EventDirectory, ProductDirectory
-from QrcodeCashless.models import Detail, CarteCashless, FederatedCashless
+from QrcodeCashless.models import Detail, CarteCashless, FederatedCashless, SyncFederatedLog
 
 # from boutique.models import Category, Product, Tag, VAT, Event, LandingPageContent, Price
 # from solo.admin import SingletonModelAdmin
@@ -161,10 +161,11 @@ public_admin_site.register(Detail, DetailAdmin)
 
 class CarteCashlessAdmin(admin.ModelAdmin):
     list_display = (
-        'tag_id',
-        'uuid',
-        'number',
         'user',
+        'tag_id',
+        'wallets',
+        'number',
+        'uuid',
         'get_origin',
     )
 
@@ -216,4 +217,23 @@ class FederatedCashlessAdmin(admin.ModelAdmin):
 
 public_admin_site.register(FederatedCashless, FederatedCashlessAdmin)
 
+class SyncFederatedLogAdmin(admin.ModelAdmin):
+    list_display = (
+        'categorie',
+        'date',
+        'card',
+        'old_qty',
+        'new_qty',
+        'client_source',
+        'wallet',
+        'first_uuid',
+        'etat_client_sync',
+        'is_sync',
+    )
+    readonly_fields = list_display
+
+    def first_uuid(self, obj):
+        return f"{str(obj.uuid).split('-')[0]}"
+
+public_admin_site.register(SyncFederatedLog, SyncFederatedLogAdmin)
 

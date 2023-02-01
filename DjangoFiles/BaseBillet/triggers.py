@@ -3,7 +3,6 @@ import datetime
 import requests
 from django.db import connection
 
-import QrcodeCashless.models
 import TiBillet.settings
 from BaseBillet.models import LigneArticle, Product, Configuration, Membership, Price
 from BaseBillet.tasks import send_membership_to_cashless
@@ -11,7 +10,7 @@ from BaseBillet.tasks import send_membership_to_cashless
 import logging
 
 from Customers.models import Client
-from QrcodeCashless.models import Asset, Wallet
+from QrcodeCashless.models import Asset, Wallet, SyncFederatedLog, CarteCashless
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +34,7 @@ def increment_to_cashless_serveur(vente):
             'Authorization': f'Api-Key {configuration.key_cashless}'
         },
         data=data,
+        verify=bool(not TiBillet.settings.DEBUG),
     )
 
     sess.close()
@@ -48,8 +48,8 @@ def increment_to_cashless_serveur(vente):
     return r.status_code, r.text
 
 
-def get_federated_wallet(cashless_card: QrcodeCashless.models.CarteCashless = None,
-                         user: TiBillet.settings.AUTH_USER_MODEL = None,) -> Wallet:
+def get_federated_wallet(cashless_card: CarteCashless = None,
+                         user: TiBillet.settings.AUTH_USER_MODEL = None, ) -> Wallet:
     """
         Récupère le wallet en fonction des informations : email, carte ou les deux.
 
@@ -72,29 +72,29 @@ def get_federated_wallet(cashless_card: QrcodeCashless.models.CarteCashless = No
     asset, created = Asset.objects.get_or_create(
         origin=tenant_root,
         name="Stripe",
+        categorie=Asset.STRIPE_FED,
         is_federated=True,
     )
 
     if cashless_card:
         # Si la carte à un utilisateur
         if cashless_card.user:
-            if user :
+            if user:
                 if user != cashless_card.user:
                     logger.error(f"get_federated_wallet - carte {cashless_card} et user {user} ne correspondent pas")
                     raise OverflowError(f"get_federated_wallet : user != cashless_card.user")
-            else :
+            else:
                 cashless_card.user = user
                 cashless_card.save()
 
         # Si la carte n'a pas d'utilisateur,
-        else :
-            if user :
+        else:
+            if user:
                 logger.info(f"get_federated_wallet - carte {cashless_card} sans user, on lui affecte {user}")
                 cashless_card.user = user
                 cashless_card.save()
 
-
-    try :
+    try:
         #   Lors d'un rechargement cashless via le QRCode, nous avons l'email et la carte
         if user and cashless_card:
             wallet, created = Wallet.objects.get_or_create(asset=asset, user=user, card=cashless_card)
@@ -112,13 +112,12 @@ def get_federated_wallet(cashless_card: QrcodeCashless.models.CarteCashless = No
 
     except Wallet.DoesNotExist:
         logger.error(f"get_federated_wallet - Wallet does not exist for")
-        import ipdb; ipdb.set_trace()
+        import ipdb;
+        ipdb.set_trace()
     except ValueError as e:
         logger.error(f"get_federated_wallet - {e}")
-        import ipdb; ipdb.set_trace()
-
-
-
+        import ipdb;
+        ipdb.set_trace()
 
         # if user :
         #     wallet, created = Wallet.objects.get_or_create(asset=asset, user=user)
@@ -138,9 +137,14 @@ def get_federated_wallet(cashless_card: QrcodeCashless.models.CarteCashless = No
     return wallet
 
 
+
 def increment_federated_wallet(vente):
+    # Un paiement stripe a été fait.
+    # Une ligne article a été mis en validé
+    # Le trigger_S correspondant à la ligne article est lancé
+
     vente: ActionArticlePaidByCategorie
-    ligne_article : LigneArticle = vente.ligne_article
+    ligne_article: LigneArticle = vente.ligne_article
     # On incrémente la valeur du wallet Stripe de la carte.
     # Cela déclenche un post save qui lance une requete celery
     # pour alerter tous les cashless fédérés
@@ -148,10 +152,24 @@ def increment_federated_wallet(vente):
     user = ligne_article.paiement_stripe.user
     cashless_card = ligne_article.carte
     wallet = get_federated_wallet(cashless_card=cashless_card, user=user)
+    old_qty = wallet.qty
+    new_qty = old_qty + ligne_article.total()
+
+    # On log l'action
+    log = SyncFederatedLog.objects.create(
+        uuid=vente.ligne_article.paiement_stripe.uuid,
+        old_qty=old_qty,
+        new_qty=new_qty,
+        card=cashless_card,
+        wallet=wallet,
+        client_source=connection.tenant,
+        categorie=SyncFederatedLog.RECHARGE_STRIPE_FED,
+        etat_client_sync={},
+    )
 
     logger.debug(f"    triggers.increment_federated_wallet - WALLET : {wallet.qty} + {ligne_article.total()}")
 
-    wallet.qty += ligne_article.total()
+    wallet.qty = new_qty
     wallet.save()
 
     # et pouf, ça lance le /DjangoFiles/BaseBillet/signals.py/wallet_update_to_celery
@@ -211,7 +229,7 @@ class ActionArticlePaidByCategorie:
 
     # Category RECHARGE_FEDERATED
     def trigger_S(self):
-        reponse_cashless_serveur = increment_federated_wallet(self)
+        increment_federated_wallet(self)
         logger.info(f"TRIGGER RECHARGE_FEDERATED")
 
     # Categorie ADHESION

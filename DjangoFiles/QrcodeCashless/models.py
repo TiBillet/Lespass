@@ -8,6 +8,7 @@ from stdimage.validators import MaxSizeValidator
 
 from Customers.models import Client as Customers_Client
 from TiBillet import settings
+from django.utils.translation import ugettext_lazy as _
 
 import logging
 
@@ -43,12 +44,38 @@ class Asset(models.Model):
     origin = models.ForeignKey(Customers_Client, on_delete=models.PROTECT)
     name = models.CharField(max_length=50, null=False, blank=False)
     is_federated = models.BooleanField(default=False)
-    # federated_with = models.ManyToManyField(Customers_Client,
-    #                                         blank=True,
-    #                                         related_name="feredated_assets")
+
+    LOCAL_EURO = 'LE'
+    LOCAL_GIFT = 'LG'
+    FRACTIONNE = 'FR'
+    ARDOISE = 'AR'
+    STRIPE_FED = 'SF'
+    STRIPE_NOFED = 'SN'
+    COMMANDE = "CM"
+    CASH = 'CA'
+    CREDIT_CARD_NOFED = 'CC'
+    OCECO = 'OC'
+
+    CATEGORIES = [
+        (LOCAL_EURO, _('Token local €')),
+        (LOCAL_GIFT, _('Token local cadeau')),
+        (FRACTIONNE, _('Fractionné')),
+        (ARDOISE, _('Ardoise')),
+        (STRIPE_FED, _('Token Federated Stripe')),
+        (STRIPE_NOFED, _('Stripe no federated')),
+        (CASH, _('Espèces')),
+        (CREDIT_CARD_NOFED, _('Carte bancaire TPE')),
+        (OCECO, _('Oceco')),
+
+    ]
+
+    categorie = models.CharField(
+        max_length=2,
+        choices=CATEGORIES
+    )
 
     class Meta:
-        unique_together = [['origin', 'name']]
+        unique_together = [['origin', 'name'], ['origin', 'categorie']]
 
     def __str__(self):
         return self.name
@@ -81,6 +108,11 @@ class CarteCashless(models.Model):
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True)
 
+    def wallets(self):
+        return [f"{wallet}" for wallet in self.wallet_set.all()]
+
+    def __str__(self):
+        return self.number
 
 class Wallet(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -98,7 +130,9 @@ class Wallet(models.Model):
     sync = models.JSONField(null=True, blank=True)
 
     def __str__(self):
-        return f'{self.asset.name}, {self.qty}'
+        if self.card :
+            return f'{self.card.number} - {self.asset.name} : {self.qty}'
+        return f'NOCARD : {self.asset.name}, {self.qty}'
 
     class Meta:
         unique_together = [['asset', 'user']]
@@ -144,11 +178,18 @@ class SyncFederatedLog(models.Model):
     """
     On garde en memoire les logs des synchronisations avec les federations
     """
-    uuid = models.UUIDField(default=uuid.uuid4)
 
+    # A la création, on utilise le même uuid que Paiement_stripe ou Commande.
+    uuid = models.UUIDField(default=uuid.uuid4)
     date = models.DateTimeField(auto_now_add=True)
+
+    # Peut-être l'un ou l'autre ou les deux :
     card = models.ForeignKey(CarteCashless, on_delete=models.CASCADE, null=True, blank=True)
-    asset = models.ForeignKey(Asset, on_delete=models.CASCADE, null=True, blank=True)
+    wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE, null=True, blank=True)
+
+    old_qty = models.DecimalField(max_digits=10, decimal_places=2)
+    new_qty = models.DecimalField(max_digits=10, decimal_places=2)
+
     client_source = models.ForeignKey(Customers_Client, on_delete=models.CASCADE, null=True, blank=True)
 
     etat_client_sync = models.JSONField(null=True, blank=True)
@@ -156,15 +197,30 @@ class SyncFederatedLog(models.Model):
     # {
     #   'tenant_uuid' : {'status': 'success', '200': 'Synchronisation réussie'},
     # }
+    NONE, RECHARGE_STRIPE_FED, VENTE_CASHLESS_FED = 'N', 'S', 'V'
+
+    CATEGORIE_CHOICES = [
+        (NONE, _("?")),
+        (RECHARGE_STRIPE_FED, _("Recharge fédérée depuis stripe")),
+        (VENTE_CASHLESS_FED, _("Vente d'article depuis cashless")),
+    ]
+
+    categorie = models.CharField(max_length=3, choices=CATEGORIE_CHOICES, default=NONE,
+                                         verbose_name=_("Why?"))
 
     def get_federated_clients(self):
-        federated_client = FederatedCashless.objects.filter(asset=self.asset)
+        federated_client = FederatedCashless.objects.filter(asset=self.wallet.asset)
         return federated_client
 
     def is_sync(self):
+        if not self.etat_client_sync:
+            return False
+
         try:
             for tenant in self.get_federated_clients():
-                if self.etat_client_sync[tenant.client.uuid]['status'] != 200:
+                state = self.etat_client_sync[f"{tenant.client.uuid}"]['status']
+                # logger.info(f"SyncFederatedLog.is_sync() : {state}")
+                if state not in [200, 208]:
                     return False
         except Exception :
             return False
@@ -172,4 +228,6 @@ class SyncFederatedLog(models.Model):
 
 
     def __str__(self):
+        if self.wallet:
+            return f"{self.wallet} : {self.date}"
         return f"{self.date}"
