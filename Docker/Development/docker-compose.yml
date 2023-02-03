@@ -1,10 +1,19 @@
 version: '3.7'
 services:
   billetterie_postgres_dev:
-    extends:
-      file: ../compose/docker-compose-base.yml
-      service: billetterie_postgres
+    container_name: billetterie_postgres
+    image: postgres:11.5-alpine
+    restart: always
+    volumes:
+      - bill_dev_dbdata:/var/lib/postgresql/data"
+      - "/etc/localtime:/etc/localtime:ro"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     env_file: .env
+
+    # open for dev purpose
     ports:
       - 5432:5432
     networks:
@@ -145,3 +154,5 @@ networks:
   backend-billeterie:
     name: "backend-billeterie"
 
+volumes:
+  bill_dev_dbdata:

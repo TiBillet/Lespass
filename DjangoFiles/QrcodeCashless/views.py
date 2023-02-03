@@ -130,12 +130,6 @@ def check_carte_local(uuid):
     :return:
     """
     carte = get_object_or_404(CarteCashless, uuid=uuid)
-    if carte.detail.origine != connection.tenant:
-        logger.error(f"{timezone.now()} "
-                     f"check_carte_local {carte.uuid} : "
-                     f"carte detail origine correspond pas : {carte.detail.origine} != {connection.tenant}")
-        raise Http404
-
     logger.info(f"**1** check_carte_local : {carte}")
     return carte
 

@@ -594,9 +594,9 @@ def request_server_cashless_updateFed(self,
             # raise self.retry(exc=Exception(f"request_server_cashless_updateFed {r.status_code} {r.text}"))
 
         sync_log.refresh_from_db()
-        logger.info(f'    sync_log.etat_client_sync : {sync_log.etat_client_sync}')
         sync_log.etat_client_sync[uuid]['status'] = r.status_code
         sync_log.save()
+        logger.info(f'    sync_log.etat_client_sync : {sync_log.etat_client_sync}')
 
     except Exception as e:
         logger.error(

@@ -1129,7 +1129,6 @@ class UpdateFederatedAssetFromCashless(APIView):
         validator = UpdateFederatedAssetFromCashlessValidator(data=request.data)
         if not validator.is_valid():
             logger.error(f"UpdateFederatedAssetFromCashless ERREUR validator.errors : {validator.errors} : request.data {request.data}")
-            # import ipdb; ipdb.set_trace()
             return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
         validated_data = validator.data
