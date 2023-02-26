@@ -202,6 +202,8 @@ class NewConfigSerializer(serializers.ModelSerializer):
             # "carte_restaurant",
             # "img",
             # "logo",
+            "server_cashless",
+            "key_cashless",
         ]
         # # un seul tenant par compte stripe, sauf en test
         # if rootConf.stripe_mode_test :

@@ -257,6 +257,7 @@ class Configuration(SingletonModel):
                 sess.close()
                 logger.info(f"    check_serveur_cashless : {r.status_code} {r.text}")
                 if r.status_code == 200:
+
                     if r.json().get('bill'):
                         # On récupère l'asset fédéré Stripe
                         asset, created = Asset.objects.get_or_create(
@@ -265,7 +266,7 @@ class Configuration(SingletonModel):
                             categorie=Asset.STRIPE_FED,
                             is_federated=True,
                         )
-                        logger.info(f"    check_serveur_cashless : {asset} - Created {created}")
+                        logger.info(f"    check_serveur_cashless - Stripe - Created {created}")
 
                         # on l'enregistre dans une table tenant public
                         fed_cash_conf, created = FederatedCashless.objects.get_or_create(
@@ -280,6 +281,7 @@ class Configuration(SingletonModel):
                             fed_cash_conf.save()
 
                         return True
+
             except Exception as e:
                 # import ipdb; ipdb.set_trace()
                 logger.error(f"    ERROR check_serveur_cashless : {e}")
