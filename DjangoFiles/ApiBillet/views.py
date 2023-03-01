@@ -39,6 +39,7 @@ from BaseBillet.models import Event, Price, Product, Reservation, Configuration,
     OptionGenerale, Membership
 from rest_framework import viewsets, permissions, status
 from django.db import connection, IntegrityError
+from TiBillet import settings
 
 import os
 import logging
@@ -832,6 +833,34 @@ class MembershipViewset(viewsets.ViewSet):
 
         return [permission() for permission in permission_classes]
 
+
+class ZReportPDF(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, pk_uuid):
+        configuration = Configuration.get_solo()
+        if configuration.server_cashless and configuration.key_cashless:
+            try:
+                response = requests.request("GET",
+                                            f"{configuration.server_cashless}/rapport/TicketZapi/{pk_uuid}",
+                                            headers={"Authorization": f"Api-Key {configuration.key_cashless}"},
+                                            verify=bool(not settings.DEBUG),)
+
+                if response.status_code == 200:
+                    data = json.loads(response.content)
+                    logger.info(f"ZReportPDF data : {data}")
+                    return Response(data, status=status.HTTP_200_OK)
+
+            except Exception as e:
+                logger.info(f"ZReportPDF erreur {e}")
+                raise e
+
+            logger.info(f"ZReportPDF erreur {response.status_code} : {response.text}")
+            return Response(f"{response.status_code}", status=status.HTTP_400_BAD_REQUEST)
+
+
+
+        return {'erreur': f"pas de configuration server_cashless"}
 
 class TicketPdf(APIView):
     permission_classes = [AllowAny]
