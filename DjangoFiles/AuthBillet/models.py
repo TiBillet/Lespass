@@ -13,8 +13,6 @@ from django.db import connection
 from rest_framework import permissions
 
 
-
-
 class RootPermission(permissions.BasePermission):
     message = 'No root'
 
@@ -22,22 +20,28 @@ class RootPermission(permissions.BasePermission):
         return request.user.is_superuser
 
 
+# Mis à l'extérieur pour pouvoir être utilisé
+# tout seul dans les class view de Django sans RESTframework
+def TenantAdminPermissionWithRequest(request):
+    if request.user.is_authenticated:
+        return any([
+            all([
+                connection.tenant in request.user.client_admin.all(),
+                request.user.is_staff,
+                request.user.is_active,
+                request.user.espece == TibilletUser.TYPE_HUM
+            ]),
+            request.user.is_superuser
+        ])
+    else:
+        return False
+
+
 class TenantAdminPermission(permissions.BasePermission):
     message = 'No admin in tenant'
 
     def has_permission(self, request, view):
-        if request.user.is_authenticated:
-            return any([
-                all([
-                    connection.tenant in request.user.client_admin.all(),
-                    request.user.is_staff,
-                    request.user.is_active,
-                    request.user.espece == TibilletUser.TYPE_HUM
-                ]),
-                request.user.is_superuser
-            ])
-        else:
-            return False
+        return TenantAdminPermissionWithRequest(request)
 
 
 class TerminalScanPermission(permissions.BasePermission):
@@ -197,9 +201,7 @@ class TibilletUser(AbstractUser):
 
     ##### Pour les user humain ####
 
-
     ##### END user humain ####
-
 
     def achat(self):
         return " ".join([achat["schema_name"] for achat in self.client_achat.values("schema_name")])
@@ -240,6 +242,7 @@ class TibilletUser(AbstractUser):
         return self.email
 
     objects = TibilletManager()
+
 
 # ---------------------------------------------------------------------------------------------------------------------
 
@@ -341,5 +344,3 @@ class TerminalPairingToken(models.Model):
     user = models.ForeignKey(TermUser, on_delete=models.CASCADE)
     token = models.PositiveIntegerField()
     used = models.BooleanField(default=False)
-
-

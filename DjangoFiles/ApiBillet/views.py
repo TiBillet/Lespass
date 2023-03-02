@@ -15,6 +15,8 @@ from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
 from django.http import HttpResponseRedirect, Http404, HttpResponse
 from django.utils import timezone
+from django.views import View
+from django.views.generic import TemplateView
 from django_tenants.utils import schema_context, tenant_context
 from rest_framework import serializers
 from rest_framework.decorators import permission_classes
@@ -31,9 +33,9 @@ from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSeria
     EventCreateSerializer, TicketSerializer, OptionTicketSerializer, ChargeCashlessValidator, NewAdhesionValidator, \
     DetailCashlessCardsValidator, DetailCashlessCardsSerializer, CashlessCardsValidator, \
     UpdateFederatedAssetFromCashlessValidator
-from AuthBillet.models import TenantAdminPermission, TibilletUser, RootPermission
+from AuthBillet.models import TenantAdminPermission, TibilletUser, RootPermission, TenantAdminPermissionWithRequest
 from AuthBillet.utils import user_apikey_valid, get_or_create_user
-from BaseBillet.tasks import create_ticket_pdf
+from BaseBillet.tasks import create_ticket_pdf, report_to_pdf, report_celery_mailer
 from Customers.models import Client, Domain
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe, \
     OptionGenerale, Membership
@@ -833,11 +835,23 @@ class MembershipViewset(viewsets.ViewSet):
 
         return [permission() for permission in permission_classes]
 
+# class BookListView(ListView):
+#     model = Book
+#
+#     def head(self, *args, **kwargs):
+#         last_book = self.get_queryset().latest('publication_date')
+#         response = HttpResponse(
+#             # RFC 1123 date format.
+#             headers={'Last-Modified': last_book.publication_date.strftime('%a, %d %b %Y %H:%M:%S GMT')},
+#         )
+#         return response
 
-class ZReportPDF(APIView):
-    permission_classes = [AllowAny]
-
+class ZReportPDF(View):
     def get(self, request, pk_uuid):
+        logger.info(f"ZReportPDF user : {request.user}")
+        if not TenantAdminPermissionWithRequest(request) :
+            return HttpResponse(f"403", content_type='application/json')
+
         configuration = Configuration.get_solo()
         if configuration.server_cashless and configuration.key_cashless:
             try:
@@ -848,19 +862,30 @@ class ZReportPDF(APIView):
 
                 if response.status_code == 200:
                     data = json.loads(response.content)
+                    date = data['date']
+                    structure = data['structure']
+                    # import ipdb; ipdb.set_trace()
+
                     logger.info(f"ZReportPDF data : {data}")
-                    return Response(data, status=status.HTTP_200_OK)
+                    logger.info(f"  On envoie le mail")
+                    report_celery_mailer.delay([data,])
+
+                    pdf_binary = report_to_pdf(data)
+                    response = HttpResponse(pdf_binary, content_type='application/pdf')
+                    response['Content-Disposition'] = f'attachment; filename="{structure}-{date}.pdf"'
+                    return response
+
+                    # return HttpResponse(json.dumps(data), content_type='application/json')
+                    # return Response(data, status=status.HTTP_200_OK)
 
             except Exception as e:
                 logger.info(f"ZReportPDF erreur {e}")
                 raise e
 
             logger.info(f"ZReportPDF erreur {response.status_code} : {response.text}")
-            return Response(f"{response.status_code}", status=status.HTTP_400_BAD_REQUEST)
+            return HttpResponse(f"{response.status_code}", content_type='application/json')
 
-
-
-        return {'erreur': f"pas de configuration server_cashless"}
+        # return {'erreur': f"pas de configuration server_cashless"}
 
 class TicketPdf(APIView):
     permission_classes = [AllowAny]

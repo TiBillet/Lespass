@@ -97,7 +97,11 @@ class CeleryMailerClass():
             return False
 
     def send(self):
+        # logger.info("SELF.HTML : ",self.html)
+        # import ipdb; ipdb.set_trace()
+
         if self.html and self.config_valid():
+
             logger.info(f'  WORKDER CELERY : send_mail - {self.title}')
             mail = EmailMultiAlternatives(
                 self.title,
@@ -129,71 +133,17 @@ class CeleryMailerClass():
             raise ValueError('Pas de contenu HTML ou de configuration email valide')
 
 
-class MailJetSendator():
-    def __init__(self,
-                 email: str,
-                 template: None,
-                 context=None,
-                 attached_files=None,
-                 ):
 
-        self.template = template
-        self.email = email
-
-        self.context = context
-        self.attached_files = attached_files
-        self.sended = None
-
-    def config_valid(self):
-        api_key = os.environ['MAILJET_APIKEY']
-        api_secret = os.environ['MAILJET_SECRET']
-
-        # Try except un peu degueulasse causé par l'envoie de task
-        # depuis le tenant public pour l'envoi du mail d'appairage
-        try:
-            self.return_email = Configuration.get_solo().email
-            assert self.return_email
-        except Exception as e:
-            logger.warning(f'  WORKDER CELERY : self.return_email {e}')
-            self.return_email = "contact@tibillet.re"
-
-        if all([api_key,
-                api_secret,
-                self.template,
-                self.email,
-                ]):
-
-            self.mailjet = Client(auth=(api_key, api_secret), version='v3.1')
-            return True
-        else:
-            return False
-
-    def send(self):
-        if self.config_valid():
-            data = {
-                'Messages': [
-                    {
-                        "From": {
-                            "Email": "contact@tibillet.re",
-                            "Name": "TiBillet.re"
-                        },
-                        "To": [
-                            {
-                                "Email": f"{self.email}",
-                                "Name": f"{self.email}"
-                            }
-                        ],
-                        "TemplateID": self.template,
-                        "TemplateLanguage": True,
-                        "Subject": "{{var:place:""}} : Confirmez votre e-mail",
-                        "Variables": self.context
-                    }
-                ]
-            }
-            result = self.mailjet.send.create(data=data)
-            logger.info(result.status_code)
-            logger.info(result.json())
-
+def report_to_pdf(report):
+    template_name = 'report/ticketz.html'
+    font_config = FontConfiguration()
+    template = get_template(template_name)
+    html = template.render(report)
+    pdf_binary = HTML(string=html).write_pdf(
+        font_config=font_config,
+    )
+    logger.info(f"  WORKER CELERY : report_to_pdf - {report.get('organisation')} {report.get('date')} bytes")
+    return pdf_binary
 
 def create_ticket_pdf(ticket: Ticket):
     # logger_weasy = logging.getLogger("weasyprint")
@@ -204,16 +154,15 @@ def create_ticket_pdf(ticket: Ticket):
     # PROGRESS_LOGGER.addHandler(logging.NullHandler())
     # PROGRESS_LOGGER.setLevel(50)  # Only show errors, use 50
 
+    # Pour faire le qrcode
     qr = segno.make(f"{ticket.uuid}", micro=False)
-
     buffer_svg = BytesIO()
     qr.save(buffer_svg, kind='svg', scale=8)
 
+    # Pour faire le barcode
     CODE128 = barcode.get_barcode_class('code128')
     bar_svg = BytesIO()
-
     bar_secret = encode_uid(f"{ticket.uuid}".split('-')[4])
-
     bar = CODE128(f"{bar_secret}")
     options = {
         'module_height': 30,
@@ -221,6 +170,7 @@ def create_ticket_pdf(ticket: Ticket):
         'font_size': 10,
     }
     bar.write(bar_svg, options=options)
+
 
     context = {
         'ticket': ticket,
@@ -397,6 +347,37 @@ def terminal_pairing_celery_mailer(term_user_email, subject=None):
     except Exception as e:
         logger.error(f"{timezone.now()} Erreur envoie de mail pour appairage {user_parent.email} : {e}")
         raise Exception
+
+
+@app.task
+def report_celery_mailer(data_report_list: list):
+    configuration = Configuration.get_solo()
+    if configuration.server_cashless and configuration.key_cashless:
+        attached_files = {}
+        for report in data_report_list:
+            print(f"report : {report.get('structure')}")
+            try:
+                pdf_binary = report_to_pdf(report)
+                attached_files[f"{report.get('structure')}-{report.get('date')}.pdf"] = pdf_binary
+
+            except Exception as e:
+                logger.info(f"ZReportPDF erreur {e}")
+                raise e
+
+        try:
+            mail = CeleryMailerClass(
+                configuration.email,
+                f"Rapport de vente TiBillet - {configuration.organisation}",
+                template='mails/mail_rapport.html',
+                context={'organisation': f'{configuration.organisation}'},
+                attached_files=attached_files,
+            )
+            mail.send()
+            logger.info(f"mail.sended : {mail.sended}")
+
+        except smtplib.SMTPRecipientsRefused as e:
+            logger.error(
+                f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour report_celery_mailer : {e}")
 
 
 
