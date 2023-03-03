@@ -101,8 +101,8 @@
             {#TOTAL#}
             <tr>
                 <th colspan="5"></th>
-                <th>sous TOTAL</th>
-                <td>{{ total_euro | floatformat:2 }}€</td>
+                <th>TOTAL HT</th>
+                <td>{{ total_HT | floatformat:2 }}€</td>
             </tr>
             <tr>
                 <th colspan="5"></th>
@@ -111,22 +111,20 @@
             </tr>
             <tr>
                 <th colspan="5"></th>
-                <th>TOTAL</th>
-                <td>{{ total_chiffre_affaire | floatformat:2 }}€</td>
+                <th>TOTAL TTC</th>
+                <td>{{ total_TTC | floatformat:2 }}€</td>
             </tr>
             </tfoot>
         </table>
     </div>
 
     <div>
-        <h2>TVA Collectée</h2>
+        <h2>TVA Collectée par taux</h2>
         <table class="content">
             <thead>
             <tr>
                 <th>Taux</th>
                 <th>Collecté</th>
-
-
             </tr>
             </thead>
             <tbody>
