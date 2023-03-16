@@ -148,6 +148,7 @@ public_admin_site.register(Domain, admin.ModelAdmin)
 
 class DetailAdmin(admin.ModelAdmin):
     list_display = (
+        'slug',
         'base_url',
         'origine',
         'generation',

@@ -515,7 +515,7 @@ class index_scan(View):
     def get(self, request, uuid):
         config = self.configuration
         if not config.check_serveur_cashless():
-            return HttpResponse("Serveur non joignable, merci de revenir ultérieurement.")
+            return HttpResponse("<h1>Serveur non joignable, merci de revenir ultérieurement.<h1>")
 
         # Au cas où ce sont des cartes V1 du bisik & de la raffinerie :/
         check_dette_technique(request)
@@ -523,6 +523,9 @@ class index_scan(View):
         wallet = WalletValidator(uuid=uuid, config=config)
 
         carte = wallet.carte_local
+        if not carte.detail.origine :
+            return HttpResponse("<h1>Carte non lié à une instance. Merci de contacter l'administrateur.</h1>")
+
         reponse_carte_dict = wallet.carte_serveur_cashless
         email = wallet.user.email if wallet.user else None
 

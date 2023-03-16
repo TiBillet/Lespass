@@ -2,6 +2,8 @@ from os.path import exists
 
 from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand
+from django.utils.text import slugify
+
 from Customers.models import Client
 from QrcodeCashless.models import Detail, CarteCashless
 from django.core.validators import URLValidator
@@ -21,66 +23,69 @@ class Command(BaseCommand):
             return False
         return True
 
+    def add_arguments(self, parser):
+
+        # Named (optional) arguments
+        parser.add_argument(
+            '--demo',
+            action='store_true',
+            help='pop demo cards',
+        )
 
     def handle(self, *args, **options):
         try:
             from data.csv.loader import get_detail_cards
-        except ImportError:
-            print('data.csv.loader not found')
-            return False
+            all_cards_dict = get_detail_cards(demo=options.get('demo'))
+        except Exception as e:
+            print(f'data.csv.loader or csv file not found : {e}')
+            raise e
 
-        all_cards_dict = get_detail_cards()
+        for detail in all_cards_dict:
+            generation = detail['generation']
+            tenant = detail['tenant']
+            slug = slugify(f"{tenant.lower()}-{generation}")
 
-        for client, gens in cards_dict.items():
-            print(client, gens)
-            client_tenant = Client.objects.get(schema_name=client.lower())
-            print(client)
-            for gen, file in gens.items():
-                print(gen,file)
-                file = open(file)
+            client_tenant = None
+            try :
+                client_tenant = Client.objects.get(schema_name=tenant.lower())
+            except Client.DoesNotExist:
+                pass
+            except Exception as e:
+                print(e)
+                raise e
 
-                csv_parser = csv.reader(file)
-                list_csv = []
-                for line in csv_parser:
-                    list_csv.append(line)
+            part = detail['cards'][0][0].partition('/qr/')
+            base_url = f"{part[0]}{part[1]}"
 
-                # import ipdb; ipdb.set_trace()
-                # on saucissonne l'url d'une ligne au pif :
-                part = list_csv[10][0].partition('/qr/')
-                base_url = f"{part[0]}{part[1]}"
+            if self.is_string_an_url(base_url) :
+                detail_carte, created = Detail.objects.get_or_create(
+                    base_url=base_url,
+                    origine=client_tenant,
+                    generation=generation,
+                    slug=slug,
+                )
 
+                numline = 1
+                all_line = len(detail['cards'])
+                for card in detail['cards']:
+                    url = card[0]
+                    numbers = card[1]
+                    tag_id = card[2]
 
+                    # On vérifie que le qrcode soit bien un uuid
+                    part = url.partition('/qr/')
+                    uuid_url = uuid.UUID(part[2])
 
-                if self.is_string_an_url(base_url) :
-                    detail_carte, created = Detail.objects.get_or_create(
-                        base_url=base_url,
-                        origine=client_tenant,
-                        generation=gen,
-                    )
+                    try :
+                        carte, created = CarteCashless.objects.get_or_create(
+                            uuid=uuid_url,
+                            number=numbers,
+                            tag_id=tag_id,
+                            detail=detail_carte,
+                        )
 
-                    numline = 1
-                    for line in list_csv:
-                        print(numline)
-                        part = line[0].partition('/qr/')
-                        try:
-                            uuid_url = uuid.UUID(part[2])
-                            print(f"base_url : {base_url}")
-                            print(f"uuid_url : {uuid_url}")
-                            print(f"number : {line[1]}")
-                            print(f"tag_id : {line[2]}")
-                            # if str(uuid_url).partition('-')[0].upper() != line[1]:
-                            #     print('ERROR PRINT != uuid')
-                            #     break
-
-
-                            carte, created = CarteCashless.objects.get_or_create(
-                                tag_id=line[2],
-                                uuid=uuid_url,
-                                number=line[1],
-                                detail=detail_carte,
-                            )
-
-                            numline += 1
-                        except:
-                            pass
-
+                        numline += 1
+                        print(f"{slug} : {numline}/{all_line} : {carte} created : {created}")
+                    except Exception as e:
+                        print(e)
+                        import ipdb; ipdb.set_trace()
