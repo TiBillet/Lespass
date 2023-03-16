@@ -12,6 +12,7 @@ import stripe
 from django.contrib import messages
 from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
+from django.core.management import call_command
 from django.core.validators import URLValidator
 from django.http import HttpResponseRedirect, Http404, HttpResponse
 from django.utils import timezone
@@ -191,6 +192,9 @@ class TenantViewSet(viewsets.ViewSet):
                         is_primary=True
                     )
 
+                    if settings.DEBUG and slug == "demo":
+                        call_command("load_cards", "demo")
+
                 except IntegrityError as e:
                     logger.error(e)
                     return Response(_(f"{e}"), status=status.HTTP_400_BAD_REQUEST)
@@ -288,8 +292,9 @@ class TenantViewSet(viewsets.ViewSet):
         return Response(place_serialized_with_uuid)
 
     def get_permissions(self):
-        permission_classes = [permissions.AllowAny]
-        return [permission() for permission in permission_classes]
+        return get_permission_Api_LR_Any(self)
+        # permission_classes = [permissions.AllowAny]
+        # return [permission() for permission in permission_classes]
 
 
 class HereViewSet(viewsets.ViewSet):
