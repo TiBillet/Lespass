@@ -10,7 +10,6 @@ import csv, uuid
 
 
 
-
 class Command(BaseCommand):
 
     def is_string_an_url(self, url_string):
@@ -24,33 +23,13 @@ class Command(BaseCommand):
 
 
     def handle(self, *args, **options):
-        cards_dict = {}
-        input_file_find = False
-        if exists("/DjangoFiles/data/domains_and_cards_betabillet.py"):
-            print("/DjangoFiles/data/domains_and_cards_betabillet.py existe. On charge depuis ce fichier ?")
-            input_file_find = input('Y ? \n')
+        try:
+            from data.csv.loader import get_detail_cards
+        except ImportError:
+            print('data.csv.loader not found')
+            return False
 
-        if input_file_find == "Y":
-            from data.domains_and_cards_betabillet import cards
-            cards_dict = cards
-        else :
-            for client in Client.objects.all():
-                print (client.schema_name)
-
-            input_client = input('quel client ? \n')
-
-            cards_dict[input_client]= {}
-            print(' ')
-            # client_tenant = Client.objects.get(schema_name='VavangArt')
-
-            input_generation = input('quelle génération ? \n')
-
-            print(' ')
-
-            input_fichier_csv = input('path fichier csv ? \n')
-            cards_dict[input_client][input_generation]=input_fichier_csv
-
-        # file = open('/DjangoFiles/data/csv/Vavangart_G1.csv')
+        all_cards_dict = get_detail_cards()
 
         for client, gens in cards_dict.items():
             print(client, gens)
