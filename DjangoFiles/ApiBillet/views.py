@@ -12,7 +12,8 @@ import stripe
 from django.contrib import messages
 from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
-from django.core.management import call_command
+from django.core import management
+
 from django.core.validators import URLValidator
 from django.http import HttpResponseRedirect, Http404, HttpResponse
 from django.utils import timezone
@@ -192,8 +193,9 @@ class TenantViewSet(viewsets.ViewSet):
                         is_primary=True
                     )
 
+                    # Ajoute des cartes de test DEMO
                     if settings.DEBUG and slug == "demo":
-                        call_command("load_cards", "demo")
+                        management.call_command("load_cards","--demo")
 
                 except IntegrityError as e:
                     logger.error(e)
