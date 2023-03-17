@@ -1,7 +1,7 @@
 import datetime
 import uuid
 from decimal import Decimal
-
+from urllib.parse import urlparse
 import requests
 import stripe
 from PIL import Image
@@ -877,7 +877,11 @@ class UpdateFederatedAssetFromCashlessValidator(serializers.Serializer):
 
     def validate_domain(self, value):
         serveur_cashless = Configuration.get_solo().server_cashless
-        if value != serveur_cashless:
+        parse_config = urlparse(serveur_cashless)
+        parse_value = urlparse(value)
+
+        # on utilise urlparse pour vérifier les url et retirer les / si besoin
+        if parse_config.scheme != parse_value.scheme or parse_config.netloc != parse_value.netloc:
             raise serializers.ValidationError(_(f'ERREUR DOMAIN domaine envoyé : {value} =! config : {serveur_cashless}'))
 
         #TODO: lier categorie et source
