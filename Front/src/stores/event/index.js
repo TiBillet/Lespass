@@ -248,6 +248,8 @@ export const useEventStore = defineStore({
       gift.enable = value
     },
     deleteAllCustomersFromPrices(uuid) {
+      console.log('this.forms =', this.forms)
+      console.log('uuid =', uuid)
       const form = this.forms.find(obj => obj.event === uuid)
       form.prices = []
     },

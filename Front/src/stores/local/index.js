@@ -22,9 +22,11 @@ export const useLocalStore = defineStore({
     // status 402 = pas payé
     // status 202 = 'Paiement validé. Création des billets et envoi par mail en cours.' coté front
     async postStripeReturn(uuidStripe) {
-      console.log(`-> fonc postStripeReturn !`)
+      console.log(`-> fonc postStripeReturn, uuidStripe =`, uuidStripe)
 
       let messageValidation = 'OK', messageErreur = 'Retour stripe:'
+
+      console.log('this.stripeEtape =', this.stripeEtape)
 
       // adhésion
       if (this.stripeEtape === 'attente_stripe_adhesion') {
@@ -61,7 +63,7 @@ export const useLocalStore = defineStore({
           contenu: messageValidation
         })
         // supprimer le formulaire de la réservation validée
-        if (this.stripeEtape !== null) {
+        if (this.stripeEtape.formEventUuid !== undefined) {
           const eventStore = useEventStore()
           // efface les réservations
           eventStore.deleteAllCustomersFromPrices(this.stripeEtape.formEventUuid)
