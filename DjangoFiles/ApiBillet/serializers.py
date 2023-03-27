@@ -882,7 +882,7 @@ class UpdateFederatedAssetFromCashlessValidator(serializers.Serializer):
 
         # on utilise urlparse pour vérifier les url et retirer les / si besoin
         if parse_config.scheme != parse_value.scheme or parse_config.netloc != parse_value.netloc:
-            raise serializers.ValidationError(_(f'ERREUR DOMAIN domaine envoyé : {value} =! config : {serveur_cashless}'))
+            raise serializers.ValidationError(_(f'ERREUR DOMAIN domaine envoyé : {parse_value.netloc} =! config : {parse_config.netloc }'))
 
         #TODO: lier categorie et source
         self.categorie = SyncFederatedLog.VENTE_CASHLESS_FED

@@ -356,13 +356,22 @@ class GetMembership():
         :return:
         """
         data = None
-        response = requests.request("POST",
-                                    f"{self.config.server_cashless}/api/membre_check",
-                                    headers={"Authorization": f"Api-Key {self.config.key_cashless}"},
-                                    data={"email": self.user.email})
+
+        verify = True
+        if settings.DEBUG:
+            verify = False
+        session = requests.session()
+
+        response = session.post(
+            f"{self.config.server_cashless}/api/membre_check",
+            headers={"Authorization": f"Api-Key {self.config.key_cashless}"},
+            data={"email": self.user.email},
+            verify=verify)
 
         if response.status_code == 200:
             data = json.loads(response.content)
+
+        session.close()
 
         logger.info(f"**5** data_check_cashless -> /api/membre_check : {response.status_code} - {response.content}")
         return data
@@ -523,7 +532,7 @@ class index_scan(View):
         wallet = WalletValidator(uuid=uuid, config=config)
 
         carte = wallet.carte_local
-        if not carte.detail.origine :
+        if not carte.detail.origine:
             return HttpResponse("<h1>Carte non lié à une instance. Merci de contacter l'administrateur.</h1>")
 
         reponse_carte_dict = wallet.carte_serveur_cashless

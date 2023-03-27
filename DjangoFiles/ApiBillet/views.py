@@ -195,7 +195,7 @@ class TenantViewSet(viewsets.ViewSet):
 
                     # Ajoute des cartes de test DEMO
                     if settings.DEBUG and slug == "demo":
-                        management.call_command("load_cards","--demo")
+                        management.call_command("load_cards", "--demo")
 
                 except IntegrityError as e:
                     logger.error(e)
@@ -777,10 +777,15 @@ def request_for_data_cashless(user: TibilletUser):
     configuration = Configuration.get_solo()
     if configuration.server_cashless and configuration.key_cashless:
         try:
+            verify = True
+            if settings.DEBUG:
+                verify = False
+
             response = requests.request("POST",
                                         f"{configuration.server_cashless}/api/membre_check",
                                         headers={"Authorization": f"Api-Key {configuration.key_cashless}"},
-                                        data={"email": user.email})
+                                        data={"email": user.email},
+                                        verify=verify)
 
             if response.status_code != 200:
                 return {'erreur': f"{response.status_code} : {response.text}"}
@@ -842,6 +847,7 @@ class MembershipViewset(viewsets.ViewSet):
 
         return [permission() for permission in permission_classes]
 
+
 # class BookListView(ListView):
 #     model = Book
 #
@@ -856,7 +862,7 @@ class MembershipViewset(viewsets.ViewSet):
 class ZReportPDF(View):
     def get(self, request, pk_uuid):
         logger.info(f"ZReportPDF user : {request.user}")
-        if not TenantAdminPermissionWithRequest(request) :
+        if not TenantAdminPermissionWithRequest(request):
             return HttpResponse(f"403", content_type='application/json')
 
         configuration = Configuration.get_solo()
@@ -865,7 +871,7 @@ class ZReportPDF(View):
                 response = requests.request("GET",
                                             f"{configuration.server_cashless}/rapport/TicketZapi/{pk_uuid}",
                                             headers={"Authorization": f"Api-Key {configuration.key_cashless}"},
-                                            verify=bool(not settings.DEBUG),)
+                                            verify=bool(not settings.DEBUG), )
 
                 if response.status_code == 200:
                     data = json.loads(response.content)
@@ -875,7 +881,7 @@ class ZReportPDF(View):
 
                     logger.info(f"ZReportPDF data : {data}")
                     logger.info(f"  On envoie le mail")
-                    report_celery_mailer.delay([data,])
+                    report_celery_mailer.delay([data, ])
 
                     pdf_binary = report_to_pdf(data)
                     response = HttpResponse(pdf_binary, content_type='application/pdf')
@@ -893,6 +899,7 @@ class ZReportPDF(View):
             return HttpResponse(f"{response.status_code}", content_type='application/json')
 
         # return {'erreur': f"pas de configuration server_cashless"}
+
 
 class TicketPdf(APIView):
     permission_classes = [AllowAny]
@@ -1173,8 +1180,6 @@ def paiment_stripe_validator(request, paiement_stripe):
     raise Http404(f'{paiement_stripe.status}')
 
 
-
-
 @permission_classes([permissions.AllowAny])
 class UpdateFederatedAssetFromCashless(APIView):
     def post(self, request):
@@ -1189,7 +1194,8 @@ class UpdateFederatedAssetFromCashless(APIView):
 
         validator = UpdateFederatedAssetFromCashlessValidator(data=request.data)
         if not validator.is_valid():
-            logger.error(f"UpdateFederatedAssetFromCashless ERREUR validator.errors : {validator.errors} : request.data {request.data}")
+            logger.error(
+                f"UpdateFederatedAssetFromCashless ERREUR validator.errors : {validator.errors} : request.data {request.data}")
             return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
         validated_data = validator.data
@@ -1226,8 +1232,9 @@ class UpdateFederatedAssetFromCashless(APIView):
 
                 wallet_stripe.qty = new_qty
                 wallet_stripe.save()
-                #TODO: logger
-                logger.info(f"UpdateFederatedAssetFromCashless MAJ : {carte} - {wallet_stripe.qty} == {new_qty} - {domain}")
+                # TODO: logger
+                logger.info(
+                    f"UpdateFederatedAssetFromCashless MAJ : {carte} - {wallet_stripe.qty} == {new_qty} - {domain}")
                 return Response(f"log {syncLog.uuid}", status=status.HTTP_202_ACCEPTED)
 
             # La valeur reçue est différente de celle du serveur cashless
@@ -1246,7 +1253,8 @@ class UpdateFederatedAssetFromCashless(APIView):
             syncLog.etat_client_sync[tenant_uuid]['return'] = True
             syncLog.etat_client_sync[tenant_uuid]['return_value'] = f"{new_qty}"
             syncLog.save()
-            return Response(f"NO NEED TO UPDATE - log {syncLog.uuid} already reported", status=status.HTTP_208_ALREADY_REPORTED)
+            return Response(f"NO NEED TO UPDATE - log {syncLog.uuid} already reported",
+                            status=status.HTTP_208_ALREADY_REPORTED)
 
         # La valeur old est différente de celle du serveur cashless
         erreur = f"UpdateFederatedAssetFromCashless ERROR : " \
