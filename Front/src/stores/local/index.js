@@ -100,6 +100,7 @@ export const useLocalStore = defineStore({
         // console.log('-> response =', response)
         if (response.status === 200) {
           const retour = await response.json()
+          console.log('-> emailActivation, retour =', retour)
           // message confirmation email
           emitter.emit('modalMessage', {
             titre: 'Succès',
@@ -112,7 +113,7 @@ export const useLocalStore = defineStore({
           this.refreshToken = retour.refresh
           this.me = await this.getMe(window.accessToken)
           this.email = this.me.email
-          console.log('-> emailActivation, retour =', retour)
+
           mainStore.loading = false
         } else {
           throw new Error(`Erreur conrfirmation mail !`)
@@ -146,7 +147,9 @@ export const useLocalStore = defineStore({
         const response = await fetch(domain + apiMe, options)
         // console.log('-> getMe, response =', response)
         if (response.status === 200) {
-          return await response.json()
+          const retour =  await response.json()
+          console.log('-> getMe, retour =', retour)
+          return retour
         } else {
           throw new Error(`Erreur ${apiMe} !`)
         }
