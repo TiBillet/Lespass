@@ -75,7 +75,7 @@
         <span class="input-group-text" @click="inputFocus('adhesion-tel')">Fixe ou Mobile</span>
         <input id="adhesion-tel" v-model="adhesion.phone" type="tel"
                class="form-control" pattern="^[0-9-+\s()]*$"
-               aria-label="Fixe ou Mobile" required>
+               aria-label="Fixe ou Mobile">
         <div class="invalid-feedback">Un numéro de téléphone svp !</div>
       </div>
       <p class="mb-2">Non obligatoire, uniquement utile pour vous envoyer les confirmations d'achats."</p>
