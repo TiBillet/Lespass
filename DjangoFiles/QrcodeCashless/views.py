@@ -341,6 +341,7 @@ class GetMembership():
         # Si l'adhérent n'a pas de cotisation, on la crée
         # On ajoutera le prix lorsqu'il sera payé
         if not membership:
+            logger.info("l'adhérent n'a pas de cotisation, on la crée. On ajoutera price lorsqu'il sera payé")
             membership, created = Membership.objects.get_or_create(
                 user=self.user,
                 price=None

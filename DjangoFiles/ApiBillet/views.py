@@ -804,6 +804,7 @@ def request_for_data_cashless(user: TibilletUser):
 class MembershipViewset(viewsets.ViewSet):
 
     def create(self, request):
+        logger.info(f"MembershipViewset reçue -> go MembreValidator")
         membre_validator = MembreValidator(data=request.data, context={'request': request})
         if membre_validator.is_valid():
             adhesion_validator = NewAdhesionValidator(data=request.data, context={'request': request})

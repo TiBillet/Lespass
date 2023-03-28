@@ -247,14 +247,18 @@ class ActionArticlePaidByCategorie:
             user=user,
             price=price
         ).first()
+        logger.info(f"    membership trouvé : {membership}")
 
         if not membership:
             membership, created = Membership.objects.get_or_create(
                 user=user,
             )
-            if not membership.first_contribution:
-                membership.first_contribution = datetime.datetime.now().date()
             membership.price = price
+
+        # Si Membership a été créé juste avant ce paiement,
+        # la first contribution est vide.
+        if not membership.first_contribution:
+            membership.first_contribution = datetime.datetime.now().date()
 
         membership.last_contribution = datetime.datetime.now().date()
         membership.contribution_value = self.ligne_article.pricesold.prix

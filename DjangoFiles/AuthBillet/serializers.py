@@ -240,6 +240,7 @@ class MeSerializer(serializers.ModelSerializer):
         return serializer.data
 
     def get_membership(self, user: TibilletUser):
+        # First contibution est False si aucune paiement n'a jamais été fait.
         qs = user.membership.filter(first_contribution__isnull=False)
         serializer = MembershipSerializer(instance=qs, many=True)
         return serializer.data

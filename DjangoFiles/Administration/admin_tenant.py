@@ -685,25 +685,26 @@ staff_admin_site.register(Paiement_stripe, PaiementStripeAdmin)
 
 class MembershipAdmin(admin.ModelAdmin):
     list_display = (
-        'last_name',
-        'first_name',
+        # 'last_name',
+        # 'first_name',
         'user',
         'product_name',
         'price',
-        'is_valid',
+        'status',
         'deadline',
+        'is_valid',
         'date_added',
         'first_contribution',
         'last_contribution',
         'contribution_value',
-        'last_action',
+        # 'last_action',
         'postal_code',
-        'birth_date',
-        'phone',
-        'commentaire',
+        # 'birth_date',
+        # 'phone',
+        # 'commentaire',
     )
     ordering = ('-date_added',)
-
+    search_fields = ('user__email','user__first_name', 'user__last_name')
 
 staff_admin_site.register(Membership, MembershipAdmin)
 

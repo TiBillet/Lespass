@@ -84,17 +84,20 @@
                 </div>
 
                 <!-- téléphone -->
-                <p class="mb-2">Téléphone non obligatoire, mais utile pour vous envoyer les confirmations et la double authentification."</p>
+<!--                <p class="mb-2">Téléphone non obligatoire, mais utile pour vous envoyer les confirmations et la double authentification."</p>-->
                 <div class="input-group has-validation">
                   <span class="input-group-text" @click="inputFocus('adhesion-tel')">Fixe ou Mobile</span>
                   <input id="adhesion-tel" v-model="adhesion.phone" type="tel"
                          class="form-control" pattern="^[0-9-+\s()]*$"
-                         aria-label="Fixe ou Mobile">
+                         aria-label="Fixe ou Mobile" required>
                   <div class="invalid-feedback">Merci de remplir votre numéro de téléphone.</div>
                 </div>
 
                 <div class="text-center">
-                  <p class="mb-2 mt-2">Aucune de ces informations ne sont et ne seront utilisées pour du démarchage commercial. TiBillet est une solution libre et open-source qui prends soin de votre vie privée."</p>
+                  <p class="mb-2 mt-2">
+                    Aucune de ces informations ne sont et ne seront utilisées pour du démarchage commercial.
+                    TiBillet est une solution libre et open-source qui prends soin de votre vie privée.
+                  </p>
 
                   <button type="submit" class="btn btn-round bg-gradient-info btn-lg w-100 mt-4 mb-0">Valider</button>
                 </div>
