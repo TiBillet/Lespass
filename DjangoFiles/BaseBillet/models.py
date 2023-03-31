@@ -978,7 +978,7 @@ class Paiement_stripe(models.Model):
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, blank=True, null=True)
 
-    NON, OPEN, PENDING, EXPIRE, PAID, VALID, CANCELED = 'N', 'O', 'W', 'E', 'P', 'V', 'C'
+    NON, OPEN, PENDING, EXPIRE, PAID, VALID, NOTSYNC, CANCELED = 'N', 'O', 'W', 'E', 'P', 'V', 'S', 'C'
     STATUT_CHOICES = (
         (NON, 'Lien de paiement non créé'),
         (OPEN, 'Envoyée a Stripe'),
@@ -986,6 +986,7 @@ class Paiement_stripe(models.Model):
         (EXPIRE, 'Expiré'),
         (PAID, 'Payée'),
         (VALID, 'Payée et validée'),  # envoyé sur serveur cashless
+        (NOTSYNC, 'Payée mais problème de synchro cashless'),  # envoyé sur serveur cashless qui retourne une erreur
         (CANCELED, 'Annulée'),
     )
     status = models.CharField(max_length=1, choices=STATUT_CHOICES, default=NON, verbose_name="Statut de la commande")

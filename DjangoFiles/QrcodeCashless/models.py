@@ -209,6 +209,9 @@ class SyncFederatedLog(models.Model):
     categorie = models.CharField(max_length=3, choices=CATEGORIE_CHOICES, default=NONE,
                                          verbose_name=_("Why?"))
 
+    # Utilisé par l'admin pour savoir s'ils sont tous synchronisés
+    # Non utiliser pour la synchronisation en tant que telle.
+    # TODO : Check pour la synchro ?
     def get_federated_clients(self):
         federated_client = FederatedCashless.objects.filter(asset=self.wallet.asset)
         return federated_client

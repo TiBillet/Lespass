@@ -263,9 +263,9 @@ PRE_SAVE_TRANSITIONS = {
 }
 
 
+# Pour tout les modèls qui possèdent un système de status choice
 @receiver(pre_save)
 def pre_save_signal_status(sender, instance, **kwargs):
-    # logger.info(f"pre_save_signal_status. Sender : {sender} - Instance : {instance}")
     # if not create
     if not instance._state.adding:
         sender_str = sender.__name__.upper()
@@ -296,19 +296,19 @@ def pre_save_signal_status(sender, instance, **kwargs):
                     trigger_function(old_instance, new_instance)
 
 
-@receiver(pre_save, sender=Wallet)
-def wallet_update_to_celery(sender, instance: Wallet, **kwargs):
-    # Pre save pour récupérer old_qty
-
-    # instance._state.adding = Ne pas lancer à la création
-    # Le modèle se re-save une seconde fois, à la validation du paiement.
-    if not instance._state.adding:
-        if instance.asset.is_federated:
-            old_instance = sender.objects.get(pk=instance.pk)
-            new_instance = instance
-
-            if old_instance.qty != new_instance.qty:
-                logger.info(f"wallet_update_celery : need update cashless serveur")
+# @receiver(pre_save, sender=Wallet)
+# def wallet_update_to_celery(sender, instance: Wallet, **kwargs):
+#     # Pre save pour récupérer old_qty
+#     # instance._state.adding = Ne pas lancer à la création
+#
+#     # Le modèle se re-save une seconde fois, à la validation du paiement.
+#     if not instance._state.adding:
+#         if instance.asset.is_federated:
+#             old_instance = sender.objects.get(pk=instance.pk)
+#             new_instance = instance
+#
+#             if old_instance.qty != new_instance.qty:
+#                 logger.info(f"wallet_update_celery : need update cashless serveur ????")
                 # update all cashless serveur
-                get_fedinstance_and_launch_request.delay(instance.pk)
+                # get_fedinstance_and_launch_request.delay(instance.pk)
 

@@ -251,12 +251,16 @@ class SetPasswordIfEmpty(APIView):
         user: TibilletUser = request.user
         if not user.password :
             if request.data.get('password') :
-                if len(request.data.get('password')) > 8 :
+                if len(request.data.get('password')) >= 8 :
                     user.set_password(request.data.get('password'))
                     user.save()
 
                     return Response('Password set',
                                     status=status.HTTP_200_OK)
+                else :
+                    logger.error(f"Password too short")
+                    return Response('Password trop court',
+                                    status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
         return Response('Not allowed',
                         status=status.HTTP_405_METHOD_NOT_ALLOWED)

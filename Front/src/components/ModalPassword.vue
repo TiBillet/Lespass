@@ -31,6 +31,7 @@
                     Merci de renseigner un mot de passe identique.
                   </div>
                 </div>
+                <p class="mt-2">Minimum 8 caractères.</p>
                 <p class="mt-2">Notez le bien, il vous sera demandé à la page suivante :)</p>
                 <div class="text-center">
                   <button class="btn btn-round bg-gradient-info btn-lg mt-4 mb-0 h-44px" type="submit">Valider

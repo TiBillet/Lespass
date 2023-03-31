@@ -1,4 +1,6 @@
 # Create your views here.
+import decimal
+
 import csv
 import json
 import uuid
@@ -55,6 +57,12 @@ from QrcodeCashless.views import WalletValidator
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
+
+class DecimalEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, decimal.Decimal):
+            return str(o)
+        return super(DecimalEncoder, self).default(o)
 
 
 # Refactor for get_permission
@@ -230,7 +238,9 @@ class TenantViewSet(viewsets.ViewSet):
                     conf.logo.save(serializer.logo_name, serializer.logo_img.fp)
 
                 conf.save()
+                conf.check_serveur_cashless()
                 # user.client_admin.add(tenant)
+
 
                 staff_group = Group.objects.get(name="staff")
 
@@ -1181,6 +1191,25 @@ def paiment_stripe_validator(request, paiement_stripe):
     raise Http404(f'{paiement_stripe.status}')
 
 
+# Si on a l'uuid, on considère qu'on a la carte.
+# A réfléchir sur la suite en terme de vie privée ; AllowAny ?
+@permission_classes([permissions.AllowAny])
+class GetFederatedAssetFromCashless(APIView):
+    def get(self, request, pk_uuid):
+
+        # on informe de la quantité de l'asset fédéré sur la carte.
+        card = get_object_or_404(CarteCashless, uuid=pk_uuid)
+        data = {"stripe_wallet" : 0}
+        try:
+            wallet_stripe = card.wallet_set.get(asset__categorie=Asset.STRIPE_FED)
+            data['stripe_wallet'] = wallet_stripe.qty
+            return Response(data, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"GetFederatedAssetFromCashless : {e}")
+            return Response(data, status=status.HTTP_404_NOT_FOUND)
+
+
+
 @permission_classes([permissions.AllowAny])
 class UpdateFederatedAssetFromCashless(APIView):
     def post(self, request):
@@ -1256,6 +1285,7 @@ class UpdateFederatedAssetFromCashless(APIView):
             syncLog.save()
             return Response(f"NO NEED TO UPDATE - log {syncLog.uuid} already reported",
                             status=status.HTTP_208_ALREADY_REPORTED)
+
 
         # La valeur old est différente de celle du serveur cashless
         erreur = f"UpdateFederatedAssetFromCashless ERROR : " \

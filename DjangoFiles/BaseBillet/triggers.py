@@ -5,7 +5,7 @@ from django.db import connection
 
 import TiBillet.settings
 from BaseBillet.models import LigneArticle, Product, Configuration, Membership, Price
-from BaseBillet.tasks import send_membership_to_cashless
+from BaseBillet.tasks import send_membership_to_cashless, get_fedinstance_and_launch_request
 
 import logging
 
@@ -172,7 +172,10 @@ def increment_federated_wallet(vente):
     wallet.qty = new_qty
     wallet.save()
 
-    # et pouf, ça lance le /DjangoFiles/BaseBillet/signals.py/wallet_update_to_celery
+    # Recharge FEDERE a up dans tout les serveur cashless
+    # anciennement sur le /DjangoFiles/BaseBillet/signals.py/wallet_update_to_celery
+
+    get_fedinstance_and_launch_request.delay(wallet.pk)
     # qui va informer tous les serveurs cashless qu'un wallet stripe est disponible
 
     # On valide pour avoir un retour positif coté front :
@@ -222,11 +225,13 @@ class ActionArticlePaidByCategorie:
     def trigger_F(self):
         logger.info(f"TRIGGER FREE RESERVATION")
 
+    # TODO: Pouvoir basculer du normal au federated
     # Category RECHARGE_CASHLESS
     def trigger_R(self):
         reponse_cashless_serveur = increment_to_cashless_serveur(self)
         logger.info(f"TRIGGER RECHARGE_CASHLESS : {reponse_cashless_serveur}")
 
+    # TODO: Pouvoir basculer du federated au normal
     # Category RECHARGE_FEDERATED
     def trigger_S(self):
         increment_federated_wallet(self)

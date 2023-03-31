@@ -26,7 +26,7 @@ from django.template.loader import render_to_string, get_template
 from django.utils import timezone
 
 from AuthBillet.models import TibilletUser, TerminalPairingToken
-from BaseBillet.models import Reservation, Ticket, Configuration, Membership, LigneArticle, Webhook
+from BaseBillet.models import Reservation, Ticket, Configuration, Membership, LigneArticle, Webhook, Paiement_stripe
 from Customers.models import Client
 from QrcodeCashless.models import Wallet, SyncFederatedLog
 from TiBillet import settings
@@ -559,13 +559,19 @@ def request_server_cashless_updateFed(self,
 
         sess.close()
 
-        msg = f"REPONSE DE {fed_client} DEPUIS CELERY fed_client {uuid} request_server_cashless_updateFed {r.status_code} {r.text}"
+        msg = f"REPONSE DE {fed_client} DEPUIS CELERY fed_client {uuid} request_server_cashless_updateFed {r.status_code} {r.text[:100]}"
         logger.info(f"    {msg}")
         if r.status_code not in [200, 208]:
             erreur = f"ERREUR {msg}"
             logger.error(erreur)
             sync_log.etat_client_sync[uuid]['status'] = erreur
             sync_log.save()
+
+            #TODO : mettre le paiement en NOTSYNC
+            # paiement_stripe = Paiement_stripe.objects.filter(uuid=sync_log.uuid)
+            # paiement_stripe.update(status=Paiement_stripe.NOTSYNC)
+            # logger.error(f"paiement_stripe status NOTSYNC : {paiement_stripe}")
+
             raise Exception(erreur)
             # raise self.retry(exc=Exception(f"request_server_cashless_updateFed {r.status_code} {r.text}"))
 
