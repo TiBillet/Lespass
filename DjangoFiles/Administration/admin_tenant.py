@@ -346,6 +346,12 @@ class EventAdmin(admin.ModelAdmin):
                 'options_checkbox',
             )
         }),
+        ('Cashless', {
+            'fields': (
+                'cashless',
+                'minimum_cashless_required',
+            )
+        }),
     )
 
     list_display = [
@@ -360,10 +366,11 @@ class EventAdmin(admin.ModelAdmin):
 
     # pour selectionner uniquement les articles ventes et retour consigne
     def formfield_for_manytomany(self, db_field, request, **kwargs):
+        produits_non_affichables = [Product.RECHARGE_CASHLESS, Product.DON, Product.ADHESION, Product.FREERES]
         if db_field.name == "products":
             kwargs["queryset"] = Product.objects \
                 .exclude(
-                categorie_article__in=(Product.RECHARGE_CASHLESS, Product.DON, Product.ADHESION, Product.FREERES)) \
+                categorie_article__in=produits_non_affichables) \
                 .exclude(archive=True)
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 

@@ -76,6 +76,11 @@ def get_federated_wallet(cashless_card: CarteCashless = None,
         is_federated=True,
     )
 
+    # asset = Asset.objects.get(
+    #     origin=tenant_root,
+    #     categorie=Asset.STRIPE_FED,
+    # )
+
     if cashless_card:
         # Si la carte à un utilisateur
         if cashless_card.user:
@@ -112,27 +117,10 @@ def get_federated_wallet(cashless_card: CarteCashless = None,
 
     except Wallet.DoesNotExist:
         logger.error(f"get_federated_wallet - Wallet does not exist for")
-        import ipdb;
-        ipdb.set_trace()
-    except ValueError as e:
+        raise Wallet.DoesNotExist(f"get_federated_wallet - Wallet does not exist for")
+    except Exception as e:
         logger.error(f"get_federated_wallet - {e}")
-        import ipdb;
-        ipdb.set_trace()
-
-        # if user :
-        #     wallet, created = Wallet.objects.get_or_create(asset=asset, user=user)
-        #     if cashless_card :
-        #         cashless_card.user = user
-        #         cashless_card.save()
-        #         wallet.card = cashless_card
-        #         wallet.save()
-        # elif cashless_card :
-        #     wallet, created = Wallet.objects.get_or_create(asset=asset, card=cashless_card)
-        #     if user :
-        #         cashless_card.user = user
-        #         cashless_card.save()
-        #         wallet.user = user
-        #         wallet.save()
+        raise ValueError(f"get_federated_wallet - {e}")
 
     return wallet
 
@@ -172,11 +160,8 @@ def increment_federated_wallet(vente):
     wallet.qty = new_qty
     wallet.save()
 
-    # Recharge FEDERE a up dans tout les serveur cashless
-    # anciennement sur le /DjangoFiles/BaseBillet/signals.py/wallet_update_to_celery
-
+    # Informer tous les serveurs cashless qu'une recharge fédéré est lancée.
     get_fedinstance_and_launch_request.delay(wallet.pk)
-    # qui va informer tous les serveurs cashless qu'un wallet stripe est disponible
 
     # On valide pour avoir un retour positif coté front :
     vente.ligne_article.status = LigneArticle.VALID

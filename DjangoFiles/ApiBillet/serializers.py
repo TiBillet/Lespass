@@ -352,8 +352,9 @@ class EventCreateSerializer(serializers.Serializer):
     long_description = serializers.CharField(required=False)
     short_description = serializers.CharField(required=False, max_length=100)
     img_url = serializers.URLField(required=False)
+    cashless = serializers.BooleanField(required=False)
+    minimum_cashless_required = serializers.IntegerField(required=False)
 
-    # recharge_cashless = serializers.BooleanField(required=False)
 
     def validate_artists(self, value):
         # logger.info(f"validate_artists : {value}")
@@ -389,6 +390,13 @@ class EventCreateSerializer(serializers.Serializer):
                 raise serializers.ValidationError(_(f'{uuid} Option non trouvé'))
         return self.options_checkbox
 
+    def validate_minimum_cashless_required(self, value):
+        if value:
+            try:
+                return int(value)
+            except Exception as e:
+                raise serializers.ValidationError(_(f'{value} minimum_cashless non valide'))
+
     def validate_img_url(self, value):
         if value:
             self.file_name, self.file_img = get_img_from_url(value)
@@ -407,14 +415,17 @@ class EventCreateSerializer(serializers.Serializer):
         if not name:
             raise serializers.ValidationError(f"if not 'artist', 'name' is required")
 
-        event, created = Event.objects.get_or_create(
-            name=name,
-            datetime=attrs.get('datetime'),
-            categorie=Event.CONCERT,
-            long_description=attrs.get('long_description'),
-            short_description=attrs.get('short_description'),
-            # img=self.img,
-        )
+        event_data = {
+            "name" : name,
+            "datetime" : attrs.get('datetime'),
+            "categorie" : Event.CONCERT,
+            "long_description" : attrs.get('long_description'),
+            "short_description" : attrs.get('short_description'),
+            "cashless" : attrs.get('cashless', False),
+            "minimum_cashless_required": attrs.get('minimum_cashless_required', 0),
+        }
+
+        event, created = Event.objects.get_or_create(**event_data)
 
         if attrs.get('img_url'):
             event.img.save(self.file_name, self.file_img.fp)
@@ -471,6 +482,8 @@ class EventSerializer(serializers.ModelSerializer):
             'reservations',
             'complet',
             'artists',
+            'cashless',
+            'minimum_cashless_required',
         ]
         read_only_fields = ['uuid', 'reservations']
         depth = 1

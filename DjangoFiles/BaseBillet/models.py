@@ -274,6 +274,18 @@ class Configuration(SingletonModel):
                             asset=asset,
                         )
 
+                        # product, created = Product.objects.get_or_create(
+                        #     name=f"Recharge Carte {carte.detail.origine.name} v{carte.detail.generation}",
+                        #     categorie_article=Product.RECHARGE_FEDERATED,
+                        #     img=carte.detail.img,
+                        # )
+                        #
+                        # price, created = Price.objects.get_or_create(
+                        #     product=product,
+                        #     name=f"{montant_recharge}€",
+                        #     prix=int(montant_recharge),
+                        # )
+
                         if self.key_cashless != fed_cash_conf.key_cashless \
                                 or self.server_cashless != fed_cash_conf.server_cashless:
                             fed_cash_conf.key_cashless = self.key_cashless
@@ -368,7 +380,10 @@ class Product(models.Model):
                         verbose_name=_('Image du produit'),
                         )
 
-    NONE, BILLET, PACK, RECHARGE_CASHLESS, RECHARGE_FEDERATED, VETEMENT, MERCH, ADHESION, DON, FREERES = 'N', 'B', 'P', 'R', 'S', 'T', 'M', 'A', 'D', 'F'
+    NONE, BILLET, PACK, RECHARGE_CASHLESS = 'N', 'B', 'P', 'R'
+    RECHARGE_FEDERATED, VETEMENT, MERCH, ADHESION  = 'S', 'T', 'M', 'A'
+    DON, FREERES = 'D', 'F'
+
 
     CATEGORIE_ARTICLE_CHOICES = [
         (NONE, _('Selectionnez une catégorie')),
@@ -500,6 +515,9 @@ class Event(models.Model):
                                            verbose_name="Option choix unique")
     options_checkbox = models.ManyToManyField(OptionGenerale, blank=True, related_name="options_checkbox",
                                               verbose_name="Options choix multiple")
+
+    cashless = models.BooleanField(default=False, verbose_name="Proposer la recharge cashless")
+    minimum_cashless_required = models.SmallIntegerField(default=0, verbose_name="Montant obligatoire minimum de la recharge cashless")
 
     img = StdImageField(upload_to='images/',
                         validators=[MaxSizeValidator(1920, 1920)],
