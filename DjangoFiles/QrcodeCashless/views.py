@@ -161,12 +161,17 @@ def check_carte_serveur_cashless(config, uuid: str) -> dict or HttpResponse:
             data={
                 'uuid': f'{uuid}',
             },
-            verify=bool(not settings.DEBUG)
+            verify=bool(not settings.DEBUG),
+            timeout=2,
         )
 
     except requests.exceptions.ConnectionError:
         reponse = HttpResponse("Serveur non disponible. Merci de revenir ultérieurement.",
                                status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    except requests.exceptions.Timeout:
+        reponse = HttpResponse("Serveur non disponible. Merci de revenir ultérieurement.",
+                               status=status.HTTP_504_GATEWAY_TIMEOUT)
+
 
     sess.close()
     if reponse.status_code == 200:
@@ -186,6 +191,50 @@ def check_carte_serveur_cashless(config, uuid: str) -> dict or HttpResponse:
         logger.error(f"Erreur serveur cashless : {reponse.status_code} - {reponse.content}")
         return HttpResponse(f"Erreur serveur cashless : {reponse.status_code} - {reponse.content}",
                             status=reponse.status_code)
+
+
+class GetArticleRechargeCashless():
+    def __init__(self,
+                 carte: CarteCashless = None,
+                 montant_recharge: int = None,
+                 config: Configuration = None):
+
+        if not config:
+            config = Configuration.get_solo()
+        self.config = config
+
+        self.montant_recharge = montant_recharge
+        self.carte = carte
+        self.product = self.get_product()
+        self.price = self.get_price()
+
+    def get_product(self):
+        # TODO: Checker si l'image existe. Sinon erreur lorsqu'on change l'image ensuite ...
+        carte = self.carte
+
+        categorie = Product.RECHARGE_CASHLESS
+        if self.config.federated_cashless:
+            categorie = Product.RECHARGE_FEDERATED
+
+        product, created = Product.objects.get_or_create(
+            name=f"Recharge Carte {carte.detail.origine.name} v{carte.detail.generation}",
+            categorie_article=categorie,
+            img=carte.detail.img,
+        )
+
+        return product
+
+    def get_price(self):
+        product = self.product
+        montant_recharge = self.montant_recharge
+
+        price, created = Price.objects.get_or_create(
+            product=product,
+            name=f"{montant_recharge}€",
+            prix=int(montant_recharge),
+        )
+
+        return price
 
 
 class GetMembership():
@@ -596,18 +645,13 @@ class index_scan(View):
             }
 
             if montant_recharge:
-                # TODO: Checker si l'image existe. Sinon erreur lorsqu'on change l'image ensuite ...
-                product, created = Product.objects.get_or_create(
-                    name=f"Recharge Carte {carte.detail.origine.name} v{carte.detail.generation}",
-                    categorie_article=Product.RECHARGE_FEDERATED,
-                    img=carte.detail.img,
+                recharge = GetArticleRechargeCashless(
+                    montant_recharge=montant_recharge,
+                    carte=carte,
+                    config=config,
                 )
-
-                price, created = Price.objects.get_or_create(
-                    product=product,
-                    name=f"{montant_recharge}€",
-                    prix=int(montant_recharge),
-                )
+                price = recharge.price
+                # import ipdb; ipdb.set_trace()
 
                 # noinspection PyTypeChecker
                 ligne_article_recharge = LigneArticle.objects.create(
@@ -615,8 +659,8 @@ class index_scan(View):
                     qty=1,
                     carte=carte,
                 )
-                ligne_articles.append(ligne_article_recharge)
 
+                ligne_articles.append(ligne_article_recharge)
                 metadata['recharge_carte_montant'] = str(montant_recharge)
 
             price_adhesion = None

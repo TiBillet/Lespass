@@ -223,7 +223,8 @@ class CreationPaiementStripe():
 
 
 def new_entry_from_stripe_invoice(user, id_invoice):
-    stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+    # stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+    stripe.api_key = Configuration.get_solo().get_stripe_api()
     invoice = stripe.Invoice.retrieve(id_invoice)
 
     lines = invoice.lines

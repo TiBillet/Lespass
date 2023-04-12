@@ -179,39 +179,14 @@ class Configuration(SingletonModel):
         else:
             return []
 
-    mollie_api_key = models.CharField(max_length=50,
-                                      blank=True, null=True)
+    # mollie_api_key = models.CharField(max_length=50,
+    #                                   blank=True, null=True)
 
-    stripe_connect_account = models.CharField(max_length=21, blank=True, null=True)
-    stripe_connect_account_test = models.CharField(max_length=21, blank=True, null=True)
-    stripe_payouts_enabled = models.BooleanField(default=False)
 
-    stripe_api_key = models.CharField(max_length=110, blank=True, null=True)
-    stripe_test_api_key = models.CharField(max_length=110, blank=True, null=True)
 
-    stripe_mode_test = models.BooleanField(default=True)
-
-    def get_stripe_api(self):
-        return RootConfiguration.get_solo().get_stripe_api()
-
-    def get_stripe_connect_account(self):
-        if self.stripe_mode_test:
-            return self.stripe_connect_account_test
-        else:
-            return self.stripe_connect_account
-
-    def get_stripe_payouts(self):
-        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-        id_acc_connect = self.get_stripe_connect_account()
-
-        if id_acc_connect:
-            info_stripe = stripe.Account.retrieve(id_acc_connect)
-            self.stripe_payouts_enabled = info_stripe.get('payout_enabled')
-            self.save()
-
-        return self.stripe_payouts_enabled
-
-    # activer_billetterie = models.BooleanField(default=True, verbose_name=_("Activer la billetterie"))
+    """
+    ######### OPTION GENERALES #########
+    """
 
     jauge_max = models.PositiveSmallIntegerField(default=50, verbose_name=_("Jauge maximale"))
 
@@ -223,7 +198,9 @@ class Configuration(SingletonModel):
                                                       blank=True,
                                                       related_name="checkbox")
 
+    """
     ######### CASHLESS #########
+    """
 
     server_cashless = models.URLField(
         max_length=300,
@@ -238,6 +215,8 @@ class Configuration(SingletonModel):
         null=True,
         verbose_name=_("Clé d'API du serveur cashless")
     )
+
+    federated_cashless = models.BooleanField(default=False)
 
     def check_serveur_cashless(self):
         logger.info(f"On check le serveur cashless. Adresse : {self.server_cashless}")
@@ -300,6 +279,51 @@ class Configuration(SingletonModel):
         return False
 
     ######### END CASHLESS #########
+
+    """
+    ######### STRIPE #########
+    """
+
+    stripe_connect_account = models.CharField(max_length=21, blank=True, null=True)
+    stripe_connect_account_test = models.CharField(max_length=21, blank=True, null=True)
+    stripe_payouts_enabled = models.BooleanField(default=False)
+
+    stripe_api_key = models.CharField(max_length=110, blank=True, null=True)
+    stripe_test_api_key = models.CharField(max_length=110, blank=True, null=True)
+
+    stripe_mode_test = models.BooleanField(default=True)
+
+
+    def get_stripe_api(self):
+        if self.federated_cashless :
+            return RootConfiguration.get_solo().get_stripe_api()
+        tenant_stripe = self.stripe_test_api_key if self.stripe_mode_test else self.stripe_api_key
+
+        if not tenant_stripe:
+            logger.warning(f"Configuration.get_stripe_api() - No stripe api key for {connection.tenant}. On utilise celle de root.")
+            return RootConfiguration.get_solo().get_stripe_api()
+        return tenant_stripe
+
+    def get_stripe_connect_account(self):
+        if self.stripe_mode_test:
+            return self.stripe_connect_account_test
+        else:
+            return self.stripe_connect_account
+
+    # Vérifie que le compte stripe connect soit valide et accepte les paiements.
+    def get_stripe_payouts(self):
+        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+        id_acc_connect = self.get_stripe_connect_account()
+
+        if id_acc_connect:
+            info_stripe = stripe.Account.retrieve(id_acc_connect)
+            self.stripe_payouts_enabled = info_stripe.get('payout_enabled')
+            self.save()
+
+        return self.stripe_payouts_enabled
+
+
+
 
     ARNAUD, MASSIVELY, BLK_MVC = 'arnaud_mvc', 'html5up-masseively', 'blk-pro-mvc'
     CHOICE_TEMPLATE = [
@@ -641,7 +665,7 @@ def add_to_public_event_directory(sender, instance: Event, created, **kwargs):
         if created:
             productsold.get_id_product_stripe()
         logger.info(
-            f"productsold {productsold.nickname()} created : {created} - {productsold.get_id_product_stripe()}")
+            f"productsold {productsold.nickname()} created : {created}")
 
         for price in product.prices.all():
             # On va chercher le stripe id du price
@@ -706,11 +730,17 @@ class ProductSold(models.Model):
         else:
             return f"{self.product.name}"
 
-    def get_id_product_stripe(self, force=False):
+    def get_id_product_stripe(self,
+                              force=False,
+                              stripe_key=None,
+                              ):
+
         if self.id_product_stripe and not force:
             return self.id_product_stripe
 
-        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+        if stripe_key == None:
+            stripe_key = Configuration.get_solo().get_stripe_api()
+        stripe.api_key = stripe_key
         # config = Configuration.get_solo()
 
         client = connection.tenant
@@ -757,12 +787,18 @@ class PriceSold(models.Model):
     def __str__(self):
         return self.price.name
 
-    def get_id_price_stripe(self, force=False):
+    def get_id_price_stripe(self,
+                            force=False,
+                            stripe_key=None,
+                            ):
+
         if self.id_price_stripe and not force:
             return self.id_price_stripe
 
-        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-        # config = Configuration.get_solo()
+        if stripe_key == None:
+            stripe_key = Configuration.get_solo().get_stripe_api()
+        stripe.api_key = stripe_key
+
         try:
             product_stripe = self.productsold.get_id_product_stripe()
             stripe.Product.retrieve(product_stripe)
