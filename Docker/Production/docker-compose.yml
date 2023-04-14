@@ -7,6 +7,7 @@ services:
     env_file: .env
 #    ports:
 #      - 5432:5432
+
     networks:
       - backend-billeterie
 
@@ -22,8 +23,8 @@ services:
     extends:
       file: ../compose/docker-compose-base.yml
       service: billetterie_django
-    command: "bash /DjangoFiles/launch_prod.sh"
-#    command: "bash /DjangoFiles/launch.sh"
+#    command: "bash /DjangoFiles/launch_prod.sh"
+    command: "bash /DjangoFiles/launch.sh"
     env_file: .env
 
     depends_on:
@@ -50,7 +51,7 @@ services:
     networks:
 #      - frontend
       - backend-billeterie
-    command: "bash /DjangoFiles/launch_celery.sh"
+    command: "bash /DjangoFiles/launch_celery_prod.sh"
 
 
 #  billetterie_daphne_prod:
