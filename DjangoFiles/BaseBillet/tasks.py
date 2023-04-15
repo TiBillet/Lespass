@@ -610,9 +610,12 @@ def get_fedinstance_and_launch_request(wallet_pk):
 
     for tenant in Client.objects.exclude(categorie__in=public_tenant_categorie):
         with tenant_context(tenant):
-
             tenant_configuration = Configuration.get_solo()
-            if tenant_configuration.server_cashless and tenant_configuration.key_cashless:
+
+            if tenant_configuration.federated_cashless and \
+                    tenant_configuration.server_cashless and \
+                    tenant_configuration.key_cashless:
+
                 logger.info(f"    SCHEMA NAME ADDED to syncLog : {tenant.schema_name}")
 
                 dict_syncLog[f"{tenant.uuid}"] = {
