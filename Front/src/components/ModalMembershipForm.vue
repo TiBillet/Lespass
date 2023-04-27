@@ -7,9 +7,11 @@
       <div class="modal-content">
         <div class="modal-body p-0">
           <div class="card card-plain">
-            <div class="card-header pb-0 d-flex align-items-center">
+            <div class="card-header pb-0 d-flex flex-column align-items-star">
               <h3 class="font-weight-bolder text-info text-gradient align-self-start w-85">
-                {{ getNameAdhesion(productUuid) }}</h3>
+                {{ getDataAdhesion(productUuid).name }}</h3>
+              <!-- style="white-space: pre-line" pour interpréter le \r\n -->
+              <h5 style="white-space: pre-line">{{ getDataAdhesion(productUuid).short_description }}</h5>
             </div>
             <div class="card-body">
               <!-- formulaire -->
@@ -125,7 +127,7 @@ import {useRouter} from 'vue-router'
 
 // obtenir data adhesion
 const {place, adhesion, loading, error} = storeToRefs(useAllStore())
-const {getPricesAdhesion, getNameAdhesion} = useAllStore()
+const {getPricesAdhesion, getDataAdhesion} = useAllStore()
 
 // stockage adhesion en local
 let {setEtapeStripe} = useLocalStore()
@@ -187,6 +189,9 @@ function postAdhesionModal(data) {
       message: error
     }
   })
+}
+
+function textSwitchToLine(text) {
 }
 
 function validerAdhesion(event) {

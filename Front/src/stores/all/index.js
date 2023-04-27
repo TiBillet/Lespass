@@ -104,10 +104,10 @@ export const useAllStore = defineStore({
                 return []
             }
         },
-        getNameAdhesion(productUuid) {
+        getDataAdhesion(productUuid) {
             console.log('-> fonc getNameAdhesion !')
             try {
-                return this.place.membership_products.find(obj => obj.uuid === productUuid).name
+                return this.place.membership_products.find(obj => obj.uuid === productUuid)
             } catch (error) {
                 // console.log('store all, getNameAdhesion:', error)
                 return ''
