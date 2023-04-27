@@ -814,6 +814,11 @@ class MembershipViewset(viewsets.ViewSet):
 
     def create(self, request):
         logger.info(f"MembershipViewset reçue -> go MembreValidator")
+
+        # Test pour option :
+        # request.data['options'] = ['1ff89201-edfa-4839-80d8-a5f98737f970',]
+
+        #TODO: Pourquoi deux serializers ?
         membre_validator = MembreValidator(data=request.data, context={'request': request})
         if membre_validator.is_valid():
             adhesion_validator = NewAdhesionValidator(data=request.data, context={'request': request})

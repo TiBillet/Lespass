@@ -47,6 +47,7 @@ class OptionsSerializer(serializers.ModelSerializer):
         fields = [
             'uuid',
             'name',
+            'description',
             'poids',
         ]
         read_only_fields = ('uuid', 'poids')
@@ -62,9 +63,9 @@ class TagSerializer(serializers.ModelSerializer):
 
 
 class ProductSerializer(serializers.ModelSerializer):
-    option_generale_radio = OptionsSerializer(many=True)
-    option_generale_checkbox = OptionsSerializer(many=True)
-    tag = TagSerializer(many=True)
+    option_generale_radio = OptionsSerializer(many=True, required=False)
+    option_generale_checkbox = OptionsSerializer(many=True, required=False)
+    tag = TagSerializer(many=True, required=False)
 
     class Meta:
         model = Product
@@ -683,6 +684,8 @@ class MembreValidator(serializers.Serializer):
 
     email = serializers.EmailField()
 
+    options = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(), many=True, allow_null=True, required=False)
+
     first_name = serializers.CharField(max_length=200, required=False)
     last_name = serializers.CharField(max_length=200, required=False)
 
@@ -691,9 +694,11 @@ class MembreValidator(serializers.Serializer):
     birth_date = serializers.DateField(required=False)
     newsletter = serializers.BooleanField(required=False)
 
+
     def validate_adhesion(self, value):
         self.price = value
         return value
+
 
     def validate_email(self, value):
         if not getattr(self, 'price', None):
@@ -707,6 +712,7 @@ class MembreValidator(serializers.Serializer):
             user=user_paiement,
             price=self.price,
         )
+
 
         # Si une adhésion existe déja
         if not created:
@@ -737,6 +743,19 @@ class MembreValidator(serializers.Serializer):
         self.fiche_membre.save()
 
         return self.fiche_membre.user.email
+
+    def validate_options(self, value):
+        self.options = value
+        for option in value:
+            product = self.price.product
+            option: OptionGenerale
+            if option not in list(set(product.option_generale_radio.all()) | set(product.option_generale_checkbox.all())):
+                raise serializers.ValidationError(_(f'Option {option.name} non disponible dans product'))
+
+        for option in self.options:
+            self.fiche_membre.option_generale.add(option)
+
+        return value
 
 
 def get_near_event_by_date():
@@ -1131,6 +1150,7 @@ class ReservationValidator(serializers.Serializer):
                 option: OptionGenerale
                 if option not in list(set(event.options_checkbox.all()) | set(event.options_radio.all())):
                     raise serializers.ValidationError(_(f'Option {option.name} non disponible dans event'))
+
 
         # on construit l'object reservation.
         reservation = Reservation.objects.create(

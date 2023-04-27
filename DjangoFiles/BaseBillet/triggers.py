@@ -2,6 +2,7 @@ import datetime
 
 import requests
 from django.db import connection
+from django.utils import timezone
 
 import TiBillet.settings
 from BaseBillet.models import LigneArticle, Product, Configuration, Membership, Price
@@ -248,9 +249,9 @@ class ActionArticlePaidByCategorie:
         # Si Membership a été créé juste avant ce paiement,
         # la first contribution est vide.
         if not membership.first_contribution:
-            membership.first_contribution = datetime.datetime.now().date()
+            membership.first_contribution = timezone.now().date()
 
-        membership.last_contribution = datetime.datetime.now().date()
+        membership.last_contribution = timezone.now().date()
         membership.contribution_value = self.ligne_article.pricesold.prix
 
         if paiement_stripe.invoice_stripe:

@@ -45,6 +45,7 @@ class Tag(models.Model):
 class OptionGenerale(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
     name = models.CharField(max_length=30, unique=True)
+    description = models.CharField(max_length=250, blank=True, null=True)
     poids = models.PositiveSmallIntegerField(default=0, verbose_name=_("Poids"))
 
     def __str__(self):
@@ -1205,13 +1206,9 @@ class Membership(models.Model):
     status = models.CharField(max_length=1, choices=STATUS_CHOICES, default=ONCE,
                               verbose_name=_("Status"))
 
-    option_generale_radio = models.ManyToManyField(OptionGenerale,
+    option_generale = models.ManyToManyField(OptionGenerale,
                                                    blank=True,
-                                                   related_name="membership_radio")
-
-    option_generale_checkbox = models.ManyToManyField(OptionGenerale,
-                                                      blank=True,
-                                                      related_name="membership_checkbox")
+                                                   related_name="membership_options")
 
     class Meta:
         unique_together = ('user', 'price')
@@ -1256,6 +1253,13 @@ class Membership(models.Model):
             if self.price.product:
                 return self.price.product.uuid
         return None
+
+    def options(self):
+        names = ""
+        for option in self.option_generale.all():
+            names += f"{option.name} "
+        return names
+
 
     def __str__(self):
         if self.pseudo:
