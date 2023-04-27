@@ -1205,6 +1205,14 @@ class Membership(models.Model):
     status = models.CharField(max_length=1, choices=STATUS_CHOICES, default=ONCE,
                               verbose_name=_("Status"))
 
+    option_generale_radio = models.ManyToManyField(OptionGenerale,
+                                                   blank=True,
+                                                   related_name="membership_radio")
+
+    option_generale_checkbox = models.ManyToManyField(OptionGenerale,
+                                                      blank=True,
+                                                      related_name="membership_checkbox")
+
     class Meta:
         unique_together = ('user', 'price')
         verbose_name = _('Adhésion')
