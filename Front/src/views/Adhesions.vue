@@ -12,10 +12,10 @@
             <div class="col-md-7 my-auto ms-md-3 mt-md-auto mt-4">
               <h3>{{ product.name }}
               </h3>
-              <p>
+              <p style="white-space: pre-line">
                 {{ product.short_description }}
               </p>
-              <p>
+              <p style="white-space: pre-line">
                 {{ product.long_description }}
               </p>
 

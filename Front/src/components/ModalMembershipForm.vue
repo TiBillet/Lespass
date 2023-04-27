@@ -7,10 +7,11 @@
       <div class="modal-content">
         <div class="modal-body p-0">
           <div class="card card-plain">
-            <div class="card-header pb-0 d-flex align-items-center">
+            <div class="card-header pb-0 d-flex flex-column align-items-star">
               <h3 class="font-weight-bolder text-info text-gradient align-self-start w-85">
                 {{ getDataAdhesion(productUuid).name }}</h3>
-              <h5>description courte</h5>
+              <!-- style="white-space: pre-line" pour interpréter le \r\n -->
+              <h5 style="white-space: pre-line">{{ getDataAdhesion(productUuid).short_description }}</h5>
             </div>
             <div class="card-body">
               <!-- formulaire -->
@@ -114,9 +115,6 @@
 </template>
 
 <script setup>
-/*
-<input type="radio">
- */
 // console.log('-> ModalMembershipForm.vue !')
 
 // store
@@ -191,6 +189,9 @@ function postAdhesionModal(data) {
       message: error
     }
   })
+}
+
+function textSwitchToLine(text) {
 }
 
 function validerAdhesion(event) {
