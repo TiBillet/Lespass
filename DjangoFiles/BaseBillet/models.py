@@ -56,6 +56,12 @@ class OptionGenerale(models.Model):
         verbose_name_plural = _('Options Tickets')
 
 
+# class ExternalLink(models.Model):
+#     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
+#     name = models.CharField(max_length=50, verbose_name=_("Nom du lien"))
+#     url = models.URLField(verbose_name=_("URL"))
+
+
 @receiver(post_save, sender=OptionGenerale)
 def poids_option_generale(sender, instance: OptionGenerale, created, **kwargs):
     if created:
@@ -394,7 +400,6 @@ class Product(models.Model):
     poids = models.PositiveSmallIntegerField(default=0, verbose_name=_("Poids"),
                                              help_text="Ordre d'apparition du plus leger au plus lourd")
 
-
     tag = models.ManyToManyField(Tag, blank=True, related_name="produit_tags")
 
     option_generale_radio = models.ManyToManyField(OptionGenerale,
@@ -420,7 +425,7 @@ class Product(models.Model):
 
     NONE, BILLET, PACK, RECHARGE_CASHLESS = 'N', 'B', 'P', 'R'
     RECHARGE_FEDERATED, VETEMENT, MERCH, ADHESION  = 'S', 'T', 'M', 'A'
-    DON, FREERES = 'D', 'F'
+    ABONNEMENT, DON, FREERES = 'B', 'D', 'F'
 
 
     CATEGORIE_ARTICLE_CHOICES = [
@@ -431,7 +436,8 @@ class Product(models.Model):
         (RECHARGE_FEDERATED, _('Recharge suspendue')),
         (VETEMENT, _('Vetement')),
         (MERCH, _('Merchandasing')),
-        (ADHESION, _('Adhésions et abonnements')),
+        (ADHESION, _('Adhésions associative')),
+        (ABONNEMENT, _('Abonnement')),
         (DON, _('Don')),
         (FREERES, _('Reservation gratuite'))
     ]

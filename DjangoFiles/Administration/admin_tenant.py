@@ -567,11 +567,9 @@ class ProductAdminCustomForm(forms.ModelForm):
             'long_description',
             'img',
             'poids',
-            # 'tag',
-
-            # 'options_radio',
-            # 'options_checkbox',
-            # 'send_to_cashless',
+            "tag",
+            "option_generale_radio",
+            "option_generale_checkbox",
         )
 
     def clean(self):
