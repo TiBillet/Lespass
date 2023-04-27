@@ -704,6 +704,10 @@ def add_to_public_event_directory(sender, instance: Artist_on_event, created, **
         )
 
 
+class Tag(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    name = models.CharField(max_length=50, verbose_name=_("Nom du tag"))
+
 class ProductSold(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
 
@@ -711,6 +715,16 @@ class ProductSold(models.Model):
     event = models.ForeignKey(Event, on_delete=models.PROTECT, null=True, blank=True)
 
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
+
+    tag = models.ManyToManyField(Tag, null=True, blank=True, related_name="produit_tags")
+
+    option_generale_radio = models.ManyToManyField(OptionGenerale,
+                                                   blank=True,
+                                                   related_name="produits_radio")
+
+    option_generale_checkbox = models.ManyToManyField(OptionGenerale,
+                                                      blank=True,
+                                                      related_name="produits_checkbox")
 
     def __str__(self):
         return self.product.name

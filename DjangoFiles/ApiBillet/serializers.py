@@ -20,7 +20,7 @@ from AuthBillet.models import TibilletUser, HumanUser
 from AuthBillet.utils import get_or_create_user
 
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, Paiement_stripe, \
-    PriceSold, ProductSold, Artist_on_event, OptionGenerale, Membership
+    PriceSold, ProductSold, Artist_on_event, OptionGenerale, Membership, Tag
 from Customers.models import Client
 from PaiementStripe.views import CreationPaiementStripe
 
@@ -41,8 +41,31 @@ def get_img_from_url(url):
         raise serializers.ValidationError(_(f"{url} doit contenir une url d'image valide : {e}"))
     return file_name, file_img
 
+class OptionsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OptionGenerale
+        fields = [
+            'uuid',
+            'name',
+            'poids',
+        ]
+        read_only_fields = ('uuid', 'poids')
+
+class TagSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Tag
+        fields = [
+            'uuid',
+            'name',
+        ]
+        read_only_fields = ('uuid')
+
 
 class ProductSerializer(serializers.ModelSerializer):
+    options_radio = OptionsSerializer(many=True)
+    options_checkbox = OptionsSerializer(many=True)
+    tag = TagSerializer(many=True)
+
     class Meta:
         model = Product
         fields = [
@@ -56,6 +79,9 @@ class ProductSerializer(serializers.ModelSerializer):
             "categorie_article",
             "send_to_cashless",
             "prices",
+            "options_radio",
+            "options_checkbox",
+            "tag",
         ]
         depth = 1
         read_only_fields = [
@@ -331,16 +357,6 @@ class Artist_on_eventSerializer(serializers.ModelSerializer):
         ]
 
 
-class OptionTicketSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = OptionGenerale
-        fields = [
-            'uuid',
-            'name',
-            'poids',
-        ]
-        read_only_fields = ('uuid', 'poids')
-
 
 class EventCreateSerializer(serializers.Serializer):
     name = serializers.CharField(required=False, max_length=200)
@@ -461,8 +477,8 @@ class EventCreateSerializer(serializers.Serializer):
 
 class EventSerializer(serializers.ModelSerializer):
     products = ProductSerializer(many=True)
-    options_radio = OptionTicketSerializer(many=True)
-    options_checkbox = OptionTicketSerializer(many=True)
+    options_radio = OptionsSerializer(many=True)
+    options_checkbox = OptionsSerializer(many=True)
     artists = Artist_on_eventSerializer(many=True)
 
     class Meta:

@@ -34,7 +34,7 @@ from rest_framework.views import APIView
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
     ReservationValidator, MembreValidator, ConfigurationSerializer, NewConfigSerializer, \
-    EventCreateSerializer, TicketSerializer, OptionTicketSerializer, ChargeCashlessValidator, NewAdhesionValidator, \
+    EventCreateSerializer, TicketSerializer, OptionsSerializer, ChargeCashlessValidator, NewAdhesionValidator, \
     DetailCashlessCardsValidator, DetailCashlessCardsSerializer, CashlessCardsValidator, \
     UpdateFederatedAssetFromCashlessValidator
 from AuthBillet.models import TenantAdminPermission, TibilletUser, RootPermission, TenantAdminPermissionWithRequest
@@ -48,7 +48,6 @@ from django.db import connection, IntegrityError
 from TiBillet import settings
 
 import os
-import logging
 
 from MetaBillet.models import EventDirectory, ProductDirectory
 from PaiementStripe.views import new_entry_from_stripe_invoice
@@ -56,6 +55,7 @@ from QrcodeCashless.models import Detail, CarteCashless, Wallet, Asset, SyncFede
 from QrcodeCashless.views import WalletValidator
 from root_billet.models import RootConfiguration
 
+import logging
 logger = logging.getLogger(__name__)
 
 class DecimalEncoder(json.JSONEncoder):
@@ -544,11 +544,11 @@ class ReservationViewset(viewsets.ViewSet):
 class OptionTicket(viewsets.ViewSet):
     def list(self, request):
         queryset = OptionGenerale.objects.all()
-        serializer = OptionTicketSerializer(queryset, many=True, context={'request': request})
+        serializer = OptionsSerializer(queryset, many=True, context={'request': request})
         return Response(serializer.data)
 
     def create(self, request):
-        validator = OptionTicketSerializer(data=request.data, context={'request': request})
+        validator = OptionsSerializer(data=request.data, context={'request': request})
         if validator.is_valid():
             validator.save()
             return Response(validator.data, status=status.HTTP_201_CREATED)
