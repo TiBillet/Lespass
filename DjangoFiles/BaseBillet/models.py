@@ -38,6 +38,9 @@ from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
 
+class Tag(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    name = models.CharField(max_length=50, verbose_name=_("Nom du tag"))
 
 class OptionGenerale(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
@@ -391,6 +394,17 @@ class Product(models.Model):
     poids = models.PositiveSmallIntegerField(default=0, verbose_name=_("Poids"),
                                              help_text="Ordre d'apparition du plus leger au plus lourd")
 
+
+    tag = models.ManyToManyField(Tag, blank=True, related_name="produit_tags")
+
+    option_generale_radio = models.ManyToManyField(OptionGenerale,
+                                                   blank=True,
+                                                   related_name="produits_radio")
+
+    option_generale_checkbox = models.ManyToManyField(OptionGenerale,
+                                                      blank=True,
+                                                      related_name="produits_checkbox")
+
     img = StdImageField(upload_to='images/',
                         null=True, blank=True,
                         validators=[MaxSizeValidator(1920, 1920)],
@@ -704,9 +718,6 @@ def add_to_public_event_directory(sender, instance: Artist_on_event, created, **
         )
 
 
-class Tag(models.Model):
-    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
-    name = models.CharField(max_length=50, verbose_name=_("Nom du tag"))
 
 class ProductSold(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
@@ -716,15 +727,6 @@ class ProductSold(models.Model):
 
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
 
-    tag = models.ManyToManyField(Tag, null=True, blank=True, related_name="produit_tags")
-
-    option_generale_radio = models.ManyToManyField(OptionGenerale,
-                                                   blank=True,
-                                                   related_name="produits_radio")
-
-    option_generale_checkbox = models.ManyToManyField(OptionGenerale,
-                                                      blank=True,
-                                                      related_name="produits_checkbox")
 
     def __str__(self):
         return self.product.name
