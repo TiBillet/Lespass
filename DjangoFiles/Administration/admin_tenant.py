@@ -570,6 +570,7 @@ class ProductAdminCustomForm(forms.ModelForm):
             "tag",
             "option_generale_radio",
             "option_generale_checkbox",
+            "legal_link",
         )
 
     def clean(self):
