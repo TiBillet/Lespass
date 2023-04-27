@@ -82,6 +82,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "tag",
             "option_generale_radio",
             "option_generale_checkbox",
+            "legal_link",
         ]
         depth = 1
         read_only_fields = [

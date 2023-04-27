@@ -410,6 +410,8 @@ class Product(models.Model):
                                                       blank=True,
                                                       related_name="produits_checkbox")
 
+    legal_link = models.URLField(blank=True, null=True, verbose_name=_("Mentions légales"))
+
     img = StdImageField(upload_to='images/',
                         null=True, blank=True,
                         validators=[MaxSizeValidator(1920, 1920)],
