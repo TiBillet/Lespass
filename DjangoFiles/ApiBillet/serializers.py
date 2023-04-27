@@ -62,8 +62,8 @@ class TagSerializer(serializers.ModelSerializer):
 
 
 class ProductSerializer(serializers.ModelSerializer):
-    options_radio = OptionsSerializer(many=True)
-    options_checkbox = OptionsSerializer(many=True)
+    option_generale_radio = OptionsSerializer(many=True)
+    option_generale_checkbox = OptionsSerializer(many=True)
     tag = TagSerializer(many=True)
 
     class Meta:
@@ -79,9 +79,9 @@ class ProductSerializer(serializers.ModelSerializer):
             "categorie_article",
             "send_to_cashless",
             "prices",
-            "options_radio",
-            "options_checkbox",
             "tag",
+            "option_generale_radio",
+            "option_generale_checkbox",
         ]
         depth = 1
         read_only_fields = [
