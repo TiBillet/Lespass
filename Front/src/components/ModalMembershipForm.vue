@@ -9,7 +9,8 @@
           <div class="card card-plain">
             <div class="card-header pb-0 d-flex align-items-center">
               <h3 class="font-weight-bolder text-info text-gradient align-self-start w-85">
-                {{ getNameAdhesion(productUuid) }}</h3>
+                {{ getDataAdhesion(productUuid).name }}</h3>
+              <h5>description courte</h5>
             </div>
             <div class="card-body">
               <!-- formulaire -->
@@ -113,6 +114,9 @@
 </template>
 
 <script setup>
+/*
+<input type="radio">
+ */
 // console.log('-> ModalMembershipForm.vue !')
 
 // store
@@ -125,7 +129,7 @@ import {useRouter} from 'vue-router'
 
 // obtenir data adhesion
 const {place, adhesion, loading, error} = storeToRefs(useAllStore())
-const {getPricesAdhesion, getNameAdhesion} = useAllStore()
+const {getPricesAdhesion, getDataAdhesion} = useAllStore()
 
 // stockage adhesion en local
 let {setEtapeStripe} = useLocalStore()
