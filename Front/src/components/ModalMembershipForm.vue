@@ -9,9 +9,8 @@
           <div class="card card-plain">
             <div class="card-header pb-0 d-flex flex-column align-items-star">
               <h3 class="font-weight-bolder text-info text-gradient align-self-start w-85">
-                {{ getDataAdhesion(productUuid).name }}</h3>
-              <!-- style="white-space: pre-line" pour interpréter le \r\n -->
-              <h5 style="white-space: pre-line">{{ getDataAdhesion(productUuid).short_description }}</h5>
+                {{ getPartialDataAdhesion(productUuid).name }}</h3>
+              <h5 style="white-space: pre-line">{{ getPartialDataAdhesion(productUuid).short_description }}</h5>
             </div>
             <div class="card-body">
               <!-- formulaire -->
@@ -86,7 +85,7 @@
                 </div>
 
                 <!-- téléphone -->
-<!--                <p class="mb-2">Téléphone non obligatoire, mais utile pour vous envoyer les confirmations et la double authentification."</p>-->
+                <!--                <p class="mb-2">Téléphone non obligatoire, mais utile pour vous envoyer les confirmations et la double authentification."</p>-->
                 <div class="input-group has-validation">
                   <span class="input-group-text" @click="inputFocus('adhesion-tel')">Fixe ou Mobile</span>
                   <input id="adhesion-tel" v-model="adhesion.phone" type="tel"
@@ -118,39 +117,38 @@
 // console.log('-> ModalMembershipForm.vue !')
 
 // store
-import {storeToRefs} from 'pinia'
-import {useAllStore} from '@/stores/all'
-import {useLocalStore} from '@/stores/local'
+import { storeToRefs } from 'pinia'
+import { useAllStore } from '@/stores/all'
+import { useLocalStore } from '@/stores/local'
 
 // routes
-import {useRouter} from 'vue-router'
+import { useRouter } from 'vue-router'
 
 // obtenir data adhesion
-const {place, adhesion, loading, error} = storeToRefs(useAllStore())
-const {getPricesAdhesion, getDataAdhesion} = useAllStore()
+const { place, adhesion, loading, error } = storeToRefs(useAllStore())
+const { getPricesAdhesion, getPartialDataAdhesion } = useAllStore()
 
 // stockage adhesion en local
-let {setEtapeStripe} = useLocalStore()
+let { setEtapeStripe } = useLocalStore()
 const router = useRouter()
 
 const props = defineProps({
   productUuid: String
 })
 
-
-function inputFocus(id) {
+function inputFocus (id) {
   document.querySelector(`#${id}`).focus()
 }
 
-function checkConditions() {
+function checkConditions () {
   adhesion.value.readConditions = document.querySelector(`#read-conditions`).checked
 }
 
-function goStatus() {
-  window.open(place.value.site_web, "_blank")
+function goStatus () {
+  window.open(place.value.site_web, '_blank')
 }
 
-function postAdhesionModal(data) {
+function postAdhesionModal (data) {
   // console.log(`-> fonc postAdhesionModal !`)
   const domain = `${location.protocol}//${location.host}`
   const apiMemberShip = `/api/membership/`
@@ -191,10 +189,10 @@ function postAdhesionModal(data) {
   })
 }
 
-function textSwitchToLine(text) {
+function textSwitchToLine (text) {
 }
 
-function validerAdhesion(event) {
+function validerAdhesion (event) {
   console.log('-> fonc validerAdhesion !!')
 
   // efface tous les messages d'invalidité
@@ -203,7 +201,6 @@ function validerAdhesion(event) {
   for (let i = 0; i < msgInvalides.length; i++) {
     msgInvalides[i].style.display = 'none'
   }
-
 
   // vérification status
   const satusElement = document.querySelector(`#read-conditions`)
@@ -241,7 +238,7 @@ function validerAdhesion(event) {
         const element = elements[i]
         if (element.checkValidity() === false) {
           // console.log('element = ', element)
-          element.scrollIntoView({behavior: 'smooth', inline: 'center', block: 'center'})
+          element.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'center' })
           element.parentNode.querySelector('.invalid-feedback').style.display = 'block'
           break
         }
