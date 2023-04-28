@@ -26,7 +26,8 @@ export const useAllStore = defineStore({
       postal_code: null,
       adhesion: '',
       // status: '',
-      readConditions: false
+      readConditions: false,
+      options: []
     },
     tenant: {
       email: '',
@@ -105,16 +106,18 @@ export const useAllStore = defineStore({
       }
     },
     getPartialDataAdhesion (productUuid) {
-      console.log('-> fonc getDataAdhesion !')
-      console.log('productUuid =', productUuid)
+      // console.log('-> fonc getDataAdhesion !')
       if (productUuid !== '') {
         const dataArray = JSON.parse(JSON.stringify(this.place.membership_products))
-        console.log('dataArray =', dataArray, '  --  type =', typeof (dataArray))
         const data = dataArray.find(obj => obj.uuid === productUuid)
-        console.log('data =', data, '  --  type =', typeof (data))
         return data
       } else {
-        return { name: '', short_description: '' }
+        return { name: '',
+          short_description: '',
+          categorie_article: 'INCONNUE',
+          option_generale_radio: [],
+          option_generale_checkbox: []
+        }
       }
 
     },

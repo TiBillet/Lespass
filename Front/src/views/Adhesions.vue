@@ -44,7 +44,7 @@ import {useAllStore} from '@/stores/all'
 import {useLocalStore} from '@/stores/local'
 
 // obtenir data adhesion
-const {getListAdhesions, getHeaderPlace} = useAllStore()
+const {getListAdhesions} = useAllStore()
 const {iamMembershipOwned} = useLocalStore()
 
 let selectedProductUuid = ref('')
