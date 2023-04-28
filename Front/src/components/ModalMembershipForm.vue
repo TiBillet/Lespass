@@ -19,7 +19,7 @@
 
                 <!-- conditions -->
                 <div class="input-group mb-2 has-validation">
-                  <div class="form-check form-switch position-relative">
+                  <div class="form-check form-switch">
                     <div>
                       <input id="read-conditions" class="form-check-input" type="checkbox" required
                              @click="checkConditions()" :checked="adhesion.readConditions">
@@ -32,10 +32,8 @@
                         j'ai pris connaissance des <a class="text-info" @click="goStatus()">CGU/CGV.</a>
                       </label>
                     </div>
-                    <div class="invalid-feedback position-absolute">
-                      Conditions non acceptées.
-                    </div>
                   </div>
+                  <div class="invalid-feedback">Conditions non acceptées.</div>
                 </div>
 
                 <!-- prix -->
@@ -199,9 +197,9 @@ function checkConditions () {
 
 function goStatus () {
   const lien = getPartialDataAdhesion(props.productUuid).legal_link
-  // console.log('-> goStatus, lien =', lien)
+  console.log('-> goStatus, lien =', lien)
   if (lien !== null) {
-    window.open(place.value.site_web, '_blank')
+    window.open(lien, '_blank')
   }
 }
 
@@ -271,10 +269,14 @@ function validerAdhesion (event) {
   // vérification status
   const satusElement = document.querySelector(`#read-conditions`)
   if (satusElement.checked === false) {
+    satusElement.parentNode.parentNode.parentNode.querySelector(`.invalid-feedback`).style.display = 'block'
+    /*
     const warningElement = satusElement.parentNode.parentNode.querySelector(`.invalid-feedback`)
     warningElement.style.display = 'block'
     warningElement.style.top = '20px'
     warningElement.style.left = '-6px'
+
+     */
   }
   if (satusElement.checked === true) {
     // console.log('event.target.checkValidity() =', event.target.checkValidity())
