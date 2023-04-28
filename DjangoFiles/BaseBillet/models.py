@@ -289,6 +289,14 @@ class Configuration(SingletonModel):
         return False
 
     ######### END CASHLESS #########
+    """
+    ######### GHOST #########
+    """
+
+    ghost_url = models.URLField(blank=True, null=True)
+    ghost_key = models.CharField(max_length=200, blank=True, null=True)
+    ghost_last_log = models.TextField(blank=True, null=True)
+
 
     """
     ######### STRIPE #########

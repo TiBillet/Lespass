@@ -235,7 +235,6 @@ staff_admin_site.register(Webhook, WebhookAdmin)
 
 ########################################################################
 class ConfigurationAdmin(SingletonModelAdmin):
-    # readonly_fields = []
 
     fieldsets = (
         (None, {
@@ -277,7 +276,7 @@ class ConfigurationAdmin(SingletonModelAdmin):
                 'stripe_mode_test',
             ),
         }),
-        ('Billetterie', {
+        ('Billetterie options générales', {
             'fields': (
                 # 'activer_billetterie',
                 # 'template_billetterie',
@@ -293,6 +292,13 @@ class ConfigurationAdmin(SingletonModelAdmin):
                 'key_cashless',
             ),
         }),
+        ('Ghost', {
+            'fields': (
+                'ghost_url',
+                'ghost_key',
+                'ghost_last_log',
+            ),
+        }),
         # ('Mailing', {
         #     'fields': (
         #         'activate_mailjet',
@@ -300,6 +306,7 @@ class ConfigurationAdmin(SingletonModelAdmin):
         #     ),
         # }),
     )
+    readonly_fields = ['ghost_last_log',]
 
     def save_model(self, request, obj, form, change):
         obj: Configuration
