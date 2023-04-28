@@ -9,7 +9,7 @@
         <div class="row">
           <div class="col-lg-8 mx-auto text-white text-center">
             <h2 class="text-white">{{ header.titre }}</h2>
-            <p v-if="header.shortDescription !== null" class="lead">{{ header.shortDescription }}</p>
+            <p v-if="header.shortDescription !== null" class="lead" style="white-space: pre-line">{{ header.shortDescription }}</p>
           </div>
         </div>
       </div>
@@ -19,7 +19,7 @@
       <Search />
     </div>
 
-    <div class="container mt-5">{{ header.longDescription }}</div>
+    <div class="container mt-5" style="white-space: pre-line">{{ header.longDescription }}</div>
 
   </header>
 </template>
