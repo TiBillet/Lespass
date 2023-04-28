@@ -144,7 +144,7 @@
                   <p class="mb-2 mt-2">
                     Aucune de ces informations ne sont et ne seront utilisées pour du démarchage
                     commercial.
-                    TiBillet est une solution libre et open-source qui prends soin de votre vie
+                    TiBillet est une solution libre et open-source qui prend soin de votre vie
                     privée.
                   </p>
 
