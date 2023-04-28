@@ -20,16 +20,18 @@
                 <!-- conditions -->
                 <div class="input-group mb-2 has-validation">
                   <div class="form-check form-switch position-relative">
-                    <input id="read-conditions" class="form-check-input" type="checkbox" required
-                           @click="checkConditions()" :checked="adhesion.readConditions">
-                    <label v-if="getPartialDataAdhesion(productUuid).categorie_article === 'A'"
-                           class="form-check-label text-dark" for="read-conditions">
-                      j'ai pris connaissance des <a class="text-info" @click="goStatus()">Status et réglement
-                      intérieur.</a>
-                    </label>
-                    <label v-else class="form-check-label text-dark" for="read-conditions">
-                      j'ai pris connaissance des <a class="text-info" @click="goStatus()">CGU/CGV.</a>
-                    </label>
+                    <div>
+                      <input id="read-conditions" class="form-check-input" type="checkbox" required
+                             @click="checkConditions()" :checked="adhesion.readConditions">
+                      <label v-if="getPartialDataAdhesion(productUuid).categorie_article === 'A'"
+                             class="form-check-label text-dark" for="read-conditions">
+                        j'ai pris connaissance des <a class="text-info" @click="goStatus()">status et du réglement
+                        intérieur de l'association.</a>
+                      </label>
+                      <label v-else class="form-check-label text-dark" for="read-conditions">
+                        j'ai pris connaissance des <a class="text-info" @click="goStatus()">CGU/CGV.</a>
+                      </label>
+                    </div>
                     <div class="invalid-feedback position-absolute">
                       Conditions non acceptées.
                     </div>
@@ -106,11 +108,10 @@
 
                 <!-- options checkbox -->
                 <div v-if="getPartialDataAdhesion(productUuid).option_generale_checkbox.length > 0" class="mt-3">
-                  <div>options checkbox</div>
                   <div v-for="(option, index) in getPartialDataAdhesion(productUuid).option_generale_checkbox"
                        :key="index" class="mb-1">
                     <div class="form-switch input-group has-validation">
-                      <input class="form-check-input me-2" type="checkbox"
+                      <input class="form-check-input me-2 options-adhesion-to-unchecked" type="checkbox"
                              :id="`option-checkbox-adhesion${option.uuid}`">
                       <label class="form-check-label text-dark mb-0" :for="`option-checkbox-adhesion${option.uuid}`">
                         {{ option.name }}
@@ -123,11 +124,10 @@
 
                 <!-- options radio -->
                 <div v-if="getPartialDataAdhesion(productUuid).option_generale_radio.length > 0" class="mt-3">
-                  <div>options radio</div>
                   <div v-for="(option, index) in getPartialDataAdhesion(productUuid).option_generale_radio"
                        :key="index" class="mb-2">
                     <div class="form-switch input-group has-validation ps-0">
-                      <input class="form-check-input me-2" type="radio"
+                      <input class="form-check-input me-2 options-adhesion-to-unchecked" type="radio"
                              name="option-radio-name-adhesion"
                              :id="`option-radio-adhesion${index}`"
                              :data-uuid="option.uuid"
@@ -167,6 +167,7 @@
 
 <script setup>
 console.log('-> ModalMembershipForm.vue !')
+import { onMounted } from 'vue'
 
 // store
 import { storeToRefs } from 'pinia'
@@ -261,7 +262,7 @@ function validerAdhesion (event) {
   console.log('-> fonc validerAdhesion !!')
 
   // efface tous les messages d'invalidité
-  document.querySelector(`#read-conditions`).parentNode.querySelector(`.invalid-feedback`).style.display = 'none'
+  //document.querySelector(`#read-conditions`).parentNode.querySelector(`.invalid-feedback`).style.display = 'none'
   const msgInvalides = event.target.querySelectorAll('.invalid-feedback')
   for (let i = 0; i < msgInvalides.length; i++) {
     msgInvalides[i].style.display = 'none'
@@ -270,7 +271,7 @@ function validerAdhesion (event) {
   // vérification status
   const satusElement = document.querySelector(`#read-conditions`)
   if (satusElement.checked === false) {
-    const warningElement = satusElement.parentNode.querySelector(`.invalid-feedback`)
+    const warningElement = satusElement.parentNode.parentNode.querySelector(`.invalid-feedback`)
     warningElement.style.display = 'block'
     warningElement.style.top = '20px'
     warningElement.style.left = '-6px'

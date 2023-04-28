@@ -34,22 +34,22 @@
 
 <script setup>
 // vue
-import {ref} from 'vue'
+import { ref } from 'vue'
 
 // components
 import ModalMembershipForm from '@/components/ModalMembershipForm.vue'
 
 // store
-import {useAllStore} from '@/stores/all'
-import {useLocalStore} from '@/stores/local'
+import { useAllStore } from '@/stores/all'
+import { useLocalStore } from '@/stores/local'
 
 // obtenir data adhesion
-const {getListAdhesions} = useAllStore()
-const {iamMembershipOwned} = useLocalStore()
+const { getListAdhesions } = useAllStore()
+const { iamMembershipOwned } = useLocalStore()
 
 let selectedProductUuid = ref('')
 
-function showFormAdhesion(productUuid) {
+function showFormAdhesion (productUuid) {
   console.log('-> fonc showFormAdhesion, productUuid =', productUuid)
 
   if (iamMembershipOwned(productUuid) === false) {
@@ -60,6 +60,13 @@ function showFormAdhesion(productUuid) {
     const elementModal = document.querySelector('#modal-form-adhesion')
     const modal = new bootstrap.Modal(elementModal) // Returns a Bootstrap modal instance
     modal.show()
+
+    // uncheck inputs radio et chcekbox du modal adhésion
+    const inputsC = document.querySelectorAll('.options-adhesion-to-unchecked')
+    for (const inputsCElement of inputsC) {
+      inputsCElement.checked = false
+    }
+
   } else {
     emitter.emit('modalMessage', {
       titre: 'Adhésion à jour',
