@@ -25,7 +25,7 @@
                              @click="checkConditions()" :checked="adhesion.readConditions">
                       <label v-if="getPartialDataAdhesion(productUuid).categorie_article === 'A'"
                              class="form-check-label text-dark" for="read-conditions">
-                        j'ai pris connaissance des <a class="text-info" @click="goStatus()">status et du réglement
+                        j'ai pris connaissance des <a class="text-info" @click="goStatus()">statuts et du règlement
                         intérieur de l'association.</a>
                       </label>
                       <label v-else class="form-check-label text-dark" for="read-conditions">
