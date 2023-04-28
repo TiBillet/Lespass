@@ -53,8 +53,8 @@ class OptionGenerale(models.Model):
 
     class Meta:
         ordering = ('poids',)
-        verbose_name = _('Option Ticket')
-        verbose_name_plural = _('Options Tickets')
+        verbose_name = _('Option')
+        verbose_name_plural = _('Options')
 
 
 # class ExternalLink(models.Model):

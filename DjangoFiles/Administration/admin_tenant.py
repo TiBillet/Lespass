@@ -39,10 +39,10 @@ class StaffAdminSite(AdminSite):
         ordering = {
             "Billetterie": [
                 "Paramètres",
-                "Options Tickets",
                 "Produits",
                 "Tarifs",
                 "Evenements",
+                "Options",
                 "Paiements Stripe",
                 "Réservations",
                 "Adhésions",
