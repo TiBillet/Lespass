@@ -197,7 +197,7 @@ function checkConditions () {
 
 function goStatus () {
   const lien = getPartialDataAdhesion(props.productUuid).legal_link
-  console.log('-> goStatus, lien =', lien)
+  // console.log('-> goStatus, lien =', lien)
   if (lien !== null) {
     window.open(lien, '_blank')
   }
@@ -270,13 +270,6 @@ function validerAdhesion (event) {
   const satusElement = document.querySelector(`#read-conditions`)
   if (satusElement.checked === false) {
     satusElement.parentNode.parentNode.parentNode.querySelector(`.invalid-feedback`).style.display = 'block'
-    /*
-    const warningElement = satusElement.parentNode.parentNode.querySelector(`.invalid-feedback`)
-    warningElement.style.display = 'block'
-    warningElement.style.top = '20px'
-    warningElement.style.left = '-6px'
-
-     */
   }
   if (satusElement.checked === true) {
     // console.log('event.target.checkValidity() =', event.target.checkValidity())
