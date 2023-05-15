@@ -23,12 +23,12 @@
                   <div class="invalid-feedback">Merci de remplir le nom de votre organisation.</div>
                 </div>
 
-                <label for="short_description">Une courte description.</label>
-                <div class="input-group mb-2 has-validation">
-                  <input id="short_description" v-model="tenant.short_description" type="text"
-                         class="form-control" aria-label="Description" required>
-                  <div class="invalid-feedback">Une description courte.</div>
-                </div>
+<!--                <label for="short_description">Une courte description.</label>-->
+<!--                <div class="input-group mb-2 has-validation">-->
+<!--                  <input id="short_description" v-model="tenant.short_description" type="text"-->
+<!--                         class="form-control" aria-label="Description" required>-->
+<!--                  <div class="invalid-feedback">Une description courte.</div>-->
+<!--                </div>-->
 
 <!--                <label for="phone">Téléphone</label>-->
 <!--                <div class="input-group mb-2 has-validation">-->
@@ -37,19 +37,19 @@
 <!--                  <div class="invalid-feedback">Merci de remplir votre numéro de téléphone.</div>-->
 <!--                </div>-->
 
-                <label for="img_url">L'url de l'image de la bannière.</label>
-                <div class="input-group mb-2 has-validation">
-                  <input id="img_url" type="text"
-                         class="form-control" v-model="tenant.img_url" aria-label="Prénom pour l'adhésion" required>
-                  <div class="invalid-feedback">Bannière.</div>
-                </div>
+<!--                <label for="img_url">L'url de l'image de la bannière.</label>-->
+<!--                <div class="input-group mb-2 has-validation">-->
+<!--                  <input id="img_url" type="text"-->
+<!--                         class="form-control" v-model="tenant.img_url" aria-label="Prénom pour l'adhésion" required>-->
+<!--                  <div class="invalid-feedback">Bannière.</div>-->
+<!--                </div>-->
 
-                <label for="logo_url">L'url de l'image du logo.</label>
-                <div class="input-group mb-2 has-validation">
-                  <input id="logo_url" type="text"
-                         class="form-control" v-model="tenant.logo_url" aria-label="Prénom pour l'adhésion" required>
-                  <div class="invalid-feedback">Logo.</div>
-                </div>
+<!--                <label for="logo_url">L'url de l'image du logo.</label>-->
+<!--                <div class="input-group mb-2 has-validation">-->
+<!--                  <input id="logo_url" type="text"-->
+<!--                         class="form-control" v-model="tenant.logo_url" aria-label="Prénom pour l'adhésion" required>-->
+<!--                  <div class="invalid-feedback">Logo.</div>-->
+<!--                </div>-->
 
                 <!-- conditions -->
                 <div class="input-group mb-2 has-validation">
@@ -186,9 +186,9 @@ function ValidateTenant(event) {
       SubmitTenant({
         organisation: tenant.value.organisation,
         // phone: tenant.value.phone,
-        short_description: tenant.value.short_description,
-        img_url: tenant.value.img_url,
-        logo_url: tenant.value.logo_url,
+        // short_description: tenant.value.short_description,
+        // img_url: tenant.value.img_url,
+        // logo_url: tenant.value.logo_url,
         categorie: "S",
         stripe_connect_account: accStripe,
       })

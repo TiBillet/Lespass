@@ -304,19 +304,21 @@ class NewConfigSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 _(f'stripe account not send nor valid'))
 
+        # if not attrs.get('img') and not img_url:
+        #     raise serializers.ValidationError(
+        #         _(f'img doit contenir un fichier, ou img_url doit contenir une url valide'))
+
         # On cherche la source de l'image principale :
         img_url = self.initial_data.get('img_url')
-        if not attrs.get('img') and not img_url:
-            raise serializers.ValidationError(
-                _(f'img doit contenir un fichier, ou img_url doit contenir une url valide'))
         if not attrs.get('img') and img_url:
             self.img_name, self.img_img = get_img_from_url(img_url)
 
+        # if not attrs.get('logo') and not logo_url:
+        #     raise serializers.ValidationError(
+        #         _(f'img doit contenir un fichier, ou logo_url doit contenir une url valide'))
+
         # On cherche la source de l'image du logo :
         logo_url = self.initial_data.get('logo_url')
-        if not attrs.get('logo') and not logo_url:
-            raise serializers.ValidationError(
-                _(f'img doit contenir un fichier, ou logo_url doit contenir une url valide'))
         if not attrs.get('logo') and logo_url:
             self.logo_name, self.logo_img = get_img_from_url(logo_url)
 
@@ -632,7 +634,7 @@ class NewAdhesionValidator(serializers.Serializer):
 
     def validate_email(self, value):
         # logger.info(f"NewAdhesionValidator validate email : {value}")
-        user_paiement: TibilletUser = get_or_create_user(value)
+        user_paiement: TibilletUser = get_or_create_user(value, send_mail=False)
         self.user = user_paiement
         return user_paiement.email
 
@@ -703,7 +705,7 @@ class MembreValidator(serializers.Serializer):
     def validate_email(self, value):
         if not getattr(self, 'price', None):
             raise serializers.ValidationError(
-                _(f"Pas de prix d'adésion"))
+                _(f"Pas de prix d'adhésion"))
 
         user_paiement: TibilletUser = get_or_create_user(value)
         self.user = user_paiement

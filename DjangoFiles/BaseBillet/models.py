@@ -81,7 +81,7 @@ class Configuration(SingletonModel):
 
     slug = models.SlugField(max_length=50, default="")
 
-    short_description = models.CharField(max_length=250, verbose_name=_("Description courte"))
+    short_description = models.CharField(max_length=250, verbose_name=_("Description courte"), blank=True, null=True)
     long_description = models.TextField(blank=True, null=True)
 
     adress = models.CharField(max_length=250, blank=True, null=True)
@@ -311,10 +311,11 @@ class Configuration(SingletonModel):
 
     stripe_mode_test = models.BooleanField(default=True)
 
-
     def get_stripe_api(self):
         if self.federated_cashless :
-            return RootConfiguration.get_solo().get_stripe_api()
+            if self.get_stripe_connect_account :
+                return RootConfiguration.get_solo().get_stripe_api()
+
         tenant_stripe = self.stripe_test_api_key if self.stripe_mode_test else self.stripe_api_key
 
         if not tenant_stripe:
@@ -788,6 +789,7 @@ class ProductSold(models.Model):
             # stripe_account=config.get_stripe_connect_account(),
             images=images
         )
+        logger.info(f"product {product.name} created : {product.id}")
         self.id_product_stripe = product.id
 
         with schema_context('public'):

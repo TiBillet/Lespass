@@ -144,21 +144,13 @@ class ProductViewSet(viewsets.ViewSet):
 class TenantViewSet(viewsets.ViewSet):
 
     def create(self, request):
-
-        # On teste les prérequis :
-        # User peut créer de nouveaux tenants ?
-        # user: TibilletUser = request.user
-        # if not user.can_create_tenant:
-        #     raise serializers.ValidationError(
-        #         _("Vous n'avez pas la permission de créer de nouvelles instances sur ce serveur."))
-
         # Le slug est-il disponible ?
         try:
             slug = slugify(request.data.get('organisation'))
             Client.objects.get(schema_name=slug)
             logger.warning(f"{slug} exist : Conflict")
             return Response(
-                {f"{slug} exist : Conflict"},
+                {f"{slug} existe déja : Conflit de nom"},
                 status=status.HTTP_409_CONFLICT)
         except Client.DoesNotExist:
             pass
@@ -175,7 +167,10 @@ class TenantViewSet(viewsets.ViewSet):
         if request.data.get('categorie') not in categories:
             raise serializers.ValidationError(_("categorie ne correspond pas à l'url"))
 
+
         serializer = NewConfigSerializer(data=request.data, context={'request': request})
+
+        # import ipdb; ipdb.set_trace()
 
         if serializer.is_valid():
 
@@ -256,7 +251,7 @@ class TenantViewSet(viewsets.ViewSet):
 
             return Response(place_serialized_with_uuid, status=status.HTTP_201_CREATED)
 
-        logger.info(f"serializer.errors : {serializer.errors}")
+        logger.error(f"serializer.errors : {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     # def update(self, request, pk=None):
@@ -304,9 +299,12 @@ class TenantViewSet(viewsets.ViewSet):
         return Response(place_serialized_with_uuid)
 
     def get_permissions(self):
-        return get_permission_Api_LR_Any(self)
+        if self.action =='create':
+            permission_classes = [permissions.AllowAny]
+            return [permission() for permission in permission_classes]
+        else :
+            return get_permission_Api_LR_Any(self)
         # permission_classes = [permissions.AllowAny]
-        # return [permission() for permission in permission_classes]
 
 
 class HereViewSet(viewsets.ViewSet):

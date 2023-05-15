@@ -89,7 +89,8 @@ class CreationPaiementStripe():
         return total
 
     def _stripe_api_key(self):
-        api_key = RootConfiguration.get_solo().get_stripe_api()
+        # import ipdb; ipdb.set_trace()
+        api_key = self.configuration.get_stripe_api()
         if api_key:
             stripe.api_key = api_key
             return stripe.api_key
