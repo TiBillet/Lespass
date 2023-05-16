@@ -30,7 +30,7 @@ LOG_FILE="/Backup/error_backup_cron.log"
 
 
 echo $DATE_NOW" on dump la db en sql "
-/usr/bin/pg_dumpall -f $DUMPS_DIRECTORY/$PREFIX-$DATE_NOW.sql
+/usr/bin/pg_dumpall  | gzip > $DUMPS_DIRECTORY/$PREFIX-$DATE_NOW.sql.gz
 
 echo $DATE_NOW" on supprime les vieux dumps sql de plus de 30min"
 /usr/bin/find $DUMPS_DIRECTORY -mmin +30 -type f -delete
