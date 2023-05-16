@@ -43,10 +43,10 @@ export BORG_PASSPHRASE=$BORG_PASSPHRASE
 export BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes
 export BORG_RELOCATED_REPO_ACCESS_IS_OK=yes
 
-echo $DATE_NOW" on cree l'archive borg "
-/usr/bin/borg create -vs --compression lz4 \
-    $BORG_REPO::$PREFIX-$DATE_NOW \
-    $DUMPS_DIRECTORY
+#echo $DATE_NOW" on cree l'archive borg "
+#/usr/bin/borg create -vs --compression lz4 \
+#    $BORG_REPO::$PREFIX-$DATE_NOW \
+#    $DUMPS_DIRECTORY
 
 
 #echo $DATE_NOW" on prune les vieux borg :"
