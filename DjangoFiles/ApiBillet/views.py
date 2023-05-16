@@ -1364,7 +1364,12 @@ class Webhook_stripe(APIView):
         # configuré dans l'admin stripe
         if payload.get('type') == "checkout.session.completed":
             logger.info(f"Webhook_stripe checkout.session.completed : {payload}")
-            tenant_uuid_in_metadata = payload["data"]["object"]["metadata"]["tenant"]
+
+            tenant_uuid_in_metadata = payload["data"]["object"]["metadata"].get("tenant")
+            if not tenant_uuid_in_metadata:
+                logger.warning(f"Webhook_stripe checkout.session.completed : {payload} - no tenant in metadata")
+                return Response('no tenant in metadata',
+                                status=status.HTTP_204_NO_CONTENT)
 
             # On utilise les metadata du paiement stripe pour savoir de quel tenant cela vient.
             if f"{connection.tenant.uuid}" != tenant_uuid_in_metadata:
