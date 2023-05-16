@@ -24,6 +24,8 @@ services:
       file: ../compose/docker-compose-base.yml
       service: billetterie_django
     command: "bash /DjangoFiles/launch_prod.sh"
+    volumes:
+      - "./ssh:/root/.ssh"
 #    command: "bash /DjangoFiles/launch.sh"
     env_file: .env
 

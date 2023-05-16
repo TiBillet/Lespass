@@ -26,7 +26,6 @@ services:
 #    ports:
 #      - 8002:8002
     volumes:
-      - "ssh/:/root/.ssh"
       - "../../DjangoFiles:/DjangoFiles"
       - "../../Backup:/Backup"
       - "../../Docker/bashrc:/root/.bashrc"
