@@ -2,6 +2,7 @@ from django.contrib.auth.models import Permission, Group
 from django.contrib.contenttypes.models import ContentType
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
+from django_tenants.utils import schema_context, tenant_context
 
 from BaseBillet.models import OptionGenerale, Configuration
 
@@ -19,7 +20,6 @@ class Command(BaseCommand):
 
 
     def handle(self, *args, **options):
-
         liste_permission_user_staff = [
 
             "change_configuration",
@@ -47,9 +47,15 @@ class Command(BaseCommand):
 
             "view_paiement_stripe",
 
+            "add_reservation",
             "change_reservation",
             "delete_reservation",
             "view_reservation",
+
+            "add_ticket",
+            "change_ticket",
+            "delete_ticket",
+            "view_ticket",
 
             "add_membership",
             "change_membership",
@@ -73,16 +79,17 @@ class Command(BaseCommand):
 
         ]
 
+        with schema_context('public'):
 
-        # on clean les anciennes permissions:
-        Permission.objects.all().delete()
-        call_command('update_permissions')
+            # on clean les anciennes permissions:
+            Permission.objects.all().delete()
+            call_command('update_permissions')
 
-        staff_group = Group.objects.get_or_create(name="staff")[0]
-        for permission in liste_permission_user_staff:
-            print(permission)
-            perm = Permission.objects.get(codename=permission)
-            print(perm)
+            staff_group = Group.objects.get_or_create(name="staff")[0]
+            for permission in liste_permission_user_staff:
+                print(permission)
+                perm = Permission.objects.get(codename=permission)
+                print(perm)
 
-            staff_group.permissions.add(perm)
-        staff_group.save()
+                staff_group.permissions.add(perm)
+            staff_group.save()
