@@ -70,12 +70,15 @@ class StaffAdminSite(AdminSite):
         """
         try:
             if request.tenant in request.user.client_admin.all():
+                logger.info(f"{request.user} is staff : {request.user.is_staff}")
                 return request.user.is_staff
             elif request.user.client_source == Client.objects.get(schema_name="public"):
+                logger.info(f"{request.user} is is_superuser : {request.user.is_superuser}")
                 return request.user.is_superuser
             else:
                 return False
-        except AttributeError:
+        except AttributeError as e:
+            logger.error(f"{e} : AnonymousUser has no attribute 'client_source'")
             # AttributeError: 'AnonymousUser' object has no attribute 'client_source'
             return False
         except Exception as e:
