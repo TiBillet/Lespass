@@ -41,11 +41,12 @@ class UserAdminTibillet(UserAdmin):
         'is_active',
         'is_staff',
         'is_superuser',
-        'can_create_tenant',
+        # 'can_create_tenant',
         'client_source',
-        'achat',
+        # 'achat',
         'administre',
-        'espece',
+        # 'espece',
+        # 'groups',
     )
 
     list_filter = (

@@ -33,36 +33,36 @@ class StaffAdminSite(AdminSite):
     site_title = "TiBillet Staff Admin"
     site_url = '/'
 
-    def get_app_list(self, request):
-        app_dict = self._build_app_dict(request)
-
-        ordering = {
-            "Billetterie": [
-                "Paramètres",
-                "Produits",
-                "Tarifs",
-                "Evenements",
-                "Options",
-                "Paiements Stripe",
-                "Réservations",
-                "Adhésions",
-                "Api keys",
-                "Webhooks",
-            ]
-        }
-
-        app_dict = self._build_app_dict(request)
-        # a.sort(key=lambda x: b.index(x[0]))
-        # Sort the apps alphabetically.
-        app_list = sorted(app_dict.values(), key=lambda x: x['name'].lower())
-
-        # Sort the models alphabetically within each app.
-        for app in app_list:
-            order = ordering.get(app['name'])
-            if order:
-                app['models'].sort(key=lambda x: order.index(x['name']))
-
-        return app_list
+    # def get_app_list(self, request):
+    #     app_dict = self._build_app_dict(request)
+    #
+    #     ordering = {
+    #         "Billetterie": [
+    #             "Paramètres",
+    #             "Produits",
+    #             "Tarifs",
+    #             "Evenements",
+    #             "Options",
+    #             "Paiements Stripe",
+    #             "Réservations",
+    #             "Adhésions",
+    #             "Api keys",
+    #             "Webhooks",
+    #         ]
+    #     }
+    #
+    #     app_dict = self._build_app_dict(request)
+    #     # a.sort(key=lambda x: b.index(x[0]))
+    #     # Sort the apps alphabetically.
+    #     app_list = sorted(app_dict.values(), key=lambda x: x['name'].lower())
+    #
+    #     # Sort the models alphabetically within each app.
+    #     for app in app_list:
+    #         order = ordering.get(app['name'])
+    #         if order:
+    #             app['models'].sort(key=lambda x: order.index(x['name']))
+    #
+    #     return app_list
 
     def has_permission(self, request):
         """
