@@ -28,6 +28,7 @@ class PublicAdminSite(AdminSite):
     site_url = '/'
 
     def has_permission(self, request):
+        logger.warning(f"RootAdminSite.has_permission : {request.user} - {request.user.client_source}")
         try:
             if request.user.client_source == Client.objects.get(schema_name="public"):
                 return request.user.is_superuser
@@ -35,12 +36,7 @@ class PublicAdminSite(AdminSite):
             logger.error(f"{e} : AnonymousUser for admin ?")
             return False
         except Exception as e:
-            raise
-
-
-        if request.user.client_source == Client.objects.get(schema_name="public"):
-            if request.tenant in request.user.client_admin.all():
-                return request.user.is_superuser
+            raise e
         return False
 
 
