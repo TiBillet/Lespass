@@ -17,8 +17,9 @@ class RootPermission(permissions.BasePermission):
     message = 'No root'
 
     def has_permission(self, request, view):
-        return request.user.is_superuser
-
+        if request.user.client_source.categorie == Client.ROOT:
+            return request.user.is_superuser
+        return False
 
 # Mis à l'extérieur pour pouvoir être utilisé
 # tout seul dans les class view de Django sans RESTframework
@@ -31,7 +32,11 @@ def TenantAdminPermissionWithRequest(request):
                 request.user.is_active,
                 request.user.espece == TibilletUser.TYPE_HUM
             ]),
-            request.user.is_superuser
+            # Pour l'user ROOT qui peut tout faire
+            all([
+                request.user.client_source.categorie == Client.ROOT,
+                request.user.is_superuser,
+            ]),
         ])
     else:
         return False
@@ -56,7 +61,11 @@ class TerminalScanPermission(permissions.BasePermission):
                     request.user.user_parent().is_staff,
                     request.user.espece == TibilletUser.TYPE_TERM
                 ]),
-                request.user.is_superuser
+                # Pour l'user ROOT qui peut tout faire
+                all([
+                    request.user.client_source.categorie == Client.ROOT,
+                    request.user.is_superuser,
+                ]),
             ])
         else:
             return False

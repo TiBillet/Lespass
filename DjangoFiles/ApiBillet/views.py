@@ -300,7 +300,7 @@ class TenantViewSet(viewsets.ViewSet):
 
     def get_permissions(self):
         if self.action =='create':
-            permission_classes = [permissions.AllowAny]
+            permission_classes = [permissions.IsAuthenticated]
             return [permission() for permission in permission_classes]
         else :
             return get_permission_Api_LR_Any(self)
