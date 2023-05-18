@@ -888,7 +888,8 @@ class ZReportPDF(View):
 
                 if response.status_code == 200:
                     data = json.loads(response.content)
-                    date = data['date']
+
+                    date = data['start_date']
                     structure = data['structure']
                     # import ipdb; ipdb.set_trace()
 
@@ -898,7 +899,7 @@ class ZReportPDF(View):
 
                     pdf_binary = report_to_pdf(data)
                     response = HttpResponse(pdf_binary, content_type='application/pdf')
-                    response['Content-Disposition'] = f'attachment; filename="{structure}-{date}.pdf"'
+                    response['Content-Disposition'] = f'attachment; filename="{structure}-TicketZ-{date}.pdf"'
                     return response
 
                     # return HttpResponse(json.dumps(data), content_type='application/json')

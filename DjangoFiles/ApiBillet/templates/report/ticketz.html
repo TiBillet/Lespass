@@ -50,253 +50,369 @@
         }
     </style>
 </head>
+<body>
+
+<h1>Rapport TiBillet</h1>
+<h1><span class="test-tenant">{{ structure }}</span></h1>
+<h3>Début : {{ start_date }}</h3>
+<h3>Fin : {{ end_date }}</h3>
+
+
 <div>
-    <h1>Rapport TiBillet</h1>
-    <h1>{{ structure }} : {{ date }}</h1>
+    <table class="content">
+        <h2>Quantités vendues et offertes</h2>
 
-    <div>
-        <table class="content">
-            <h2>Quantités vendues et offertes</h2>
+        <thead>
+        <tr>
+            <td>Article</td>
+            <td>Prix</td>
+            <td>TVA</td>
+            <th>Qty vendue</th>
+            <th>Qty offerte</th>
+            <th>Qty totale</th>
+            <th>Total € vendus</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for categorie_name, articles_vendus in dict_quantites_vendus.items %}
 
-            <thead>
             <tr>
-                <td>Article</td>
-                <td>Prix</td>
-                <td>TVA</td>
-                <th>Qty vendue</th>
-                <th>Qty offerte</th>
-                <th>Qty totale</th>
-                <th>Total € vendus</th>
+                <th colspan="7">{{ categorie_name }}</th>
             </tr>
-            </thead>
-            <tbody>
-            {% for categorie_name, articles_vendus in dict_quantites_vendus.items %}
 
-                <tr>
-                    <th colspan="7">{{ categorie_name }}</th>
+            {% for article, col_qty in articles_vendus.items %}
+                <tr class="test-item-qty">
+                    <td class="test-item-name">{{ article }}</td>
+                    {% for qty_name, value in col_qty.items %}
+                        {% if forloop.first %}
+                            <td class="test-item-value-{{ qty_name }}">{{ value | floatformat:2 }}€</td>
+                        {% elif forloop.counter == 2 %}
+                            <td class="test-item-value-{{ qty_name }}">{{ value }}%</td>
+                        {% elif forloop.last %}
+                            <td class="test-item-value-{{ qty_name }}">{{ value | floatformat:2 }}€</td>
+                        {% else %}
+                            <td class="test-item-value-{{ qty_name }}">{{ value | floatformat:2 }}</td>
+
+                        {% endif %}
+
+                    {% endfor %}
                 </tr>
-
-                {% for article, col_qty in articles_vendus.items %}
-                    <tr>
-                        <td>{{ article }}</td>
-                        {% for qty_name, value in col_qty.items %}
-                            {% if forloop.first %}
-                                <td>{{ value | floatformat:2 }}€</td>
-                            {% elif forloop.counter == 2 %}
-                                <td>{{ value }}%</td>
-                            {% elif forloop.last %}
-                                <td>{{ value | floatformat:2 }}€</td>
-                            {% else %}
-                                <td>{{ value | floatformat:2 }}</td>
-
-                            {% endif %}
-
-                        {% endfor %}
-                    </tr>
-                {% endfor %}
             {% endfor %}
+        {% endfor %}
 
-            </tbody>
-            <tfoot>
-            {#TOTAL#}
-            <tr>
-                <th colspan="5"></th>
-                <th>TOTAL HT</th>
-                <td>{{ total_HT | floatformat:2 }}€</td>
+        </tbody>
+        <tfoot>
+        {#TOTAL#}
+        <tr>
+            <th colspan="5"></th>
+            <th>TOTAL HT</th>
+            <td class="test-qty-total-ht">{{ total_HT | floatformat:2 }}€</td>
+        </tr>
+        <tr>
+            <th colspan="5"></th>
+            <th>TVA</th>
+            <td class="test-qty-total-tva">{{ total_collecte_toute_tva | floatformat:2 }}€</td>
+        </tr>
+        <tr>
+            <th colspan="5"></th>
+            <th>TOTAL TTC</th>
+            <td class="test-qty-total-ttc">{{ total_TTC | floatformat:2 }}€</td>
+        </tr>
+        </tfoot>
+    </table>
+</div>
+
+<div id="tva">
+    <h2>TVA Collectée par taux</h2>
+    <table class="content">
+        <thead>
+        <tr>
+            <th>Taux</th>
+            <th>Collecté</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for taux, collecte in dict_TVA.items %}
+            <tr class="test-item-tau">
+                <td class="test-item-tau-type">{{ taux | floatformat:2 }}%</td>
+                <td class="test-item-tau-type-collecte">{{ collecte | floatformat:2 }}€</td>
             </tr>
-            <tr>
-                <th colspan="5"></th>
-                <th>TVA</th>
-                <td>{{ total_collecte_toute_tva | floatformat:2 }}€</td>
+        {% endfor %}
+        </tbody>
+        <tfoot>
+        {#TOTAL#}
+        <tr>
+            <th>TOTAL</th>
+            <td class="total-taux-collecte">{{ total_collecte_toute_tva | floatformat:2 }}€</td>
+        </tr>
+        </tfoot>
+    </table>
+
+</div>
+
+
+<div id="total_vente">
+    <h2>Total des ventes par moyen de paiement</h2>
+    <span>Ne comprend pas les recharges cashless.</span>
+    <table class="content">
+        <thead>
+        <tr>
+            <th>Nom</th>
+            <th>Total vente</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for nom, total in dict_moyenPaiement_euros.items %}
+            <tr class="test-item1-mp">
+                <td class="test-item1-mp-nom">{{ nom }}</td>
+                <td class="test-item1-mp-total">{{ total | floatformat:2 }}€</td>
             </tr>
-            <tr>
-                <th colspan="5"></th>
-                <th>TOTAL TTC</th>
-                <td>{{ total_TTC | floatformat:2 }}€</td>
+        {% endfor %}
+        {#TOTAL#}
+        <tr style="border-bottom: 2px solid #1B1464; ">
+            <th>TOTAL €</th>
+            <td class="test-items1-mp-total">{{ total_euro_by_mp | floatformat:2 }}€</td>
+        </tr>
+        {% for nom, total in dict_moyenPaiement_gift.items %}
+            <tr class="test-item2-mp">
+                <td class="test-item2-mp-nom">{{ nom }}</td>
+                <td class="test-item2-mp-total">{{ total | floatformat:2 }}€</td>
             </tr>
-            </tfoot>
-        </table>
+        {% endfor %}
+        <tr>
+            <th>TOTAL Offert</th>
+            <td class="test-items2-mp-total">{{ total_gift_by_mp | floatformat:2 }}€</td>
+        </tr>
+        </tbody>
+        <tfoot>
+        </tfoot>
+
+    </table>
+
+</div>
+
+
+<div id="recharge_cashless">
+    <h2 class="test-nom-monnaie">Recharge Cashless {{ nom_monnaie }}</h2>
+    <table class="content">
+        <thead>
+        <tr>
+            <th>Nom</th>
+            <th>Total</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr>
+            <th colspan="2">Recharge</th>
+        </tr>
+        {% for nom, total in dict_moyenPaiement_recharge.items %}
+            <tr class="test-item-recharge">
+                <td class="test-item-recharge-nom">{{ nom }}</td>
+                <td class="test-item-recharge-total">{{ total | floatformat:2 }}€</td>
+            </tr>
+        {% endfor %}
+        <tr>
+            <th colspan="2">Remboursement</th>
+        </tr>
+        {% for nom, total in dict_moyenPaiement_remboursement.items %}
+            <tr class="test-item-remboursement">
+                <td class="test-item-remboursement-nom">{{ nom }}</td>
+                <td class="test-item-remboursement-total">{{ total | floatformat:2 }}€</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+        <tfoot>
+        {#TOTAL#}
+        <tr>
+            <th>TOTAL</th>
+            <td class="test-item-recharge-cashless-total">{{ total_cashless | floatformat:2 }}€</td>
+        </tr>
+        </tfoot>
+    </table>
+
+</div>
+
+
+<div id="fond_caisse">
+    <h2>Fond de caisse espèce</h2>
+    <table class="content">
+        <thead>
+        <tr>
+            <th></th>
+            <th>Total</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr class="test-item-fond-caisse">
+            <td class="test-item-fond-caisse-nom">Fond de caisse</td>
+            <td class="test-item-fond-caisse-total">{{ fond_caisse | floatformat:2 }}€</td>
+        </tr>
+        <tr class="test-item-fond-caisse">
+            <td class="test-item-fond-caisse-nom">Recharge cashless en espèce</td>
+            <td class="test-item-fond-caisse-total">{{ recharge_cash | floatformat:2 }}€</td>
+        </tr>
+        <tr class="test-item-fond-caisse">
+            <td class="test-item-fond-caisse-nom">Vente directe en espèce</td>
+            <td class="test-item-fond-caisse-total">{{ ventes_directe_espece | floatformat:2 }}€</td>
+        </tr>
+        </tbody>
+        <tfoot>
+        <tr class="test-item-fond-caisse">
+            <th>TOTAL CAISSE :</th>
+            <td class="test-item-fond-caisse-totaux">{{ total_cash | floatformat:2 }}€</td>
+        </tr>
+        </tfoot>
+    </table>
+</div>
+
+<div id="monnaie_dormante">
+    <h2>Monnaie dormante</h2>
+    <span>Le delta est la différence entre recharge et dépense.</span>
+    <table class="content">
+        <thead>
+        <tr>
+            <th>Delta</th>
+            <th>Reste sur toutes cartes</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr>
+            <th colspan="2">{{ nom_monnaie }}</th>
+        </tr>
+        <tr class="test-item-monnaie-dormante">
+            <td class="test-item-monnaie-dormante-valeur">{{ delta_cashless_euro| floatformat:2 }}€</td>
+            <td class="test-item-monnaie-dormante-reste">{{ dormante_j_rapport | floatformat:2 }}€</td>
+        </tr>
+        <tr>
+            <th colspan="2">{{ nom_monnaie_cadeau }} (+{{ total_recharge_cadeau }})</th>
+        </tr>
+        <tr class="test-item-monnaie-dormante">
+            <td class="test-item-monnaie-dormante-valeur">{{ delta_cashless_gift | floatformat:2 }}€</td>
+            <td class="test-item-monnaie-dormante-reste">{{ dormante_gift_j_rapport | floatformat:2 }}€</td>
+        </tr>
+        </tbody>
+        <tfoot>
+        </tfoot>
+    </table>
+</div>
+
+<div id="benef">
+    <h2>Bénéfices estimés</h2>
+    <div>
+        {% if articles_sans_cout.count > 0 %}
+            <span>Attention, les articles suivants n'ont pas de valeur d'achat. Ils comptent comme 100% de bénéfices.</span>
+            {% for article in articles_sans_cout %}
+                {{ article.nom }}, <br>
+            {% endfor %}
+        {% endif %}
     </div>
 
     <div>
-        <h2>TVA Collectée par taux</h2>
-        <table class="content">
+        <table id="table_benef" class="content">
             <thead>
             <tr>
-                <th>Taux</th>
-                <th>Collecté</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for taux, collecte in dict_TVA.items %}
-                <tr>
-                    <td>{{ taux | floatformat:2 }}%</td>
-                    <td>{{ collecte | floatformat:2 }}€</td>
-                </tr>
-            {% endfor %}
-            </tbody>
-            <tfoot>
-            {#TOTAL#}
-            <tr>
-                <th>TOTAL</th>
-                <td>{{ total_collecte_toute_tva | floatformat:2 }}€</td>
-            </tr>
-            </tfoot>
-        </table>
-
-    </div>
-
-
-    <div>
-        <h2>Total des ventes par moyen de paiement</h2>
-        <span>Ne comprend pas les recharges cashless.</span>
-        <table class="content">
-            <thead>
-            <tr>
-                <th>Nom</th>
-                <th>Total vente</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for nom, total in dict_moyenPaiement_euros.items %}
-                <tr>
-                    <td>{{ nom }}</td>
-                    <td>{{ total | floatformat:2 }}€</td>
-                </tr>
-            {% endfor %}
-            {#TOTAL#}
-            <tr style="border-bottom: 2px solid #1B1464; ">
-                <th>TOTAL €</th>
-                <td>{{ total_euro_by_mp | floatformat:2 }}€</td>
-            </tr>
-            {% for nom, total in dict_moyenPaiement_gift.items %}
-                <tr>
-                    <td>{{ nom }}</td>
-                    <td>{{ total | floatformat:2 }}€</td>
-                </tr>
-            {% endfor %}
-            <tr>
-                <th>TOTAL Offert</th>
-                <td>{{ total_gift_by_mp | floatformat:2 }}€</td>
-            </tr>
-            </tbody>
-            <tfoot>
-            </tfoot>
-
-        </table>
-
-    </div>
-
-
-    <div>
-        <h2>Recharge Cashless {{ nom_monnaie }}</h2>
-        <table class="content">
-            <thead>
-            <tr>
-                <th>Nom</th>
+                <th></th>
                 <th>Total</th>
             </tr>
             </thead>
             <tbody>
-            <tr>
-                <th colspan="2">Recharge</th>
+            <tr style="border-bottom: 2px solid #1B1464; ">
+                <th>TOTAL VENTE TTC €</th>
+                <td class="">{{ total_euro_by_mp | floatformat:2 }}€</td>
             </tr>
-            {% for nom, total in dict_moyenPaiement_recharge.items %}
-                <tr>
-                    <td>{{ nom }}</td>
-                    <td>{{ total | floatformat:2 }}€</td>
-                </tr>
-            {% endfor %}
-            <tr>
-                <th colspan="2">Remboursement</th>
+            <tr class="">
+                <td class="">Coût vente ( prix achat x qty vendu )</td>
+                <td class="">{{ cout_ventes | floatformat:2 }}€</td>
             </tr>
-            {% for nom, total in dict_moyenPaiement_remboursement.items %}
-                <tr>
-                    <td>{{ nom }}</td>
-                    <td>{{ total | floatformat:2 }}€</td>
-                </tr>
-            {% endfor %}
+            <tr class="">
+                <td class="">TVA Collectée</td>
+                <td class="">{{ total_collecte_toute_tva | floatformat:2 }}€</td>
+            </tr>
+            <tr style="border-bottom: 2px solid #1B1464; border-top: 2px solid #1B1464;">
+                <th>TOTAL Offert</th>
+                <td class="">{{ total_gift_by_mp | floatformat:2 }}€</td>
+            </tr>
+            <tr class="">
+                <td class="">Coût offert ( prix achat x qty offerte )</td>
+                <td class="">{{ cout_offerts | floatformat:2 }}€</td>
+            </tr>
             </tbody>
             <tfoot>
-            {#TOTAL#}
-            <tr>
-                <th>TOTAL</th>
-                <td>{{ total_cashless | floatformat:2 }}€</td>
+            <tr class="">
+                <th>Bénéfices estimés</th>
+                <td></td>
             </tr>
+            <tr class="">
+                <td>Total vente - tva - coût vente - coût offert</td>
+                <td class="">{{ benefices_estimes | floatformat:2 }}€</td>
+            </tr>
+
             </tfoot>
         </table>
-
     </div>
+</div>
+<div id="habitudes">
+    <h2>Habitudes</h2>
 
+    <table class="content">
+        <thead>
+        <tr>
+            <th>Nbr de carte utilisées</th>
+            <th>Recharge médiane</th>
+            <th>Dépense médiane</th>
+            <th>Panier moyen</th>
+            <th>Reste sur carte médiane</th>
+            <th>% D'habitués</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr>
+            <td>{{ nbr_carte_distinct }}</td>
+            <td>{{ recharge_mediane }}€</td>
+            <td>{{ depenses_mediane }}€</td>
+            <td>{{ panier_moyen }}€</td>
+            <td>{{ reste_mediane }}€</td>
+            <td>{{ pourcent_habitue }}%</td>
+        </tr>
+        </tbody>
+    </table>
+</div>
 
-    <div>
-        <h2>Monnaie dormante</h2>
-        <span>Le delta est la différence entre recharge et dépense.</span>
+<div id="adhesion">
+    {% if total_adhesion > 0 %}
+        <h2>Adhésions</h2>
         <table class="content">
             <thead>
             <tr>
-                <th>Delta</th>
-                <th>Reste sur toutes cartes</th>
+                <th>Quantitées</th>
+                <th>Tarif</th>
             </tr>
             </thead>
             <tbody>
+            {% for tarif, qty in dict_adhesions.items %}
+                <tr class="test-item-adhesion">
+                    <td class="test-item-adhesion-qt">{{ qty }}</td>
+                    <td class="test-item-adhesion-tarif">{{ tarif  | floatformat:2 }}€</td>
+                </tr>
+            {% endfor %}
             <tr>
-                <th colspan="2">{{ nom_monnaie }}</th>
-            </tr>
-            <tr>
-                <td>{{ delta_cashless_euro| floatformat:2 }}€</td>
-                <td>{{ dormante_j_rapport | floatformat:2 }}€</td>
-            </tr>
-            <tr>
-                <th colspan="2">{{ nom_monnaie_cadeau }} (+{{ total_recharge_cadeau }})</th>
-            </tr>
-            <tr>
-                <td>{{ delta_cashless_gift | floatformat:2 }}</td>
-                <td>{{ dormante_gift_j_rapport | floatformat:2 }}</td>
+                <th colspan="2">TOTAL</th>
             </tr>
             </tbody>
             <tfoot>
+            {#TOTAL#}
+            <tr class="test-item-adhesion-total">
+                <td class="test-item-adhesion-total-qt">{{ total_adhesion }}</td>
+                <td class="test-item-adhesion-total-tarif">{{ total_adhesion_euro | floatformat:2 }}€</td>
+            </tr>
             </tfoot>
         </table>
-    </div>
 
-    {% if total_adhesion > 0 %}
-        <div>
-            <h2>Adhésions</h2>
-            <table class="content">
-                <thead>
-                <tr>
-                    <th>Quantitées</th>
-                    <th>Tarif</th>
-                </tr>
-                </thead>
-                <tbody>
-                {% for tarif, qty in dict_adhesions.items %}
-                    <tr>
-                        <td>{{ qty }}</td>
-                        <td>{{ tarif  | floatformat:2 }}€</td>
-                    </tr>
-                {% endfor %}
-                <tr>
-                    <th colspan="2">TOTAL</th>
-                </tr>
-                </tbody>
-                <tfoot>
-                {#TOTAL#}
-                <tr>
-                    <td>{{ total_adhesion }}</td>
-                    <td>{{ total_adhesion_euro | floatformat:2 }}€</td>
-                </tr>
-                </tfoot>
-            </table>
-
-        </div>
     {% else %}
         <span>Aucune adhésion enregistrée</span>
     {% endif %}
-
 </div>
-<body>
+
 
 </body>
 </html>
