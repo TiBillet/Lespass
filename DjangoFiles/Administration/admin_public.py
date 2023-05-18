@@ -28,7 +28,7 @@ class PublicAdminSite(AdminSite):
     site_url = '/'
 
     def has_permission(self, request):
-        logger.warning(f"RootAdminSite.has_permission : {request.user} - {request.user.client_source}")
+        logger.warning(f"RootAdminSite.has_permission : {request.user} - {request.user.client_source if request.user.is_authenticated else 'No client'}")
         try:
             if request.user.client_source == Client.objects.get(schema_name="public"):
                 return request.user.is_superuser
