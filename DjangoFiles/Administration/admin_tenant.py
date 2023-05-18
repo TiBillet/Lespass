@@ -88,6 +88,8 @@ class StaffAdminSite(AdminSite):
         try:
             if request.tenant in request.user.client_admin.all():
                 return request.user.is_superuser
+            if request.user.client_source.categorie == Client.ROOT:
+                return request.user.is_superuser
         except AttributeError as e:
             logger.error(f"{e} : AnonymousUser for admin ?")
             return False

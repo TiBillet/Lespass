@@ -30,10 +30,10 @@ class PublicAdminSite(AdminSite):
     def has_permission(self, request):
         logger.warning(f"RootAdminSite.has_permission : {request.user} - {request.user.client_source if request.user.is_authenticated else 'No client'}")
         try:
-            if request.user.client_source == Client.objects.get(schema_name="public"):
+            if request.user.client_source.categorie == Client.ROOT:
                 return request.user.is_superuser
         except AttributeError as e:
-            logger.error(f"{e} : AnonymousUser for admin ?")
+            logger.warning(f"{e} : AnonymousUser for admin ?")
             return False
         except Exception as e:
             raise e
