@@ -9,8 +9,9 @@ from django.contrib.admin.views.main import ChangeList
 from django.contrib.auth.models import Group
 from django.http import HttpResponseRedirect
 from django.template.response import TemplateResponse
-from django.urls import reverse
+from django.urls import reverse, NoReverseMatch
 from django.utils.html import format_html
+from django.utils.text import capfirst
 # from rest_framework_api_key.models import APIKey
 from rest_framework_api_key.models import APIKey
 from solo.admin import SingletonModelAdmin
@@ -20,7 +21,6 @@ from AuthBillet.models import HumanUser, SuperHumanUser, TermUser
 from BaseBillet.models import Configuration, Event, OptionGenerale, Product, Price, Reservation, LigneArticle, Ticket, \
     Paiement_stripe, ProductSold, PriceSold, Membership, ExternalApiKey, Webhook
 from django.contrib.auth.admin import UserAdmin
-
 from Customers.models import Client
 
 import logging
@@ -33,56 +33,68 @@ class StaffAdminSite(AdminSite):
     site_title = "TiBillet Staff Admin"
     site_url = '/'
 
-    # def get_app_list(self, request):
-    #     app_dict = self._build_app_dict(request)
-    #
-    #     ordering = {
-    #         "Billetterie": [
-    #             "Paramètres",
-    #             "Produits",
-    #             "Tarifs",
-    #             "Evenements",
-    #             "Options",
-    #             "Paiements Stripe",
-    #             "Réservations",
-    #             "Adhésions",
-    #             "Api keys",
-    #             "Webhooks",
-    #         ]
-    #     }
-    #
-    #     app_dict = self._build_app_dict(request)
-    #     # a.sort(key=lambda x: b.index(x[0]))
-    #     # Sort the apps alphabetically.
-    #     app_list = sorted(app_dict.values(), key=lambda x: x['name'].lower())
-    #
-    #     # Sort the models alphabetically within each app.
-    #     for app in app_list:
-    #         order = ordering.get(app['name'])
-    #         if order:
-    #             app['models'].sort(key=lambda x: order.index(x['name']))
-    #
-    #     return app_list
+
+    def get_app_list(self, request):
+        # app_dict = self._build_app_dict(request)
+
+        ordering = {
+            "Billetterie": [
+                "Paramètres",
+                "Produits",
+                "Tarifs",
+                "Evenements",
+                "Options",
+                "Paiements Stripe",
+                "Réservations",
+                "Adhésions",
+                "Api keys",
+                "Webhooks",
+            ]
+        }
+
+        logger.info("")
+        app_dict = self._build_app_dict(request)
+        # logger.info(f"user perm : {len(request.user.get_all_permissions())}")
+        # logger.info(f"_registry : {len(self._registry.items())}")
+        # logger.info(app_dict)
+        # import ipdb; ipdb.set_trace()
+
+        # models = self._registry
+        # for model, model_admin in models.items():
+        #     app_label = model._meta.app_label
+        #     has_module_perms = model_admin.has_module_permission(request)
+        #     perms = model_admin.get_model_perms(request)
+        #     import ipdb; ipdb.set_trace()
+        logger.info("")
+
+        # a.sort(key=lambda x: b.index(x[0]))
+        # Sort the apps alphabetically.
+        app_list = sorted(app_dict.values(), key=lambda x: x['name'].lower())
+
+        # Sort the models alphabetically within each app.
+        for app in app_list:
+            order = ordering.get(app['name'])
+            if order:
+                app['models'].sort(key=lambda x: order.index(x['name']))
+
+        return app_list
 
     def has_permission(self, request):
         """
         Removed check for is_staff.
+        Ensure that the tenant is in client_admin for the current user.
+        Return SuperUser : Bug in contentype permission with tenant ... BIG TODO !
         """
         try:
             if request.tenant in request.user.client_admin.all():
-                logger.info(f"{request.user} is staff : {request.user.is_staff}")
-                return request.user.is_staff
-            elif request.user.client_source == Client.objects.get(schema_name="public"):
-                logger.info(f"{request.user} is is_superuser : {request.user.is_superuser}")
                 return request.user.is_superuser
-            else:
-                return False
         except AttributeError as e:
-            logger.error(f"{e} : AnonymousUser has no attribute 'client_source'")
-            # AttributeError: 'AnonymousUser' object has no attribute 'client_source'
+            logger.error(f"{e} : AnonymousUser for admin ?")
             return False
         except Exception as e:
             raise e
+
+        return False
 
     # def get_app_list(self, request):
     #     import ipdb; ipdb.set_trace()
@@ -197,7 +209,7 @@ class ExtApiKeyAdmin(admin.ModelAdmin):
                 messages.add_message(
                     request,
                     messages.SUCCESS,
-                    f"Copiez bien la clé suivante et mettez la en lieu sur ! Elle n'est pas enregistrée sur nos serveurs et ne sera affichée qu'une seule fois ici :"
+                    f"Copiez bien la clé suivante et mettez la en lieu sur ! Elle est chifrée coté serveur et ne sera affichée qu'une seule fois ici :"
                 )
                 messages.add_message(
                     request,
@@ -376,6 +388,7 @@ class EventAdmin(admin.ModelAdmin):
 
     # pour selectionner uniquement les articles ventes et retour consigne
     def formfield_for_manytomany(self, db_field, request, **kwargs):
+
         produits_non_affichables = [Product.RECHARGE_CASHLESS, Product.DON, Product.ADHESION, Product.FREERES]
         if db_field.name == "products":
             kwargs["queryset"] = Product.objects \

@@ -17,6 +17,9 @@ from QrcodeCashless.models import Detail, CarteCashless, FederatedCashless, Sync
 # from boutique.models import Category, Product, Tag, VAT, Event, LandingPageContent, Price
 # from solo.admin import SingletonModelAdmin
 from root_billet.models import RootConfiguration
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class PublicAdminSite(AdminSite):
@@ -25,7 +28,20 @@ class PublicAdminSite(AdminSite):
     site_url = '/'
 
     def has_permission(self, request):
-        return request.user.is_superuser
+        try:
+            if request.user.client_source == Client.objects.get(schema_name="public"):
+                return request.user.is_superuser
+        except AttributeError as e:
+            logger.error(f"{e} : AnonymousUser for admin ?")
+            return False
+        except Exception as e:
+            raise
+
+
+        if request.user.client_source == Client.objects.get(schema_name="public"):
+            if request.tenant in request.user.client_admin.all():
+                return request.user.is_superuser
+        return False
 
 
 public_admin_site = PublicAdminSite(name='public_admin')

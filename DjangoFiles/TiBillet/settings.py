@@ -84,7 +84,7 @@ SHARED_APPS = (
 )
 
 # CodeLogin_app/settings.py
-
+TENANT_COLOR_ADMIN_APPS = False
 
 TENANT_APPS = (
     # The following Django contrib apps must be in TENANT_APPS
