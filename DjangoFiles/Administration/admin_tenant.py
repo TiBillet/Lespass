@@ -18,6 +18,7 @@ from solo.admin import SingletonModelAdmin
 from django.utils.translation import ugettext_lazy as _
 
 from AuthBillet.models import HumanUser, SuperHumanUser, TermUser
+from AuthBillet.utils import get_client_ip
 from BaseBillet.models import Configuration, Event, OptionGenerale, Product, Price, Reservation, LigneArticle, Ticket, \
     Paiement_stripe, ProductSold, PriceSold, Membership, ExternalApiKey, Webhook
 from django.contrib.auth.admin import UserAdmin
@@ -85,6 +86,8 @@ class StaffAdminSite(AdminSite):
         Ensure that the tenant is in client_admin for the current user.
         Return SuperUser : Bug in contentype permission with tenant ... BIG TODO !
         """
+        logger.warning(f"Tenant AdminSite.has_permission : {request.user} - {request.user.client_source if request.user.is_authenticated else 'No client'} - ip : {get_client_ip(request)}")
+
         try:
             if request.tenant in request.user.client_admin.all():
                 return request.user.is_superuser
@@ -120,7 +123,8 @@ class UserAdminTibillet(UserAdmin):
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('email', 'password1', 'password2', 'is_active')}
+            'fields': ('email',)}
+            # 'fields': ('email', 'password1', 'password2', 'is_active')}
          ),
     )
 
@@ -134,10 +138,17 @@ class UserAdminTibillet(UserAdmin):
             obj.save()
         obj.client_achat.add(request.tenant)
 
+    def has_delete_permission(self, request, obj=None):
+        # return request.user.is_superuser
+        return False
 
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
 class HumanUserAdmin(UserAdminTibillet):
     pass
-
 
 staff_admin_site.register(HumanUser, HumanUserAdmin)
 
@@ -692,12 +703,14 @@ class PaiementStripeAdmin(admin.ModelAdmin):
     ordering = ('-order_date',)
 
     def has_delete_permission(self, request, obj=None):
-        return request.user.is_superuser
-        # return False
+        # return request.user.is_superuser
+        return False
 
     def has_add_permission(self, request):
         return False
 
+    def has_change_permission(self, request, obj=None):
+        return False
 
 staff_admin_site.register(Paiement_stripe, PaiementStripeAdmin)
 

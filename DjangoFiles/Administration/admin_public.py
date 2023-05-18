@@ -6,6 +6,7 @@ from django.contrib.auth.admin import UserAdmin, GroupAdmin
 from django_tenants.utils import tenant_context
 from solo.admin import SingletonModelAdmin
 
+from AuthBillet.utils import get_client_ip
 from BaseBillet.models import Configuration
 from Customers.models import Client, Domain
 from AuthBillet.models import TibilletUser, HumanUser, TermUser, SuperHumanUser
@@ -28,7 +29,9 @@ class PublicAdminSite(AdminSite):
     site_url = '/'
 
     def has_permission(self, request):
-        logger.warning(f"RootAdminSite.has_permission : {request.user} - {request.user.client_source if request.user.is_authenticated else 'No client'}")
+        logger.warning(f"Tenant AdminSite.has_permission : {request.user} - {request.user.client_source if request.user.is_authenticated else 'No client source'} - ip : {get_client_ip(request)}")
+
+        # import ipdb; ipdb.set_trace()
         try:
             if request.user.client_source.categorie == Client.ROOT:
                 return request.user.is_superuser
