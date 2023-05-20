@@ -13,6 +13,12 @@ import logging
 from Customers.models import Client
 from QrcodeCashless.models import Asset, Wallet, SyncFederatedLog, CarteCashless
 
+# Pour SendToGhost
+import jwt	
+from datetime import datetime as date
+
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -230,16 +236,87 @@ def send_to_ghost(trigger):
     # product: Product = trigger.ligne_article.pricesold.productsold.product
 
     # Email du compte :
-    # user = paiement_stripe.user
-    # email = user.email
+    user = paiement_stripe.user
+    email = user.email
+    name = user.name
 
     # Et ici tu as les cred' ghost à entrer dans l'admin.
-    # config = Configuration.get_solo()
-    # ghost_url = config.ghost_url
-    # ghost_key = config.ghost_key
+    config = Configuration.get_solo()
+    ghost_url = config.ghost_url
+    ghost_key = config.ghost_key
 
-    # if ghost_url and ghost_key and email :
-    #     gogogo !
+    if ghost_url and ghost_key and email and name:
+        ###################################
+        ## Génération du token JWT 
+        ###################################
+
+        # Split the key into ID and SECRET
+        id, secret = ghost_key.split(':')
+
+        # Prepare header and payload
+        iat = int(date.now().timestamp())
+
+        header = {'alg': 'HS256', 'typ': 'JWT', 'kid': id}
+        payload = {
+            'iat': iat,
+            'exp': iat + 5 * 60,
+            'aud': '/admin/'
+        
+        # Create the token (including decoding secret)
+        token = jwt.encode(payload, bytes.fromhex(secret), algorithm='HS256', headers=header)
+        logger.debug(f"JWT token: " + token)
+
+        ###################################
+        ## Appels de l'API Ghost
+        ###################################
+
+        # Définir les critères de filtrage
+        filter = {
+            "filter": "email:"+ email
+        }
+        headers = {'Authorization': 'Ghost {}'.format(token)}
+
+        # Récupérer la liste des membres de l'instance Ghost
+        response = requests.get(ghost_url + "/ghost/api/admin/members/",  params=filter, headers=headers)
+
+        # Vérifier que la réponse de l'API est valide
+        if response.status_code == 200:
+            # Décoder la réponse JSON
+            j = response.json()
+            members = j['members']
+
+            # Si aucun membre n'a été trouvé avec l'adresse e-mail spécifiée
+            if len(members) == 0:
+                # Définir les informations du nouveau membre
+                member_data = { 
+                    "members": [ 
+                        {
+                            "email": email,
+                            "name": name,
+                            "labels": ["TiBillet", "import " + date.today().strftime("%d/%m/%Y")]
+                        }
+                    ]
+                }
+
+                # Ajouter le nouveau membre à l'instance Ghost
+                response = requests.post(ghost_url + "/ghost/api/admin/members/", json=member_data, headers=headers)
+
+                # Vérifier que la réponse de l'API est valide
+                if response.status_code == 201:
+                    # Décoder la réponse JSON
+                    j = response.json()
+                    members = j['members']
+                    member = members[0]
+                    logger.info(f"Le nouveau membre a été créé avec succès :", member["email"])
+                else:
+                    logger.error(f"Erreur lors de la création du nouveau membre :", response.text)
+            else:
+                # Afficher la liste des membres
+                for member in members:
+                    logger.debug(f"membre existant ", debug['email'])
+        else:
+            logger.error(f"Erreur lors de la récupération des membres :", response.text)
+        }
 
     pass
 
