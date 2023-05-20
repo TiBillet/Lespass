@@ -233,6 +233,11 @@ def send_to_ghost(trigger):
     # user = paiement_stripe.user
     # email = user.email
 
+    # Et ici tu as les cred' ghost rensigné dans l'admin.
+    # config = Configuration.get_solo()
+    # ghost_url = config.ghost_url
+    # ghost_key = config.ghost_key
+
     pass
 
 class ActionArticlePaidByCategorie:
