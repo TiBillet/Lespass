@@ -126,6 +126,57 @@ def get_federated_wallet(cashless_card: CarteCashless = None,
     return wallet
 
 
+def update_membership_state(trigger):
+    paiement_stripe = trigger.ligne_article.paiement_stripe
+    user = paiement_stripe.user
+    price: Price = trigger.ligne_article.pricesold.price
+    product: Product = trigger.ligne_article.pricesold.productsold.product
+
+    # On check s'il n'y a pas déjà une fiche membre avec le "price" correspondant
+    membership = Membership.objects.filter(
+        user=user,
+        price=price
+    ).first()
+    logger.info(f"    membership trouvé : {membership}")
+
+    if not membership:
+        membership, created = Membership.objects.get_or_create(
+            user=user,
+        )
+        membership.price = price
+
+    # Si Membership a été créé juste avant ce paiement,
+    # la first contribution est vide.
+    if not membership.first_contribution:
+        membership.first_contribution = timezone.now().date()
+
+    membership.last_contribution = timezone.now().date()
+    membership.contribution_value = trigger.ligne_article.pricesold.prix
+
+    if paiement_stripe.invoice_stripe:
+        membership.last_stripe_invoice = paiement_stripe.invoice_stripe
+
+    if paiement_stripe.subscription:
+        membership.stripe_id_subscription = paiement_stripe.subscription
+        membership.status = Membership.AUTO
+
+    membership.save()
+
+    # C'est le cashless qui gère l'adhésion et l'envoi de mail
+    if product.send_to_cashless:
+        logger.info(f"    Envoie celery task.send_membership_to_cashless")
+        data = {
+            "ligne_article_pk": trigger.ligne_article.pk,
+        }
+        send_membership_to_cashless.delay(data)
+
+    # TODO: C'est un abonnement autre que l'adhésion cashless, on gère l'envoi du contrat.
+    else:
+        logger.info(f"    TODO Envoie mail abonnement")
+        pass
+
+    trigger.ligne_article.status = LigneArticle.VALID
+
 
 def increment_federated_wallet(vente):
     # Un paiement stripe a été fait.
@@ -168,6 +219,21 @@ def increment_federated_wallet(vente):
     vente.ligne_article.status = LigneArticle.VALID
     logger.info(f"rechargement cashless fédéré ok")
 
+
+def send_to_ghost(trigger):
+    paiement_stripe = trigger.ligne_article.paiement_stripe
+
+    # Si tu as besoin du produit adhésion, tu peux utiliser les deux variables ci dessous.
+    # Le model est BaseBillet/models.py
+
+    # price: Price = trigger.ligne_article.pricesold.price
+    # product: Product = trigger.ligne_article.pricesold.productsold.product
+
+    # Email du compte :
+    # user = paiement_stripe.user
+    # email = user.email
+
+    pass
 
 class ActionArticlePaidByCategorie:
     """
@@ -220,60 +286,13 @@ class ActionArticlePaidByCategorie:
     # TODO: Pouvoir basculer du federated au normal
     # Category RECHARGE_FEDERATED
     def trigger_S(self):
-        increment_federated_wallet(self)
         logger.info(f"TRIGGER RECHARGE_FEDERATED")
+        increment_federated_wallet(self)
 
     # Categorie ADHESION
     def trigger_A(self):
-
         logger.info(f"TRIGGER ADHESION")
+        update_membership_state(self)
+        send_to_ghost(self)
 
-        paiement_stripe = self.ligne_article.paiement_stripe
-        user = paiement_stripe.user
-        price: Price = self.ligne_article.pricesold.price
-        product: Product = self.ligne_article.pricesold.productsold.product
 
-        # On check s'il n'y a pas déjà une fiche membre avec le "price" correspondant
-        membership = Membership.objects.filter(
-            user=user,
-            price=price
-        ).first()
-        logger.info(f"    membership trouvé : {membership}")
-
-        if not membership:
-            membership, created = Membership.objects.get_or_create(
-                user=user,
-            )
-            membership.price = price
-
-        # Si Membership a été créé juste avant ce paiement,
-        # la first contribution est vide.
-        if not membership.first_contribution:
-            membership.first_contribution = timezone.now().date()
-
-        membership.last_contribution = timezone.now().date()
-        membership.contribution_value = self.ligne_article.pricesold.prix
-
-        if paiement_stripe.invoice_stripe:
-            membership.last_stripe_invoice = paiement_stripe.invoice_stripe
-
-        if paiement_stripe.subscription:
-            membership.stripe_id_subscription = paiement_stripe.subscription
-            membership.status = Membership.AUTO
-
-        membership.save()
-
-        # C'est le cashless qui gère l'adhésion et l'envoi de mail
-        if product.send_to_cashless:
-            logger.info(f"    Envoie celery task.send_membership_to_cashless")
-            data = {
-                "ligne_article_pk": self.ligne_article.pk,
-            }
-            send_membership_to_cashless.delay(data)
-
-        # TODO: C'est un abonnement autre que l'adhésion cashless, on gère l'envoi du contrat.
-        else:
-            logger.info(f"    TODO Envoie mail abonnement")
-            pass
-
-        self.ligne_article.status = LigneArticle.VALID
