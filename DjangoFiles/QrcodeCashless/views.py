@@ -64,8 +64,10 @@ START Deux fonctions pour gérer la dette technique des premières générations
 def check_dette_technique(request):
     # Dette technique ...
     # Pour rediriger les premières générations de qrcode
-    # m.tibillet.re et raffinerie
+    # m.tibillet.re de la raffinerie
     address = request.build_absolute_uri()
+    logger.warning(f"check_dette_technique : {address}")
+
     host = address.partition('://')[2]
     sub_addr = host.partition('.')[0]
     if sub_addr == "m":
