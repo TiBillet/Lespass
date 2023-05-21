@@ -61,17 +61,7 @@ START Deux fonctions pour gérer la dette technique des premières générations
 '''
 
 
-def check_dette_technique(request):
-    # Dette technique ...
-    # Pour rediriger les premières générations de qrcode
-    # m.tibillet.re de la raffinerie
-    address = request.build_absolute_uri()
-    logger.warning(f"check_dette_technique : {address}")
 
-    host = address.partition('://')[2]
-    sub_addr = host.partition('.')[0]
-    if sub_addr == "m":
-        return HttpResponseRedirect(address.replace("://m.", "://raffinerie."))
 
 
 class gen_one_bisik(View):
@@ -576,8 +566,17 @@ class index_scan(View):
 
     def get(self, request, uuid):
         config = self.configuration
-        # Au cas où ce sont des cartes V1 de la raffinerie
-        check_dette_technique(request)
+
+        # Dette technique ...
+        # Pour rediriger les premières générations de qrcode
+        # m.tibillet.re de la raffinerie
+        address = request.build_absolute_uri()
+        host = address.partition('://')[2]
+        sub_addr = host.partition('.')[0]
+        if sub_addr == "m":
+            logger.warning(f"m_tenant Check : {address}")
+            return HttpResponseRedirect(address.replace("://m.", "://raffinerie."))
+
 
         if not config.check_serveur_cashless():
             return HttpResponse("<h1>Serveur non joignable, merci de revenir ultérieurement.<h1>")
