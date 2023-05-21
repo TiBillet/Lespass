@@ -73,6 +73,7 @@ def check_dette_technique(request):
 
 
 class gen_one_bisik(View):
+    # Vue déclenchée lorsqu'on scanne un qrcode de la première génération Bisik avec m.tibllet et qsdf
     def get(self, request, numero_carte):
         logger.info(f"gen_one_bisik : {numero_carte} - tenant : {connection.tenant}")
         if connection.tenant.name != "m":
@@ -573,11 +574,12 @@ class index_scan(View):
 
     def get(self, request, uuid):
         config = self.configuration
+        # Au cas où ce sont des cartes V1 de la raffinerie
+        check_dette_technique(request)
+
         if not config.check_serveur_cashless():
             return HttpResponse("<h1>Serveur non joignable, merci de revenir ultérieurement.<h1>")
 
-        # Au cas où ce sont des cartes V1 du bisik & de la raffinerie :/
-        check_dette_technique(request)
 
         wallet = WalletValidator(uuid=uuid, config=config)
 
