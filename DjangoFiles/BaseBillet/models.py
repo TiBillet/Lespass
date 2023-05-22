@@ -43,6 +43,13 @@ class Tag(models.Model):
     name = models.CharField(max_length=50, verbose_name=_("Nom du tag"), db_index=True)
     color = models.CharField(max_length=7, verbose_name=_("Couleur du tag"), default="#000000")
 
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        verbose_name = _("Tag")
+        verbose_name_plural = _("Tags")
+
 class OptionGenerale(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
     name = models.CharField(max_length=30, unique=True)

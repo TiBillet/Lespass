@@ -43,6 +43,7 @@ class StaffAdminSite(AdminSite):
                 "Paramètres",
                 "Produits",
                 "Tarifs",
+                "Tags",
                 "Evenements",
                 "Options",
                 "Paiements Stripe",
@@ -355,6 +356,8 @@ class TagAdmin(admin.ModelAdmin):
         "name",
         "color",
     ]
+    fields = list_display
+    readonly_fields = ['uuid', ]
 
 staff_admin_site.register(Tag, TagAdmin)
 

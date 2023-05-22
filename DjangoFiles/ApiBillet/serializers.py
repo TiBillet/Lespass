@@ -60,7 +60,7 @@ class TagSerializer(serializers.ModelSerializer):
             'name',
             'color',
         ]
-        read_only_fields = ('uuid')
+        read_only_fields = ('uuid',)
 
 
 class ProductSerializer(serializers.ModelSerializer):
