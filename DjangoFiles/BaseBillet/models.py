@@ -567,6 +567,8 @@ class Event(models.Model):
 
     products = models.ManyToManyField(Product, blank=True)
 
+    tag = models.ManyToManyField(Tag, blank=True, related_name="events")
+
     options_radio = models.ManyToManyField(OptionGenerale, blank=True, related_name="options_radio",
                                            verbose_name="Option choix unique")
     options_checkbox = models.ManyToManyField(OptionGenerale, blank=True, related_name="options_checkbox",

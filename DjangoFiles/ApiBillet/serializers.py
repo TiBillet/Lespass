@@ -369,16 +369,17 @@ class EventCreateSerializer(serializers.Serializer):
     products = serializers.ListField(required=False)
     options_radio = serializers.ListField(required=False)
     options_checkbox = serializers.ListField(required=False)
+    tags = serializers.ListField(required=False)
     long_description = serializers.CharField(required=False)
     short_description = serializers.CharField(required=False, max_length=100)
     img_url = serializers.URLField(required=False)
     cashless = serializers.BooleanField(required=False)
     minimum_cashless_required = serializers.IntegerField(required=False)
 
-
     def validate_artists(self, value):
         # logger.info(f"validate_artists : {value}")
         return value
+
 
     def validate_products(self, value):
         self.products_db = []
@@ -389,6 +390,16 @@ class EventCreateSerializer(serializers.Serializer):
             except Product.DoesNotExist as e:
                 raise serializers.ValidationError(_(f'{uuid} Produit non trouvé'))
         return self.products_db
+
+    def validate_tags(self, value):
+        self.tags_db = []
+        for name in value:
+            try:
+                tag, created = Tag.objects.get_or_create(name=name)
+                self.tags_db.append(tag)
+            except Product.DoesNotExist as e:
+                raise serializers.ValidationError(_(f'Erreur création du Tag'))
+        return self.tags_db
 
     def validate_options_radio(self, value):
         self.options_radio = []
@@ -467,6 +478,12 @@ class EventCreateSerializer(serializers.Serializer):
             for option in attrs.get('options_checkbox'):
                 event.options_checkbox.add(option)
 
+        event.tag.clear()
+        if attrs.get('tags'):
+            for tag in self.tags_db:
+                event.tag.add(tag)
+
+
         if attrs.get('artists'):
             for artist_input in attrs.get('artists'):
                 prog, created = Artist_on_event.objects.get_or_create(
@@ -484,6 +501,7 @@ class EventSerializer(serializers.ModelSerializer):
     options_radio = OptionsSerializer(many=True)
     options_checkbox = OptionsSerializer(many=True)
     artists = Artist_on_eventSerializer(many=True)
+    tag = TagSerializer(many=True)
 
     class Meta:
         model = Event
@@ -493,7 +511,9 @@ class EventSerializer(serializers.ModelSerializer):
             'slug',
             'short_description',
             'long_description',
-            'event_facebook_url',
+            'categorie',
+            'tag',
+            # 'event_facebook_url',
             'datetime',
             'products',
             'options_radio',
