@@ -58,6 +58,7 @@ class TagSerializer(serializers.ModelSerializer):
         fields = [
             'uuid',
             'name',
+            'color',
         ]
         read_only_fields = ('uuid')
 

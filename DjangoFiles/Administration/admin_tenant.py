@@ -20,7 +20,7 @@ from django.utils.translation import ugettext_lazy as _
 from AuthBillet.models import HumanUser, SuperHumanUser, TermUser
 from AuthBillet.utils import get_client_ip
 from BaseBillet.models import Configuration, Event, OptionGenerale, Product, Price, Reservation, LigneArticle, Ticket, \
-    Paiement_stripe, ProductSold, PriceSold, Membership, ExternalApiKey, Webhook
+    Paiement_stripe, ProductSold, PriceSold, Membership, ExternalApiKey, Webhook, Tag
 from django.contrib.auth.admin import UserAdmin
 from Customers.models import Client
 
@@ -355,6 +355,9 @@ class TagAdmin(admin.ModelAdmin):
         "name",
         "color",
     ]
+
+staff_admin_site.register(Tag, TagAdmin)
+
 
 class CustomEventForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
