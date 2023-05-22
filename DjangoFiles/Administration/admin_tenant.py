@@ -350,6 +350,12 @@ class ConfigurationAdmin(SingletonModelAdmin):
 staff_admin_site.register(Configuration, ConfigurationAdmin)
 
 
+class TagAdmin(admin.ModelAdmin):
+    list_display = [
+        "name",
+        "color",
+    ]
+
 class CustomEventForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -377,6 +383,7 @@ class EventAdmin(admin.ModelAdmin):
         ('Options', {
             'fields': (
                 'jauge_max',
+                'tag',
                 'options_radio',
                 'options_checkbox',
             )
