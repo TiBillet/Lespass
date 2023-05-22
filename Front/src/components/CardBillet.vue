@@ -15,10 +15,15 @@
         <!-- prix -->
         <div class="d-flex justify-content-between">
           <!-- nom tarif -->
-          <h4 class="font-weight-bolder text-info text-gradient align-self-start">{{ price.name.toLowerCase() }} :
+          <h4 v-if="price.prix > 0" class="font-weight-bolder text-info text-gradient align-self-start">
+            {{ price.name.toLowerCase() }} :
             {{ price.prix }} €</h4>
+          <h4 v-else class="font-weight-bolder text-info text-gradient align-self-start">{{
+              price.name.toLowerCase()
+            }}</h4>
           <button
-              v-if="stop(price.uuid, price.stock, price.max_per_user) === false" class="btn btn-primary ms-3 test-card-billet-bt-add"
+              v-if="stop(price.uuid, price.stock, price.max_per_user) === false"
+              class="btn btn-primary ms-3 test-card-billet-bt-add"
               type="button" @click.stop="addCustomer(price.uuid)">
             <i class="fas fa-plus"></i>
           </button>
@@ -26,9 +31,11 @@
         <!-- clients -->
         <div class="input-group mb-1 test-card-billet-input-group"
              v-for="(customer, index) in getCustomersByUuidPrix(price.uuid)" :key="index">
-          <input type="text" :value="customer.last_name" placeholder="Nom" aria-label="Nom" class="form-control test-card-billet-input-group-nom"
+          <input type="text" :value="customer.last_name" placeholder="Nom" aria-label="Nom"
+                 class="form-control test-card-billet-input-group-nom"
                  @keyup="updateCustomer(price.uuid, customer.uuid, $event.target.value,'last_name')" required>
-          <input type="text" :value="customer.first_name" placeholder="Prénom" aria-label="Prénom" class="form-control test-card-billet-input-group-prenom"
+          <input type="text" :value="customer.first_name" placeholder="Prénom" aria-label="Prénom"
+                 class="form-control test-card-billet-input-group-prenom"
                  @keyup="updateCustomer(price.uuid, customer.uuid, $event.target.value,'first_name')" required>
           <button class="btn btn-primary mb-0" type="button" @click="deleteCustomer(price.uuid, customer.uuid)"
                   style="border-top-right-radius: 30px; border-bottom-right-radius: 30px;">
@@ -63,10 +70,10 @@
 // console.log('-> CardBillet.vue')
 
 // store
-import {storeToRefs} from 'pinia'
-import {useEventStore} from '@/stores/event'
-import {useLocalStore} from '@/stores/local'
-import {useAllStore} from '@/stores/all'
+import { storeToRefs } from 'pinia'
+import { useEventStore } from '@/stores/event'
+import { useLocalStore } from '@/stores/local'
+import { useAllStore } from '@/stores/all'
 
 // attributs/props
 const props = defineProps({
@@ -86,15 +93,14 @@ if (props.styleImage === undefined) {
 }
 
 // state
-const {event} = storeToRefs(useEventStore())
-const {place} = storeToRefs(useAllStore())
+const { event } = storeToRefs(useEventStore())
+const { place } = storeToRefs(useAllStore())
 // action(s) du state
-const {getCustomersByUuidPrix, addCustomer, updateCustomer, deleteCustomer, stop} = useEventStore()
+const { getCustomersByUuidPrix, addCustomer, updateCustomer, deleteCustomer, stop } = useEventStore()
 // action state
-const {me} = useLocalStore()
+const { me } = useLocalStore()
 
-
-function testProductEnable(uuidProductAdhesion) {
+function testProductEnable (uuidProductAdhesion) {
   if (uuidProductAdhesion === null) {
     return true
   } else {
@@ -115,7 +121,7 @@ function testProductEnable(uuidProductAdhesion) {
   }
 }
 
-function getNameAdhesion(uuidProductAdhesion) {
+function getNameAdhesion (uuidProductAdhesion) {
   // console.log('-> getNameAdhesion, uuid product =', uuidProductAdhesion)
   try {
     const nameAdhesion = place.value.membership_products.find(prod => prod.uuid === uuidProductAdhesion).name
