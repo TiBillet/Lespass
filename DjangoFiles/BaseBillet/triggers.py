@@ -14,8 +14,8 @@ from Customers.models import Client
 from QrcodeCashless.models import Asset, Wallet, SyncFederatedLog, CarteCashless
 
 # Pour SendToGhost
-import jwt	
-from datetime import datetime as date
+import jwt
+# from datetime import datetime as date
 
 
 
@@ -189,7 +189,7 @@ def increment_federated_wallet(vente):
     # Une ligne article a été mis en validé
     # Le trigger_S correspondant à la ligne article est lancé
 
-    vente: ActionArticlePaidByCategorie
+    # vente: ActionArticlePaidByCategorie
     ligne_article: LigneArticle = vente.ligne_article
     # On incrémente la valeur du wallet Stripe de la carte.
     # Cela déclenche un post save qui lance une requete celery
@@ -254,14 +254,15 @@ def send_to_ghost(trigger):
         id, secret = ghost_key.split(':')
 
         # Prepare header and payload
-        iat = int(date.now().timestamp())
+        iat = int(datetime.datetime.now().timestamp())
 
         header = {'alg': 'HS256', 'typ': 'JWT', 'kid': id}
         payload = {
             'iat': iat,
             'exp': iat + 5 * 60,
             'aud': '/admin/'
-        
+        }
+
         # Create the token (including decoding secret)
         token = jwt.encode(payload, bytes.fromhex(secret), algorithm='HS256', headers=header)
         logger.debug(f"JWT token: " + token)
@@ -316,9 +317,7 @@ def send_to_ghost(trigger):
                     logger.debug(f"membre existant ", debug['email'])
         else:
             logger.error(f"Erreur lors de la récupération des membres :", response.text)
-        }
 
-    pass
 
 class ActionArticlePaidByCategorie:
     """
@@ -378,6 +377,6 @@ class ActionArticlePaidByCategorie:
     def trigger_A(self):
         logger.info(f"TRIGGER ADHESION")
         update_membership_state(self)
-        send_to_ghost(self)
+        # send_to_ghost(self)
 
 
