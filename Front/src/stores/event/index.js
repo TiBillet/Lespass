@@ -9,7 +9,7 @@ export const useEventStore = defineStore({
     event: {},
     showProduct: {
       cashless: false,
-      gift: false
+      gifDt: false
     },
     forms: [],
     loading: false,
@@ -99,7 +99,8 @@ export const useEventStore = defineStore({
             uuidGift: don.uuid,
             name: don.name,
             price: don.prices[0].uuid, // sélection du premier prix
-            enable: false
+            // activation du don par défaut
+            enable: true
           })
         }
       }
@@ -219,7 +220,7 @@ export const useEventStore = defineStore({
     updateChargeCashless(value) {
       // console.log('updateCashless =', value)
       this.forms.find(obj => obj.event === this.event.uuid).chargeCashless = parseFloat(value)
-    },
+    }/*,
     enableGifts(list) {
       if (list !== undefined && list.length > 0) {
         const gifts = this.forms.find(obj => obj.event === this.event.uuid).gifts
@@ -238,14 +239,15 @@ export const useEventStore = defineStore({
           }
         }
       }
-    },
+    }*/,
     changePriceGift(uuidGift, priceUuid) {
       let gift = this.forms.find(obj => obj.event === this.event.uuid).gifts.find(obj2 => obj2.uuidGift === uuidGift)
       gift.price = priceUuid
     },
-    setEnableGift(uuidGift, value) {
+    toggleEnableGift(uuidGift, value) {
       let gift = this.forms.find(obj => obj.event === this.event.uuid).gifts.find(obj2 => obj2.uuidGift === uuidGift)
-      gift.enable = value
+      console.log('gift =', gift)
+      gift.enable = !gift.enable
     },
     deleteAllCustomersFromPrices(uuid) {
       console.log('this.forms =', this.forms)

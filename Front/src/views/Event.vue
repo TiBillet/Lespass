@@ -25,12 +25,7 @@
 
       <CardChargeCashless v-if="showProduct.cashless"/>
 
-      <!--
-      Don(s):
-      les dons sont désactivés par défaut
-      l'attribut enable-names permet d'activer une liste de don par son nom (attention: nom unique !!)
-      -->
-      <CardGifts :enable-names="['Don']"/>
+      <CardGifts />
 
       <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
     </form>
