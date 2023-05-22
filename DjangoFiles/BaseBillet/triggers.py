@@ -6,7 +6,7 @@ from django.utils import timezone
 
 import TiBillet.settings
 from BaseBillet.models import LigneArticle, Product, Configuration, Membership, Price
-from BaseBillet.tasks import send_membership_to_cashless, get_fedinstance_and_launch_request
+from BaseBillet.tasks import send_membership_to_cashless, get_fedinstance_and_launch_request, send_to_ghost
 
 import logging
 
@@ -168,6 +168,7 @@ def update_membership_state(trigger):
 
     membership.save()
 
+
     # C'est le cashless qui gère l'adhésion et l'envoi de mail
     if product.send_to_cashless:
         logger.info(f"    Envoie celery task.send_membership_to_cashless")
@@ -183,6 +184,7 @@ def update_membership_state(trigger):
 
     trigger.ligne_article.status = LigneArticle.VALID
 
+    return membership
 
 def increment_federated_wallet(vente):
     # Un paiement stripe a été fait.
@@ -224,101 +226,6 @@ def increment_federated_wallet(vente):
     # On valide pour avoir un retour positif coté front :
     vente.ligne_article.status = LigneArticle.VALID
     logger.info(f"rechargement cashless fédéré ok")
-
-
-def send_to_ghost(trigger):
-    paiement_stripe = trigger.ligne_article.paiement_stripe
-    user = paiement_stripe.user
-    price: Price = trigger.ligne_article.pricesold.price
-
-    membership = Membership.objects.get(
-        user=user,
-        price=price
-    )
-
-    # Email du compte :
-    email = user.email
-    name = f"{membership.first_name} {membership.last_name}"
-
-    # Si tu as besoin du produit adhésion, tu peux utiliser les deux variables ci-dessous.
-    # Le model est BaseBillet/models.py
-    # product: Product = trigger.ligne_article.pricesold.productsold.product
-
-    # Et ici, tu as les cred' ghost à entrer dans l'admin.
-    config = Configuration.get_solo()
-    ghost_url = config.ghost_url
-    ghost_key = config.ghost_key
-
-    if ghost_url and ghost_key and email and name:
-        ###################################
-        ## Génération du token JWT 
-        ###################################
-
-        # Split the key into ID and SECRET
-        id, secret = ghost_key.split(':')
-
-        # Prepare header and payload
-        iat = int(datetime.datetime.now().timestamp())
-
-        header = {'alg': 'HS256', 'typ': 'JWT', 'kid': id}
-        payload = {
-            'iat': iat,
-            'exp': iat + 5 * 60,
-            'aud': '/admin/'
-        }
-
-        # Create the token (including decoding secret)
-        token = jwt.encode(payload, bytes.fromhex(secret), algorithm='HS256', headers=header)
-        logger.debug(f"JWT token: " + token)
-
-        ###################################
-        ## Appels de l'API Ghost
-        ###################################
-
-        # Définir les critères de filtrage
-        filter = {
-            "filter": f"email:{email}"
-        }
-        headers = {'Authorization': f'Ghost {token}'}
-
-        # Récupérer la liste des membres de l'instance Ghost
-        response = requests.get(ghost_url + "/ghost/api/admin/members/", params=filter, headers=headers)
-
-        # Vérifier que la réponse de l'API est valide
-        if response.status_code == 200:
-            # Décoder la réponse JSON
-            j = response.json()
-            members = j['members']
-
-            # Si aucun membre n'a été trouvé avec l'adresse e-mail spécifiée
-            if len(members) == 0:
-                # Définir les informations du nouveau membre
-                member_data = {
-                    "members": [
-                        {
-                            "email": email,
-                            "name": name,
-                            "labels": ["TiBillet", f"import {timezone.now().strftime('%d/%m/%Y')}"]
-                        }
-                    ]
-                }
-
-                # Ajouter le nouveau membre à l'instance Ghost
-                response = requests.post(ghost_url + "/ghost/api/admin/members/", json=member_data, headers=headers)
-
-                # Vérifier que la réponse de l'API est valide
-                if response.status_code == 201:
-                    # Décoder la réponse JSON
-                    j = response.json()
-                    members = j['members']
-                    logger.info(f"Le nouveau membre a été créé avec succès : {members}")
-                else:
-                    logger.error(f"Erreur lors de la création du nouveau membre : {response.text}")
-            else:
-                # Afficher la liste des membres
-                logger.debug(f"Le membre {email} existe déja dans : {members}")
-        else:
-            logger.error(f"Erreur lors de la récupération des membres : {response.text}")
 
 
 class ActionArticlePaidByCategorie:
@@ -378,5 +285,5 @@ class ActionArticlePaidByCategorie:
     # Categorie ADHESION
     def trigger_A(self):
         logger.info(f"TRIGGER ADHESION")
-        update_membership_state(self)
-        # send_to_ghost(self)
+        membership = update_membership_state(self)
+        send_to_ghost.delay(membership.pk)

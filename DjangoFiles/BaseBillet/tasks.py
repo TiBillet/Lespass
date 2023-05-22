@@ -1,8 +1,5 @@
 # import base64
-import json
-import os
-import random
-import smtplib
+import json, os, random, smtplib, datetime, jwt
 
 from io import BytesIO
 
@@ -133,7 +130,6 @@ class CeleryMailerClass():
             raise ValueError('Pas de contenu HTML ou de configuration email valide')
 
 
-
 def report_to_pdf(report):
     template_name = 'report/ticketz.html'
     font_config = FontConfiguration()
@@ -144,6 +140,7 @@ def report_to_pdf(report):
     )
     logger.info(f"  WORKER CELERY : report_to_pdf - {report.get('organisation')} {report.get('date')} bytes")
     return pdf_binary
+
 
 def create_ticket_pdf(ticket: Ticket):
     # logger_weasy = logging.getLogger("weasyprint")
@@ -170,7 +167,6 @@ def create_ticket_pdf(ticket: Ticket):
         'font_size': 10,
     }
     bar.write(bar_svg, options=options)
-
 
     context = {
         'ticket': ticket,
@@ -380,7 +376,6 @@ def report_celery_mailer(data_report_list: list):
                 f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour report_celery_mailer : {e}")
 
 
-
 @app.task
 def ticket_celery_mailer(reservation_uuid: str, base_url):
     logger.info(f'      WORKDER CELERY app.task ticket_celery_mailer : {reservation_uuid}')
@@ -526,7 +521,7 @@ def webhook_reservation(reservation_pk):
             webhook.save()
 
 
-#TODO: checker les retry sur les bonnes exceptions
+# TODO: checker les retry sur les bonnes exceptions
 @app.task(
     bind=True,
     default_retry_delay=2,
@@ -537,7 +532,6 @@ def request_server_cashless_updateFed(self,
                                       data: dict = None,
                                       sync_log_pk: str = None,
                                       ) -> requests.status_codes:
-
     logger.info(f"request_server_cashless_updateFed {fed_client} - {connection.tenant} - {timezone.now()}")
     sync_log = SyncFederatedLog.objects.get(pk=sync_log_pk)
     uuid = fed_client['tenant_uuid']
@@ -567,7 +561,7 @@ def request_server_cashless_updateFed(self,
             sync_log.etat_client_sync[uuid]['status'] = erreur
             sync_log.save()
 
-            #TODO : mettre le paiement en NOTSYNC
+            # TODO : mettre le paiement en NOTSYNC
             # paiement_stripe = Paiement_stripe.objects.filter(uuid=sync_log.uuid)
             # paiement_stripe.update(status=Paiement_stripe.NOTSYNC)
             # logger.error(f"paiement_stripe status NOTSYNC : {paiement_stripe}")
@@ -597,7 +591,7 @@ def get_fedinstance_and_launch_request(wallet_pk):
     logger.info("get_fedinstance_and_launch_request")
     wallet = Wallet.objects.get(pk=wallet_pk)
 
-    #TODO: GET OR CREATE SYNC LOG
+    # TODO: GET OR CREATE SYNC LOG
     # On récupère l'instance de log :
     sync_log = SyncFederatedLog.objects.filter(wallet=wallet, new_qty=wallet.qty).last()
     logger.info(f"get_fedinstance_and_launch_request : {timezone.now()} synclog : {sync_log}")
@@ -615,7 +609,6 @@ def get_fedinstance_and_launch_request(wallet_pk):
             if tenant_configuration.federated_cashless and \
                     tenant_configuration.server_cashless and \
                     tenant_configuration.key_cashless:
-
                 logger.info(f"    SCHEMA NAME ADDED to syncLog : {tenant.schema_name}")
 
                 dict_syncLog[f"{tenant.uuid}"] = {
@@ -643,7 +636,7 @@ def get_fedinstance_and_launch_request(wallet_pk):
             "email": wallet.user.email,
             "old_qty": sync_log.old_qty,
             "new_qty": wallet.qty,
-            "uuid_sync_log" : sync_log.uuid,
+            "uuid_sync_log": sync_log.uuid,
             "card_uuid": wallet.card.uuid
         }
 
@@ -653,6 +646,96 @@ def get_fedinstance_and_launch_request(wallet_pk):
                 data=data,
                 sync_log_pk=sync_log.pk,
             )
+
+
+@app.task
+def send_to_ghost(membership_pk):
+    membership = Membership.objects.get(pk=membership_pk)
+
+    # Email du compte :
+    user = membership.user
+    email = user.email
+    name = f"{membership.first_name} {membership.last_name}"
+
+    # Si tu as besoin du produit adhésion, tu peux utiliser les deux variables ci-dessous.
+    # Le model est BaseBillet/models.py
+    # product: Product = trigger.ligne_article.pricesold.productsold.product
+
+    # Et ici, tu as les cred' ghost à entrer dans l'admin.
+    config = Configuration.get_solo()
+    ghost_url = config.ghost_url
+    ghost_key = config.ghost_key
+
+    if ghost_url and ghost_key and email and name:
+        ###################################
+        ## Génération du token JWT
+        ###################################
+
+        # Split the key into ID and SECRET
+        id, secret = ghost_key.split(':')
+
+        # Prepare header and payload
+        iat = int(datetime.datetime.now().timestamp())
+
+        header = {'alg': 'HS256', 'typ': 'JWT', 'kid': id}
+        payload = {
+            'iat': iat,
+            'exp': iat + 5 * 60,
+            'aud': '/admin/'
+        }
+
+        # Create the token (including decoding secret)
+        token = jwt.encode(payload, bytes.fromhex(secret), algorithm='HS256', headers=header)
+        logger.debug(f"JWT token: " + token)
+
+        ###################################
+        ## Appels de l'API Ghost
+        ###################################
+
+        # Définir les critères de filtrage
+        filter = {
+            "filter": f"email:{email}"
+        }
+        headers = {'Authorization': f'Ghost {token}'}
+
+        # Récupérer la liste des membres de l'instance Ghost
+        response = requests.get(ghost_url + "/ghost/api/admin/members/", params=filter, headers=headers)
+
+        # Vérifier que la réponse de l'API est valide
+        if response.status_code == 200:
+            # Décoder la réponse JSON
+            j = response.json()
+            members = j['members']
+
+            # Si aucun membre n'a été trouvé avec l'adresse e-mail spécifiée
+            if len(members) == 0:
+                # Définir les informations du nouveau membre
+                member_data = {
+                    "members": [
+                        {
+                            "email": email,
+                            "name": name,
+                            "labels": ["TiBillet", f"import {timezone.now().strftime('%d/%m/%Y')}"]
+                        }
+                    ]
+                }
+
+                # Ajouter le nouveau membre à l'instance Ghost
+                response = requests.post(ghost_url + "/ghost/api/admin/members/", json=member_data, headers=headers)
+
+                # Vérifier que la réponse de l'API est valide
+                if response.status_code == 201:
+                    # Décoder la réponse JSON
+                    j = response.json()
+                    members = j['members']
+                    logger.info(f"Le nouveau membre a été créé avec succès : {members}")
+                else:
+                    logger.error(f"Erreur lors de la création du nouveau membre : {response.text}")
+            else:
+                # Afficher la liste des membres
+                logger.info(f"Le membre {email} existe déja dans : {members}")
+        else:
+            logger.error(f"Erreur lors de la récupération des membres : {response.text}")
 
 
 @app.task
