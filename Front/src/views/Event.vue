@@ -250,10 +250,10 @@ function validerAchats(domEvent) {
       } else {
         // aucun produit sélectionné
         emitter.emit('modalMessage', {
-          titre: '? ? ?',
+          titre: 'Aucune réservation choisie.',
           dynamic: true,
           typeMsg: 'warning',
-          contenu: '<h3>Aucune réservation !</h3>'
+          contenu: '<h3>Merci de selectionner le nombre de réservations.</h3>'
         })
       }
     }
