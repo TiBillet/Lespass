@@ -15,8 +15,8 @@ from QrcodeCashless.models import Asset, Wallet, SyncFederatedLog, CarteCashless
 
 # Pour SendToGhost
 import jwt
-# from datetime import datetime as date
 
+# from datetime import datetime as date
 
 
 logger = logging.getLogger(__name__)
@@ -228,19 +228,23 @@ def increment_federated_wallet(vente):
 
 def send_to_ghost(trigger):
     paiement_stripe = trigger.ligne_article.paiement_stripe
+    user = paiement_stripe.user
+    price: Price = trigger.ligne_article.pricesold.price
 
-    # Si tu as besoin du produit adhésion, tu peux utiliser les deux variables ci dessous.
-    # Le model est BaseBillet/models.py
-
-    # price: Price = trigger.ligne_article.pricesold.price
-    # product: Product = trigger.ligne_article.pricesold.productsold.product
+    membership = Membership.objects.get(
+        user=user,
+        price=price
+    )
 
     # Email du compte :
-    user = paiement_stripe.user
     email = user.email
-    name = user.name
+    name = f"{membership.first_name} {membership.last_name}"
 
-    # Et ici tu as les cred' ghost à entrer dans l'admin.
+    # Si tu as besoin du produit adhésion, tu peux utiliser les deux variables ci-dessous.
+    # Le model est BaseBillet/models.py
+    # product: Product = trigger.ligne_article.pricesold.productsold.product
+
+    # Et ici, tu as les cred' ghost à entrer dans l'admin.
     config = Configuration.get_solo()
     ghost_url = config.ghost_url
     ghost_key = config.ghost_key
@@ -273,12 +277,12 @@ def send_to_ghost(trigger):
 
         # Définir les critères de filtrage
         filter = {
-            "filter": "email:"+ email
+            "filter": f"email:{email}"
         }
-        headers = {'Authorization': 'Ghost {}'.format(token)}
+        headers = {'Authorization': f'Ghost {token}'}
 
         # Récupérer la liste des membres de l'instance Ghost
-        response = requests.get(ghost_url + "/ghost/api/admin/members/",  params=filter, headers=headers)
+        response = requests.get(ghost_url + "/ghost/api/admin/members/", params=filter, headers=headers)
 
         # Vérifier que la réponse de l'API est valide
         if response.status_code == 200:
@@ -289,12 +293,12 @@ def send_to_ghost(trigger):
             # Si aucun membre n'a été trouvé avec l'adresse e-mail spécifiée
             if len(members) == 0:
                 # Définir les informations du nouveau membre
-                member_data = { 
-                    "members": [ 
+                member_data = {
+                    "members": [
                         {
                             "email": email,
                             "name": name,
-                            "labels": ["TiBillet", "import " + date.today().strftime("%d/%m/%Y")]
+                            "labels": ["TiBillet", f"import {timezone.now().strftime('%d/%m/%Y')}"]
                         }
                     ]
                 }
@@ -307,16 +311,14 @@ def send_to_ghost(trigger):
                     # Décoder la réponse JSON
                     j = response.json()
                     members = j['members']
-                    member = members[0]
-                    logger.info(f"Le nouveau membre a été créé avec succès :", member["email"])
+                    logger.info(f"Le nouveau membre a été créé avec succès : {members}")
                 else:
-                    logger.error(f"Erreur lors de la création du nouveau membre :", response.text)
+                    logger.error(f"Erreur lors de la création du nouveau membre : {response.text}")
             else:
                 # Afficher la liste des membres
-                for member in members:
-                    logger.debug(f"membre existant ", debug['email'])
+                logger.debug(f"Le membre {email} existe déja dans : {members}")
         else:
-            logger.error(f"Erreur lors de la récupération des membres :", response.text)
+            logger.error(f"Erreur lors de la récupération des membres : {response.text}")
 
 
 class ActionArticlePaidByCategorie:
@@ -378,5 +380,3 @@ class ActionArticlePaidByCategorie:
         logger.info(f"TRIGGER ADHESION")
         update_membership_state(self)
         # send_to_ghost(self)
-
-
