@@ -557,11 +557,7 @@ class OptionTicket(viewsets.ViewSet):
         return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_permissions(self):
-        if self.action in ['list']:
-            permission_classes = [permissions.AllowAny]
-        else:
-            permission_classes = [TenantAdminPermission]
-        return [permission() for permission in permission_classes]
+        return get_permission_Api_LR_Any(self)
 
 
 def borne_temps_4h():
