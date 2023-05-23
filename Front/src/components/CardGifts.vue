@@ -34,8 +34,7 @@
 </template>
 
 <script setup>
-console.log('-> CardGifts.vue')
-import { ref } from 'vue'
+// console.log('-> CardGifts.vue')
 
 // store
 import { storeToRefs } from 'pinia'
@@ -43,12 +42,8 @@ import { useEventStore } from '@/stores/event'
 
 // state event
 const { event } = storeToRefs(useEventStore())
-// action(s) du state event
-// const {enableGifts, getEnableGift, setEnableGift, getPriceGift, changePriceGift, getExistGift} = useEventStore()
+// actions et getters du state event
 const { toggleEnableGift, getEnableGift, getPriceGift, changePriceGift } = useEventStore()
-
-// activation des dons de la liste 'props.enableNames'
-// enableGifts(props.enableNames)
 </script>
 
 <style scoped>

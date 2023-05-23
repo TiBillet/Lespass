@@ -92,16 +92,16 @@ function formatBodyPost() {
   }
 
   // options radio
-  for (const optionRadioKey in form.options_radio) {
-    const option = form.options_radio[optionRadioKey]
+  for (const optionRadioKey in form.optionsRadio) {
+    const option = form.optionsRadio[optionRadioKey]
     if (option.activation === true) {
       body.options.push(option.uuid)
     }
   }
 
   // options checkbox
-  for (const optionCheckboxKey in form.options_checkbox) {
-    const option = form.options_checkbox[optionCheckboxKey]
+  for (const optionCheckboxKey in form.optionsCheckbox) {
+    const option = form.optionsCheckbox[optionCheckboxKey]
     if (option.activation === true) {
       body.options.push(option.uuid)
     }

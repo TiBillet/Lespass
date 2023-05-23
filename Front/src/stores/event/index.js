@@ -72,8 +72,8 @@ export const useEventStore = defineStore({
           event: this.event.uuid,
           email: allStore.adhesAllmail, // pas d'observeur/proxy
           emailConfirme: allStore.adhesAllmail,
-          options_radio: this.event.options_radio,
-          options_checkbox: this.event.options_checkbox,
+          optionsRadio: this.event.options_radio,
+          optionsCheckbox: this.event.options_checkbox,
           prices: [],
           chargeCashless: 0
         })
@@ -100,7 +100,7 @@ export const useEventStore = defineStore({
             name: don.name,
             price: don.prices[0].uuid, // sélection du premier prix
             // activation du don par défaut
-            enable: true
+            enable: false
           })
         }
       }
@@ -197,49 +197,34 @@ export const useEventStore = defineStore({
       return true
     },
     updateOptions(inputType, value, uuidOption) {
+      const convertInputType = {
+        "options_checkbox": "optionsCheckbox",
+        "options_radio": "optionsRadio"
+      }
       let form = this.forms.find(obj => obj.event === this.event.uuid)
       // console.log('-> fonc updateOptions, type =', inputType, '  --  value =', value, '  --  uuidOptions =', uuidOptions)
-      if (inputType === 'options_radio') {
+      if (convertInputType[inputType] === 'optionsRadio') {
         // toutes les activation radio à false
-        for (let i = 0; i < form.options_radio.length; i++) {
-          form.options_radio[i].activation = false
+        for (let i = 0; i < form.optionsRadio.length; i++) {
+          form.optionsRadio[i].activation = false
         }
       }
-      const option = form[inputType].find(opt => opt.uuid === uuidOption)
+      const option = form[convertInputType[inputType]].find(opt => opt.uuid === uuidOption)
       option.activation = value
     },
     allOptionsFalse() {
       let form = this.forms.find(obj => obj.event === this.event.uuid)
-      for (let i = 0; i < form.options_radio.length; i++) {
-        form.options_radio[i].activation = false
+      for (let i = 0; i < form.optionsRadio.length; i++) {
+        form.optionsRadio[i].activation = false
       }
-      for (let i = 0; i < form.options_checkbox.length; i++) {
-        form.options_checkbox[i].activation = false
+      for (let i = 0; i < form.optionsCheckbox.length; i++) {
+        form.optionsCheckbox[i].activation = false
       }
     },
     updateChargeCashless(value) {
       // console.log('updateCashless =', value)
       this.forms.find(obj => obj.event === this.event.uuid).chargeCashless = parseFloat(value)
-    }/*,
-    enableGifts(list) {
-      if (list !== undefined && list.length > 0) {
-        const gifts = this.forms.find(obj => obj.event === this.event.uuid).gifts
-        // console.log('gifts =', gifts)
-        for (const listKey in list) {
-          const giftNameToEnable = list[listKey]
-          try {
-            if (gifts.find(obj2 => obj2.name === giftNameToEnable) === undefined) {
-              throw('Nom du don inconnu !')
-            } else {
-              let gift = gifts.find(obj2 => obj2.name === giftNameToEnable)
-              gift.enable = true
-            }
-          } catch (err) {
-            console.log('event store, func. enableGifts :', err)
-          }
-        }
-      }
-    }*/,
+    },
     changePriceGift(uuidGift, priceUuid) {
       let gift = this.forms.find(obj => obj.event === this.event.uuid).gifts.find(obj2 => obj2.uuidGift === uuidGift)
       gift.price = priceUuid
@@ -248,13 +233,14 @@ export const useEventStore = defineStore({
       let gift = this.forms.find(obj => obj.event === this.event.uuid).gifts.find(obj2 => obj2.uuidGift === uuidGift)
       console.log('gift =', gift)
       gift.enable = !gift.enable
-    },
+    },/*
     deleteAllCustomersFromPrices(uuid) {
       console.log('this.forms =', this.forms)
       console.log('uuid =', uuid)
       const form = this.forms.find(obj => obj.event === uuid)
+      console.log('form =', form)
       form.prices = []
-    },
+    },*/
     getEventHeader() {
       // console.log('-> action getHeaderEvent')
       let urlImage
@@ -305,15 +291,15 @@ export const useEventStore = defineStore({
     },
     getOptions: (state) => {
       let form = state.forms.find(obj => obj.event === state.event.uuid)
-      const options_checkbox = form.options_checkbox
-      const nb_options_checkbox = options_checkbox.length
-      const options_radio = form.options_radio
-      const nb_options_radio = options_radio.length
+      const optionsCheckbox = form.optionsCheckbox
+      const nbOptionsCheckbox = optionsCheckbox.length
+      const optionsRadio = form.optionsRadio
+      const nbOptionsRadio = optionsRadio.length
       return {
-        options_checkbox,
-        options_radio,
-        nb_options_checkbox,
-        nb_options_radio
+        optionsCheckbox,
+        optionsRadio,
+        nbOptionsCheckbox,
+        nbOptionsRadio
       }
     },
     getChargeCashless: (state) => {
