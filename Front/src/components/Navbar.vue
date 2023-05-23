@@ -4,8 +4,8 @@
       <!-- lieu -->
       <div class="navbar-brand">
         <a href="/" class="navbar-brand d-flex justify-content-between align-items-center">
-          <h6 v-if="place.categorie !== 'M'" class="m-0 text-white">{{ place.organisation }}</h6>
-          <h6 v-else class="m-0 text-white">Agenda TiBillet</h6>
+          <h6 v-if="place.categorie !== 'M'" class="m-0 text-white" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Actualise les données évènements et lieu !">{{ place.organisation }}</h6>
+          <h6 v-else class="m-0 text-white" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Actualise les données évènements et lieu !">Agenda TiBillet</h6>
         </a>
       </div>
 

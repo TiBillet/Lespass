@@ -13,6 +13,9 @@
 
 <script setup>
 console.log('-> Accueil.vue')
+// reset sessionStorage(s)
+sessionStorage.removeItem("Tibillet-event");
+sessionStorage.removeItem("Tibillet-all");
 
 // store
 import {storeToRefs} from 'pinia'

@@ -25,12 +25,7 @@
 
       <CardChargeCashless v-if="showProduct.cashless"/>
 
-      <!--
-      Don(s):
-      les dons sont désactivés par défaut
-      l'attribut enable-names permet d'activer une liste de don par son nom (attention: nom unique !!)
-      -->
-      <CardGifts :enable-names="['Don']"/>
+      <CardGifts />
 
       <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
     </form>
@@ -97,16 +92,16 @@ function formatBodyPost() {
   }
 
   // options radio
-  for (const optionRadioKey in form.options_radio) {
-    const option = form.options_radio[optionRadioKey]
+  for (const optionRadioKey in form.optionsRadio) {
+    const option = form.optionsRadio[optionRadioKey]
     if (option.activation === true) {
       body.options.push(option.uuid)
     }
   }
 
   // options checkbox
-  for (const optionCheckboxKey in form.options_checkbox) {
-    const option = form.options_checkbox[optionCheckboxKey]
+  for (const optionCheckboxKey in form.optionsCheckbox) {
+    const option = form.optionsCheckbox[optionCheckboxKey]
     if (option.activation === true) {
       body.options.push(option.uuid)
     }
