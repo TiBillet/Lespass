@@ -610,7 +610,6 @@ class index_scan(View):
             'numero_carte': carte.number,
             'client_name': carte.detail.origine.name,
 
-            'adhesion_obligatoire': config.adhesion_obligatoire,
             'carte_resto': config.carte_restaurant,
             'site_web': config.site_web,
 

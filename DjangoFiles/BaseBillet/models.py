@@ -90,13 +90,13 @@ class Configuration(SingletonModel):
     slug = models.SlugField(max_length=50, default="")
 
     short_description = models.CharField(max_length=250, verbose_name=_("Description courte"), blank=True, null=True)
-    long_description = models.TextField(blank=True, null=True)
+    long_description = models.TextField(blank=True, null=True, verbose_name=_("Description longue"))
 
-    adress = models.CharField(max_length=250, blank=True, null=True)
-    postal_code = models.IntegerField(blank=True, null=True)
-    city = models.CharField(max_length=250, blank=True, null=True)
+    adress = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Adresse"))
+    postal_code = models.IntegerField(blank=True, null=True, verbose_name=_("Code postal"))
+    city = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Ville"))
 
-    phone = models.CharField(max_length=20)
+    phone = models.CharField(max_length=20, verbose_name=_("Téléphone"))
     email = models.EmailField()
 
     site_web = models.URLField(blank=True, null=True)
@@ -106,8 +106,8 @@ class Configuration(SingletonModel):
     facebook = models.URLField(blank=True, null=True)
     instagram = models.URLField(blank=True, null=True)
 
-    adhesion_obligatoire = models.BooleanField(default=False)
-    button_adhesion = models.BooleanField(default=False)
+    # adhesion_obligatoire = models.BooleanField(default=False, verbose_name="Proposer l'adhésion lors d'un scan de QRCode de carte NFC")
+    # button_adhesion = models.BooleanField(default=False)
 
     map_img = StdImageField(upload_to='images/',
                             null=True, blank=True,
@@ -119,7 +119,7 @@ class Configuration(SingletonModel):
                                 'thumbnail': (150, 90),
                             },
                             delete_orphans=True,
-                            verbose_name=_('Carte géorgraphique')
+                            verbose_name=_('Carte géographique')
                             )
 
     carte_restaurant = StdImageField(upload_to='images/',
@@ -403,6 +403,10 @@ class Configuration(SingletonModel):
         verbose_name = _('Paramètres')
         verbose_name_plural = _('Paramètres')
 
+    def __str__(self):
+        if self.organisation :
+            return f"Paramètres de {self.organisation}"
+        return f"Paramètres"
 
 class Product(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
@@ -463,13 +467,13 @@ class Product(models.Model):
     ]
 
     categorie_article = models.CharField(max_length=3, choices=CATEGORIE_ARTICLE_CHOICES, default=NONE,
-                                         verbose_name=_("Type d'article"))
+                                         verbose_name=_("Type de produit"))
 
     archive = models.BooleanField(default=False)
 
     send_to_cashless = models.BooleanField(default=False,
                                            verbose_name="Envoyer au cashless",
-                                           help_text="Article qui doit être envoyé pour une comptabilité au cashless. Ex : Adhésions",
+                                           help_text="Produit qui doit être envoyé pour une comptabilité au cashless. Ex : Adhésions",
                                            )
 
     # id_product_stripe = models.CharField(max_length=30, null=True, blank=True)
@@ -571,7 +575,7 @@ class Event(models.Model):
     long_description = models.TextField(blank=True, null=True)
 
     event_facebook_url = models.URLField(blank=True, null=True)
-    published = models.BooleanField(default=False)
+    published = models.BooleanField(default=False, verbose_name=_("Publier"))
 
     products = models.ManyToManyField(Product, blank=True)
 
@@ -582,7 +586,7 @@ class Event(models.Model):
     options_checkbox = models.ManyToManyField(OptionGenerale, blank=True, related_name="options_checkbox",
                                               verbose_name="Options choix multiple")
 
-    cashless = models.BooleanField(default=False, verbose_name="Proposer la recharge cashless")
+    # cashless = models.BooleanField(default=False, verbose_name="Proposer la recharge cashless")
     minimum_cashless_required = models.SmallIntegerField(default=0, verbose_name="Montant obligatoire minimum de la recharge cashless")
 
     img = StdImageField(upload_to='images/',

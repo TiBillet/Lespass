@@ -271,13 +271,13 @@ class ConfigurationAdmin(SingletonModelAdmin):
                 'organisation',
                 'short_description',
                 'long_description',
-                'logo',
                 'img',
+                'logo',
                 'adress',
                 'phone',
                 'email',
                 'site_web',
-                'map_img',
+                # 'map_img',
             )
         }),
         # ('Restaurant', {
@@ -292,12 +292,12 @@ class ConfigurationAdmin(SingletonModelAdmin):
         #         'instagram',
         #     ),
         # }),
-        ('Adhésions', {
-            'fields': (
-                'adhesion_obligatoire',
+        # ('Adhésions', {
+        #     'fields': (
+        #         'adhesion_obligatoire',
                 # 'button_adhesion',
-            ),
-        }),
+            # ),
+        # }),
         ('Paiements', {
             'fields': (
                 # 'stripe_api_key',
@@ -379,6 +379,7 @@ class EventAdmin(admin.ModelAdmin):
                 'img',
                 'short_description',
                 'long_description',
+                'published',
             )
         }),
         ('Articles', {
@@ -396,7 +397,7 @@ class EventAdmin(admin.ModelAdmin):
         }),
         ('Cashless', {
             'fields': (
-                'cashless',
+                # 'cashless',
                 'minimum_cashless_required',
             )
         }),

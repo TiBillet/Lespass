@@ -174,8 +174,8 @@ class ConfigurationSerializer(serializers.ModelSerializer):
             "facebook",
             "instagram",
             # "activer_billetterie",
-            "adhesion_obligatoire",
-            "button_adhesion",
+            # "adhesion_obligatoire",
+            # "button_adhesion",
             "map_img",
             "carte_restaurant",
             "img_variations",
@@ -225,7 +225,7 @@ class NewConfigSerializer(serializers.ModelSerializer):
             # "twitter",
             # "facebook",
             # "instagram",
-            "adhesion_obligatoire",
+            # "adhesion_obligatoire",
             # "button_adhesion",
             # "map_img",
             # "carte_restaurant",
@@ -374,7 +374,7 @@ class EventCreateSerializer(serializers.Serializer):
     long_description = serializers.CharField(required=False)
     short_description = serializers.CharField(required=False, max_length=100)
     img_url = serializers.URLField(required=False)
-    cashless = serializers.BooleanField(required=False)
+    # cashless = serializers.BooleanField(required=False)
     minimum_cashless_required = serializers.IntegerField(required=False)
 
     def validate_artists(self, value):
@@ -453,7 +453,7 @@ class EventCreateSerializer(serializers.Serializer):
             "categorie" : Event.CONCERT,
             "long_description" : attrs.get('long_description'),
             "short_description" : attrs.get('short_description'),
-            "cashless" : attrs.get('cashless', False),
+            # "cashless" : attrs.get('cashless', False),
             "minimum_cashless_required": attrs.get('minimum_cashless_required', 0),
         }
 
@@ -523,7 +523,7 @@ class EventSerializer(serializers.ModelSerializer):
             'reservations',
             'complet',
             'artists',
-            'cashless',
+            # 'cashless',
             'minimum_cashless_required',
         ]
         read_only_fields = ['uuid', 'reservations']

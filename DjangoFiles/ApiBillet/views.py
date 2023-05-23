@@ -56,7 +56,9 @@ from QrcodeCashless.views import WalletValidator
 from root_billet.models import RootConfiguration
 
 import logging
+
 logger = logging.getLogger(__name__)
+
 
 class DecimalEncoder(json.JSONEncoder):
     def default(self, o):
@@ -167,7 +169,6 @@ class TenantViewSet(viewsets.ViewSet):
         if request.data.get('categorie') not in categories:
             raise serializers.ValidationError(_("categorie ne correspond pas à l'url"))
 
-
         serializer = NewConfigSerializer(data=request.data, context={'request': request})
 
         # import ipdb; ipdb.set_trace()
@@ -236,7 +237,6 @@ class TenantViewSet(viewsets.ViewSet):
                 conf.check_serveur_cashless()
                 # user.client_admin.add(tenant)
 
-
                 staff_group = Group.objects.get(name="staff")
 
                 user_from_email_nouveau_tenant = get_or_create_user(conf.email, force_mail=True)
@@ -299,10 +299,10 @@ class TenantViewSet(viewsets.ViewSet):
         return Response(place_serialized_with_uuid)
 
     def get_permissions(self):
-        if self.action =='create':
+        if self.action == 'create':
             permission_classes = [permissions.IsAuthenticated]
             return [permission() for permission in permission_classes]
-        else :
+        else:
             return get_permission_Api_LR_Any(self)
         # permission_classes = [permissions.AllowAny]
 
@@ -812,7 +812,7 @@ class MembershipViewset(viewsets.ViewSet):
         # Test pour option :
         # request.data['options'] = ['1ff89201-edfa-4839-80d8-a5f98737f970',]
 
-        #TODO: Pourquoi deux serializers ?
+        # TODO: Pourquoi deux serializers ?
         membre_validator = MembreValidator(data=request.data, context={'request': request})
         if membre_validator.is_valid():
             adhesion_validator = NewAdhesionValidator(data=request.data, context={'request': request})
@@ -1199,7 +1199,7 @@ class GetFederatedAssetFromCashless(APIView):
 
         # on informe de la quantité de l'asset fédéré sur la carte.
         card = get_object_or_404(CarteCashless, uuid=pk_uuid)
-        data = {"stripe_wallet" : 0}
+        data = {"stripe_wallet": 0}
         try:
             wallet_stripe = card.wallet_set.get(asset__categorie=Asset.STRIPE_FED)
             data['stripe_wallet'] = wallet_stripe.qty
@@ -1207,7 +1207,6 @@ class GetFederatedAssetFromCashless(APIView):
         except Exception as e:
             logger.error(f"GetFederatedAssetFromCashless : {e}")
             return Response(data, status=status.HTTP_404_NOT_FOUND)
-
 
 
 @permission_classes([permissions.AllowAny])
@@ -1286,7 +1285,6 @@ class UpdateFederatedAssetFromCashless(APIView):
             return Response(f"NO NEED TO UPDATE - log {syncLog.uuid} already reported",
                             status=status.HTTP_208_ALREADY_REPORTED)
 
-
         # La valeur old est différente de celle du serveur cashless
         erreur = f"UpdateFederatedAssetFromCashless ERROR : " \
                  f"log {syncLog.uuid} - carte {carte} - " \
@@ -1364,7 +1362,8 @@ class Webhook_stripe(APIView):
 
             tenant_uuid_in_metadata = payload["data"]["object"]["metadata"].get("tenant")
             if not tenant_uuid_in_metadata:
-                logger.warning(f"Webhook_stripe checkout.session.completed - id : {payload.get('id')} - no tenant in metadata")
+                logger.warning(
+                    f"Webhook_stripe checkout.session.completed - id : {payload.get('id')} - no tenant in metadata")
                 return Response("no tenant in metadata",
                                 status=status.HTTP_204_NO_CONTENT)
 

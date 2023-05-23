@@ -252,29 +252,27 @@
                 {% endfor %}
             {% endif %}
 
-            {% if adhesion_obligatoire %}
-                {% if tarifs_adhesion %}
-                    <h4>Payer en ligne avec un vrai robot :</h4>
-                    {% for tarif in tarifs_adhesion %}
-                        <ul class="actions">
-                            <li>
-                                {% if tarif.recurring_payment %}
-                                    <h6>Paiement récurent. Annulable à tout moment sans frais ni obligations :</h6>
-                                {% endif %}
-                                <a id="adh_{{ tarif.name | slugify }}" href="#paiementadhesionenligne"
-                                   class="button primary field">
-                                    {{ tarif.product.name }} {{ tarif.name }} {{ tarif.prix | floatformat:'-2' | intcomma }}€
-                                </a>
-                            </li>
-                        </ul>
-
-                    {% endfor %}
-
-                    <h4>Ou payer à l'accueil de l'association avec un vrai humain :</h4>
+            {% if tarifs_adhesion %}
+                <h4>Payer en ligne avec un vrai robot :</h4>
+                {% for tarif in tarifs_adhesion %}
                     <ul class="actions">
-                        <li><a href="#" class="button primary field">CONTINUER</a></li>
+                        <li>
+                            {% if tarif.recurring_payment %}
+                                <h6>Paiement récurent. Annulable à tout moment sans frais ni obligations :</h6>
+                            {% endif %}
+                            <a id="adh_{{ tarif.name | slugify }}" href="#paiementadhesionenligne"
+                               class="button primary field">
+                                {{ tarif.product.name }} {{ tarif.name }} {{ tarif.prix | floatformat:'-2' | intcomma }}€
+                            </a>
+                        </li>
                     </ul>
-                {% endif %}
+
+                {% endfor %}
+
+                <h4>Ou payer à l'accueil de l'association avec un vrai humain :</h4>
+                <ul class="actions">
+                    <li><a href="#" class="button primary field">CONTINUER</a></li>
+                </ul>
             {% endif %}
         </article>
 
