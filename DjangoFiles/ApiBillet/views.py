@@ -825,28 +825,6 @@ class MembershipViewset(viewsets.ViewSet):
         logger.error(f'membre_validator.errors : {membre_validator.errors}')
         return Response(membre_validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    # TODO: gerer en interne, pas avec le cashless
-    # def retrieve(self, request, pk=None):
-    #     try:
-    #         email = force_str(urlsafe_base64_decode(pk))
-    #     except:
-    #         return Response("base64 email only", status=status.HTTP_406_NOT_ACCEPTABLE)
-    #     User = get_user_model()
-    #     user = User.objects.filter(email=email, username=email).first()
-    #
-    #     if user:
-    #         configuration = Configuration.get_solo()
-    #         if configuration.server_cashless and configuration.key_cashless:
-    #             data = request_for_data_cashless(user)
-    #             data_retrieve = {
-    #                 'a_jour_cotisation': data.get('a_jour_cotisation'),
-    #                 'date_derniere_cotisation': data.get('date_derniere_cotisation'),
-    #                 'prochaine_echeance': data.get('prochaine_echeance')
-    #             }
-    #             return Response(data_retrieve, status=status.HTTP_200_OK)
-    #
-    #         return Response('no cashless server', status=status.HTTP_404_NOT_FOUND)
-    #     return Response('no User', status=status.HTTP_402_PAYMENT_REQUIRED)
 
     def get_permissions(self):
         if self.action in ['create', 'retrieve']:
@@ -857,16 +835,6 @@ class MembershipViewset(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
-# class BookListView(ListView):
-#     model = Book
-#
-#     def head(self, *args, **kwargs):
-#         last_book = self.get_queryset().latest('publication_date')
-#         response = HttpResponse(
-#             # RFC 1123 date format.
-#             headers={'Last-Modified': last_book.publication_date.strftime('%a, %d %b %Y %H:%M:%S GMT')},
-#         )
-#         return response
 
 class ZReportPDF(View):
     def get(self, request, pk_uuid):
@@ -927,30 +895,6 @@ class TicketPdf(APIView):
         return response
 
 
-# class TicketPdf(WeasyTemplateView):
-#     permission_classes = [AllowAny]
-#     template_name = 'ticket/ticket.html'
-#
-#     def get_context_data(self, pk_uuid, **kwargs):
-#         logger.info(f"{timezone.now()} création de pdf demandé. uuid : {pk_uuid}")
-#
-#         self.config = Configuration.get_solo()
-#         ticket: Ticket = get_object_or_404(Ticket, uuid=pk_uuid)
-#         kwargs['ticket'] = ticket
-#         kwargs['config'] = self.config
-#
-#         '''
-#         context = {
-#             'ticket': ticket,
-#             'config': config,
-#         }
-#         '''
-#
-#         self.pdf_filename = ticket.pdf_filename()
-#         return kwargs
-#
-#     def get_pdf_filename(self, **kwargs):
-#         return self.pdf_filename
 
 
 # On vérifie que les métatada soient les meme dans la DB et chez Stripe.
