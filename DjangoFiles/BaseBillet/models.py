@@ -143,7 +143,8 @@ class Configuration(SingletonModel):
                             'hdr': (720, 720),
                             'med': (480, 480),
                             'thumbnail': (150, 90),
-
+                            'crop_hdr': (960, 540, True),
+                            'crop': (480, 270, True),
                         },
                         delete_orphans=True,
                         verbose_name='Background',
@@ -168,6 +169,8 @@ class Configuration(SingletonModel):
                 'hdr': self.img.hdr.url,
                 'med': self.img.med.url,
                 'thumbnail': self.img.thumbnail.url,
+                'crop_hdr': self.img.crop_hdr.url,
+                'crop': self.img.crop.url,
             }
         else:
             return {}
@@ -597,7 +600,8 @@ class Event(models.Model):
                             'hdr': (1280, 1280),
                             'med': (480, 480),
                             'thumbnail': (150, 90),
-                            'crop': (510, 310, True),
+                            'crop_hdr': (960, 540, True),
+                            'crop': (480, 270, True),
                         },
                         delete_orphans=True
                         )
@@ -613,6 +617,8 @@ class Event(models.Model):
                 'hdr': self.img.hdr.url,
                 'med': self.img.med.url,
                 'thumbnail': self.img.thumbnail.url,
+                'crop_hdr': self.img.crop_hdr.url,
+                'crop': self.img.crop.url,
             }
         elif self.artists.all().count() > 0:
             artist_on_event: Artist_on_event = self.artists.all()[0]
@@ -625,6 +631,9 @@ class Event(models.Model):
                 'hdr': img.hdr.url,
                 'med': img.med.url,
                 'thumbnail': img.thumbnail.url,
+                'crop_hdr': img.crop_hdr.url,
+                'crop': img.crop.url,
+
             }
         else:
             return {}

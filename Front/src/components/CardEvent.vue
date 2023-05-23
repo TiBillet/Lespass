@@ -5,7 +5,7 @@
       <a class="d-block">
         <img
             class="img-fluid shadow border-radius-lg"
-            :src="event.img_variations.med"
+            :src="event.img_variations.crop"
             loading="lazy"
             alt="Image de l'évènement !"/>
       </a>
