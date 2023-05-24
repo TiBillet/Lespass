@@ -445,6 +445,8 @@ class Product(models.Model):
                             'hdr': (720, 720),
                             'med': (480, 480),
                             'thumbnail': (150, 90),
+                            'crop_hdr': (960, 540, True),
+                            'crop': (480, 270, True),
                         },
                         delete_orphans=True,
                         verbose_name=_('Image du produit'),

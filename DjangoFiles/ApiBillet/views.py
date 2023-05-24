@@ -648,7 +648,7 @@ class LoadCardsFromCsv(APIView):
 
 
 @permission_classes([permissions.IsAuthenticated])
-class Cancel_sub(APIView):
+class CancelSubscription(APIView):
     def post(self, request):
         user = request.user
         price = request.data.get('uuid_price')

@@ -1,7 +1,7 @@
 from django.urls import include, path, re_path
 from ApiBillet import views as api_view
 from rest_framework import routers
-from ApiBillet.views import TicketPdf, Webhook_stripe, Gauge, Cancel_sub, Onboard_stripe_return, Onboard, \
+from ApiBillet.views import TicketPdf, Webhook_stripe, Gauge, CancelSubscription, Onboard_stripe_return, Onboard, \
     UpdateFederatedAssetFromCashless, ZReportPDF, GetFederatedAssetFromCashless
 
 router = routers.DefaultRouter()
@@ -33,7 +33,7 @@ urlpatterns = [
     path('webhook_stripe/', Webhook_stripe.as_view()),
     path('webhook_stripe/<uuid:uuid_paiement>/', Webhook_stripe.as_view()),
     path('gauge/', Gauge.as_view()),
-    path('cancel_sub/', Cancel_sub.as_view()),
+    path('cancel_sub/', CancelSubscription.as_view()),
     # path('LoadCardsFromCsv/', LoadCardsFromCsv.as_view()),
     # path('LoadCardsFromDict/', LoadCardsFromD.as_view()),
 ]
