@@ -22,11 +22,8 @@ export const useLocalStore = defineStore({
     // status 402 = pas payé
     // status 202 = 'Paiement validé. Création des billets et envoi par mail en cours.' coté front
     async postStripeReturn(uuidStripe) {
-      console.log(`-> fonc postStripeReturn, uuidStripe =`, uuidStripe)
-
+      // console.log(`-> fonc postStripeReturn, uuidStripe =`, uuidStripe)
       let messageValidation = 'OK', messageErreur = 'Retour stripe:'
-
-      console.log('this.stripeEtape =', this.stripeEtape)
 
       // adhésion
       if (this.stripeEtape === 'attente_stripe_adhesion') {
@@ -73,17 +70,13 @@ export const useLocalStore = defineStore({
 
     },
     async emailActivation(id, token) {
-      console.log('store, all/index.js -> emailActivation')
-      // console.log('-> id =', id)
-      // console.log('-> token =', token)
-
+      // console.log('store, all/EmitEvent.js -> emailActivation')
       const mainStore = useAllStore()
 
       // attention pas de "/" à la fin de "api"
       const api = `/api/user/activate/${id}/${token}`
       try {
         mainStore.loading = true
-        console.log('deb -> mainStore.loading =', mainStore.loading)
         const response = await fetch(domain + api, {
           method: 'GET',
           cache: 'no-cache', // *default, no-cache, reload, force-cache, only-if-cached
@@ -91,10 +84,8 @@ export const useLocalStore = defineStore({
             'Content-Type': 'application/json'
           }
         })
-        // console.log('-> response =', response)
         if (response.status === 200) {
           const retour = await response.json()
-          console.log('-> emailActivation, retour =', retour)
           // message confirmation email
           emitter.emit('modalMessage', {
             titre: 'Succès',
@@ -121,7 +112,6 @@ export const useLocalStore = defineStore({
           contenu: `Activation email : ${erreur}`
         })
       }
-      console.log('fin -> loading =', mainStore.loading)
     },
     updateEmail(email, value) {
       this.email = value
@@ -142,7 +132,6 @@ export const useLocalStore = defineStore({
         // console.log('-> getMe, response =', response)
         if (response.status === 200) {
           const retour =  await response.json()
-          console.log('-> getMe, retour =', retour)
           return retour
         } else {
           throw new Error(`Erreur ${apiMe} !`)

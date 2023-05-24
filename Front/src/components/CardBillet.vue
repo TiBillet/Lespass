@@ -59,7 +59,7 @@
 </template>
 
 <script setup>
-// console.log('-> CardBillet.vue')
+console.log('-> CardBillet.vue')
 
 // store
 import { storeToRefs } from 'pinia'

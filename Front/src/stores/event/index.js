@@ -30,7 +30,6 @@ export const useEventStore = defineStore({
 
         for (const productKey in retour.products) {
           const product = retour.products[productKey]
-          // console.log('-> product =', product)
           // les produits peuvent ils être affiché (attention tous les produits ne sont pas encore gérés)
           // cashless
           if (product.categorie_article === 'S' && product.prices.length > 0) {
@@ -84,7 +83,6 @@ export const useEventStore = defineStore({
         for (const optionsKey in options) {
           let eventOptions = form[options[optionsKey]]
           for (const eventOptionsKey in eventOptions) {
-            // console.log('->', eventOptions[eventOptionsKey])
             eventOptions[eventOptionsKey]['activation'] = false
           }
         }
@@ -92,7 +90,6 @@ export const useEventStore = defineStore({
         // ajout de la propriété "don", l'activation de chaque don sera à false par défaut
         form['gifts'] = []
         const dons = this.event.products.filter(prod => prod.categorie_article === 'D')
-        console.log('init dons')
         for (const donsKey in dons) {
           const don = dons[donsKey]
           form.gifts.push({
@@ -104,7 +101,6 @@ export const useEventStore = defineStore({
           })
         }
       }
-      console.log('email =', email)
       if (email !== undefined) {
         this.updateEmail('emailConfirme', email)
         this.updateEmail('email', email)
@@ -157,7 +153,6 @@ export const useEventStore = defineStore({
       // supprime leproduit si quantité = 0
       prix = this.forms.find(obj => obj.event === this.event.uuid).prices.filter(obj2 => obj2.qty > 0)
       this.forms.find(obj => obj.event === this.event.uuid).prices = prix
-      // console.log('customers =', customers)
     },
     updateCustomer (priceUuid, customerUuid, value, variable) {
       // console.log('-> fonc updateCustomer !')
@@ -171,7 +166,6 @@ export const useEventStore = defineStore({
         'options_radio': 'optionsRadio'
       }
       let form = this.forms.find(obj => obj.event === this.event.uuid)
-      // console.log('-> fonc updateOptions, type =', inputType, '  --  value =', value, '  --  uuidOptions =', uuidOptions)
       if (convertInputType[inputType] === 'optionsRadio') {
         // toutes les activation radio à false
         for (let i = 0; i < form.optionsRadio.length; i++) {
@@ -202,14 +196,7 @@ export const useEventStore = defineStore({
       let gift = this.forms.find(obj => obj.event === this.event.uuid).gifts.find(obj2 => obj2.uuidGift === uuidGift)
       console.log('gift =', gift)
       gift.enable = !gift.enable
-    },/*
-    deleteAllCustomersFromPrices(uuid) {
-      console.log('this.forms =', this.forms)
-      console.log('uuid =', uuid)
-      const form = this.forms.find(obj => obj.event === uuid)
-      console.log('form =', form)
-      form.prices = []
-    },*/
+    },
     getEventHeader () {
       // console.log('-> action getHeaderEvent')
       let urlImage
@@ -226,7 +213,6 @@ export const useEventStore = defineStore({
         titre: this.event.name
       }
     }
-
   },
   getters: {
     stop (state) {
@@ -246,13 +232,10 @@ export const useEventStore = defineStore({
         // message nb billet max par utilisateur atteint
         if (nbCustomers === maxPerUser) {
           console.log('-> Le nombre maximun de billet par utilisateur est atteint !')
-          /*
           emitter.emit('modalMessage', {
             titre: 'Attention',
             contenu: `Le nombre maximun de billet par utilisateur est atteint !`
           })
-
-           */
         }
 
         // stock pas géré et maxi par user géré

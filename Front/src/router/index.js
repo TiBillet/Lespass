@@ -104,16 +104,13 @@ router.beforeEach((to, from, next) => {
 
   // intercepte la route "NotFound" et redirige sur le wiki tibillet
   if (to.name === "NotFound") {
-    console.log(`redirection stopée --> router/index.js, route 'NotFound'`)
     // window.location = "https://wiki.tibillet.re/"
   }
 
   // intercepte la route "EmailConfirmation" et active l'email
   if (to.name === "EmailConfirmation") {
-    console.log(`-> Interception de la route "EmailConfirmation" et activation de l'email !`)
     const id = to.params.id
     const token = to.params.token
-    console.log('id =', id, '  --  token =', token)
     if (id !== undefined && token !== undefined) {
       const {emailActivation} = useLocalStore()
       emailActivation(id, token)
@@ -131,13 +128,7 @@ router.beforeEach((to, from, next) => {
   // intercepte retour de stripe
   if (to.name === "StripeReturn") {
     const localstore = useLocalStore()
-    // console.log('--------------------------------------------------------------------------------------------------')
-    // console.log('Interception "StripeReturn" !')
-    // console.log('to =', to)
-
-
     // redirection en fonction de l'url provenant stripeEtape définie dans Event.vue
-    // console.log('stripeEtape =', localstore.stripeEtape)
     nouvelleRoute = localstore.stripeEtape.nextPath
 
     const uuidStripe = to.params.id
@@ -163,8 +154,6 @@ router.beforeEach((to, from, next) => {
     next()
   }
 
-  //   console.log('from =', from)
-  // console.log('to =', to)
   useAllStore().routeName = to.name
 
 })

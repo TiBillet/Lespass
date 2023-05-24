@@ -12,7 +12,7 @@
 </template>
 
 <script setup>
-console.log('-> Accueil.vue')
+// console.log('-> Accueil.vue')
 // reset sessionStorage(s)
 sessionStorage.removeItem("Tibillet-event");
 sessionStorage.removeItem("Tibillet-all");
