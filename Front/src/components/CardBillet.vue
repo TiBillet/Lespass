@@ -21,22 +21,12 @@
           <h4 v-else class="font-weight-bolder text-info text-gradient align-self-start">{{
               price.name.toLowerCase()
             }}</h4>
-<!--          <button-->
-<!--              v-if="stop(price.uuid, price.stock, price.max_per_user) === false"-->
-<!--              class="btn btn-primary ms-3 test-card-billet-bt-add"-->
-<!--              type="button" @click="addCustomer(price.uuid)">-->
-<!--            <i class="fas fa-plus"></i>-->
-<!--          </button>-->
-
-
           <button
-              v-if="stop(price.uuid, price.stock, 100) === false"
+              v-if="stop(price.uuid, price.stock, price.max_per_user) === false"
               class="btn btn-primary ms-3 test-card-billet-bt-add"
               type="button" @click.stop="addCustomer(price.uuid)">
             <i class="fas fa-plus"></i>
-            {{ price.max_per_user }}
           </button>
-
 
         </div>
         <!-- clients -->
@@ -66,15 +56,6 @@
       </section>
     </div>
   </fieldset>
-
-
-  <!--
-    <div v-if="price.users.length > 0 " class="d-flex justify-content-end mb-3">
-      <h6>
-        SOUS-TOTAL : {{ (price.users.length * price.prix) }}€
-      </h6>
-    </div>
-  -->
 </template>
 
 <script setup>

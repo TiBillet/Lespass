@@ -1,5 +1,5 @@
-import {defineStore} from 'pinia'
-import {useAllStore} from '@/stores/all'
+import { defineStore } from 'pinia'
+import { useAllStore } from '@/stores/all'
 
 const domain = `${location.protocol}//${location.host}`
 
@@ -16,7 +16,7 @@ export const useEventStore = defineStore({
     error: null
   }),
   actions: {
-    async getEventBySlug(slug, email) {
+    async getEventBySlug (slug, email) {
       const urlApi = `/api/eventslug/${slug}`
       this.error = null
       this.event = {}
@@ -59,7 +59,7 @@ export const useEventStore = defineStore({
       }
     },
     // init le formulaire d'un évènement (CardBillet, CardOptions)
-    initEventForm(email) {
+    initEventForm (email) {
       // console.log('-> action initEventForm !')
       const allStore = useAllStore()
       // init data form / event uuid
@@ -110,11 +110,11 @@ export const useEventStore = defineStore({
         this.updateEmail('email', email)
       }
     },
-    generateUUIDUsingMathRandom() {
-      let d = new Date().getTime();//Timestamp
-      let d2 = (performance && performance.now && (performance.now() * 1000)) || 0;//Time in microseconds since page-load or 0 if unsupported
+    generateUUIDUsingMathRandom () {
+      let d = new Date().getTime()//Timestamp
+      let d2 = (performance && performance.now && (performance.now() * 1000)) || 0//Time in microseconds since page-load or 0 if unsupported
       return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-        let r = Math.random() * 16;//random number between 0 and 16
+        let r = Math.random() * 16//random number between 0 and 16
         if (d > 0) {//Use timestamp until depleted
           r = (d + r) % 16 | 0
           d = Math.floor(d / 16)
@@ -125,28 +125,27 @@ export const useEventStore = defineStore({
         return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
       })
     },
-    addCustomer(priceUuid) {
-      console.log('-> fonc addCustomer !')
-        let prix = this.forms.find(obj => obj.event === this.event.uuid).prices
-        let lePrix = prix.find(obj => obj.uuid === priceUuid)
-        // pas encore d'ajout de ce prix
-        if (lePrix === undefined) {
-          prix.push({
-            uuid: priceUuid,
-            qty: 0,
-            customers: []
-          })
-          lePrix = prix.find(obj => obj.uuid === priceUuid)
-        }
-        lePrix.customers.push({
-          uuid: this.generateUUIDUsingMathRandom(),
-          first_name: "",
-          last_name: ""
+    addCustomer (priceUuid) {
+      // console.log('-> fonc addCustomer !')
+      let prix = this.forms.find(obj => obj.event === this.event.uuid).prices
+      let lePrix = prix.find(obj => obj.uuid === priceUuid)
+      // pas encore d'ajout de ce prix
+      if (lePrix === undefined) {
+        prix.push({
+          uuid: priceUuid,
+          qty: 0,
+          customers: []
         })
-        lePrix.qty = lePrix.customers.length
-      console.log('prix =', prix)
+        lePrix = prix.find(obj => obj.uuid === priceUuid)
+      }
+      lePrix.customers.push({
+        uuid: this.generateUUIDUsingMathRandom(),
+        first_name: '',
+        last_name: ''
+      })
+      lePrix.qty = lePrix.customers.length
     },
-    deleteCustomer(priceUuid, customerUuid) {
+    deleteCustomer (priceUuid, customerUuid) {
       // console.log('-> fonc deleteCustomer !')
       let prix = this.forms.find(obj => obj.event === this.event.uuid).prices
       const customers = prix.find(obj => obj.uuid === priceUuid).customers.filter(obj => obj.uuid !== customerUuid)
@@ -160,47 +159,16 @@ export const useEventStore = defineStore({
       this.forms.find(obj => obj.event === this.event.uuid).prices = prix
       // console.log('customers =', customers)
     },
-    updateCustomer(priceUuid, customerUuid, value, variable) {
+    updateCustomer (priceUuid, customerUuid, value, variable) {
       // console.log('-> fonc updateCustomer !')
       const customers = this.forms.find(obj => obj.event === this.event.uuid).prices.find(obj2 => obj2.uuid === priceUuid).customers
       let customer = customers.find(obj => obj.uuid === customerUuid)
       customer[variable] = value
     },
-    stop(priceUuid, stock, maxPerUser) {
-      // console.log('-> fonc stop !')
-      // --- gestion de l'affichage du bouton "+" ---
-      let price = undefined
-      if (this.forms.length > 0) {
-        price = this.forms.find(obj => obj.event === this.event.uuid).prices.find(obj2 => obj2.uuid === priceUuid)
-      }
-      // aucun ajout
-      if (price === undefined) {
-        return false
-      }
-      const nbCustomers = price.customers.length
-
-      // message nb billet max par utilisateur atteint
-      if (nbCustomers === maxPerUser) {
-        emitter.emit('modalMessage', {
-          titre: 'Attention',
-          contenu: `Le nombre maximun de billet par utilisateur est atteint !`
-        })
-      }
-
-      // stock pas géré et maxi par user géré
-      if (stock === null && nbCustomers < maxPerUser) {
-        return false
-      }
-      // stock et maxi par user géré
-      if (stock !== null && (stock - nbCustomers) >= 1 && nbCustomers < maxPerUser) {
-        return false
-      }
-      return true
-    },
-    updateOptions(inputType, value, uuidOption) {
+    updateOptions (inputType, value, uuidOption) {
       const convertInputType = {
-        "options_checkbox": "optionsCheckbox",
-        "options_radio": "optionsRadio"
+        'options_checkbox': 'optionsCheckbox',
+        'options_radio': 'optionsRadio'
       }
       let form = this.forms.find(obj => obj.event === this.event.uuid)
       // console.log('-> fonc updateOptions, type =', inputType, '  --  value =', value, '  --  uuidOptions =', uuidOptions)
@@ -213,7 +181,7 @@ export const useEventStore = defineStore({
       const option = form[convertInputType[inputType]].find(opt => opt.uuid === uuidOption)
       option.activation = value
     },
-    allOptionsFalse() {
+    allOptionsFalse () {
       let form = this.forms.find(obj => obj.event === this.event.uuid)
       for (let i = 0; i < form.optionsRadio.length; i++) {
         form.optionsRadio[i].activation = false
@@ -222,15 +190,15 @@ export const useEventStore = defineStore({
         form.optionsCheckbox[i].activation = false
       }
     },
-    updateChargeCashless(value) {
+    updateChargeCashless (value) {
       // console.log('updateCashless =', value)
       this.forms.find(obj => obj.event === this.event.uuid).chargeCashless = parseFloat(value)
     },
-    changePriceGift(uuidGift, priceUuid) {
+    changePriceGift (uuidGift, priceUuid) {
       let gift = this.forms.find(obj => obj.event === this.event.uuid).gifts.find(obj2 => obj2.uuidGift === uuidGift)
       gift.price = priceUuid
     },
-    toggleEnableGift(uuidGift, value) {
+    toggleEnableGift (uuidGift, value) {
       let gift = this.forms.find(obj => obj.event === this.event.uuid).gifts.find(obj2 => obj2.uuidGift === uuidGift)
       console.log('gift =', gift)
       gift.enable = !gift.enable
@@ -242,7 +210,7 @@ export const useEventStore = defineStore({
       console.log('form =', form)
       form.prices = []
     },*/
-    getEventHeader() {
+    getEventHeader () {
       // console.log('-> action getHeaderEvent')
       let urlImage
       try {
@@ -261,7 +229,44 @@ export const useEventStore = defineStore({
 
   },
   getters: {
-    getCustomersByUuidPrix(state) {
+    stop (state) {
+      return (priceUuid, stock, maxPerUser) => {
+        // console.log('-> fonc stop !')
+        // --- gestion de l'affichage du bouton "+" ---
+        let price = undefined
+        if (state.forms.length > 0) {
+          price = state.forms.find(obj => obj.event === this.event.uuid).prices.find(obj2 => obj2.uuid === priceUuid)
+        }
+        // aucun ajout
+        if (price === undefined) {
+          return false
+        }
+        const nbCustomers = price.customers.length
+
+        // message nb billet max par utilisateur atteint
+        if (nbCustomers === maxPerUser) {
+          console.log('-> Le nombre maximun de billet par utilisateur est atteint !')
+          /*
+          emitter.emit('modalMessage', {
+            titre: 'Attention',
+            contenu: `Le nombre maximun de billet par utilisateur est atteint !`
+          })
+
+           */
+        }
+
+        // stock pas géré et maxi par user géré
+        if (stock === null && nbCustomers < maxPerUser) {
+          return false
+        }
+        // stock et maxi par user géré
+        if (stock !== null && (stock - nbCustomers) >= 1 && nbCustomers < maxPerUser) {
+          return false
+        }
+        return true
+      }
+    },
+    getCustomersByUuidPrix (state) {
       return (priceUuid) => {
         // console.log('-> fonc getCustomersByUuidPrix !')
         try {
