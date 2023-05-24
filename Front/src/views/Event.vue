@@ -25,7 +25,7 @@
 
       <CardChargeCashless v-if="showProduct.cashless"/>
 
-      <CardGifts />
+<!--      <CardGifts />-->
 
       <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
     </form>
