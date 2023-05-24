@@ -126,7 +126,8 @@ export const useEventStore = defineStore({
       })
     },
     addCustomer(priceUuid) {
-      // console.log('-> fonc addCustomer !')
+      console.log('-> fonc addCustomer !')
+      console.log('priceUuid =', priceUuid)
       let prix = this.forms.find(obj => obj.event === this.event.uuid).prices
       let lePrix = prix.find(obj => obj.uuid === priceUuid)
       // pas encore d'ajout de ce prix
