@@ -34,6 +34,7 @@
               class="btn btn-primary ms-3 test-card-billet-bt-add"
               type="button" @click.stop="addCustomer(price.uuid)">
             <i class="fas fa-plus"></i>
+            {{ price.max_per_user }}
           </button>
 
 
