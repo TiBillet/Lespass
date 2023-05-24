@@ -128,7 +128,7 @@ export const useEventStore = defineStore({
     addCustomer(priceUuid) {
       console.log('-> fonc addCustomer !')
       console.log('priceUuid =', priceUuid)
-      try {
+      debugger;
         let prix = this.forms.find(obj => obj.event === this.event.uuid).prices
         let lePrix = prix.find(obj => obj.uuid === priceUuid)
         // pas encore d'ajout de ce prix
@@ -146,9 +146,6 @@ export const useEventStore = defineStore({
           last_name: ""
         })
         lePrix.qty = lePrix.customers.length
-      } catch (err) {
-        console.log('-> addCustomer, erreur =', err)
-      }
     },
     deleteCustomer(priceUuid, customerUuid) {
       // console.log('-> fonc deleteCustomer !')
