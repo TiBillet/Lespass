@@ -128,23 +128,27 @@ export const useEventStore = defineStore({
     addCustomer(priceUuid) {
       console.log('-> fonc addCustomer !')
       console.log('priceUuid =', priceUuid)
-      let prix = this.forms.find(obj => obj.event === this.event.uuid).prices
-      let lePrix = prix.find(obj => obj.uuid === priceUuid)
-      // pas encore d'ajout de ce prix
-      if (lePrix === undefined) {
-        prix.push({
-          uuid: priceUuid,
-          qty: 0,
-          customers: []
+      try {
+        let prix = this.forms.find(obj => obj.event === this.event.uuid).prices
+        let lePrix = prix.find(obj => obj.uuid === priceUuid)
+        // pas encore d'ajout de ce prix
+        if (lePrix === undefined) {
+          prix.push({
+            uuid: priceUuid,
+            qty: 0,
+            customers: []
+          })
+          lePrix = prix.find(obj => obj.uuid === priceUuid)
+        }
+        lePrix.customers.push({
+          uuid: this.generateUUIDUsingMathRandom(),
+          first_name: "",
+          last_name: ""
         })
-        lePrix = prix.find(obj => obj.uuid === priceUuid)
+        lePrix.qty = lePrix.customers.length
+      } catch (err) {
+        console.log('-> addCustomer, erreur =', err)
       }
-      lePrix.customers.push({
-        uuid: this.generateUUIDUsingMathRandom(),
-        first_name: "",
-        last_name: ""
-      })
-      lePrix.qty = lePrix.customers.length
     },
     deleteCustomer(priceUuid, customerUuid) {
       // console.log('-> fonc deleteCustomer !')
