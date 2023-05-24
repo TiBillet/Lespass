@@ -127,8 +127,6 @@ export const useEventStore = defineStore({
     },
     addCustomer(priceUuid) {
       console.log('-> fonc addCustomer !')
-      console.log('priceUuid =', priceUuid)
-      debugger;
         let prix = this.forms.find(obj => obj.event === this.event.uuid).prices
         let lePrix = prix.find(obj => obj.uuid === priceUuid)
         // pas encore d'ajout de ce prix
@@ -146,6 +144,7 @@ export const useEventStore = defineStore({
           last_name: ""
         })
         lePrix.qty = lePrix.customers.length
+      console.log('prix =', prix)
     },
     deleteCustomer(priceUuid, customerUuid) {
       // console.log('-> fonc deleteCustomer !')
