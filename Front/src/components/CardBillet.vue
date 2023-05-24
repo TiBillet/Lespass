@@ -21,12 +21,22 @@
           <h4 v-else class="font-weight-bolder text-info text-gradient align-self-start">{{
               price.name.toLowerCase()
             }}</h4>
+<!--          <button-->
+<!--              v-if="stop(price.uuid, price.stock, price.max_per_user) === false"-->
+<!--              class="btn btn-primary ms-3 test-card-billet-bt-add"-->
+<!--              type="button" @click="addCustomer(price.uuid)">-->
+<!--            <i class="fas fa-plus"></i>-->
+<!--          </button>-->
+
+
           <button
-              v-if="stop(price.uuid, price.stock, price.max_per_user) === false"
+              v-if="stop(price.uuid, price.stock, 100) === false"
               class="btn btn-primary ms-3 test-card-billet-bt-add"
-              type="button" @click="addCustomer(price.uuid)">
+              type="button" @click.stop="addCustomer(price.uuid)">
             <i class="fas fa-plus"></i>
           </button>
+
+
         </div>
         <!-- clients -->
         <div class="input-group mb-1 test-card-billet-input-group"
