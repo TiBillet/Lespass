@@ -390,6 +390,7 @@ class EventAdmin(admin.ModelAdmin):
         ('Options', {
             'fields': (
                 'jauge_max',
+                # 'max_per_user',
                 'tag',
                 'options_radio',
                 'options_checkbox',

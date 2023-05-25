@@ -38,6 +38,7 @@ from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
 
+
 class Tag(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
     name = models.CharField(max_length=50, verbose_name=_("Nom du tag"), db_index=True)
@@ -49,6 +50,7 @@ class Tag(models.Model):
     class Meta:
         verbose_name = _("Tag")
         verbose_name_plural = _("Tags")
+
 
 class OptionGenerale(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
@@ -203,8 +205,6 @@ class Configuration(SingletonModel):
     # mollie_api_key = models.CharField(max_length=50,
     #                                   blank=True, null=True)
 
-
-
     """
     ######### OPTION GENERALES #########
     """
@@ -308,7 +308,6 @@ class Configuration(SingletonModel):
     ghost_key = models.CharField(max_length=200, blank=True, null=True)
     ghost_last_log = models.TextField(blank=True, null=True)
 
-
     """
     ######### STRIPE #########
     """
@@ -323,14 +322,15 @@ class Configuration(SingletonModel):
     stripe_mode_test = models.BooleanField(default=True)
 
     def get_stripe_api(self):
-        if self.federated_cashless :
-            if self.get_stripe_connect_account :
+        if self.federated_cashless:
+            if self.get_stripe_connect_account:
                 return RootConfiguration.get_solo().get_stripe_api()
 
         tenant_stripe = self.stripe_test_api_key if self.stripe_mode_test else self.stripe_api_key
 
         if not tenant_stripe:
-            logger.warning(f"Configuration.get_stripe_api() - No stripe api key for {connection.tenant}. On utilise celle de root.")
+            logger.warning(
+                f"Configuration.get_stripe_api() - No stripe api key for {connection.tenant}. On utilise celle de root.")
             return RootConfiguration.get_solo().get_stripe_api()
         return tenant_stripe
 
@@ -351,9 +351,6 @@ class Configuration(SingletonModel):
             self.save()
 
         return self.stripe_payouts_enabled
-
-
-
 
     ARNAUD, MASSIVELY, BLK_MVC = 'arnaud_mvc', 'html5up-masseively', 'blk-pro-mvc'
     CHOICE_TEMPLATE = [
@@ -407,9 +404,10 @@ class Configuration(SingletonModel):
         verbose_name_plural = _('Paramètres')
 
     def __str__(self):
-        if self.organisation :
+        if self.organisation:
             return f"Paramètres de {self.organisation}"
         return f"Paramètres"
+
 
 class Product(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
@@ -453,9 +451,8 @@ class Product(models.Model):
                         )
 
     NONE, BILLET, PACK, RECHARGE_CASHLESS = 'N', 'B', 'P', 'R'
-    RECHARGE_FEDERATED, VETEMENT, MERCH, ADHESION  = 'S', 'T', 'M', 'A'
+    RECHARGE_FEDERATED, VETEMENT, MERCH, ADHESION = 'S', 'T', 'M', 'A'
     ABONNEMENT, DON, FREERES = 'B', 'D', 'F'
-
 
     CATEGORIE_ARTICLE_CHOICES = [
         (NONE, _('Selectionnez une catégorie')),
@@ -529,7 +526,10 @@ class Price(models.Model):
     # id_price_stripe = models.CharField(max_length=30, null=True, blank=True)
 
     stock = models.SmallIntegerField(blank=True, null=True)
-    max_per_user = models.PositiveSmallIntegerField(default=10)
+    max_per_user = models.PositiveSmallIntegerField(default=10,
+                                                    verbose_name=_("Nombre de reservation maximum par utilisateur"),
+                                                    help_text=_("ex : Un même email peut réserver plusieurs billets")
+                                                    )
 
     adhesion_obligatoire = models.ForeignKey(Product, on_delete=models.PROTECT,
                                              related_name="adhesion_obligatoire",
@@ -548,10 +548,11 @@ class Price(models.Model):
                                          default=NA,
                                          verbose_name=_("durée d'abonnement"),
                                          )
+
     recurring_payment = models.BooleanField(default=False,
                                             verbose_name="Paiement récurrent",
                                             help_text="Paiement récurrent avec Stripe, "
-                                                      "ne peux être utilisé avec un autre article dans le panier",
+                                                      "Ne peux être utilisé avec un autre article dans le même panier",
                                             )
 
     # def range_max(self):
@@ -592,7 +593,8 @@ class Event(models.Model):
                                               verbose_name="Options choix multiple")
 
     # cashless = models.BooleanField(default=False, verbose_name="Proposer la recharge cashless")
-    minimum_cashless_required = models.SmallIntegerField(default=0, verbose_name="Montant obligatoire minimum de la recharge cashless")
+    minimum_cashless_required = models.SmallIntegerField(default=0,
+                                                         verbose_name="Montant obligatoire minimum de la recharge cashless")
 
     img = StdImageField(upload_to='images/',
                         validators=[MaxSizeValidator(1920, 1920)],
@@ -761,7 +763,6 @@ def add_to_public_event_directory(sender, instance: Artist_on_event, created, **
         )
 
 
-
 class ProductSold(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
 
@@ -769,7 +770,6 @@ class ProductSold(models.Model):
     event = models.ForeignKey(Event, on_delete=models.PROTECT, null=True, blank=True)
 
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
-
 
     def __str__(self):
         return self.product.name
@@ -1242,8 +1242,8 @@ class Membership(models.Model):
                               verbose_name=_("Status"))
 
     option_generale = models.ManyToManyField(OptionGenerale,
-                                                   blank=True,
-                                                   related_name="membership_options")
+                                             blank=True,
+                                             related_name="membership_options")
 
     class Meta:
         unique_together = ('user', 'price')
@@ -1294,7 +1294,6 @@ class Membership(models.Model):
         for option in self.option_generale.all():
             names += f"{option.name} "
         return names
-
 
     def __str__(self):
         if self.pseudo:
