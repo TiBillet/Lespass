@@ -376,6 +376,7 @@ class EventCreateSerializer(serializers.Serializer):
     img_url = serializers.URLField(required=False)
     # cashless = serializers.BooleanField(required=False)
     minimum_cashless_required = serializers.IntegerField(required=False)
+    max_per_user = serializers.IntegerField(required=False)
 
     def validate_artists(self, value):
         # logger.info(f"validate_artists : {value}")
@@ -525,6 +526,8 @@ class EventSerializer(serializers.ModelSerializer):
             'artists',
             # 'cashless',
             'minimum_cashless_required',
+            'max_per_user',
+            'reservation_solo',
         ]
         read_only_fields = ['uuid', 'reservations']
         depth = 1

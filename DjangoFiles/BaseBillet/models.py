@@ -576,12 +576,16 @@ class Event(models.Model):
     datetime = models.DateTimeField()
     created = models.DateTimeField(auto_now=True)
     jauge_max = models.PositiveSmallIntegerField(default=50, verbose_name=_("Jauge maximale"))
+    max_per_user = models.PositiveSmallIntegerField(default=10,
+                                                    verbose_name=_("Nombre de reservation maximum par utilisateur"),
+                                                    help_text=_("ex : Un même email peut réserver plusieurs billets.")
+                                                    )
 
     short_description = models.CharField(max_length=250, blank=True, null=True)
     long_description = models.TextField(blank=True, null=True)
 
     event_facebook_url = models.URLField(blank=True, null=True)
-    published = models.BooleanField(default=False, verbose_name=_("Publier"))
+    published = models.BooleanField(default=True, verbose_name=_("Publier"))
 
     products = models.ManyToManyField(Product, blank=True)
 
@@ -609,6 +613,13 @@ class Event(models.Model):
                         },
                         delete_orphans=True
                         )
+
+    def reservation_solo(self):
+        if self.max_per_user == 1:
+            if self.products.all().count() == 1:
+                if self.products.first().prices.all().count() == 1:
+                    return True
+        return False
 
     def url(self):
         return f"https://{connection.tenant.get_primary_domain().domain}/event/{self.slug}/"
