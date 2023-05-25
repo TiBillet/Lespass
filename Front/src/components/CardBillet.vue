@@ -27,6 +27,7 @@
               type="button" @click.stop="addCustomer(price.uuid)">
             <i class="fas fa-plus"></i>
           </button>
+
         </div>
         <!-- clients -->
         <div class="input-group mb-1 test-card-billet-input-group"
@@ -55,19 +56,10 @@
       </section>
     </div>
   </fieldset>
-
-
-  <!--
-    <div v-if="price.users.length > 0 " class="d-flex justify-content-end mb-3">
-      <h6>
-        SOUS-TOTAL : {{ (price.users.length * price.prix) }}€
-      </h6>
-    </div>
-  -->
 </template>
 
 <script setup>
-// console.log('-> CardBillet.vue')
+console.log('-> CardBillet.vue')
 
 // store
 import { storeToRefs } from 'pinia'

@@ -46,31 +46,32 @@ function initScrollProperties() {
   return 'init'
 }
 
+// en attente de suppression
 emitter.on('modalMessage', (data) => {
-  message.value = data
-  if (message.value.dynamic === null) {
-    message.value.dynamic = false
+  if (data.dynamic === null) {
+    data.dynamic = false
   }
 
-  if (message.value.typeMsg) {
-    if (message.value.typeMsg === "warning") {
-      message.value.typeMsg = "bg-warning text-dark"
+  if (data.typeMsg) {
+    if (data.typeMsg === "warning") {
+      data.typeMsg = "bg-warning text-dark"
     }
-    if (message.value.typeMsg === "primary") {
-      message.value.typeMsg = "bg-primary text-white"
+    if (data.typeMsg === "primary") {
+      data.typeMsg = "bg-primary text-white"
     }
-    if (message.value.typeMsg === "secondary") {
-      message.value.typeMsg = "bg-secondary text-white"
+    if (data.typeMsg === "secondary") {
+      data.typeMsg = "bg-secondary text-white"
     }
-    if (message.value.typeMsg === "success") {
-      message.value.typeMsg = "bg-success text-white"
+    if (data.typeMsg === "success") {
+      data.typeMsg = "bg-success text-white"
     }
-    if (message.value.typeMsg === "danger") {
-      message.value.typeMsg = "bg-danger text-white"
+    if (data.typeMsg === "danger") {
+      data.typeMsg = "bg-danger text-white"
     }
   } else {
-    message.value.typeMsg = "bg-white text-dark"
+    data.typeMsg = "bg-white text-dark"
   }
+  message.value = data
 
   const elementModal = document.querySelector('#conteneur-message-modal')
   const modalMessage = bootstrap.Modal.getOrCreateInstance(elementModal)
