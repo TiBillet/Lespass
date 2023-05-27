@@ -709,8 +709,8 @@ class PaiementStripeAdmin(admin.ModelAdmin):
         'total',
         'order_date',
         'status',
-        'traitement_en_cours',
-        'source_traitement',
+        # 'traitement_en_cours',
+        # 'source_traitement',
         'source',
         'articles',
     )
