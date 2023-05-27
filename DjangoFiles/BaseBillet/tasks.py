@@ -737,6 +737,13 @@ def send_to_ghost(membership_pk):
         else:
             logger.error(f"Erreur lors de la récupération des membres : {response.text}")
 
+        # On met à jour les logs pour debug
+        try:
+            config.ghost_last_log = f"{timezone.now()} : {response.text}"
+            config.save()
+        except Exception as e:
+            logger.error(f"Erreur lors de la mise à jour du log : {e}")
+
 
 @app.task
 def test_logger():
