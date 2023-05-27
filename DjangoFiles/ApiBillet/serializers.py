@@ -41,6 +41,7 @@ def get_img_from_url(url):
         raise serializers.ValidationError(_(f"{url} doit contenir une url d'image valide : {e}"))
     return file_name, file_img
 
+
 class OptionsSerializer(serializers.ModelSerializer):
     class Meta:
         model = OptionGenerale
@@ -51,6 +52,7 @@ class OptionsSerializer(serializers.ModelSerializer):
             'poids',
         ]
         read_only_fields = ('uuid', 'poids')
+
 
 class TagSerializer(serializers.ModelSerializer):
     class Meta:
@@ -286,7 +288,7 @@ class NewConfigSerializer(serializers.ModelSerializer):
             if not info_stripe.business_profile.support_phone:
                 raise serializers.ValidationError(
                     _(f'Please set phone number in your stripe account'))
-            if not info_stripe.business_profile.url :
+            if not info_stripe.business_profile.url:
                 raise serializers.ValidationError(
                     _(f'Please set website in your stripe account'))
 
@@ -362,7 +364,6 @@ class Artist_on_eventSerializer(serializers.ModelSerializer):
         ]
 
 
-
 class EventCreateSerializer(serializers.Serializer):
     name = serializers.CharField(required=False, max_length=200)
     datetime = serializers.DateTimeField()
@@ -381,7 +382,6 @@ class EventCreateSerializer(serializers.Serializer):
     def validate_artists(self, value):
         # logger.info(f"validate_artists : {value}")
         return value
-
 
     def validate_products(self, value):
         self.products_db = []
@@ -449,11 +449,11 @@ class EventCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError(f"if not 'artist', 'name' is required")
 
         event_data = {
-            "name" : name,
-            "datetime" : attrs.get('datetime'),
-            "categorie" : Event.CONCERT,
-            "long_description" : attrs.get('long_description'),
-            "short_description" : attrs.get('short_description'),
+            "name": name,
+            "datetime": attrs.get('datetime'),
+            "categorie": Event.CONCERT,
+            "long_description": attrs.get('long_description'),
+            "short_description": attrs.get('short_description'),
             # "cashless" : attrs.get('cashless', False),
             "minimum_cashless_required": attrs.get('minimum_cashless_required', 0),
         }
@@ -484,7 +484,6 @@ class EventCreateSerializer(serializers.Serializer):
         if attrs.get('tags'):
             for tag in self.tags_db:
                 event.tag.add(tag)
-
 
         if attrs.get('artists'):
             for artist_input in attrs.get('artists'):
@@ -710,7 +709,8 @@ class MembreValidator(serializers.Serializer):
 
     email = serializers.EmailField()
 
-    options = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(), many=True, allow_null=True, required=False)
+    options = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(), many=True, allow_null=True,
+                                                 required=False)
 
     first_name = serializers.CharField(max_length=200, required=False)
     last_name = serializers.CharField(max_length=200, required=False)
@@ -720,11 +720,9 @@ class MembreValidator(serializers.Serializer):
     birth_date = serializers.DateField(required=False)
     newsletter = serializers.BooleanField(required=False)
 
-
     def validate_adhesion(self, value):
         self.price = value
         return value
-
 
     def validate_email(self, value):
         if not getattr(self, 'price', None):
@@ -738,7 +736,6 @@ class MembreValidator(serializers.Serializer):
             user=user_paiement,
             price=self.price,
         )
-
 
         # Si une adhésion existe déja
         if not created:
@@ -775,7 +772,8 @@ class MembreValidator(serializers.Serializer):
         for option in value:
             product = self.price.product
             option: OptionGenerale
-            if option not in list(set(product.option_generale_radio.all()) | set(product.option_generale_checkbox.all())):
+            if option not in list(
+                    set(product.option_generale_radio.all()) | set(product.option_generale_checkbox.all())):
                 raise serializers.ValidationError(_(f'Option {option.name} non disponible dans product'))
 
         for option in self.options:
@@ -949,7 +947,6 @@ class UpdateFederatedAssetFromCashlessValidator(serializers.Serializer):
     domain = serializers.URLField()
     card_uuid_qrcode = serializers.UUIDField()
 
-
     def validate_domain(self, value):
         serveur_cashless = Configuration.get_solo().server_cashless
         parse_config = urlparse(serveur_cashless)
@@ -957,9 +954,10 @@ class UpdateFederatedAssetFromCashlessValidator(serializers.Serializer):
 
         # on utilise urlparse pour vérifier les url et retirer les / si besoin
         if parse_config.scheme != parse_value.scheme or parse_config.netloc != parse_value.netloc:
-            raise serializers.ValidationError(_(f'ERREUR DOMAIN domaine envoyé : {parse_value.netloc} =! config : {parse_config.netloc }'))
+            raise serializers.ValidationError(
+                _(f'ERREUR DOMAIN domaine envoyé : {parse_value.netloc} =! config : {parse_config.netloc}'))
 
-        #TODO: lier categorie et source
+        # TODO: lier categorie et source
         self.categorie = SyncFederatedLog.VENTE_CASHLESS_FED
 
         return value
@@ -1010,8 +1008,6 @@ class UpdateFederatedAssetFromCashlessValidator(serializers.Serializer):
         representation['old_qty'] = instance['old_qty']
         representation['new_qty'] = instance['new_qty']
         return representation
-
-
 
 
 class ChargeCashlessValidator(serializers.Serializer):
@@ -1110,6 +1106,10 @@ class ReservationValidator(serializers.Serializer):
                     'qty': float(entry['qty']),
                 }
 
+                if entry['qty'] > price.max_per_user:
+                    raise serializers.ValidationError(
+                        _(f'Quantitée de réservations suppérieure au maximum autorisé pour ce prix'))
+
                 if price.adhesion_obligatoire:
                     membership_products = [membership.price.product for membership in
                                            self.user_commande.membership.all()]
@@ -1120,7 +1120,6 @@ class ReservationValidator(serializers.Serializer):
 
                 if price.product.categorie_article in [Product.BILLET, Product.FREERES]:
                     self.nbr_ticket += entry['qty']
-
                     # les noms sont requis pour la billetterie
                     if not entry.get('customers'):
                         raise serializers.ValidationError(_(f'customers name not find in ticket'))
@@ -1138,6 +1137,8 @@ class ReservationValidator(serializers.Serializer):
 
         if self.nbr_ticket == 0:
             raise serializers.ValidationError(_(f'pas de billet dans la reservation'))
+
+        # import ipdb; ipdb.set_trace()
 
         return value
 
@@ -1161,6 +1162,10 @@ class ReservationValidator(serializers.Serializer):
         to_mail: bool = attrs.get('to_mail')
 
         resas = event.reservations()
+
+        if self.nbr_ticket > event.max_per_user:
+            raise serializers.ValidationError(_(f'Quantitée de réservations suppérieure au maximum autorisé'))
+
         if resas + self.nbr_ticket > event.jauge_max:
             raise serializers.ValidationError(_(f'Il ne reste que {resas} places disponibles'))
 
@@ -1176,7 +1181,6 @@ class ReservationValidator(serializers.Serializer):
                 option: OptionGenerale
                 if option not in list(set(event.options_checkbox.all()) | set(event.options_radio.all())):
                     raise serializers.ValidationError(_(f'Option {option.name} non disponible dans event'))
-
 
         # on construit l'object reservation.
         reservation = Reservation.objects.create(
