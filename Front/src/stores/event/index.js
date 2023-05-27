@@ -230,6 +230,7 @@ export const useEventStore = defineStore({
         const nbCustomers = price.customers.length
 
         // message nb billet max par utilisateur atteint
+        /*
         if (nbCustomers === maxPerUser) {
           console.log('-> Le nombre maximun de billet par utilisateur est atteint !')
           emitter.emit('modalMessage', {
@@ -237,6 +238,7 @@ export const useEventStore = defineStore({
             contenu: `Le nombre maximun de billet par utilisateur est atteint !`
           })
         }
+        */
 
         // stock pas géré et maxi par user géré
         if (stock === null && nbCustomers < maxPerUser) {
