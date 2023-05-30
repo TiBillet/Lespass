@@ -225,9 +225,9 @@ function validerAchats(domEvent) {
             // paiement sans stripe, exemple: réservation gratuite
             emitter.emit('modalMessage', {
               typeMsg: 'success',
-              titre: 'Succès',
+              titre: 'Demande envoyée.',
               dynamic: true,
-              contenu: '<h3>Réservation validée !</h3>'
+              contenu: '<h4>Merci de vérifier votre réservation dans votre boite email.</h4>'
             })
           }
         }).catch((erreur) => {
