@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from django.http import HttpResponseRedirect
 from django.shortcuts import render
 
@@ -7,11 +5,10 @@ from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 
-from BaseBillet.models import Configuration, Event, Ticket, Product
+from BaseBillet.models import Configuration, Ticket
 
 import segno
 import barcode
-# from djoser import utils
 
 from io import BytesIO
 
@@ -41,10 +38,6 @@ class index(APIView):
         #     return render(request, 'arnaud_mvc/lieu.html', context=context)
 
 
-# class adhesion(APIView):
-#     permission_classes = [AllowAny]
-#
-#     def post(self, request):
 
 
 class event(APIView):
