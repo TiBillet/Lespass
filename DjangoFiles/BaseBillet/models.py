@@ -584,7 +584,11 @@ class Event(models.Model):
     short_description = models.CharField(max_length=250, blank=True, null=True)
     long_description = models.TextField(blank=True, null=True)
 
-    event_facebook_url = models.URLField(blank=True, null=True)
+    # event_facebook_url = models.URLField(blank=True, null=True)
+    is_external = models.BooleanField(default=False, verbose_name=_("Billetterie/Reservation externe"), help_text=_(
+        "Si l'évènement est géré par une autre billetterie ou un autre site de réservation. Ex : Un event Facebook"))
+    url_external = models.URLField(blank=True, null=True)
+
     published = models.BooleanField(default=True, verbose_name=_("Publier"))
 
     products = models.ManyToManyField(Product, blank=True)
