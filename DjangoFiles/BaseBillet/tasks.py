@@ -105,6 +105,7 @@ class CeleryMailerClass():
                 self.text,
                 self.return_email,
                 [self.email, ],
+                headers={"List-Unsubscribe": f"<mailto: {self.return_email}?subject=unsubscribe>"},
             )
             mail.attach_alternative(self.html, "text/html")
 
