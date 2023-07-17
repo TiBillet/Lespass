@@ -27,7 +27,8 @@ services:
       - backend-billeterie
 
   billetterie_django_dev:
-    image: tibillet/tibillet_django:2022-10-01
+#    image: tibillet/tibillet_django:2023-07-17
+    build : .
     container_name: billetterie_django
     extends:
       file: ../compose/docker-compose-base.yml
@@ -53,7 +54,8 @@ services:
       - backend-billeterie
 
   billetterie_celery_dev:
-    image: tibillet/tibillet_django:2022-10-01
+#    image: tibillet/tibillet_django:2023-07-17
+    build : .
     container_name: billetterie_celery
     extends:
       file: ../compose/docker-compose-base.yml
@@ -158,7 +160,6 @@ networks:
   frontend:
     external: true
   backend-billeterie:
-    name: "backend-billeterie"
 
 volumes:
   bill_dev_dbdata:
