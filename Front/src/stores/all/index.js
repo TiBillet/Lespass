@@ -152,6 +152,20 @@ export const useAllStore = defineStore({
       }
     }
   },
+  getters: {
+    getNameAdhesion: (state) => {
+      return (uuidProductAdhesion) => {
+        const allStore = useAllStore()
+        try {
+          const dataArray = JSON.parse(JSON.stringify(allStore.place.membership_products))
+          return dataArray.find(prod => prod.uuid === uuidProductAdhesion).name
+        } catch (error) {
+          return ''
+        }
+      }
+    }
+  }
+  ,
   persist: {
     key: 'Tibillet-all',
     storage: window.sessionStorage

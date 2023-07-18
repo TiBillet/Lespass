@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import { useAllStore } from '@/stores/all'
+import { useLocalStore } from '@/stores/local'
+
 
 const domain = `${location.protocol}//${location.host}`
 
@@ -296,6 +298,29 @@ export const useEventStore = defineStore({
     getChargeCashless: (state) => {
       const form = state.forms.find(obj => obj.event === state.event.uuid)
       return form.chargeCashless
+    },
+    getProductEnable: (state) => {
+      return (uuidAdhesionObligatoire) => {
+        const localStore = useLocalStore()
+        if (uuidAdhesionObligatoire === null) {
+          return true
+        } else {
+          let retour = false
+          try {
+            for (const adhesionKey in localStore.me.membership) {
+              const adhesion = localStore.me.membership[adhesionKey]
+              if (adhesion.product_uuid === uuidAdhesionObligatoire) {
+                retour = true
+                break
+              }
+            }
+            return retour
+          } catch (error) {
+            console.log('Store event, getProductEnable :', error)
+            return false
+          }
+        }
+      }
     }
   },
   persist: {

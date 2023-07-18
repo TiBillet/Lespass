@@ -1,5 +1,4 @@
 <template>
-
   <fieldset class="shadow-sm p-3 mb-5 bg-body rounded test-card-billet"
             v-for="product in event.products.filter(prod => prod.categorie_article === 'F' || prod.categorie_article === 'B')"
             :key="product.uuid">
@@ -11,7 +10,7 @@
     <!-- tous les produits de type billet -->
     <div v-for="price in product.prices" :key="price.uuid" class="mt-5">
       <!-- produit ne nécessitant pas une adhésion ou déjà adhérant -->
-      <section v-if="testProductEnable(price.adhesion_obligatoire) === true">
+      <section v-if="getProductEnable(price.adhesion_obligatoire) === true">
         <!-- prix -->
         <div class="d-flex justify-content-between">
           <!-- nom tarif -->
@@ -46,12 +45,14 @@
         </div>
       </section>
       <!-- produit nécessitant une adhésion -->
-      <section v-if="testProductEnable(price.adhesion_obligatoire) === false">
+      <section v-if="getProductEnable(price.adhesion_obligatoire) === false">
         <div class="">
           <!-- nom tarif -->
           <h4 class="font-weight-bolder text-dark text-gradient">{{ price.name.toLowerCase() }} :
             {{ price.prix }} €</h4>
-          <div v-html="getNameAdhesion(price.adhesion_obligatoire)" class="ms-2 mt-0"></div>
+          <div class="ms-2 mt-0">
+            Produit accessible si adhérant à "<a href="/adhesions" class="text-info">{{getNameAdhesion(price.adhesion_obligatoire)}}</a>" .
+          </div>
         </div>
       </section>
     </div>
@@ -86,42 +87,12 @@ if (props.styleImage === undefined) {
 
 // state
 const { event } = storeToRefs(useEventStore())
-const { place } = storeToRefs(useAllStore())
+const { place, getNameAdhesion } = storeToRefs(useAllStore())
 // action(s) du state
-const { getCustomersByUuidPrix, addCustomer, updateCustomer, deleteCustomer, stop } = useEventStore()
+const { getCustomersByUuidPrix, addCustomer, updateCustomer, deleteCustomer, stop, getProductEnable } = useEventStore()
 // action state
 const { me } = useLocalStore()
 
-function testProductEnable (uuidProductAdhesion) {
-  if (uuidProductAdhesion === null) {
-    return true
-  } else {
-    let retour = false
-    try {
-      for (const adhesionKey in me.membership) {
-        const adhesion = me.membership[adhesionKey]
-        if (adhesion.product_uuid === uuidProductAdhesion) {
-          retour = true
-          break
-        }
-      }
-      return retour
-    } catch (error) {
-      console.log('CardBillet, fonc testProductEnable', error)
-      return false
-    }
-  }
-}
-
-function getNameAdhesion (uuidProductAdhesion) {
-  // console.log('-> getNameAdhesion, uuid product =', uuidProductAdhesion)
-  try {
-    const nameAdhesion = place.value.membership_products.find(prod => prod.uuid === uuidProductAdhesion).name
-    return `Produit accessible si adhérant à "<a href="/adhesions" class="text-info">${nameAdhesion}"</a> .`
-  } catch (error) {
-    return ''
-  }
-}
 </script>
 
 <style scoped>
