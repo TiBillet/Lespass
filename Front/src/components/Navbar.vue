@@ -4,8 +4,10 @@
       <!-- lieu -->
       <div class="navbar-brand">
         <a href="/" class="navbar-brand d-flex justify-content-between align-items-center">
-          <h6 v-if="place.categorie !== 'M'" class="m-0 text-white" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Actualise les données évènements et lieu !">{{ place.organisation }}</h6>
-          <h6 v-else class="m-0 text-white" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Actualise les données évènements et lieu !">Agenda TiBillet</h6>
+          <h6 v-if="place.categorie !== 'M'" class="m-0 text-white" data-bs-toggle="tooltip" data-bs-placement="bottom"
+              title="Actualise les données évènements et lieu !">{{ place.organisation }}</h6>
+          <h6 v-else class="m-0 text-white" data-bs-toggle="tooltip" data-bs-placement="bottom"
+              title="Actualise les données évènements et lieu !">Agenda TiBillet</h6>
         </a>
       </div>
 
@@ -21,8 +23,11 @@
             <h6 class="m-0 text-white">Mon compte</h6>
           </a>
           <!-- menu user -->
-          <ul class="dropdown-menu w-100" aria-labelledby="menuUser">
-
+          <ul class="dropdown-menu" aria-labelledby="menuUser">
+            <li class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
+                style="cursor: default">
+              {{ email }}
+            </li>
             <!-- Cartes cashless -->
             <li v-if="infosCardExist() === true">
               <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
@@ -102,7 +107,7 @@
         <li class="nav-item">
           <a class="nav-link ps-1 d-flex justify-content-between align-items-center"
              role="button"
-             data-bs-toggle="modal" data-bs-target="#modal-onboard" >
+             data-bs-toggle="modal" data-bs-target="#modal-onboard">
             <i class="fa fa-plane me-1 text-white" aria-hidden="true"></i>
             <h6 class="m-0 text-white" data-test-id="seConnecter">Créer son espace</h6>
           </a>
@@ -117,14 +122,14 @@
 // console.log(' -> Navbar.vue !')
 
 // store
-import {storeToRefs} from 'pinia'
-import {useAllStore} from '@/stores/all'
-import {useLocalStore} from '@/stores/local'
+import { storeToRefs } from 'pinia'
+import { useAllStore } from '@/stores/all'
+import { useLocalStore } from '@/stores/local'
 
-const {place, events, adhesion, routeName, loading, error} = storeToRefs(useAllStore())
-const {getPlace, setHeaderPlace} = useAllStore()
-const {refreshToken, me} = storeToRefs(useLocalStore())
-const {infosCardExist, infosReservationExist, getMe, refreshAccessToken, isStaff, asP} = useLocalStore()
+const { place, events, adhesion, routeName, loading, error } = storeToRefs(useAllStore())
+const { getPlace, setHeaderPlace } = useAllStore()
+const { refreshToken, email, me } = storeToRefs(useLocalStore())
+const { infosCardExist, infosReservationExist, getMe, refreshAccessToken, isStaff, asP } = useLocalStore()
 
 // load place
 getPlace()
@@ -133,14 +138,14 @@ if (window.accessToken === '' && refreshToken.value !== '') {
   updateAccessToken()
 }
 
-async function updateAccessToken() {
+async function updateAccessToken () {
   // console.log('-> fonc updateAccessToken !')
   loading.value = true
   await refreshAccessToken(refreshToken.value)
   loading.value = false
 }
 
-function disconnect() {
+function disconnect () {
   refreshToken.value = ''
   me.value = {
     cashless: {},
@@ -159,7 +164,7 @@ function disconnect() {
 }
 
 // menu transparant / non transparant
-window.addEventListener("scroll", () => {
+window.addEventListener('scroll', () => {
   if (document.querySelector('#navbar') !== null) {
     if (scrollY === 0) {
       document.querySelector('#navbar').style.backgroundColor = ''

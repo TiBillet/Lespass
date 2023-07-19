@@ -50,7 +50,10 @@
           <!-- nom tarif -->
           <h4 class="font-weight-bolder text-dark text-gradient">{{ price.name.toLowerCase() }} :
             {{ price.prix }} €</h4>
-          <div class="ms-2 mt-0">
+          <div v-if="refreshToken === ''" class="ms-2 mt-0 text-info font-weight-500">
+            Vous devez être connecter pour accéder à ce produit.
+          </div>
+          <div v-else class="ms-2 mt-0">
             Produit accessible si adhérant à "<a href="/adhesions" class="text-info">{{getNameAdhesion(price.adhesion_obligatoire)}}</a>" .
           </div>
         </div>
@@ -91,7 +94,7 @@ const { place, getNameAdhesion } = storeToRefs(useAllStore())
 // action(s) du state
 const { getCustomersByUuidPrix, addCustomer, updateCustomer, deleteCustomer, stop, getProductEnable } = useEventStore()
 // action state
-const { me } = useLocalStore()
+const { refreshToken, me } = storeToRefs(useLocalStore())
 
 </script>
 
