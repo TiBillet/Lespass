@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { useAllStore } from '@/stores/all'
 import { useLocalStore } from '@/stores/local'
+import * as CryptoJS from 'crypto-js'
 
 const domain = `${location.protocol}//${location.host}`
 
@@ -8,6 +9,7 @@ export const useEventStore = defineStore({
   id: 'event',
   state: () => ({
     event: {},
+    eventHashReturn: 'first',
     showProduct: {
       cashless: false,
       gifDt: false
@@ -24,9 +26,9 @@ export const useEventStore = defineStore({
       console.log('form membership =', membership)
     },
     async getEventBySlug (slug, email) {
+      // console.log('-> getEventBySlug, slug =', slug)
       const urlApi = `/api/eventslug/${slug}`
       this.error = null
-      this.event = {}
       this.loading = true
       try {
         const response = await fetch(domain + urlApi)
@@ -35,23 +37,40 @@ export const useEventStore = defineStore({
         }
         const retour = await response.json()
 
-        for (const productKey in retour.products) {
-          const product = retour.products[productKey]
-          // les produits peuvent ils être affiché (attention tous les produits ne sont pas encore gérés)
-          // cashless
-          if (product.categorie_article === 'S' && product.prices.length > 0) {
-            this.showProduct.cashless = true
-          }
+        // hash retour et sauvegarde dans event
+        const returnString = JSON.stringify(retour)
+        const hashReturn = CryptoJS.HmacMD5(returnString, 'node 18 lts').toString()
 
-          // ajout d'une propriété 'customers' à chaque prix
-          for (const prixKey in product.prices) {
-            product.prices[prixKey]['customers'] = []
+        if (this.eventHashReturn === 'first' || this.eventHashReturn !== hashReturn) {
+          this.eventHashReturn = hashReturn
+
+          console.log('Modification data session event !')
+          for (const productKey in retour.products) {
+            const product = retour.products[productKey]
+            // les produits peuvent ils être affiché (attention tous les produits ne sont pas encore gérés)
+            // cashless
+            if (product.categorie_article === 'S' && product.prices.length > 0) {
+              this.showProduct.cashless = true
+            }
+
+            const allStore = useAllStore()
+            for (const prixKey in product.prices) {
+              // ajout d'une propriété 'customers' à chaque prix
+              const price = product.prices[prixKey]
+              price['customers'] = []
+              // ajout data adhésion si non null
+              if (price.adhesion_obligatoire !== null) {
+                const membership = allStore.place.membership_products.find(membership => membership.uuid === price.adhesion_obligatoire)
+                // console.log('ajout data adhésion =', membership)
+                price['adhesionObligatoireData'] = membership
+              }
+            }
           }
+          this.event = retour
+          this.initEventForm(email)
+          // updata data header
+          this.getEventHeader()
         }
-        this.event = retour
-        this.initEventForm(email)
-        // updata data header
-        this.getEventHeader()
 
       } catch (error) {
         this.error = error
@@ -81,47 +100,50 @@ export const useEventStore = defineStore({
           optionsRadio: this.event.options_radio,
           optionsCheckbox: this.event.options_checkbox,
           prices: [],
-          chargeCashless: 0
-        })
-        form = this.forms.find(obj => obj.event === this.event.uuid)
-
-        // options, ajout de la propriétée 'activation' à toutes les options
-        const options = ['options_checkbox', 'options_radio']
-        for (const optionsKey in options) {
-          let eventOptions = form[options[optionsKey]]
-          for (const eventOptionsKey in eventOptions) {
-            eventOptions[eventOptionsKey]['activation'] = false
-          }
-        }
-
-        // ajout de la propriété "don", l'activation de chaque don sera à false par défaut
-        form['gifts'] = []
-        const dons = this.event.products.filter(prod => prod.categorie_article === 'D')
-        for (const donsKey in dons) {
-          const don = dons[donsKey]
-          form.gifts.push({
-            uuidGift: don.uuid,
-            name: don.name,
-            price: don.prices[0].uuid, // sélection du premier prix
-            // activation du don par défaut
-            enable: false
-          })
-        }
-
-        // ajout de la propriété "memberships", l'activation de chaque "membership" sera à false par défaut
-        form['memberships'] = []
-        this.event.products.forEach((event) => {
-          event.prices.forEach((price) => {
-            // ajout de l'adhésion obligatoire pour ce tarif
-            if (price.adhesion_obligatoire !== null) {
-              const placeMembership = allStore.place.membership_products.find(membership => membership.uuid === price.adhesion_obligatoire)
-              // activation de l'adhésion = "false"
-              placeMembership['enabled'] = false
-              form.memberships.push(placeMembership)
-            }
-          })
+          chargeCashless: 0,
+          memberships: []
         })
       }
+      form = this.forms.find(obj => obj.event === this.event.uuid)
+
+      // options, ajout de la propriétée 'activation' à toutes les options
+      const options = ['options_checkbox', 'options_radio']
+      for (const optionsKey in options) {
+        let eventOptions = form[options[optionsKey]]
+        for (const eventOptionsKey in eventOptions) {
+          eventOptions[eventOptionsKey]['activation'] = false
+        }
+      }
+
+      // ajout de la propriété "don", l'activation de chaque don sera à false par défaut
+      form['gifts'] = []
+      const dons = this.event.products.filter(prod => prod.categorie_article === 'D')
+      for (const donsKey in dons) {
+        const don = dons[donsKey]
+        form.gifts.push({
+          uuidGift: don.uuid,
+          name: don.name,
+          price: don.prices[0].uuid, // sélection du premier prix
+          // activation du don par défaut
+          enable: false
+        })
+      }
+
+      // ajout de la propriété "memberships", l'activation de chaque "membership" sera à false par défaut*
+      form.memberships = []
+      this.event.products.forEach((event) => {
+        event.prices.forEach((price) => {
+          // ajout de l'adhésion obligatoire pour ce tarif
+          if (price.adhesion_obligatoire !== null) {
+            const placeMembership = allStore.place.membership_products.find(membership => membership.uuid === price.adhesion_obligatoire)
+            // activation de l'adhésion = "false"
+            placeMembership['enabled'] = false
+            price['adhesion_obligatoireEnabled'] = false
+            form.memberships.push(placeMembership)
+          }
+        })
+      })
+      //
       if (email !== undefined) {
         this.updateEmail('emailConfirme', email)
         this.updateEmail('email', email)
@@ -343,7 +365,7 @@ export const useEventStore = defineStore({
     },
     getStateEnabledMembership (state) {
       return (uuidMembership) => {
-        // console.log('uuidMembership =', uuidMembership)
+        // console.log('-> getStateEnabledMembership, uuidMembership =', uuidMembership)
         if (uuidMembership !== null) {
           let form = this.forms.find(obj => obj.event === this.event.uuid)
           let membership = form.memberships.find(membership => membership.uuid === uuidMembership)

@@ -11,7 +11,8 @@
       <!-- tous les produits de type billet -->
       <div v-for="price in product.prices" :key="price.uuid" class="mt-5">
         <!-- produit ne nécessitant pas une adhésion ou déjà adhérant -->
-        <section v-if="getProductEnable(price.adhesion_obligatoire) === true || getStateEnabledMembership(price.adhesion_obligatoire) === true">
+        <section
+            v-if="getProductEnable(price.adhesion_obligatoire) === true || getStateEnabledMembership(price.adhesion_obligatoire) === true">
           <!-- prix -->
           <div class="d-flex justify-content-between">
             <!-- nom tarif -->
@@ -46,7 +47,8 @@
           </div>
         </section>
         <!-- produit nécessitant une adhésion -->
-        <section v-if="getProductEnable(price.adhesion_obligatoire) === false && getStateEnabledMembership(price.adhesion_obligatoire) === false">
+        <section
+            v-if="getProductEnable(price.adhesion_obligatoire) === false && getStateEnabledMembership(price.adhesion_obligatoire) === false">
           <div class="">
             <!-- nom tarif -->
             <h4 class="font-weight-bolder text-dark text-gradient">{{ price.name.toLowerCase() }} :
@@ -74,7 +76,20 @@
       <fieldset v-if="getStateEnabledMembership(price.adhesion_obligatoire)"
                 class="shadow-sm p-3 mb-5 bg-body rounded test-card-billet">
         <legend>
-          <h3 class="font-weight-bolder text-info text-gradient align-self-start">{{ price.name }}</h3>
+          <!-- accepte abonnement -->
+          <div class="input-group mb-2 has-validation">
+            <div class="form-check form-switch me-3">
+              <input class="form-check-input" type="checkbox" :id="`membership-checkbox-${price.adhesion_obligatoire}`"
+                     @change.stop="toggleEnabledMembership(price.adhesion_obligatoire)"
+                     checked>
+              <label class="form-check-label text-dark ms-0" :for="`membership-checkbox-${price.adhesion_obligatoire}`">
+                Accepte
+              </label>
+            </div>
+          </div>
+          <h3 class="font-weight-bolder text-info text-gradient align-self-start">{{
+              price.adhesionObligatoireData.name
+            }}</h3>
         </legend>
         <span>price.adhesion_obligatoire = {{ price.adhesion_obligatoire }}</span>
       </fieldset>

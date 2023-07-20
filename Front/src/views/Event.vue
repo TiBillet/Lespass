@@ -25,7 +25,7 @@
 
       <CardChargeCashless v-if="showProduct.cashless"/>
 
-<!--      <CardGifts />-->
+      <!--      <CardGifts />-->
 
       <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
     </form>
@@ -38,13 +38,13 @@
 console.log('-> Event.vue !')
 
 // vue
-import {useRoute} from 'vue-router'
+import { useRoute } from 'vue-router'
 
 // store
-import {storeToRefs} from 'pinia'
-import {useEventStore} from '@/stores/event'
-import {useLocalStore} from '@/stores/local'
-import {useAllStore} from '@/stores/all'
+import { storeToRefs } from 'pinia'
+import { useEventStore } from '@/stores/event'
+import { useLocalStore } from '@/stores/local'
+import { useAllStore } from '@/stores/all'
 
 // composants
 import CardArtist from '@/components/CardArtist.vue'
@@ -55,26 +55,27 @@ import CardChargeCashless from '@/components/CardChargeCashless.vue'
 import CardGifts from '@/components/CardGifts.vue'
 
 // state event
-const {event, forms, showProduct} = storeToRefs(useEventStore())
+const { event, forms, showProduct } = storeToRefs(useEventStore())
 // actions
-const {updateEmail, getEventBySlug} = useEventStore()
+const { updateEmail, getEventBySlug } = useEventStore()
 // state adhésion
-let {setEtapeStripe} = useLocalStore()
+let { setEtapeStripe } = useLocalStore()
 
-const {setIdentitySite} = useAllStore()
+const { setIdentitySite } = useAllStore()
 // state "all" for loading components
-const {adhesion, loading, error} = storeToRefs(useAllStore())
+const { adhesion, loading, error } = storeToRefs(useAllStore())
 
 const route = useRoute()
 const slug = route.params.slug
 const email = route.query.email
 
 // load event
-getEventBySlug(slug, email)
-
+async function initEvent () {
+  await getEventBySlug(slug, email)
+}
 
 // formatage des données POST events
-function formatBodyPost() {
+function formatBodyPost () {
   // console.log('-> fonc formatBodyPost !')
 
   const form = forms.value.find(obj => obj.event === event.value.uuid)
@@ -129,7 +130,7 @@ function formatBodyPost() {
   return body
 }
 
-function validerAchats(domEvent) {
+function validerAchats (domEvent) {
   console.log('-> fonc validerAchats !')
 
   // efface tous les messages d'invalidité
@@ -147,7 +148,7 @@ function validerAchats(domEvent) {
       const element = elements[i]
       if (element.checkValidity() === false) {
         // console.log('element = ', element)
-        element.scrollIntoView({behavior: 'smooth', inline: 'center', block: 'center'})
+        element.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'center' })
         element.parentNode.querySelector('.invalid-feedback').style.display = 'block'
         break
       }
@@ -159,7 +160,7 @@ function validerAchats(domEvent) {
     if (email.value !== confirmeEmail.value) {
       // console.log('formulaire non valide !')
       confirmeEmail.parentNode.querySelector('.invalid-feedback').style.display = 'block'
-      confirmeEmail.scrollIntoView({behavior: 'smooth', inline: 'center', block: 'center'})
+      confirmeEmail.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'center' })
     } else {
       // formulaire valide
       console.log('formulaire valide !')
@@ -212,12 +213,11 @@ function validerAchats(domEvent) {
             // active "l'étape stripe"
             if (route.path.indexOf('embed') !== -1) {
               // reste sur l'event
-              setEtapeStripe({formEventUuid: event.value.uuid, nextPath: route.path})
+              setEtapeStripe({ formEventUuid: event.value.uuid, nextPath: route.path })
             } else {
               // va à l'accueil
-              setEtapeStripe({formEventUuid: event.value.uuid, nextPath: '/'})
+              setEtapeStripe({ formEventUuid: event.value.uuid, nextPath: '/' })
             }
-
 
             // paiement, redirection vers stripe
             window.location.assign(response.checkout_url)
@@ -253,8 +253,9 @@ function validerAchats(domEvent) {
       }
     }
   }
-
 }
+
+initEvent()
 </script>
 <style>
 .invalid-feedback {

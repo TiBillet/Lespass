@@ -19,7 +19,6 @@
                :checked="option.activation === true ? true: false">
         <label class="form-check-label text-dark ms-0" :for="`option-checkbox${option.uuid}`">{{ option.name }}</label>
       </div>
-
     </div>
 
     <!-- options radio -->
