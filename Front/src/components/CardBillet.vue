@@ -61,8 +61,6 @@
                       @click="toggleEnabledMembership(price.adhesion_obligatoire)"
                       style="border-top-right-radius: 30px; border-bottom-right-radius: 30px;">
                 <span>adhérez à "{{ getNameAdhesion(price.adhesion_obligatoire) }}" pour accéder à ce produit</span>
-                <!-- pour dev -->
-                <div>{{ price.adhesion_obligatoire }}</div>
               </button>
             </div>
           </div>
@@ -75,23 +73,83 @@
     <div v-for="price in product.prices" :key="price.uuid" class="mt-5">
       <fieldset v-if="getStateEnabledMembership(price.adhesion_obligatoire)"
                 class="shadow-sm p-3 mb-5 bg-body rounded test-card-billet">
+        <!-- accepte abonnement
+        <div class="input-group mb-2 has-validation d-flex flex-row align-items-center">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" :id="`membership-checkbox-${price.adhesion_obligatoire}`"
+                   @change.stop="toggleEnabledMembership(price.adhesion_obligatoire)"
+                   checked style="height: 20px;">
+            <label class="form-check-label text-dark mb-0 ms-1"
+                   :for="`membership-checkbox-${price.adhesion_obligatoire}`">
+              Accepter l'adhésion.
+            </label>
+          </div>
+        </div>
+        -->
+
         <legend>
-          <!-- accepte abonnement -->
-          <div class="input-group mb-2 has-validation">
-            <div class="form-check form-switch me-3">
-              <input class="form-check-input" type="checkbox" :id="`membership-checkbox-${price.adhesion_obligatoire}`"
-                     @change.stop="toggleEnabledMembership(price.adhesion_obligatoire)"
-                     checked>
-              <label class="form-check-label text-dark ms-0" :for="`membership-checkbox-${price.adhesion_obligatoire}`">
-                Accepte
+          <div class="card-header pb-0 d-flex flex-column align-items-star">
+            <h3 class="font-weight-bolder text-info text-gradient align-self-start w-85">
+              {{ price.adhesionObligatoireData.name }}</h3>
+            <h5 style="white-space: pre-line">{{ price.adhesionObligatoireData.short_description }}</h5>
+          </div>
+        </legend>
+        <!-- conditions -->
+        <div class="input-group mb-2 has-validation">
+          <div class="form-check form-switch">
+            <div>
+              <input id="read-conditions-membership" class="form-check-input" type="checkbox" required
+                     @change.stop="toggleEnabledMembership(price.adhesion_obligatoire)" checked="false">
+              <label v-if="price.adhesionObligatoireData.categorie_article === 'A'"
+                     class="form-check-label text-dark" for="read-conditions-membership">
+                J'ai pris connaissance des <a class="text-info" @click="goStatus()">statuts, du règlement
+                intérieur de l'association</a> et j'accepte cette adhésion.
+              </label>
+              <label v-else class="form-check-label text-dark" for="read-conditions">
+                J'ai pris connaissance des <a class="text-info" @click="goStatus()">CGU/CGV</a> et j'accepte cette
+                adhésion.
               </label>
             </div>
           </div>
-          <h3 class="font-weight-bolder text-info text-gradient align-self-start">{{
-              price.adhesionObligatoireData.name
-            }}</h3>
-        </legend>
-        <span>price.adhesion_obligatoire = {{ price.adhesion_obligatoire }}</span>
+          <div class="invalid-feedback">Conditions non acceptées.</div>
+        </div>
+
+        <!-- prix -->
+        <div class="input-group mb-2 has-validation">
+          <div :id="`adesion-price-parent${index}`" class="col form-check mb-2"
+               v-for="(prix, indexPrix) in price.adhesionObligatoireData.prices" :key="indexPrix">
+            <input v-if="indexPrix === 0" :value="prix.uuid"
+                   class="form-check-input input-adesion-modal-price" type="radio"
+                   name="prixAdhesionModal" :id="`adhesion-price-radio${indexPrix}`"
+                   required>
+            <input v-else :value="prix.uuid"
+                   class="form-check-input input-adesion-modal-price" type="radio"
+                   name="prixAdhesionModal" :id="`adhesion-price-radio${indexPrix}`">
+            <label class="form-check-label" :for="`adhesion-price-radio${indexPrix}`">
+              {{ prix.name }} - {{ prix.prix }}€
+            </label>
+            <div v-if="index === 0" class="invalid-feedback">
+              Merci de choisir un tarif.
+            </div>
+          </div>
+        </div>
+
+        <!-- Nom / Prénom -->
+        <div class="input-group has-validation mb-1 test-card-billet-input-group">
+          <input type="text" value="" placeholder="Nom" aria-label="Nom"
+                 class="form-control test-card-billet-input-group-nom-membership" required>
+          <input type="text" value="" placeholder="Prénom" aria-label="Prénom"
+                 class="form-control test-card-billet-input-group-prenom-membership" required>
+          <div class="invalid-feedback">Donnée(s) manquante(s) !</div>
+        </div>
+        <!-- Code postal / Fixe ou Mobile -->
+        <div class="input-group has-validation mb-1 test-card-billet-input-group">
+          <input type="text" value="" placeholder="Code postal" aria-label="Code postal"
+                 class="form-control test-card-billet-input-group-nom-codepostal-membership" required>
+          <input type="text" value="" placeholder="Fixe ou Mobile" aria-label="Fixe ou Mobile"
+                 class="form-control test-card-billet-input-group-tel-membership" required>
+          <div class="invalid-feedback">Donnée(s) manquante(s) !</div>
+        </div>
       </fieldset>
     </div>
   </div>
