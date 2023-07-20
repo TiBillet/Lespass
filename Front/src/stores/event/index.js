@@ -2,7 +2,6 @@ import { defineStore } from 'pinia'
 import { useAllStore } from '@/stores/all'
 import { useLocalStore } from '@/stores/local'
 
-
 const domain = `${location.protocol}//${location.host}`
 
 export const useEventStore = defineStore({
@@ -18,6 +17,12 @@ export const useEventStore = defineStore({
     error: null
   }),
   actions: {
+    toggleEnabledMembership (uuidMembership) {
+      let form = this.forms.find(obj => obj.event === this.event.uuid)
+      let membership = form.memberships.find(membership => membership.uuid === uuidMembership)
+      membership.enabled = !membership.enabled
+      console.log('form membership =', membership)
+    },
     async getEventBySlug (slug, email) {
       const urlApi = `/api/eventslug/${slug}`
       this.error = null
@@ -102,6 +107,20 @@ export const useEventStore = defineStore({
             enable: false
           })
         }
+
+        // ajout de la propriété "memberships", l'activation de chaque "membership" sera à false par défaut
+        form['memberships'] = []
+        this.event.products.forEach((event) => {
+          event.prices.forEach((price) => {
+            // ajout de l'adhésion obligatoire pour ce tarif
+            if (price.adhesion_obligatoire !== null) {
+              const placeMembership = allStore.place.membership_products.find(membership => membership.uuid === price.adhesion_obligatoire)
+              // activation de l'adhésion = "false"
+              placeMembership['enabled'] = false
+              form.memberships.push(placeMembership)
+            }
+          })
+        })
       }
       if (email !== undefined) {
         this.updateEmail('emailConfirme', email)
@@ -321,7 +340,20 @@ export const useEventStore = defineStore({
           }
         }
       }
-    }
+    },
+    getStateEnabledMembership (state) {
+      return (uuidMembership) => {
+        // console.log('uuidMembership =', uuidMembership)
+        if (uuidMembership !== null) {
+          let form = this.forms.find(obj => obj.event === this.event.uuid)
+          let membership = form.memberships.find(membership => membership.uuid === uuidMembership)
+          // console.log('form membership =', membership)
+          return membership.enabled
+        } else {
+          return false
+        }
+      }
+    },
   },
   persist: {
     key: 'Tibillet-event',
