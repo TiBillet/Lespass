@@ -3,7 +3,7 @@ import vue from '@vitejs/plugin-vue'
 // const path = require('path')
 import {resolve} from 'path'
 
-let urlLieu = 'http://billetistan.django-local.org:8002'
+let urlLieu = 'https://demo.tibillet.localhost/'
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -11,7 +11,6 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": resolve(__dirname, "/src"),
-      "~@": resolve(__dirname, "/src")
     },
   },
   build: {
@@ -21,12 +20,7 @@ export default defineConfig({
     // pour exposer le port d'un conteneur docker
     host: true,
     port: 3000,
-    // https: true,
     strictPort: true,
-    proxy: {
-      '/api': urlLieu,
-      '/media': urlLieu
-    },
     hmr: {
       protocol: 'wss',
       port: 3000,
@@ -35,6 +29,5 @@ export default defineConfig({
     watch: {
       usePolling: true
     }
-
   }
 })

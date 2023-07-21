@@ -1,46 +1,38 @@
 <template>
-  <header>
+  <header v-if="header !== null">
     <div
-      class="page-header min-vh-50"
-      :style="{ backgroundImage: `url('${header.urlImage}')`, maxHeight: `365px` }"
-    >
+        class="page-header min-vh-50" :style="{ backgroundImage: `url('${header.urlImage}')`, maxHeight: `365px` }">
       <span class="mask bg-dark opacity-8"></span>
       <div class="container">
         <div class="row">
           <div class="col-lg-8 mx-auto text-white text-center">
             <h2 class="text-white">{{ header.titre }}</h2>
-            <p v-if="header.shortDescription !== null" class="lead" style="white-space: pre-line">{{ header.shortDescription }}</p>
+            <p v-if="header.shortDescription !== null" class="lead" style="white-space: pre-line">
+              {{ header.shortDescription }}</p>
           </div>
         </div>
       </div>
     </div>
     <!-- search -->
     <div v-if="routeName === 'Accueil'" class="container">
-      <Search />
+      <Search/>
     </div>
 
-    <div class="container mt-5" style="white-space: pre-line">{{ header.longDescription }}</div>
+    <div class="container mt-5 mb-5" style="white-space: pre-line">{{ header.longDescription }}</div>
 
   </header>
 </template>
 
 <script setup>
 // console.log('-> Header.vue')
+// store
+import { storeToRefs } from 'pinia'
+import { useSessionStore } from '@/stores/session'
 
 // components
 import Search from '@/components/Search.vue'
 
-// import { watch } from "vue"
+// réactivité
+const { header, routeName } = storeToRefs(useSessionStore())
 
-// store
-import { storeToRefs } from 'pinia'
-import { useAllStore } from '@/stores/all'
-
-const { routeName, header } = storeToRefs(useAllStore())
-
-/*
-watch(routeName, (newValue, oldValue) => {
-  console.log('-> routeName:', newValue, oldValue)
-})
- */
 </script>

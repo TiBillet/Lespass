@@ -138,7 +138,11 @@ export const useEventStore = defineStore({
             const placeMembership = allStore.place.membership_products.find(membership => membership.uuid === price.adhesion_obligatoire)
             // activation de l'adhésion = "false"
             placeMembership['enabled'] = false
-            price['adhesion_obligatoireEnabled'] = false
+            placeMembership['nom'] = ''
+            placeMembership['prenom'] = ''
+            placeMembership['codePostal'] = ''
+            placeMembership['tel'] = ''
+            placeMembership['prixSelectionner'] = ''
             form.memberships.push(placeMembership)
           }
         })

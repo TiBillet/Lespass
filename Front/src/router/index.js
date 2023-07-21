@@ -1,5 +1,5 @@
 // store
-import {useAllStore} from '@/stores/all'
+import {useSessionStore} from '@/stores/session'
 import {useLocalStore} from '@/stores/local'
 
 // gère les routes(pages)
@@ -96,7 +96,7 @@ router.beforeEach((to, from, next) => {
   }
 
   // par défaut le header et la navbar son affiché
-  const {setIdentitySite} = useAllStore()
+  const {setIdentitySite} = useSessionStore()
   setIdentitySite(true)
   if (to.name === "EventEmbed") {
     setIdentitySite(false)
@@ -154,7 +154,7 @@ router.beforeEach((to, from, next) => {
     next()
   }
 
-  useAllStore().routeName = to.name
+  useSessionStore().routeName = to.name
 
 })
 

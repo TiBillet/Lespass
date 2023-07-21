@@ -1,42 +1,85 @@
 <template>
+  <!-- artistes -->
+  <div v-if="event !== null" class="container">
+    <div v-for="(artist, index) in event.artists" :key="index">
+      <CardArtist :artist="artist.configuration" class="mb-6"/>
+    </div>
+  </div>
+
+  <!-- les produits -->
   <div v-if="Object.entries(event).length > 0" class="container mt-5 test-view-event">
 
-    <!-- artistes -->
-    <div v-for="(artist, index) in event.artists" :key="index">
-      <CardArtist :data-artist="artist" class="mb-6"/>
-    </div>
-
-    <div class="container">
-      <p>
-      </p>
-    </div>
-
     <form @submit.prevent="validerAchats($event)" class="needs-validation" novalidate>
-      <!--
-      Billet(s)
-      Si attribut "image", une image est affiché à la place du nom
-      Attribut 'style-image' gère les propriétées(css) de l'image (pas obligaoire, style par défaut)
-       -->
-      <CardBillet :image="true" :style-image="{height: '30px',width: 'auto'}"/>
-
-      <CardOptions/>
-
-      <CardEmail/>
-
-      <CardChargeCashless v-if="showProduct.cashless"/>
-
-      <!--      <CardGifts />-->
-
+       <CardEmail/>
       <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
     </form>
+    <!--
+      <div class="container">
+        <p>
+        </p>
+      </div>
 
+      <form @submit.prevent="validerAchats($event)" class="needs-validation" novalidate>
+        //--
+        Billet(s)
+        Si attribut "image", une image est affiché à la place du nom
+        Attribut 'style-image' gère les propriétées(css) de l'image (pas obligaoire, style par défaut)
+         --
+        <CardBillet :image="true" :style-image="{height: '30px',width: 'auto'}"/>
+
+        <CardOptions/>
+
+        <CardEmail/>
+
+        <CardChargeCashless v-if="showProduct.cashless"/>
+
+        //--      <CardGifts /> --
+
+        <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
+      </form>
+      -->
   </div>
 </template>
 
 <script setup>
 // console.clear()
 console.log('-> Event.vue !')
+import { useRoute } from 'vue-router'
+// composants
+import CardArtist from '@/components/CardArtist.vue'
+import CardEmail from '@/components/CardEmail.vue'
 
+// store
+import { storeToRefs } from 'pinia'
+import { useSessionStore } from '@/stores/session'
+
+// réactivité
+const { event } = storeToRefs(useSessionStore())
+// action
+const { loadEvent } = useSessionStore()
+const route = useRoute()
+
+function validerAchats (event) {
+  if (!event.target.checkValidity()) {
+    event.preventDefault()
+    event.stopPropagation()
+  }
+  event.target.classList.add('was-validated')
+}
+
+loadEvent(route.params.slug)
+
+/*
+// vue
+import {ref} from "vue"
+
+import { useAllStore } from "@/stores/all"
+
+const { getFormEventBySlug, getArtists, updateSlug } = useAllStore()
+
+updateSlug(slug)
+
+// getFormEventBySlug(slug)
 // vue
 import { useRoute } from 'vue-router'
 
@@ -47,7 +90,6 @@ import { useLocalStore } from '@/stores/local'
 import { useAllStore } from '@/stores/all'
 
 // composants
-import CardArtist from '@/components/CardArtist.vue'
 import CardBillet from '@/components/CardBillet.vue'
 import CardOptions from '@/components/CardOptions.vue'
 import CardEmail from '@/components/CardEmail.vue'
@@ -254,8 +296,8 @@ function validerAchats (domEvent) {
     }
   }
 }
-
 initEvent()
+ */
 </script>
 <style>
 .invalid-feedback {

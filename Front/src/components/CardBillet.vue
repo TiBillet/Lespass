@@ -114,7 +114,11 @@
           <div class="invalid-feedback">Conditions non acceptées.</div>
         </div>
 
-        <!-- prix -->
+        <!--
+        prix
+        clique sur prix  = fonc updateSelectPrice => forms[index event].memberships[uuid adhesion].prixSelectionner = prix
+        nom/prenom/tel/codePostal @keyup="upddate input $event
+        -->
         <div class="input-group mb-2 has-validation">
           <div :id="`adesion-price-parent${index}`" class="col form-check mb-2"
                v-for="(prix, indexPrix) in price.adhesionObligatoireData.prices" :key="indexPrix">

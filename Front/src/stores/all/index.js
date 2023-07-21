@@ -1,7 +1,22 @@
 // store
 import { defineStore } from 'pinia'
+import * as CryptoJS from 'crypto-js'
+import { log } from '../../communs/LogError'
 
 const domain = `${window.location.protocol}//${window.location.host}`
+
+async function loadEventBySlug (slug) {
+  const urlApi = `/api/eventslug/${slug}`
+  try {
+    const response = await fetch(domain + urlApi)
+    if (response.status !== 200) {
+      throw new Error(`${response.status} - ${response.statusText}`)
+    }
+    return { status: 'ok', content: await response.json() }
+  } catch (error) {
+    return { status: 'error', error: error }
+  }
+}
 
 export const useAllStore = defineStore({
   id: 'all',
@@ -11,6 +26,8 @@ export const useAllStore = defineStore({
     error: null,
     language: 'fr',
     events: {},
+    eventHashReturn: 'first',
+    eventSlug: '',
     place: {},
     routeName: '',
     header: {
@@ -37,9 +54,13 @@ export const useAllStore = defineStore({
       logo_url: '',
       stripe_connect_account: null,
       readConditions: false
-    }
+    },
+    forms: []
   }),
   actions: {
+    updateSlug(slug) {
+      state.eventSlug = slug
+    },
     setIdentitySite (value) {
       this.identitySite = value
     },
@@ -112,7 +133,8 @@ export const useAllStore = defineStore({
         const data = dataArray.find(obj => obj.uuid === productUuid)
         return data
       } else {
-        return { name: '',
+        return {
+          name: '',
           short_description: '',
           categorie_article: 'INCONNUE',
           option_generale_radio: [],
@@ -153,6 +175,43 @@ export const useAllStore = defineStore({
     }
   },
   getters: {
+    getArtists (state) {
+      const currentEvent = state.events.find(event => event.slug === state.eventSlug)
+      console.log('currentEvent =', currentEvent)
+      return currentEvent.artists
+    },
+    getFormEventBySlug (state) {
+      return async (slug) => {
+        state.eventSlug = slug
+        state.error = null
+        state.loading = true
+        const retour = await loadEventBySlug(slug)
+
+        // hash retour et sauvegarde dans event
+        const returnString = JSON.stringify(retour)
+        const hashReturn = CryptoJS.HmacMD5(returnString, 'NODE_18_lts').toString()
+
+        console.log({ message: 'state.events = ' })
+        log({ object: state.events })
+        // actualisation event
+        if (state.eventHashReturn === 'reset' || state.eventHashReturn !== hashReturn) {
+          state.eventHashReturn = hashReturn
+          log({ message: 'Modification data session event !' })
+          let event = state.events.find(event => event.slug === slug)
+          event = retour.content
+        }
+
+        log({ message: '-> getFormEventBySlug, retour = ', raw: retour })
+        state.loading = false
+        if (retour.status === 'error') {
+          log({ message: 'useEventStore, getEventBySlug: ', error: retour.error })
+          emitter.emit('modalMessage', {
+            titre: 'Erreur',
+            contenu: `Chargement de l'évènement '${slug}' -- erreur: ${retour.error.message}`
+          })
+        }
+      }
+    },
     getNameAdhesion: (state) => {
       return (uuidProductAdhesion) => {
         const allStore = useAllStore()

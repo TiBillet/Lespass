@@ -6,34 +6,22 @@
       </div>
     </div>
   </div>
-  <div id="calendar" class="container">
-    <!-- <Calendar categorie-article="B"/> -->
-  </div>
 </template>
 
 <script setup>
 // console.log('-> Accueil.vue')
 
 // store
-import {storeToRefs} from 'pinia'
-import {useAllStore} from '@/stores/all'
-
-// routes
-import {useRouter} from 'vue-router'
-
+import { storeToRefs } from "pinia"
+import { useSessionStore } from '@/stores/session'
 // composants
 import CardEvent from '@/components/CardEvent.vue'
-// import Calendar from '../components/Calendar.vue'
 
-
-// state
-const {place, header, events, loading, error} = storeToRefs(useAllStore())
-// actions du state
-const {getEvents} = useAllStore()
-const router = useRouter()
-
-// load events and update data header
-getEvents()
+// réactivité
+const { events } = storeToRefs(useSessionStore())
+// action
+const { loadEvents } = useSessionStore()
+loadEvents()
 </script>
 
 <style>
