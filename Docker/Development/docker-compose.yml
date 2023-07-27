@@ -152,7 +152,7 @@ networks:
   frontend:
     external: true
   backend-billeterie:
-
+    internal: true
 
 volumes:
   bill_dev_dbdata:
