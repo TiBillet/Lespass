@@ -2,19 +2,19 @@
   <nav id="navbar" class="navbar navbar-expand-lg z-index-3 w-100 navbar-transparent position-fixed">
     <div class="container">
       <!-- lieu -->
-      <div v-if="getHeader !== null" class="navbar-brand">
+      <div v-if="header !== null" class="navbar-brand">
         <a href="/" class="navbar-brand d-flex justify-content-between align-items-center">
-          <h6 v-if="getHeader.categorie !== 'M'" class="m-0 text-white" data-bs-toggle="tooltip"
+          <h6 v-if="header.categorie !== 'M'" class="m-0 text-white" data-bs-toggle="tooltip"
               data-bs-placement="bottom"
-              title="Actualise les données évènements et lieu !">{{ getHeader.titre }}</h6>
+              title="Actualise les données évènements et lieu !">{{ header.titre }}</h6>
           <h6 v-else class="m-0 text-white" data-bs-toggle="tooltip" data-bs-placement="bottom"
               title="Actualise les données évènements et lieu !">Agenda TiBillet</h6>
         </a>
       </div>
       <!-- partie droite -->
       <ul class="navbar-nav d-flex flex-row-reverse ms-auto d-block">
-        <!-- menu user -->
-        <li v-if="getRefreshToken !== ''" class="nav-item dropdown">
+        <!-- user connecté -->
+        <li v-if="refreshToken !== ''" class="nav-item dropdown">
           <a class="nav-link d-flex justify-content-between align-items-center dropdown-toggle me-1" href="#"
              id="menuUser"
              role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -23,18 +23,27 @@
           </a>
           <!-- sous menu user -->
           <ul class="dropdown-menu" aria-labelledby="menuUser">
+            <!-- info email user connecté -->
             <li class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
                 style="cursor: default">
-              {{ getEmail }}
+              {{ me.email }}
+            </li>
+
+            <!-- déconnexion -->
+            <li v-if="refreshToken !== ''">
+              <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
+                 role="button" @click="disconnect()">
+                <i class="fa fa-sign-out fa-fw me-1 text-dark" aria-hidden="true"></i>
+                <h6 class="m-0 text-dark">Deconnexion</h6>
+              </a>
             </li>
           </ul>
         </li>
 
         <!-- pas de connexion -->
-        <li class="nav-item">
-          <a v-if="getRefreshToken === ''" class="nav-link ps-1 d-flex justify-content-between align-items-center"
-             role="button"
-             data-bs-toggle="modal" data-bs-target="#modal-form-login">
+        <li v-else class="nav-item">
+          <a class="nav-link ps-1 d-flex justify-content-between align-items-center"
+             role="button" @click="showModalLogin()">
             <i class="fa fa-user-circle-o me-1 text-white" aria-hidden="true"></i>
             <h6 class="m-0 text-white" data-test-id="seConnecter">Se connecter</h6>
           </a>
@@ -42,9 +51,9 @@
 
         <!-- adhésions -->
         <li class="nav-item">
-          <a v-if="routeName !== 'Adhesions'" href="/adhesions"
+          <a v-if="routeName !== 'Adhesions' && header !== null" href="/adhesions"
              class="nav-link ps-1 d-flex justify-content-between align-items-center"
-             :title="`Adhésions possibles à l'association '${ getHeader.titre }'`">
+             :title="`Adhésions possibles à l'association '${ header.titre }'`">
             <i class="fa fa-users me-1 text-white" aria-hidden="true"></i>
             <h6 class="m-0 text-white">Adhésions</h6>
           </a>
@@ -160,12 +169,25 @@
 
 <script setup>
 console.log(' -> Navbar.vue !')
+import { storeToRefs } from 'pinia'
 import { useSessionStore } from '@/stores/session'
 import { useLocalStore } from '@/stores/local'
 
 // action
-const { getHeader } = useSessionStore()
-const { getEmail, getRefreshToken } = useLocalStore()
+const sessionStore = useSessionStore()
+const localStore = useLocalStore()
+const { header, routeName } = storeToRefs(sessionStore)
+const { refreshToken, me } = storeToRefs(localStore)
+// action
+const { disconnect } = localStore
+
+function showModalLogin () {
+  const elementModal = document.querySelector('#modal-form-login')
+  const modal = bootstrap.Modal.getOrCreateInstance(elementModal) // Returns a Bootstrap modal instance
+  // peuple l'email
+  modal.show()
+  document.querySelector('#login-email').value = email.value
+}
 
 /*
 //vue
@@ -195,23 +217,6 @@ async function updateAccessToken () {
   loading.value = false
 }
 
-function disconnect () {
-  refreshToken.value = ''
-  me.value = {
-    cashless: {},
-    reservations: [],
-    membership: []
-  }
-  adhesion.value = {
-    email: '',
-    first_name: '',
-    last_name: '',
-    phone: null,
-    postal_code: null,
-    adhesion: '',
-    status: ''
-  }
-}
 
 // menu transparant / non transparant
 window.addEventListener('scroll', () => {

@@ -11,14 +11,13 @@ export const useSessionStore = defineStore({
   state: () => ({
     identitySite: true,
     loading: false,
-    error: '',
     language: 'fr',
     routeName: '',
     header: null,
     membershipProducts: null,
     currentEventUuid: null,
     events: [],
-    email: null
+    email: ''
   }),
   getters: {
     getArtists (state) {
@@ -46,20 +45,13 @@ export const useSessionStore = defineStore({
         const products = state.events.find(event => event.uuid === state.currentEventUuid).products
         return products.find(product => product.uuid === productUuid).activated
       }
-    },
-    getHeader (state) {
-      return state.header
-    },
-    getRouteName (state) {
-      return state.routeName
     }
-
   },
   actions: {
     setIdentitySite (value) {
       this.identitySite = value
     },
-    updateEmail (email, value) {
+    updateEmail (value) {
       this.email = value
     },
     /**
@@ -78,10 +70,6 @@ export const useSessionStore = defineStore({
 
       // création ou reset de l'objet event si non existant ou données "postEvent" différentes
       if (event === undefined || event.eventHash !== hash) {
-        // priorité: l'email est pris dans le cache local(résultat d'une validation d'email)
-        const { email } = useLocalStore()
-        this.email = email !== null ? email : ''
-
         // enregistrer le hash post
         postEvent.eventHash = hash
 
@@ -156,13 +144,22 @@ export const useSessionStore = defineStore({
           domain: domain,
           categorie: retour.categorie
         }
+
+        // priorité: l'email est pris dans le cache local(résultat d'une validation d'email)
+        const { getEmailStore } = useLocalStore()
+        console.log('getEmailStore =', getEmailStore)
+        this.email = getEmailStore !== '' ? getEmailStore : ''
+
+        // chargemment terminé
+        return true
       } catch (error) {
         log({ message: 'loadPlace', error })
-         emitter.emit('modalMessage', {
+        emitter.emit('modalMessage', {
           titre: 'Erreur',
           contenu: `Chargement des données initiales(lieu/...) -- erreur: ${error.message}`
         })
-         return false
+        // chargemment terminé
+        return true
       } finally {
         this.loading = false
       }

@@ -1,9 +1,10 @@
 <template>
   <Loading v-if="loading"/>
   <!-- en cours -->
-  <Navbar v-if="identitySite" />
-  <Header v-if="identitySite" />
+  <Navbar v-if="identitySite && loadingPlace" />
+  <Header v-if="identitySite && loadingPlace" />
   <router-view></router-view>
+  <!--
   <ModalMessage/>
   <Modallogin/>
   <ModalPassword/>
@@ -11,10 +12,13 @@
   <ModalCardsList/>
   <ModalReservationList/>
   <ModalOnboard/>
+  -->
 </template>
 
 <script setup>
 console.log('-> App.vue')
+import { ref } from "vue"
+
 // composants
 import Loading from '@/components/Loading.vue'
 import Navbar from '@/components/Navbar.vue'
@@ -30,6 +34,7 @@ import ModalOnboard from '@/components/ModalOnboard.vue'
 // store
 import { storeToRefs } from 'pinia'
 import { useSessionStore } from '@/stores/session'
+import { useLocalStore } from '@/stores/local'
 
 // font monserrat
 import '@/assets/css/font_Montserrat_Open_Sans_Condensed.css'
@@ -52,7 +57,18 @@ import '@/assets/js/perfect-scrollbar/perfect-scrollbar.min.js'
 import '@/assets/css/now-design-system-pro.min.css'
 import '@/assets/js/now-design-system-pro.js'
 
-// réactivité
-const { identitySite, loading, header, routeName } = storeToRefs(useSessionStore())
+const localStore = useLocalStore()
+const { initLocalStore } = localStore
+// pour créer le local store dans le cache
+initLocalStore()
+
+const sessionStore = useSessionStore()
+const { identitySite, loading } = storeToRefs(sessionStore)
+const { loadPlace } = sessionStore
+const loadingPlace = ref(false)
+
+async function waitLoadPlace() {
+  loadingPlace.value = await loadPlace()
+}
+waitLoadPlace()
 </script>
-<style></style>

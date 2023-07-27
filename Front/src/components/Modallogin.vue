@@ -17,11 +17,14 @@
             </div>
 
             <div class="card-body">
-              <form role="form" class="text-left" @submit.prevent="validerLogin($event)">
-                <div class="input-group">
+              <form class="text-left needs-validation" @submit.prevent="validerLogin($event)" novalidate>
+                <div class="input-group has-validation">
                   <input id="login-email" :value="getEmail" laria-describedby="email-addon" aria-label="Email"
                          class="form-control" placeholder="Email" type="email"
                          pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$" required>
+                  <div class="invalid-feedback">
+                    Merci de renseigner une adresse email valide.
+                  </div>
                 </div>
                 <p class="mt-2">Nul besoin de mot de passe : un email vous sera envoyé pour validation.</p>
                 <div class="text-center">
@@ -54,34 +57,40 @@
   </div>
 </template>
 <script setup>
+// log
+import { log } from '../communs/LogError.js'
+
 // store
-import { useSessionStore } from "@/stores/session"
+import { useSessionStore } from '@/stores/session'
 
 // asset
 import communecterLogo from '@/assets/img/communecterLogo_31x28.png'
 
-// const {adhesion} = useLocalStore()
 const domain = `${location.protocol}//${location.host}`
-const { getEmail, loading } = useSessionStore()
+let { getEmail, updateEmail, loading } = useSessionStore()
 
-async function validerLogin(event) {
-  /*
+async function validerLogin (event) {
+  if (!event.target.checkValidity()) {
+    event.preventDefault()
+    event.stopPropagation()
+  }
+  event.target.classList.add('was-validated')
   if (event.target.checkValidity() === true) {
-    // enregistre l'email dans le storeUser
     const email = document.querySelector('#login-email').value
+    // enregistre l'email dans le storeUser
+    updateEmail(email)
     console.log('-> validerLogin, email =', email)
-    adhesion.email = email
 
     const api = `/api/user/create/`
     try {
-      loading.value = true
+      loading = true
       const response = await fetch(domain + api, {
         method: 'POST',
         cache: 'no-cache',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({email: email})
+        body: JSON.stringify({ email: email })
       })
       const retour = await response.json()
       console.log('retour =', retour)
@@ -95,21 +104,25 @@ async function validerLogin(event) {
         // message de succès
         emitter.emit('modalMessage', {
           titre: 'Validation',
+          typeMsg: 'success',
           contenu: retour
         })
       } else {
         throw new Error(`Erreur création utilisateur !`)
       }
-    } catch (erreur) {
-      console.log('-> validerLogin, erreur :', erreur)
-      error.value = erreur
+    } catch (error) {
+      log({ message: 'login', error })
+      emitter.emit('modalMessage', {
+        titre: 'Erreur',
+        typeMsg: 'danger',
+        contenu: `Post, /api/user/create/ -- erreur: ${error.message}`
+      })
     }
   }
-  loading.value = false
-   */
+  loading = false
 }
 
-function goCommunecter() {
+function goCommunecter () {
   location.href = '/api/user/requestoauth/'
 }
 </script>

@@ -18,7 +18,7 @@ import CardEvent from '@/components/CardEvent.vue'
 // store
 import { useSessionStore } from '@/stores/session'
 
-let { loading, error } = useSessionStore()
+let { loading } = useSessionStore()
 let events = ref(null)
 const domain = `${window.location.protocol}//${window.location.host}`
 

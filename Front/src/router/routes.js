@@ -1,9 +1,4 @@
-import { useSessionStore } from '@/stores/session'
-
-function loadEventData (to, from, next) {
-  const { loadEvent } = useSessionStore()
-  loadEvent(to.params.slug, next)
-}
+import Accueil from '../views/Accueil.vue'
 
 export const routes = [
   {
@@ -18,7 +13,7 @@ export const routes = [
     // route level code-splitting
     // this generates a separate chunk (about.[hash].js) for this route
     // which is lazy-loaded when the route is visited.
-    component: import(/* webpackChunkName: "Accueil" */ '../views/Accueil.vue')
+    component: Accueil
   },
   {
     // route interceptée
@@ -30,7 +25,6 @@ export const routes = [
     path: '/event/:slug',
     // si iframe
     alias: '/event/embed/:slug',
-    beforeEnter: [loadEventData],
     name: 'Event',
     component: () => import(/* webpackChunkName: "Event" */ '../views/Event.vue')
   },

@@ -7,7 +7,7 @@
     <div class="input-group mb-2 has-validation">
       <span class="input-group-text" @click="inputFocus('profil-email')">Email</span>
       <input id="profil-email" :value="getEmail" type="email"
-             @change.stop="updateEmail('email', $event.target.value)"
+             @change.stop="updateEmail($event.target.value)"
              pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$"
              class="form-control card-email-input" placeholder="Email" required>
       <div class="invalid-feedback">
