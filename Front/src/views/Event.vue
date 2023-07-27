@@ -58,9 +58,7 @@ import CardEmail from "@/components/CardEmail.vue"
 import CardBillet from '@/components/CardBillet.vue'
 
 // store
-import { storeToRefs } from "pinia"
 import { useSessionStore } from "@/stores/session"
-
 
 // action
 const { getArtists, getEvent } = useSessionStore()

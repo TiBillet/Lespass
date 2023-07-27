@@ -1,7 +1,6 @@
 <template>
   <Loading v-if="loading"/>
   <!-- en cours -->
-  <div>identitySite = {{ identitySite }}</div>
   <Navbar v-if="identitySite" />
   <Header v-if="identitySite" />
   <router-view></router-view>
@@ -16,7 +15,6 @@
 
 <script setup>
 console.log('-> App.vue')
-import { onBeforeMount, onBeforeUpdate } from 'vue'
 // composants
 import Loading from '@/components/Loading.vue'
 import Navbar from '@/components/Navbar.vue'

@@ -19,7 +19,7 @@
             <div class="card-body">
               <form role="form" class="text-left" @submit.prevent="validerLogin($event)">
                 <div class="input-group">
-                  <input id="login-email" :value="adhesion.email" laria-describedby="email-addon" aria-label="Email"
+                  <input id="login-email" :value="getEmail" laria-describedby="email-addon" aria-label="Email"
                          class="form-control" placeholder="Email" type="email"
                          pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$" required>
                 </div>
@@ -55,17 +55,17 @@
 </template>
 <script setup>
 // store
-import {storeToRefs} from 'pinia'
-import {useAllStore} from '@/stores/all'
+import { useSessionStore } from "@/stores/session"
 
 // asset
 import communecterLogo from '@/assets/img/communecterLogo_31x28.png'
 
 // const {adhesion} = useLocalStore()
 const domain = `${location.protocol}//${location.host}`
-const {adhesion, loading, error} = storeToRefs(useAllStore())
+const { getEmail, loading } = useSessionStore()
 
 async function validerLogin(event) {
+  /*
   if (event.target.checkValidity() === true) {
     // enregistre l'email dans le storeUser
     const email = document.querySelector('#login-email').value
@@ -106,6 +106,7 @@ async function validerLogin(event) {
     }
   }
   loading.value = false
+   */
 }
 
 function goCommunecter() {
