@@ -4,77 +4,9 @@ import { useLocalStore } from '@/stores/local'
 
 // gère les routes(pages)
 import { createRouter, createWebHistory } from 'vue-router'
-import Accueil from '../views/Accueil.vue'
+import { routes } from './routes.js'
 
 const domain = `${location.protocol}//${location.host}`
-
-const routes = [
-  {
-    // 404, route interceptée
-    path: '/:pathMatch(.*)*',
-    name: 'NotFound',
-    component: {}
-  },
-  {
-    path: '/',
-    name: 'Accueil',
-    component: Accueil
-  },
-  {
-    // route interceptée
-    path: '/emailconfirmation/:id/:token',
-    name: 'EmailConfirmation',
-    component: {}
-  },
-  {
-    // /search/screens -> /search?q=screens
-    path: '/event/embed/:slug',
-    name: 'EventEmbed',
-    component: () => import(/* webpackChunkName: "Event" */ '../views/Event.vue'),
-  },
-  {
-    path: '/event/:slug',
-    // si embed
-    alias: '/event/embed/:slug',
-    name: 'Event',
-    // route level code-splitting
-    // this generates a separate chunk (about.[hash].js) for this route
-    // which is lazy-loaded when the route is visited.
-    component: () => import(/* webpackChunkName: "Event" */ '../views/Event.vue')
-  },
-  {
-    path: '/artist/:slug',
-    name: 'Artist',
-    component: () => import(/* webpackChunkName: "Artist" */ '../views/ArtistPage.vue')
-  },
-  {
-    path: '/adhesions/',
-    name: 'Adhesions',
-    component: () => import(/* webpackChunkName: "Adhesions" */ '@/views/Adhesions.vue')
-  },
-  {
-    // route interceptée
-    path: '/stripe/return/:id',
-    name: 'StripeReturn',
-    component: {}
-  },
-  {
-    // route interceptée
-    path: '/emailconfirmation/:id/:token',
-    name: 'EmailConfirmation',
-    component: {}
-  },
-  {
-    path: '/status',
-    name: 'StatusPlace',
-    component: () => import(/* webpackChunkName: "StatusPlace" */ '../views/StatusPlace.vue')
-  },
-  {
-    path: '/onboardreturn/:accstripe/',
-    name: 'OnboardReturn',
-    component: () => import(/* webpackChunkName: "OnboardReturn" */ '../views/OnboardReturn.vue')
-  }
-]
 
 const router = createRouter({
   history: createWebHistory(),
