@@ -2,7 +2,7 @@
 import { defineStore } from 'pinia'
 import * as CryptoJS from 'crypto-js'
 import { log } from '../../communs/LogError'
-// import {emitEvent} from "../../communs/EmitEvent"
+import { useLocalStore } from '../local/index'
 
 const domain = `${window.location.protocol}//${window.location.host}`
 
@@ -16,24 +16,102 @@ export const useSessionStore = defineStore({
     routeName: '',
     header: null,
     membershipProducts: null,
+    currentEventUuid: null,
     events: [],
-    event: null,
-    eventHashReturn: 'first'
+    email: null
   }),
   getters: {
     getArtists (state) {
-      const currentEvent = state.events.find(event => event.slug === state.eventSlug)
-      // console.log('-> getArtists, currentEvent =', currentEvent)
-      // console.log('-> getArtists, state.eventSlug =', state.eventSlug)
-      return currentEvent.artists
+      return state.events.find(event => event.uuid === state.currentEventUuid).artists
     },
     getEvent (state) {
-      return state.events.find(event => event.slug === state.eventSlug)
+      return state.events.find(event => event.uuid === state.currentEventUuid)
+    },
+    getBilletsFromEvent (state) {
+      const event = state.events.find(event => event.uuid === state.currentEventUuid)
+      // "B" billets payants et "F" gratuits + "A" adhésion lié à un prix d'un autre produit dans l'évènement
+      const categories = ['F', 'B', 'A']
+      return event.products.filter(prod => categories.includes(prod.categorie_article))
+    },
+    getEmail (state) {
+      return state.email
+    },
+    getDataAdhesion (state) {
+      return (membershipsUuid) => {
+        return state.membershipProducts.find(membership => membership.uuid === membershipsUuid)
+      }
+    },
+    getProductIsActivated (state) {
+      return (productUuid) => {
+        const products = state.events.find(event => event.uuid === state.currentEventUuid).products
+        return products.find(product => product.uuid === productUuid).activated
+      }
+    },
+    getHeader (state) {
+      return state.header
+    },
+    getRouteName (state) {
+      return state.routeName
     }
+
   },
   actions: {
     setIdentitySite (value) {
       this.identitySite = value
+    },
+    updateEmail (email, value) {
+      this.email = value
+    },
+    /**
+     * Formate les données d'un évènement pour un formulaire
+     * @param postEvent
+     */
+    storeEvent (postEvent) {
+      this.currentEventUuid = postEvent.uuid
+
+      // hash retour et sauvegarde dans event
+      const returnString = JSON.stringify(postEvent)
+      const hash = CryptoJS.HmacMD5(returnString, 'NODE_18_lts').toString()
+
+      // lévènement actuel existe il dans le tablea events
+      let event = this.events?.find(event => event.uuid === postEvent.uuid)
+
+      // création ou reset de l'objet event si non existant ou données "postEvent" différentes
+      if (event === undefined || event.eventHash !== hash) {
+        // priorité: l'email est pris dans le cache local(résultat d'une validation d'email)
+        const { email } = useLocalStore()
+        this.email = email !== null ? email : ''
+
+        // enregistrer le hash post
+        postEvent.eventHash = hash
+
+        // ajout de la propriété "selected" aux options checkbox
+        postEvent.options_checkbox.forEach(option => option['checked'] = false)
+
+        // ajout de la propriété "optionsRadioSelected" à l'évènement
+        postEvent.optionsRadioSelected = false
+
+        // ajout de l'adhésion obligatoire d'un prix de produits dans la liste des produits
+        let newProducts = []
+        postEvent.products.forEach((product) => {
+          newProducts.push(product)
+          product.prices.forEach((price) => {
+            // pour avoir un champ inputs visible
+            price['customers'] = [{ first_name: '', last_name: '' }]
+            // ajout de l'adhésion dans la liste de produits de l'évènement
+            if (price.adhesion_obligatoire !== null) {
+              let newProduct = this.membershipProducts.find(membership => membership.uuid === price.adhesion_obligatoire)
+              newProduct['customers'] = [{ first_name: '', last_name: '', phone: '', postal_code: '' }]
+              // adhésion non activée/visible
+              newProduct['activated'] = false
+              newProducts.push(JSON.parse(JSON.stringify(newProduct)))
+            }
+          })
+        })
+        postEvent.products = newProducts
+        postEvent['email'] = this.email
+        this.events.push(postEvent)
+      }
     },
     /**
      * Initialise/charge les données du tenant/lieu (place, membershipProducts)
@@ -54,6 +132,7 @@ export const useSessionStore = defineStore({
         // init state.place
         if (retour.membership_products) {
           this.membershipProducts = retour.membership_products
+          // log({object : retour.membership_products})
         }
 
         try {
@@ -77,16 +156,19 @@ export const useSessionStore = defineStore({
           domain: domain,
           categorie: retour.categorie
         }
-
       } catch (error) {
-        this.error = error
         log({ message: 'loadPlace', error })
+         emitter.emit('modalMessage', {
+          titre: 'Erreur',
+          contenu: `Chargement des données initiales(lieu/...) -- erreur: ${error.message}`
+        })
+         return false
       } finally {
         this.loading = false
       }
     },
-    async loadEvent (slug) {
-      log({ message: 'loadEvent, slug = ' + slug })
+    async loadEvent (slug, next) {
+      // log({ message: 'loadEvent, slug = ' + slug })
       this.eventSlug = slug
       this.error = ''
       this.loading = true
@@ -103,46 +185,23 @@ export const useSessionStore = defineStore({
         retour = { status: 'error', error: error }
       }
 
-      // hash retour et sauvegarde dans event
-      const returnString = JSON.stringify(retour)
-      const hashReturn = CryptoJS.HmacMD5(returnString, 'NODE_18_lts').toString()
-
-      // actualisation event
-      if (this.eventHashReturn === 'first' || this.eventHashReturn !== hashReturn) {
-        this.eventHashReturn = hashReturn
-        log({ message: 'Modification data session event !' })
-        this.event = retour.content
-      }
-
-      this.loading = false
       if (retour.status === 'error') {
         log({ message: 'useEventStore, getEventBySlug: ', error: retour.error })
         emitter.emit('modalMessage', {
           titre: 'Erreur',
           contenu: `Chargement de l'évènement '${slug}' -- erreur: ${retour.error.message}`
         })
+        return false
+      } else {
+        this.storeEvent(retour.content)
       }
+      this.loading = false
+      next()
     },
-    /**
-     * Charge tous les évènements dans le store session
-     * @returns {Promise<void>}
-     */
-    async loadEvents () {
-      this.error = ''
-      this.loading = true
-      try {
-        const apiEvents = `/api/events/`
-        const response = await fetch(domain + apiEvents)
-        if (response.status !== 200) {
-          throw new Error(`${response.status} - ${response.statusText}`)
-        }
-        this.events = await response.json()
-      } catch (error) {
-        this.error = error
-        log({ message: 'loadEvents', error })
-      } finally {
-        this.loading = false
-      }
+    toggleActivationProductMembership (uuid) {
+      const products = this.events.find(event => event.uuid === this.currentEventUuid).products
+      const status = products.find(product => product.uuid === uuid).activated
+      products.find(product => product.uuid === uuid).activated = !status
     }
   },
   persist: {

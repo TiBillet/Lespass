@@ -1,12 +1,18 @@
+import { START_LOCATION } from 'vue-router'
 // store
-import {useSessionStore} from '@/stores/session'
-import {useLocalStore} from '@/stores/local'
+import { useSessionStore } from '@/stores/session'
+import { useLocalStore } from '@/stores/local'
 
 // gère les routes(pages)
-import {createRouter, createWebHistory} from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router'
 import Accueil from '../views/Accueil.vue'
 
 const domain = `${location.protocol}//${location.host}`
+
+function loadEventData (to, from, next) {
+  const { loadEvent } = useSessionStore()
+  loadEvent(to.params.slug, next)
+}
 
 const routes = [
   {
@@ -27,14 +33,10 @@ const routes = [
     component: {}
   },
   {
-    // /search/screens -> /search?q=screens
-    path: '/event/embed/:slug',
-    name: 'EventEmbed',
-    component: () => import(/* webpackChunkName: "Event" */ '../views/Event.vue'),
-  },
-  {
     path: '/event/:slug',
+    alias:'/event/embed/:slug',
     name: 'Event',
+    beforeEnter: [loadEventData],
     // route level code-splitting
     // this generates a separate chunk (about.[hash].js) for this route
     // which is lazy-loaded when the route is visited.
@@ -77,7 +79,7 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
-  scrollBehavior(to, from, savedPosition) {
+  scrollBehavior (to, from, savedPosition) {
     // always scroll to top
     return {
       top: 0,
@@ -86,33 +88,35 @@ const router = createRouter({
   }
 })
 
-
 router.beforeEach((to, from, next) => {
   // traitement de la redirection si interception
   let redirection = false
   let nouvelleRoute = '/'
+
   if (from.name !== undefined) {
     nouvelleRoute = from.path
   }
 
   // par défaut le header et la navbar son affiché
-  const {setIdentitySite} = useSessionStore()
-  setIdentitySite(true)
-  if (to.name === "EventEmbed") {
+  let { setIdentitySite } = useSessionStore()
+   setIdentitySite(true)
+
+  // le header et la navbar son cachée
+  if (to.path.includes('embed')) {
     setIdentitySite(false)
   }
 
   // intercepte la route "NotFound" et redirige sur le wiki tibillet
-  if (to.name === "NotFound") {
+  if (to.name === 'NotFound') {
     // window.location = "https://wiki.tibillet.re/"
   }
 
   // intercepte la route "EmailConfirmation" et active l'email
-  if (to.name === "EmailConfirmation") {
+  if (to.name === 'EmailConfirmation') {
     const id = to.params.id
     const token = to.params.token
     if (id !== undefined && token !== undefined) {
-      const {emailActivation} = useLocalStore()
+      const { emailActivation } = useLocalStore()
       emailActivation(id, token)
     } else {
       emitter.emit('message', {
@@ -124,9 +128,8 @@ router.beforeEach((to, from, next) => {
     redirection = true
   }
 
-
   // intercepte retour de stripe
-  if (to.name === "StripeReturn") {
+  if (to.name === 'StripeReturn') {
     const localstore = useLocalStore()
     // redirection en fonction de l'url provenant stripeEtape définie dans Event.vue
     nouvelleRoute = localstore.stripeEtape.nextPath
@@ -150,13 +153,12 @@ router.beforeEach((to, from, next) => {
       path: nouvelleRoute,
       replace: true
     })
-  } else {
+  }
+  if (redirection === false) {
     next()
   }
 
   useSessionStore().routeName = to.name
-
 })
-
 
 export default router

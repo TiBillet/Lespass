@@ -1,18 +1,27 @@
 <template>
   <!-- artistes -->
-  <div v-if="event !== null" class="container">
-    <div v-for="(artist, index) in event.artists" :key="index">
+  <div class="container">
+    <div v-for="(artist, index) in getArtists" :key="index">
       <CardArtist :artist="artist.configuration" class="mb-6"/>
     </div>
   </div>
 
   <!-- les produits -->
-  <div v-if="Object.entries(event).length > 0" class="container mt-5 test-view-event">
+  <div class="container mt-5 test-view-event">
 
     <form @submit.prevent="validerAchats($event)" class="needs-validation" novalidate>
        <CardEmail/>
+
+      <!--
+        Billet(s)
+        Si attribut "image", une image est affiché à la place du nom
+        Attribut 'style-image' gère les propriétées(css) de l'image (pas obligaoire, style par défaut)
+         -->
+        <CardBillet :image="true" :style-image="{height: '30px',width: 'auto'}"/>
+
       <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
     </form>
+
     <!--
       <div class="container">
         <p>
@@ -40,24 +49,22 @@
       -->
   </div>
 </template>
-
 <script setup>
 // console.clear()
 console.log('-> Event.vue !')
-import { useRoute } from 'vue-router'
 // composants
-import CardArtist from '@/components/CardArtist.vue'
-import CardEmail from '@/components/CardEmail.vue'
+import CardArtist from "@/components/CardArtist.vue"
+import CardEmail from "@/components/CardEmail.vue"
+import CardBillet from '@/components/CardBillet.vue'
 
 // store
-import { storeToRefs } from 'pinia'
-import { useSessionStore } from '@/stores/session'
+import { storeToRefs } from "pinia"
+import { useSessionStore } from "@/stores/session"
 
-// réactivité
-const { event } = storeToRefs(useSessionStore())
+
 // action
-const { loadEvent } = useSessionStore()
-const route = useRoute()
+const { getArtists, getEvent } = useSessionStore()
+
 
 function validerAchats (event) {
   if (!event.target.checkValidity()) {
@@ -67,7 +74,7 @@ function validerAchats (event) {
   event.target.classList.add('was-validated')
 }
 
-loadEvent(route.params.slug)
+
 
 /*
 // vue

@@ -1,9 +1,9 @@
 <template>
   <Loading v-if="loading"/>
   <!-- en cours -->
-  <Navbar v-if="identitySite"/>
-  <Header v-if="identitySite"/>
-  <p v-if="error !== ''" class="text-dark">{{ error }}</p>
+  <div>identitySite = {{ identitySite }}</div>
+  <Navbar v-if="identitySite" />
+  <Header v-if="identitySite" />
   <router-view></router-view>
   <ModalMessage/>
   <Modallogin/>
@@ -15,7 +15,8 @@
 </template>
 
 <script setup>
-// console.log('-> App.vue')
+console.log('-> App.vue')
+import { onBeforeMount, onBeforeUpdate } from 'vue'
 // composants
 import Loading from '@/components/Loading.vue'
 import Navbar from '@/components/Navbar.vue'
@@ -54,11 +55,6 @@ import '@/assets/css/now-design-system-pro.min.css'
 import '@/assets/js/now-design-system-pro.js'
 
 // réactivité
-const { identitySite, loading, error } = storeToRefs(useSessionStore())
-// action
-const { loadPlace } = useSessionStore()
-
-loadPlace()
-
+const { identitySite, loading, header, routeName } = storeToRefs(useSessionStore())
 </script>
 <style></style>

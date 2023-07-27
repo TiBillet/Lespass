@@ -2,15 +2,54 @@
   <nav id="navbar" class="navbar navbar-expand-lg z-index-3 w-100 navbar-transparent position-fixed">
     <div class="container">
       <!-- lieu -->
-      <div v-if="header !== null" class="navbar-brand">
+      <div v-if="getHeader !== null" class="navbar-brand">
         <a href="/" class="navbar-brand d-flex justify-content-between align-items-center">
-          <h6 v-if="header.categorie !== 'M'" class="m-0 text-white" data-bs-toggle="tooltip" data-bs-placement="bottom"
-              title="Actualise les données évènements et lieu !">{{ header.organisation }}</h6>
+          <h6 v-if="getHeader.categorie !== 'M'" class="m-0 text-white" data-bs-toggle="tooltip"
+              data-bs-placement="bottom"
+              title="Actualise les données évènements et lieu !">{{ getHeader.titre }}</h6>
           <h6 v-else class="m-0 text-white" data-bs-toggle="tooltip" data-bs-placement="bottom"
               title="Actualise les données évènements et lieu !">Agenda TiBillet</h6>
         </a>
       </div>
+      <!-- partie droite -->
+      <ul class="navbar-nav d-flex flex-row-reverse ms-auto d-block">
+        <!-- menu user -->
+        <li v-if="getRefreshToken !== ''" class="nav-item dropdown">
+          <a class="nav-link d-flex justify-content-between align-items-center dropdown-toggle me-1" href="#"
+             id="menuUser"
+             role="button" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="fas fa-user me-1" aria-hidden="true"></i>
+            <h6 class="m-0 text-white">Mon compte</h6>
+          </a>
+          <!-- sous menu user -->
+          <ul class="dropdown-menu" aria-labelledby="menuUser">
+            <li class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
+                style="cursor: default">
+              {{ getEmail }}
+            </li>
+          </ul>
+        </li>
 
+        <!-- pas de connexion -->
+        <li class="nav-item">
+          <a v-if="getRefreshToken === ''" class="nav-link ps-1 d-flex justify-content-between align-items-center"
+             role="button"
+             data-bs-toggle="modal" data-bs-target="#modal-form-login">
+            <i class="fa fa-user-circle-o me-1 text-white" aria-hidden="true"></i>
+            <h6 class="m-0 text-white" data-test-id="seConnecter">Se connecter</h6>
+          </a>
+        </li>
+
+        <!-- adhésions -->
+        <li class="nav-item">
+          <a v-if="routeName !== 'Adhesions'" href="/adhesions"
+             class="nav-link ps-1 d-flex justify-content-between align-items-center"
+             :title="`Adhésions possibles à l'association '${ getHeader.titre }'`">
+            <i class="fa fa-users me-1 text-white" aria-hidden="true"></i>
+            <h6 class="m-0 text-white">Adhésions</h6>
+          </a>
+        </li>
+      </ul>
       <!--
       //-- partie droite --
       <ul v-if="place.categorie !== 'M'" class="navbar-nav d-flex flex-row-reverse ms-auto d-block">
@@ -121,13 +160,12 @@
 
 <script setup>
 console.log(' -> Navbar.vue !')
-// store
-import { storeToRefs } from "pinia"
 import { useSessionStore } from '@/stores/session'
+import { useLocalStore } from '@/stores/local'
 
-// réactivité
-const { header } = storeToRefs(useSessionStore())
-
+// action
+const { getHeader } = useSessionStore()
+const { getEmail, getRefreshToken } = useLocalStore()
 
 /*
 //vue

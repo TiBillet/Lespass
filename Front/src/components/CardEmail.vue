@@ -38,9 +38,9 @@
 console.log('-> CardEmail.vue !')
 
 // store
-import {useLocalStore} from '@/stores/local'
+import {useSessionStore} from '@/stores/session'
 
-const {getEmail, updateEmail} = useLocalStore()
+const {getEmail, updateEmail} = useSessionStore()
 
 function inputFocus(id) {
   document.querySelector(`#${id}`).focus()

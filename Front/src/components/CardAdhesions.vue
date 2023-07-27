@@ -84,7 +84,7 @@
 </template>
 
 <script setup>
-console.log('-> CardAdhesions.vue !')
+console.log('-> CardAdhesions_save.vue !')
 
 // vue
 import {useRouter} from 'vue-router'
