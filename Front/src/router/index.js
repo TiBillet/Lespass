@@ -96,11 +96,11 @@ router.beforeEach((to, from, next) => {
     nouvelleRoute = from.path
   }
 
-  // par défaut le header et la navbar son affiché
+  // par défaut le header et la navbar sons affichés
   const { setIdentitySite } = useAllStore()
   setIdentitySite(true)
 
-  // le header et la navbar son cachée
+  // le header et la navbar sont cachées
   if (to.path.includes('embed')) {
     setIdentitySite(false)
   }
