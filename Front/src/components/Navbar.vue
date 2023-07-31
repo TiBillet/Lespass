@@ -1,8 +1,8 @@
 <template>
-  <nav id="navbar" class="navbar navbar-expand-lg z-index-3 w-100 navbar-transparent position-fixed">
+  <nav id="navbar" class="navbar navbar-expand-lg bg-dark opacity-8 w-100 fixed-top" >
     <div class="container">
       <!-- lieu -->
-      <div v-if="header !== null" class="navbar-brand">
+      <div v-if="header !== null" class="navbar-brand opacity-10">
         <a href="/" class="navbar-brand d-flex justify-content-between align-items-center">
           <h6 v-if="header.categorie !== 'M'" class="m-0 text-white" data-bs-toggle="tooltip"
               data-bs-placement="bottom"
@@ -180,13 +180,15 @@ const { header, routeName } = storeToRefs(sessionStore)
 const { refreshToken, me } = storeToRefs(localStore)
 // action
 const { disconnect } = localStore
+const { getEmail } = sessionStore
 
 function showModalLogin () {
+
   const elementModal = document.querySelector('#modal-form-login')
   const modal = bootstrap.Modal.getOrCreateInstance(elementModal) // Returns a Bootstrap modal instance
   // peuple l'email
   modal.show()
-  document.querySelector('#login-email').value = email.value
+  document.querySelector('#login-email').value = getEmail
 }
 
 /*

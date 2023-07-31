@@ -16,12 +16,6 @@
 </template>
 
 <script setup>
-// store
-import { storeToRefs } from 'pinia'
-import { useAllStore } from '@/stores/all'
-
-const { events, place } = storeToRefs(useAllStore())
-
 let research = ''
 </script>
 

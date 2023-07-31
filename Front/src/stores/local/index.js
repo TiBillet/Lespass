@@ -1,22 +1,22 @@
 import { defineStore } from 'pinia'
-
 import { useSessionStore } from '@/stores/session'
 import { log } from '../../communs/LogError'
 
 const domain = `${location.protocol}//${location.host}`
-const initState = {
-  initStore: false,
-  refreshToken: '',
-  me: {
-    cashless: {},
-    reservations: [],
-    membership: []
-  },
-  stripeEtape: null
-}
 
-export const useLocalStore = defineStore('TiBillet-local', {
-  state: () => (initState),
+export const useLocalStore = defineStore({
+  id: 'local',
+  state: () => ({
+    initStore: false,
+    refreshToken: '',
+    me: {
+      cashless: {},
+      reservations: [],
+      membership: [],
+      email: ''
+    },
+    stripeEtape: null
+  }),
   getters: {
     getIsLogin (state) {
       return state.refreshToken !== '' ? true : false
@@ -33,7 +33,7 @@ export const useLocalStore = defineStore('TiBillet-local', {
       }
     },
     getEmailStore (state) {
-      return state.me?.email
+      return state.me.email
     },
     getRefreshToken (state) {
       return state.refreshToken
@@ -78,7 +78,8 @@ export const useLocalStore = defineStore('TiBillet-local', {
       this.me = {
         cashless: {},
         reservations: [],
-        membership: []
+        membership: [],
+        email: ''
       }
       this.refreshToken = ''
     },
@@ -161,5 +162,8 @@ export const useLocalStore = defineStore('TiBillet-local', {
       }
     }
   },
-  persist: true
+  persist: {
+    key: 'Tibillet-local',
+    storage: window.localStorage
+  }
 })
