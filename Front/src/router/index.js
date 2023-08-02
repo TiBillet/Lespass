@@ -1,6 +1,6 @@
 // store
-import { useSessionStore } from '@/stores/session'
-import { useLocalStore } from '@/stores/local'
+import { useSessionStore } from "../stores/session"
+import { getLocalStateKey } from "../communs/storeLocal.js"
 
 // gère les routes(pages)
 import { createRouter, createWebHistory } from 'vue-router'
@@ -53,7 +53,7 @@ router.beforeEach((to, from, next) => {
     const id = to.params.id
     const token = to.params.token
     if (id !== undefined && token !== undefined) {
-      const { emailActivation } = useLocalStore()
+      const { emailActivation } = useSessionStore()
       emailActivation(id, token)
     } else {
       emitter.emit('message', {
@@ -67,14 +67,17 @@ router.beforeEach((to, from, next) => {
 
   // intercepte retour de stripe
   if (to.name === 'StripeReturn') {
-    const localstore = useLocalStore()
+    const {postStripeReturn} = useSessionStore()
+
+    const stripeStep = getLocalStateKey('stripeStep')
+
     // redirection en fonction de l'url provenant stripeEtape définie dans Event.vue
-    nouvelleRoute = localstore.stripeEtape.nextPath
+    nouvelleRoute = stripeStep.nextPath
 
     const uuidStripe = to.params.id
     // console.log('uuidStripe =', uuidStripe)
     if (uuidStripe !== undefined) {
-      localstore.postStripeReturn(uuidStripe)
+      postStripeReturn(uuidStripe)
     } else {
       emitter.emit('message', {
         tmp: 6,

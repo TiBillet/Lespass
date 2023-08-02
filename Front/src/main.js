@@ -6,7 +6,6 @@ import App from './App.vue'
 import mitt from 'mitt'
 
 window.emitter = mitt()
-window.accessToken = ''
 
 const pinia = createPinia()
 pinia.use(piniaPluginPersistedstate)

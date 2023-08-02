@@ -34,7 +34,6 @@
               </div>
             </div>
           </fieldset>
-
         </div>
         <div class="modal-footer">
           <button type="button" class="btn bg-gradient-secondary" data-bs-dismiss="modal">Fermer</button>
@@ -69,6 +68,108 @@
 </template>
 
 <script setup>
+import { onMounted } from 'vue'
+import { log } from '../communs/LogError'
+
+// store
+import { storeToRefs } from 'pinia'
+import { useSessionStore } from '@/stores/session'
+
+const sessionStore = useSessionStore()
+const { accessToken, me } = storeToRefs(sessionStore)
+
+const { setLoadingValue, getMe } = sessionStore
+const domain = `${window.location.protocol}//${window.location.host}`
+
+// actu du profil à l'ouverture du modal
+onMounted(() => {
+  const elementModal = document.querySelector('#membership-owned-modal')
+  elementModal.addEventListener('shown.bs.modal', function (event) {
+    getMe()
+  })
+})
+
+function dateToFrenchFormat (dateString) {
+  if (dateString !== null) {
+    const nomMois = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+    const dateArray = dateString.split('T')[0].split('-')
+    const mois = nomMois[parseInt(dateArray[1])]
+    return dateArray[2] + ' ' + mois + ' ' + dateArray[0]
+  } else {
+    return ''
+  }
+}
+
+function showStatus (status) {
+  const conv = {
+    A: 'Reconduction automatique.',
+    O: 'Pas de reconduction.',
+    C: 'Reconduction automatique annulée.'
+  }
+  try {
+    return conv[status]
+  } catch (error) {
+    log({ message: `showStatus, status "${status}", error:`, error })
+    return 'Type de reconduction inconnue.'
+  }
+
+}
+
+async function cancelMembership () {
+  // récup uuid price
+  const terminationModal = document.querySelector('#membership-termination-modal')
+  const modal = bootstrap.Modal.getInstance(terminationModal)
+  console.log('modal =', modal.uuidPrice)
+
+  // effacer modal confirmation
+  modal.hide()
+
+  const api = `/api/cancel_sub/`
+  try {
+    setLoadingValue(true)
+    const response = await fetch(domain + api, {
+      method: 'POST',
+      cache: 'no-cache',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken.value} `
+      },
+      body: JSON.stringify({ 'uuid_price': modal.uuidPrice })
+    })
+    const retour = await response.json()
+    setLoadingValue(false)
+    if (response.status === 200) {
+      // message confirmation résiliation
+      emitter.emit('modalMessage', {
+        titre: 'Succès',
+        typeMsg: 'success',
+        dynamic: true,
+        contenu: '<h3>' + retour + '</h3>'
+      })
+    }
+    // actu modal
+    getMe()
+  } catch (error) {
+    setLoadingValue(false)
+    log({ message: 'cancelMembership, /api/cancel_sub/, error:', error })
+    emitter.emit('modalMessage', {
+      titre: 'Erreur',
+      typeMsg: 'danger',
+      contenu: `Post /api/membership/ : ${error.message}`
+    })
+    // actu modal
+    getMe()
+  }
+
+}
+
+function confirmMembershipTermination (uuidPrice) {
+  const terminationModal = new bootstrap.Modal(document.querySelector('#membership-termination-modal'))
+  terminationModal.uuidPrice = uuidPrice
+  terminationModal.show()
+}
+
+/*
 // store
 import {storeToRefs} from 'pinia'
 import {useAllStore} from '@/stores/all'
@@ -78,20 +179,6 @@ const {me} = storeToRefs(useLocalStore())
 const {loading, error} = storeToRefs(useAllStore())
 const domain = `${location.protocol}//${location.host}`
 
-function showStatus(status) {
-  if (status === 'A') {
-    return 'Reconduction automatique.'
-  }
-
-  if (status === 'O') {
-    return 'Pas de reconduction.'
-  }
-
-  if (status === 'C') {
-    return 'Reconduction automatique annulée.'
-  }
-
-}
 
 function dateToFrenchFormat(dateString) {
   if (dateString !== null) {
@@ -140,6 +227,8 @@ async function cancelMembership() {
     error.value = erreur
   }
 }
+
+ */
 </script>
 
 <style scoped>

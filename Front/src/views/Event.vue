@@ -1,68 +1,47 @@
 <template>
-  <!-- artistes -->
-  <div class="container">
-    <div v-for="(artist, index) in getArtists" :key="index">
-      <CardArtist :artist="artist.configuration" class="mb-6"/>
-    </div>
-  </div>
-
-  <!-- les produits -->
-  <div class="container mt-5 test-view-event">
-
-    <form @submit.prevent="validerAchats($event)" class="needs-validation" novalidate>
-       <CardEmail/>
-
-      <!--
-        Billet(s)
-        Si attribut "image", une image est affiché à la place du nom
-        Attribut 'style-image' gère les propriétées(css) de l'image (pas obligaoire, style par défaut)
-         -->
-        <CardBillet :image="true" :style-image="{height: '30px',width: 'auto'}"/>
-
-      <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
-    </form>
-
-    <!--
-      <div class="container">
-        <p>
-        </p>
+  <div v-if="loadingEvent">
+    <!-- artistes -->
+    <div class="container">
+      <div v-for="(artist, index) in getArtists" :key="index">
+        <CardArtist :artist="artist.configuration" class="mb-6"/>
       </div>
+    </div>
 
+    <!-- les produits -->
+    <div class="container mt-5 test-view-event">
       <form @submit.prevent="validerAchats($event)" class="needs-validation" novalidate>
-        //--
-        Billet(s)
-        Si attribut "image", une image est affiché à la place du nom
-        Attribut 'style-image' gère les propriétées(css) de l'image (pas obligaoire, style par défaut)
-         --
-        <CardBillet :image="true" :style-image="{height: '30px',width: 'auto'}"/>
-
-        <CardOptions/>
-
         <CardEmail/>
 
-        <CardChargeCashless v-if="showProduct.cashless"/>
-
-        //--      <CardGifts /> --
 
         <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
       </form>
-      -->
+    </div>
   </div>
 </template>
+
 <script setup>
-// console.clear()
 console.log('-> Event.vue !')
+import { ref } from 'vue'
+import { useRoute } from 'vue-router'
+import { useSessionStore } from '../stores/session'
+
 // composants
-import CardArtist from "@/components/CardArtist.vue"
-import CardEmail from "@/components/CardEmail.vue"
-import CardBillet from '@/components/CardBillet.vue'
+import CardArtist from '@/components/CardArtist.vue'
+import CardEmail from '@/components/CardEmail.vue'
 
-// store
-import { useSessionStore } from "@/stores/session"
+//store
+const sessionStore = useSessionStore()
+// actions
+const { loadEvent, getArtists } = sessionStore
 
-// action
-const { getArtists, getEvent } = useSessionStore()
+const loadingEvent = ref(false)
+const route = useRoute()
+const slug = route.params.slug
 
+// gestion synchrone du chargement de l'évènement
+const waitLoadEvent = async () => {
+  loadingEvent.value = await loadEvent(slug)
+}
 
 function validerAchats (event) {
   if (!event.target.checkValidity()) {
@@ -70,240 +49,14 @@ function validerAchats (event) {
     event.stopPropagation()
   }
   event.target.classList.add('was-validated')
-}
-
-
-
-/*
-// vue
-import {ref} from "vue"
-
-import { useAllStore } from "@/stores/all"
-
-const { getFormEventBySlug, getArtists, updateSlug } = useAllStore()
-
-updateSlug(slug)
-
-// getFormEventBySlug(slug)
-// vue
-import { useRoute } from 'vue-router'
-
-// store
-import { storeToRefs } from 'pinia'
-import { useEventStore } from '@/stores/event'
-import { useLocalStore } from '@/stores/local'
-import { useAllStore } from '@/stores/all'
-
-// composants
-import CardBillet from '@/components/CardBillet.vue'
-import CardOptions from '@/components/CardOptions.vue'
-import CardEmail from '@/components/CardEmail.vue'
-import CardChargeCashless from '@/components/CardChargeCashless.vue'
-import CardGifts from '@/components/CardGifts.vue'
-
-// state event
-const { event, forms, showProduct } = storeToRefs(useEventStore())
-// actions
-const { updateEmail, getEventBySlug } = useEventStore()
-// state adhésion
-let { setEtapeStripe } = useLocalStore()
-
-const { setIdentitySite } = useAllStore()
-// state "all" for loading components
-const { adhesion, loading, error } = storeToRefs(useAllStore())
-
-const route = useRoute()
-const slug = route.params.slug
-const email = route.query.email
-
-// load event
-async function initEvent () {
-  await getEventBySlug(slug, email)
-}
-
-// formatage des données POST events
-function formatBodyPost () {
-  // console.log('-> fonc formatBodyPost !')
-
-  const form = forms.value.find(obj => obj.event === event.value.uuid)
-
-  // proxy to array
-  const prices = JSON.parse(JSON.stringify(form.prices))
-
-  // init body with prices ticket
-  const body = {
-    event: form.event,
-    email: document.querySelector(`#profil-email`).value,
-    chargeCashless: form.chargeCashless,
-    prices,
-    options: []
-  }
-
-  // options radio
-  for (const optionRadioKey in form.optionsRadio) {
-    const option = form.optionsRadio[optionRadioKey]
-    if (option.activation === true) {
-      body.options.push(option.uuid)
-    }
-  }
-
-  // options checkbox
-  for (const optionCheckboxKey in form.optionsCheckbox) {
-    const option = form.optionsCheckbox[optionCheckboxKey]
-    if (option.activation === true) {
-      body.options.push(option.uuid)
-    }
-  }
-
-  // gifts
-  for (const giftKey in form.gifts) {
-    const gift = form.gifts[giftKey]
-    if (gift.enable === true) {
-      body.prices.push({
-        uuid: gift.price,
-        qty: 1
-      })
-    }
-  }
-
-  // charge cashless qty = valeur de l'input
-  if (document.querySelector('#charge_cashless') !== null && parseFloat(document.querySelector('#charge_cashless').value) > 0) {
-    body.prices.push({
-      uuid: document.querySelector('#charge_cashless').getAttribute('data-uuid'),
-      qty: parseFloat(document.querySelector('#charge_cashless').value)
-    })
-  }
-
-  return body
-}
-
-function validerAchats (domEvent) {
-  console.log('-> fonc validerAchats !')
-
-  // efface tous les messages d'invalidité
-  const msgInvalides = domEvent.target.querySelectorAll('.invalid-feedback')
-  for (let i = 0; i < msgInvalides.length; i++) {
-    msgInvalides[i].style.display = 'none'
-  }
-
-  if (domEvent.target.checkValidity() === false) {
-    // formulaire non valide
-    // console.log('formulaire pas vailde !')
-    // scroll vers l'entrée non valide et affiche un message
-    const elements = domEvent.target.querySelectorAll('input')
-    for (let i = 0; i < elements.length; i++) {
-      const element = elements[i]
-      if (element.checkValidity() === false) {
-        // console.log('element = ', element)
-        element.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'center' })
-        element.parentNode.querySelector('.invalid-feedback').style.display = 'block'
-        break
-      }
-    }
-  } else {
-    // vérifier emails
-    const email = document.querySelector(`#profil-email`)
-    const confirmeEmail = document.querySelector(`#profil-confirme-email`)
-    if (email.value !== confirmeEmail.value) {
-      // console.log('formulaire non valide !')
-      confirmeEmail.parentNode.querySelector('.invalid-feedback').style.display = 'block'
-      confirmeEmail.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'center' })
-    } else {
-      // formulaire valide
-      console.log('formulaire valide !')
-
-      // vérifier qu'il y a au moins un achat pour valider un POST
-      let buyEnable = false
-      const form = forms.value.find(obj => obj.event === event.value.uuid)
-      // console.log('formulaire =', JSON.stringify(form, null, 2))
-      if (form.prices.length > 0) {
-        buyEnable = true
-      }
-      if (adhesion.activation === true) {
-        buyEnable = true
-      }
-
-      // lancement achat
-      if (buyEnable === true) {
-        const body = JSON.stringify(formatBodyPost())
-
-        // ---- requête "POST" achat billets ----
-        const urlApi = `/api/reservations/`
-
-        // options de la requête
-        const options = {
-          method: 'POST',
-          body: body,
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }
-        console.log('options =', JSON.stringify(options, null, 2))
-
-        // chargement
-        loading.value = true
-
-        // lance la/les réservation(s)
-        fetch(urlApi, options).then(response => {
-          // erreurs
-          if (response.status >= 400 && response.status <= 599) {
-            let typeErreur = 'Client'
-            if (response.status >= 500) {
-              typeErreur = 'Serveur'
-            }
-            throw new Error(`${typeErreur}, ${response.status} - ${response.statusText}`)
-          }
-          return response.json()
-        }).then((response) => {
-          loading.value = false
-          if (response.checkout_url !== undefined) {
-            // active "l'étape stripe"
-            if (route.path.indexOf('embed') !== -1) {
-              // reste sur l'event
-              setEtapeStripe({ formEventUuid: event.value.uuid, nextPath: route.path })
-            } else {
-              // va à l'accueil
-              setEtapeStripe({ formEventUuid: event.value.uuid, nextPath: '/' })
-            }
-
-            // paiement, redirection vers stripe
-            window.location.assign(response.checkout_url)
-          } else {
-            // paiement sans stripe, exemple: réservation gratuite
-            emitter.emit('modalMessage', {
-              typeMsg: 'success',
-              titre: 'Demande envoyée.',
-              dynamic: true,
-              contenu: '<h4>Merci de vérifier votre réservation dans votre boite email.</h4>'
-            })
-          }
-        }).catch((erreur) => {
-          loading.value = false
-          // désactive "l'étape stripe"
-          setEtapeStripe(null)
-          emitter.emit('modalMessage', {
-            titre: 'Erreur(s)',
-            // contenu = html => dynamic = true
-            dynamic: true,
-            contenu: '<h3>' + erreur + '</h3>',
-            typeMsg: 'warning',
-          })
-        })
-      } else {
-        // aucun produit sélectionné
-        emitter.emit('modalMessage', {
-          titre: 'Aucune réservation choisie.',
-          dynamic: true,
-          typeMsg: 'warning',
-          contenu: '<h3>Merci de selectionner le nombre de réservations.</h3>'
-        })
-      }
-    }
+  if (event.target.checkValidity() === true) {
+    console.log('validation ok!')
   }
 }
-initEvent()
- */
+
+waitLoadEvent()
 </script>
+
 <style>
 .invalid-feedback {
   margin-top: -4px !important;

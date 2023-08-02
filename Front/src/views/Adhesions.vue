@@ -1,7 +1,7 @@
 <template>
   <section class="pt-7 pb-5">
     <div class="container">
-      <div class="row justify-space-between py-2" v-for="(product, index) in getListAdhesions()" :key="index">
+      <div class="row justify-space-between py-2" v-for="(product, index) in getListAdhesions" :key="index">
         <div class="card card-plain card-blog mt-5">
           <div class="row">
             <div class="col-md-4">
@@ -19,7 +19,8 @@
                 {{ product.long_description }}
               </p>
 
-              <button class="btn btn-outline-secondary btn-sm" @click="showFormAdhesion(product.uuid)">Adhérez</button>
+              <button class="btn btn-outline-secondary btn-sm" @click="showMembershipForm(product.uuid)">Adhérez
+              </button>
 
             </div>
           </div>
@@ -36,23 +37,19 @@
 // vue
 import { ref } from 'vue'
 
+// store
+import { useSessionStore } from '../stores/session'
+
 // components
 import ModalMembershipForm from '@/components/ModalMembershipForm.vue'
 
-// store
-import { useAllStore } from '@/stores/all'
-import { useLocalStore } from '@/stores/local'
-
-// obtenir data adhesion
-const { getListAdhesions } = useAllStore()
-const { iamMembershipOwned } = useLocalStore()
-
+const { getListAdhesions, getIsMemberShip } = useSessionStore()
 let selectedProductUuid = ref('')
 
-function showFormAdhesion (productUuid) {
+function showMembershipForm (productUuid) {
   console.log('-> fonc showFormAdhesion, productUuid =', productUuid)
 
-  if (iamMembershipOwned(productUuid) === false) {
+  if (getIsMemberShip(productUuid) === false) {
     // update selected product uuid
     selectedProductUuid.value = productUuid
 
@@ -61,12 +58,6 @@ function showFormAdhesion (productUuid) {
     const modal = new bootstrap.Modal(elementModal) // Returns a Bootstrap modal instance
     modal.show()
 
-    // uncheck inputs radio et chcekbox du modal adhésion
-    const inputsC = document.querySelectorAll('.options-adhesion-to-unchecked')
-    for (const inputsCElement of inputsC) {
-      inputsCElement.checked = false
-    }
-
   } else {
     emitter.emit('modalMessage', {
       titre: 'Adhésion à jour',
@@ -74,7 +65,6 @@ function showFormAdhesion (productUuid) {
     })
   }
 }
-
 </script>
 
 <style scoped>

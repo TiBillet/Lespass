@@ -14,7 +14,7 @@
       <!-- partie droite -->
       <ul class="navbar-nav d-flex flex-row-reverse ms-auto d-block">
         <!-- user connecté -->
-        <li v-if="refreshToken !== ''" class="nav-item dropdown">
+        <li v-if="accessToken !== ''" class="nav-item dropdown">
           <a class="nav-link d-flex justify-content-between align-items-center dropdown-toggle me-1" href="#"
              id="menuUser"
              role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -29,8 +29,17 @@
               {{ me.email }}
             </li>
 
+             <!-- les adhésions du client -->
+            <li>
+              <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
+                 role="button" data-bs-toggle="modal" data-bs-target="#membership-owned-modal">
+                <i class="fa fa-users fa-fw me-1 text-dark" aria-hidden="true"></i>
+                <h6 class="m-0 text-dark">Adhésions</h6>
+              </a>
+            </li>
+
             <!-- déconnexion -->
-            <li v-if="refreshToken !== ''">
+            <li v-if="accessToken !== ''">
               <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
                  role="button" @click="disconnect()">
                 <i class="fa fa-sign-out fa-fw me-1 text-dark" aria-hidden="true"></i>
@@ -168,22 +177,17 @@
 </template>
 
 <script setup>
-console.log(' -> Navbar.vue !')
+// console.log(' -> Navbar.vue !')
 import { storeToRefs } from 'pinia'
 import { useSessionStore } from '@/stores/session'
-import { useLocalStore } from '@/stores/local'
 
-// action
 const sessionStore = useSessionStore()
-const localStore = useLocalStore()
-const { header, routeName } = storeToRefs(sessionStore)
-const { refreshToken, me } = storeToRefs(localStore)
-// action
-const { disconnect } = localStore
-const { getEmail } = sessionStore
+// reactif
+const { header, routeName, accessToken, me } = storeToRefs(sessionStore)
+// actions
+const { disconnect, getEmail, automaticConnection } = sessionStore
 
 function showModalLogin () {
-
   const elementModal = document.querySelector('#modal-form-login')
   const modal = bootstrap.Modal.getOrCreateInstance(elementModal) // Returns a Bootstrap modal instance
   // peuple l'email
@@ -191,6 +195,7 @@ function showModalLogin () {
   document.querySelector('#login-email').value = getEmail
 }
 
+automaticConnection()
 /*
 //vue
 import { ref } from 'vue'
