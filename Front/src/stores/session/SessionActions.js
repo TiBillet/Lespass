@@ -117,6 +117,7 @@ export const sessionActions = {
           body: JSON.stringify({ refresh: refreshToken })
         })
         const retour = await response.json()
+        console.log('retour =', retour)
         if (response.status === 200) {
           this.accessToken = retour.access
           this.getMe()
@@ -141,18 +142,21 @@ export const sessionActions = {
    * Formate les données d'un évènement pour un formulaire
    * @param postEvent
    */
-  storeEvent (postEvent) {
-    this.currentEventUuid = postEvent.uuid
-
+  initFormEvent (postEvent) {
+    console.log('-> initFormEvent')
+    this.currentUuidEventForm = postEvent.uuid
     // hash retour et sauvegarde dans event
     const returnString = JSON.stringify(postEvent)
     const hash = CryptoJS.HmacMD5(returnString, 'NODE_18_lts').toString()
 
-    // lévènement actuel existe il dans le tablea events
-    let event = this.events?.find(event => event.uuid === postEvent.uuid)
+    // lévènement actuel existe il dans forms
+    let form = this.forms?.find(formItem => formItem.uuid === postEvent.uuid)
 
-    // création ou reset de l'objet event si non existant ou données "postEvent" différentes
-    if (event === undefined || event.eventHash !== hash) {
+    // console.log('          hash =', hash)
+    // console.log('form.eventHash =', form?.eventHash)
+
+    // création ou reset de l'objet form si non existant ou données "postEvent" différentes
+    if (form === undefined || form.eventHash !== hash) {
       // enregistrer le hash post
       postEvent.eventHash = hash
 
@@ -180,32 +184,8 @@ export const sessionActions = {
         })
       })
       postEvent.products = newProducts
-      postEvent['email'] = this.email
-      this.event = postEvent
-    }
-  },
-  async loadEvent (slug) {
-    log({ message: 'loadEvent, slug = ' + slug })
-    this.loading = true
-
-    const urlApi = `/api/eventslug/${slug}`
-    try {
-      const response = await fetch(domain + urlApi)
-      if (response.status !== 200) {
-        throw new Error(`${response.status} - ${response.statusText}`)
-      }
-      const retour = await response.json()
-      this.loading = false
-      this.storeEvent(retour)
-      return true
-    } catch (error) {
-      this.loading = false
-      log({ message: `loadEvent, /api/eventslug/${slug}, error: `, error })
-      emitter.emit('modalMessage', {
-        titre: 'Erreur',
-        contenu: `Chargement de l'évènement '${slug}' -- erreur: ${error.message}`
-      })
-      return false
+      postEvent['email'] = this.me.email
+      this.forms.push(postEvent)
     }
   },
   /**

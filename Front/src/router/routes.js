@@ -1,4 +1,35 @@
-import Accueil from '../views/Accueil.vue'
+import Accueil from "../views/Accueil.vue"
+import { log } from "../communs/LogError"
+import { useSessionStore } from "../stores/session"
+
+const domain = `${window.location.protocol}//${window.location.host}`
+
+async function loadEvent(to, from, next) {
+  const { setLoadingValue, initFormEvent } = useSessionStore()
+  setLoadingValue(true)
+   const urlApi = `/api/eventslug/${to.params.slug}`
+    try {
+      const response = await fetch(domain + urlApi)
+      if (response.status !== 200) {
+        throw new Error(`${response.status} - ${response.statusText}`)
+      }
+      const retour = await response.json()
+      setLoadingValue(false)
+      initFormEvent(retour)
+      // Une fois le chargement de l'évènement fait, aller à la page event.
+      next()
+    } catch (error) {
+      setLoadingValue(false)
+      log({ message: `loadEvent, /api/eventslug/${to.params.slug}, error: `, error })
+      emitter.emit('modalMessage', {
+        titre: 'Erreur',
+        contenu: `Chargement de l'évènement '${to.params.slug}' -- erreur: ${error.message}`
+      })
+       next()
+    }
+
+
+}
 
 export const routes = [
   {
@@ -26,6 +57,7 @@ export const routes = [
     // si iframe
     alias: '/event/embed/:slug',
     name: 'Event',
+    beforeEnter: [loadEvent],
     component: () => import(/* webpackChunkName: "Event" */ '../views/Event.vue')
   },
   {

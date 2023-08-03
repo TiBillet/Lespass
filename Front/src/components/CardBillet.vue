@@ -1,6 +1,7 @@
 <template>
-  <div v-for="product in getBilletsFromEvent" :key="product.uuid">
-    <!-- produits "F" et "B" -->
+  <div>
+<!--  <div v-for="product in getBilletsFromEvent" :key="product.uuid">-->
+    <!-- produits "F" et "B" --
     <fieldset v-if="['F','B'].includes(product.categorie_article)"
               class="shadow-sm p-3 mb-5 bg-body rounded test-card-billet">
       <legend>
@@ -9,14 +10,13 @@
         <h6 v-if="product.short_description !== null" class="text-info">{{ product.short_description }}</h6>
       </legend>
       <div v-for="price in product.prices" :key="price.uuid" class="mt-5">
-        <!-- adhesion_obligatoire === null || (adhesion_obligatoire === true && userLoginAndHaveThisMembership -->
         <section
             v-if="price.adhesion_obligatoire === null || (getUserHasThisMembership(price.adhesion_obligatoire) && getIsLogin)">
           <div>{{ price.name }}</div>
         </section>
-        <!-- adhesion_obligatoire === true -->
+        /-- adhesion_obligatoire === true --
         <section v-else>
-          <!-- nom tarif -->
+          /-- nom tarif --
           <h4 class="font-weight-bolder text-dark text-gradient">
             {{ price.name.toLowerCase() }} : {{ price.prix }} €
           </h4>
@@ -34,7 +34,7 @@
 
       </div>
     </fieldset>
-    <!-- produits "A" -->
+    /-- produits "A" --
     <fieldset v-if="product.categorie_article === 'A' && getProductIsActivated(product.uuid) === true" class="shadow-sm p-3 mb-5 bg-body rounded test-card-billet">
       <legend>
         <img v-if="image === true" :src="product.img" class="image-product" :alt="product.name" :style="stImage">
@@ -42,6 +42,7 @@
         <h6 v-if="product.short_description !== null" class="text-info">{{ product.short_description }}</h6>
       </legend>
     </fieldset>
+    -->
   </div>
 </template>
 
@@ -49,13 +50,13 @@
 console.log('-> CardBillet.vue')
 
 // store
-import { useLocalStore } from '@/stores/local'
 import { useSessionStore } from '@/stores/session'
 
 // attributs/props
 const props = defineProps({
   image: Boolean,
   styleImage: Object,
+  form: Object
 })
 
 let stImage = ''
@@ -68,11 +69,12 @@ if (props.styleImage === undefined) {
 } else {
   stImage = props.styleImage
 }
-
+/*
 // state
 const { getBilletsFromEvent, getDataAdhesion, getProductIsActivated, toggleActivationProductMembership } = useSessionStore()
 const { getIsLogin, getUserHasThisMembership } = useLocalStore()
-
+*/
+console.log('form =', props.form)
 </script>
 
 <style scoped>

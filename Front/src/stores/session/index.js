@@ -14,13 +14,13 @@ export const useSessionStore = defineStore({
     routeName: '',
     header: null,
     membershipProducts: [],
-    event: null,
     me: {
       cashless: {},
       reservations: [],
       membership: [],
       email: ''
     },
+    currentUuidEventForm: '',
     forms: []
   }),
   getters: sessionGetters,
