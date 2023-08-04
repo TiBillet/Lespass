@@ -1,6 +1,7 @@
 <template>
-  <div>
-<!--  <div v-for="product in getBilletsFromEvent" :key="product.uuid">-->
+ <div v-for="product in products" :key="product.uuid">
+   <div>{{ product}}</div>
+   <hr>
     <!-- produits "F" et "B" --
     <fieldset v-if="['F','B'].includes(product.categorie_article)"
               class="shadow-sm p-3 mb-5 bg-body rounded test-card-billet">
@@ -42,7 +43,7 @@
         <h6 v-if="product.short_description !== null" class="text-info">{{ product.short_description }}</h6>
       </legend>
     </fieldset>
-    -->
+-->
   </div>
 </template>
 
@@ -53,10 +54,11 @@ console.log('-> CardBillet.vue')
 import { useSessionStore } from '@/stores/session'
 
 // attributs/props
+const emit = defineEmits(['update:products'])
 const props = defineProps({
   image: Boolean,
   styleImage: Object,
-  form: Object
+  products: Object
 })
 
 let stImage = ''

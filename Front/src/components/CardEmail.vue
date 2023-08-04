@@ -41,17 +41,15 @@ const props = defineProps({
   emailModifiers: { default: () => ({}) }
 })
 
-const confirmEmail = ''
+let confirmEmail = ''
 
 function validateEmail (event) {
   let value = event.target.value
   const re = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$/
   if (value.match(re) === null) {
-    event.target.classList.remove('is-valid')
-    event.target.classList.add('is-invalid')
+    event.target.setCustomValidity("Invalid field.")
   } else {
-    event.target.classList.remove('is-invalid')
-    event.target.classList.add('is-valid')
+    event.target.setCustomValidity("")
   }
 }
 

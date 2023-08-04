@@ -1,5 +1,5 @@
-import { log } from "../../communs/LogError"
-import * as CryptoJS from "crypto-js"
+import { log } from '../../communs/LogError'
+import * as CryptoJS from 'crypto-js'
 
 const domain = `${window.location.protocol}//${window.location.host}`
 
@@ -143,14 +143,17 @@ export const sessionActions = {
    * @param postEvent
    */
   initFormEvent (postEvent) {
-    console.log('-> initFormEvent')
+    // console.log('-> initFormEvent')
     this.currentUuidEventForm = postEvent.uuid
     // hash retour et sauvegarde dans event
     const returnString = JSON.stringify(postEvent)
     const hash = CryptoJS.HmacMD5(returnString, 'NODE_18_lts').toString()
 
+    // convert proxy to array
+    let forms = JSON.parse(JSON.stringify(this.forms))
+
     // lévènement actuel existe il dans forms
-    let form = this.forms?.find(formItem => formItem.uuid === postEvent.uuid)
+    let form = forms?.find(formItem => formItem.uuid === postEvent.uuid)
 
     // console.log('          hash =', hash)
     // console.log('form.eventHash =', form?.eventHash)
@@ -185,7 +188,16 @@ export const sessionActions = {
       })
       postEvent.products = newProducts
       postEvent['email'] = this.me.email
-      this.forms.push(postEvent)
+      // le formulaire n'existe pas
+      if (form === undefined) {
+        forms.push(postEvent)
+        this.forms = forms
+      } else {
+        // le contenu du formulaire est différent
+        let newforms = forms.filter((obj) => obj.uuid !== postEvent.uuid)
+        newforms.push(postEvent)
+        this.forms = newforms
+      }
     }
   },
   /**
