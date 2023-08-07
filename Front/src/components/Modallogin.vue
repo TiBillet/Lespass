@@ -21,7 +21,7 @@
                 <div class="input-group has-validation">
                   <input id="login-email" :value="getEmail" laria-describedby="email-addon" aria-label="Email"
                          class="form-control" placeholder="Email" type="email"
-                         pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$" required>
+                          @keyup="validateEmail($event)" required>
                   <div class="invalid-feedback">
                     Merci de renseigner une adresse email valide.
                   </div>
@@ -68,6 +68,17 @@ import communecterLogo from '@/assets/img/communecterLogo_31x28.png'
 
 const domain = `${location.protocol}//${location.host}`
 let { getEmail, updateEmail, loading } = useSessionStore()
+
+function validateEmail (event) {
+  let value = event.target.value
+  event.target.setAttribute('type', 'text')
+  const re = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$/
+  if (value.match(re) === null) {
+    event.target.parentNode.querySelector('.invalid-feedback').style.display = "block"
+  } else {
+    event.target.parentNode.querySelector('.invalid-feedback').style.display = "none"
+  }
+}
 
 async function validerLogin (event) {
   if (!event.target.checkValidity()) {

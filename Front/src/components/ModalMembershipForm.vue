@@ -85,7 +85,7 @@
                 <div class="input-group mb-2 has-validation">
                   <span class="input-group-text" @click="inputFocus('adhesion-email')">Email</span>
                   <input id="adhesion-email" v-model="getFormMembership(props.productUuid).email" type="email"
-                         pattern="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$"
+                         @keyup="validateEmail($event)"
                          class="form-control" required>
                   <div class="invalid-feedback">
                     Merci de remplir votre email.
@@ -175,7 +175,6 @@ console.log('-> ModalMembershipForm.vue !')
 import { log } from '../communs/LogError'
 import { setLocalStateKey } from '../communs/storeLocal.js'
 
-
 // store
 import { useSessionStore } from '../stores/session'
 
@@ -194,16 +193,27 @@ const props = defineProps({
 
 const domain = `${window.location.protocol}//${window.location.host}`
 
-// const elementModal = document.querySelector('#modal-form-login')
-// elementModal.addEventListener('shown.bs.modal', function (event) {
-//   document.querySelector('#form-valid-membership').reset()
-// })
+function validateEmail (event) {
+  let value = event.target.value
+  // event.target.setAttribute('type', 'text')
+  const re = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$/
+  if (value.match(re) === null) {
+    event.target.parentNode.querySelector('.invalid-feedback').style.display = 'block'
+  } else {
+    event.target.parentNode.querySelector('.invalid-feedback').style.display = 'none'
+  }
+}
 
 function formatNumber (event, limit) {
-  if (event.target !== null) {
-    const element = event.target
-    const initValue = element.value
-    element.value = initValue.replace(/[^\d]/g, '').substring(0, limit)
+  const element = event.target
+  // obligation de changer le type pour ce code, si non "replace" ne fait pas "correctement" son travail
+  element.setAttribute('type', 'text')
+  let initValue = element.value
+  element.value = initValue.replace(/[^\d+]/g, '').substring(0, limit)
+  if (element.value.length < limit) {
+    element.parentNode.querySelector('.invalid-feedback').style.display = "block"
+  } else {
+    element.parentNode.querySelector('.invalid-feedback').style.display = "none"
   }
 }
 

@@ -1,5 +1,6 @@
 import { log } from '../../communs/LogError'
 import * as CryptoJS from 'crypto-js'
+import { setLocalStateKey, getLocalStateKey } from '../../communs/storeLocal'
 
 const domain = `${window.location.protocol}//${window.location.host}`
 
@@ -39,8 +40,7 @@ export const sessionActions = {
         // maj token d'accès
         this.accessToken = retour.access
         // enregistrement en local(long durée) du "refreshToken"
-        localStorage.removeItem('TiBillet-refreshToken')
-        localStorage.setItem('TiBillet-refreshToken', retour.refresh)
+        setLocalStateKey('refreshToken', retour.refresh)
         // info: email dans this.me.email
       } else {
         throw new Error(`Erreur conrfirmation mail !`)
@@ -103,8 +103,9 @@ export const sessionActions = {
   },
   async automaticConnection () {
     // console.log('-> automaticConnection')
-    const refreshToken = localStorage.getItem('TiBillet-refreshToken')
-    if (this.accessToken === '' && refreshToken !== null && refreshToken !== '') {
+    const refreshToken = getLocalStateKey('refreshToken')
+    // console.log('-> automaticConnection, refreshToken =',refreshToken)
+    if (this.accessToken === '' && refreshToken !== undefined) {
       const api = `/api/user/token/refresh/`
       this.loading = true
       try {
@@ -117,7 +118,7 @@ export const sessionActions = {
           body: JSON.stringify({ refresh: refreshToken })
         })
         const retour = await response.json()
-        console.log('retour =', retour)
+        // console.log('retour =', retour)
         if (response.status === 200) {
           this.accessToken = retour.access
           this.getMe()
@@ -137,6 +138,21 @@ export const sessionActions = {
   },
   updateEmail (value) {
     this.email = value
+  },
+  generateUUIDUsingMathRandom () {
+    let d = new Date().getTime()//Timestamp
+    let d2 = (performance && performance.now && (performance.now() * 1000)) || 0//Time in microseconds since page-load or 0 if unsupported
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      let r = Math.random() * 16//random number between 0 and 16
+      if (d > 0) {//Use timestamp until depleted
+        r = (d + r) % 16 | 0
+        d = Math.floor(d / 16)
+      } else {//Use microseconds since page-load if supported
+        r = (d2 + r) % 16 | 0
+        d2 = Math.floor(d2 / 16)
+      }
+      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
+    })
   },
   /**
    * Formate les données d'un évènement pour un formulaire
@@ -175,11 +191,17 @@ export const sessionActions = {
         newProducts.push(product)
         product.prices.forEach((price) => {
           // pour avoir un champ inputs visible
-          price['customers'] = [{ first_name: '', last_name: '' }]
+          price['customers'] = [{ first_name: '', last_name: '', uuid: this.generateUUIDUsingMathRandom() }]
           // ajout de l'adhésion dans la liste de produits de l'évènement
           if (price.adhesion_obligatoire !== null) {
             let newProduct = this.membershipProducts.find(membership => membership.uuid === price.adhesion_obligatoire)
-            newProduct['customers'] = [{ first_name: '', last_name: '', phone: '', postal_code: '' }]
+            newProduct['customers'] = [{
+              first_name: '',
+              last_name: '',
+              phone: '',
+              postal_code: '',
+              uuid: this.generateUUIDUsingMathRandom()
+            }]
             // adhésion non activée/visible
             newProduct['activated'] = false
             newProducts.push(JSON.parse(JSON.stringify(newProduct)))
@@ -205,7 +227,7 @@ export const sessionActions = {
    * @returns {Promise<void>}
    */
   async loadPlace () {
-    log({ message: '-> loadPlace' })
+    // log({ message: '-> loadPlace' })
     let urlImage, urlLogo
     this.loading = true
     this.error = ''
@@ -259,7 +281,7 @@ export const sessionActions = {
     }
   },
   toggleActivationProductMembership (uuid) {
-    const products = this.events.find(event => event.uuid === this.currentEventUuid).products
+    const products = this.forms.find(form => form.uuid === this.currentUuidEventForm).products
     const status = products.find(product => product.uuid === uuid).activated
     products.find(product => product.uuid === uuid).activated = !status
   },
@@ -353,5 +375,11 @@ export const sessionActions = {
       })
       this.loading = false
     })
+  },
+  addCustomer (productUuid, priceUuid) {
+    const products = this.forms.find(form => form.uuid === this.currentUuidEventForm).products
+    const product = products.find(prod => prod.uuid === productUuid)
+    let customers = product.prices.find(prix => prix.uuid === priceUuid).customers
+    customers.push({ first_name: '', last_name: '', uuid: this.generateUUIDUsingMathRandom() })
   }
 }

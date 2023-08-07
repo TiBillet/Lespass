@@ -16,7 +16,7 @@
     <!-- confirme email -->
     <div class="input-group mb-2 has-validation">
       <span class="input-group-text" v-focuselement="'card-email-confirm-email'">Confirmez l'email</span>
-      <input id="card-email-confirm-email" type="text" :value="confirmEmail" @input="validateEmail($event)"
+      <input id="card-email-confirm-email" type="text" :value="confirmEmail" @keyup="validateEmail($event)"
              class="form-control card-email-input" placeholder="Email"
              required/>
       <div class="invalid-feedback">
@@ -45,11 +45,12 @@ let confirmEmail = ''
 
 function validateEmail (event) {
   let value = event.target.value
+  event.target.setAttribute('type', 'text')
   const re = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$/
   if (value.match(re) === null) {
-    event.target.setCustomValidity("Invalid field.")
+    event.target.parentNode.querySelector('.invalid-feedback').style.display = "block"
   } else {
-    event.target.setCustomValidity("")
+    event.target.parentNode.querySelector('.invalid-feedback').style.display = "none"
   }
 }
 

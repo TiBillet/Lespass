@@ -8,7 +8,12 @@
     <form @submit.prevent="validerAchats($event)" class="needs-validation" novalidate>
       <CardEmail v-model:email.checkemail="getEventForm.email"/>
 
-      <CardBillet v-model:products="getEventForm.products" :image="true" :style-image="{height: '30px',width: 'auto'}"/>
+       <!--
+      Billet(s)
+      Si attribut "image", une image est affiché à la place du nom
+      Attribut 'style-image' gère les propriétées(css) de l'image (pas obligaoire, style par défaut)
+       -->
+      <CardBillet v-model:products="getEventForm.products" />
 
       <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
     </form>

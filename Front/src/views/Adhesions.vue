@@ -47,8 +47,6 @@ const { getListAdhesions, getIsMemberShip } = useSessionStore()
 let selectedProductUuid = ref('')
 
 function showMembershipForm (productUuid) {
-  console.log('-> fonc showFormAdhesion, productUuid =', productUuid)
-
   if (getIsMemberShip(productUuid) === false) {
     // update selected product uuid
     selectedProductUuid.value = productUuid

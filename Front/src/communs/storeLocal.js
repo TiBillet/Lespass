@@ -14,24 +14,39 @@ export function getLocalState () {
   }
 }
 
+/**
+ *
+ * @param {string} key - property to add or update
+ * @param {(Object|string|number)} data - the value of key
+ */
 export function setLocalStateKey (key, data) {
+  console.log('-> setLocalStateKey, key =', key, '  --  data =', data)
   try {
     const state = JSON.parse(localStorage.getItem(index))
     localStorage.removeItem(index)
     state[key] = data
-    state[key]['timestampStore'] = new Date().getTime()
+    // un timestamp est ajouté uniquement sur une donnée de type objet
+    if (typeof (data) !== 'string') {
+      state[key]['timestampStore'] = new Date().getTime()
+    }
     localStorage.setItem(index, JSON.stringify(state))
   } catch (error) {
     console.log(`locale storage "${index} - setLocalState, error: ${error}`)
   }
 }
 
+/**
+ *
+ * @param {string} key - property to read
+ * @returns{(Object|undefined)} - the value of key
+ */
 export function getLocalStateKey (key) {
   try {
     const state = JSON.parse(localStorage.getItem(index))
     return state[key]
   } catch (error) {
     console.log(`locale storage "${index} - getLocal, error: ${error}`)
+    return undefined
   }
 }
 
