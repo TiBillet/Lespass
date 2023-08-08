@@ -200,10 +200,12 @@ export const sessionActions = {
               last_name: '',
               phone: '',
               postal_code: '',
-              uuid: this.generateUUIDUsingMathRandom()
+              uuid: ''
             }]
             // adhésion non activée/visible
             newProduct['activated'] = false
+            // conditions de l'adhésion
+            newProduct['conditionsRead'] = false
             newProducts.push(JSON.parse(JSON.stringify(newProduct)))
           }
         })
@@ -280,10 +282,13 @@ export const sessionActions = {
       this.loading = false
     }
   },
-  toggleActivationProductMembership (uuid) {
+  activationProductMembership (uuid) {
     const products = this.forms.find(form => form.uuid === this.currentUuidEventForm).products
-    const status = products.find(product => product.uuid === uuid).activated
-    products.find(product => product.uuid === uuid).activated = !status
+    products.find(product => product.uuid === uuid).activated = true
+  },
+  deactivationProductMembership (uuid) {
+    const products = this.forms.find(form => form.uuid === this.currentUuidEventForm).products
+    products.find(product => product.uuid === uuid).activated = false
   },
   setLoadingValue (value) {
     this.loading = value

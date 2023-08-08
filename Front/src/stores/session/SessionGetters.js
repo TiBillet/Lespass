@@ -18,7 +18,8 @@ export const sessionGetters = {
           let membershipProduct = JSON.parse(JSON.stringify(state.membershipProducts)).find(obj => obj.uuid === uuid).option_generale_checkbox
           membershipProduct.forEach((membership) => {
             console.log('membership =', membership)
-            optionsCheckbox.push({ uuid: membership.uuid, checked: false })
+            membership['checked'] = false
+            optionsCheckbox.push(membership)
           })
 
           state.forms.push({
@@ -103,19 +104,16 @@ export const sessionGetters = {
       }
       return false
     }
-  },
+  },/*
   getCustomers (state) {
     return (data) => {
       console.log('data =', data)
       return []
-      /*
-      const form = state.forms.find(formRec => formRec.uuid === state.currentUuidEventForm)
-      const product = form.products.find(prod => prod.uuid === productUuid)
-      return product.prices.find(price => price.uuid === priceUuid).customers
-
-       */
+      // const form = state.forms.find(formRec => formRec.uuid === state.currentUuidEventForm)
+      // const product = form.products.find(prod => prod.uuid === productUuid)
+      // return product.prices.find(price => price.uuid === priceUuid).customers
     }
-  },
+  },*/
   getListAdhesions () {
     if (this.membershipProducts !== null) {
       return this.membershipProducts
@@ -155,6 +153,15 @@ export const sessionGetters = {
     return (productUuid) => {
       try {
         return state.membershipProducts.find(obj => obj.uuid === productUuid).option_generale_radio
+      } catch (error) {
+        return []
+      }
+    }
+  },
+  getMembershipOptionsCheckbox (state) {
+    return (productUuid) => {
+      try {
+        return state.membershipProducts.find(obj => obj.uuid === productUuid).option_generale_checkbox
       } catch (error) {
         return []
       }

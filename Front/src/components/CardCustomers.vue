@@ -16,14 +16,19 @@
 
 <script setup>
 // console.log('-> CardCustomers.vue !')
+// store
+import { useSessionStore } from '@/stores/session'
+
+
 const emit = defineEmits(['update:customers'])
 const props = defineProps({
   customers: Array,
-  priceUuid: String
+  membershipRequired: String
 })
 
+const { deactivationProductMembership } = useSessionStore()
+
 function emitValue (customerUuid, key, value) {
-  console.log('-> emitValue, customerUuid =', customerUuid, '  --  value =', value)
   props.customers.find(cust => cust.uuid === customerUuid)[key] = value
   emit('update:customers', props.customers)
 }
@@ -31,10 +36,11 @@ function emitValue (customerUuid, key, value) {
 function deleteCustomer(customerUuid) {
   const newData = props.customers.filter(cust => cust.uuid !== customerUuid)
   emit('update:customers', newData)
+  // désactive l'adhésion liée au prix si "cutomer/client" = 0
+  if ((props.customers.length - 1) === 0 && props.membershipRequired !== null) {
+    deactivationProductMembership(props.membershipRequired)
+  }
 }
-
 </script>
 
-<style scoped>
-
-</style>
+<style scoped></style>

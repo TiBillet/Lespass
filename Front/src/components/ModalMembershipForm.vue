@@ -129,7 +129,6 @@
                 </div>
 
                 <!-- options checkbox -->
-
                 <div v-if="getFormMembership(props.productUuid).option_checkbox.length > 0" class="mt-3">
                   <div v-for="(option, index) in getFormMembership(props.productUuid).option_checkbox"
                        :key="index" class="mb-1">

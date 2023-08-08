@@ -1,0 +1,121 @@
+<template>
+
+  <fieldset class="shadow-sm p-3 mb-5 bg-body rounded test-card-billet">
+    <legend>
+      <h3 class="font-weight-bolder text-info text-gradient align-self-start">{{ product.name }}</h3>
+      <h6 v-if="product.short_description !== null" class="text-info">{{ product.short_description }}</h6>
+    </legend>
+
+    <!-- annuler l'adhésion -->
+    <div class="form-check form-switch">
+      <input class="form-check-input" type="checkbox" v-model="product.activated"
+             true-value="true" false-value="false" required/>
+      <label class="form-check-label text-dark" for="etat-adhesion">
+        Prendre une adhésion associative.
+      </label>
+    </div>
+
+    <!-- conditions -->
+    <div class="input-group mb-2 has-validation">
+      <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox"
+                 v-model="product.conditionsRead"
+                 true-value="true" false-value="false" required/>
+          <label class="form-check-label text-dark" for="read-conditions">
+            <span>j'ai pris connaissance des </span>
+            <span v-if="product.categorie_article === 'A'">
+                <a v-if="product.legal_link !== null" class="text-info"
+                   @click="goStatus()">statuts et du règlement intérieur de l'association.</a>
+                <span v-else>statuts et du règlement intérieur de l'association</span>
+              </span>
+            <span v-else>
+                <a v-if="product.legal_link !== null" class="text-info" @click="goStatus()">CGU/CGV.</a>
+                <span v-else>CGU/CGV.</span>
+                        </span>
+          </label>
+        </div>
+      <div class="invalid-feedback">Conditions non acceptées.</div>
+    </div>
+
+    <!-- prix -->
+    <div class="input-group mb-2 has-validation">
+      <div class="col form-check mb-2"
+           v-for="(price, index) in product.prices" :key="index">
+        <input name="membership-prices" :id="`uuidcardmembershippriceradio${index}`" type="radio"
+               v-model="product.customers[0].uuid" :value="price.uuid"
+               class="form-check-input input-adesion-modal-price" required/>
+        <label class="form-check-label text-dark" :for="`uuidcardmembershippriceradio${index}`">
+          {{ price.name }} - {{ price.prix }}€
+        </label>
+        <div v-if="index === 0" class="invalid-feedback w-100">
+          Tarif SVP
+        </div>
+      </div>
+    </div>
+
+    <!-- nom / prénom -->
+    <div class="form-group">
+      <div class="input-group mb-1 test-membership-input-group">
+        <input type="text" v-model="product.customers[0].last_name"
+               placeholder="Nom ou Structure" aria-label="Nom ou Structure"
+               class="form-control test-membership-input-group-nom"
+               required>
+        <input type="text" v-model="product.customers[0].first_name"
+               placeholder="Prénom" aria-label="Prénom" class="form-control test-membership-input-group-prenom"
+               required>
+      </div>
+      <div class="invalid-feedback">Donnée(s) manquante(s) !</div>
+    </div>
+
+    <!-- code postal / téléphone -->
+    <div class="form-group">
+      <div class="input-group mb-1 test-membership-input-group">
+        <input type="text" v-model="product.customers[0].postal_code"
+               placeholder="Code postal" aria-label="Code postal"
+               class="form-control test-membership-input-group-postal"
+               @keyup="formatNumberPrentNode2($event, 5)" required>
+        <input type="text" v-model="product.customers[0].phone"
+               placeholder="Fixe ou mobile" aria-label="Fixe ou mobile"
+               class="form-control test-membership-input-group-phone"
+               @keyup="formatNumberPrentNode2($event, 10)" required>
+      </div>
+      <div class="invalid-feedback">Merci de renseigner une donnée valide.</div>
+    </div>
+  </fieldset>
+
+</template>
+
+<script setup>
+console.log('-> CardMembership.vue !')
+
+const emit = defineEmits(['update:product'])
+const props = defineProps({
+  product: Object,
+})
+
+console.log('props.product =', props.product)
+
+function goStatus () {
+  const lien = getMembershipData(props.productUuid).legal_link
+  // console.log('-> goStatus, lien =', lien)
+  if (lien !== null) {
+    window.open(lien, '_blank')
+  }
+}
+
+function formatNumberPrentNode2 (event, limit) {
+  const element = event.target
+  // obligation de changer le type pour ce code, si non "replace" ne fait pas "correctement" son travail
+  element.setAttribute('type', 'text')
+  let initValue = element.value
+  element.value = initValue.replace(/[^\d+]/g, '').substring(0, limit)
+  if (element.value.length < limit) {
+    element.parentNode.parentNode.querySelector('.invalid-feedback').style.display = 'block'
+  } else {
+    element.parentNode.parentNode.querySelector('.invalid-feedback').style.display = 'none'
+  }
+}
+
+</script>
+
+<style></style>
