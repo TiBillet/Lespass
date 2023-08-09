@@ -76,7 +76,7 @@ services:
       - "billetistan.tibillet.localhost:172.17.0.1"
       - "tibillet.localhost:172.17.0.1"
     networks:
-#      - frontend
+      - frontend
       - backend-billeterie
     command: "bash /DjangoFiles/launch_celery.sh"
 
