@@ -15,14 +15,14 @@ export const sessionGetters = {
         let form = state.forms.find(obj => obj.uuid === uuid)
         if (form === undefined) {
           let optionsCheckbox = []
-          let membershipProduct = JSON.parse(JSON.stringify(state.membershipProducts)).find(obj => obj.uuid === uuid).option_generale_checkbox
-          membershipProduct.forEach((membership) => {
-            console.log('membership =', membership)
-            membership['checked'] = false
-            optionsCheckbox.push(membership)
+          let rawOptionsCheckbox = JSON.parse(JSON.stringify(state.membershipProducts)).find(obj => obj.uuid === uuid).option_generale_checkbox
+          rawOptionsCheckbox.forEach((option) => {
+            option['checked'] = false
+            optionsCheckbox.push(option)
           })
 
           state.forms.push({
+            typeForm: 'membership',
             readConditions: false,
             uuidPrice: '',
             first_name: '',
@@ -38,6 +38,7 @@ export const sessionGetters = {
         return state.forms.find(form => form.uuid === uuid)
       } else {
         return {
+          typeForm: 'membership',
           readConditions: false,
           uuidPrice: '',
           first_name: '',
@@ -80,8 +81,12 @@ export const sessionGetters = {
   },
   getRelatedProductIsActivated (state) {
     return (productUuid) => {
-      const form = state.forms.find(formRec => formRec.uuid === state.currentUuidEventForm)
-      return form.products.find(prod => prod.uuid === productUuid).activated
+      try {
+        const form = state.forms.find(formRec => formRec.uuid === state.currentUuidEventForm)
+        return form.products.find(prod => prod.uuid === productUuid).activated
+      } catch (e) {
+        return false
+      }
     }
   },
   getIsMemberShip (state) {
@@ -97,22 +102,23 @@ export const sessionGetters = {
   getBtnAddCustomerCanBeSeen (state) {
     return (productUuid, priceUuid) => {
       let customers = []
-      if (state.forms.length > 0) {
-        const products = state.forms.find(form => form.uuid === this.currentUuidEventForm).products
+      const formReservation = state.forms.filter(form => form.typeForm === 'reservation')
+      if (formReservation.length > 0) {
+        const products = formReservation.find(form => form.uuid === this.currentUuidEventForm).products
         const product = products.find(prod => prod.uuid === productUuid)
         const price = product.prices.find(prix => prix.uuid === priceUuid)
         customers = price.customers
+        // stock pas géré et maxi par user géré
+        if (price.stock === null && customers.length < price.max_per_user) {
+          return true
+        }
+        // stock et maxi par user géré
+        if (price.stock !== null && (price.stock - customers.length) >= 1 && customers.length < price.max_per_user) {
+          return true
+        }
       }
       // pas de clients/no customer
       if (customers.length === 0) {
-        return true
-      }
-      // stock pas géré et maxi par user géré
-      if (price.stock === null && customers.length < price.max_per_user) {
-        return true
-      }
-      // stock et maxi par user géré
-      if (price.stock !== null && (price.stock - customers.length) >= 1 && customers.length < price.max_per_user) {
         return true
       }
       return false

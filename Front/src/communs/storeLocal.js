@@ -20,7 +20,7 @@ export function getLocalState () {
  * @param {(Object|string|number)} data - the value of key
  */
 export function setLocalStateKey (key, data) {
-  console.log('-> setLocalStateKey, key =', key, '  --  data =', data)
+  // console.log('-> setLocalStateKey, key =', key, '  --  data =', data)
   try {
     const state = JSON.parse(localStorage.getItem(index))
     localStorage.removeItem(index)

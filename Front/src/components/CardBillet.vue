@@ -107,10 +107,6 @@ function priceCanBeDisplayed(adhesionObligatoire) {
 }
 
 function membershipCanBeDisplayed(product) {
-  console.log('---------------  membershipCanBeDisplayed  ---------------')
-  console.log('product.categorie_article =', product.categorie_article)
-  console.log('getIsLogin =', getIsLogin)
-  console.log('getRelatedProductIsActivated =', getRelatedProductIsActivated(product.uuid))
   if (product.categorie_article === 'A' && getIsLogin === true && getRelatedProductIsActivated(product.uuid) === true && getIsMemberShip(product.uuid) === false) {
     return true
   }
