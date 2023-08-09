@@ -84,12 +84,25 @@ export const sessionGetters = {
       return form.products.find(prod => prod.uuid === productUuid).activated
     }
   },
+  getIsMemberShip (state) {
+    return (membershipUuuid) => {
+      if (state.me.membership.length > 0) {
+        const productExist = state.me.membership.find(obj => obj.product_uuid === membershipUuuid)
+        return productExist !== undefined ? true : false
+      } else {
+        return false
+      }
+    }
+  },
   getBtnAddCustomerCanBeSeen (state) {
     return (productUuid, priceUuid) => {
-      const products = state.forms.find(form => form.uuid === this.currentUuidEventForm).products
-      const product = products.find(prod => prod.uuid === productUuid)
-      const price = product.prices.find(prix => prix.uuid === priceUuid)
-      const customers = price.customers
+      let customers = []
+      if (state.forms.length > 0) {
+        const products = state.forms.find(form => form.uuid === this.currentUuidEventForm).products
+        const product = products.find(prod => prod.uuid === productUuid)
+        const price = product.prices.find(prix => prix.uuid === priceUuid)
+        customers = price.customers
+      }
       // pas de clients/no customer
       if (customers.length === 0) {
         return true
@@ -164,16 +177,6 @@ export const sessionGetters = {
         return state.membershipProducts.find(obj => obj.uuid === productUuid).option_generale_checkbox
       } catch (error) {
         return []
-      }
-    }
-  },
-  getIsMemberShip (state) {
-    return (membershipUuuid) => {
-      if (state.me.membership.length > 0) {
-        const productExist = state.me.membership.find(obj => obj.product_uuid === membershipUuuid)
-        return productExist !== undefined ? true : false
-      } else {
-        return false
       }
     }
   }

@@ -1,6 +1,6 @@
-import { log } from '../../communs/LogError'
-import * as CryptoJS from 'crypto-js'
-import { setLocalStateKey, getLocalStateKey } from '../../communs/storeLocal'
+import { log } from "../../communs/LogError"
+import * as CryptoJS from "crypto-js"
+import { setLocalStateKey, getLocalStateKey } from "../../communs/storeLocal"
 
 const domain = `${window.location.protocol}//${window.location.host}`
 
@@ -14,6 +14,9 @@ export const sessionActions = {
       email: ''
     }
     this.accessToken = ''
+    this.forms = []
+    setLocalStateKey('refreshToken', '')
+    this.router.push('/')
   },
   async emailActivation (id, token) {
     // console.log('emailActivation')
@@ -77,7 +80,7 @@ export const sessionActions = {
       }
       this.loading = true
       const response = await fetch(domain + apiMe, options)
-      // console.log('-> getMe, response =', response)
+      console.log('-> getMe, response =', response)
       if (response.status === 200) {
         const retour = await response.json()
         this.loading = false
@@ -102,10 +105,9 @@ export const sessionActions = {
     }
   },
   async automaticConnection () {
-    // console.log('-> automaticConnection')
     const refreshToken = getLocalStateKey('refreshToken')
-    // console.log('-> automaticConnection, refreshToken =',refreshToken)
-    if (this.accessToken === '' && refreshToken !== undefined) {
+    if (this.accessToken === '' && refreshToken !== undefined && refreshToken !== '') {
+      log({message: '-> automaticConnection'})
       const api = `/api/user/token/refresh/`
       this.loading = true
       try {
@@ -328,7 +330,7 @@ export const sessionActions = {
     console.log('stripeStep =', stripeStep)
 
     // adhésion, attente stripe adhesion
-    if (stripeStep.action === 'expect_payment_stripe') {
+    if (stripeStep.action === 'expect_payment_stripe_membership') {
       messageValidation = `<h3>Adhésion OK !</h3>`
       messageErreur = `Retour stripe pour l'adhésion:`
       // debugger
@@ -336,15 +338,12 @@ export const sessionActions = {
       this.cleanFormMembership(stripeStep.uuidForm)
       // action stripe = aucune
       setLocalStateKey('stripeStep', { action: null })
+      // informer le state de l'adhésion si connecté
+      if (this.accessToken !== '') {
+        console.log('-> postStripeReturn, expect_payment_stripe_membership !')
+        this.getMe()
+      }
     }
-
-    /*
-    // reservation(s)
-    if (this.stripeEtape !== null) {
-      messageValidation = `<h3>Paiement validé.</h3>`
-      messageErreur = `Retour stripe pour une/des réservation(s):`
-    }
-    */
 
     const apiStripe = `/api/webhook_stripe/`
     const options = {
