@@ -8,7 +8,7 @@
 
     <!-- annuler l'adhésion -->
     <div class="form-check form-switch">
-      <input class="form-check-input" type="checkbox" v-model="product.activated"
+      <input class="form-check-input" type="checkbox" @click="resetPriceCustomers(product.priceLinkWithMembership)" v-model="product.activated"
              true-value="true" false-value="false"/>
       <label class="form-check-label text-dark" for="etat-adhesion">
         Prendre une adhésion associative.
@@ -93,7 +93,7 @@
           {{ option.name }}
         </label>
         <div v-if="index === 0" class="invalid-feedback w-100">
-          Option SVP
+          Sélectionner un don
         </div>
       </div>
     </div>
@@ -122,11 +122,13 @@
 
 <script setup>
 console.log('-> CardMembership.vue !')
+import { useSessionStore } from "../stores/session"
 
 const emit = defineEmits(['update:product'])
 const props = defineProps({
   product: Object,
 })
+const { resetPriceCustomers } = useSessionStore()
 
 function goStatus () {
   const lien = getMembershipData(props.productUuid).legal_link

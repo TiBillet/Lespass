@@ -58,19 +58,23 @@ export const sessionGetters = {
   getEventForm (state) {
     return state.forms.find(formRec => formRec.uuid === state.currentUuidEventForm)
   },
+  getEventFormOptions (state) {
+    let form = state.forms.find(formRec => formRec.uuid === state.currentUuidEventForm)
+    const optionsCheckbox = form.options_checkbox
+    const nbOptionsCheckbox = optionsCheckbox.length
+    const optionsRadio = form.options_radio
+    const nbOptionsRadio = optionsRadio.length
+    return {
+      optionsCheckbox,
+      optionsRadio,
+      nbOptionsCheckbox,
+      nbOptionsRadio
+    }
+  },
   getEmailForm (state) {
     const form = state.forms.find(formRec => formRec.uuid === state.currentUuidEventForm)
     return form.email
-  }/*,
-  getEvent (state) {
-    return state.event
   },
-  getBilletsFromEvent (state) {
-    const event = state.events.find(event => event.uuid === state.currentEventUuid)
-    // "B" billets payants et "F" gratuits + "A" adhésion lié à un prix d'un autre produit dans l'évènement
-    const categories = ['F', 'B', 'A']
-    return event.products.filter(prod => categories.includes(prod.categorie_article))
-  }*/,
   getEmail (state) {
     return state.me.email
   },
@@ -103,7 +107,7 @@ export const sessionGetters = {
     return (productUuid, priceUuid) => {
       let customers = []
       const formReservation = state.forms.filter(form => form.typeForm === 'reservation')
-      if (formReservation.length > 0) {
+      if (formReservation.length > 0 && state.currentUuidEventForm !== '') {
         const products = formReservation.find(form => form.uuid === this.currentUuidEventForm).products
         const product = products.find(prod => prod.uuid === productUuid)
         const price = product.prices.find(prix => prix.uuid === priceUuid)
@@ -123,16 +127,7 @@ export const sessionGetters = {
       }
       return false
     }
-  },/*
-  getCustomers (state) {
-    return (data) => {
-      console.log('data =', data)
-      return []
-      // const form = state.forms.find(formRec => formRec.uuid === state.currentUuidEventForm)
-      // const product = form.products.find(prod => prod.uuid === productUuid)
-      // return product.prices.find(price => price.uuid === priceUuid).customers
-    }
-  },*/
+  },
   getListAdhesions () {
     if (this.membershipProducts !== null) {
       return this.membershipProducts
