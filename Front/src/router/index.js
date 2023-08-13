@@ -1,17 +1,14 @@
 // store
-import { useSessionStore } from "../stores/session"
-import { getLocalStateKey } from "../communs/storeLocal.js"
+import { useSessionStore } from '../stores/session'
+import { getLocalStateKey } from '../communs/storeLocal.js'
 
 // gère les routes(pages)
 import { createRouter, createWebHistory } from 'vue-router'
+// les routes
 import { routes } from './routes.js'
 
-const domain = `${location.protocol}//${location.host}`
-
-function loadEventData (to, from, next) {
-  const { loadEvent } = useSessionStore()
-  loadEvent(to.params.slug, next)
-}
+// ensemble de fonctions de près chargementt de données
+import * as preload from './preload.js'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -25,7 +22,7 @@ const router = createRouter({
   }
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   // traitement de la redirection si interception
   let redirection = false
   let nouvelleRoute = '/'
@@ -36,7 +33,7 @@ router.beforeEach((to, from, next) => {
 
   // par défaut le header et la navbar son affiché
   let { setIdentitySite } = useSessionStore()
-   setIdentitySite(true)
+  setIdentitySite(true)
 
   // le header et la navbar son cachée
   if (to.path.includes('embed')) {
@@ -67,7 +64,7 @@ router.beforeEach((to, from, next) => {
 
   // intercepte retour de stripe
   if (to.name === 'StripeReturn') {
-    const {postStripeReturn} = useSessionStore()
+    const { postStripeReturn } = useSessionStore()
 
     const stripeStep = getLocalStateKey('stripeStep')
 
@@ -86,6 +83,28 @@ router.beforeEach((to, from, next) => {
       })
     }
     redirection = true
+  }
+
+  // près chargement
+  if (to.meta.preload) {
+    console.log('to.meta.preload =', to.meta.preload.name)
+
+    const result = await preload[to.meta.preload.name](to)
+    if (to.meta.preload.data === null) {
+      // chargement des données ok, on continue sur cette route
+      if (result === true) {
+        redirection === false
+      } else {
+        redirection = null
+      }
+    } else {
+      if (result === false) {
+        redirection = null
+      } else {
+        to.params[to.meta.preload.data] = result
+        redirection === false
+      }
+    }
   }
 
   if (redirection === true) {

@@ -26,7 +26,7 @@
 
 <script setup>
 console.log('-> Event.vue !')
-// le près chargement de l'évènement est géré par .../router/routes.js fonction "loadEvent"
+// le près chargement de l'évènement est géré par .../router/routes.js fonction "preload"
 import {useRoute} from 'vue-router'
 
 // store
@@ -133,6 +133,7 @@ function formatBodyPost () {
   return body
 }
 
+// lance la réservation
 async function validerAchats (event) {
   if (!event.target.checkValidity()) {
     event.preventDefault()
@@ -159,7 +160,7 @@ async function validerAchats (event) {
     // active l'icon de chargement
     setLoadingValue(true)
 
-    // lance la/les réservation(s)
+    // POST la/les réservation(s)
     fetch(urlApi, options).then(response => {
       // erreurs
       if (response.status >= 400 && response.status <= 599) {
