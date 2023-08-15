@@ -62,6 +62,4 @@ function emitValue (e) {
 }
 </script>
 
-<style scoped>
-
-</style>
+<style scoped></style>

@@ -8,8 +8,8 @@
 
     <!-- annuler l'adhésion -->
     <div class="form-check form-switch">
-      <input class="form-check-input" type="checkbox" v-model="product.activated"
-             true-value="true" false-value="false" required/>
+      <input class="form-check-input" type="checkbox" @click="resetPriceCustomers(product.priceLinkWithMembership)" v-model="product.activated"
+             true-value="true" false-value="false"/>
       <label class="form-check-label text-dark" for="etat-adhesion">
         Prendre une adhésion associative.
       </label>
@@ -17,24 +17,24 @@
 
     <!-- conditions -->
     <div class="input-group mb-2 has-validation">
+
       <div class="form-check form-switch">
-          <input class="form-check-input" type="checkbox"
-                 v-model="product.conditionsRead"
-                 true-value="true" false-value="false" required/>
-          <label class="form-check-label text-dark" for="read-conditions">
-            <span>j'ai pris connaissance des </span>
-            <span v-if="product.categorie_article === 'A'">
+        <input class="form-check-input" type="checkbox" v-model="product.conditionsRead"
+               true-value="true" false-value="false" required/>
+        <label class="form-check-label text-dark" for="read-conditions">
+          <span>j'ai pris connaissance des </span>
+          <span v-if="product.categorie_article === 'A'">
                 <a v-if="product.legal_link !== null" class="text-info"
                    @click="goStatus()">statuts et du règlement intérieur de l'association.</a>
                 <span v-else>statuts et du règlement intérieur de l'association</span>
-              </span>
-            <span v-else>
+          </span>
+          <span v-else>
                 <a v-if="product.legal_link !== null" class="text-info" @click="goStatus()">CGU/CGV.</a>
                 <span v-else>CGU/CGV.</span>
-                        </span>
-          </label>
-        </div>
-      <div class="invalid-feedback">Conditions non acceptées.</div>
+          </span>
+        </label>
+        <div class="invalid-feedback">Conditions non acceptées.</div>
+      </div>
     </div>
 
     <!-- prix -->
@@ -81,19 +81,54 @@
       </div>
       <div class="invalid-feedback">Merci de renseigner une donnée valide.</div>
     </div>
+
+    <!-- options radio -->
+    <div v-if="product.option_generale_radio.length > 0" class="input-group mb-2 has-validation">
+      <div class="col form-check mb-2"
+           v-for="(option, index) in product.option_generale_radio" :key="index">
+        <input name="membership-options-radio" :id="`uuidmembershipoptionsradio${index}`" type="radio"
+               v-model="product.optionRadio" :value="option.uuid"
+               class="form-check-input input-adesion-modal-price"/>
+        <label class="form-check-label text-dark mb-0" :for="`uuidmembershipoptionsradio${index}`">
+          {{ option.name }}
+        </label>
+        <div v-if="index === 0" class="invalid-feedback w-100">
+          Sélectionner un don
+        </div>
+      </div>
+    </div>
+
+    <!-- options checkbox -->
+    <div v-if="product.option_generale_checkbox.length > 0" class="mt-3">
+      <div v-for="(option, index) in product.option_generale_checkbox"
+           :key="index" class="mb-1">
+        <div class="form-switch input-group has-validation">
+          <input class="form-check-input me-2 options-adhesion-to-unchecked" type="checkbox"
+                 :id="`option-checkbox-adhesion${option.uuid}`" v-model="option.checked"
+                 true-value="true" false-value="false">
+
+          <label class="form-check-label text-dark mb-0" :for="`option-checkbox-adhesion${option.uuid}`">
+            {{ option.name }}
+          </label>
+        </div>
+        <div class="ms-5">{{ option.description }}</div>
+        <div class="invalid-feedback">Choisisser une options !</div>
+      </div>
+    </div>
+
   </fieldset>
 
 </template>
 
 <script setup>
 console.log('-> CardMembership.vue !')
+import { useSessionStore } from "../stores/session"
 
 const emit = defineEmits(['update:product'])
 const props = defineProps({
   product: Object,
 })
-
-console.log('props.product =', props.product)
+const { resetPriceCustomers } = useSessionStore()
 
 function goStatus () {
   const lien = getMembershipData(props.productUuid).legal_link

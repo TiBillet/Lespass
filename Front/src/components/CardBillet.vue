@@ -10,8 +10,7 @@
       </legend>
       <!-- prix -->
       <div v-for="price in product.prices" :key="price.uuid" class="mt-5">
-        <section
-            v-if="price.adhesion_obligatoire === null ||  ((getIsMemberShip(price.adhesion_obligatoire) || getRelatedProductIsActivated(price.adhesion_obligatoire) === true )&& getIsLogin)">
+        <section v-if="priceCanBeDisplayed(price.adhesion_obligatoire)">
           <div class="d-flex justify-content-between">
             <!-- nom tarif -->
             <h4 v-if="price.prix > 0" class="font-weight-bolder text-info text-gradient align-self-start">
@@ -43,7 +42,7 @@
           <div v-else>
             <button class="btn btn-primary mb-0" type="button"
                     style="border-top-right-radius: 30px; border-bottom-right-radius: 30px;"
-                    @click="activationProductMembership(price.adhesion_obligatoire)">
+                    @click="activationProductMembership(price)">
               <span>adhérez à "{{
                   getMembershipData(price.adhesion_obligatoire).name
                 }}" pour accéder à ce produit</span>
@@ -54,7 +53,7 @@
     </fieldset>
 
     <!-- produits "A" -->
-    <CardMembership v-if="product.categorie_article === 'A' && getRelatedProductIsActivated(product.uuid) === true" v-model:product="products[index]" />
+    <CardMembership v-if="membershipCanBeDisplayed(product)" v-model:product="products[index]" />
   </div>
 </template>
 
@@ -93,6 +92,26 @@ const {
   addCustomer, getBtnAddCustomerCanBeSeen
 } = useSessionStore()
 
+
+function priceCanBeDisplayed(adhesionObligatoire) {
+  if (adhesionObligatoire === null) {
+    return true
+  }
+  if (getIsMemberShip(adhesionObligatoire) === true && getIsLogin === true) {
+    return true
+  }
+  if (getRelatedProductIsActivated(adhesionObligatoire) === true && getIsLogin === true) {
+    return true
+  }
+  return false
+}
+
+function membershipCanBeDisplayed(product) {
+  if (product.categorie_article === 'A' && getIsLogin === true && getRelatedProductIsActivated(product.uuid) === true && getIsMemberShip(product.uuid) === false) {
+    return true
+  }
+  return false
+}
 </script>
 
 <style scoped>

@@ -241,7 +241,7 @@ function postAdhesionModal (data, uuidForm) {
   }
 
   // init étape adhésion stripe enregistrement en local(long durée)
-  setLocalStateKey('stripeStep', { action: 'expect_payment_stripe', uuidForm, nextPath: '/' })
+  setLocalStateKey('stripeStep', { action: 'expect_payment_stripe_membership', uuidForm, nextPath: '/' })
 
   setLoadingValue(true)
 

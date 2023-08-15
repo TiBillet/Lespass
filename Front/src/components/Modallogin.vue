@@ -62,6 +62,7 @@ import { log } from '../communs/LogError.js'
 
 // store
 import { useSessionStore } from '@/stores/session'
+import { setLocalStateKey } from '../communs/storeLocal'
 
 // asset
 import communecterLogo from '@/assets/img/communecterLogo_31x28.png'
@@ -108,6 +109,8 @@ async function validerLogin (event) {
       // if (response.status === 201 || response.status === 401 || response.status === 202) {
 
       if (response.status === 200) {
+        // enregistrement en local(long durée) de l'email
+        setLocalStateKey('email', email)
         // ferme le modal
         const elementModal = document.querySelector('#modal-form-login')
         const modal = bootstrap.Modal.getInstance(elementModal) // Returns a Bootstrap modal instance

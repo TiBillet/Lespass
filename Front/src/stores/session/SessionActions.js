@@ -1,12 +1,12 @@
 import { log } from '../../communs/LogError'
 import * as CryptoJS from 'crypto-js'
-import { setLocalStateKey, getLocalStateKey } from '../../communs/storeLocal'
+import { setLocalStateKey, getLocalStateKey, resetLocalState } from '../../communs/storeLocal'
 
 const domain = `${window.location.protocol}//${window.location.host}`
 
 export const sessionActions = {
   disconnect () {
-    console.log('-> disconnect')
+    // console.log('-> disconnect')
     this.me = {
       cashless: {},
       reservations: [],
@@ -14,6 +14,9 @@ export const sessionActions = {
       email: ''
     }
     this.accessToken = ''
+    this.forms = []
+    resetLocalState('refreshToken', '')
+    this.router.push('/')
   },
   async emailActivation (id, token) {
     // console.log('emailActivation')
@@ -30,6 +33,7 @@ export const sessionActions = {
       })
       if (response.status === 200) {
         const retour = await response.json()
+        log({ message: 'sessionStore -> emailActivation /api/user/activate/, status = 200', object: retour })
         // message confirmation email
         emitter.emit('modalMessage', {
           titre: 'Succès',
@@ -41,7 +45,8 @@ export const sessionActions = {
         this.accessToken = retour.access
         // enregistrement en local(long durée) du "refreshToken"
         setLocalStateKey('refreshToken', retour.refresh)
-        // info: email dans this.me.email
+        // récupération de l'email d'activation dans this.me.email, enregistré au moment du succès du login dans this.me.email
+        this.me.email = getLocalStateKey('email')
       } else {
         throw new Error(`Erreur conrfirmation mail !`)
       }
@@ -77,9 +82,9 @@ export const sessionActions = {
       }
       this.loading = true
       const response = await fetch(domain + apiMe, options)
-      // console.log('-> getMe, response =', response)
       if (response.status === 200) {
         const retour = await response.json()
+        console.log('-> getMe, retour =', retour)
         this.loading = false
         this.me = await retour
       } else {
@@ -102,10 +107,9 @@ export const sessionActions = {
     }
   },
   async automaticConnection () {
-    // console.log('-> automaticConnection')
     const refreshToken = getLocalStateKey('refreshToken')
-    // console.log('-> automaticConnection, refreshToken =',refreshToken)
-    if (this.accessToken === '' && refreshToken !== undefined) {
+    if (this.accessToken === '' && refreshToken !== undefined && refreshToken !== '') {
+      log({ message: '-> automaticConnection' })
       const api = `/api/user/token/refresh/`
       this.loading = true
       try {
@@ -154,6 +158,16 @@ export const sessionActions = {
       return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
     })
   },
+  resetEventOptions () {
+    let form = this.forms.find(formRec => formRec.uuid === this.currentUuidEventForm)
+    form.options_checkbox.forEach((option) => {
+      option.checked = false
+    })
+    document.querySelectorAll('input[name="event-option-radio"]').forEach((ele) => {
+      ele.checked = false
+    })
+    form.optionRadioSelected = ''
+  },
   /**
    * Formate les données d'un évènement pour un formulaire
    * @param postEvent
@@ -161,8 +175,8 @@ export const sessionActions = {
   initFormEvent (postEvent) {
     // console.log('-> initFormEvent')
     this.currentUuidEventForm = postEvent.uuid
-    // hash retour et sauvegarde dans event
-    const returnString = JSON.stringify(postEvent)
+    // hash retour + adhésions et sauvegarde dans event (le post et les adhésions ont changés ?)
+    const returnString = JSON.stringify(postEvent) + JSON.stringify(this.membershipProducts)
     const hash = CryptoJS.HmacMD5(returnString, 'NODE_18_lts').toString()
 
     // convert proxy to array
@@ -183,17 +197,16 @@ export const sessionActions = {
       postEvent.options_checkbox.forEach(option => option['checked'] = false)
 
       // ajout de la propriété "optionsRadioSelected" à l'évènement
-      postEvent.optionsRadioSelected = false
+      postEvent.optionRadioSelected = ""
 
       // ajout de l'adhésion obligatoire d'un prix de produits dans la liste des produits
       let newProducts = []
       postEvent.products.forEach((product) => {
         newProducts.push(product)
         product.prices.forEach((price) => {
-          // pour avoir un champ inputs visible
-          price['customers'] = [{ first_name: '', last_name: '', uuid: this.generateUUIDUsingMathRandom() }]
           // ajout de l'adhésion dans la liste de produits de l'évènement
           if (price.adhesion_obligatoire !== null) {
+
             let newProduct = this.membershipProducts.find(membership => membership.uuid === price.adhesion_obligatoire)
             newProduct['customers'] = [{
               first_name: '',
@@ -202,16 +215,36 @@ export const sessionActions = {
               postal_code: '',
               uuid: ''
             }]
+            // tarif lié à l'adhésion
+            newProduct['priceLinkWithMembership'] = { productUuid: product.uuid, priceUuid: price.uuid }
             // adhésion non activée/visible
             newProduct['activated'] = false
             // conditions de l'adhésion
             newProduct['conditionsRead'] = false
+            newProduct['optionRadio'] = ''
+            // ajout de la propriété "checked" dans "option_generale_checkbox"
+            newProduct.option_generale_checkbox.forEach((option) => {
+              option['checked'] = false
+            })
+
             newProducts.push(JSON.parse(JSON.stringify(newProduct)))
+          } else {
+            if (product.categorie_article !== 'D') {
+              // pour avoir un champ inputs visible
+              price['customers'] = [{ first_name: '', last_name: '', uuid: this.generateUUIDUsingMathRandom() }]
+            } else {
+              // ajout de la propriété "selectedPrice" pour le don
+              product["selectedPrice"] = ''
+              // ajout de la propriété "activatedGift" à "false" pour le don
+              product["activatedGift"] = false
+            }
           }
         })
       })
       postEvent.products = newProducts
       postEvent['email'] = this.me.email
+      postEvent['typeForm'] = 'reservation'
+
       // le formulaire n'existe pas
       if (form === undefined) {
         forms.push(postEvent)
@@ -282,13 +315,74 @@ export const sessionActions = {
       this.loading = false
     }
   },
-  activationProductMembership (uuid) {
+  /**
+   * Reset les clients/customers d'un prix lié à une adhésion
+   * @param {object} rawPrice - proxy/object
+   * @param {string} rawPrice.productUuid - id du produit
+   * @param {string} rawPrice.priceUuid - id du prix
+   */
+  resetPriceCustomers (rawPrice) {
+    const price = JSON.parse(JSON.stringify(rawPrice))
+    let products = this.forms.find(form => form.uuid === this.currentUuidEventForm).products
+    let prices = products.find(product => product.uuid === price.productUuid).prices
+    let priceResult = prices.find(prix => prix.uuid === price.priceUuid)
+    priceResult.customers = []
+  },
+  deleteCurrentEventForm() {
+    if (this.forms.find(form => form.uuid === this.currentUuidEventForm).typeForm === "reservation") {
+      this.router.push('/')
+      console.log('reset formulaire !')
+      // suppression du formulaire "reservation" courant
+      const  newForms = this.forms.filter(form => form.uuid !== this.currentUuidEventForm)
+      this.forms = JSON.parse(JSON.stringify(newForms))
+      this.currentUuidEventForm = ''
+    } else {
+      log({message: `sessionStore -> deleteCurrentEventForm, ce n'est pas un formulaire de réservation`})
+    }
+  },
+  /**
+   * Active l'adhésion liée au prix/price
+   * @param {object} price - données du prix
+   */
+  activationProductMembership (price) {
+    // activation du produit adhésion
+    const uuid = price.adhesion_obligatoire
     const products = this.forms.find(form => form.uuid === this.currentUuidEventForm).products
-    products.find(product => product.uuid === uuid).activated = true
+    let product = products.find(product => product.uuid === uuid)
+    // ajoute d'un customer "champs vide", sauf uuid champ, si supprimé auparavant
+    if (price.customers === undefined || price?.customers.length === 0) {
+      price.customers = [{ first_name: '', last_name: '', uuid: this.generateUUIDUsingMathRandom() }]
+    }
+    // vidage du produit adhésion
+    product.customers = [{
+      first_name: '',
+      last_name: '',
+      phone: '',
+      postal_code: '',
+      uuid: ''
+    }]
+    // adhésion non activée/visible
+    product.activated = true
+    // conditions de l'adhésion
+    product.conditionsRead = false
+    product.optionRadio = ''
+    // ajout de la propriété "checked" dans "option_generale_checkbox"
+    product.option_generale_checkbox.forEach((option) => {
+      option.checked = false
+    })
   },
   deactivationProductMembership (uuid) {
     const products = this.forms.find(form => form.uuid === this.currentUuidEventForm).products
-    products.find(product => product.uuid === uuid).activated = false
+    let product = products.find(product => product.uuid === uuid)
+    product.activated = false
+    // vidage data customer
+    product.customers[0] = {
+      first_name: '',
+      last_name: '',
+      phone: '',
+      postal_code: '',
+      uuid: ''
+    }
   },
   setLoadingValue (value) {
     this.loading = value
@@ -302,6 +396,7 @@ export const sessionActions = {
     let newforms = forms.filter(obj => obj.uuid !== uuid)
     // insert empty form + uuid
     newforms.push({
+      typeForm: 'membership',
       readConditions: false,
       uuidPrice: '',
       first_name: '',
@@ -325,26 +420,17 @@ export const sessionActions = {
     let messageValidation = 'OK', messageErreur = 'Retour stripe:'
 
     const stripeStep = getLocalStateKey('stripeStep')
-    console.log('stripeStep =', stripeStep)
+    // console.log('stripeStep =', stripeStep)
 
     // adhésion, attente stripe adhesion
-    if (stripeStep.action === 'expect_payment_stripe') {
+    if (stripeStep.action === 'expect_payment_stripe_membership') {
       messageValidation = `<h3>Adhésion OK !</h3>`
       messageErreur = `Retour stripe pour l'adhésion:`
-      // debugger
       // vidage formulaire
       this.cleanFormMembership(stripeStep.uuidForm)
       // action stripe = aucune
       setLocalStateKey('stripeStep', { action: null })
     }
-
-    /*
-    // reservation(s)
-    if (this.stripeEtape !== null) {
-      messageValidation = `<h3>Paiement validé.</h3>`
-      messageErreur = `Retour stripe pour une/des réservation(s):`
-    }
-    */
 
     const apiStripe = `/api/webhook_stripe/`
     const options = {
@@ -364,6 +450,7 @@ export const sessionActions = {
       return response.json()
     }).then(retour => {
       // message ok
+      // console.log('/api/webhook_stripe/ -> retour =', retour)
       emitter.emit('modalMessage', {
         titre: 'Succès',
         dynamic: true,
@@ -371,6 +458,11 @@ export const sessionActions = {
         contenu: messageValidation
       })
       this.loading = false
+      // informer le state de l'adhésion si connecté
+      if (this.accessToken !== '') {
+        // console.log('-> postStripeReturn, expect_payment_stripe_membership !')
+        this.getMe()
+      }
     }).catch(function (error) {
       log({ message: 'postStripeReturn, /api/webhook_stripe/ error: ', error })
       emitter.emit('modalMessage', {

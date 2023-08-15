@@ -1,35 +1,4 @@
-import Accueil from "../views/Accueil.vue"
-import { log } from "../communs/LogError"
-import { useSessionStore } from "../stores/session"
-
-const domain = `${window.location.protocol}//${window.location.host}`
-
-async function loadEvent(to, from, next) {
-  const { setLoadingValue, initFormEvent } = useSessionStore()
-  setLoadingValue(true)
-   const urlApi = `/api/eventslug/${to.params.slug}`
-    try {
-      const response = await fetch(domain + urlApi)
-      if (response.status !== 200) {
-        throw new Error(`${response.status} - ${response.statusText}`)
-      }
-      const retour = await response.json()
-      setLoadingValue(false)
-      initFormEvent(retour)
-      // Une fois le chargement de l'évènement fait, aller à la page event.
-      next()
-    } catch (error) {
-      setLoadingValue(false)
-      log({ message: `loadEvent, /api/eventslug/${to.params.slug}, error: `, error })
-      emitter.emit('modalMessage', {
-        titre: 'Erreur',
-        contenu: `Chargement de l'évènement '${to.params.slug}' -- erreur: ${error.message}`
-      })
-       next()
-    }
-
-
-}
+import Accueil from '../views/Accueil.vue'
 
 export const routes = [
   {
@@ -41,6 +10,11 @@ export const routes = [
   {
     path: '/',
     name: 'Accueil',
+    meta: {
+      // nom de la fonction de préchargement: "events", dans le module "preload.js"
+      // avec retour de donnée dans les params ($route.params.events)
+       preload: {name: 'events', data: 'events'}
+    },
     // route level code-splitting
     // this generates a separate chunk (about.[hash].js) for this route
     // which is lazy-loaded when the route is visited.
@@ -57,7 +31,11 @@ export const routes = [
     // si iframe
     alias: '/event/embed/:slug',
     name: 'Event',
-    beforeEnter: [loadEvent],
+    meta: {
+      // nom de la fonction de préchargement: "event", dans le module "preload.js"
+      // sans retour de donnée dans les params
+      preload: {name: 'event', data: null},
+    },
     component: () => import(/* webpackChunkName: "Event" */ '../views/Event.vue')
   },
   {
