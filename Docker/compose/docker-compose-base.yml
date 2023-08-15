@@ -7,10 +7,6 @@ services:
     volumes:
       - "../../Postgres/dbdata:/var/lib/postgresql/data"
       - "/etc/localtime:/etc/localtime:ro"
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
 
   billetterie_redis:
     container_name: billetterie_redis
@@ -19,29 +15,25 @@ services:
     hostname: redis
 
   billetterie_django:
+    image: tibillet/tibillet_django:2022-10-01
     container_name: billetterie_django
     build: ../Dockerfile/
-#    image: registry.3peaks.re/billetterie_django:2.8-bullyeses_python38_prelog4s
     restart: always
-#    ports:
-#      - 8002:8002
     volumes:
       - "../../DjangoFiles:/DjangoFiles"
       - "../../Backup:/Backup"
       - "../../Docker/bashrc:/root/.bashrc"
     working_dir: /DjangoFiles
-#    command: "bash /DjangoFiles/launch.sh"
 
   billetterie_celery:
+    image: tibillet/tibillet_django:2022-10-01
     container_name: billetterie_celery
     build: ../Dockerfile/
-#    image: registry.3peaks.re/billetterie_django:2.8-bullyeses_python38_prelog4s
     restart: always
     volumes:
       - "../../DjangoFiles:/DjangoFiles"
       - "../../Docker/bashrc:/root/.bashrc"
     working_dir: /DjangoFiles
-#    command: "bash /DjangoFiles/launch.sh"
 
 
   billetterie_nginx:
@@ -53,21 +45,15 @@ services:
       - ../../Front/Landing:/usr/share/nginx/landing
       - ../../DjangoFiles/www:/DjangoFiles/www
       - ../../DjangoFiles/logs:/DjangoFiles/logs
-      - ../../../documentation:/documentation
 
   billetterie_nodejs:
     image: node:16-bullseye
     container_name: billetterie_nodejs
     hostname: billetterie_nodejs
-#    ports:
-#      - "3000:3000"
     environment:
       DEV: 1
       TIMEZONE: Indian/Reunion
-#    restart: on-failure
     volumes:
       - ../../Front:/Front
     working_dir: /Front
 #    command: "bash /Front/start.sh"
-#    networks:
-#      - frontend
