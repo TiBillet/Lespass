@@ -51,6 +51,13 @@ class Command(BaseCommand):
         )
         domain_public.save()
 
+        domain_public, created = Domain.objects.get_or_create(
+            domain= f'www.{os.getenv("DOMAIN")}',
+            tenant = tenant_public,
+            is_primary = True
+        )
+        domain_public.save()
+
         meta = os.getenv("META")
         if not meta:
             print("Quelle sera le sous domaine META ?")
