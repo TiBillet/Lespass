@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class Command(BaseCommand):
     def handle(self, *args, **options):
         User = get_user_model()
-        root, created  = User.objects.get_or_create(email="root@root.root")
+        root, created  = User.objects.get_or_create(email="root@root.root", username="root@root.root")
         logger.info(f"Root created: {created}")
         if created :
             root.set_password('root')

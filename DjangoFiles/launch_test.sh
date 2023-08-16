@@ -1,7 +1,8 @@
 python /DjangoFiles/manage.py collectstatic --no-input
 python /DjangoFiles/manage.py migrate
+echo "Création des tenants public et meta"
 python /DjangoFiles/manage.py create_public
-echo "Création du super utilisateur :"
+echo "Création du super utilisateur"
 python /DjangoFiles/manage.py test_user
 
 mkdir -p /DjangoFiles/logs
