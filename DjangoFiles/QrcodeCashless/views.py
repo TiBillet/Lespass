@@ -567,7 +567,7 @@ class index_scan(View):
     def get(self, request, uuid):
         config = self.configuration
 
-        # Dette technique ...
+        # Dette technique…
         # Pour rediriger les premières générations de qrcode
         # m.tibillet.re de la raffinerie
         address = request.build_absolute_uri()
