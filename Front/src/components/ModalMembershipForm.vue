@@ -1,6 +1,6 @@
 <template>
   <!-- modal formulaire adhésion -->
-  <div class="modal fade" id="modal-form-adhesion" tabindex="-1" role="dialog"
+  <div id="modal-form-adhesion" class="modal fade" tabindex="-1" role="dialog"
        aria-labelledby="modal-form-adhesion" data-mdb-backdrop="true" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" role="document">
       <div class="modal-content">
@@ -8,28 +8,39 @@
           <div class="card card-plain">
             <div class="card-header pb-0 d-flex flex-column align-items-star">
               <h3 class="font-weight-bolder text-info text-gradient align-self-start w-85">
-                {{ getPartialDataAdhesion(productUuid).name }}</h3>
+                {{
+                  getMembershipData(props.productUuid)
+                      .name
+                }}</h3>
               <h5 style="white-space: pre-line">{{
-                  getPartialDataAdhesion(productUuid).short_description
+                  getMembershipData(props.productUuid)
+                      .short_description
                 }}</h5>
             </div>
             <div class="card-body">
               <!-- formulaire -->
-              <form @submit.prevent="validerAdhesion($event)" novalidate>
-
+              <form id="form-valid-membership" class="needs-validation"
+                    @submit.prevent="validerAdhesion($event, props.productUuid)"
+                    novalidate>
                 <!-- conditions -->
                 <div class="input-group mb-2 has-validation">
                   <div class="form-check form-switch">
                     <div>
-                      <input id="read-conditions" class="form-check-input" type="checkbox" required
-                             @click="checkConditions()" :checked="adhesion.readConditions">
-                      <label v-if="getPartialDataAdhesion(productUuid).categorie_article === 'A'"
-                             class="form-check-label text-dark" for="read-conditions">
-                        j'ai pris connaissance des <a class="text-info" @click="goStatus()">statuts et du règlement
-                        intérieur de l'association.</a>
-                      </label>
-                      <label v-else class="form-check-label text-dark" for="read-conditions">
-                        j'ai pris connaissance des <a class="text-info" @click="goStatus()">CGU/CGV.</a>
+                      <input class="form-check-input" type="checkbox"
+                             v-model="getFormMembership(props.productUuid).readConditions"
+                             true-value="true" false-value="false" required/>
+                      <label class="form-check-label text-dark" for="read-conditions">
+                        <span>j'ai pris connaissance des </span>
+                        <span v-if="getMembershipData(props.productUuid).categorie_article === 'A'">
+                          <a v-if="getMembershipData(props.productUuid).legal_link !== null" class="text-info"
+                             @click="goStatus()">statuts et du règlement intérieur de l'association.</a>
+                          <span v-else>statuts et du règlement intérieur de l'association</span>
+                        </span>
+                        <span v-else>
+                          <a v-if="getMembershipData(props.productUuid).legal_link !== null" class="text-info"
+                             @click="goStatus()">CGU/CGV.</a>
+                          <span v-else>CGU/CGV.</span>
+                        </span>
                       </label>
                     </div>
                   </div>
@@ -38,29 +49,26 @@
 
                 <!-- prix -->
                 <div class="input-group mb-2 has-validation">
-                  <div :id="`adesion-modal-price-parent${index}`" class="col form-check mb-2"
-                       v-for="(price, index) in getPricesAdhesion(productUuid)" :key="index">
-                    <input v-if="index === 0" :value="price.uuid" v-model="adhesion.adhesion"
-                           class="form-check-input input-adesion-modal-price" type="radio"
-                           name="prixAdhesionModal" :id="`uuidadhesionmodalpriceradio${index}`"
-                           required>
-                    <input v-else :value="price.uuid" v-model="adhesion.adhesion"
-                           class="form-check-input input-adesion-modal-price" type="radio"
-                           name="prixAdhesionModal" :id="`uuidadhesionmodalpriceradio${index}`">
-                    <label class="form-check-label" :for="`uuidadhesionmodalpriceradio${index}`">
+                  <div class="col form-check mb-2"
+                       v-for="(price, index) in getMembershipPrices(props.productUuid)" :key="index">
+                    <input name="membership-prices" :id="`uuidadhesionmodalpriceradio${index}`" type="radio"
+                           v-model="getFormMembership(props.productUuid)
+                           .uuidPrice" :value="price.uuid"
+                           class="form-check-input input-adesion-modal-price" required/>
+                    <label class="form-check-label text-dark" :for="`uuidadhesionmodalpriceradio${index}`">
                       {{ price.name }} - {{ price.prix }}€
                     </label>
-                    <div v-if="index === 0" class="invalid-feedback">
-                      Merci de choisir un tarif.
+                    <div v-if="index === 0" class="invalid-feedback w-100">
+                      Tarif SVP
                     </div>
                   </div>
                 </div>
 
                 <!-- nom -->
                 <div class="input-group mb-2 has-validation">
-                                    <span class="input-group-text"
-                                          @click="inputFocus('adhesion-nom')">Nom ou Structure</span>
-                  <input id="adhesion-nom" v-model="adhesion.last_name" type="text"
+                  <span class="input-group-text" @click="inputFocus('adhesion-nom')">Nom ou Structure</span>
+                  <input id="adhesion-nom" v-model="getFormMembership(props.productUuid)
+                  .last_name" type="text"
                          class="form-control" aria-label="Nom pour l'adhésion" required>
                   <div class=" invalid-feedback">Merci de remplir votre nom.</div>
                 </div>
@@ -68,17 +76,16 @@
                 <!-- prénom -->
                 <div class="input-group mb-2 has-validation">
                   <span class="input-group-text" @click="inputFocus('adhesion-prenom')">Prénom</span>
-                  <input id="adhesion-prenom" v-model="adhesion.first_name" type="text"
+                  <input id="adhesion-prenom" v-model="getFormMembership(props.productUuid).first_name" type="text"
                          class="form-control" aria-label="Prénom pour l'adhésion" required>
                   <div class="invalid-feedback">Merci de remplir votre prénom.</div>
                 </div>
 
-
                 <!-- email -->
                 <div class="input-group mb-2 has-validation">
                   <span class="input-group-text" @click="inputFocus('adhesion-email')">Email</span>
-                  <input id="adhesion-email" v-model="adhesion.email" type="email"
-                         pattern="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$"
+                  <input id="adhesion-email" v-model="getFormMembership(props.productUuid).email" type="email"
+                         @keyup="validateEmail($event)"
                          class="form-control" required>
                   <div class="invalid-feedback">
                     Merci de remplir votre email.
@@ -88,57 +95,56 @@
                 <!-- code postal -->
                 <div class="input-group mb-2 has-validation">
                   <span class="input-group-text" @click="inputFocus('adhesion-code-postal')">Code postal</span>
-                  <input id="adhesion-code-postal" v-model="adhesion.postal_code"
-                         type="number" class="form-control" aria-label="Code postal" required>
+                  <input id="adhesion-code-postal" v-model="getFormMembership(props.productUuid).postal_code"
+                         type="number" class="form-control" aria-label="Code postal"
+                         @keyup="formatNumber($event, 5)" required>
                   <div class="invalid-feedback">Merci de remplir votre code postal.</div>
                 </div>
 
                 <!-- téléphone -->
-                <!--                <p class="mb-2">Téléphone non obligatoire, mais utile pour vous envoyer les confirmations et la double authentification."</p>-->
                 <div class="input-group has-validation">
                                     <span class="input-group-text"
                                           @click="inputFocus('adhesion-tel')">Fixe ou Mobile</span>
-                  <input id="adhesion-tel" v-model="adhesion.phone" type="tel"
-                         class="form-control" pattern="^[0-9-+\s()]*$"
-                         aria-label="Fixe ou Mobile" required>
+                  <input id="adhesion-tel" v-model="getFormMembership(props.productUuid).phone" type="tel"
+                         class="form-control" @keyup="formatNumber($event, 10)" aria-label="Fixe ou Mobile" required>
                   <div class="invalid-feedback">Merci de remplir votre numéro de téléphone.</div>
                 </div>
 
+                <!-- options radio -->
+                <div v-if="getMembershipOptionsRadio(props.productUuid).length > 0"
+                     class="input-group mb-2 has-validation">
+                  <div class="col form-check mb-2"
+                       v-for="(option, index) in getMembershipOptionsRadio(props.productUuid)" :key="index">
+                    <input name="membership-options-radio" :id="`uuidmembershipoptionsradio${index}`" type="radio"
+                           v-model="getFormMembership(props.productUuid)
+                           .option_radio" :value="option.uuid"
+                           class="form-check-input input-adesion-modal-price"/>
+                    <label class="form-check-label text-dark mb-0" :for="`uuidmembershipoptionsradio${index}`">
+                      {{ option.name }}
+                    </label>
+                    <div v-if="index === 0" class="invalid-feedback w-100">
+                      Option SVP
+                    </div>
+                  </div>
+                </div>
+
                 <!-- options checkbox -->
-                <div v-if="getPartialDataAdhesion(productUuid).option_generale_checkbox.length > 0" class="mt-3">
-                  <div v-for="(option, index) in getPartialDataAdhesion(productUuid).option_generale_checkbox"
+                <div v-if="getFormMembership(props.productUuid).option_checkbox.length > 0" class="mt-3">
+                  <div v-for="(option, index) in getFormMembership(props.productUuid).option_checkbox"
                        :key="index" class="mb-1">
                     <div class="form-switch input-group has-validation">
                       <input class="form-check-input me-2 options-adhesion-to-unchecked" type="checkbox"
-                             :id="`option-checkbox-adhesion${option.uuid}`">
+                             :id="`option-checkbox-adhesion${option.uuid}`" v-model="option.checked"
+                             true-value="true" false-value="false">
+
                       <label class="form-check-label text-dark mb-0" :for="`option-checkbox-adhesion${option.uuid}`">
                         {{ option.name }}
                       </label>
                     </div>
                     <div class="ms-5">{{ option.description }}</div>
-                    <!-- <div class="invalid-feedback">Choisisser une options !</div> -->
+                    <div class="invalid-feedback">Choisisser une options !</div>
                   </div>
                 </div>
-
-                <!-- options radio -->
-                <div v-if="getPartialDataAdhesion(productUuid).option_generale_radio.length > 0" class="mt-3">
-                  <div v-for="(option, index) in getPartialDataAdhesion(productUuid).option_generale_radio"
-                       :key="index" class="mb-2">
-                    <div class="form-switch input-group has-validation ps-0">
-                      <input class="form-check-input me-2 options-adhesion-to-unchecked" type="radio"
-                             name="option-radio-name-adhesion"
-                             :id="`option-radio-adhesion${index}`"
-                             :data-uuid="option.uuid"
-                             style="margin-left: 0;">
-                      <label class="form-check-label text-dark mb-0" :for="`option-radio-adhesion${index}`">
-                        {{ option.name }}
-                      </label>
-                    </div>
-                    <div class="ms-5">{{ option.description }}</div>
-                  </div>
-                  <!-- <div class="invalid-feedback">Choisisser une options !</div> -->
-                </div>
-
 
                 <div class="text-center">
                   <p class="mb-2 mt-2">
@@ -165,62 +171,80 @@
 
 <script setup>
 console.log('-> ModalMembershipForm.vue !')
-import { onMounted } from 'vue'
+import { log } from '../communs/LogError'
+import { setLocalStateKey } from '../communs/storeLocal.js'
 
 // store
-import { storeToRefs } from 'pinia'
-import { useAllStore } from '@/stores/all'
-import { useLocalStore } from '@/stores/local'
+import { useSessionStore } from '../stores/session'
 
-// routes
-import { useRouter } from 'vue-router'
-
-// obtenir data adhesion
-const { place, adhesion, loading, error } = storeToRefs(useAllStore())
-const { getPricesAdhesion, getPartialDataAdhesion } = useAllStore()
-
-// stockage adhesion en local
-let { setEtapeStripe } = useLocalStore()
-const router = useRouter()
+const sessionStore = useSessionStore()
+const {
+  getMembershipData,
+  getMembershipPrices,
+  getMembershipOptionsRadio,
+  getFormMembership,
+  setLoadingValue,
+} = sessionStore
 
 const props = defineProps({
   productUuid: String
 })
 
-function inputFocus (id) {
-  document.querySelector(`#${id}`).focus()
+const domain = `${window.location.protocol}//${window.location.host}`
+
+function validateEmail (event) {
+  let value = event.target.value
+  // event.target.setAttribute('type', 'text')
+  const re = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$/
+  if (value.match(re) === null) {
+    event.target.parentNode.querySelector('.invalid-feedback').style.display = 'block'
+  } else {
+    event.target.parentNode.querySelector('.invalid-feedback').style.display = 'none'
+  }
 }
 
-function checkConditions () {
-  adhesion.value.readConditions = document.querySelector(`#read-conditions`).checked
+function formatNumber (event, limit) {
+  const element = event.target
+  // obligation de changer le type pour ce code, si non "replace" ne fait pas "correctement" son travail
+  element.setAttribute('type', 'text')
+  let initValue = element.value
+  element.value = initValue.replace(/[^\d+]/g, '').substring(0, limit)
+  if (element.value.length < limit) {
+    element.parentNode.querySelector('.invalid-feedback').style.display = "block"
+  } else {
+    element.parentNode.querySelector('.invalid-feedback').style.display = "none"
+  }
 }
 
 function goStatus () {
-  const lien = getPartialDataAdhesion(props.productUuid).legal_link
+  const lien = getMembershipData(props.productUuid).legal_link
   // console.log('-> goStatus, lien =', lien)
   if (lien !== null) {
     window.open(lien, '_blank')
   }
 }
 
-function postAdhesionModal (data) {
+function inputFocus (id) {
+  document.querySelector(`#${id}`).focus()
+}
+
+function postAdhesionModal (data, uuidForm) {
   // console.log(`-> fonc postAdhesionModal !`)
   const domain = `${location.protocol}//${location.host}`
   const apiMemberShip = `/api/membership/`
   const options = {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json'/*,
-      'Token': window.accessToken*/
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify(data)
   }
 
-  console.log('options =', JSON.stringify(data, null, 2))
-  // init étape adhésion stripe
-  setEtapeStripe('attente_stripe_adhesion')
+  // init étape adhésion stripe enregistrement en local(long durée)
+  setLocalStateKey('stripeStep', { action: 'expect_payment_stripe_membership', uuidForm, nextPath: '/' })
 
-  loading.value = true
+  setLoadingValue(true)
+
   fetch(domain + apiMemberShip, options).then(response => {
     console.log('response =', response)
     if (response.status !== 201) {
@@ -228,112 +252,61 @@ function postAdhesionModal (data) {
     }
     return response.json()
   }).then(retour => {
+    setLoadingValue(false)
     // redirection stripe formulaire paiement
     window.location = retour.checkout_url
   }).catch(function (error) {
-    console.log('error =', error)
-    const modalForm = document.querySelector(`#modal-form-adhesion form`).getBoundingClientRect()
-    modal.value = {
-      status: 'error',
-      size: {
-        width: modalForm.width,
-        height: modalForm.height
-      },
-      message: error
-    }
+    setLoadingValue(false)
+    log({ message: 'postAdhesionModal, /api/membership/, error:', error })
+    emitter.emit('modalMessage', {
+      titre: 'Erreur',
+      typeMsg: 'danger',
+      contenu: `Post /api/membership/ : ${error.message}`
+    })
   })
 }
 
-function searchInvalidFeedbackElement (ele) {
-  for (let i = 0; i < 3; i++) {
-    const parent = ele.parentNode
-    const eleInvF = parent.querySelector('.invalid-feedback')
-    if (eleInvF !== null) {
-      return eleInvF
+async function validerAdhesion (event, uuidForm) {
+  if (!event.target.checkValidity()) {
+    event.preventDefault()
+    event.stopPropagation()
+  }
+  event.target.classList.add('was-validated')
+  if (event.target.checkValidity() === true) {
+    console.log('validation ok!')
+
+    // ferme le modal
+    const elementModal = document.querySelector('#modal-form-adhesion')
+    const modal = bootstrap.Modal.getInstance(elementModal) // Returns a Bootstrap modal instance
+    modal.hide()
+
+    const form = JSON.parse(JSON.stringify(getFormMembership(uuidForm)))
+    let options = []
+
+    // récupération des options chekbox validés
+    form.option_checkbox.forEach((opt) => {
+      if (opt.checked === 'true') {
+        options.push(opt.uuid)
+      }
+    })
+
+    // récupération de l'option radio validée
+    if (form.option_radio !== '') {
+      options.push(form.option_radio)
     }
-    ele = parent
-  }
-  return null
-}
 
-function validerAdhesion (event) {
-  console.log('-> fonc validerAdhesion !!')
-
-  // efface tous les messages d'invalidité
-  //document.querySelector(`#read-conditions`).parentNode.querySelector(`.invalid-feedback`).style.display = 'none'
-  const msgInvalides = event.target.querySelectorAll('.invalid-feedback')
-  for (let i = 0; i < msgInvalides.length; i++) {
-    msgInvalides[i].style.display = 'none'
-  }
-
-  // vérification status
-  const satusElement = document.querySelector(`#read-conditions`)
-  if (satusElement.checked === false) {
-    satusElement.parentNode.parentNode.parentNode.querySelector(`.invalid-feedback`).style.display = 'block'
-  }
-  if (satusElement.checked === true) {
-    // console.log('event.target.checkValidity() =', event.target.checkValidity())
-    if (event.target.checkValidity() === true) {
-      // formulaire valide
-      // console.log('-> valide !')
-
-      // ferme le modal
-      const elementModal = document.querySelector('#modal-form-adhesion')
-      const modal = bootstrap.Modal.getInstance(elementModal) // Returns a Bootstrap modal instance
-      modal.hide()
-
-      // récupération des options chekbox validés
-      let optionsAdhesion = []
-      for (const option of getPartialDataAdhesion(props.productUuid).option_generale_checkbox) {
-        const inputCheckbox = document.querySelector(`#option-checkbox-adhesion${option.uuid}`)
-        if (inputCheckbox.checked === true) {
-          optionsAdhesion.push(option.uuid)
-        }
-      }
-
-      // récupération de l'option radio validée
-      const optionsRadio = document.querySelectorAll('input[name="option-radio-name-adhesion"]')
-      for (const ele of optionsRadio) {
-        const uuid = ele.getAttribute('data-uuid')
-        if (ele.checked === true) {
-          optionsAdhesion.push(uuid)
-          break
-        }
-      }
-
-      // POST adhésion
-      postAdhesionModal({
-        email: adhesion.value.email,
-        first_name: adhesion.value.first_name,
-        last_name: adhesion.value.last_name,
-        phone: adhesion.value.phone,
-        postal_code: adhesion.value.postal_code,
-        adhesion: adhesion.value.adhesion,
-        options: optionsAdhesion
-      })
-    } else {
-      // formulaire non valide
-      console.log('-> pas valide !')
-      // scroll vers l'entrée non valide et affiche un message
-      const elements = event.target.querySelectorAll('input')
-      for (let i = 0; i < elements.length; i++) {
-        const element = elements[i]
-        if (element.checkValidity() === false) {
-          element.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'center' })
-          try {
-            const invalidFeedbackElement = searchInvalidFeedbackElement(element)
-            console.log('element = ', element)
-            invalidFeedbackElement.style.display = 'block'
-          } catch (e) {
-            console.log(`Pas d'élément avec la class "invalid-feedback" !`)
-          }
-          break
-        }
-      }
-    }
+    // POST adhésion
+    postAdhesionModal({
+      email: form.email,
+      first_name: form.first_name,
+      last_name: form.last_name,
+      phone: form.phone,
+      postal_code: form.postal_code,
+      adhesion: form.uuidPrice,
+      options
+    }, uuidForm)
   }
 }
-
 </script>
 
 <style scoped>

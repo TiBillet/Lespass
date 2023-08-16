@@ -5,22 +5,20 @@
     </legend>
     <!-- email -->
     <div class="input-group mb-2 has-validation">
-      <span class="input-group-text" @click="inputFocus('profil-email')">Email</span>
-      <input id="profil-email" :value="getEmail" type="email"
-             @change.stop="updateEmail('email', $event.target.value)"
-             pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$"
-             class="form-control card-email-input" placeholder="Email" required>
+      <span class="input-group-text" v-focuselement="'card-email-email'">Email</span>
+      <input id="card-email-email" type="text" :value="email" @input="emitValue" class="form-control card-email-input"
+             placeholder="Email"
+             required/>
       <div class="invalid-feedback">
         Merci de renseigner une adresse email valide.
       </div>
     </div>
-
     <!-- confirme email -->
     <div class="input-group mb-2 has-validation">
-      <span class="input-group-text" @click="inputFocus('profil-confirme-email')">Confirmez l'email</span>
-      <input id="profil-confirme-email" :value="getEmail" type="email"
-             pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$"
-             class="form-control card-email-input" placeholder="Email" required>
+      <span class="input-group-text" v-focuselement="'card-email-confirm-email'">Confirmez l'email</span>
+      <input id="card-email-confirm-email" type="text" :value="confirmEmail" @keyup="validateEmail($event)"
+             class="form-control card-email-input" placeholder="Email"
+             required/>
       <div class="invalid-feedback">
         Merci de renseigner une adresse email valide et identique.
       </div>
@@ -37,16 +35,31 @@
 <script setup>
 console.log('-> CardEmail.vue !')
 
-// store
-import {useLocalStore} from '@/stores/local'
+const emit = defineEmits(['update:email'])
+const props = defineProps({
+  email: String,
+  emailModifiers: { default: () => ({}) }
+})
 
-const {getEmail, updateEmail} = useLocalStore()
+let confirmEmail = ''
 
-function inputFocus(id) {
-  document.querySelector(`#${id}`).focus()
+function validateEmail (event) {
+  let value = event.target.value
+  event.target.setAttribute('type', 'text')
+  const re = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$/
+  if (value.match(re) === null) {
+    event.target.parentNode.querySelector('.invalid-feedback').style.display = "block"
+  } else {
+    event.target.parentNode.querySelector('.invalid-feedback').style.display = "none"
+  }
+}
+
+function emitValue (e) {
+  if (props.emailModifiers.checkemail) {
+    validateEmail(e)
+  }
+  emit('update:email', e.target.value)
 }
 </script>
 
-<style scoped>
-
-</style>
+<style scoped></style>

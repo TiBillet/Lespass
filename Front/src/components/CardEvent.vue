@@ -46,7 +46,7 @@
         {{ event.artists[0].configuration.short_description }}
       </p>
 
-      <a :href="event.url" class="btn btn-outline-primary btn-sm">Réserver</a>
+      <div class="btn btn-outline-primary btn-sm" @click="$router.push({ path: '/event/' + event.slug })">Réserver</div>
 
     </div>
   </div>
@@ -54,16 +54,9 @@
 </template>
 
 <script setup>
-
-// asset
-const img = import('../../src/assets/img/loading.svg')
-
-const emit = defineEmits(['goEvent'])
-
 const props = defineProps({
   event: Object
 })
-
 
 function formateDate(dateString) {
   const date = new Date(dateString)
