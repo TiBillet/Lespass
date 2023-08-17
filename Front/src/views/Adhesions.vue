@@ -19,7 +19,8 @@
                 {{ product.long_description }}
               </p>
 
-              <button class="btn btn-outline-secondary btn-sm" @click="showMembershipForm(product.uuid)">Adhérez
+              <button class="btn btn-outline-secondary btn-sm" @click="showMembershipForm(product.uuid)"
+              role="button" :aria-label="`Adhérez ${product.name}`">Adhérez
               </button>
 
             </div>

@@ -46,8 +46,10 @@
         {{ event.artists[0].configuration.short_description }}
       </p>
 
-      <div class="btn btn-outline-primary btn-sm" @click="$router.push({ path: '/event/' + event.slug })">Réserver</div>
-
+      <div class="btn btn-outline-primary btn-sm" @click="$router.push({ path: '/event/' + event.slug })"
+      role="button" :aria-label="`Réserver ${event.slug}`">
+        Réserver
+      </div>
     </div>
   </div>
 
@@ -58,7 +60,7 @@ const props = defineProps({
   event: Object
 })
 
-function formateDate(dateString) {
+function formateDate (dateString) {
   const date = new Date(dateString)
   return `${date.toLocaleDateString()} - ${date.toLocaleTimeString()}`
 }

@@ -5,7 +5,7 @@ const domain = `${window.location.protocol}//${window.location.host}`
 
 // charge un évènement
 export async function event (to) {
-  console.log(`Près chargement d'un évènement !`)
+  // console.log(`Près chargement d'un évènement !`)
   const { setLoadingValue, initFormEvent } = useSessionStore()
   try {
     setLoadingValue(true)
@@ -32,7 +32,7 @@ export async function event (to) {
 
 // Charge tous les évènements
 export async function events () {
-  console.log('Près chargement des évènements !')
+  // console.log('Près chargement des évènements !')
   const { setLoadingValue, initFormEvent } = useSessionStore()
   try {
     setLoadingValue(true)
