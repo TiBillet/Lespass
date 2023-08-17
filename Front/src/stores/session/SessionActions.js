@@ -18,56 +18,6 @@ export const sessionActions = {
     resetLocalState('refreshToken', '')
     this.router.push('/')
   },
-  async emailActivation (id, token) {
-    // console.log('emailActivation')
-    // attention pas de "/" à la fin de "api"
-    const api = `/api/user/activate/${id}/${token}`
-    try {
-      this.loading = true
-      const response = await fetch(domain + api, {
-        method: 'GET',
-        cache: 'no-cache', // *default, no-cache, reload, force-cache, only-if-cached
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      })
-      if (response.status === 200) {
-        const retour = await response.json()
-        log({ message: 'sessionStore -> emailActivation /api/user/activate/, status = 200', object: retour })
-        // message confirmation email
-        emitter.emit('modalMessage', {
-          titre: 'Succès',
-          typeMsg: 'success',
-          dynamic: true,
-          contenu: '<h3>Utilisateur activé / connecté !</h3>'
-        })
-        // maj token d'accès
-        this.accessToken = retour.access
-        // enregistrement en local(long durée) du "refreshToken"
-        setLocalStateKey('refreshToken', retour.refresh)
-        // récupération de l'email d'activation dans this.me.email, enregistré au moment du succès du login dans this.me.email
-        this.me.email = getLocalStateKey('email')
-      } else {
-        throw new Error(`Erreur conrfirmation mail !`)
-      }
-    } catch (error) {
-      log({ message: 'emailActivation, /api/user/activate/, error:', error })
-      emitter.emit('modalMessage', {
-        titre: 'Erreur',
-        typeMsg: 'danger',
-        contenu: `Activation email : ${error.message}`
-      })
-      this.accessToken = ''
-      this.me = {
-        cashless: {},
-        reservations: [],
-        membership: [],
-        email: ''
-      }
-      localStorage.setItem('TiBillet-refreshToken', '')
-    }
-    this.loading = false
-  },
   async getMe () {
     // console.log('-> getMe, accessToken = ', this.accessToken)
     try {
@@ -84,7 +34,7 @@ export const sessionActions = {
       const response = await fetch(domain + apiMe, options)
       if (response.status === 200) {
         const retour = await response.json()
-        console.log('-> getMe, retour =', retour)
+        // console.log('-> getMe, retour =', retour)
         this.loading = false
         this.me = await retour
       } else {
@@ -105,6 +55,58 @@ export const sessionActions = {
         email: ''
       }
     }
+  },
+  async emailActivation (id, token) {
+    // console.log('emailActivation')
+    // attention pas de "/" à la fin de "api"
+    const api = `/api/user/activate/${id}/${token}`
+    try {
+      this.loading = true
+      const response = await fetch(domain + api, {
+        method: 'GET',
+        cache: 'no-cache', // *default, no-cache, reload, force-cache, only-if-cached
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+      if (response.status === 200) {
+        const retour = await response.json()
+        // console.log('retour =', retour)
+        log({ message: 'sessionStore -> emailActivation /api/user/activate/, status = 200', object: retour })
+        // message confirmation email
+        emitter.emit('modalMessage', {
+          titre: 'Succès',
+          typeMsg: 'success',
+          dynamic: true,
+          contenu: '<h3>Utilisateur activé / connecté !</h3>'
+        })
+        // maj token d'accès
+        this.accessToken = retour.access
+        // enregistrement en local(long durée) du "refreshToken"
+        setLocalStateKey('refreshToken', retour.refresh)
+        // actu du profile
+        await this.getMe()
+        // this.me.email = getLocalStateKey('email')
+      } else {
+        throw new Error(`Erreur conrfirmation mail !`)
+      }
+    } catch (error) {
+      log({ message: 'emailActivation, /api/user/activate/, error:', error })
+      emitter.emit('modalMessage', {
+        titre: 'Erreur',
+        typeMsg: 'danger',
+        contenu: `Activation email : ${error.message}`
+      })
+      this.accessToken = ''
+      this.me = {
+        cashless: {},
+        reservations: [],
+        membership: [],
+        email: ''
+      }
+      localStorage.setItem('TiBillet-refreshToken', '')
+    }
+    this.loading = false
   },
   async automaticConnection () {
     const refreshToken = getLocalStateKey('refreshToken')
@@ -197,7 +199,7 @@ export const sessionActions = {
       postEvent.options_checkbox.forEach(option => option['checked'] = false)
 
       // ajout de la propriété "optionsRadioSelected" à l'évènement
-      postEvent.optionRadioSelected = ""
+      postEvent.optionRadioSelected = ''
 
       // ajout de l'adhésion obligatoire d'un prix de produits dans la liste des produits
       let newProducts = []
@@ -228,17 +230,18 @@ export const sessionActions = {
             })
 
             newProducts.push(JSON.parse(JSON.stringify(newProduct)))
-          } else {
-            if (product.categorie_article !== 'D') {
-              // pour avoir un champ inputs visible
-              price['customers'] = [{ first_name: '', last_name: '', uuid: this.generateUUIDUsingMathRandom() }]
-            } else {
-              // ajout de la propriété "selectedPrice" pour le don
-              product["selectedPrice"] = ''
-              // ajout de la propriété "activatedGift" à "false" pour le don
-              product["activatedGift"] = false
-            }
           }
+          if (product.categorie_article !== 'D') {
+            console.log('ajout du champ first_name / last_name')
+            // pour avoir un champ inputs visible
+            price['customers'] = [{ first_name: '', last_name: '', uuid: this.generateUUIDUsingMathRandom() }]
+          } else {
+            // ajout de la propriété "selectedPrice" pour le don
+            product['selectedPrice'] = ''
+            // ajout de la propriété "activatedGift" à "false" pour le don
+            product['activatedGift'] = false
+          }
+
         })
       })
       postEvent.products = newProducts
@@ -328,16 +331,16 @@ export const sessionActions = {
     let priceResult = prices.find(prix => prix.uuid === price.priceUuid)
     priceResult.customers = []
   },
-  deleteCurrentEventForm() {
-    if (this.forms.find(form => form.uuid === this.currentUuidEventForm).typeForm === "reservation") {
+  deleteCurrentEventForm () {
+    if (this.forms.find(form => form.uuid === this.currentUuidEventForm).typeForm === 'reservation') {
       this.router.push('/')
       console.log('reset formulaire !')
       // suppression du formulaire "reservation" courant
-      const  newForms = this.forms.filter(form => form.uuid !== this.currentUuidEventForm)
+      const newForms = this.forms.filter(form => form.uuid !== this.currentUuidEventForm)
       this.forms = JSON.parse(JSON.stringify(newForms))
       this.currentUuidEventForm = ''
     } else {
-      log({message: `sessionStore -> deleteCurrentEventForm, ce n'est pas un formulaire de réservation`})
+      log({ message: `sessionStore -> deleteCurrentEventForm, ce n'est pas un formulaire de réservation` })
     }
   },
   /**
@@ -376,6 +379,7 @@ export const sessionActions = {
     let product = products.find(product => product.uuid === uuid)
     product.activated = false
     // vidage data customer
+    /*
     product.customers[0] = {
       first_name: '',
       last_name: '',
@@ -383,6 +387,8 @@ export const sessionActions = {
       postal_code: '',
       uuid: ''
     }
+
+     */
   },
   setLoadingValue (value) {
     this.loading = value

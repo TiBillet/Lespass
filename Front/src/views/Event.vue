@@ -9,9 +9,9 @@
       <CardEmail v-model:email.checkemail="getEventForm.email"/>
 
       <!--
-     Billet(s)
-     Si attribut "image", une image est affiché à la place du nom
-     Attribut 'style-image' gère les propriétées(css) de l'image (pas obligaoire, style par défaut)
+       Billet(s)
+       Si attribut "image = booléen", une image est affiché à la place du nom
+       Attribut 'style-image' gère les propriétées(css) de l'image (pas obligaoire, style par défaut)
       -->
       <CardBillet v-model:products="getEventForm.products"/>
 
@@ -19,7 +19,7 @@
 
       <CardGifts/>
 
-      <button type="submit" class="btn bg-gradient-dark w-100">Valider la réservation</button>
+      <button type="submit" class="btn bg-gradient-dark w-100" role="button" aria-label="Valider la réservation">Valider la réservation</button>
     </form>
   </div>
 </template>

@@ -2,11 +2,10 @@
   <div class="card card-background">
     <div class="full-background" :style="{ backgroundImage: getBackgroundImage() }"></div>
     <div class="card-body pt-12">
-      <h4 class="text-white">{{ artist.organisation }}</h4>
+      <h4 class="text-white" role="heading" :aria-label="artist.organisation">{{ artist.organisation }}</h4>
       <p v-if="artist.long_description !== null"> {{ artist.long_description }}</p>
-      <p v-if="artist.long_description === null && artist.short_description !== null"> {{
-          artist.short_description
-        }}</p>
+      <p v-if="artist.long_description === null && artist.short_description !== null">
+        {{ artist.short_description }}</p>
     </div>
   </div>
 </template>
