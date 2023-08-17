@@ -111,14 +111,18 @@ export const sessionGetters = {
         const products = formReservation.find(form => form.uuid === this.currentUuidEventForm).products
         const product = products.find(prod => prod.uuid === productUuid)
         const price = product.prices.find(prix => prix.uuid === priceUuid)
-        customers = price.customers
-        // stock pas géré et maxi par user géré
-        if (price.stock === null && customers.length < price.max_per_user) {
-          return true
-        }
-        // stock et maxi par user géré
-        if (price.stock !== null && (price.stock - customers.length) >= 1 && customers.length < price.max_per_user) {
-          return true
+        if (price.customers) {
+          customers = price.customers
+          // stock pas géré et maxi par user géré
+          if (price.stock === null && customers.length < price.max_per_user) {
+            return true
+          }
+          // stock et maxi par user géré
+          if (price.stock !== null && (price.stock - customers.length) >= 1 && customers.length < price.max_per_user) {
+            return true
+          }
+        } else {
+          return false
         }
       }
       // pas de clients/no customer
