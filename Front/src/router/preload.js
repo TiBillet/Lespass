@@ -10,6 +10,7 @@ export async function event (to) {
   try {
     setLoadingValue(true)
     const urlApi = `/api/eventslug/${to.params.slug}`
+    console.log('-> event, url =', domain + urlApi)
     const response = await fetch(domain + urlApi)
     if (response.status !== 200) {
       throw new Error(`${response.status} - ${response.statusText}`)

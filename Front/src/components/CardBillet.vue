@@ -33,7 +33,7 @@
           </div>
 
           <!-- clients / customers -->
-          <CardCustomers v-model:customers="price.customers" :price="price" :membership-required="price.adhesion_obligatoire"/>
+          <CardCustomers v-model:customers="price.customers" :price="price" />
         </section>
 
         <!-- adhesion_obligatoire === true -->
