@@ -2,18 +2,17 @@
 
   <fieldset class="shadow-sm p-3 mb-5 bg-body rounded test-card-billet">
     <legend>
-      <h3 class="font-weight-bolder text-info text-gradient align-self-start">{{ product.name }}</h3>
+      <div class="d-flex flex-row align-items-center justify-content-between">
+        <h3 class="font-weight-bolder text-info text-gradient align-self-start">{{ product.name }}</h3>
+        <button class="btn btn-primary mb-0 test-card-billet-bt-add" type="button"
+                @click="resetPriceCustomers(product)"
+                role="button" aria-label="Supprimer adhésion associative">
+          <i class="fa fa-trash" aria-hidden="true"></i>
+          <span class="ms-1">Supprimer</span>
+        </button>
+      </div>
       <h6 v-if="product.short_description !== null" class="text-info">{{ product.short_description }}</h6>
     </legend>
-
-    <!-- annuler l'adhésion -->
-    <div class="form-check form-switch">
-      <input class="form-check-input" type="checkbox" @click="resetPriceCustomers(product.priceLinkWithMembership)" v-model="product.activated"
-             true-value="true" false-value="false"/>
-      <label class="form-check-label text-dark" for="etat-adhesion">
-        Prendre une adhésion associative.
-      </label>
-    </div>
 
     <!-- conditions -->
     <div class="input-group mb-2 has-validation">
@@ -43,7 +42,8 @@
            v-for="(price, index) in product.prices" :key="index">
         <input name="membership-prices" :id="`uuidcardmembershippriceradio${index}`" type="radio"
                v-model="product.customers[0].uuid" :value="price.uuid"
-               class="form-check-input input-adesion-modal-price" required/>
+               class="form-check-input input-adesion-modal-price" required
+               :checked="product.prices.length === 1"/>
         <label class="form-check-label text-dark" :for="`uuidcardmembershippriceradio${index}`">
           {{ price.name }} - {{ price.prix }}€
         </label>
@@ -122,7 +122,7 @@
 
 <script setup>
 console.log('-> CardMembership.vue !')
-import { useSessionStore } from "../stores/session"
+import { useSessionStore } from '../stores/session'
 
 const emit = defineEmits(['update:product'])
 const props = defineProps({

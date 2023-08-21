@@ -1,5 +1,5 @@
 <template>
-  <div class="input-group mb-1 test-card-billet-input-group" v-for="(customer, index) in customers" :key="index">
+  <div class="input-group mt-2 test-card-billet-input-group" v-for="(customer, index) in customers" :key="index">
     <input type="text" :value="customer.last_name" @input="emitValue(customer.uuid, 'last_name', $event.target.value)"
            placeholder="Nom" class="form-control test-card-billet-input-group-nom"
            required role="textbox" :aria-label="`Nom ${price.name} - ${index}`">
@@ -9,7 +9,7 @@
     <button class="btn btn-primary mb-0" type="button" @click="deleteCustomer(customer.uuid)"
             style="border-top-right-radius: 30px; border-bottom-right-radius: 30px;"
     role="button" :aria-label="`Supprimer champ ${price.name} - ${index}`">
-      <i class="fas fa-times"></i>
+      <i class="fa fa-trash" aria-hidden="true"></i>
     </button>
     <div class="invalid-feedback">Donnée(s) manquante(s) !</div>
   </div>
