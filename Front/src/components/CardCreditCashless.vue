@@ -13,23 +13,23 @@
     <div class="form-switch">
       <input class="form-check-input" type="checkbox" id="credit-cashless" v-model="product.activated"
              :checked="product.activated">
-      <label class="form-check-label" for="credit-cashless">Recharger carte</label>
+      <label class="form-check-label text-dark" for="credit-cashless">Recharger carte</label>
     </div>
 
     <!-- la recharge -->
-    <div v-if="product.activated === true" class="input-group mb-2 rounded-right">
+    <div v-if="product.activated === true" class="input-group mb-2 rounded-right w-15">
       <button class="btn btn-primary mb-0" type="button" role="button" aria-label="Ajouter 1 crédit cashless"
               @click="product.qty <= 0 ? product.qty = 0 : product.qty--">
         <i class="fa fa-minus" aria-hidden="true"></i>
       </button>
       <input type="text" class="form-control ps-1" :placeholder="product.qty"
              role="textbox" aria-label="Recharge cashless" v-model="product.qty"
-             @keyup="formatNumberPrentNode2($event, 3)" required>
+             @keyup="formatNumber($event, 3)" required>
       <button class="btn btn-primary mb-0 app-rounded-right-20" type="button" role="button" aria-label="Supprimer 1 crédit cashless"
               @click="product.qty > 998 ? product.qty = 998 : product.qty++">
         <i class="fa fa-plus" aria-hidden="true"></i>
       </button>
-      <div class="input-group-append invalid-feedback">Merci de renseigner une recharge.</div>
+      <div class="input-group-append invalid-feedback">Pas de recharge.</div>
     </div>
 
 
@@ -45,26 +45,16 @@ const props = defineProps({
   products: Object
 })
 
-/*
-// store
-import {storeToRefs} from 'pinia'
-import {useEventStore} from '@/stores/event'
-
-const {updateChargeCashless, getChargeCashless} = useEventStore()
-const {event} = storeToRefs(useEventStore())
-*/
-
 function inputFocus (id) {
   document.querySelector(`#${id}`).focus()
 }
 
-function formatNumberPrentNode2 (event, limit) {
+function formatNumber (event, limit) {
   const element = event.target
   // obligation de changer le type pour ce code, si non "replace" ne fait pas "correctement" son travail
   element.setAttribute('type', 'text')
   let initValue = element.value
   element.value = initValue.replace(/[^\d+]/g, '').substring(0, limit)
-
 }
 
 </script>

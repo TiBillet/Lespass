@@ -11,20 +11,20 @@
     </legend>
 
     <!-- options radio -->
-    <div>Choix unique:</div>
+    <div v-if="getEventFormOptions.nbOptionsRadio > 1">Choix unique:</div>
     <div v-if="getEventFormOptions.nbOptionsRadio > 1" class="input-group mb-2 has-validation">
       <div v-for="(option, index) in getEventFormOptions.optionsRadio" :key="index" class="form-check ps-0 me-3">
         <input class="form-check-input " type="radio" name="event-option-radio" :id="`option-event-radio${index}`"
                style="margin-left: 0;"
                v-model="getEventForm.optionRadioSelected" :value="option.uuid">
-        <label class="form-check-label" :for="`option-event-radio${index}`">
+        <label class="form-check-label text-dark ms-2" :for="`option-event-radio${index}`">
           {{ option.name }}
         </label>
       </div>
     </div>
 
     <!-- options checkbox -->
-    <div>Choix multiples:</div>
+    <div v-if="getEventFormOptions.nbOptionsCheckbox > 0">Choix multiples:</div>
     <div v-if="getEventFormOptions.nbOptionsCheckbox > 0" class="input-group mb-2 has-validation">
       <div v-for="(option, index) in getEventFormOptions.optionsCheckbox" :key="index"
            class="form-check form-switch me-3">

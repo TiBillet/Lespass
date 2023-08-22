@@ -242,8 +242,12 @@ export const sessionActions = {
           }
           if (product.categorie_article !== 'D' && product.categorie_article !== 'S') {
             console.log('ajout du champ first_name / last_name')
-            //price['customers'] = [{ first_name: '', last_name: '', uuid: this.generateUUIDUsingMathRandom() }]
-            price['customers'] = []
+            if (product.nominative === true) {
+              //price['customers'] = [{ first_name: '', last_name: '', uuid: this.generateUUIDUsingMathRandom() }]
+              price['customers'] = []
+            } else {
+              price['qty'] = 0
+            }
           }
         })
       })

@@ -75,4 +75,7 @@ waitLoadPlace()
   border-bottom-right-radius: 20px !important;
   border-top-right-radius: 20px !important;
 }
+.w-15 {
+  width: 15% !important;
+}
 </style>
