@@ -4,9 +4,9 @@ from django.contrib import admin
 
 # créer un modèle d'administration pour le modèle Billet
 
-class BilletAdmin(admin.ModelAdmin):
-    list_display = ('titre', 'auteur', 'date')
-    list_filter = ('date',)
-    date_hierarchy = 'date'
-    ordering = ('-date',)
-    search_fields = ('titre', 'contenu')
+# class BilletAdmin(admin.ModelAdmin):
+#     list_display = ('titre', 'auteur', 'date')
+#     list_filter = ('date',)
+#     date_hierarchy = 'date'
+#     ordering = ('-date',)
+#     search_fields = ('titre', 'contenu')
