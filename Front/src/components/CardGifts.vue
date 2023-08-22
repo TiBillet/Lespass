@@ -17,7 +17,6 @@
       </label>
     </div>
   </fieldset>
-  <button @click="deleteCurrentEventForm()">Test reset form</button>
 </template>
 
 <script setup>

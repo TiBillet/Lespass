@@ -16,25 +16,25 @@ export async function event (to) {
       throw new Error(`${response.status} - ${response.statusText}`)
     }
     const retour = await response.json()
-    setLoadingValue(false)
     initFormEvent(retour)
     // Une fois le chargement de l'évènement fait, aller à la page event.
     return true
   } catch (error) {
-    setLoadingValue(false)
     log({ message: `loadEvent, /api/eventslug/${to.params.slug}, error: `, error })
     emitter.emit('modalMessage', {
       titre: 'Erreur',
       contenu: `Chargement de l'évènement '${to.params.slug}' -- erreur: ${error.message}`
     })
     return false
+  }finally {
+     setLoadingValue(false)
   }
 }
 
 // Charge tous les évènements
 export async function events () {
   // console.log('Près chargement des évènements !')
-  const { setLoadingValue, initFormEvent } = useSessionStore()
+  const { setLoadingValue } = useSessionStore()
   try {
     setLoadingValue(true)
     const apiEvents = `/api/events/`
@@ -44,12 +44,13 @@ export async function events () {
     }
     return await response.json()
   } catch (error) {
-    setLoadingValue(true)
     emitter.emit('modalMessage', {
       titre: 'Erreur',
       contenu: `Chargement des évènements  -- erreur: ${error.message}`
     })
     log({ message: 'load events: ' + error.message })
     return false
+  } finally {
+     setLoadingValue(false)
   }
 }

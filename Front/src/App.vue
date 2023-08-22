@@ -68,3 +68,11 @@ async function waitLoadPlace() {
 }
 waitLoadPlace()
 </script>
+
+<style>
+/* ajout partie arrondie sur groupe input por l'ensemble de l'application */
+.app-rounded-right-20 {
+  border-bottom-right-radius: 20px !important;
+  border-top-right-radius: 20px !important;
+}
+</style>

@@ -54,32 +54,22 @@
     </div>
 
     <!-- nom / prénom -->
-    <div class="form-group">
-      <div class="input-group mb-1 test-membership-input-group">
+      <div class="input-group mb-1">
         <input type="text" v-model="product.customers[0].last_name"
-               placeholder="Nom ou Structure" aria-label="Nom ou Structure"
-               class="form-control test-membership-input-group-nom"
-               required>
+               placeholder="Nom ou Structure" aria-label="Nom ou Structure" class="form-control" required>
         <input type="text" v-model="product.customers[0].first_name"
-               placeholder="Prénom" aria-label="Prénom" class="form-control test-membership-input-group-prenom"
-               required>
+               placeholder="Prénom" aria-label="Prénom" class="form-control app-rounded-right-20" required>
+        <div class="invalid-feedback">Donnée(s) manquante(s).</div>
       </div>
-      <div class="invalid-feedback">Donnée(s) manquante(s) !</div>
-    </div>
+
 
     <!-- code postal / téléphone -->
-    <div class="form-group">
-      <div class="input-group mb-1 test-membership-input-group">
-        <input type="text" v-model="product.customers[0].postal_code"
-               placeholder="Code postal" aria-label="Code postal"
-               class="form-control test-membership-input-group-postal"
-               @keyup="formatNumberPrentNode2($event, 5)" required>
-        <input type="text" v-model="product.customers[0].phone"
-               placeholder="Fixe ou mobile" aria-label="Fixe ou mobile"
-               class="form-control test-membership-input-group-phone"
-               @keyup="formatNumberPrentNode2($event, 10)" required>
-      </div>
-      <div class="invalid-feedback">Merci de renseigner une donnée valide.</div>
+    <div class="input-group mb-1 test-membership-input-group">
+      <input type="text" v-model="product.customers[0].postal_code" placeholder="Code postal" aria-label="Code postal"
+             class="form-control" @keyup="formatNumberPrentNode2($event, 5)" required>
+      <input type="text" v-model="product.customers[0].phone" placeholder="Fixe ou mobile" aria-label="Fixe ou mobile"
+             class="form-control app-rounded-right-20" @keyup="formatNumberPrentNode2($event, 10)" required>
+      <div class="invalid-feedback">Donnée(s) manquante(s).</div>
     </div>
 
     <!-- options radio -->
