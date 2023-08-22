@@ -40,11 +40,7 @@
             <h4 class="font-weight-bolder text-dark text-gradient" role="heading" :aria-label="price.name">
               {{ price.name.toLowerCase() }} : {{ price.prix }} €
             </h4>
-            <div v-if="getIsLogin === false" class="ms-2 mt-0 text-info font-weight-500"
-                 role="heading" aria-label="Vous devez être connecter pour accéder à ce produit.">
-              Vous devez être connecter pour accéder à ce produit.
-            </div>
-            <div v-else>
+            <div v-if="getIsLogin === true">
               <button class="btn btn-primary mb-0" type="button"
                       style="border-top-right-radius: 30px; border-bottom-right-radius: 30px;"
                       @click="activationProductMembership(price)" role="button"
@@ -55,6 +51,10 @@
               </span>
               </button>
             </div>
+          </div>
+          <div v-if="getIsLogin === false" class="mt-0 text-info font-weight-500"
+               role="heading" aria-label="Vous devez être connecter pour accéder à ce produit.">
+            Vous devez être connecter pour accéder à ce produit.
           </div>
         </section>
       </div>
