@@ -233,8 +233,12 @@ export const sessionActions = {
           }
           if (product.categorie_article !== 'D') {
             console.log('ajout du champ first_name / last_name')
-            // pour avoir un champ inputs visible
-            price['customers'] = [{ first_name: '', last_name: '', uuid: this.generateUUIDUsingMathRandom() }]
+            // pour avoir un champ inputs visible avec un seul prix
+            if (product.prices.length === 1) {
+              price['customers'] = [{ first_name: '', last_name: '', uuid: this.generateUUIDUsingMathRandom() }]
+            } else {
+              price['customers'] = []
+            }
           } else {
             // ajout de la propriété "selectedPrice" pour le don
             product['selectedPrice'] = ''
@@ -320,12 +324,12 @@ export const sessionActions = {
   },
   /**
    * Reset les clients/customers d'un prix lié à une adhésion
-   * @param {object} rawPrice - proxy/object
-   * @param {string} rawPrice.productUuid - id du produit
-   * @param {string} rawPrice.priceUuid - id du prix
+   * @param {object} product - proxy/object
    */
-  resetPriceCustomers (rawPrice) {
-    const price = JSON.parse(JSON.stringify(rawPrice))
+  resetPriceCustomers (product) {
+    console.log('-> resetPriceCustomers, product =', product)
+    product.activated = false
+    const price = JSON.parse(JSON.stringify( product.priceLinkWithMembership))
     let products = this.forms.find(form => form.uuid === this.currentUuidEventForm).products
     let prices = products.find(product => product.uuid === price.productUuid).prices
     let priceResult = prices.find(prix => prix.uuid === price.priceUuid)
@@ -377,18 +381,9 @@ export const sessionActions = {
   deactivationProductMembership (uuid) {
     const products = this.forms.find(form => form.uuid === this.currentUuidEventForm).products
     let product = products.find(product => product.uuid === uuid)
-    product.activated = false
-    // vidage data customer
-    /*
-    product.customers[0] = {
-      first_name: '',
-      last_name: '',
-      phone: '',
-      postal_code: '',
-      uuid: ''
+    if (product !== undefined) {
+      product.activated = false
     }
-
-     */
   },
   setLoadingValue (value) {
     this.loading = value

@@ -5,7 +5,7 @@
       <div class="d-flex flex-row align-items-center justify-content-between">
         <h3 class="font-weight-bolder text-info text-gradient align-self-start">Options</h3>
         <button class="btn btn-primary ms-3" type="button" title="Annuler les options !" @click="resetEventOptions()">
-          <span class="btn-inner--icon">Annuler<i class="fa fa-trash ms-1" aria-hidden="true"></i></span>
+          <i class="fa fa-trash ms-1" aria-hidden="true"></i><span class="btn-inner--icon ms-1">Annuler</span>
         </button>
       </div>
     </legend>
