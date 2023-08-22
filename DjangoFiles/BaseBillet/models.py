@@ -471,11 +471,12 @@ class Product(models.Model):
     categorie_article = models.CharField(max_length=3, choices=CATEGORIE_ARTICLE_CHOICES, default=NONE,
                                          verbose_name=_("Type de produit"))
 
-    archive = models.BooleanField(default=False)
+    nominative = models.BooleanField(default=True, help_text="Nom/Prenom obligatoire lors de la réservation.")
 
+    archive = models.BooleanField(default=False)
     send_to_cashless = models.BooleanField(default=False,
                                            verbose_name="Envoyer au cashless",
-                                           help_text="Produit qui doit être envoyé pour une comptabilité au cashless. Ex : Adhésions",
+                                           help_text="Produit checké par le serveur cashless.",
                                            )
 
     # id_product_stripe = models.CharField(max_length=30, null=True, blank=True)
