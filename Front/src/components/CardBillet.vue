@@ -29,7 +29,7 @@
               <span class="ms-1">Ajouter une réservation</span>
             </button>
             <!-- ajouter une réservation non nominative -->
-            <InputSupAdd v-if="product.nominative === false" v-model:price="product.prices[index]" />
+            <InputNumber v-if="product.nominative === false" v-model:price="product.prices[index]" :min="0" :max="product.prices[index].max_per_user"/>
           </div>
 
           <!-- clients / customers -->
@@ -79,7 +79,7 @@ import { useSessionStore } from '@/stores/session'
 // component
 import CardCustomers from './CardCustomers.vue'
 import CardMembership from './CardMembership.vue'
-import InputSupAdd from './InputSupAdd.vue'
+import InputNumber from './InputNumber.vue'
 
 
 // attributs/props

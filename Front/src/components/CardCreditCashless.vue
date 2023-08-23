@@ -17,27 +17,15 @@
     </div>
 
     <!-- la recharge -->
-    <div v-if="product.activated === true" class="input-group mb-2 rounded-right w-15">
-      <button class="btn btn-primary mb-0" type="button" role="button" aria-label="Ajouter 1 crédit cashless"
-              @click="product.qty <= 0 ? product.qty = 0 : product.qty--">
-        <i class="fa fa-minus" aria-hidden="true"></i>
-      </button>
-      <input type="text" class="form-control ps-1" :placeholder="product.qty"
-             role="textbox" aria-label="Recharge cashless" v-model="product.qty"
-             @keyup="formatNumber($event, 3)" required>
-      <button class="btn btn-primary mb-0 app-rounded-right-20" type="button" role="button" aria-label="Supprimer 1 crédit cashless"
-              @click="product.qty > 998 ? product.qty = 998 : product.qty++">
-        <i class="fa fa-plus" aria-hidden="true"></i>
-      </button>
-      <div class="input-group-append invalid-feedback">Pas de recharge.</div>
-    </div>
-
+    <InputNumber v-if="product.activated === true" v-model:price="products.filter(prod => prod.categorie_article === 'S')[index]" :min="0" :max="500"/>
 
   </fieldset>
 </template>
 
 <script setup>
 console.log('-> CardCreditCashless.vue')
+// components
+import InputNumber from './InputNumber.vue'
 
 // attributs/props
 const emit = defineEmits(['update:products'])

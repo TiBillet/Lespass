@@ -40,10 +40,10 @@
     <div class="input-group mb-2 has-validation">
       <div class="col form-check mb-2"
            v-for="(price, index) in product.prices" :key="index">
-        <input name="membership-prices" :id="`uuidcardmembershippriceradio${index}`" type="radio"
+        <input v-trigger="{index,nbPrices: product.prices.length}"
+               name="membership-prices" :id="`uuidcardmembershippriceradio${index}`" type="radio"
                v-model="product.customers[0].uuid" :value="price.uuid"
-               class="form-check-input input-adesion-modal-price" required
-               :checked="product.prices.length === 1"/>
+               class="form-check-input input-adesion-modal-price" required/>
         <label class="form-check-label text-dark" :for="`uuidcardmembershippriceradio${index}`">
           {{ price.name }} - {{ price.prix }}€
         </label>
@@ -54,13 +54,13 @@
     </div>
 
     <!-- nom / prénom -->
-      <div class="input-group mb-1">
-        <input type="text" v-model="product.customers[0].last_name"
-               placeholder="Nom ou Structure" aria-label="Nom ou Structure" class="form-control" required>
-        <input type="text" v-model="product.customers[0].first_name"
-               placeholder="Prénom" aria-label="Prénom" class="form-control app-rounded-right-20" required>
-        <div class="invalid-feedback">Donnée(s) manquante(s).</div>
-      </div>
+    <div class="input-group mb-1">
+      <input type="text" v-model="product.customers[0].last_name"
+             placeholder="Nom ou Structure" aria-label="Nom ou Structure" class="form-control" required>
+      <input type="text" v-model="product.customers[0].first_name"
+             placeholder="Prénom" aria-label="Prénom" class="form-control app-rounded-right-20" required>
+      <div class="invalid-feedback">Donnée(s) manquante(s).</div>
+    </div>
 
 
     <!-- code postal / téléphone -->
@@ -112,6 +112,8 @@
 
 <script setup>
 console.log('-> CardMembership.vue !')
+import { onMounted } from "vue"
+
 import { useSessionStore } from '../stores/session'
 
 const emit = defineEmits(['update:product'])
@@ -119,6 +121,17 @@ const props = defineProps({
   product: Object,
 })
 const { resetPriceCustomers } = useSessionStore()
+
+// directive qui active un prix si il est unique
+const vTrigger = {
+  mounted: (el, binding) => {
+    const index = binding.value.index
+    const nbPrices = binding.value.nbPrices
+    if (index === 0 && nbPrices === 1) {
+      el.click()
+    }
+  }
+}
 
 function goStatus () {
   const lien = getMembershipData(props.productUuid).legal_link

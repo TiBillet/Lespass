@@ -25,7 +25,6 @@ app.directive('focuselement', (el, binding) => {
   el.addEventListener('click', () =>{
     document.querySelector(`#${binding.value}`).focus()
   })
-
 })
 
 app.use(pinia).use(router).mount('#app')

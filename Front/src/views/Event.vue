@@ -21,7 +21,9 @@
 
       <CardGifts/>
 
-      <button type="submit" class="btn bg-gradient-dark w-100" role="button" aria-label="Valider la réservation">Valider la réservation</button>
+      <button type="submit" class="btn bg-gradient-dark w-100" role="button" aria-label="Valider la réservation">Valider
+        la réservation
+      </button>
     </form>
   </div>
 </template>
@@ -29,7 +31,7 @@
 <script setup>
 console.log('-> Event.vue !')
 // le près chargement de l'évènement est géré par .../router/routes.js fonction "preload"
-import {useRoute} from 'vue-router'
+import { useRoute } from 'vue-router'
 
 // store
 import { useSessionStore } from '../stores/session'
@@ -43,7 +45,6 @@ import CardOptions from '../components/CardOptions.vue'
 import CardGifts from '../components/CardGifts.vue'
 import CardCreditCashless from '../components/CardCreditCashless.vue'
 
-
 const { getEventForm, setLoadingValue } = useSessionStore()
 const route = useRoute()
 
@@ -55,18 +56,35 @@ function formatBodyPost () {
   const body = {
     event: form.uuid,
     email: form.email,
-    // chargeCashless: form.chargeCashless, // TODO: à faire
     prices: [],
     options: []
   }
 
   // infos:
-  // produits 'D' et 'A' n'ont pas la propriété customers dans leurs prix
 
-  form.products.forEach((product) => {
+  // récupération des prix des billets ("B" et "F")
+  let products = form.products.filter(product => ['B', 'F'].includes(product.categorie_article))
+  products.forEach((product) => {
     product.prices.forEach((price) => {
-      if (price.customers !== undefined && price.customers.length >= 1) {
-        // price sans uuid (besoin pour le formulaire)
+      // produit nom nominatif et quantité supérieure à 0
+      if (product.nominative === false && price.qty > 0) {
+        let activatedLinkProduct = false
+        if (price.adhesion_obligatoire !== null) {
+          activatedLinkProduct = form.products.find(prod => prod.uuid === price.adhesion_obligatoire).activated
+        }
+        // si adésion obligatoire = null ou produit lié activé
+        console.log('-> adésion obligatoire =', price.adhesion_obligatoire, '  --  activatedLinkProduct =', activatedLinkProduct)
+        if (price.adhesion_obligatoire === null || (price.adhesion_obligatoire !== null && activatedLinkProduct === true)) {
+          console.log('price name =', price.name)
+          body.prices.push({
+            uuid: price.uuid,
+            qty: price.qty,
+            customers: [{ first_name: '', last_name: '' }]
+          })
+        }
+      }
+      if (product.nominative === true) {
+        // price sans uuid (besoin uniquement pour le formulaire html)
         let filterCustomers = []
         price.customers.forEach((customer) => {
           filterCustomers.push({ first_name: customer.first_name, last_name: customer.last_name })
@@ -80,9 +98,10 @@ function formatBodyPost () {
     })
   })
 
-  form.products.forEach((product) => {
-    //adhésions
-    if (product.categorie_article === 'A' && product.activated === true) {
+  // récupération des adhésions ("A")
+  products = form.products.filter(product => product.categorie_article === 'A')
+  products.forEach((product) => {
+    if (product.activated === true && product.conditionsRead === 'true') {
       const data = product.customers[0]
       // ajout prix adhésion
       body.prices.push({
@@ -96,6 +115,7 @@ function formatBodyPost () {
         }]
       })
 
+      /*
       // ajout des options à choix unique(radio) de l'adhésions
       if (product.optionRadio !== '') {
         body.options.push(product.optionRadio)
@@ -107,27 +127,39 @@ function formatBodyPost () {
           body.options.push(option.uuid)
         }
       })
-    }
-
-    // ajout don
-    if (product.categorie_article === 'D') {
-      console.log('product.activatedGift =', product.activatedGift, '  --  type =', typeof (product.activatedGift))
-      if (product.activatedGift === true && product.selectedPrice !== '') {
-        body.prices.push({
-          uuid: product.uuid,
-          qty: 1
-        })
-      }
+       */
     }
   })
 
-  // ajout de l'option à choix unique(radio) de l'évènement
+  // récupération du cashless ("S")
+  products = form.products.filter(product => product.categorie_article === 'S')
+  products.forEach((product) => {
+    if (product.activated === true && product.qty > 0) {
+      body.prices.push({
+        uuid: product.uuid,
+        qty: product.qty
+      })
+    }
+  })
+
+  // récupération du don ("D")
+  products = form.products.filter(product => product.categorie_article === 'D')
+  products.forEach((product) => {
+    if (product.activatedGift === true) {
+      body.prices.push({
+        uuid: product.uuid,
+        qty: 1
+      })
+    }
+  })
+
+  // option radio de l'évènement
   if (form.optionRadioSelected !== '') {
     body.options.push(form.optionRadioSelected)
   }
 
-  // ajout de l'option à choix multiples(checkbox) de l'évènement
-  form.options_checkbox.forEach((option) => {
+  // option checkbox de l'évènement
+  form.options_checkbox.forEach(option => {
     if (option.checked === 'true') {
       body.options.push(option.uuid)
     }
@@ -158,10 +190,8 @@ async function validerAchats (event) {
         'Content-Type': 'application/json'
       }
     }
-    console.log('options =', body)
+    console.log('body =', body)
 
-     console.log('-> lancement de fetch !')
-    /*
     // active l'icon de chargement
     setLoadingValue(true)
 
@@ -209,7 +239,7 @@ async function validerAchats (event) {
       }
     }).catch((erreur) => {
       setLoadingValue(false)
-       // action stripe = aucune
+      // action stripe = aucune
       setLocalStateKey('stripeStep', { action: null })
       emitter.emit('modalMessage', {
         titre: 'Erreur(s)',
@@ -219,8 +249,6 @@ async function validerAchats (event) {
         typeMsg: 'warning',
       })
     })
-
-     */
   }
 }
 

@@ -211,7 +211,7 @@ export const sessionActions = {
         // désactive la recharge carte par défaut et init nombre crédits à 0
         if (product.categorie_article === 'S') {
           product['activated'] = false
-          product['qty'] = 0
+          product['qty'] = 1
         }
         newProducts.push(product)
         product.prices.forEach((price) => {
@@ -246,7 +246,7 @@ export const sessionActions = {
               //price['customers'] = [{ first_name: '', last_name: '', uuid: this.generateUUIDUsingMathRandom() }]
               price['customers'] = []
             } else {
-              price['qty'] = 0
+              price['qty'] = 1
             }
           }
         })
