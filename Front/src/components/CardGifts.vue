@@ -10,27 +10,13 @@
       <input class="form-check-input" type="checkbox" :id="`don${gift.uuid}`"
              v-model="gift.activatedGift">
       <label class="form-check-label text-dark" :for="`don${gift.uuid}`">
-        Je donne pour soutenir les actions de la coopérative
+        Je donne {{ gift.prices[0].prix }} € pour soutenir les actions de la coopérative
         <a target="_blank" href="https://tibillet.org" data-bs-toggle="tooltip" data-bs-placement="top"
            title="go TiBillet">TiBillet</a> en faveur de la culture et de l'économie sociale et
         solidaire.
       </label>
     </div>
-
-    <!-- prix -->
-    <div v-if="gift.activatedGift === true" class="input-group has-validation">
-      <div class="col form-check" v-for="(price, index) in gift.prices" :key="index">
-        <input type="radio" :name="`don-prix-${index}`" :id="`don-uuid-price-${index}`"
-               v-model="gift.selectedPrice" :value="price.uuid"
-               :class="`form-check-input don-uuid-price-${price.uuid}`" required>
-        <label class="form-check-label" :for="`don-uuid-price-${index}`">{{ price.prix }}€</label>
-        <div v-if="index === 0" class="invalid-feedback w-100">
-          Option SVP
-        </div>
-      </div>
-    </div>
   </fieldset>
-  <button @click="deleteCurrentEventForm()">Test reset form</button>
 </template>
 
 <script setup>

@@ -12,7 +12,7 @@
         <h6 v-if="product.short_description !== null" class="text-info">{{ product.short_description }}</h6>
       </legend>
       <!-- prix -->
-      <div v-for="price in product.prices" :key="price.uuid" class="mt-5">
+      <div v-for="(price, index) in product.prices" :key="index" class="mt-5">
         <section v-if="priceCanBeDisplayed(price.adhesion_obligatoire)">
           <div class="d-flex flex-row justify-content-between align-items-center">
             <!-- nom tarif -->
@@ -20,17 +20,22 @@
                 role="heading" :aria-label="price.name">
               {{ price.prix > 0 ? `${price.name.toLowerCase()} : ${price.prix} €` : `${price.name.toLowerCase()}` }}
             </h4>
-            <button v-if="getBtnAddCustomerCanBeSeen(product.uuid, price.uuid)"
+            <!-- ajouter une réservation nominative -->
+            <button v-if="getBtnAddCustomerCanBeSeen(product.uuid, price.uuid) && product.nominative === true"
                     class="btn btn-primary mb-0 test-card-billet-bt-add"
                     type="button" @click.stop="addCustomer(product.uuid, price.uuid)"
                     role="button" :aria-label="'Ajouter une réservation - ' + price.name">
               <i class="fa fa-plus" aria-hidden="true"></i>
               <span class="ms-1">Ajouter une réservation</span>
             </button>
+            <!-- ajouter une réservation non nominative -->
+            <InputSupAdd v-if="product.nominative === false" v-model:price="product.prices[index]" />
           </div>
 
           <!-- clients / customers -->
-          <CardCustomers v-model:customers="price.customers" :price="price"/>
+          <!-- TODO:  un seule attribut, price. -->
+          <CardCustomers v-if="product.nominative === true" v-model:customers="price.customers" :price="price"/>
+
         </section>
 
         <!-- adhesion_obligatoire === true -->
@@ -40,11 +45,7 @@
             <h4 class="font-weight-bolder text-dark text-gradient" role="heading" :aria-label="price.name">
               {{ price.name.toLowerCase() }} : {{ price.prix }} €
             </h4>
-            <div v-if="getIsLogin === false" class="ms-2 mt-0 text-info font-weight-500"
-                 role="heading" aria-label="Vous devez être connecter pour accéder à ce produit.">
-              Vous devez être connecter pour accéder à ce produit.
-            </div>
-            <div v-else>
+            <div v-if="getIsLogin === true">
               <button class="btn btn-primary mb-0" type="button"
                       style="border-top-right-radius: 30px; border-bottom-right-radius: 30px;"
                       @click="activationProductMembership(price)" role="button"
@@ -55,6 +56,10 @@
               </span>
               </button>
             </div>
+          </div>
+          <div v-if="getIsLogin === false" class="mt-0 text-info font-weight-500"
+               role="heading" aria-label="Vous devez être connecter pour accéder à ce produit.">
+            Vous devez être connecter pour accéder à ce produit.
           </div>
         </section>
       </div>
@@ -74,6 +79,8 @@ import { useSessionStore } from '@/stores/session'
 // component
 import CardCustomers from './CardCustomers.vue'
 import CardMembership from './CardMembership.vue'
+import InputSupAdd from './InputSupAdd.vue'
+
 
 // attributs/props
 const emit = defineEmits(['update:products'])

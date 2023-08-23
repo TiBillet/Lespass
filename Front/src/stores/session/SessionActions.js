@@ -204,6 +204,15 @@ export const sessionActions = {
       // ajout de l'adhésion obligatoire d'un prix de produits dans la liste des produits
       let newProducts = []
       postEvent.products.forEach((product) => {
+        // ajout de la propriété "activatedGift" à "false" pour le don
+        if (product.categorie_article === 'D') {
+          product['activatedGift'] = false
+        }
+        // désactive la recharge carte par défaut et init nombre crédits à 0
+        if (product.categorie_article === 'S') {
+          product['activated'] = false
+          product['qty'] = 0
+        }
         newProducts.push(product)
         product.prices.forEach((price) => {
           // ajout de l'adhésion dans la liste de produits de l'évènement
@@ -231,21 +240,15 @@ export const sessionActions = {
 
             newProducts.push(JSON.parse(JSON.stringify(newProduct)))
           }
-          if (product.categorie_article !== 'D') {
+          if (product.categorie_article !== 'D' && product.categorie_article !== 'S') {
             console.log('ajout du champ first_name / last_name')
-            // pour avoir un champ inputs visible avec un seul prix
-            if (product.prices.length === 1) {
-              price['customers'] = [{ first_name: '', last_name: '', uuid: this.generateUUIDUsingMathRandom() }]
-            } else {
+            if (product.nominative === true) {
+              //price['customers'] = [{ first_name: '', last_name: '', uuid: this.generateUUIDUsingMathRandom() }]
               price['customers'] = []
+            } else {
+              price['qty'] = 0
             }
-          } else {
-            // ajout de la propriété "selectedPrice" pour le don
-            product['selectedPrice'] = ''
-            // ajout de la propriété "activatedGift" à "false" pour le don
-            product['activatedGift'] = false
           }
-
         })
       })
       postEvent.products = newProducts
@@ -329,7 +332,7 @@ export const sessionActions = {
   resetPriceCustomers (product) {
     console.log('-> resetPriceCustomers, product =', product)
     product.activated = false
-    const price = JSON.parse(JSON.stringify( product.priceLinkWithMembership))
+    const price = JSON.parse(JSON.stringify(product.priceLinkWithMembership))
     let products = this.forms.find(form => form.uuid === this.currentUuidEventForm).products
     let prices = products.find(product => product.uuid === price.productUuid).prices
     let priceResult = prices.find(prix => prix.uuid === price.priceUuid)

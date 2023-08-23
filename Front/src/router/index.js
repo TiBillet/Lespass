@@ -87,8 +87,6 @@ router.beforeEach(async (to, from, next) => {
 
   // près chargement
   if (to.meta.preload) {
-    console.log('to.meta.preload =', to.meta.preload.name)
-
     const result = await preload[to.meta.preload.name](to)
     if (to.meta.preload.data === null) {
       // chargement des données ok, on continue sur cette route

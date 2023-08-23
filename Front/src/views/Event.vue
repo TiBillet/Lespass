@@ -15,6 +15,8 @@
       -->
       <CardBillet v-model:products="getEventForm.products"/>
 
+      <CardCreditCashless v-model:products="getEventForm.products"/>
+
       <CardOptions/>
 
       <CardGifts/>
@@ -39,6 +41,8 @@ import CardEmail from '../components/CardEmail.vue'
 import CardBillet from '../components/CardBillet.vue'
 import CardOptions from '../components/CardOptions.vue'
 import CardGifts from '../components/CardGifts.vue'
+import CardCreditCashless from '../components/CardCreditCashless.vue'
+
 
 const { getEventForm, setLoadingValue } = useSessionStore()
 const route = useRoute()
@@ -108,10 +112,9 @@ function formatBodyPost () {
     // ajout don
     if (product.categorie_article === 'D') {
       console.log('product.activatedGift =', product.activatedGift, '  --  type =', typeof (product.activatedGift))
-      console.log('product.selectedPrice =', product.selectedPrice)
       if (product.activatedGift === true && product.selectedPrice !== '') {
         body.prices.push({
-          uuid: product.selectedPrice,
+          uuid: product.uuid,
           qty: 1
         })
       }
@@ -155,8 +158,10 @@ async function validerAchats (event) {
         'Content-Type': 'application/json'
       }
     }
-    console.log('options =', JSON.stringify(options, null, 2))
+    console.log('options =', body)
 
+     console.log('-> lancement de fetch !')
+    /*
     // active l'icon de chargement
     setLoadingValue(true)
 
@@ -192,6 +197,7 @@ async function validerAchats (event) {
         }
         // paiement, redirection vers stripe
         window.location.assign(response.checkout_url)
+
       } else {
         // paiement sans stripe, exemple: réservation gratuite
         emitter.emit('modalMessage', {
@@ -213,6 +219,8 @@ async function validerAchats (event) {
         typeMsg: 'warning',
       })
     })
+
+     */
   }
 }
 
