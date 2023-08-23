@@ -22,6 +22,7 @@ from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string, get_template
 from django.utils import timezone
 
+from ApiBillet.utils import b64decode
 from AuthBillet.models import TibilletUser, TerminalPairingToken
 from BaseBillet.models import Reservation, Ticket, Configuration, Membership, LigneArticle, Webhook, Paiement_stripe
 from Customers.models import Client
@@ -647,6 +648,30 @@ def get_fedinstance_and_launch_request(wallet_pk):
                 data=data,
                 sync_log_pk=sync_log.pk,
             )
+
+
+@app.task
+def send_info_to_fedow_serveur(data):
+    logger.info(f"TRIGGER RECHARGE FEDOW")
+    config = Configuration.get_solo()
+    if not config.server_fedow or not config.key_fedow:
+        logger.error(f"triggers/increment_to_fedow_serveur - No FEDOW config for {connection.tenant}")
+        raise Exception(f'triggers/increment_to_fedow_serveur - No FEDOW config for {connection.tenant}')
+
+    ligne_article = LigneArticle.objects.get(uuid=data['ligne_article_uuid'])
+
+    request_fedow = requests.request("POST",
+                                     f"https://{config.server_fedow}/stripe_federated_charge/",
+                                     data=data,
+                                     headers={"Authorization": f"Api-Key {config.fedow_key}"},
+                                     verify=bool(not settings.DEBUG),
+                                     )
+
+    if request_fedow.status_code == 202:
+        ligne_article.status = LigneArticle.VALID
+        ligne_article.save()
+
+    # on envoie l'id du paiement stripe et le serveur FEDOW ira vérifier de lui même.
 
 
 @app.task

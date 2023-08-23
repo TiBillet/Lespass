@@ -1,3 +1,5 @@
+import base64
+
 import requests, json, os
 APIKEY = os.environ.get('API_PEXELS')
 
@@ -14,3 +16,10 @@ def random_url_photo(query=None):
 
     return photos
 
+
+
+def b64encode(string):
+    return base64.urlsafe_b64encode(string.encode('utf-8')).decode('utf-8')
+
+def b64decode(string):
+    return base64.urlsafe_b64decode(string).decode('utf-8')

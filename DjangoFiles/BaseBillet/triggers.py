@@ -5,8 +5,10 @@ from django.db import connection
 from django.utils import timezone
 
 import TiBillet.settings
+from ApiBillet.utils import b64encode
 from BaseBillet.models import LigneArticle, Product, Configuration, Membership, Price
-from BaseBillet.tasks import send_membership_to_cashless, get_fedinstance_and_launch_request, send_to_ghost
+from BaseBillet.tasks import send_membership_to_cashless, get_fedinstance_and_launch_request, send_to_ghost, \
+    send_info_to_fedow_serveur
 
 import logging
 
@@ -20,6 +22,7 @@ import jwt
 
 
 logger = logging.getLogger(__name__)
+
 
 
 def increment_to_cashless_serveur(vente):
@@ -235,7 +238,10 @@ class ActionArticlePaidByCategorie:
 
     def __init__(self, ligne_article: LigneArticle):
         self.ligne_article = ligne_article
-        self.categorie = self.ligne_article.pricesold.productsold.product.categorie_article
+        self.categorie = self.ligne_article.pricesold.productsold.categorie_article
+
+        if self.categorie == Product.NONE :
+            self.categorie = self.ligne_article.pricesold.productsold.product.categorie_article
 
         self.data_for_cashless = {}
         if ligne_article.paiement_stripe:
@@ -280,7 +286,21 @@ class ActionArticlePaidByCategorie:
     # Category RECHARGE_FEDERATED
     def trigger_S(self):
         logger.info(f"TRIGGER RECHARGE_FEDERATED")
-        increment_federated_wallet(self)
+        # Le serveur FEDOW est censé être au courant, car
+        # il est dans les webhook de Stripe.
+        # On envoie tout de même pour être sûr de la bonne reception.
+        data = {
+            'email': f"{self.ligne_article.paiement_stripe.user.email}",
+            'paiement_stripe_uuid' : f"{self.ligne_article.paiement_stripe.uuid}",
+            'ligne_article_uuid': f"{self.ligne_article.uuid}",
+            "checkout_session_id_stripe": f"{self.ligne_article.paiement_stripe.checkout_session_id_stripe}",
+            'card_uuid' : f"{self.ligne_article.carte.uuid}",
+            'qty': f"{self.ligne_article.pricesold.prix}",
+        }
+        send_info_to_fedow_serveur.delay(data)
+
+
+        # increment_federated_wallet(self)
 
     # Categorie ADHESION
     def trigger_A(self):

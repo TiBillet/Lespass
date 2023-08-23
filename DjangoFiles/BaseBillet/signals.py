@@ -282,6 +282,7 @@ def pre_save_signal_status(sender, instance, **kwargs):
                 new_instance.status = getattr(new_instance, CALLABLE_STATUS_MODEL.get(sender_str))
 
             logger.info(f"dict_transition {sender_str} {new_instance} : {old_instance.status} to {new_instance.status}")
+
             transitions = dict_transition.get(old_instance.status, None)
             if transitions:
                 # Par ordre de préférence :

@@ -1,4 +1,4 @@
-import os
+# import os
 
 import uuid
 from datetime import timedelta, datetime
@@ -237,8 +237,6 @@ class Configuration(SingletonModel):
         verbose_name=_("Clé d'API du serveur cashless")
     )
 
-    federated_cashless = models.BooleanField(default=False)
-
     def check_serveur_cashless(self):
         logger.info(f"On check le serveur cashless. Adresse : {self.server_cashless}")
         if self.server_cashless and self.key_cashless:
@@ -299,19 +297,30 @@ class Configuration(SingletonModel):
                 logger.error(f"    ERROR check_serveur_cashless : {e}")
         return False
 
-    ######### END CASHLESS #########
     """
-    ######### GHOST #########
+    ######### FEDOW #########
     """
+    federated_cashless = models.BooleanField(default=False)
 
-    ghost_url = models.URLField(blank=True, null=True)
-    ghost_key = models.CharField(max_length=200, blank=True, null=True)
-    ghost_last_log = models.TextField(blank=True, null=True)
+    server_fedow = models.URLField(
+        max_length=300,
+        blank=True,
+        null=True,
+        verbose_name=_("Adresse du serveur fedow")
+    )
+
+    key_fedow = models.CharField(
+        max_length=41,
+        blank=True,
+        null=True,
+        verbose_name=_("Clé d'API du serveur fedow")
+    )
+
 
     """
     ######### STRIPE #########
     """
-
+    # SI FEDOW :
     stripe_connect_account = models.CharField(max_length=21, blank=True, null=True)
     stripe_connect_account_test = models.CharField(max_length=21, blank=True, null=True)
     stripe_payouts_enabled = models.BooleanField(default=False)
@@ -320,6 +329,14 @@ class Configuration(SingletonModel):
     stripe_test_api_key = models.CharField(max_length=110, blank=True, null=True)
 
     stripe_mode_test = models.BooleanField(default=True)
+
+    """
+    ######### GHOST #########
+    """
+
+    ghost_url = models.URLField(blank=True, null=True)
+    ghost_key = models.CharField(max_length=200, blank=True, null=True)
+    ghost_last_log = models.TextField(blank=True, null=True)
 
     def get_stripe_api(self):
         if self.federated_cashless:
@@ -787,8 +804,16 @@ class ProductSold(models.Model):
 
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
 
+    categorie_article = models.CharField(max_length=3, choices=Product.CATEGORIE_ARTICLE_CHOICES, default=Product.NONE,
+                                         verbose_name=_("Type de produit"))
+
     def __str__(self):
         return self.product.name
+
+    def save(self, force_insert=False, force_update=False, using=None, update_fields=None):
+        if self.categorie_article == Product.NONE and self.product:
+            self.categorie_article = self.product.categorie_article
+        super().save(force_insert, force_update, using, update_fields)
 
     def img(self):
         if self.product.img:
