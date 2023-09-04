@@ -338,8 +338,8 @@ export const sessionActions = {
     let priceResult = prices.find(prix => prix.uuid === price.priceUuid)
     priceResult.customers = []
   },
-  deleteCurrentEventForm () {
-    if (this.forms.find(form => form.uuid === this.currentUuidEventForm).typeForm === 'reservation') {
+  deleteEventForm (uuid) {
+    if (this.forms.find(form => form.uuid === uuid).typeForm === 'reservation') {
       this.router.push('/')
       console.log('reset formulaire !')
       // suppression du formulaire "reservation" courant
@@ -349,6 +349,10 @@ export const sessionActions = {
     } else {
       log({ message: `sessionStore -> deleteCurrentEventForm, ce n'est pas un formulaire de réservation` })
     }
+
+  },
+  deleteCurrentEventForm () {
+    this.deleteEventForm(this.currentUuidEventForm)
   },
   /**
    * Active l'adhésion liée au prix/price
@@ -436,6 +440,15 @@ export const sessionActions = {
       setLocalStateKey('stripeStep', { action: null })
     }
 
+    if (stripeStep.action === 'expect_payment_stripe_reservation') {
+       messageValidation = `<h3>Réservation OK !</h3>`
+      messageErreur = `Retour stripe pour la réservation:`
+      // vidage formulaire
+      this.deleteEventForm(stripeStep.eventFormUuid)
+      // action stripe = aucune
+      setLocalStateKey('stripeStep', { action: null })
+    }
+
     const apiStripe = `/api/webhook_stripe/`
     const options = {
       method: 'POST',
@@ -462,7 +475,7 @@ export const sessionActions = {
         contenu: messageValidation
       })
       this.loading = false
-      // informer le state de l'adhésion si connecté
+      // informer le state de l'adhésion/réservation si connecté
       if (this.accessToken !== '') {
         // console.log('-> postStripeReturn, expect_payment_stripe_membership !')
         this.getMe()
