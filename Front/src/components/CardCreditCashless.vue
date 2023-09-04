@@ -17,7 +17,9 @@
     </div>
 
     <!-- la recharge -->
-    <InputNumber v-if="product.activated === true" v-model:price="products.filter(prod => prod.categorie_article === 'S')[index]" :min="0" :max="500"/>
+    <InputNumber v-if="product.activated === true"
+                 v-model:price="products.filter(prod => prod.categorie_article === 'S')[index]" :min="0" :max="500"
+                 info-aria="Recharge cashless"/>
 
   </fieldset>
 </template>

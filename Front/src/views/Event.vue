@@ -208,50 +208,50 @@ async function validerAchats (event) {
         }
       }
       console.log('body =', body)
-      /*
-            // active l'icon de chargement
-            setLoadingValue(true)
 
-            const response = await fetch(urlApi, options)
-            if (response.status >= 400 && response.status <= 599) {
-              let typeErreur = 'Client'
-              if (response.status >= 500) {
-                typeErreur = 'Serveur'
-              }
-              throw new Error(`${typeErreur}, ${response.status} - ${response.statusText}`)
-            }
+      // active l'icon de chargement
+      setLoadingValue(true)
 
-            const retour = await response.json()
-            if (retour.checkout_url !== undefined) {
-              // mémorise l'étape ayant lancé l'opération stripe
-              if (route.path.indexOf('embed') !== -1) {
-                // reste sur l'event
-                setLocalStateKey('stripeStep', {
-                  action: 'expect_payment_stripe_reservation',
-                  eventFormUuid: getEventForm.uuid,
-                  nextPath: route.path
-                })
-              } else {
-                // va à l'accueil
-                setLocalStateKey('stripeStep', {
-                  action: 'expect_payment_stripe_reservation',
-                  eventFormUuid: getEventForm.uuid,
-                  nextPath: '/'
-                })
-              }
-              // paiement, redirection vers stripe
-              window.location.assign(retour.checkout_url)
+      const response = await fetch(urlApi, options)
+      if (response.status >= 400 && response.status <= 599) {
+        let typeErreur = 'Client'
+        if (response.status >= 500) {
+          typeErreur = 'Serveur'
+        }
+        throw new Error(`${typeErreur}, ${response.status} - ${response.statusText}`)
+      }
 
-            } else {
-              // paiement sans stripe, exemple: réservation gratuite
-              emitter.emit('modalMessage', {
-                typeMsg: 'success',
-                titre: 'Demande envoyée.',
-                dynamic: true,
-                contenu: '<h4>Merci de vérifier votre réservation dans votre boite email.</h4>'
-              })
-            }
-      */
+      const retour = await response.json()
+      if (retour.checkout_url !== undefined) {
+        // mémorise l'étape ayant lancé l'opération stripe
+        if (route.path.indexOf('embed') !== -1) {
+          // reste sur l'event
+          setLocalStateKey('stripeStep', {
+            action: 'expect_payment_stripe_reservation',
+            eventFormUuid: getEventForm.uuid,
+            nextPath: route.path
+          })
+        } else {
+          // va à l'accueil
+          setLocalStateKey('stripeStep', {
+            action: 'expect_payment_stripe_reservation',
+            eventFormUuid: getEventForm.uuid,
+            nextPath: '/'
+          })
+        }
+        // paiement, redirection vers stripe
+        window.location.assign(retour.checkout_url)
+
+      } else {
+        // paiement sans stripe, exemple: réservation gratuite
+        emitter.emit('modalMessage', {
+          typeMsg: 'success',
+          titre: 'Demande envoyée.',
+          dynamic: true,
+          contenu: '<h4>Merci de vérifier votre réservation dans votre boite email.</h4>'
+        })
+      }
+
     } catch (error) {
       // action stripe = aucune
       setLocalStateKey('stripeStep', { action: null })
