@@ -150,7 +150,7 @@ function formatBodyPost () {
   products.forEach((product) => {
     if (product.activatedGift === true) {
       body.prices.push({
-        uuid: product.uuid,
+        uuid: product.prices[0].uuid,
         qty: 1
       })
     }
@@ -242,6 +242,8 @@ async function validerAchats (event) {
         // paiement, redirection vers stripe
         console.log('--> aller chez stripe !')
         window.location.assign(retour.checkout_url)
+        // dev
+        //setLoadingValue(false)
 
       } else {
         setLoadingValue(false)
