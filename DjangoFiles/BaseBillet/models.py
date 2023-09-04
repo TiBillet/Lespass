@@ -316,7 +316,6 @@ class Configuration(SingletonModel):
         verbose_name=_("Clé d'API du serveur fedow")
     )
 
-
     """
     ######### STRIPE #########
     """
@@ -1073,6 +1072,7 @@ class Ticket(models.Model):
                f"{self.reservation.event.datetime.astimezone().strftime('%d/%m/%Y')} " \
                f"{self.first_name.upper()} " \
                f"{self.last_name.capitalize()}" \
+               f"{self.status}-{self.numero_uuid()}-{self.seat}" \
                f".pdf"
 
     def pdf_url(self):
