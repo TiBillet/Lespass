@@ -1230,6 +1230,12 @@ class ReservationValidator(serializers.Serializer):
                 if product.nominative:
                     for customer in price_object.get('customers'):
                         create_ticket(pricesold, customer, reservation)
+                else:
+                    for i in range(int(qty)):
+                        create_ticket(
+                            pricesold,
+                            {'first_name': f'Billet non nominatif', 'last_name': f'Billet non nominatif'},
+                            reservation)
 
         print(f"total_checkout : {total_checkout}")
         self.checkout_session = None
