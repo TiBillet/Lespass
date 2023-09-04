@@ -1234,7 +1234,7 @@ class ReservationValidator(serializers.Serializer):
                     for i in range(int(qty)):
                         create_ticket(
                             pricesold,
-                            {'first_name': f'Billet non nominatif', 'last_name': f'Billet non nominatif'},
+                            {'first_name': f'{self.user_commande.email}', 'last_name': f'Billet non nominatif {i}'},
                             reservation)
 
         print(f"total_checkout : {total_checkout}")
