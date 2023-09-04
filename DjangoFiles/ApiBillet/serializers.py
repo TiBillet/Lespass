@@ -1125,7 +1125,6 @@ class ReservationValidator(serializers.Serializer):
                 if product.categorie_article in [Product.BILLET, Product.FREERES]:
                     self.nbr_ticket += entry['qty']
 
-                    import ipdb; ipdb.set_trace()
                     # les noms sont requis pour la billetterie
                     if product.nominative :
                         if not entry.get('customers'):
