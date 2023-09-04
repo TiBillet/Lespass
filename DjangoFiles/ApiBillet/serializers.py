@@ -1121,12 +1121,11 @@ class ReservationValidator(serializers.Serializer):
                         logger.warning(_(f"L'utilisateur n'est pas membre"))
                         raise serializers.ValidationError(_(f"L'utilisateur n'est pas membre"))
 
-
                 if product.categorie_article in [Product.BILLET, Product.FREERES]:
                     self.nbr_ticket += entry['qty']
 
                     # les noms sont requis pour la billetterie
-                    if product.nominative :
+                    if product.nominative:
                         if not entry.get('customers'):
                             raise serializers.ValidationError(_(f'customers not find in ticket'))
                         if len(entry.get('customers')) != entry['qty']:
@@ -1212,6 +1211,7 @@ class ReservationValidator(serializers.Serializer):
         total_checkout = 0
         for price_object in self.prices_list:
             price_generique: Price = price_object['price']
+            product: Product = price_generique.product
             qty = price_object.get('qty')
             total_checkout += Decimal(qty) * price_generique.prix
 
@@ -1226,9 +1226,10 @@ class ReservationValidator(serializers.Serializer):
 
             # import ipdb; ipdb.set_trace()
             # Les Tickets si article est un billet
-            if price_generique.product.categorie_article in [Product.BILLET, Product.FREERES]:
-                for customer in price_object.get('customers'):
-                    create_ticket(pricesold, customer, reservation)
+            if product.categorie_article in [Product.BILLET, Product.FREERES]:
+                if product.nominative:
+                    for customer in price_object.get('customers'):
+                        create_ticket(pricesold, customer, reservation)
 
         print(f"total_checkout : {total_checkout}")
         self.checkout_session = None
