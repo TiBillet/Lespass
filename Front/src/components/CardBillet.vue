@@ -14,7 +14,7 @@
       <!-- prix -->
       <div v-for="(price, index) in product.prices" :key="index" class="mt-5">
         <section v-if="priceCanBeDisplayed(price.adhesion_obligatoire)">
-          <div class="d-flex flex-row justify-content-between align-items-center">
+          <div class="d-flex flex-row justify-content-between align-items-center" role="group" :aria-label="'groupe interaction tarif ' + price.name">
             <!-- nom tarif -->
             <h4 class="d-flex flex-row align-items-center mb-0 font-weight-bolder text-info text-gradient"
                 role="heading" :aria-label="price.name">
@@ -40,7 +40,7 @@
 
         <!-- adhesion_obligatoire === true -->
         <section v-else>
-          <div class="d-flex flex-row justify-content-between align-items-center">
+          <div class="d-flex flex-row justify-content-between align-items-center" role="group" :aria-label="'groupe interaction tarif, ' + price.name">
             <!-- nom tarif -->
             <h4 class="font-weight-bolder text-dark text-gradient" role="heading" :aria-label="price.name">
               {{ price.name.toLowerCase() }} : {{ price.prix }} €

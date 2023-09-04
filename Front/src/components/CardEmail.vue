@@ -6,7 +6,7 @@
     <!-- email -->
     <div class="input-group mb-2 has-validation">
       <span class="input-group-text" v-focuselement="'card-email-email'">Email</span>
-      <input id="card-email-email" type="text" :value="email" @input="emitValue" class="form-control card-email-input"
+      <input id="card-email-email" type="text" :value="email" @input="emitValue($event)" @change="emitValue($event)" class="form-control card-email-input"
              placeholder="Email" role="textbox" aria-label="Entrer un email." required/>
       <div class="invalid-feedback" role="heading" aria-label="Merci de renseigner une adresse email valide.">
         Merci de renseigner une adresse email valide.
@@ -16,7 +16,7 @@
     <div class="input-group mb-2 has-validation">
       <span class="input-group-text" v-focuselement="'card-email-confirm-email'">Confirmez l'email</span>
       <input id="card-email-confirm-email" type="text" :value="confirmEmail" @keyup="validateEmail($event)"
-             class="form-control card-email-input" placeholder="Email"
+             @change="validateEmail($event)" class="form-control card-email-input" placeholder="Email"
              required role="textbox" aria-label="Confirmer email entré."/>
       <div class="invalid-feedback" role="heading" aria-label="Merci de renseigner une adresse email valide et identique.">
         Merci de renseigner une adresse email valide et identique.

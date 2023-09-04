@@ -8,7 +8,7 @@
            role="textbox" aria-label="Recharge cashless" v-model="price.qty"
            @keydown="numOnly($event)" @keyup="limit($event, max)" required>
     <button class="btn btn-primary mb-0 app-rounded-right-20" type="button" role="button"
-            aria-label="Supprimer 1 crédit cashless"
+            :aria-label="`Supprimer 1 crédit cashless - ${price.name}`"
             @click="price.qty > (max - 1) ? price.qty = price.qty : price.qty++">
       <i class="fa fa-plus" aria-hidden="true"></i>
     </button>

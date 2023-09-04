@@ -5,7 +5,8 @@
       <CardArtist :artist="artist.configuration" class="mb-6"/>
     </div>
 
-    <form @submit.prevent="validerAchats($event)" class="needs-validation" novalidate>
+    <form id="reservation" @submit.prevent="validerAchats($event)" class="needs-validation" novalidate>
+
       <CardEmail v-model:email.checkemail="getEventForm.email"/>
 
       <!--
@@ -21,8 +22,8 @@
 
       <CardGifts/>
 
-      <button type="submit" class="btn bg-gradient-dark w-100" role="button" aria-label="Valider la réservation">Valider
-        la réservation
+      <button type="submit" class="btn bg-gradient-dark w-100" role="button" aria-label="Valider la réservation">
+        Valider la réservation
       </button>
     </form>
   </div>
@@ -86,14 +87,16 @@ function formatBodyPost () {
       if (product.nominative === true) {
         // price sans uuid (besoin uniquement pour le formulaire html)
         let filterCustomers = []
-        price.customers.forEach((customer) => {
-          filterCustomers.push({ first_name: customer.first_name, last_name: customer.last_name })
-        })
-        body.prices.push({
-          uuid: price.uuid,
-          qty: price.customers.length,
-          customers: filterCustomers
-        })
+        if (price.customers.length > 0) {
+          price.customers.forEach((customer) => {
+            filterCustomers.push({ first_name: customer.first_name, last_name: customer.last_name })
+          })
+          body.prices.push({
+            uuid: price.uuid,
+            qty: price.customers.length,
+            customers: filterCustomers
+          })
+        }
       }
     })
   })
@@ -175,25 +178,96 @@ async function validerAchats (event) {
     event.stopPropagation()
   }
   event.target.classList.add('was-validated')
+
+  // scroll first invalide field
+  const firstElement = event.target.querySelector('#reservation .form-control:invalid')
+  if (firstElement !== null) {
+    firstElement.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'center' })
+  }
+
   if (event.target.checkValidity() === true) {
     console.log('validation ok!')
-    const body = JSON.stringify(formatBodyPost())
+    try {
+      const rawData = formatBodyPost()
 
-    // ---- requête "POST" achat billets ----
-    const urlApi = `/api/reservations/`
-
-    // options de la requête
-    const options = {
-      method: 'POST',
-      body: body,
-      headers: {
-        'Content-Type': 'application/json'
+      if (rawData.prices.length === 0) {
+        throw new Error('Pas de billet dans la reservation.')
       }
-    }
-    console.log('body =', body)
 
-    // active l'icon de chargement
-    setLoadingValue(true)
+      const body = JSON.stringify(rawData)
+
+      // ---- requête "POST" achat billets ----
+      const urlApi = `/api/reservations/`
+
+      // options de la requête
+      const options = {
+        method: 'POST',
+        body: body,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      }
+      console.log('body =', body)
+      /*
+            // active l'icon de chargement
+            setLoadingValue(true)
+
+            const response = await fetch(urlApi, options)
+            if (response.status >= 400 && response.status <= 599) {
+              let typeErreur = 'Client'
+              if (response.status >= 500) {
+                typeErreur = 'Serveur'
+              }
+              throw new Error(`${typeErreur}, ${response.status} - ${response.statusText}`)
+            }
+
+            const retour = await response.json()
+            if (retour.checkout_url !== undefined) {
+              // mémorise l'étape ayant lancé l'opération stripe
+              if (route.path.indexOf('embed') !== -1) {
+                // reste sur l'event
+                setLocalStateKey('stripeStep', {
+                  action: 'expect_payment_stripe_reservation',
+                  eventFormUuid: getEventForm.uuid,
+                  nextPath: route.path
+                })
+              } else {
+                // va à l'accueil
+                setLocalStateKey('stripeStep', {
+                  action: 'expect_payment_stripe_reservation',
+                  eventFormUuid: getEventForm.uuid,
+                  nextPath: '/'
+                })
+              }
+              // paiement, redirection vers stripe
+              window.location.assign(retour.checkout_url)
+
+            } else {
+              // paiement sans stripe, exemple: réservation gratuite
+              emitter.emit('modalMessage', {
+                typeMsg: 'success',
+                titre: 'Demande envoyée.',
+                dynamic: true,
+                contenu: '<h4>Merci de vérifier votre réservation dans votre boite email.</h4>'
+              })
+            }
+      */
+    } catch (error) {
+      // action stripe = aucune
+      setLocalStateKey('stripeStep', { action: null })
+      console.log('error.message =', error.message)
+      emitter.emit('modalMessage', {
+        titre: 'Erreur(s)',
+        // contenu = html => dynamic = true
+        dynamic: true,
+        contenu: '<h3>' + error.message + '</h3>',
+        typeMsg: 'warning',
+      })
+    } finally {
+      setLoadingValue(false)
+    }
+
+    /*
 
     // POST la/les réservation(s)
     fetch(urlApi, options).then(response => {
@@ -249,6 +323,7 @@ async function validerAchats (event) {
         typeMsg: 'warning',
       })
     })
+     */
   }
 }
 
