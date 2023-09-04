@@ -1103,6 +1103,7 @@ class ReservationValidator(serializers.Serializer):
             logger.info(f"price entry : {entry}")
             try:
                 price = Price.objects.get(pk=entry['uuid'])
+                product = price.product
                 price_object = {
                     'price': price,
                     'qty': float(entry['qty']),
@@ -1120,15 +1121,22 @@ class ReservationValidator(serializers.Serializer):
                         logger.warning(_(f"L'utilisateur n'est pas membre"))
                         raise serializers.ValidationError(_(f"L'utilisateur n'est pas membre"))
 
-                if price.product.categorie_article in [Product.BILLET, Product.FREERES]:
-                    self.nbr_ticket += entry['qty']
-                    # les noms sont requis pour la billetterie
-                    if not entry.get('customers'):
-                        raise serializers.ValidationError(_(f'customers name not find in ticket'))
-                    if len(entry.get('customers')) != entry['qty']:
-                        raise serializers.ValidationError(_(f'customers number not equal to ticket qty'))
 
-                    price_object['customers'] = entry.get('customers')
+                if product.categorie_article in [Product.BILLET, Product.FREERES]:
+                    self.nbr_ticket += entry['qty']
+
+                    import ipdb; ipdb.set_trace()
+                    # les noms sont requis pour la billetterie
+                    if product.nominative :
+                        if not entry.get('customers'):
+                            raise serializers.ValidationError(_(f'customers not find in ticket'))
+                        if len(entry.get('customers')) != entry['qty']:
+                            raise serializers.ValidationError(_(f'customers number not equal to ticket qty'))
+                        for customer in entry.get('customers'):
+                            if not customer.get('first_name') or not customer.get('last_name'):
+                                raise serializers.ValidationError(_(f'first_name and last_name are required'))
+
+                        price_object['customers'] = entry.get('customers')
 
                 self.prices_list.append(price_object)
 
