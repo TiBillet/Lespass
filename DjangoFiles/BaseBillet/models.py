@@ -674,8 +674,6 @@ class Event(models.Model):
         else:
             return {}
 
-    # reservations = models.PositiveSmallIntegerField(default=0)
-
     CONCERT = "LIV"
     FESTIVAL = "FES"
     REUNION = "REU"

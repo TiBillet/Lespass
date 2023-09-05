@@ -525,7 +525,6 @@ class EventSerializer(serializers.ModelSerializer):
             'reservations',
             'complet',
             'artists',
-            # 'cashless',
             'minimum_cashless_required',
             'max_per_user',
             'reservation_solo',
