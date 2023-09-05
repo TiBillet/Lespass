@@ -435,7 +435,7 @@ class Product(models.Model):
 
     terms_and_conditions_document = models.URLField(blank=True, null=True)
 
-    publish = models.BooleanField(default=False)
+    publish = models.BooleanField(default=True)
     poids = models.PositiveSmallIntegerField(default=0, verbose_name=_("Poids"),
                                              help_text="Ordre d'apparition du plus leger au plus lourd")
 
@@ -673,8 +673,6 @@ class Event(models.Model):
             }
         else:
             return {}
-
-    # reservations = models.PositiveSmallIntegerField(default=0)
 
     CONCERT = "LIV"
     FESTIVAL = "FES"

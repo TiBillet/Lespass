@@ -122,7 +122,9 @@ class ProductViewSet(viewsets.ViewSet):
 
     def list(self, request):
         serializer = ProductSerializer(
-            Product.objects.all(),
+            Product.objects.filter(
+                publish=True,
+            ),
             many=True, context={'request': request})
         return Response(serializer.data)
 
@@ -318,7 +320,8 @@ class HereViewSet(viewsets.ViewSet):
 
         products_adhesion = Product.objects.filter(
             categorie_article=Product.ADHESION,
-            prices__isnull=False
+            prices__isnull=False,
+            publish=True,
         ).distinct()
 
         if len(products_adhesion) > 0:
@@ -333,7 +336,7 @@ class HereViewSet(viewsets.ViewSet):
 
 class EventsSlugViewSet(viewsets.ViewSet):
     def retrieve(self, request, pk=None):
-        queryset = Event.objects.all().order_by('-datetime')
+        queryset = Event.objects.filter(published=True).order_by('-datetime')
         event = get_object_or_404(queryset, slug=pk)
         serializer = EventSerializer(event)
         return Response(serializer.data)
@@ -350,7 +353,10 @@ class EventsViewSet(viewsets.ViewSet):
 
         production_places = [Client.SALLE_SPECTACLE, Client.FESTIVAL]
         if tenant.categorie in production_places:
-            queryset = Event.objects.filter(datetime__gte=four_hour_before_now).order_by('datetime')
+            queryset = Event.objects.filter(
+                published=True,
+                datetime__gte=four_hour_before_now,
+            ).order_by('datetime')
             events_serialized = EventSerializer(queryset, many=True, context={'request': request})
             return Response(events_serialized.data)
 
@@ -360,6 +366,7 @@ class EventsViewSet(viewsets.ViewSet):
             events_serialized_data = []
             with schema_context('public'):
                 events_from_public_directory = EventDirectory.objects.filter(
+                    published=True,
                     datetime__gte=four_hour_before_now,
                     artist=artist
                 )
@@ -372,7 +379,10 @@ class EventsViewSet(viewsets.ViewSet):
 
             for place in directory:
                 with tenant_context(place):
-                    queryset = Event.objects.filter(uuid__in=directory[place])
+                    queryset = Event.objects.filter(
+                        published=True,
+                        uuid__in=directory[place],
+                    )
                     events_serialized = EventSerializer(queryset, many=True, context={'request': request})
                     for data in events_serialized.data:
                         events_serialized_data.append(data)
@@ -384,7 +394,10 @@ class EventsViewSet(viewsets.ViewSet):
             tenants = Client.objects.filter(categorie=Client.SALLE_SPECTACLE)
             for other_tenant in tenants:
                 with tenant_context(other_tenant):
-                    queryset = Event.objects.filter(datetime__gte=four_hour_before_now).order_by('datetime')
+                    queryset = Event.objects.filter(
+                        published=True,
+                        datetime__gte=four_hour_before_now
+                    ).order_by('datetime')
                     events_serialized = EventSerializer(queryset, many=True, context={'request': request})
                     for data in events_serialized.data:
                         events_serialized_data.append(data)
@@ -825,7 +838,6 @@ class MembershipViewset(viewsets.ViewSet):
         logger.error(f'membre_validator.errors : {membre_validator.errors}')
         return Response(membre_validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
     def get_permissions(self):
         if self.action in ['create', 'retrieve']:
             permission_classes = [permissions.AllowAny]
@@ -833,7 +845,6 @@ class MembershipViewset(viewsets.ViewSet):
             permission_classes = [TenantAdminPermission]
 
         return [permission() for permission in permission_classes]
-
 
 
 class ZReportPDF(View):
@@ -893,8 +904,6 @@ class TicketPdf(APIView):
         response = HttpResponse(pdf_binary, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{ticket.pdf_filename()}"'
         return response
-
-
 
 
 # On vérifie que les métatada soient les meme dans la DB et chez Stripe.
