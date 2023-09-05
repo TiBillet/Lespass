@@ -139,7 +139,7 @@ function formatBodyPost () {
   products.forEach((product) => {
     if (product.activated === true && product.qty > 0) {
       body.prices.push({
-        uuid: product.uuid,
+        uuid: product.prices[0].uuid,
         qty: product.qty
       })
     }
