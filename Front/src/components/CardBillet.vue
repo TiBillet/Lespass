@@ -58,8 +58,8 @@
             </div>
           </div>
           <div v-if="getIsLogin === false" class="mt-0 text-info font-weight-500"
-               role="heading" aria-label="Vous devez être connecter pour accéder à ce produit.">
-            Vous devez être connecter pour accéder à ce produit.
+               role="heading" aria-label="Connectez vous pour accéder à ce produit.">
+            Connectez vous pour accéder à ce produit.
           </div>
         </section>
       </div>
