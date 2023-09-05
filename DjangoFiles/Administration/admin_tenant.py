@@ -623,6 +623,7 @@ class ProductAdminCustomForm(forms.ModelForm):
             "option_generale_radio",
             "option_generale_checkbox",
             "legal_link",
+            'publish',
         )
 
     def clean(self):
@@ -634,7 +635,7 @@ class ProductAdminCustomForm(forms.ModelForm):
 
 
 class ProductAdmin(admin.ModelAdmin):
-    exclude = ('publish',)
+    # exclude = ('publish',)
     form = ProductAdminCustomForm
     list_display = (
         'name',
@@ -642,6 +643,7 @@ class ProductAdmin(admin.ModelAdmin):
         'poids',
         'categorie_article',
         'send_to_cashless',
+        'publish',
     )
 
     list_editable = (

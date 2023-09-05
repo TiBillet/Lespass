@@ -1224,8 +1224,7 @@ class ReservationValidator(serializers.Serializer):
             )
             list_line_article_sold.append(line_article)
 
-            # import ipdb; ipdb.set_trace()
-            # Les Tickets si article est un billet
+            # Création de tickets si article est un billet
             if product.categorie_article in [Product.BILLET, Product.FREERES]:
                 if product.nominative:
                     for customer in price_object.get('customers'):
