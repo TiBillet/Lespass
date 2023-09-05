@@ -18,6 +18,8 @@
 console.log('-> App.vue')
 import { ref } from "vue"
 
+import Plausible from 'plausible-tracker'
+
 // composants
 import Loading from '@/components/Loading.vue'
 import Navbar from '@/components/Navbar.vue'
@@ -67,6 +69,10 @@ async function waitLoadPlace() {
   loadingPlace.value = await loadPlace()
 }
 waitLoadPlace()
+
+const plausible = Plausible({
+  domain: `${window.location.protocol}//${window.location.host}`
+})
 </script>
 
 <style>
