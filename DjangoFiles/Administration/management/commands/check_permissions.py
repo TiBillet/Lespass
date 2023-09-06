@@ -87,9 +87,9 @@ class Command(BaseCommand):
 
             staff_group = Group.objects.get_or_create(name="staff")[0]
             for permission in liste_permission_user_staff:
-                print(permission)
+                # print(permission)
                 perm = Permission.objects.get(codename=permission)
-                print(perm)
+                # print(perm)
 
                 staff_group.permissions.add(perm)
             staff_group.save()
