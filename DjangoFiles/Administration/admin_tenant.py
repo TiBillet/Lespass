@@ -417,7 +417,7 @@ class EventAdmin(admin.ModelAdmin):
     # pour selectionner uniquement les articles ventes et retour consigne
     def formfield_for_manytomany(self, db_field, request, **kwargs):
 
-        produits_non_affichables = [Product.RECHARGE_CASHLESS, Product.DON, Product.ADHESION, Product.FREERES]
+        produits_non_affichables = [Product.RECHARGE_CASHLESS, Product.DON, Product.ADHESION]
         if db_field.name == "products":
             kwargs["queryset"] = Product.objects \
                 .exclude(
