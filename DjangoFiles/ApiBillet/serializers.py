@@ -572,12 +572,12 @@ class EventSerializer(serializers.ModelSerializer):
         #     recharge_suspendue_price, created = Price.objects.get_or_create(product=recharge_suspendue, prix=1, name="charge")
         #     instance.products.add(recharge_suspendue)
 
-        if reservation_free:
-            free_reservation, created = Product.objects.get_or_create(categorie_article=Product.FREERES,
-                                                                      name="Reservation")
-            free_reservation_price, created = Price.objects.get_or_create(product=free_reservation, prix=0,
-                                                                          name="gratuite")
-            instance.products.add(free_reservation)
+        # if reservation_free:
+        #     free_reservation, created = Product.objects.get_or_create(categorie_article=Product.FREERES,
+        #                                                               name="Reservation")
+        #     free_reservation_price, created = Price.objects.get_or_create(product=free_reservation, prix=0,
+        #                                                                   name="gratuite")
+        #     instance.products.add(free_reservation)
 
         representation = super().to_representation(instance)
 
