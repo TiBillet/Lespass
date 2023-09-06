@@ -468,7 +468,7 @@ class Product(models.Model):
 
     NONE, BILLET, PACK, RECHARGE_CASHLESS = 'N', 'B', 'P', 'R'
     RECHARGE_FEDERATED, VETEMENT, MERCH, ADHESION = 'S', 'T', 'M', 'A'
-    ABONNEMENT, DON, FREERES = 'O', 'D', 'F'
+    DON, FREERES = 'D', 'F'
 
     CATEGORIE_ARTICLE_CHOICES = [
         (NONE, _('Selectionnez une catégorie')),
@@ -478,8 +478,7 @@ class Product(models.Model):
         (RECHARGE_FEDERATED, _('Recharge suspendue')),
         (VETEMENT, _('Vetement')),
         (MERCH, _('Merchandasing')),
-        (ADHESION, _('Adhésions associative')),
-        (ABONNEMENT, _('Abonnement')),
+        (ADHESION, _('Abonnement et/ou adhésions associative')),
         (DON, _('Don')),
         (FREERES, _('Reservation gratuite'))
     ]
