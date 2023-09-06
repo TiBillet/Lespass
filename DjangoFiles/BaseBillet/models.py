@@ -468,19 +468,20 @@ class Product(models.Model):
 
     NONE, BILLET, PACK, RECHARGE_CASHLESS = 'N', 'B', 'P', 'R'
     RECHARGE_FEDERATED, VETEMENT, MERCH, ADHESION = 'S', 'T', 'M', 'A'
-    DON, FREERES = 'D', 'F'
+    DON, FREERES, NEED_VALIDATION = 'D', 'F', 'V'
 
     CATEGORIE_ARTICLE_CHOICES = [
         (NONE, _('Selectionnez une catégorie')),
-        (BILLET, _('Billet')),
+        (BILLET, _('Billet payant')),
         (PACK, _("Pack d'objets")),
         (RECHARGE_CASHLESS, _('Recharge cashless')),
         (RECHARGE_FEDERATED, _('Recharge suspendue')),
         (VETEMENT, _('Vetement')),
         (MERCH, _('Merchandasing')),
-        (ADHESION, _('Abonnement et/ou adhésions associative')),
+        (ADHESION, _('Abonnement et/ou adhésion associative')),
         (DON, _('Don')),
-        (FREERES, _('Reservation gratuite'))
+        (FREERES, _('Reservation gratuite')),
+        (NEED_VALIDATION, _('Nécessite une validation manuelle'))
     ]
 
     categorie_article = models.CharField(max_length=3, choices=CATEGORIE_ARTICLE_CHOICES, default=NONE,

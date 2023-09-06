@@ -662,8 +662,8 @@ staff_admin_site.register(Product, ProductAdmin)
 
 class PriceAdmin(admin.ModelAdmin):
     list_display = (
-        'product',
         'name',
+        'product',
         'prix',
         'adhesion_obligatoire',
         'subscription_type',
