@@ -52,7 +52,7 @@
                       :aria-label="`ajouter '${getMembershipData(price.adhesion_obligatoire).name}' pour ce produit`">
                 <i class="fa fa-plus" aria-hidden="true"></i>
                 <span class="ms-1">
-                ajouter "{{ getMembershipData(price.adhesion_obligatoire).name }}" pour  ce produit
+                Je m'abonne
               </span>
               </button>
             </div>
