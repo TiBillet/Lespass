@@ -468,7 +468,7 @@ class Product(models.Model):
 
     NONE, BILLET, PACK, RECHARGE_CASHLESS = 'N', 'B', 'P', 'R'
     RECHARGE_FEDERATED, VETEMENT, MERCH, ADHESION = 'S', 'T', 'M', 'A'
-    ABONNEMENT, DON, FREERES = 'B', 'D', 'F'
+    ABONNEMENT, DON, FREERES = 'O', 'D', 'F'
 
     CATEGORIE_ARTICLE_CHOICES = [
         (NONE, _('Selectionnez une catégorie')),
