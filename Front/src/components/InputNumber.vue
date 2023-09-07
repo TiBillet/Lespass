@@ -1,18 +1,18 @@
 <template>
   <div class="input-group mb-2 rounded-right" style="width: 30%;">
-    <button class="btn btn-primary mb-0" type="button" role="button" aria-label="Ajouter 1 crédit cashless"
+    <button v-if="button" class="btn btn-primary mb-0" type="button" role="button" aria-label="Ajouter 1 crédit cashless"
             @click="price.qty <= parseInt(min) ? price.qty = parseInt(min) : price.qty--">
       <i class="fa fa-minus" aria-hidden="true"></i>
     </button>
     <input type="number" class="form-control text-center" :placeholder="price.qty"
            role="textbox" :aria-label="infoAria" v-model="price.qty"
            @keydown="numOnly($event)" @keyup="limit($event, max)" required>
-    <button class="btn btn-primary mb-0 app-rounded-right-20" type="button" role="button"
+    <button v-if="button" class="btn btn-primary mb-0 app-rounded-right-20" type="button" role="button"
             :aria-label="`Supprimer 1 crédit cashless - ${price.name}`"
             @click="price.qty > (parseInt(max) - 1) ? price.qty = price.qty : price.qty++">
       <i class="fa fa-plus" aria-hidden="true"></i>
     </button>
-    <div class="input-group-append invalid-feedback">Pas de recharge.</div>
+    <div class="input-group-append invalid-feedback">Pas de valeur.</div>
   </div>
 </template>
 
@@ -21,7 +21,8 @@ const props = defineProps({
   price: Object,
   max: String,
   min: String,
-  infoAria: String
+  infoAria: String,
+  button: Boolean
 })
 
 if (props.max === undefined ) {

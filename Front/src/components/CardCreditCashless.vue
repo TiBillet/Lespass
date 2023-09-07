@@ -4,9 +4,10 @@
             :key="index">
     <legend>
       <h3 class="font-weight-bolder text-info text-gradient align-self-start">Cashless</h3>
-      <p>Les organisateurs du lieux utilisent un système de carte cashless. C'est gratuit, valable à vie
-        et remboursable à tout moment. Souhaitez vous recharger maintenant pour gagner du temps ? Si vous n'avez pas
-        encore de carte, elle vous sera remise, chargée, contre la confirmation de cette reservation.</p>
+      <p>Les organisateurs du lieux utilisent un système de carte cashless. C'est gratuit, valable à vie et
+        remboursable à tout moment. Une recharge minimale de 10€ est réclamée pour votre réservation.
+        Si vous n'avez pas encore de carte, elle vous sera remise, chargée, contre la confirmation de cette
+        reservation.</p>
     </legend>
 
     <!-- activation -->
@@ -17,7 +18,7 @@
     </div>
 
     <!-- la recharge -->
-    <InputNumber v-if="product.activated === true"
+    <InputNumber v-if="product.activated === true" :button="false"
                  v-model:price="products.filter(prod => prod.categorie_article === 'S')[index]" :min="0" :max="500"
                  info-aria="Recharge cashless"/>
 

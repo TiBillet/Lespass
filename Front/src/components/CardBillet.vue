@@ -29,7 +29,7 @@
               <span class="ms-1">Ajouter une réservation</span>
             </button>
             <!-- ajouter une réservation non nominative -->
-            <InputNumber v-if="product.nominative === false" v-model:price="product.prices[index]" :info-aria:="'nombre de produit du tarif ' + price.name" min="0" :max="product.prices[index].max_per_user"/>
+            <InputNumber v-if="product.nominative === false" v-model:price="product.prices[index]" :button="true" :info-aria:="'nombre de produit du tarif ' + price.name" min="0" :max="product.prices[index].max_per_user"/>
           </div>
 
           <!-- clients / customers -->
