@@ -5,7 +5,7 @@
       <CardArtist :artist="artist.configuration" class="mb-6"/>
     </div>
 
-    <form id="reservation" @submit.prevent="validerAchats($event)" class="needs-validation" novalidate>
+    <form v-if="getEventForm.products.length > 0" id="reservation" @submit.prevent="validerAchats($event)" class="needs-validation" novalidate>
 
       <CardEmail v-model:email.checkemail="getEventForm.email"/>
 
