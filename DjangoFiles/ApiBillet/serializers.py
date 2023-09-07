@@ -66,8 +66,8 @@ class TagSerializer(serializers.ModelSerializer):
 
 
 class ProductSerializer(serializers.ModelSerializer):
-    option_generale_radio = OptionsSerializer(many=True, required=False)
-    option_generale_checkbox = OptionsSerializer(many=True, required=False)
+    option_generale_radio = serializers.ListField(required=False)
+    option_generale_checkbox = serializers.ListField(required=False)
     tag = TagSerializer(many=True, required=False)
 
     class Meta:
