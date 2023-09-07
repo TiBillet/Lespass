@@ -65,7 +65,6 @@ class TagSerializer(serializers.ModelSerializer):
         read_only_fields = ('uuid',)
 
 
-
 class ProductCreateSerializer(serializers.ModelSerializer):
     option_generale_radio = serializers.ListField(required=False)
     option_generale_checkbox = serializers.ListField(required=False)
@@ -116,7 +115,6 @@ class ProductCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(_(f'{uuid} Option non trouvé'))
         return self.option_generale_checkbox
 
-
     def validate(self, attrs):
         logger.info(f"validate : {attrs}")
 
@@ -136,9 +134,6 @@ class ProductCreateSerializer(serializers.ModelSerializer):
             if len(adhesion_to_cashless) > 0:
                 raise serializers.ValidationError(
                     _(f"Un article d'adhésion vers le cashless existe déja."))
-
-
-
 
         return super().validate(attrs)
 
@@ -1167,18 +1162,10 @@ class ReservationValidator(serializers.Serializer):
                     raise serializers.ValidationError(
                         _(f'Quantitée de réservations suppérieure au maximum autorisé pour ce prix'))
 
-                if price.adhesion_obligatoire:
-                    membership_products = [membership.price.product for membership in
-                                           self.user_commande.membership.all()]
-                    if price.adhesion_obligatoire not in membership_products:
-                        # import ipdb; ipdb.set_trace()
-                        logger.warning(_(f"L'utilisateur n'est pas membre"))
-                        raise serializers.ValidationError(_(f"L'utilisateur n'est pas membre"))
-
                 if product.categorie_article in [Product.BILLET, Product.FREERES]:
                     self.nbr_ticket += entry['qty']
 
-                    # les noms sont requis pour la billetterie
+                    # les noms sont requis pour la billetterie.
                     if product.nominative:
                         if not entry.get('customers'):
                             raise serializers.ValidationError(_(f'customers not find in ticket'))
@@ -1243,6 +1230,22 @@ class ReservationValidator(serializers.Serializer):
                 option: OptionGenerale
                 if option not in list(set(event.options_checkbox.all()) | set(event.options_radio.all())):
                     raise serializers.ValidationError(_(f'Option {option.name} non disponible dans event'))
+
+        # si un tarif à une adhésion obligatoire, on confirme que :
+        # Soit l'utilisateur est membre
+        # Soit il paye l'adhésion en même temps que le billet :
+        all_price_buy = [ price_object['price'] for price_object in self.prices_list ]
+        all_product_buy = [ price.product for price in all_price_buy ]
+        for price_object in self.prices_list:
+            price: Price = price_object['price']
+            if price.adhesion_obligatoire:
+                membership_products = [membership.price.product for membership in
+                                       self.user_commande.membership.all()]
+                if (price.adhesion_obligatoire not in membership_products
+                        and price.adhesion_obligatoire not in all_product_buy):
+                    # import ipdb; ipdb.set_trace()
+                    logger.warning(_(f"L'utilisateur n'est pas membre"))
+                    raise serializers.ValidationError(_(f"L'utilisateur n'est pas membre"))
 
         # on construit l'object reservation.
         reservation = Reservation.objects.create(
