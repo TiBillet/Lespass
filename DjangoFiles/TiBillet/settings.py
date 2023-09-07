@@ -77,6 +77,7 @@ SHARED_APPS = (
     'Administration',
     'MetaBillet',
     'root_billet',
+    'llmTB',
 
     'solo',
     'stdimage',
@@ -310,7 +311,14 @@ OAUTH_CLIENT = {
 OAUTH_COOKIE_SESSION_ID = 'sso_session_id'
 
 # -------------------------------------/
+# LLM
+# -------------------------------------/
 
+OPENAI_API_KEY=os.environ.get('OPENAI_API_KEY')
+
+# -------------------------------------/
+# LOGGING
+# -------------------------------------/
 
 LOGGING = {
     'version': 1,

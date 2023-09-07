@@ -66,8 +66,8 @@ class TagSerializer(serializers.ModelSerializer):
 
 
 class ProductSerializer(serializers.ModelSerializer):
-    option_generale_radio = OptionsSerializer(many=True, required=False)
-    option_generale_checkbox = OptionsSerializer(many=True, required=False)
+    option_generale_radio = serializers.ListField(required=False)
+    option_generale_checkbox = serializers.ListField(required=False)
     tag = TagSerializer(many=True, required=False)
 
     class Meta:
@@ -116,6 +116,26 @@ class ProductSerializer(serializers.ModelSerializer):
                     _(f"Un article d'adhésion vers le cashless existe déja."))
 
         return super().validate(attrs)
+
+    def validate_option_generale_radio(self, value):
+        self.option_generale_radio = []
+        for uuid in value:
+            try:
+                option = OptionGenerale.objects.get(pk=uuid)
+                self.option_generale_radio.append(option)
+            except OptionGenerale.DoesNotExist as e:
+                raise serializers.ValidationError(_(f'{uuid} Option non trouvé'))
+        return self.option_generale_radio
+
+    def validate_option_generale_checkbox(self, value):
+        self.option_generale_checkbox = []
+        for uuid in value:
+            try:
+                option = OptionGenerale.objects.get(pk=uuid)
+                self.option_generale_checkbox.append(option)
+            except OptionGenerale.DoesNotExist as e:
+                raise serializers.ValidationError(_(f'{uuid} Option non trouvé'))
+        return self.option_generale_checkbox
 
 
 class PriceSerializer(serializers.ModelSerializer):
