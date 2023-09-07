@@ -48,7 +48,7 @@
 
       <div class="btn btn-outline-primary btn-sm" @click="$router.push({ path: '/event/' + event.slug })"
       role="button" :aria-label="`Réserver ${event.slug}`">
-        Réserver
+       {{ event.products.length === 0 ?  "Informations" : "Réserver" }}
       </div>
     </div>
   </div>
