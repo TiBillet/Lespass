@@ -117,6 +117,26 @@ class ProductSerializer(serializers.ModelSerializer):
 
         return super().validate(attrs)
 
+    def validate_option_generale_radio(self, value):
+        self.option_generale_radio = []
+        for uuid in value:
+            try:
+                option = OptionGenerale.objects.get(pk=uuid)
+                self.option_generale_radio.append(option)
+            except OptionGenerale.DoesNotExist as e:
+                raise serializers.ValidationError(_(f'{uuid} Option non trouvé'))
+        return self.option_generale_radio
+
+    def validate_option_generale_checkbox(self, value):
+        self.option_generale_checkbox = []
+        for uuid in value:
+            try:
+                option = OptionGenerale.objects.get(pk=uuid)
+                self.option_generale_checkbox.append(option)
+            except OptionGenerale.DoesNotExist as e:
+                raise serializers.ValidationError(_(f'{uuid} Option non trouvé'))
+        return self.option_generale_checkbox
+
 
 class PriceSerializer(serializers.ModelSerializer):
     product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
