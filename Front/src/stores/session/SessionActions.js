@@ -18,6 +18,9 @@ export const sessionActions = {
     resetLocalState('refreshToken', '')
     this.router.push('/')
   },
+  updateHeader(value) {
+    this.header = value
+  },
   async getMe () {
     // console.log('-> getMe, accessToken = ', this.accessToken)
     try {
@@ -301,7 +304,9 @@ export const sessionActions = {
         urlLogo = '/medias/images/default_header_1080x300.jpg'
       }
 
-      this.header = {
+      // this.header =
+
+      this.headerPlace = {
         urlImage: urlImage,
         logo: urlLogo,
         shortDescription: retour.short_description,

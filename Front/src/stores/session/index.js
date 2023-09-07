@@ -12,6 +12,7 @@ export const useSessionStore = defineStore({
     loading: false,
     language: 'fr',
     routeName: '',
+    headerPlace: null,
     header: null,
     membershipProducts: [],
     me: {
