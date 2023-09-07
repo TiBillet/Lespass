@@ -36,7 +36,7 @@ from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSeria
     ReservationValidator, MembreValidator, ConfigurationSerializer, NewConfigSerializer, \
     EventCreateSerializer, TicketSerializer, OptionsSerializer, ChargeCashlessValidator, NewAdhesionValidator, \
     DetailCashlessCardsValidator, DetailCashlessCardsSerializer, CashlessCardsValidator, \
-    UpdateFederatedAssetFromCashlessValidator
+    UpdateFederatedAssetFromCashlessValidator, ProductCreateSerializer
 from AuthBillet.models import TenantAdminPermission, TibilletUser, RootPermission, TenantAdminPermissionWithRequest
 from AuthBillet.utils import user_apikey_valid, get_or_create_user
 from BaseBillet.tasks import create_ticket_pdf, report_to_pdf, report_celery_mailer
@@ -129,13 +129,16 @@ class ProductViewSet(viewsets.ViewSet):
         return Response(serializer.data)
 
     def create(self, request):
-        serializer = ProductSerializer(data=request.data)
+        # Le sérializer de création prend des listes pour les options en M2M
+        serializer = ProductCreateSerializer(data=request.data)
         if serializer.is_valid():
             product = serializer.save()
             if getattr(serializer, 'img_img', None):
                 product.img.save(serializer.img_name, serializer.img_img.fp)
 
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            # Le sérializer de création prend des listes pour les options en M2M
+            # On utilise le sérializer de liste pour le retour.
+            return Response(ProductSerializer(product).data, status=status.HTTP_201_CREATED)
         for error in [serializer.errors[error][0] for error in serializer.errors]:
             if error.code == "unique":
                 return Response(serializer.errors, status=status.HTTP_409_CONFLICT)
