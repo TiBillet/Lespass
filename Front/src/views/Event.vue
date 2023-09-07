@@ -46,8 +46,23 @@ import CardOptions from '../components/CardOptions.vue'
 import CardGifts from '../components/CardGifts.vue'
 import CardCreditCashless from '../components/CardCreditCashless.vue'
 
-const { getEventForm, setLoadingValue } = useSessionStore()
+const { getEventForm, setLoadingValue, updateHeader } = useSessionStore()
 const route = useRoute()
+
+// update header
+let urlImage
+try {
+  urlImage = getEventForm.img_variations.fhd
+} catch (e) {
+  urlImage = '/medias/images/default_header_1080x300.jpg'
+}
+updateHeader({
+  urlImage: urlImage,
+  shortDescription: getEventForm.short_description,
+  longDescription: getEventForm.long_description,
+  titre: getEventForm.name,
+  categorie: getEventForm.categorie
+})
 
 // formatage des données POST event
 function formatBodyPost () {
@@ -68,7 +83,7 @@ function formatBodyPost () {
   products.forEach((product) => {
     product.prices.forEach((price) => {
       // produit nom nominatif et quantité supérieure à 0
-      console.log('product.nominative =', product.nominative )
+      console.log('product.nominative =', product.nominative)
       if (product.nominative === false && price.qty > 0) {
         let activatedLinkProduct = false
         if (price.adhesion_obligatoire !== null) {

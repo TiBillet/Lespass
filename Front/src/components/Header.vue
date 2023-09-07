@@ -28,7 +28,7 @@
 import { storeToRefs } from 'pinia'
 import { useSessionStore } from '@/stores/session'
 
-// action
+// store
 const sessionStore = useSessionStore()
 const { header, routeName } = storeToRefs(sessionStore)
 

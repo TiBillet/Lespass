@@ -10,9 +10,15 @@
 
 <script setup>
 // console.log('-> Accueil.vue')
+// store
+import { useSessionStore } from '@/stores/session'
 
 // composants
 import CardEvent from '@/components/CardEvent.vue'
+
+const sessionStore = useSessionStore()
+const { updateHeader, getHeaderPlace } = sessionStore
+updateHeader(getHeaderPlace)
 </script>
 
 <style></style>

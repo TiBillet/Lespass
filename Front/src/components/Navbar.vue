@@ -2,11 +2,11 @@
   <nav id="navbar" class="navbar navbar-expand-lg bg-dark opacity-8 w-100 fixed-top" >
     <div class="container">
       <!-- lieu -->
-      <div v-if="header !== null" class="navbar-brand opacity-10">
+      <div v-if="headerPlace !== null" class="navbar-brand opacity-10">
         <a href="/" class="navbar-brand d-flex justify-content-between align-items-center">
-          <h6 v-if="header.categorie !== 'M'" class="m-0 text-white" data-bs-toggle="tooltip"
+          <h6 v-if="headerPlace.categorie !== 'M'" class="m-0 text-white" data-bs-toggle="tooltip"
               data-bs-placement="bottom"
-              title="Actualise les données évènements et lieu !">{{ header.titre }}</h6>
+              title="Actualise les données évènements et lieu !">{{ headerPlace.titre }}</h6>
           <h6 v-else class="m-0 text-white" data-bs-toggle="tooltip" data-bs-placement="bottom"
               title="Actualise les données évènements et lieu !">Agenda TiBillet</h6>
         </a>
@@ -60,9 +60,9 @@
 
         <!-- adhésions -->
         <li class="nav-item">
-          <a v-if="routeName !== 'Adhesions' && header !== null" href="/adhesions"
+          <a v-if="routeName !== 'Adhesions' && headerPlace !== null" href="/adhesions"
              class="nav-link ps-1 d-flex justify-content-between align-items-center"
-             :title="`Adhésions possibles à l'association '${ header.titre }'`">
+             :title="`Adhésions possibles à l'association '${ headerPlace.titre }'`">
             <i class="fa fa-users me-1 text-white" aria-hidden="true"></i>
             <h6 class="m-0 text-white">Adhésions</h6>
           </a>
@@ -183,7 +183,7 @@ import { useSessionStore } from '@/stores/session'
 
 const sessionStore = useSessionStore()
 // reactif
-const { header, routeName, accessToken, me } = storeToRefs(sessionStore)
+const { headerPlace, routeName, accessToken, me } = storeToRefs(sessionStore)
 // actions
 const { disconnect, getEmail, automaticConnection } = sessionStore
 
