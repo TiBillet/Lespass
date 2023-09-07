@@ -12,7 +12,7 @@
             @click="price.qty > (parseInt(max) - 1) ? price.qty = price.qty : price.qty++">
       <i class="fa fa-plus" aria-hidden="true"></i>
     </button>
-    <div class="input-group-append invalid-feedback">Pas de valeur.</div>
+    <div class="input-group-append invalid-feedback app-rounded-right-20">Pas de valeur.</div>
   </div>
 </template>
 
