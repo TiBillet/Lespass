@@ -7,6 +7,7 @@ from rest_framework import serializers
 from rest_framework.generics import get_object_or_404
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from ApiBillet.serializers import ProductSerializer, OptionsSerializer
 from AuthBillet.models import TibilletUser, TermUser, TerminalPairingToken
 import logging
 from django.utils.translation import ugettext_lazy as _
@@ -177,6 +178,8 @@ class MeTicketsSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 class MembershipSerializer(serializers.ModelSerializer):
+    # products = ProductSerializer(many=True)
+    option_generale = OptionsSerializer(many=True)
     class Meta:
         model = Membership
         fields = [
@@ -184,6 +187,7 @@ class MembershipSerializer(serializers.ModelSerializer):
             'price_name',
             'product_uuid',
             'product_name',
+            # 'product',
             'date_added',
             'first_contribution',
             'last_contribution',
@@ -199,6 +203,7 @@ class MembershipSerializer(serializers.ModelSerializer):
             'birth_date',
             'phone',
             'email',
+            'option_generale',
         ]
         read_only_fields = fields
 
@@ -240,7 +245,7 @@ class MeSerializer(serializers.ModelSerializer):
         return serializer.data
 
     def get_membership(self, user: TibilletUser):
-        # First contibution est False si aucune paiement n'a jamais été fait.
+        # First contibution est False si aucun paiement n'a jamais été fait.
         qs = user.membership.filter(first_contribution__isnull=False)
         serializer = MembershipSerializer(instance=qs, many=True)
         return serializer.data
