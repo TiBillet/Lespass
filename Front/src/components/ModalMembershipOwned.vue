@@ -22,6 +22,13 @@
               <h5>Inscription : {{ dateToFrenchFormat(adhesion.last_contribution) }}</h5>
               <h5>Echéance : {{ dateToFrenchFormat(adhesion.deadline) }}</h5>
               <h5 class="mb-0">Email : {{ adhesion.email }}</h5>
+              <!-- options -->
+              <h6 class="font-weight-bolder text-info text-gradient align-self-start w-85 mt-1 mb-0">Options</h6>
+              <ul class="mb-0">
+                <li v-for="(option, index2) in adhesion.option_generale" :key="index2" class="">{{ option.name }}</li>
+              </ul>
+
+              <!-- status et résiliation -->
               <div class="d-flex justify-content-between align-items-center">
                 <div class="text-primary mbs-status">{{ showStatus(adhesion.status) }}</div>
                 <button v-if="adhesion.status === 'A'" class="btn btn-secondary btn-sm mt-4" aria-pressed="true"
