@@ -759,11 +759,7 @@ class Event(models.Model):
         """
         Transforme le titre de l'evenemennt en slug, pour en faire une url lisible
         """
-        if self.recurrent.all().count() > 0:
-            self.slug = slugify(self.name)
-        else:
-            self.slug = slugify(f"{self.name} {self.datetime.strftime('%D %R')}")
-
+        self.slug = slugify(f"{self.name} {self.datetime.strftime('%y%m%d-%H%M')}")
         super().save(*args, **kwargs)
 
     def __str__(self):

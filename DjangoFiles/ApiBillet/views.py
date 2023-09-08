@@ -1,4 +1,6 @@
 # Create your views here.
+import re
+
 import decimal
 
 import csv
@@ -340,6 +342,13 @@ class HereViewSet(viewsets.ViewSet):
 class EventsSlugViewSet(viewsets.ViewSet):
     def retrieve(self, request, pk=None):
         queryset = Event.objects.filter(published=True).order_by('-datetime')
+        import ipdb; ipdb.set_trace()
+        try :
+            date_slug = re.search(r"\d{6}-\d{4}", pk).group()
+            date = datetime.strptime(date_slug, '%y%m%d-%H%M')
+            #TODO: Gérer les récurences ?
+        except:
+            return Response(_("Mauvais format de date"), status=status.HTTP_406_NOT_ACCEPTABLE)
         event = get_object_or_404(queryset, slug=pk)
         serializer = EventSerializer(event)
         return Response(serializer.data)
