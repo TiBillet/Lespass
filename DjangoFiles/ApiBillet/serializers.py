@@ -20,7 +20,7 @@ from AuthBillet.models import TibilletUser, HumanUser
 from AuthBillet.utils import get_or_create_user
 
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, Paiement_stripe, \
-    PriceSold, ProductSold, Artist_on_event, OptionGenerale, Membership, Tag
+    PriceSold, ProductSold, Artist_on_event, OptionGenerale, Membership, Tag, Weekday
 from Customers.models import Client
 from PaiementStripe.views import CreationPaiementStripe
 
@@ -63,6 +63,14 @@ class TagSerializer(serializers.ModelSerializer):
             'color',
         ]
         read_only_fields = ('uuid',)
+
+
+class WeekdaySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Weekday
+        fields = [
+            'day',
+        ]
 
 
 class ProductCreateSerializer(serializers.ModelSerializer):
@@ -555,6 +563,7 @@ class EventSerializer(serializers.ModelSerializer):
     options_checkbox = OptionsSerializer(many=True)
     artists = Artist_on_eventSerializer(many=True)
     tag = TagSerializer(many=True)
+    recurrent = WeekdaySerializer(many=True)
 
     class Meta:
         model = Event
@@ -579,6 +588,8 @@ class EventSerializer(serializers.ModelSerializer):
             'minimum_cashless_required',
             'max_per_user',
             'reservation_solo',
+            'recurrent',
+            'booking',
         ]
         read_only_fields = ['uuid', 'reservations']
         depth = 1
@@ -617,6 +628,7 @@ class EventSerializer(serializers.ModelSerializer):
             gift_price, created = Price.objects.get_or_create(product=gift_product, prix=1, name="Coopérative TiBillet")
             instance.products.add(gift_product)
 
+
         # if instance.recharge_cashless :
         #     recharge_suspendue, created = Product.objects.get_or_create(categorie_article=Product.RECHARGE_SUSPENDUE, name="Recharge cashless")
         #     recharge_suspendue_price, created = Price.objects.get_or_create(product=recharge_suspendue, prix=1, name="charge")
@@ -630,6 +642,8 @@ class EventSerializer(serializers.ModelSerializer):
         #     instance.products.add(free_reservation)
 
         representation = super().to_representation(instance)
+
+        representation['next_datetime'] = [date_time.isoformat() for date_time in instance.next_datetime()]
 
         representation['url'] = f"https://{connection.tenant.get_primary_domain().domain}/event/{instance.slug}/"
         representation['place'] = Configuration.get_solo().organisation
@@ -1117,6 +1131,7 @@ class ReservationValidator(serializers.Serializer):
     event = serializers.PrimaryKeyRelatedField(queryset=Event.objects.all())
     options = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(), many=True, allow_null=True)
     prices = serializers.JSONField(required=True)
+    datetime = serializers.DateTimeField(required=False)
 
     def validate_event(self, value):
         event: Event = value
@@ -1140,7 +1155,7 @@ class ReservationValidator(serializers.Serializer):
         On vérifie ici :
           que chaque article existe et a une quantité valide.
           Qu'il existe au moins un billet pour la reservation.
-          Que chaque billet possède un nom/prenom
+          Que chaque billet possède un nom/prenom si le billet doit être nominatif
 
         On remplace le json reçu par une liste de dictionnaire
         qui comporte les objets de la db à la place des strings.
@@ -1227,7 +1242,8 @@ class ReservationValidator(serializers.Serializer):
 
         for price_object in self.prices_list:
             if price_object['price'].product not in product_list:
-                import ipdb; ipdb.set_trace()
+                import ipdb;
+                ipdb.set_trace()
                 logger.error(f'Article non présent dans event : {price_object["price"].product.name}')
                 raise serializers.ValidationError(_(f'Article non disponible'))
 
@@ -1241,8 +1257,8 @@ class ReservationValidator(serializers.Serializer):
         # si un tarif à une adhésion obligatoire, on confirme que :
         # Soit l'utilisateur est membre,
         # Soit il paye l'adhésion en même temps que le billet :
-        all_price_buy = [ price_object['price'] for price_object in self.prices_list ]
-        all_product_buy = [ price.product for price in all_price_buy ]
+        all_price_buy = [price_object['price'] for price_object in self.prices_list]
+        all_product_buy = [price.product for price in all_price_buy]
         for price_object in self.prices_list:
             price: Price = price_object['price']
             if price.adhesion_obligatoire:
@@ -1326,7 +1342,6 @@ class ReservationValidator(serializers.Serializer):
                 reservation.paiement = paiement_stripe
                 reservation.status = Reservation.UNPAID
                 reservation.save()
-
 
                 print(new_paiement_stripe.checkout_session.stripe_id)
                 # return new_paiement_stripe.redirect_to_stripe()

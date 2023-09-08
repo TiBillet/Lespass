@@ -396,6 +396,12 @@ class EventAdmin(admin.ModelAdmin):
                 'options_checkbox',
             )
         }),
+        ('Recurence', {
+            'fields': (
+                'recurrent',
+                'booking',
+            )
+        }),
         ('Cashless', {
             'fields': (
                 # 'cashless',

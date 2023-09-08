@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import timedelta, datetime
+from dateutil.relativedelta import relativedelta
 from decimal import Decimal
 
 import requests
@@ -14,6 +15,7 @@ from django.dispatch import receiver
 from django.urls import reverse
 
 from django.db.models import JSONField
+from django.utils import timezone
 
 from django.utils.text import slugify
 from django_tenants.utils import tenant_context, schema_context
@@ -24,6 +26,7 @@ from stdimage import StdImageField
 from stdimage.validators import MaxSizeValidator, MinSizeValidator
 from django.db import connection
 from stripe.error import InvalidRequestError
+from typing import List, Optional
 
 import AuthBillet.models
 from Customers.models import Client
@@ -37,6 +40,22 @@ import logging
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
+
+
+class Weekday(models.Model):
+    WEEK = [
+        (0, _('Lundi')),
+        (1, _('Mardi')),
+        (2, _('Mercredi')),
+        (3, _('Jeudi')),
+        (4, _('Vendredi')),
+        (5, _('Samedi')),
+        (6, _('Dimanche')),
+    ]
+    day = models.IntegerField(choices=WEEK, unique=True)
+
+    def __str__(self):
+        return self.get_day_display()
 
 
 class Tag(models.Model):
@@ -635,6 +654,31 @@ class Event(models.Model):
                         delete_orphans=True
                         )
 
+    CONCERT = "LIV"
+    FESTIVAL = "FES"
+    REUNION = "REU"
+    CONFERENCE = "CON"
+    RESTAURATION = "RES"
+    TYPE_CHOICES = [
+        (CONCERT, _('Concert')),
+        (FESTIVAL, _('Festival')),
+        (REUNION, _('Réunion')),
+        (CONFERENCE, _('Conférence')),
+        (RESTAURATION, _('Restauration')),
+    ]
+
+    categorie = models.CharField(max_length=3, choices=TYPE_CHOICES, default=CONCERT,
+                                 verbose_name=_("Catégorie d'évènement"))
+
+    recurrent = models.ManyToManyField(Weekday, blank=True,
+                                       help_text=_(
+                                           "Selectionnez le jour de la semaine pour une récurence hebdomadaire. La date de l'évènement sera la date de fin de la récurence."),
+                                       verbose_name=_("Jours de la semaine"))
+
+    booking = models.BooleanField(default=False, verbose_name=_("Mode restauration/booking"),
+                                  help_text=_(
+                                      "Si activé, l'évènement sera visible en haut de la page d'accueil, l'utilisateur pourra selectionner une date."))
+
     def reservation_solo(self):
         if self.max_per_user == 1:
             if self.products.all().count() == 1:
@@ -674,22 +718,6 @@ class Event(models.Model):
         else:
             return {}
 
-    CONCERT = "LIV"
-    FESTIVAL = "FES"
-    REUNION = "REU"
-    CONFERENCE = "CON"
-    RESTAURATION = "RES"
-    TYPE_CHOICES = [
-        (CONCERT, _('Concert')),
-        (FESTIVAL, _('Festival')),
-        (REUNION, _('Réunion')),
-        (CONFERENCE, _('Conférence')),
-        (RESTAURATION, _('Restauration')),
-    ]
-
-    categorie = models.CharField(max_length=3, choices=TYPE_CHOICES, default=CONCERT,
-                                 verbose_name=_("Catégorie d'évènement"))
-
     def reservations(self):
         """
         Renvoie toutes les réservations valide d'un évènement.
@@ -714,6 +742,16 @@ class Event(models.Model):
     # def check_serveur_cashless(self):
     #     config = Configuration.get_solo()
     #     return config.check_serveur_cashless()
+    def next_datetime(self):
+        # Création de la liste des prochaines récurences
+        if self.recurrent.all().count() > 0 :
+            jours_recurence = [day.day for day in self.recurrent.all().order_by('day')]
+            # TODO ajouter la bonne date
+            dates = [(datetime.now() + relativedelta(weekday=day)) for day in jours_recurence]
+            dates.sort()
+            return dates
+
+        return [self.datetime,]
 
     def save(self, *args, **kwargs):
         """
