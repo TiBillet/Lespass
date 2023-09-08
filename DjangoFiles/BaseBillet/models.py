@@ -759,7 +759,7 @@ class Event(models.Model):
         """
         Transforme le titre de l'evenemennt en slug, pour en faire une url lisible
         """
-        self.slug = slugify(f"{self.name} {self.datetime.strftime('%y%m%d-%H%M')}")
+        self.slug = slugify(f"{self.name}")
         super().save(*args, **kwargs)
 
     def __str__(self):
