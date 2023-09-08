@@ -744,14 +744,16 @@ class Event(models.Model):
     #     return config.check_serveur_cashless()
     def next_datetime(self):
         # Création de la liste des prochaines récurences
-        if self.recurrent.all().count() > 0 :
+        if self.recurrent.all().count() > 0:
             jours_recurence = [day.day for day in self.recurrent.all().order_by('day')]
             # TODO ajouter la bonne date
-            dates = [(datetime.now() + relativedelta(weekday=day)) for day in jours_recurence]
+            dates = [datetime.combine((timezone.localdate() + relativedelta(weekday=day)),
+                                      self.datetime.time(), self.datetime.tzinfo)
+                     for day in jours_recurence]
             dates.sort()
             return dates
 
-        return [self.datetime,]
+        return [self.datetime, ]
 
     def save(self, *args, **kwargs):
         """
