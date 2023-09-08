@@ -1219,8 +1219,15 @@ class ReservationValidator(serializers.Serializer):
             raise serializers.ValidationError(_(f'Il ne reste que {resas} places disponibles'))
 
         # On check que les prices sont bien dans l'event original.
+        product_list = [product for product in event.products.all()]
+        for product in product_list:
+            for price in product.prices.all():
+                if price.adhesion_obligatoire:
+                    product_list.append(price.adhesion_obligatoire)
+
         for price_object in self.prices_list:
-            if price_object['price'].product not in event.products.all():
+            if price_object['price'].product not in product_list:
+                import ipdb; ipdb.set_trace()
                 logger.error(f'Article non présent dans event : {price_object["price"].product.name}')
                 raise serializers.ValidationError(_(f'Article non disponible'))
 
@@ -1232,7 +1239,7 @@ class ReservationValidator(serializers.Serializer):
                     raise serializers.ValidationError(_(f'Option {option.name} non disponible dans event'))
 
         # si un tarif à une adhésion obligatoire, on confirme que :
-        # Soit l'utilisateur est membre
+        # Soit l'utilisateur est membre,
         # Soit il paye l'adhésion en même temps que le billet :
         all_price_buy = [ price_object['price'] for price_object in self.prices_list ]
         all_product_buy = [ price.product for price in all_price_buy ]
@@ -1243,7 +1250,6 @@ class ReservationValidator(serializers.Serializer):
                                        self.user_commande.membership.all()]
                 if (price.adhesion_obligatoire not in membership_products
                         and price.adhesion_obligatoire not in all_product_buy):
-                    # import ipdb; ipdb.set_trace()
                     logger.warning(_(f"L'utilisateur n'est pas membre"))
                     raise serializers.ValidationError(_(f"L'utilisateur n'est pas membre"))
 
@@ -1320,6 +1326,7 @@ class ReservationValidator(serializers.Serializer):
                 reservation.paiement = paiement_stripe
                 reservation.status = Reservation.UNPAID
                 reservation.save()
+
 
                 print(new_paiement_stripe.checkout_session.stripe_id)
                 # return new_paiement_stripe.redirect_to_stripe()
