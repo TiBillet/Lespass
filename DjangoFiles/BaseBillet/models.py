@@ -742,11 +742,11 @@ class Event(models.Model):
     # def check_serveur_cashless(self):
     #     config = Configuration.get_solo()
     #     return config.check_serveur_cashless()
+
     def next_datetime(self):
         # Création de la liste des prochaines récurences
         if self.recurrent.all().count() > 0:
             jours_recurence = [day.day for day in self.recurrent.all().order_by('day')]
-            # TODO ajouter la bonne date
             dates = [datetime.combine((timezone.localdate() + relativedelta(weekday=day)),
                                       self.datetime.time(), self.datetime.tzinfo)
                      for day in jours_recurence]
@@ -759,13 +759,10 @@ class Event(models.Model):
         """
         Transforme le titre de l'evenemennt en slug, pour en faire une url lisible
         """
-
-        # self.slug = slugify(f"{self.name} {self.datetime} {str(self.uuid).partition('-')[0]}")[:50]
-        self.slug = slugify(f"{self.name} {self.datetime.strftime('%D %R')}")
-
-        # On vérifie que le serveur cashless soit configuré et atteignable
-        # if self.recharge_cashless:
-        #     self.recharge_cashless = self.check_serveur_cashless()
+        if self.recurrent.all().count() > 0:
+            self.slug = slugify(self.name)
+        else:
+            self.slug = slugify(f"{self.name} {self.datetime.strftime('%D %R')}")
 
         super().save(*args, **kwargs)
 
