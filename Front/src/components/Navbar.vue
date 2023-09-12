@@ -1,5 +1,5 @@
 <template>
-  <nav id="navbar" class="navbar navbar-expand-lg bg-dark opacity-8 w-100 fixed-top" >
+  <nav id="navbar" class="navbar navbar-expand-lg bg-dark opacity-8 w-100 fixed-top">
     <div class="container">
       <!-- lieu -->
       <div v-if="headerPlace !== null" class="navbar-brand opacity-10">
@@ -16,8 +16,7 @@
         <!-- user connecté -->
         <li v-if="accessToken !== ''" class="nav-item dropdown">
           <a class="nav-link d-flex justify-content-between align-items-center dropdown-toggle me-1" href="#"
-             id="menuUser"
-             role="button" data-bs-toggle="dropdown" aria-expanded="false">
+             id="menuUser" role="button" data-bs-toggle="dropdown" aria-expanded="false">
             <i class="fas fa-user me-1" aria-hidden="true"></i>
             <h6 class="m-0 text-white">Mon compte</h6>
           </a>
@@ -28,13 +27,30 @@
                 style="cursor: default">
               {{ me.email }}
             </li>
-
-             <!-- les adhésions du client -->
+            <!-- les réservations  prisent par le client -->
             <li>
-              <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
+              <a v-if="me.reservations.length > 0" class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
+                 role="button" @click="showModal('reservation-list-modal')">
+                <i class="fa fa-ticket fa-fw me-1 text-dark tourne-ticket" aria-hidden="true"></i>
+                <h6 class="m-0 text-dark">Réservations - {{me.reservations.length}}</h6>
+              </a>
+              <a v-if="me.reservations.length === 0" class="dropdown-item border-radius-md d-flex justify-content-star align-items-center">
+                <i class="fa fa-ticket fa-fw me-1 text-dark tourne-ticket" aria-hidden="true"></i>
+                <h6 class="m-0 text-dark">Réservations - 0</h6>
+              </a>
+
+            </li>
+
+            <!-- les adhésions prisent par le client -->
+            <li>
+              <a v-if="me.membership.length > 0" class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
                  role="button" data-bs-toggle="modal" data-bs-target="#membership-owned-modal">
                 <i class="fa fa-users fa-fw me-1 text-dark" aria-hidden="true"></i>
-                <h6 class="m-0 text-dark">Adhésions</h6>
+                <h6 class="m-0 text-dark">Adhésions - {{me.membership.length}}</h6>
+              </a>
+              <a v-if="me.membership.length === 0" class="dropdown-item border-radius-md d-flex justify-content-star align-items-center">
+                <i class="fa fa-users fa-fw me-1 text-dark" aria-hidden="true"></i>
+                <h6 class="m-0 text-dark">Adhésions - 0</h6>
               </a>
             </li>
 
@@ -58,7 +74,7 @@
           </a>
         </li>
 
-        <!-- adhésions -->
+        <!-- Aller page adhésions -->
         <li class="nav-item">
           <a v-if="routeName !== 'Adhesions' && headerPlace !== null" href="/adhesions"
              class="nav-link ps-1 d-flex justify-content-between align-items-center"
@@ -185,7 +201,7 @@ const sessionStore = useSessionStore()
 // reactif
 const { headerPlace, routeName, accessToken, me } = storeToRefs(sessionStore)
 // actions
-const { disconnect, getEmail, automaticConnection } = sessionStore
+const { getIsLogin, disconnect, getEmail, automaticConnection } = sessionStore
 
 function showModalLogin () {
   const elementModal = document.querySelector('#modal-form-login')
@@ -195,7 +211,22 @@ function showModalLogin () {
   document.querySelector('#login-email').value = getEmail
 }
 
-automaticConnection()
+async function showModal (id) {
+  const reservations = JSON.parse(JSON.stringify(me))._object.me.reservations
+  console.log('reservations =', reservations)
+   if (reservations.length > 0) {
+     const elementModal = document.querySelector('#' + id)
+     const modal = bootstrap.Modal.getOrCreateInstance(elementModal) // Returns a Bootstrap modal instance
+     // peuple l'email
+     modal.show()
+   }
+
+}
+
+if (getIsLogin) {
+  automaticConnection()
+}
+
 /*
 //vue
 import { ref } from 'vue'

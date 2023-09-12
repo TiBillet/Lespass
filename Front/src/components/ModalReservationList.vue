@@ -28,6 +28,7 @@
               </div>
             </div>
           </fieldset>
+
           <div class="modal-footer">
             <button type="button" class="btn bg-gradient-secondary" data-bs-dismiss="modal">Fermer</button>
           </div>
@@ -42,12 +43,14 @@
 import {onMounted} from 'vue'
 
 // store
-import {storeToRefs} from 'pinia'
-import {useAllStore} from '@/stores/all'
-import {useLocalStore} from '@/stores/local'
+import { storeToRefs } from 'pinia'
+import { useSessionStore } from '@/stores/session'
 
-const {events, loading, error} = storeToRefs(useAllStore())
-const {me} = storeToRefs(useLocalStore())
+const sessionStore = useSessionStore()
+const { accessToken, me } = storeToRefs(sessionStore)
+
+const { getEventName } = sessionStore
+const domain = `${window.location.protocol}//${window.location.host}`
 
 function dateToFrenchFormat(dateString) {
   const nomMois = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
@@ -60,31 +63,6 @@ function downloadBlank(pdfUrl) {
   const redirectWindow = window.open(pdfUrl, '_blank')
   redirectWindow.location
 }
-
-function getEventName(uuidEvent) {
-  try {
-    return events.value.find(evt => evt.uuid === uuidEvent).name
-  } catch (error) {
-    return ''
-  }
-}
-
-// maj des data une fois le moal affiché
-onMounted(() => {
-  if (document.querySelector('#reservation-list-modal')) {
-    document.querySelector('#reservation-list-modal').addEventListener('shown.bs.modal', async function () {
-      console.log(`-> le modal réservation(s) s'affiche !`)
-      try {
-        loading.value = true
-        me.value = await getMe(window.accessToken)
-        loading.value = false
-      } catch (error) {
-        loading.value = false
-        error.value = error
-      }
-    })
-  }
-})
 </script>
 
 <style scoped>

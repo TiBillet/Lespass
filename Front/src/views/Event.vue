@@ -5,7 +5,8 @@
       <CardArtist :artist="artist.configuration" class="mb-6"/>
     </div>
 
-    <form v-if="getEventForm.products.length > 0" id="reservation" @submit.prevent="validerAchats($event)" class="needs-validation" novalidate>
+    <form v-if="getEventForm.products.length > 0" id="reservation" @submit.prevent="validerAchats($event)"
+          class="needs-validation" novalidate>
 
       <CardEmail v-model:email.checkemail="getEventForm.email"/>
 
@@ -46,7 +47,7 @@ import CardOptions from '../components/CardOptions.vue'
 import CardGifts from '../components/CardGifts.vue'
 import CardCreditCashless from '../components/CardCreditCashless.vue'
 
-const { getEventForm, setLoadingValue, updateHeader } = useSessionStore()
+const { getEventForm, getIsLogin, setLoadingValue, updateHeader } = useSessionStore()
 const route = useRoute()
 
 // update header
@@ -133,7 +134,6 @@ function formatBodyPost () {
         }]
       })
 
-      /*
       // ajout des options à choix unique(radio) de l'adhésions
       if (product.optionRadio !== '') {
         body.options.push(product.optionRadio)
@@ -145,7 +145,7 @@ function formatBodyPost () {
           body.options.push(option.uuid)
         }
       })
-       */
+
     }
   })
 
@@ -192,6 +192,23 @@ async function validerAchats (event) {
     event.preventDefault()
     event.stopPropagation()
   }
+
+  // vérif. email de confirmation
+  if (getIsLogin === false) {
+    const inputConfirmEmail = document.querySelector('#card-email-confirm-email').value
+    const inputEmail = document.querySelector('#card-email-email').value
+    if (inputConfirmEmail !== inputEmail) {
+      event.preventDefault()
+      event.stopPropagation()
+      document.querySelector('#card-email-confirm-email').parentNode.querySelector('.invalid-feedback').style.display = 'block'
+      document.querySelector('#card-email-confirm-email').scrollIntoView({
+        behavior: 'smooth',
+        inline: 'center',
+        block: 'center'
+      })
+      return
+    }
+  }
   event.target.classList.add('was-validated')
 
   // scroll first invalide field
@@ -206,7 +223,13 @@ async function validerAchats (event) {
       const rawData = formatBodyPost()
 
       if (rawData.prices.length === 0) {
-        throw new Error('Pas de billet dans la reservation.')
+        emitter.emit('toastSend', {
+          title: 'Information',
+          contenu: 'Pas de billet dans la reservation.',
+          typeMsg: 'primary',
+          delay: 6000
+        })
+        return
       }
 
       const body = JSON.stringify(rawData)
@@ -263,12 +286,21 @@ async function validerAchats (event) {
       } else {
         setLoadingValue(false)
         // paiement sans stripe, exemple: réservation gratuite
+        /*
         emitter.emit('modalMessage', {
           typeMsg: 'success',
           titre: 'Demande envoyée.',
           dynamic: true,
           contenu: '<h4>Merci de vérifier votre réservation dans votre boite email.</h4>'
         })
+        */
+        emitter.emit('toastSend', {
+          title: 'Demande envoyée.',
+          contenu: 'Merci de vérifier votre réservation dans votre boite email.',
+          typeMsg: 'success',
+          delay: 6000
+        })
+
       }
 
     } catch (error) {
@@ -276,6 +308,13 @@ async function validerAchats (event) {
       // action stripe = aucune
       setLocalStateKey('stripeStep', { action: null })
       console.log('error.message =', error.message)
+      emitter.emit('toastSend', {
+        title: 'Erreur(s)',
+        contenu: error.message,
+        typeMsg: 'warning',
+        delay: 8000
+      })
+      /*
       emitter.emit('modalMessage', {
         titre: 'Erreur(s)',
         // contenu = html => dynamic = true
@@ -283,6 +322,7 @@ async function validerAchats (event) {
         contenu: '<h3>' + error.message + '</h3>',
         typeMsg: 'warning',
       })
+*/
     }
   }
 }

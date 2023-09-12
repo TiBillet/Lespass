@@ -4,35 +4,41 @@
       <h3 class="font-weight-bolder text-info text-gradient align-self-start">Email</h3>
     </legend>
     <!-- email -->
-    <div class="input-group mb-2 has-validation">
-      <span class="input-group-text" v-focuselement="'card-email-email'">Email</span>
-      <input id="card-email-email" type="text" :value="email" @input="emitValue($event)" @change="emitValue($event)" class="form-control card-email-input"
-             placeholder="Email" role="textbox" aria-label="Entrer un email." required/>
-      <div class="invalid-feedback" role="heading" aria-label="Merci de renseigner une adresse email valide.">
-        Merci de renseigner une adresse email valide.
+    <h4 v-if="getIsLogin" role="heading" aria-label="Email de l'utilisateur connecté.">{{ email === '' ? getEmail : email }}</h4>
+    <div v-else>
+      <div class="input-group mb-2 has-validation">
+        <span class="input-group-text" v-focuselement="'card-email-email'">Email</span>
+        <input id="card-email-email" type="text" :value="email === '' ? getEmail : email" @input="emitValue($event)" @change="emitValue($event)"
+               class="form-control card-email-input"
+               placeholder="Email" role="textbox" aria-label="Entrer un email." required/>
+        <div class="invalid-feedback" role="heading" aria-label="Merci de renseigner une adresse email valide.">
+          Merci de renseigner une adresse email valide.
+        </div>
+      </div>
+      <!-- confirme email -->
+      <div class="input-group mb-2 has-validation">
+        <span class="input-group-text" v-focuselement="'card-email-confirm-email'">Confirmez l'email</span>
+        <input id="card-email-confirm-email" type="text" :value="confirmEmail" @keyup="validateEmail($event)"
+               @change="validateEmail($event)" class="form-control card-email-input" placeholder="Email"
+               required role="textbox" aria-label="Confirmer email entré."/>
+        <div class="invalid-feedback" role="heading"
+             aria-label="Merci de renseigner une adresse email valide et identique.">
+          Merci de renseigner une adresse email valide et identique.
+        </div>
+      </div>
+
+      <!-- message pour l'adresse email -->
+      <div class="text-warning mb-0">
+        Merci de bien vérifier votre adresse email afin de bien recevoir votre(vos) billet(s).
       </div>
     </div>
-    <!-- confirme email -->
-    <div class="input-group mb-2 has-validation">
-      <span class="input-group-text" v-focuselement="'card-email-confirm-email'">Confirmez l'email</span>
-      <input id="card-email-confirm-email" type="text" :value="confirmEmail" @keyup="validateEmail($event)"
-             @change="validateEmail($event)" class="form-control card-email-input" placeholder="Email"
-             required role="textbox" aria-label="Confirmer email entré."/>
-      <div class="invalid-feedback" role="heading" aria-label="Merci de renseigner une adresse email valide et identique.">
-        Merci de renseigner une adresse email valide et identique.
-      </div>
-    </div>
-
-    <!-- message pour l'adresse email -->
-    <div class="text-warning mb-0">
-      Merci de bien vérifier votre adresse email afin de bien recevoir votre(vos) billet(s).
-    </div>
-
   </fieldset>
 </template>
 
 <script setup>
 console.log('-> CardEmail.vue !')
+// store
+import { useSessionStore } from '@/stores/session'
 
 const emit = defineEmits(['update:email'])
 const props = defineProps({
@@ -40,16 +46,20 @@ const props = defineProps({
   emailModifiers: { default: () => ({}) }
 })
 
+// state
+const { getIsLogin, getEmail } = useSessionStore()
+
 let confirmEmail = ''
 
 function validateEmail (event) {
-  let value = event.target.value
+  const ele =  event.target
+  let value = ele.value
   event.target.setAttribute('type', 'text')
   const re = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$/
   if (value.match(re) === null) {
-    event.target.parentNode.querySelector('.invalid-feedback').style.display = "block"
+    event.target.parentNode.querySelector('.invalid-feedback').style.display = 'block'
   } else {
-    event.target.parentNode.querySelector('.invalid-feedback').style.display = "none"
+    event.target.parentNode.querySelector('.invalid-feedback').style.display = 'none'
   }
 }
 

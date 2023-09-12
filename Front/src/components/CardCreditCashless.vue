@@ -13,13 +13,13 @@
     <!-- activation -->
     <div class="form-switch">
       <input class="form-check-input" type="checkbox" id="credit-cashless" v-model="product.activated"
-             :checked="product.activated">
+             :checked="product.activated" role="checkbox" aria-label="Activer cashless.">
       <label class="form-check-label text-dark" for="credit-cashless">Recharger carte</label>
     </div>
 
     <!-- la recharge -->
     <InputNumber v-if="product.activated === true" :button="false"
-                 v-model:price="products.filter(prod => prod.categorie_article === 'S')[index]" :min="0" :max="500"
+                 v-model:price="products.filter(prod => prod.categorie_article === 'S')[index]" :min="0" :max="1000"
                  info-aria="Recharge cashless"/>
 
   </fieldset>

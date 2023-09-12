@@ -34,7 +34,7 @@ export async function event (to) {
 // Charge tous les évènements
 export async function events () {
   // console.log('Près chargement des évènements !')
-  const { setLoadingValue } = useSessionStore()
+  const { setLoadingValue, setEvents } = useSessionStore()
   try {
     setLoadingValue(true)
     const apiEvents = `/api/events/`
@@ -42,7 +42,9 @@ export async function events () {
     if (response.status !== 200) {
       throw new Error(`${response.status} - ${response.statusText}`)
     }
-    return await response.json()
+    const retour = await response.json()
+    setEvents(retour)
+    return retour
   } catch (error) {
     emitter.emit('modalMessage', {
       titre: 'Erreur',

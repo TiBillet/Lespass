@@ -12,7 +12,7 @@
     <h2>Lieux : {{ config.organisation }}</h2>
     <h2>{{ ticket.reservation.event.datetime }}</h2>
     <h3>{{ ticket.first_name }} {{ ticket.last_name }}</h3>
-
+    <h4>Prix : {{ ticket.pricesold }} €</h4>
     {% if ticket.seat == "L" %}
         <h4>Placement libre</h4>
     {% else %}

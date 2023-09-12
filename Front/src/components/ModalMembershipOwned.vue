@@ -23,7 +23,7 @@
               <h5>Echéance : {{ dateToFrenchFormat(adhesion.deadline) }}</h5>
               <h5 class="mb-0">Email : {{ adhesion.email }}</h5>
               <!-- options -->
-              <h6 class="font-weight-bolder text-info text-gradient align-self-start w-85 mt-1 mb-0">Options</h6>
+              <h6 v-if="adhesion.option_generale.length > 0 " class="font-weight-bolder text-info text-gradient align-self-start w-85 mt-1 mb-0">Options</h6>
               <ul class="mb-0">
                 <li v-for="(option, index2) in adhesion.option_generale" :key="index2" class="">{{ option.name }}</li>
               </ul>
@@ -88,6 +88,7 @@ const { accessToken, me } = storeToRefs(sessionStore)
 const { setLoadingValue, getMe } = sessionStore
 const domain = `${window.location.protocol}//${window.location.host}`
 
+
 // actu du profil à l'ouverture du modal
 onMounted(() => {
   const elementModal = document.querySelector('#membership-owned-modal')
@@ -95,6 +96,7 @@ onMounted(() => {
     getMe()
   })
 })
+
 
 function dateToFrenchFormat (dateString) {
   if (dateString !== null) {
@@ -175,67 +177,6 @@ function confirmMembershipTermination (uuidPrice) {
   terminationModal.uuidPrice = uuidPrice
   terminationModal.show()
 }
-
-/*
-// store
-import {storeToRefs} from 'pinia'
-import {useAllStore} from '@/stores/all'
-import {useLocalStore} from '@/stores/local'
-
-const {me} = storeToRefs(useLocalStore())
-const {loading, error} = storeToRefs(useAllStore())
-const domain = `${location.protocol}//${location.host}`
-
-
-function dateToFrenchFormat(dateString) {
-  if (dateString !== null) {
-    const nomMois = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
-    const dateArray = dateString.split('T')[0].split('-')
-    const mois = nomMois[parseInt(dateArray[1])]
-    return dateArray[2] + ' ' + mois + ' ' + dateArray[0]
-  } else {
-    return ''
-  }
-}
-
-function confirmMembershipTermination(uuidPrice) {
-  const terminationModal = new bootstrap.Modal(document.querySelector('#membership-termination-modal'))
-  terminationModal.uuidPrice = uuidPrice
-  terminationModal.show()
-}
-
-async function cancelMembership() {
-  // récup uuid price
-  const terminationModal = document.querySelector('#membership-termination-modal')
-  const modal = bootstrap.Modal.getInstance(terminationModal)
-  console.log('modal =', modal.uuidPrice)
-
-  // effacer modal confirmation
-  modal.hide()
-
-  const api = `/api/cancel_sub/`
-  try {
-    loading.value = true
-    const response = await fetch(domain + api, {
-      method: 'POST',
-      cache: 'no-cache',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken} `
-      },
-      body: JSON.stringify({'uuid_price': modal.uuidPrice})
-    })
-    const retour = await response.json()
-    console.log('retour =', retour)
-    //Todo: gestion du retour en attente
-
-  } catch (erreur) {
-    console.log('-> cancelMembership, erreur :', erreur)
-    error.value = erreur
-  }
-}
-
- */
 </script>
 
 <style scoped>

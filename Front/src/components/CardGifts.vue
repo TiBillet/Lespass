@@ -8,7 +8,7 @@
     <!-- activation du don -->
     <div class="form-check form-switch">
       <input class="form-check-input" type="checkbox" :id="`don${gift.uuid}`"
-             v-model="gift.activatedGift">
+             v-model="gift.activatedGift" role="checkbox" aria-label="Activer le don.">
       <label class="form-check-label text-dark" :for="`don${gift.uuid}`">
         Je donne {{ gift.prices[0].prix }} € pour soutenir les actions de la coopérative
         <a target="_blank" href="https://tibillet.org" data-bs-toggle="tooltip" data-bs-placement="top"

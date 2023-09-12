@@ -1,4 +1,6 @@
 <template>
+  <h1> StatusPlace en attente</h1>
+  <!--
   <p v-if="error !== null" class="text-dark">{{ error }}</p>
   <Loading v-if="loading === true" test="accueil"/>
   <Header v-if="Object.entries(place).length > 0" :header-event="getHeaderPlace()"/>
@@ -6,7 +8,7 @@
   <section class="pt-3 pb-0">
     <div class="container">
       <div class="row">
-        <!-- liens -->
+        //-- liens --
         <div class="col-lg-3 mb-lg-0 mb-3">
           <ul class="nav flex-column bg-white border-radius-lg p-3 position-sticky top-1">
             <li class="nav-item">
@@ -67,7 +69,7 @@
             </li>
           </ul>
         </div>
-        <!-- contenu principal -->
+        //-- contenu principal --
         <div class="col-lg-9">
           <div class="card mb-5">
             <div class="card-header bg-gradient-dark p-5 position-relative">
@@ -238,10 +240,11 @@
       </div>
     </div>
   </section>
+  -->
 </template>
 <script setup>
 console.log('-> StatusPlace.vue !')
-
+/*
 // store
 import {storeToRefs} from 'pinia'
 import {useAllStore} from '@/stores/all'
@@ -286,7 +289,7 @@ function goTo(anchor) {
     block: 'center'
   })
 }
-
+*/
 </script>
 <style>
 </style>

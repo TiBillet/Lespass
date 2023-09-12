@@ -6,7 +6,7 @@
       <div class="container">
         <div class="row">
           <div class="col-lg-8 mx-auto text-white text-center">
-            <h2 class="text-white">{{ header.titre }}</h2>
+            <h2 class="text-white" role="heading" :aria-label="`Titre de l'évènement : ` + header.titre">{{ header.titre }}</h2>
             <p v-if="header.shortDescription !== null" class="lead" style="white-space: pre-line">
               {{ header.shortDescription }}</p>
           </div>

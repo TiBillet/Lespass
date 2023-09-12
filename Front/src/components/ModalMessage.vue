@@ -1,21 +1,21 @@
 <template>
   <div class="modal fade" id="conteneur-message-modal" tabindex="-1" role="dialog"
-       aria-labelledby="Exemple de message sous forme d'un modal."
+       aria-labelledby="Message sous forme d'un modal."
        aria-hidden="true">
     <div id="conteneur-message-modal-body" class="modal-dialog modal-dialog-centered"
          :init-scroll-properties="initScrollProperties()"
          role="document">
       <div class="modal-content">
         <div class="modal-header" :class="message.typeMsg">
-          <h2 class="modal-title" id="exampleModalLabel">{{ message.titre }}</h2>
+          <h2 class="modal-title" id="exampleModalLabel" role="presentation" aria-label="Titre du message">{{ message.titre }}</h2>
         </div>
         <!-- contenu  -->
-        <div class="modal-body">
+        <div class="modal-body" role="contentinfo" aria-label="Contenu du message">
           <span v-if="message.dynamic === true" v-html="message.contenu"></span>
           <span v-else>{{ message.contenu }}</span>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn bg-gradient-secondary modal-footer-bt-fermer" data-bs-dismiss="modal">Fermer</button>
+          <button type="button" class="btn bg-gradient-secondary modal-footer-bt-fermer" data-bs-dismiss="modal" role="button" aria-label="Fermer modal message.">Fermer</button>
       </div>
     </div>
   </div>

@@ -106,6 +106,7 @@ router.beforeEach(async (to, from, next) => {
   }
 
   if (redirection === true) {
+    console.log('-> redirection, nouvelleRoute =', nouvelleRoute)
     next({
       path: nouvelleRoute,
       replace: true

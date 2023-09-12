@@ -3,7 +3,7 @@
   <fieldset class="shadow-sm p-3 mb-5 bg-body rounded test-card-billet">
     <legend>
       <div class="d-flex flex-row align-items-center justify-content-between">
-        <h3 class="font-weight-bolder text-info text-gradient align-self-start">{{ product.name }}</h3>
+        <h3 class="font-weight-bolder text-info text-gradient align-self-start" role="heading" :aria-label="`Titre de l'adhésion - ${product.name}`">{{ product.name }}</h3>
         <button class="btn btn-primary mb-0 test-card-billet-bt-add" type="button"
                 @click="resetPriceCustomers(product)"
                 role="button" aria-label="Supprimer adhésion associative">
@@ -19,8 +19,9 @@
 
       <div class="form-check form-switch">
         <input class="form-check-input" type="checkbox" v-model="product.conditionsRead"
-               true-value="true" false-value="false" required/>
-        <label class="form-check-label text-dark" for="read-conditions">
+               true-value="true" false-value="false" required role="checkbox"
+               :aria-label="`Pris connaissance du règlement de '${product.name}'`"/>
+        <label class="form-check-label text-dark" for="read-conditions" role="alert" :aria-label="`Information du règlement - '${product.name}'`">
           <span>j'ai pris connaissance des </span>
           <span v-if="product.categorie_article === 'A'">
                 <a v-if="product.legal_link !== null" class="text-info"
@@ -32,7 +33,7 @@
                 <span v-else>CGU/CGV.</span>
           </span>
         </label>
-        <div class="invalid-feedback">Conditions non acceptées.</div>
+        <div class="invalid-feedback" role="heading" aria-label="Conditions non acceptées.">Conditions non acceptées.</div>
       </div>
     </div>
 
@@ -43,7 +44,8 @@
         <input v-trigger="{index,nbPrices: product.prices.length}"
                name="membership-prices" :id="`uuidcardmembershippriceradio${index}`" type="radio"
                v-model="product.customers[0].uuid" :value="price.uuid"
-               class="form-check-input input-adesion-modal-price" required/>
+               class="form-check-input input-adesion-modal-price" required
+               role="radio" :aria-label="`Pris abonnement - ${price.name}`"/>
         <label class="form-check-label text-dark" :for="`uuidcardmembershippriceradio${index}`">
           {{ price.name }} - {{ price.prix }}€
         </label>
@@ -56,20 +58,24 @@
     <!-- nom / prénom -->
     <div class="input-group mb-1">
       <input type="text" v-model="product.customers[0].last_name"
-             placeholder="Nom ou Structure" aria-label="Nom ou Structure" class="form-control" required>
+             placeholder="Nom ou Structure" class="form-control" required
+             role="textbox" :aria-label="`Le nom pour abonnemnt '${product.name}'`">
       <input type="text" v-model="product.customers[0].first_name"
-             placeholder="Prénom" aria-label="Prénom" class="form-control app-rounded-right-20" required>
-      <div class="invalid-feedback">Donnée(s) manquante(s).</div>
+             placeholder="Prénom" class="form-control app-rounded-right-20" required
+             role="textbox" :aria-label="`Prénom pour abonnemnt '${product.name}'`">
+      <div class="invalid-feedback" role="heading" aria-label="nom / prénom manquant(s)">Donnée(s) manquante(s).</div>
     </div>
 
 
     <!-- code postal / téléphone -->
     <div class="input-group mb-1 test-membership-input-group">
-      <input type="text" v-model="product.customers[0].postal_code" placeholder="Code postal" aria-label="Code postal"
-             class="form-control" @keyup="formatNumberPrentNode2($event, 5)" required>
-      <input type="text" v-model="product.customers[0].phone" placeholder="Fixe ou mobile" aria-label="Fixe ou mobile"
-             class="form-control app-rounded-right-20" @keyup="formatNumberPrentNode2($event, 10)" required>
-      <div class="invalid-feedback">Donnée(s) manquante(s).</div>
+      <input type="text" v-model="product.customers[0].postal_code" placeholder="Code postal"
+             class="form-control" @keyup="formatNumberPrentNode2($event, 5)" required
+             role="textbox" :aria-label="`Code postal pour abonnemnt '${product.name}'`">
+      <input type="text" v-model="product.customers[0].phone" placeholder="Fixe ou mobile"
+             class="form-control app-rounded-right-20" @keyup="formatNumberPrentNode2($event, 10)" required
+             role="textbox" :aria-label="`Numéro de téléphone pour abonnemnt '${product.name}'`">
+      <div class="invalid-feedback" role="heading" aria-label="code postal / numéro de téléphone manquant(s)">Donnée(s) manquante(s).</div>
     </div>
 
     <!-- options radio -->
@@ -112,7 +118,7 @@
 
 <script setup>
 console.log('-> CardMembership.vue !')
-import { onMounted } from "vue"
+import { onMounted } from 'vue'
 
 import { useSessionStore } from '../stores/session'
 
