@@ -84,6 +84,7 @@
            v-for="(option, index) in product.option_generale_radio" :key="index">
         <input name="membership-options-radio" :id="`uuidmembershipoptionsradio${index}`" type="radio"
                v-model="product.optionRadio" :value="option.uuid"
+               role="radio" :aria-label="'Choix unique - ' + option.name"
                class="form-check-input input-adesion-modal-price"/>
         <label class="form-check-label text-dark mb-0" :for="`uuidmembershipoptionsradio${index}`">
           {{ option.name }}
@@ -101,6 +102,7 @@
         <div class="form-switch input-group has-validation">
           <input class="form-check-input me-2 options-adhesion-to-unchecked" type="checkbox"
                  :id="`option-checkbox-adhesion${option.uuid}`" v-model="option.checked"
+                 role="checkbox" :aria-label="'Choix multiple - ' + option.name"
                  true-value="true" false-value="false">
 
           <label class="form-check-label text-dark mb-0" :for="`option-checkbox-adhesion${option.uuid}`">

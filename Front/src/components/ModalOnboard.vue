@@ -1,7 +1,6 @@
 <template>
-  <div id="modal-onboard" aria-hidden="true" aria-labelledby="modal-onboard"
-       class="modal fade" role="dialog"
-       tabindex="-1" >
+  <div id="modal-onboard" aria-hidden="true" aria-labelledby="modal-onboard" class="modal fade" role="dialog"
+       tabindex="-1">
     <div class="modal-dialog modal-dialog-centered" role="document">
       <div class="modal-content">
         <div class="modal-body p-0">
@@ -41,57 +40,63 @@
 </template>
 <script setup>
 // store
-import {storeToRefs} from 'pinia'
-import {useAllStore} from '@/stores/all'
+import { useSessionStore } from "../stores/session"
+// asset
+import communecterLogo from "@/assets/img/communecterLogo_31x28.png"
+
+const sessionStore = useSessionStore()
+const { setLoadingValue } = sessionStore
+const domain = `${location.protocol}//${location.host}`
+
+/*
+// store
+import { storeToRefs } from 'pinia'
+import { useAllStore } from '@/stores/all'
 
 // asset
 import communecterLogo from '@/assets/img/communecterLogo_31x28.png'
 
 // const {adhesion} = useLocalStore()
 const domain = `${location.protocol}//${location.host}`
-const {adhesion, loading, error} = storeToRefs(useAllStore())
+const { adhesion, loading, error } = storeToRefs(useAllStore())
+*/
 
-async function goStripe() {
-    // enregistre l'email dans le storeUser
-    console.log('-> goStripe Onboard')
+async function goStripe () {
+  // enregistre l'email dans le storeUser
+  console.log('-> goStripe Onboard')
 
-    const api = `/api/onboard/`
-    try {
-      loading.value = true
-      const response = await fetch(domain + api, {
-        method: 'GET',
-        cache: 'no-cache',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-      })
-      const retour = await response.json()
-      console.log('retour =', retour)
-      // if (response.status === 201 || response.status === 401 || response.status === 202) {
+  const api = `/api/onboard/`
+  try {
+    setLoadingValue(true)
 
-      if (response.status === 202) {
-          location.href = retour
-      } else {
-        throw new Error(`Erreur goStripe Onboard'`)
-      }
-    } catch (erreur) {
-      console.log('-> validerLogin, erreur :', erreur)
-      error.value = erreur
-      loading.value = false
+    const response = await fetch(domain + api, {
+      method: 'GET',
+      cache: 'no-cache',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+    })
+    const retour = await response.json()
+    console.log('retour =', retour)
+    if (response.status === 202) {
+      location.href = retour
+    } else {
+      throw new Error(`Erreur goStripe Onboard'`)
     }
+  } catch (erreur) {
+    console.log('-> validerLogin, erreur :', erreur)
+    setLoadingValue(false)
+      emitter.emit('toastSend', {
+          title: 'validerLogin, erreur :',
+          contenu: erreur,
+          typeMsg: 'danger',
+          delay: 8000
+        })
+  }
 }
-
-
-
 </script>
 
 <style scoped>
-
-/*.no-click {*/
-/*    opacity: 0.2;*/
-/*    pointer-events: none;*/
-/*}*/
-
 .h-44px {
   height: 44px;
 }

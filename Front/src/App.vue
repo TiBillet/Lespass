@@ -9,10 +9,11 @@
   <ModalMembershipOwned/>
   <ToastContainer/>
   <ModalReservationList/>
+  <ModalOnboard/>
   <!--
   <ModalPassword/>
   <ModalCardsList/>
-  <ModalOnboard/>
+
   -->
 </template>
 
@@ -23,19 +24,20 @@ import { ref } from 'vue'
 import Plausible from 'plausible-tracker'
 
 // composants
-import Loading from '@/components/Loading.vue'
-import Navbar from '@/components/Navbar.vue'
-import Header from '@/components/Header.vue'
-import ModalMessage from '@/components/ModalMessage.vue'
-import Modallogin from '@/components/Modallogin.vue'
-import ModalMembershipOwned from '@/components/ModalMembershipOwned.vue'
-import ToastContainer from './components/ToastContainer.vue'
-import ModalReservationList from '@/components/ModalReservationList.vue'
+import Loading from "@/components/Loading.vue"
+import Navbar from "@/components/Navbar.vue"
+import Header from "@/components/Header.vue"
+import ModalMessage from "@/components/ModalMessage.vue"
+import Modallogin from "@/components/Modallogin.vue"
+import ModalMembershipOwned from "@/components/ModalMembershipOwned.vue"
+import ToastContainer from "./components/ToastContainer.vue"
+import ModalReservationList from "@/components/ModalReservationList.vue"
+import ModalOnboard from "@/components/ModalOnboard.vue"
 
 /*
 import ModalPassword from '@/components/ModalPassword.vue'
 import ModalCardsList from '@/components/ModalCardsList.vue'
-import ModalOnboard from '@/components/ModalOnboard.vue'
+
 */
 // store
 import { storeToRefs } from 'pinia'

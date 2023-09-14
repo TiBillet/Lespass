@@ -1,6 +1,6 @@
 <template>
   <h1> ModalOnboardReturn en attente</h1>
-  <!--
+
   <div id="modal-onboard-return" aria-hidden="true" aria-labelledby="modal-onboard-return"
        class="modal fade" role="dialog"
        tabindex="-1" data-backdrop="static">
@@ -17,13 +17,13 @@
 
             <div class="card-body">
               <form @submit.prevent="ValidateTenant($event)" novalidate>
-                //-- prénom --
+                <!-- prénom -->
                 <label for="organisation">Nom de l'organisation</label>
                 <div class="input-group mb-2 has-validation">
                   <input id="organisation" v-model="tenant.organisation" type="text"
                          class="form-control" aria-label="Nom de l'organisation" required>
                   <div class="invalid-feedback">Merci de remplir le nom de votre organisation.</div>
-                </div> -->
+                </div>
 
 <!--                <label for="short_description">Une courte description.</label>-->
 <!--                <div class="input-group mb-2 has-validation">-->
@@ -54,7 +54,7 @@
 <!--                </div>-->
 
                 <!-- conditions -->
-              <!--  <div class="input-group mb-2 has-validation">
+                <div class="input-group mb-2 has-validation">
                   <div class="form-check form-switch position-relative mt-2">
                     <input id="read-conditions" class="form-check-input" type="checkbox" required
                            @click="checkConditions()" :checked="tenant.readConditions">
@@ -81,7 +81,7 @@
         </div>
       </div>
     </div>
-  </div> -->
+  </div>
 </template>
 <script setup>
 /*

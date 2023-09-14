@@ -3,7 +3,7 @@
 </template>
 
 <script setup>
-import {onMounted, onUnmounted} from 'vue'
+import { onMounted } from 'vue'
 import {useRoute} from 'vue-router'
 import ModalOnboardReturn from '@/components/ModalOnboardReturn.vue'
 

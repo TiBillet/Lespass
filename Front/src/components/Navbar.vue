@@ -12,7 +12,7 @@
         </a>
       </div>
       <!-- partie droite -->
-      <ul class="navbar-nav d-flex flex-row-reverse ms-auto d-block">
+      <ul v-if="headerPlace.categorie !== 'M'" class="navbar-nav d-flex flex-row-reverse ms-auto d-block">
         <!-- user connecté -->
         <li v-if="accessToken !== ''" class="nav-item dropdown">
           <a class="nav-link d-flex justify-content-between align-items-center dropdown-toggle me-1" href="#"
@@ -81,6 +81,17 @@
              :title="`Adhésions possibles à l'association '${ headerPlace.titre }'`">
             <i class="fa fa-users me-1 text-white" aria-hidden="true"></i>
             <h6 class="m-0 text-white">Adhésions</h6>
+          </a>
+        </li>
+      </ul>
+      <!-- tenant agenda / partie droite -->
+       <ul v-else class="navbar-nav d-flex flex-row-reverse ms-auto d-block">
+        <li class="nav-item">
+          <a class="nav-link ps-1 d-flex justify-content-between align-items-center"
+             role="button"
+             data-bs-toggle="modal" data-bs-target="#modal-onboard">
+            <i class="fa fa-plane me-1 text-white" aria-hidden="true"></i>
+            <h6 class="m-0 text-white" data-test-id="seConnecter">Créer son espace</h6>
           </a>
         </li>
       </ul>
