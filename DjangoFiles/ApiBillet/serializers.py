@@ -363,9 +363,9 @@ class NewConfigSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         logger.info(f"validate : {attrs}")
 
-        if not attrs.get('stripe_connect_account') or not getattr(self, 'info_stripe', None):
-            raise serializers.ValidationError(
-                _(f'stripe account not send nor valid'))
+        # if not attrs.get('stripe_connect_account') or not getattr(self, 'info_stripe', None):
+        #     raise serializers.ValidationError(
+        #         _(f'stripe account not send nor valid'))
 
         # if not attrs.get('img') and not img_url:
         #     raise serializers.ValidationError(
