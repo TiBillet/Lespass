@@ -1,5 +1,5 @@
 <template>
-  <div class="container-fluid vw-100 vh-100" :style="`background-image: url('${wizardBackground}')`">
+  <div class="container-fluid vw-100 vh-100" :style="`background-image: url('${wizardBackground}');background-repeat:no-repeat;background-size:cover;`">
     <div class="container">
       <!--      Wizard container        -->
       <div class="wizard-container">
@@ -15,7 +15,7 @@
             <div class="wizard-navigation">
               <ul class="nav nav-pills">
                 <li :style="{width: itemNavWidth + '%'}">
-                  <a href="#espace" class="nav-item-tab" style="font-size: 12px;font-weight: 500;color: #555555;padding: 10px 15px !important;">
+                  <a href="#espace" class="nav-item-tab" style="font-size:12px !important;font-weight:500 !important;color: #555555 !important;padding:10px 15px !important;">
                     Espace
                   </a>
                 </li>
