@@ -3,6 +3,7 @@
        :style="`background-image: url('${wizardBackground}');background-repeat:no-repeat;background-size:100% 100%;`">
     <div class="container">
       <div class="card wizard-card" data-color="red">
+        {{ etape}}
         <form action="" method="">
           <div class="wizard-header">
             <h3 class="wizard-title">
@@ -28,27 +29,25 @@
             </div>
           </div>
           <div class="tab-content ps-3 pe-3">
-            <div id="espace" class="tab-pane active">
+            <div id="espace" class="tab-pane" style="display:block;">
               contenu espace
             </div>
-            <div id="information" class="tab-pane">
-              contenu information
+            <div id="informations" class="tab-pane">
+              contenu informations
             </div>
             <div id="validation" class="tab-pane">
               contenu validation
             </div>
           </div>
 
-          <div class="d-flex flex-row justify-content-between wizard-footer">
-            <div class="pull-left pe-3">
-              <input type="button" class="btn btn-wizard btn-previous" name="previous" value="Previous">
+          <div class="d-flex wizard-footer">
+            <div class="w-50 d-flex flex-column">
+             <button v-if="etape > 0" class="btn btn-wizard btn-previous align-self-start">Previous</button>
             </div>
-            <div class="pull-right ps-3">
-              <input type="button" class="btn btn-wizard btn-next btn-fill btn-danger btn-wd" name="next" value="Next"
-                     style="">
-              <input type="button" class="btn btn-finish btn-fill btn-danger btn-wd" name="finish" value="Finish"
-                     style="display: none;">
-            </div>
+           <div class="w-50  d-flex flex-column">
+            <button v-if="etape <= 1" type="button" class="btn btn-wizard btn-danger align-self-end">Next</button>
+            <button v-if="etape === 2" type="button" class="btn btn-wizard btn-danger align-self-end">Finish</button>
+           </div>
           </div>
         </form>
       </div>
@@ -69,6 +68,7 @@ const sessionStore = useSessionStore()
 const { updateHeader } = sessionStore
 
 let itemNavWidth = ref(0)
+let etape = ref(0)
 let styleBtMobile = ref({
   width: '10%',
   transform: 'translate3d(-8px, 0px, 0px)',
@@ -83,6 +83,7 @@ function moveBt (event) {
   document.querySelector('div[class~="bt-tab"]').innerText = ele.innerText
   // animation
   const index = parseInt(ele.getAttribute('index'))
+  etape.value = index
   const nbItem = document.querySelectorAll('ul[class="nav nav-pills"] li').length
   const navWidth = (document.querySelector('ul[class="nav nav-pills"]').offsetWidth / nbItem)
   const itemNavs = document.querySelectorAll('ul[class="nav nav-pills"] li')
@@ -95,10 +96,10 @@ function moveBt (event) {
   }
   styleBtMobile.value.transform = `translate3d(${decX + (index * navWidth)}px, 0px, 0px)`
   // désactivation / activation des onglets
-  document.querySelectorAll('div[class~="tab-pane"]').forEach(tab => {
-    tab.classList.remove('active')
+  document.querySelectorAll('div[class="tab-pane"]').forEach(tab => {
+    tab.style.display = "none"
   })
-  ele.classList.add('active')
+  document.querySelector('#' + ele.getAttribute('data-cible')).style.display = "block"
 }
 
 function init () {
@@ -119,6 +120,7 @@ addEventListener('resize', init)
 
 onMounted(() => init())
 
+// ne pas laisser trainer des "eventListener"
 onBeforeUnmount(() => {
   const itemNavs = document.querySelectorAll('ul[class="nav nav-pills"] li')
   for (let i = 0; i < itemNavs.length; i++) {
