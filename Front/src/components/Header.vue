@@ -6,7 +6,7 @@
       <div class="container">
         <div class="row">
           <div class="col-lg-8 mx-auto text-white text-center">
-            <h2 class="text-white">{{ header.titre }}</h2>
+            <h2 class="text-white" role="heading" :aria-label="`Titre de l'évènement : ` + header.titre">{{ header.titre }}</h2>
             <p v-if="header.shortDescription !== null" class="lead" style="white-space: pre-line">
               {{ header.shortDescription }}</p>
           </div>
@@ -17,9 +17,7 @@
     <div v-if="routeName === 'Accueil'" class="container">
       <Search/>
     </div>
-
-    <div class="container mt-5 mb-5" style="white-space: pre-line">{{ header.longDescription }}</div>
-
+    <div v-if="header.longDescription !== null" class="container mt-5 mb-5" style="white-space: pre-line">{{ header.longDescription }}</div>
   </header>
 </template>
 

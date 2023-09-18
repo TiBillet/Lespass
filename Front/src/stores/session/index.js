@@ -1,6 +1,6 @@
 // store
 import { defineStore } from "pinia"
-import { getLocalStateKey, setLocalStateKey } from "../../communs/storeLocal.js"
+// import { getLocalStateKey, setLocalStateKey } from "../../communs/storeLocal.js"
 import { sessionActions} from "./SessionActions"
 import { sessionGetters } from "./SessionGetters"
 
@@ -22,7 +22,8 @@ export const useSessionStore = defineStore({
       email: ''
     },
     currentUuidEventForm: '',
-    forms: []
+    forms: [],
+    events: []
   }),
   getters: sessionGetters,
   actions: sessionActions,

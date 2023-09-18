@@ -18,11 +18,11 @@ export const sessionActions = {
     resetLocalState('refreshToken', '')
     this.router.push('/')
   },
-  updateHeader(value) {
+  updateHeader (value) {
     this.header = value
   },
   async getMe () {
-    // console.log('-> getMe, accessToken = ', this.accessToken)
+    console.log('-> etape 2 , getMe, accessToken = ', this.accessToken)
     try {
       const apiMe = `/api/user/me/`
       const options = {
@@ -39,17 +39,21 @@ export const sessionActions = {
         const retour = await response.json()
         // console.log('-> getMe, retour =', retour)
         this.loading = false
-        this.me = await retour
+        this.me = retour
+        console.log('retour =', retour)
+        console.log('this.me =', this.me)
       } else {
         throw new Error(`Erreur ${apiMe} !`)
       }
     } catch (error) {
+      console.log('getMe ,', error)
       this.loading = false
       log({ message: 'getMe, /api/user/me/, error:', error })
-      emitter.emit('modalMessage', {
-        titre: 'Erreur',
+      emitter.emit('toastSend', {
+        title: 'Erreur',
+        contenu: `Obtention infos utilisateur, /api/user/me/ : ${error.message}`,
         typeMsg: 'danger',
-        contenu: `Obtention infos utilisateur, /api/user/me/ : ${error.message}`
+        delay: 10000
       })
       this.me = {
         cashless: {},
@@ -60,7 +64,7 @@ export const sessionActions = {
     }
   },
   async emailActivation (id, token) {
-    // console.log('emailActivation')
+    console.log('-> etape 1, emailActivation')
     // attention pas de "/" à la fin de "api"
     const api = `/api/user/activate/${id}/${token}`
     try {
@@ -89,17 +93,20 @@ export const sessionActions = {
         setLocalStateKey('refreshToken', retour.refresh)
         // actu du profile
         await this.getMe()
+
         // this.me.email = getLocalStateKey('email')
       } else {
         throw new Error(`Erreur conrfirmation mail !`)
       }
     } catch (error) {
       log({ message: 'emailActivation, /api/user/activate/, error:', error })
-      emitter.emit('modalMessage', {
-        titre: 'Erreur',
+      emitter.emit('toastSend', {
+        title: 'Erreur',
+        contenu: `Activation email : ${error.message}`,
         typeMsg: 'danger',
-        contenu: `Activation email : ${error.message}`
+        delay: 10000
       })
+
       this.accessToken = ''
       this.me = {
         cashless: {},
@@ -130,13 +137,15 @@ export const sessionActions = {
         // console.log('retour =', retour)
         if (response.status === 200) {
           this.accessToken = retour.access
-          this.getMe()
+          await this.getMe()
         }
       } catch (error) {
         log({ message: 'automaticConnection, /api/user/token/refresh/, error:', error })
-        emitter.emit('modalMessage', {
-          titre: 'Erreur, maj accessToken !',
-          contenu: `${domain + api} : ${error.message}`
+        emitter.emit('toastSend', {
+          title: 'Erreur, maj accessToken !',
+          contenu: `${domain + api} : ${error.message}`,
+          typeMsg: 'primary',
+          delay: 6000
         })
       }
       this.loading = false
@@ -246,10 +255,17 @@ export const sessionActions = {
           if (product.categorie_article !== 'D' && product.categorie_article !== 'S') {
             console.log('ajout du champ first_name / last_name')
             if (product.nominative === true) {
-              //price['customers'] = [{ first_name: '', last_name: '', uuid: this.generateUUIDUsingMathRandom() }]
-              price['customers'] = []
+              if (product.prices.length >= 2) {
+                price['customers'] = []
+              } else {
+                price['customers'] = [{ first_name: '', last_name: '', uuid: this.generateUUIDUsingMathRandom() }]
+              }
             } else {
-              price['qty'] = 1
+              if (product.prices.length >= 2) {
+                price['qty'] = 0
+              } else {
+                price['qty'] = 1
+              }
             }
           }
         })
@@ -446,7 +462,7 @@ export const sessionActions = {
     }
 
     if (stripeStep.action === 'expect_payment_stripe_reservation') {
-       messageValidation = `<h3>Réservation OK !</h3>`
+      messageValidation = `<h3>Réservation OK !</h3>`
       messageErreur = `Retour stripe pour la réservation:`
       // vidage formulaire
       this.deleteEventForm(stripeStep.eventFormUuid)
@@ -500,5 +516,8 @@ export const sessionActions = {
     const product = products.find(prod => prod.uuid === productUuid)
     let customers = product.prices.find(prix => prix.uuid === priceUuid).customers
     customers.push({ first_name: '', last_name: '', uuid: this.generateUUIDUsingMathRandom() })
+  },
+  setEvents (data) {
+    this.events = data
   }
 }

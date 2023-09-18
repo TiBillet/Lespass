@@ -1,5 +1,5 @@
 <template>
-  <nav id="navbar" class="navbar navbar-expand-lg bg-dark opacity-8 w-100 fixed-top" >
+  <nav id="navbar" class="navbar navbar-expand-lg bg-dark opacity-8 w-100 fixed-top">
     <div class="container">
       <!-- lieu -->
       <div v-if="headerPlace !== null" class="navbar-brand opacity-10">
@@ -12,12 +12,11 @@
         </a>
       </div>
       <!-- partie droite -->
-      <ul class="navbar-nav d-flex flex-row-reverse ms-auto d-block">
+      <ul v-if="headerPlace.categorie !== 'M'" class="navbar-nav d-flex flex-row-reverse ms-auto d-block">
         <!-- user connecté -->
         <li v-if="accessToken !== ''" class="nav-item dropdown">
           <a class="nav-link d-flex justify-content-between align-items-center dropdown-toggle me-1" href="#"
-             id="menuUser"
-             role="button" data-bs-toggle="dropdown" aria-expanded="false">
+             id="menuUser" role="button" data-bs-toggle="dropdown" aria-expanded="false">
             <i class="fas fa-user me-1" aria-hidden="true"></i>
             <h6 class="m-0 text-white">Mon compte</h6>
           </a>
@@ -28,13 +27,34 @@
                 style="cursor: default">
               {{ me.email }}
             </li>
-
-             <!-- les adhésions du client -->
+            <!-- les réservations  prisent par le client -->
             <li>
-              <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
+              <a v-if="me.reservations.length > 0"
+                 class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
+                 role="button" @click="showModal('reservation-list-modal')">
+                <i class="fa fa-ticket fa-fw me-1 text-dark tourne-ticket" aria-hidden="true"></i>
+                <h6 class="m-0 text-dark">Réservations - {{ me.reservations.length }}</h6>
+              </a>
+              <a v-if="me.reservations.length === 0"
+                 class="dropdown-item border-radius-md d-flex justify-content-star align-items-center">
+                <i class="fa fa-ticket fa-fw me-1 text-dark tourne-ticket" aria-hidden="true"></i>
+                <h6 class="m-0 text-dark">Réservations - 0</h6>
+              </a>
+
+            </li>
+
+            <!-- les adhésions prisent par le client -->
+            <li>
+              <a v-if="me.membership.length > 0"
+                 class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
                  role="button" data-bs-toggle="modal" data-bs-target="#membership-owned-modal">
                 <i class="fa fa-users fa-fw me-1 text-dark" aria-hidden="true"></i>
-                <h6 class="m-0 text-dark">Adhésions</h6>
+                <h6 class="m-0 text-dark">Adhésions - {{ me.membership.length }}</h6>
+              </a>
+              <a v-if="me.membership.length === 0"
+                 class="dropdown-item border-radius-md d-flex justify-content-star align-items-center">
+                <i class="fa fa-users fa-fw me-1 text-dark" aria-hidden="true"></i>
+                <h6 class="m-0 text-dark">Adhésions - 0</h6>
               </a>
             </li>
 
@@ -58,7 +78,7 @@
           </a>
         </li>
 
-        <!-- adhésions -->
+        <!-- Aller page adhésions -->
         <li class="nav-item">
           <a v-if="routeName !== 'Adhesions' && headerPlace !== null" href="/adhesions"
              class="nav-link ps-1 d-flex justify-content-between align-items-center"
@@ -68,110 +88,16 @@
           </a>
         </li>
       </ul>
-      <!--
-      //-- partie droite --
-      <ul v-if="place.categorie !== 'M'" class="navbar-nav d-flex flex-row-reverse ms-auto d-block">
-        //-- user --
-        //-- <li v-if="adhesion.status === 'membership' || refreshToken !== ''" class="nav-item dropdown"> --
-        <li v-if="refreshToken !== ''" class="nav-item dropdown">
-          <a class="nav-link d-flex justify-content-between align-items-center dropdown-toggle me-1" href="#"
-             id="menuUser"
-             role="button" data-bs-toggle="dropdown" aria-expanded="false">
-            <i class="fas fa-user me-1" aria-hidden="true"></i>
-            <h6 class="m-0 text-white">Mon compte</h6>
-          </a>
-          //-- menu user --
-          <ul class="dropdown-menu" aria-labelledby="menuUser">
-            <li class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
-                style="cursor: default">
-              {{ email }}
-            </li>
-            //-- Cartes cashless --
-            <li v-if="infosCardExist() === true">
-              <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
-                 role="button" data-bs-toggle="modal" data-bs-target="#cards-list-modal">
-                <i class="fa fa-id-card-o fa-fw me-1 text-dark" aria-hidden="true"></i>
-                <h6 class="m-0 text-dark">Carte</h6>
-              </a>
-            </li>
-            //-- réservations --
-            <li v-if="infosReservationExist() === true">
-              <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
-                 role="button" data-bs-toggle="modal" data-bs-target="#reservation-list-modal">
-                <i class="fa fa-ticket fa-fw me-1 text-dark tourne-ticket" aria-hidden="true"></i>
-                <h6 class="m-0 text-dark">Réservations</h6>
-              </a>
-            </li>
-
-            //-- les adhésions du client --
-            <li>
-              <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
-                 role="button" data-bs-toggle="modal" data-bs-target="#membership-owned-modal">
-                <i class="fa fa-users fa-fw me-1 text-dark" aria-hidden="true"></i>
-                <h6 class="m-0 text-dark">Adhésions</h6>
-              </a>
-            </li>
-
-            //-- isStaff --
-            <li v-if="isStaff() === true">
-              <a v-if="asP() === true"
-                 class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
-                 role="button" href="/admin">
-                <i class="fa fa-cog fa-fw me-1 text-dark tourne-ticket" aria-hidden="true"></i>
-                <h6 class="m-0 text-dark">Administration</h6>
-              </a>
-              <a v-else class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
-                 role="button" data-bs-toggle="modal" data-bs-target="#set-password-modal">
-                <i class="fa fa-cog fa-fw me-1 text-dark tourne-ticket" aria-hidden="true"></i>
-                <h6 class="m-0 text-dark">Administration</h6>
-              </a>
-            </li>
-
-            //-- déconnexion --
-            <li v-if="refreshToken !== ''">
-              <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
-                 role="button" @click="disconnect()">
-                <i class="fa fa-sign-out fa-fw me-1 text-dark" aria-hidden="true"></i>
-                <h6 class="m-0 text-dark">Deconnexion</h6>
-              </a>
-            </li>
-
-          </ul>
-        </li>
-
-        //-- pas de connexion --
-        <li class="nav-item">
-          <a v-if="refreshToken === ''" class="nav-link ps-1 d-flex justify-content-between align-items-center"
-             role="button"
-             data-bs-toggle="modal" data-bs-target="#modal-form-login">
-            <i class="fa fa-user-circle-o me-1 text-white" aria-hidden="true"></i>
-            <h6 class="m-0 text-white" data-test-id="seConnecter">Se connecter</h6>
-          </a>
-        </li>
-
-        //-- adhésions --
-        <li class="nav-item">
-          <a v-if="routeName !== 'Adhesions'" href="/adhesions"
-             class="nav-link ps-1 d-flex justify-content-between align-items-center"
-             :title="`Adhésions possibles à l'association '${ place.organisation }'`">
-            <i class="fa fa-users me-1 text-white" aria-hidden="true"></i>
-            <h6 class="m-0 text-white">Adhésions</h6>
-          </a>
-        </li>
-
-      </ul>
-
+      <!-- tenant agenda / partie droite -->
       <ul v-else class="navbar-nav d-flex flex-row-reverse ms-auto d-block">
         <li class="nav-item">
-          <a class="nav-link ps-1 d-flex justify-content-between align-items-center"
-             role="button"
-             data-bs-toggle="modal" data-bs-target="#modal-onboard">
+          <router-link to="/tenants"
+                       class="nav-link ps-1 d-flex justify-content-between align-items-center cursor-pointer">
             <i class="fa fa-plane me-1 text-white" aria-hidden="true"></i>
             <h6 class="m-0 text-white" data-test-id="seConnecter">Créer son espace</h6>
-          </a>
+          </router-link>
         </li>
       </ul>
-      -->
     </div>
   </nav>
 </template>
@@ -185,7 +111,7 @@ const sessionStore = useSessionStore()
 // reactif
 const { headerPlace, routeName, accessToken, me } = storeToRefs(sessionStore)
 // actions
-const { disconnect, getEmail, automaticConnection } = sessionStore
+const { getIsLogin, disconnect, getEmail, automaticConnection } = sessionStore
 
 function showModalLogin () {
   const elementModal = document.querySelector('#modal-form-login')
@@ -195,47 +121,22 @@ function showModalLogin () {
   document.querySelector('#login-email').value = getEmail
 }
 
-automaticConnection()
-/*
-//vue
-import { ref } from 'vue'
-
-// store
-import { storeToRefs } from 'pinia'
-import { useAllStore } from '@/stores/all'
-import { useLocalStore } from '@/stores/local'
-
-const { place, events, adhesion, routeName, loading, error } = storeToRefs(useAllStore())
-const { getPlace, setHeaderPlace } = useAllStore()
-const { refreshToken, email, me } = storeToRefs(useLocalStore())
-const { infosCardExist, infosReservationExist, getMe, refreshAccessToken, isStaff, asP } = useLocalStore()
-
-// load place
-getPlace()
-
-if (window.accessToken === '' && refreshToken.value !== '') {
-  updateAccessToken()
-}
-
-async function updateAccessToken () {
-  // console.log('-> fonc updateAccessToken !')
-  loading.value = true
-  await refreshAccessToken(refreshToken.value)
-  loading.value = false
-}
-
-
-// menu transparant / non transparant
-window.addEventListener('scroll', () => {
-  if (document.querySelector('#navbar') !== null) {
-    if (scrollY === 0) {
-      document.querySelector('#navbar').style.backgroundColor = ''
-    } else {
-      document.querySelector('#navbar').style.backgroundColor = '#384663'
-    }
+async function showModal (id) {
+  const reservations = JSON.parse(JSON.stringify(me))._object.me.reservations
+  console.log('reservations =', reservations)
+  if (reservations.length > 0) {
+    const elementModal = document.querySelector('#' + id)
+    const modal = bootstrap.Modal.getOrCreateInstance(elementModal) // Returns a Bootstrap modal instance
+    // peuple l'email
+    modal.show()
   }
-})
-*/
+
+}
+
+if (getIsLogin) {
+  automaticConnection()
+}
+
 </script>
 
 <style scoped>

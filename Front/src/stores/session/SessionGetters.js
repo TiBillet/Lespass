@@ -1,4 +1,4 @@
-import { log } from '../../communs/LogError'
+// import { log } from '../../communs/LogError'
 
 const domain = `${window.location.protocol}//${window.location.host}`
 
@@ -186,6 +186,12 @@ export const sessionGetters = {
       } catch (error) {
         return []
       }
+    }
+  },
+  getEventName (state) {
+    return (uuidEvent) => {
+      console.log('-> getReservations')
+      return state.events.find(event => event.uuid === uuidEvent).name
     }
   }
 }

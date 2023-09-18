@@ -66,8 +66,8 @@ export const routes = [
     component: () => import(/* webpackChunkName: "StatusPlace" */ '../views/StatusPlace.vue')
   },
   {
-    path: '/onboardreturn/:accstripe/',
-    name: 'OnboardReturn',
-    component: () => import(/* webpackChunkName: "OnboardReturn" */ '../views/OnboardReturn.vue')
+    path: '/tenants',
+    name: 'Tenants',
+    component: () => import(/* webpackChunkName: "Tenants" */ '../views/Tenants.vue')
   }
 ]

@@ -1,37 +1,43 @@
 <template>
   <Loading v-if="loading"/>
   <!-- en cours -->
-  <Navbar v-if="identitySite && loadingPlace" />
-  <Header v-if="identitySite && loadingPlace" />
+  <Navbar v-if="identitySite && loadingPlace"/>
+  <Header v-if="identitySite && loadingPlace"/>
   <router-view></router-view>
   <ModalMessage/>
   <Modallogin/>
   <ModalMembershipOwned/>
+  <ToastContainer/>
+  <ModalReservationList/>
+  <ModalOnboard/>
   <!--
   <ModalPassword/>
   <ModalCardsList/>
-  <ModalReservationList/>
-  <ModalOnboard/> -->
+
+  -->
 </template>
 
 <script setup>
 console.log('-> App.vue')
-import { ref } from "vue"
+import { ref } from 'vue'
 
 import Plausible from 'plausible-tracker'
 
 // composants
-import Loading from '@/components/Loading.vue'
-import Navbar from '@/components/Navbar.vue'
-import Header from '@/components/Header.vue'
-import ModalMessage from '@/components/ModalMessage.vue'
-import Modallogin from '@/components/Modallogin.vue'
-import ModalMembershipOwned from '@/components/ModalMembershipOwned.vue'
+import Loading from "@/components/Loading.vue"
+import Navbar from "@/components/Navbar.vue"
+import Header from "@/components/Header.vue"
+import ModalMessage from "@/components/ModalMessage.vue"
+import Modallogin from "@/components/Modallogin.vue"
+import ModalMembershipOwned from "@/components/ModalMembershipOwned.vue"
+import ToastContainer from "./components/ToastContainer.vue"
+import ModalReservationList from "@/components/ModalReservationList.vue"
+import ModalOnboard from "@/components/ModalOnboard.vue"
+
 /*
 import ModalPassword from '@/components/ModalPassword.vue'
 import ModalCardsList from '@/components/ModalCardsList.vue'
-import ModalReservationList from '@/components/ModalReservationList.vue'
-import ModalOnboard from '@/components/ModalOnboard.vue'
+
 */
 // store
 import { storeToRefs } from 'pinia'
@@ -65,9 +71,10 @@ const { loadPlace } = sessionStore
 const loadingPlace = ref(false)
 
 // gestion synchrone du chargement des informations du tenant/lieu/artist/...
-async function waitLoadPlace() {
+async function waitLoadPlace () {
   loadingPlace.value = await loadPlace()
 }
+
 waitLoadPlace()
 
 const plausible = Plausible({
@@ -81,6 +88,7 @@ const plausible = Plausible({
   border-bottom-right-radius: 20px !important;
   border-top-right-radius: 20px !important;
 }
+
 .w-15 {
   width: 15% !important;
 }
