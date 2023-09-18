@@ -62,7 +62,7 @@ import { useSessionStore } from '@/stores/session'
 
 // material-bootstrap-wizard
 // import wizardBackground from '../assets/img/wizard-profile.jpg'
-//import '../assets/css/material-bootstrap-wizard/material-bootstrap-wizard.css'
+import '../assets/css/material-bootstrap-wizard/material-bootstrap-wizard.css'
 
 // session store
 const sessionStore = useSessionStore()
