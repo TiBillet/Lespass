@@ -29,12 +29,14 @@
             </li>
             <!-- les réservations  prisent par le client -->
             <li>
-              <a v-if="me.reservations.length > 0" class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
+              <a v-if="me.reservations.length > 0"
+                 class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
                  role="button" @click="showModal('reservation-list-modal')">
                 <i class="fa fa-ticket fa-fw me-1 text-dark tourne-ticket" aria-hidden="true"></i>
-                <h6 class="m-0 text-dark">Réservations - {{me.reservations.length}}</h6>
+                <h6 class="m-0 text-dark">Réservations - {{ me.reservations.length }}</h6>
               </a>
-              <a v-if="me.reservations.length === 0" class="dropdown-item border-radius-md d-flex justify-content-star align-items-center">
+              <a v-if="me.reservations.length === 0"
+                 class="dropdown-item border-radius-md d-flex justify-content-star align-items-center">
                 <i class="fa fa-ticket fa-fw me-1 text-dark tourne-ticket" aria-hidden="true"></i>
                 <h6 class="m-0 text-dark">Réservations - 0</h6>
               </a>
@@ -43,12 +45,14 @@
 
             <!-- les adhésions prisent par le client -->
             <li>
-              <a v-if="me.membership.length > 0" class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
+              <a v-if="me.membership.length > 0"
+                 class="dropdown-item border-radius-md d-flex justify-content-star align-items-center"
                  role="button" data-bs-toggle="modal" data-bs-target="#membership-owned-modal">
                 <i class="fa fa-users fa-fw me-1 text-dark" aria-hidden="true"></i>
-                <h6 class="m-0 text-dark">Adhésions - {{me.membership.length}}</h6>
+                <h6 class="m-0 text-dark">Adhésions - {{ me.membership.length }}</h6>
               </a>
-              <a v-if="me.membership.length === 0" class="dropdown-item border-radius-md d-flex justify-content-star align-items-center">
+              <a v-if="me.membership.length === 0"
+                 class="dropdown-item border-radius-md d-flex justify-content-star align-items-center">
                 <i class="fa fa-users fa-fw me-1 text-dark" aria-hidden="true"></i>
                 <h6 class="m-0 text-dark">Adhésions - 0</h6>
               </a>
@@ -85,14 +89,13 @@
         </li>
       </ul>
       <!-- tenant agenda / partie droite -->
-       <ul v-else class="navbar-nav d-flex flex-row-reverse ms-auto d-block">
+      <ul v-else class="navbar-nav d-flex flex-row-reverse ms-auto d-block">
         <li class="nav-item">
-          <a class="nav-link ps-1 d-flex justify-content-between align-items-center"
-             role="button"
-             data-bs-toggle="modal" data-bs-target="#modal-onboard">
+          <router-link to="/tenants"
+                       class="nav-link ps-1 d-flex justify-content-between align-items-center cursor-pointer">
             <i class="fa fa-plane me-1 text-white" aria-hidden="true"></i>
             <h6 class="m-0 text-white" data-test-id="seConnecter">Créer son espace</h6>
-          </a>
+          </router-link>
         </li>
       </ul>
       <!--
@@ -225,12 +228,12 @@ function showModalLogin () {
 async function showModal (id) {
   const reservations = JSON.parse(JSON.stringify(me))._object.me.reservations
   console.log('reservations =', reservations)
-   if (reservations.length > 0) {
-     const elementModal = document.querySelector('#' + id)
-     const modal = bootstrap.Modal.getOrCreateInstance(elementModal) // Returns a Bootstrap modal instance
-     // peuple l'email
-     modal.show()
-   }
+  if (reservations.length > 0) {
+    const elementModal = document.querySelector('#' + id)
+    const modal = bootstrap.Modal.getOrCreateInstance(elementModal) // Returns a Bootstrap modal instance
+    // peuple l'email
+    modal.show()
+  }
 
 }
 
@@ -238,46 +241,6 @@ if (getIsLogin) {
   automaticConnection()
 }
 
-/*
-//vue
-import { ref } from 'vue'
-
-// store
-import { storeToRefs } from 'pinia'
-import { useAllStore } from '@/stores/all'
-import { useLocalStore } from '@/stores/local'
-
-const { place, events, adhesion, routeName, loading, error } = storeToRefs(useAllStore())
-const { getPlace, setHeaderPlace } = useAllStore()
-const { refreshToken, email, me } = storeToRefs(useLocalStore())
-const { infosCardExist, infosReservationExist, getMe, refreshAccessToken, isStaff, asP } = useLocalStore()
-
-// load place
-getPlace()
-
-if (window.accessToken === '' && refreshToken.value !== '') {
-  updateAccessToken()
-}
-
-async function updateAccessToken () {
-  // console.log('-> fonc updateAccessToken !')
-  loading.value = true
-  await refreshAccessToken(refreshToken.value)
-  loading.value = false
-}
-
-
-// menu transparant / non transparant
-window.addEventListener('scroll', () => {
-  if (document.querySelector('#navbar') !== null) {
-    if (scrollY === 0) {
-      document.querySelector('#navbar').style.backgroundColor = ''
-    } else {
-      document.querySelector('#navbar').style.backgroundColor = '#384663'
-    }
-  }
-})
-*/
 </script>
 
 <style scoped>

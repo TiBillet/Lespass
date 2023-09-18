@@ -17,9 +17,7 @@
     <div v-if="routeName === 'Accueil'" class="container">
       <Search/>
     </div>
-
-    <div class="container mt-5 mb-5" style="white-space: pre-line">{{ header.longDescription }}</div>
-
+    <div v-if="header.longDescription !== null" class="container mt-5 mb-5" style="white-space: pre-line">{{ header.longDescription }}</div>
   </header>
 </template>
 

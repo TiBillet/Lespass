@@ -100,12 +100,12 @@ export const sessionActions = {
       }
     } catch (error) {
       log({ message: 'emailActivation, /api/user/activate/, error:', error })
-       emitter.emit('toastSend', {
-          title: 'Erreur',
-          contenu: `Activation email : ${error.message}`,
-          typeMsg: 'danger',
-          delay: 10000
-        })
+      emitter.emit('toastSend', {
+        title: 'Erreur',
+        contenu: `Activation email : ${error.message}`,
+        typeMsg: 'danger',
+        delay: 10000
+      })
 
       this.accessToken = ''
       this.me = {
@@ -517,7 +517,7 @@ export const sessionActions = {
     let customers = product.prices.find(prix => prix.uuid === priceUuid).customers
     customers.push({ first_name: '', last_name: '', uuid: this.generateUUIDUsingMathRandom() })
   },
-  setEvents(data) {
+  setEvents (data) {
     this.events = data
   }
 }

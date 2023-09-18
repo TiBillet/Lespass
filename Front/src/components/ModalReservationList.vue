@@ -21,7 +21,7 @@
               <div class="col-8 text-capitalize">{{ ticket.first_name }} {{ ticket.last_name }}</div>
               <div class="col-4">
                 <a @click="downloadBlank(ticket.pdf_url)"
-                   class="d-flex flex-row-reverse align-items-center">
+                   class="d-flex flex-row-reverse align-items-center cursor-pointer">
                   <i class="fa fa-download ms-1" aria-hidden="true"></i>
                   <h6 class="m-0 text-dark">Télécharger</h6>
                 </a>

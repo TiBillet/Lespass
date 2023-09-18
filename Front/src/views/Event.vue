@@ -122,28 +122,31 @@ function formatBodyPost () {
   products.forEach((product) => {
     if (product.activated === true && product.conditionsRead === 'true') {
       const data = product.customers[0]
+
+      // récupération des options
+      let optionsMembership = []
+      // ajout des options à choix unique(radio) de l'adhésions
+      if (product.optionRadio !== '') {
+       optionsMembership.push(product.optionRadio)
+      }
+      // ajout des options à choix multiples(checkbox) de l'adhésions
+      product.option_generale_checkbox.forEach((option) => {
+        if (option.checked === 'true') {
+         optionsMembership.push(option.uuid)
+        }
+      })
+
       // ajout prix adhésion
       body.prices.push({
         uuid: data.uuid,
         qty: 1,
+        options: optionsMembership,
         customers: [{
           first_name: data.first_name,
           last_name: data.last_name,
           phone: data.phone,
           postal_code: data.postal_code
         }]
-      })
-
-      // ajout des options à choix unique(radio) de l'adhésions
-      if (product.optionRadio !== '') {
-        body.options.push(product.optionRadio)
-      }
-
-      // ajout des options à choix multiples(checkbox) de l'adhésions
-      product.option_generale_checkbox.forEach((option) => {
-        if (option.checked === 'true') {
-          body.options.push(option.uuid)
-        }
       })
 
     }
