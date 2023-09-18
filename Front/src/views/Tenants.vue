@@ -42,11 +42,11 @@
 
           <div class="d-flex wizard-footer">
             <div class="w-50 d-flex flex-column">
-             <button v-if="etape > 0" class="btn btn-wizard btn-previous align-self-start">Previous</button>
+             <button v-if="etape > 0" class="btn btn-wizard btn-previous align-self-start" @click="wizardPrev($event)">Previous</button>
             </div>
            <div class="w-50  d-flex flex-column">
-            <button v-if="etape <= 1" type="button" class="btn btn-wizard btn-danger align-self-end">Next</button>
-            <button v-if="etape === 2" type="button" class="btn btn-wizard btn-danger align-self-end">Finish</button>
+            <button v-if="etape <= 1" type="button" class="btn btn-wizard btn-danger align-self-end" @click="wizardNext($event)">Next</button>
+            <button v-if="etape === (getNbItemNav() - 1)" type="button" class="btn btn-wizard btn-danger align-self-end">Finish</button>
            </div>
           </div>
         </form>
@@ -77,6 +77,22 @@ let styleBtMobile = ref({
 
 updateHeader(null)
 
+function wizardNext(evt) {
+  evt.preventDefault()
+  const index = etape.value + 1
+  document.querySelector(`ul[class="nav nav-pills"] li[index="${index}"]`).click()
+}
+
+function wizardPrev(evt) {
+  evt.preventDefault()
+  const index = etape.value - 1
+  document.querySelector(`ul[class="nav nav-pills"] li[index="${index}"]`).click()
+}
+
+function getNbItemNav() {
+  return document.querySelectorAll('ul[class="nav nav-pills"] li').length
+}
+
 function moveBt (event) {
   const ele = event.target
   // text du bouton mobile
@@ -84,7 +100,7 @@ function moveBt (event) {
   // animation
   const index = parseInt(ele.getAttribute('index'))
   etape.value = index
-  const nbItem = document.querySelectorAll('ul[class="nav nav-pills"] li').length
+  const nbItem = getNbItemNav()
   const navWidth = (document.querySelector('ul[class="nav nav-pills"]').offsetWidth / nbItem)
   const itemNavs = document.querySelectorAll('ul[class="nav nav-pills"] li')
   let decX = 0
