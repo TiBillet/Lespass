@@ -140,11 +140,11 @@ function moveBt (event) {
   document.querySelector('#' + ele.getAttribute('data-cible')).style.display = 'block'
 }
 
-addEventListener('resize', init)
+document.addEventListener('resize', init)
 onMounted(() => init())
 
 onBeforeUnmount(() => {
-  removeEventListener('resize', init)
+  document.removeEventListener('resize', init)
 })
 
 </script>

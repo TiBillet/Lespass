@@ -7,8 +7,9 @@
       <div id="espace" class="wizard-tab-content">
         <div class="espace-content d-flex flex-wrap justify-content-around">
           <div v-for="(espace, index) in espacesType" class="espace-card" :title="espace.description"
-            :style="cursorOff(espace.disable)" @click="changeTenantCategorie(espace.categorie)">
-            <img :src="espace.urlImage" class="espace-card-sub espace-type-img" :alt="'image - ' + espace.name">
+               :style="cursorOff(espace.disable)" @click="changeTenantCategorie(espace.categorie)">
+            <img :src="espace.urlImage" class="espace-card-sub espace-type-img"
+                 :alt="'image - ' + espace.name" loading="lazy">
             <div class="espace-card-sub d-flex flex-column justify-content-center align-content-center">
               <h5 class="card-title" :style="{color: espace.colorText}">{{ espace.name }}</h5>
             </div>
@@ -18,10 +19,51 @@
         <input type="hidden" id="tenant-categorie" value="">
       </div>
       <div id="informations" class="wizard-tab-content">
-        contenu informations
+        <div class="espace-content d-flex flex-column">
+          <div class="wizard-group">
+            <input type="text" id="wizard-organisation" class="wizard-input">
+            <label class="wizard-group-label" for="wizard-organisation">Organisation</label>
+          </div>
+          <div class="wizard-group">
+            <input type="text" id="wizard-short-description" class="wizard-input">
+            <label class="wizard-group-label" for="wizard-short-description">Courte description</label>
+          </div>
+          <div class="wizard-group">
+            <textarea id="wizard-long-description" class="wizard-input" placeholder="Votre longue description"
+                      rows="6"></textarea>
+            <label class="wizard-group-label" for="wizard-long-description">Longue description</label>
+          </div>
+          <div class="wizard-group">
+            <input type="file" id="wizard-img-url" class="wizard-input">
+            <label class="wizard-group-label" for="wizard-img-url">Url image</label>
+          </div>
+          <div class="wizard-group">
+            <input type="file" id="wizard-logo-url" class="wizard-input">
+            <label class="wizard-group-label" for="wizard-logo-url">Url logo</label>
+          </div>
+        </div>
       </div>
       <div id="validation" class="wizard-tab-content">
-        contenu validation
+        <div class="espace-content d-flex flex-column">
+          <h3>Résumé</h3>
+          <h4>.........</h4>
+          <h4>.........</h4>
+          <h4>.........</h4>
+          <p class="mt-4">Aurez vous besoin de récolter de l'argent ?
+            ( adhésion, billetterie, crowdfundind,
+            caisse enregistreuse, cashless )</p>
+          <div class="d-flex flex-row justify-content-center">
+
+            <div class="d-flex flex-row">
+              <input type="radio" id="money" name="coin" value="true">
+              <label class="h3" for="money">Oui</label>
+            </div>
+            <div class="d-flex flex-row ms-4">
+              <input type="radio" id="no-money" name="coin" value="false">
+              <label class="h3" for="no-money">Non</label>
+            </div>
+          </div>
+        </div>
       </div>
     </template>
   </WizardCreation>
@@ -39,7 +81,7 @@ const espacesType = [
     urlImage: 'https://picsum.photos/300/300',
     colorText: 'white',
     disable: false,
-    categorie: "A"
+    categorie: 'A'
   },
   {
     name: 'Lieu / association',
@@ -47,7 +89,7 @@ const espacesType = [
     urlImage: 'https://picsum.photos/300/300',
     colorText: 'white',
     disable: false,
-    categorie: "B"
+    categorie: 'S'
   },
   {
     name: 'Festival',
@@ -55,7 +97,7 @@ const espacesType = [
     urlImage: 'https://picsum.photos/300/300',
     colorText: 'white',
     disable: true,
-    categorie: "C"
+    categorie: 'C'
   },
   {
     name: 'Producteur',
@@ -63,14 +105,15 @@ const espacesType = [
     urlImage: 'https://picsum.photos/300/300',
     colorText: 'white',
     disable: true,
-    categorie: "D"
+    categorie: 'P'
   }
 ]
-function changeTenantCategorie(categorie) {
+
+function changeTenantCategorie (categorie) {
   document.querySelector('#tenant-categorie').value = categorie
 }
 
-function cursorOff(state) {
+function cursorOff (state) {
   if (state === true) {
     return ''
   } else {
@@ -111,7 +154,34 @@ function cursorOff(state) {
   min-height: var(--wizard-content-height);
   max-height: var(--wizard-content-height);
   overflow-x: hidden;
-  overflow-y: scroll;
+  overflow-y: auto;
 }
 
+.wizard-group {
+  position: relative;
+  padding: 15px 0 0;
+  margin-top: 6px;
+}
+
+.wizard-input {
+  font-family: inherit;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid #d2d2d2;
+  outline: 0;
+  font-size: 16px;
+  color: #212121;
+  padding: 7px 0;
+  background: transparent;
+  transition: border-color 0.2s;
+}
+
+.wizard-group-label {
+  position: absolute;
+  top: 0;
+  display: block;
+  transition: 0.2s;
+  font-size: 12px;
+  color: #9b9b9b;
+}
 </style>
