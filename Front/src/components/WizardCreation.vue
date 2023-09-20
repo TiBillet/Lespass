@@ -142,6 +142,7 @@ function moveBt (event) {
 
 document.addEventListener('wizardNext', (data) => {
   console.log('-> réception du msg "wizardNext" data =', data)
+  wizardPrev(data.detail.event)
 })
 
 document.addEventListener('resize', init)
