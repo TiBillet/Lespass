@@ -31,7 +31,7 @@
           </div>
           <div class="wizard-group">
             <textarea id="wizard-long-description" class="wizard-input" placeholder="Votre longue description"
-                      rows="6" v-model="formCretaePlace.long_description" rows="3"></textarea>
+                      v-model="formCretaePlace.long_description" rows="3"></textarea>
             <label class="wizard-group-label" for="wizard-long-description">Longue description</label>
           </div>
           <div class="wizard-group">
