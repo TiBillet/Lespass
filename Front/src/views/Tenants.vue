@@ -57,16 +57,16 @@
              <div class="resume-valeur">{{formCretaePlace.short_description}}</div>
            </div>
            <div class="d-flex flex-row">
-             <div class="resume-nom">Longue description</div>
+             <div class="resume-nom bg-success w-25" >Longue description</div>
              <div class="resume-valeur">{{formCretaePlace.long_description}}</div>
            </div>
            <div class="d-flex flex-row">
              <div class="resume-nom">Url de l'image</div>
-             <div class="resume-valeur">{{formCretaePlace.img_url}}</div>
+             <div class="resume-valeur">{{formCretaePlace.img_url.name}}</div>
            </div>
            <div class="d-flex flex-row">
              <div class="resume-nom">Url du logo</div>
-             <div class="resume-valeur">{{formCretaePlace.logo_url}}</div>
+             <div class="resume-valeur">{{formCretaePlace.logo_url.name}}</div>
            </div>
           <p class="mt-4">Aurez vous besoin de récolter de l'argent ?
             ( adhésion, billetterie, crowdfundind,
@@ -97,8 +97,8 @@ const formCretaePlace = {
   organisation: '',
   short_description: '',
   long_description: '',
-  img_url: '',
-  logo_url: '',
+  img_url: null,
+  logo_url: null,
   categorie: ''
 }
 const espacesType = [
