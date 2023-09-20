@@ -6,7 +6,7 @@
     <template #wizard-tabs-content>
       <div id="espace" class="wizard-tab-content">
         <div class="espace-content d-flex flex-wrap justify-content-around">
-          <div v-for="(espace, index) in espacesType" class="espace-card" :title="espace.description"
+          <div v-for="(espace, index) in espacesType" :key="index" class="espace-card" :title="espace.description"
                :style="cursorOff(espace.disable)"
                @click="changeTenantCategorie(espace.categorie);callWizardNext($event)">
             <img :src="espace.urlImage" class="espace-card-sub espace-type-img"
