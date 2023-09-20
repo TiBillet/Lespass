@@ -144,10 +144,10 @@ function moveBt (event) {
   document.querySelector('#' + ele.getAttribute('data-cible')).style.display = 'block'
 }
 
-function callWizardNext(data) {
-  console.log('-> réception du msg "wizardNext" data =', data)
+function callWizardNext() {
+  console.log('-> réception du msg "wizardNext" etape.value =', etape.value)
   const index = etape.value - 1
-  document.querySelector(`ul[class="nav nav-pills"] li[data-index="${index}"]`).click()
+  //document.querySelector(`ul[class="nav nav-pills"] li[data-index="${index}"]`).click()
 }
 document.addEventListener('wizardNext', callWizardNext)
 

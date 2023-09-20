@@ -111,7 +111,7 @@ const espacesType = [
 
 function callWizardNext(evt) {
   evt.preventDefault()
-  emitEvent('wizardNext', {event: evt})
+  emitEvent('wizardNext', {})
 }
 
 function changeTenantCategorie (categorie) {
