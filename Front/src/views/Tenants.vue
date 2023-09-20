@@ -69,19 +69,19 @@
             <div v-if="formCreatePlace.logo_url !== null" class="resume-valeur">{{ formCreatePlace.logo_url.name }}
             </div>
           </div>
-          <p class="mt-4" style="white-space: pre-line">Aurez vous besoin de récolter de l'argent ?
-            ( adhésion, billetterie, crowdfundind, caisse enregistreuse, cashless )
-          </p>
+          <h3 class="mt-4" style="white-space: pre-line">Aurez vous besoin de récolter de l'argent ?
+            (adhésion, billetterie, crowdfundind, caisse enregistreuse, cashless)
+          </h3>
 
           <div class="d-flex flex-row justify-content-center">
 
             <div class="d-flex flex-row">
               <input type="radio" id="money" name="coin" value="true">
-              <label class="h3" for="money">Oui</label>
+              <label for="money">Oui</label>
             </div>
             <div class="d-flex flex-row ms-4">
               <input type="radio" id="no-money" name="coin" value="false" checked>
-              <label class="h3" for="no-money">Non</label>
+              <label for="no-money">Non</label>
             </div>
           </div>
         </div>
@@ -92,9 +92,13 @@
 
 <script setup>
 console.log('-> Tenants.vue')
+import { useSessionStore } from "../stores/session"
 import { emitEvent } from '../communs/EmitEvent'
 import WizardCreation from '../components/WizardCreation.vue'
 
+
+const sessionStore = useSessionStore()
+const { setLoadingValue } = sessionStore
 let formCreatePlace = {
   organisation: '',
   short_description: '',
@@ -165,13 +169,42 @@ function cursorOff (state) {
 
   }
 }
+async function goStripe () {
+  // enregistre l'email dans le storeUser
+  console.log('-> goStripe Onboard')
+
+  const api = `/api/onboard/`
+  try {
+    setLoadingValue(true)
+
+    const response = await fetch( api, {
+      method: 'GET',
+      cache: 'no-cache',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+    })
+    const retour = await response.json()
+    console.log('retour =', retour)
+    if (response.status === 202) {
+      location.href = retour
+    } else {
+      throw new Error(`Erreur goStripe Onboard'`)
+    }
+  } catch (erreur) {
+    console.log('-> validerLogin, erreur :', erreur)
+    setLoadingValue(false)
+      emitter.emit('toastSend', {
+          title: 'validerLogin, erreur :',
+          contenu: erreur,
+          typeMsg: 'danger',
+          delay: 8000
+        })
+  }
+}
 
 async function validerCreationPlace () {
-
   const coin = document.querySelector('input[name="coin"]:checked').value
-
-  console.log('formCreatePlace =', formCreatePlace)
-  console.log('coin =', coin)
 
   let erreurs = []
 
@@ -195,7 +228,6 @@ async function validerCreationPlace () {
     erreurs.push(`Veuillez sélectionner un logo !`)
   }
 
-  console.log('erreurs.length =', erreurs.length)
   console.log('formCreatePlace =', formCreatePlace)
   if (erreurs.length > 0) {
     erreurs.forEach(erreur => {
@@ -207,26 +239,31 @@ async function validerCreationPlace () {
       })
     })
   } else {
-
-    try {
-      const response = await fetch('/api/place/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formCreatePlace)
-      })
-      console.log('response =', response)
-      const retour = await response.json()
-      console.log('retour =', retour)
-    } catch (error) {
-      console.log(error)
-      emitter.emit('toastSend', {
-        title: 'Erreur',
-        contenu: error,
-        typeMsg: 'danger',
-        delay: 8000
-      })
+    // nom monétaire
+    if (coin === false) {
+      try {
+        const response = await fetch('/api/place/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(formCreatePlace)
+        })
+        console.log('response =', response)
+        const retour = await response.json()
+        console.log('retour =', retour)
+      } catch (error) {
+        console.log(error)
+        emitter.emit('toastSend', {
+          title: 'Erreur',
+          contenu: error,
+          typeMsg: 'danger',
+          delay: 8000
+        })
+      }
+    } else {
+      // monétaire
+      goStripe()
     }
   }
 }
