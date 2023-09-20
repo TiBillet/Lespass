@@ -7,7 +7,8 @@
       <div id="espace" class="wizard-tab-content">
         <div class="espace-content d-flex flex-wrap justify-content-around">
           <div v-for="(espace, index) in espacesType" class="espace-card" :title="espace.description"
-               :style="cursorOff(espace.disable)" @click="changeTenantCategorie(espace.categorie)">
+               :style="cursorOff(espace.disable)" @click="changeTenantCategorie(espace.categorie)"
+          @click="wizardNext($event)">
             <img :src="espace.urlImage" class="espace-card-sub espace-type-img"
                  :alt="'image - ' + espace.name" loading="lazy">
             <div class="espace-card-sub d-flex flex-column justify-content-center align-content-center">
@@ -70,7 +71,6 @@
 </template>
 
 <script setup>
-
 console.log('-> Tenants.vue')
 import WizardCreation from '../components/WizardCreation.vue'
 
