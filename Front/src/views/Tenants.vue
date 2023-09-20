@@ -69,9 +69,10 @@
             <div v-if="formCreatePlace.logo_url !== null" class="resume-valeur">{{ formCreatePlace.logo_url.name }}
             </div>
           </div>
-          <p class="mt-4">Aurez vous besoin de récolter de l'argent ?
+          <p class="mt-4" style="white-space: pre-line">Aurez vous besoin de récolter de l'argent ?
             ( adhésion, billetterie, crowdfundind, caisse enregistreuse, cashless )
           </p>
+
           <div class="d-flex flex-row justify-content-center">
 
             <div class="d-flex flex-row">
@@ -174,7 +175,6 @@ async function validerCreationPlace () {
 
   let erreurs = []
 
-
   if (formCreatePlace.categorie === '') {
     erreurs.push('Aucun type d\'espace n\'a été Selectionné !')
   }
@@ -195,7 +195,6 @@ async function validerCreationPlace () {
     erreurs.push(`Veuillez sélectionner un logo !`)
   }
 
-
   console.log('erreurs.length =', erreurs.length)
   console.log('formCreatePlace =', formCreatePlace)
   if (erreurs.length > 0) {
@@ -207,28 +206,28 @@ async function validerCreationPlace () {
         delay: 6000
       })
     })
-    return
-  }
+  } else {
 
-  try {
-    const response = await fetch('/api/place/', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(formCreatePlace)
-    })
-    console.log('response =', response)
-    const retour = await response.json()
-    console.log('retour =', retour)
-  } catch (error) {
-    console.log(error)
-    emitter.emit('toastSend', {
-      title: 'Erreur',
-      contenu: error,
-      typeMsg: 'danger',
-      delay: 8000
-    })
+    try {
+      const response = await fetch('/api/place/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(formCreatePlace)
+      })
+      console.log('response =', response)
+      const retour = await response.json()
+      console.log('retour =', retour)
+    } catch (error) {
+      console.log(error)
+      emitter.emit('toastSend', {
+        title: 'Erreur',
+        contenu: error,
+        typeMsg: 'danger',
+        delay: 8000
+      })
+    }
   }
 }
 
