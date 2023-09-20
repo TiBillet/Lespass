@@ -7,7 +7,8 @@
       <div id="espace" class="wizard-tab-content">
         <div class="espace-content d-flex flex-wrap justify-content-around">
           <div v-for="(espace, index) in espacesType" class="espace-card" :title="espace.description"
-               :style="cursorOff(espace.disable)" @click="changeTenantCategorie(espace.categorie);callWizardNext($event)">
+               :style="cursorOff(espace.disable)"
+               @click="changeTenantCategorie(espace.categorie);callWizardNext($event)">
             <img :src="espace.urlImage" class="espace-card-sub espace-type-img"
                  :alt="'image - ' + espace.name" loading="lazy">
             <div class="espace-card-sub d-flex flex-column justify-content-center align-content-center">
@@ -16,39 +17,57 @@
             <div v-if="espace.disable" class="espace-card-sub bg-dark opacity-5"></div>
           </div>
         </div>
-        <input type="hidden" id="tenant-categorie" value="">
+        <input type="hidden" id="tenant-categorie" v-model="formCretaePlace.categorie">
       </div>
       <div id="informations" class="wizard-tab-content">
         <div class="espace-content d-flex flex-column">
           <div class="wizard-group">
-            <input type="text" id="wizard-organisation" class="wizard-input">
+            <input type="text" id="wizard-organisation" class="wizard-input" v-model="formCretaePlace.organisation">
             <label class="wizard-group-label" for="wizard-organisation">Organisation</label>
           </div>
           <div class="wizard-group">
-            <input type="text" id="wizard-short-description" class="wizard-input">
+            <input type="text" id="wizard-short-description" class="wizard-input" v-model="formCretaePlace.short_description">
             <label class="wizard-group-label" for="wizard-short-description">Courte description</label>
           </div>
           <div class="wizard-group">
             <textarea id="wizard-long-description" class="wizard-input" placeholder="Votre longue description"
-                      rows="6"></textarea>
+                      rows="6" v-model="formCretaePlace.long_description"></textarea>
             <label class="wizard-group-label" for="wizard-long-description">Longue description</label>
           </div>
           <div class="wizard-group">
-            <input type="file" id="wizard-img-url" class="wizard-input">
+            <input type="file" id="wizard-img-url" class="wizard-input" v-model="formCretaePlace.img_url">
             <label class="wizard-group-label" for="wizard-img-url">Url image</label>
           </div>
           <div class="wizard-group">
-            <input type="file" id="wizard-logo-url" class="wizard-input">
+            <input type="file" id="wizard-logo-url" class="wizard-input" v-model="formCretaePlace.logo_url">
             <label class="wizard-group-label" for="wizard-logo-url">Url logo</label>
           </div>
         </div>
       </div>
       <div id="validation" class="wizard-tab-content">
         <div class="espace-content d-flex flex-column">
-          <h3>Résumé</h3>
-          <h4>.........</h4>
-          <h4>.........</h4>
-          <h4>.........</h4>
+          <h3>Résumé :</h3>
+           <div class="d-flex flex-row">
+             <div class="resume-nom">organisation</div>
+             <div class="resume-valeur">{{formCretaePlace.organisation}}</div>
+           </div>
+
+           <div class="d-flex flex-row">
+             <div class="resume-nom">Coute description</div>
+             <div class="resume-valeur">{{formCretaePlace.short_description}}</div>
+           </div>
+           <div class="d-flex flex-row">
+             <div class="resume-nom">Longue description</div>
+             <div class="resume-valeur">{{formCretaePlace.long_description}}</div>
+           </div>
+           <div class="d-flex flex-row">
+             <div class="resume-nom">Url de l'image</div>
+             <div class="resume-valeur">{{formCretaePlace.img_url}}</div>
+           </div>
+           <div class="d-flex flex-row">
+             <div class="resume-nom">Url du logo</div>
+             <div class="resume-valeur">{{formCretaePlace.logo_url}}</div>
+           </div>
           <p class="mt-4">Aurez vous besoin de récolter de l'argent ?
             ( adhésion, billetterie, crowdfundind,
             caisse enregistreuse, cashless )</p>
@@ -71,9 +90,17 @@
 
 <script setup>
 console.log('-> Tenants.vue')
-import { emitEvent } from "../communs/EmitEvent"
+import { emitEvent } from '../communs/EmitEvent'
 import WizardCreation from '../components/WizardCreation.vue'
 
+const formCretaePlace = {
+  organisation: '',
+  short_description: '',
+  long_description: '',
+  img_url: '',
+  logo_url: '',
+  categorie: ''
+}
 const espacesType = [
   {
     name: 'Artistique',
@@ -109,7 +136,7 @@ const espacesType = [
   }
 ]
 
-function callWizardNext(evt) {
+function callWizardNext (evt) {
   evt.preventDefault()
   emitEvent('wizardNext', {})
 }
