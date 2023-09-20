@@ -62,11 +62,11 @@
            </div>
            <div class="d-flex flex-row">
              <div class="resume-nom">Url de l'image</div>
-             <div class="resume-valeur">{{formCretaePlace.img_url.name}}</div>
+             <div v-if="formCretaePlace.img_url !== null" class="resume-valeur">{{formCretaePlace.img_url.name}}</div>
            </div>
            <div class="d-flex flex-row">
              <div class="resume-nom">Url du logo</div>
-             <div class="resume-valeur">{{formCretaePlace.logo_url.name}}</div>
+             <div v-if="formCretaePlace.logo_url !== null" class="resume-valeur">{{formCretaePlace.logo_url.name}}</div>
            </div>
           <p class="mt-4">Aurez vous besoin de récolter de l'argent ?
             ( adhésion, billetterie, crowdfundind,
