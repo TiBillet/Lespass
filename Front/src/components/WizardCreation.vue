@@ -27,7 +27,7 @@
 
           <div class="d-flex wizard-footer">
             <div class="w-50 d-flex flex-column">
-              <button v-if="etape > 0" class="btn btn-wizard btn-previous align-self-start" @click="wizardPrev()">
+              <button v-if="etape > 0" class="btn btn-wizard btn-previous align-self-start" @click="wizardPrev($event)">
                 Previous
               </button>
             </div>
