@@ -49,12 +49,12 @@
         <div class="espace-content d-flex flex-column">
           <h3>Résumé :</h3>
           <div class="d-flex flex-row">
-            <div class="resume-nom">organisation</div>
+            <div class="resume-nom w-25 align-items-start">organisation</div>
             <div class="resume-valeur">{{ formCretaePlace.organisation }}</div>
           </div>
 
           <div class="d-flex flex-row">
-            <div class="resume-nom">Coute description</div>
+            <div class="resume-nom w-25 align-items-start">Coute description</div>
             <div class="resume-valeur">{{ formCretaePlace.short_description }}</div>
           </div>
           <div class="d-flex flex-row">
@@ -62,11 +62,11 @@
             <div class="resume-valeur">{{ formCretaePlace.long_description }}</div>
           </div>
           <div class="d-flex flex-row">
-            <div class="resume-nom">Url de l'image</div>
+            <div class="resume-nom w-25 align-items-start">Url de l'image</div>
             <div v-if="formCretaePlace.img_url !== null" class="resume-valeur">{{ formCretaePlace.img_url.name }}</div>
           </div>
           <div class="d-flex flex-row">
-            <div class="resume-nom">Url du logo</div>
+            <div class="resume-nom w-25 align-items-start">Url du logo</div>
             <div v-if="formCretaePlace.logo_url !== null" class="resume-valeur">{{ formCretaePlace.logo_url.name }}
             </div>
           </div>
@@ -95,7 +95,7 @@ console.log('-> Tenants.vue')
 import { emitEvent } from '../communs/EmitEvent'
 import WizardCreation from '../components/WizardCreation.vue'
 
-const formCretaePlace = {
+let formCretaePlace = {
   organisation: '',
   short_description: '',
   long_description: '',
@@ -169,7 +169,7 @@ function cursorOff (state) {
 function validerCreationPlace () {
   const coin = document.querySelector('input[name="coin"]:checked').value;
 
-  console.log('formCretaePlace =', JSON.stringify(formCretaePlace, null, 2))
+  console.log('formCretaePlace =', formCretaePlace)
   console.log('coin =', coin)
 }
 
