@@ -31,7 +31,7 @@
           </div>
           <div class="wizard-group">
             <textarea id="wizard-long-description" class="wizard-input" placeholder="Votre longue description"
-                      rows="6" v-model="formCretaePlace.long_description"></textarea>
+                      rows="6" v-model="formCretaePlace.long_description" rows="3"></textarea>
             <label class="wizard-group-label" for="wizard-long-description">Longue description</label>
           </div>
           <div class="wizard-group">
@@ -79,7 +79,7 @@
               <label class="h3" for="money">Oui</label>
             </div>
             <div class="d-flex flex-row ms-4">
-              <input type="radio" id="no-money" name="coin" value="false">
+              <input type="radio" id="no-money" name="coin" value="false" checked>
               <label class="h3" for="no-money">Non</label>
             </div>
           </div>
