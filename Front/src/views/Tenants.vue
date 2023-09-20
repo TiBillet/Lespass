@@ -165,43 +165,78 @@ function cursorOff (state) {
   }
 }
 
-function validerCreationPlace () {
+async function validerCreationPlace () {
 
-    const coin = document.querySelector('input[name="coin"]:checked').value
+  const coin = document.querySelector('input[name="coin"]:checked').value
 
-    console.log('formCretaePlace =', formCretaePlace)
-    console.log('coin =', coin)
+  console.log('formCretaePlace =', formCretaePlace)
+  console.log('coin =', coin)
 
-    let erreurs = ['test erreur']
+  let erreurs = []
 
-  console.log('erreurs.lenght =', erreurs.lenght)
+  /*
+  organisation: '',
+  short_description: '',
+  long_description: '',
+  img_url: null,
+  logo_url: null,
+  categorie: ''
+   */
+  if (formCretaePlace.categorie === '') {
+    erreurs.push('Aucun type d\'espace n\'a été Selectionné !')
+  }
 
-    if (erreurs.lenght > 0) {
-      erreurs.forEach(erreur => {
-              emitter.emit('toastSend', {
-          title: 'Attention',
-          contenu: erreur,
-          typeMsg: 'warning',
-          delay: 6000
-        })
+  if (formCretaePlace.organisation === '') {
+    erreurs.push(`Votre "organistation" n'a pas été renseignée !`)
+  }
 
+  if (formCretaePlace.short_description === '') {
+    erreurs.push(`La courte description doit être renseignée !`)
+  }
+
+  if (formCretaePlace.img_url !== null) {
+    erreurs.push(`Veuillez sélectionner une image !`)
+  }
+
+  if (formCretaePlace.logo_url !== null) {
+    erreurs.push(`Veuillez sélectionner un logo !`)
+  }
+
+
+  console.log('erreurs.length =', erreurs.length)
+  if (erreurs.length > 0) {
+    erreurs.forEach(erreur => {
+      emitter.emit('toastSend', {
+        title: 'Attention',
+        contenu: erreur,
+        typeMsg: 'warning',
+        delay: 6000
       })
-      return
-    }
 
-       // Add the file to the FormData object
+    })
+    return
+  }
 
-
-      // Send a POST request
-      fetch('/api/place/', {
-        method: 'POST',
-        body: JSON.stringify(formCretaePlace)
-      })
-        .then(res => res.json())
-        .then(json => console.log(json))
-        .catch(err => console.error(err))
-
-
+  try {
+    const response = await fetch('/api/place/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(formCretaePlace)
+    })
+    console.log('response =', response)
+    const retour = await response.json()
+    console.log('retour =', retour)
+  } catch (error) {
+    console.log(error)
+    emitter.emit('toastSend', {
+      title: 'Erreur',
+      contenu: error,
+      typeMsg: 'danger',
+      delay: 8000
+    })
+  }
 }
 
 document.addEventListener('validerCreationPlace', validerCreationPlace)
