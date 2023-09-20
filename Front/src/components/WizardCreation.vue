@@ -146,9 +146,10 @@ function moveBt (event) {
 
 function callWizardNext() {
   console.log('-> réception du msg "wizardNext" etape.value =', etape.value)
-  const index = etape.value - 1
-  //document.querySelector(`ul[class="nav nav-pills"] li[data-index="${index}"]`).click()
+  const index = etape.value + 1
+  document.querySelector(`ul[class="nav nav-pills"] li[data-index="${index}"]`).click()
 }
+
 document.addEventListener('wizardNext', callWizardNext)
 
 document.addEventListener('resize', init)
