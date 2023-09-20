@@ -104,6 +104,10 @@ function getNbItemNav () {
 }
 
 function wizardNext (evt) {
+  console.log('-> wizardNext :')
+  console.log('evt =', evt)
+  console.log('etape.value =', etape.value)
+
   evt.preventDefault()
   const index = etape.value + 1
   document.querySelector(`ul[class="nav nav-pills"] li[data-index="${index}"]`).click()
