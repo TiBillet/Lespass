@@ -28,15 +28,16 @@
           <div class="d-flex wizard-footer">
             <div class="w-50 d-flex flex-column">
               <button v-if="etape > 0" class="btn btn-wizard btn-previous align-self-start" @click="wizardPrev($event)">
-                Previous
+                Précédant
               </button>
             </div>
             <div class="w-50  d-flex flex-column">
               <button v-if="etape <= 1" type="button" class="btn btn-wizard btn-primary align-self-end"
-                      @click="wizardNext($event)">Next
+                      @click="wizardNext($event)">Suivant
               </button>
               <button v-if="etape === (getNbItemNav() - 1)" type="button"
-                      class="btn btn-wizard btn-primary align-self-end">Finish
+                      class="btn btn-wizard btn-primary align-self-end" @click="emitEvent('validerCreationPlace', {})">
+                Valider
               </button>
             </div>
 
@@ -51,6 +52,7 @@
 console.log('-> WizardCreation.vue')
 
 import { onMounted, onBeforeUnmount, ref } from 'vue'
+import { emitEvent } from '../communs/EmitEvent'
 import { useSessionStore } from '@/stores/session'
 
 // material-bootstrap-wizard
@@ -93,7 +95,7 @@ function init () {
       // text du bouton mobile
       document.querySelector('div[class~="bt-tab"]').innerText = name.toUpperCase()
       element.style.display = 'block'
-    } else  {
+    } else {
       element.style.display = 'none'
     }
   }
@@ -144,7 +146,7 @@ function moveBt (event) {
   document.querySelector('#' + ele.getAttribute('data-cible')).style.display = 'block'
 }
 
-function callWizardNext() {
+function callWizardNext () {
   const index = etape.value + 1
   document.querySelector(`ul[class="nav nav-pills"] li[data-index="${index}"]`).click()
 }

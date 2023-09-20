@@ -26,7 +26,8 @@
             <label class="wizard-group-label" for="wizard-organisation">Organisation</label>
           </div>
           <div class="wizard-group">
-            <input type="text" id="wizard-short-description" class="wizard-input" v-model="formCretaePlace.short_description">
+            <input type="text" id="wizard-short-description" class="wizard-input"
+                   v-model="formCretaePlace.short_description">
             <label class="wizard-group-label" for="wizard-short-description">Courte description</label>
           </div>
           <div class="wizard-group">
@@ -47,27 +48,28 @@
       <div id="validation" class="wizard-tab-content">
         <div class="espace-content d-flex flex-column">
           <h3>Résumé :</h3>
-           <div class="d-flex flex-row">
-             <div class="resume-nom">organisation</div>
-             <div class="resume-valeur">{{formCretaePlace.organisation}}</div>
-           </div>
+          <div class="d-flex flex-row">
+            <div class="resume-nom">organisation</div>
+            <div class="resume-valeur">{{ formCretaePlace.organisation }}</div>
+          </div>
 
-           <div class="d-flex flex-row">
-             <div class="resume-nom">Coute description</div>
-             <div class="resume-valeur">{{formCretaePlace.short_description}}</div>
-           </div>
-           <div class="d-flex flex-row">
-             <div class="resume-nom bg-success w-25" >Longue description</div>
-             <div class="resume-valeur">{{formCretaePlace.long_description}}</div>
-           </div>
-           <div class="d-flex flex-row">
-             <div class="resume-nom">Url de l'image</div>
-             <div v-if="formCretaePlace.img_url !== null" class="resume-valeur">{{formCretaePlace.img_url.name}}</div>
-           </div>
-           <div class="d-flex flex-row">
-             <div class="resume-nom">Url du logo</div>
-             <div v-if="formCretaePlace.logo_url !== null" class="resume-valeur">{{formCretaePlace.logo_url.name}}</div>
-           </div>
+          <div class="d-flex flex-row">
+            <div class="resume-nom">Coute description</div>
+            <div class="resume-valeur">{{ formCretaePlace.short_description }}</div>
+          </div>
+          <div class="d-flex flex-row">
+            <div class="resume-nom bg-success w-25">Longue description</div>
+            <div class="resume-valeur">{{ formCretaePlace.long_description }}</div>
+          </div>
+          <div class="d-flex flex-row">
+            <div class="resume-nom">Url de l'image</div>
+            <div v-if="formCretaePlace.img_url !== null" class="resume-valeur">{{ formCretaePlace.img_url.name }}</div>
+          </div>
+          <div class="d-flex flex-row">
+            <div class="resume-nom">Url du logo</div>
+            <div v-if="formCretaePlace.logo_url !== null" class="resume-valeur">{{ formCretaePlace.logo_url.name }}
+            </div>
+          </div>
           <p class="mt-4">Aurez vous besoin de récolter de l'argent ?
             ( adhésion, billetterie, crowdfundind,
             caisse enregistreuse, cashless )</p>
@@ -136,7 +138,7 @@ const espacesType = [
   }
 ]
 
-function fileChange(evt, typeFile) {
+function fileChange (evt, typeFile) {
   if (typeFile === 'image') {
     formCretaePlace.img_url = evt.target.files[0]
   }
@@ -163,6 +165,15 @@ function cursorOff (state) {
 
   }
 }
+
+function validerCreationPlace () {
+  const coin = document.querySelector('input[name="coin"]:checked').value;
+
+  console.log('formCretaePlace =', JSON.stringify(formCretaePlace, null, 2))
+  console.log('coin =', coin)
+}
+
+document.addEventListener('validerCreationPlace', validerCreationPlace)
 </script>
 <style scoped>
 .wizard-tab-content {
