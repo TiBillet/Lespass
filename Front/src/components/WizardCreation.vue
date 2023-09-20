@@ -27,7 +27,7 @@
 
           <div class="d-flex wizard-footer">
             <div class="w-50 d-flex flex-column">
-              <button v-if="etape > 0" class="btn btn-wizard btn-previous align-self-start" @click="wizardPrev($event)">
+              <button v-if="etape > 0" class="btn btn-wizard btn-previous align-self-start" @click="wizardPrev()">
                 Previous
               </button>
             </div>
@@ -109,8 +109,8 @@ function wizardNext (evt) {
   document.querySelector(`ul[class="nav nav-pills"] li[data-index="${index}"]`).click()
 }
 
-function wizardPrev (evt) {
-  evt.preventDefault()
+function wizardPrev () {
+  // evt.preventDefault()
   const index = etape.value - 1
   document.querySelector(`ul[class="nav nav-pills"] li[data-index="${index}"]`).click()
 }
@@ -142,7 +142,7 @@ function moveBt (event) {
 
 document.addEventListener('wizardNext', (data) => {
   console.log('-> réception du msg "wizardNext" data =', data)
-  wizardPrev(data.detail.event)
+  wizardPrev()
 })
 
 document.addEventListener('resize', init)
