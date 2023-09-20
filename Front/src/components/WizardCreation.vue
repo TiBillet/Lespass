@@ -142,7 +142,7 @@ function moveBt (event) {
 
 function callWizardNext(data) {
   console.log('-> réception du msg "wizardNext" data =', data)
-  wizardPrev(data.details.event)
+  wizardPrev(data.detail.event)
 }
 document.addEventListener('wizardNext', callWizardNext)
 
