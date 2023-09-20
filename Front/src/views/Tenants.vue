@@ -184,6 +184,7 @@ function validerCreationPlace () {
         })
 
       })
+      return
     }
       // Add the file to the FormData object
       let fd = new FormData()
