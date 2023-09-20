@@ -174,6 +174,8 @@ function validerCreationPlace () {
 
     let erreurs = ['test erreur']
 
+  console.log('erreurs.lenght =', erreurs.lenght)
+
     if (erreurs.lenght > 0) {
       erreurs.forEach(erreur => {
               emitter.emit('toastSend', {
@@ -186,19 +188,14 @@ function validerCreationPlace () {
       })
       return
     }
-      // Add the file to the FormData object
-      let fd = new FormData()
-      fd.append('organisation', formCretaePlace.organisation)
-      fd.append('short_description', formCretaePlace.short_description)
-      fd.append('long_description', formCretaePlace.long_description)
-      fd.append('img_url', formCretaePlace.img_url)
-      fd.append('img_url', formCretaePlace.logo_url)
-      fd.append('categorie', formCretaePlace.categorie)
+
+       // Add the file to the FormData object
+
 
       // Send a POST request
-      fetch('/upload-avatar', {
+      fetch('/api/place/', {
         method: 'POST',
-        body: fd
+        body: JSON.stringify(formCretaePlace)
       })
         .then(res => res.json())
         .then(json => console.log(json))
