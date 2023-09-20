@@ -71,6 +71,7 @@
 
 <script setup>
 console.log('-> Tenants.vue')
+import { emitEvent } from "../communs/EmitEvent"
 import WizardCreation from '../components/WizardCreation.vue'
 
 const espacesType = [
@@ -107,6 +108,10 @@ const espacesType = [
     categorie: 'P'
   }
 ]
+
+function callWizardNext(evt) {
+  emitEvent('wizardNext', {event: evt})
+}
 
 function changeTenantCategorie (categorie) {
   document.querySelector('#tenant-categorie').value = categorie

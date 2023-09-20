@@ -140,6 +140,10 @@ function moveBt (event) {
   document.querySelector('#' + ele.getAttribute('data-cible')).style.display = 'block'
 }
 
+document.addEventListener('wizardNext', (data) => {
+  console.log('-> réception du msg "wizardNext" data =', data)
+})
+
 document.addEventListener('resize', init)
 onMounted(() => init())
 
