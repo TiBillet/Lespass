@@ -17,7 +17,6 @@
             <div v-if="espace.disable" class="espace-card-sub bg-dark opacity-5"></div>
           </div>
         </div>
-        <input type="hidden" id="tenant-categorie" v-model="formCretaePlace.categorie">
       </div>
       <div id="informations" class="wizard-tab-content">
         <div class="espace-content d-flex flex-column">
@@ -58,7 +57,7 @@
             <div class="resume-valeur">{{ formCretaePlace.short_description }}</div>
           </div>
           <div class="d-flex flex-row">
-            <div class="resume-nom bg-success w-25">Longue description</div>
+            <div class="d-flex align-items-start bg-success w-25">Longue description</div>
             <div class="resume-valeur">{{ formCretaePlace.long_description }}</div>
           </div>
           <div class="d-flex flex-row">
@@ -154,7 +153,7 @@ function callWizardNext (evt) {
 }
 
 function changeTenantCategorie (categorie) {
-  document.querySelector('#tenant-categorie').value = categorie
+  formCretaePlace.categorie = categorie
 }
 
 function cursorOff (state) {
