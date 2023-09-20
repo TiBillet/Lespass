@@ -21,17 +21,17 @@
       <div id="informations" class="wizard-tab-content">
         <div class="espace-content d-flex flex-column">
           <div class="wizard-group">
-            <input type="text" id="wizard-organisation" class="wizard-input" v-model="formCretaePlace.organisation">
+            <input type="text" id="wizard-organisation" class="wizard-input" v-model="formCreatePlace.organisation">
             <label class="wizard-group-label" for="wizard-organisation">Organisation</label>
           </div>
           <div class="wizard-group">
             <input type="text" id="wizard-short-description" class="wizard-input"
-                   v-model="formCretaePlace.short_description">
+                   v-model="formCreatePlace.short_description">
             <label class="wizard-group-label" for="wizard-short-description">Courte description</label>
           </div>
           <div class="wizard-group">
             <textarea id="wizard-long-description" class="wizard-input" placeholder="Votre longue description"
-                      v-model="formCretaePlace.long_description" rows="3"></textarea>
+                      v-model="formCreatePlace.long_description" rows="3"></textarea>
             <label class="wizard-group-label" for="wizard-long-description">Longue description</label>
           </div>
           <div class="wizard-group">
@@ -49,24 +49,24 @@
           <h3>Résumé</h3>
           <div class="d-flex flex-row">
             <div class="d-flex align-items-start w-25">organisation</div>
-            <div class="resume-valeur">{{ formCretaePlace.organisation }}</div>
+            <div class="resume-valeur">{{ formCreatePlace.organisation }}</div>
           </div>
 
           <div class="d-flex flex-row">
             <div class="d-flex align-items-start w-25">Coute description</div>
-            <div class="resume-valeur">{{ formCretaePlace.short_description }}</div>
+            <div class="resume-valeur">{{ formCreatePlace.short_description }}</div>
           </div>
           <div class="d-flex flex-row">
             <div class="d-flex align-items-start w-25">Longue description</div>
-            <div class="resume-valeur">{{ formCretaePlace.long_description }}</div>
+            <div class="resume-valeur">{{ formCreatePlace.long_description }}</div>
           </div>
           <div class="d-flex flex-row">
             <div class="d-flex align-items-start w-25">Url de l'image</div>
-            <div v-if="formCretaePlace.img_url !== null" class="resume-valeur">{{ formCretaePlace.img_url.name }}</div>
+            <div v-if="formCreatePlace.img_url !== null" class="resume-valeur">{{ formCreatePlace.img_url.name }}</div>
           </div>
           <div class="d-flex flex-row">
             <div class="d-flex align-items-start w-25">Url du logo</div>
-            <div v-if="formCretaePlace.logo_url !== null" class="resume-valeur">{{ formCretaePlace.logo_url.name }}
+            <div v-if="formCreatePlace.logo_url !== null" class="resume-valeur">{{ formCreatePlace.logo_url.name }}
             </div>
           </div>
           <p class="mt-4">Aurez vous besoin de récolter de l'argent ?
@@ -94,7 +94,7 @@ console.log('-> Tenants.vue')
 import { emitEvent } from '../communs/EmitEvent'
 import WizardCreation from '../components/WizardCreation.vue'
 
-let formCretaePlace = {
+let formCreatePlace = {
   organisation: '',
   short_description: '',
   long_description: '',
@@ -139,10 +139,10 @@ const espacesType = [
 
 function fileChange (evt, typeFile) {
   if (typeFile === 'image') {
-    formCretaePlace.img_url = evt.target.files[0]
+    formCreatePlace.img_url = evt.target.files[0]
   }
   if (typeFile === 'logo') {
-    formCretaePlace.logo_url = evt.target.files[0]
+    formCreatePlace.logo_url = evt.target.files[0]
   }
 
 }
@@ -153,7 +153,7 @@ function callWizardNext (evt) {
 }
 
 function changeTenantCategorie (categorie) {
-  formCretaePlace.categorie = categorie
+  formCreatePlace.categorie = categorie
 }
 
 function cursorOff (state) {
@@ -169,41 +169,35 @@ async function validerCreationPlace () {
 
   const coin = document.querySelector('input[name="coin"]:checked').value
 
-  console.log('formCretaePlace =', formCretaePlace)
+  console.log('formCreatePlace =', formCreatePlace)
   console.log('coin =', coin)
 
   let erreurs = []
 
-  /*
-  organisation: '',
-  short_description: '',
-  long_description: '',
-  img_url: null,
-  logo_url: null,
-  categorie: ''
-   */
-  if (formCretaePlace.categorie === '') {
+
+  if (formCreatePlace.categorie === '') {
     erreurs.push('Aucun type d\'espace n\'a été Selectionné !')
   }
 
-  if (formCretaePlace.organisation === '') {
+  if (formCreatePlace.organisation === '') {
     erreurs.push(`Votre "organistation" n'a pas été renseignée !`)
   }
 
-  if (formCretaePlace.short_description === '') {
+  if (formCreatePlace.short_description === '') {
     erreurs.push(`La courte description doit être renseignée !`)
   }
 
-  if (formCretaePlace.img_url !== null) {
+  if (formCreatePlace.img_url !== null) {
     erreurs.push(`Veuillez sélectionner une image !`)
   }
 
-  if (formCretaePlace.logo_url !== null) {
+  if (formCreatePlace.logo_url !== null) {
     erreurs.push(`Veuillez sélectionner un logo !`)
   }
 
 
   console.log('erreurs.length =', erreurs.length)
+  console.log('formCreatePlace =', formCreatePlace)
   if (erreurs.length > 0) {
     erreurs.forEach(erreur => {
       emitter.emit('toastSend', {
@@ -212,7 +206,6 @@ async function validerCreationPlace () {
         typeMsg: 'warning',
         delay: 6000
       })
-
     })
     return
   }
@@ -223,7 +216,7 @@ async function validerCreationPlace () {
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(formCretaePlace)
+      body: JSON.stringify(formCreatePlace)
     })
     console.log('response =', response)
     const retour = await response.json()
