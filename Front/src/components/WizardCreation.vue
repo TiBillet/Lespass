@@ -109,8 +109,8 @@ function wizardNext (evt) {
   document.querySelector(`ul[class="nav nav-pills"] li[data-index="${index}"]`).click()
 }
 
-function wizardPrev () {
-  // evt.preventDefault()
+function wizardPrev (evt) {
+  evt.preventDefault()
   const index = etape.value - 1
   document.querySelector(`ul[class="nav nav-pills"] li[data-index="${index}"]`).click()
 }
@@ -140,16 +140,18 @@ function moveBt (event) {
   document.querySelector('#' + ele.getAttribute('data-cible')).style.display = 'block'
 }
 
-document.addEventListener('wizardNext', (data) => {
+function callWizardNext(data) {
   console.log('-> réception du msg "wizardNext" data =', data)
-  wizardPrev()
-})
+  wizardPrev(data.details.event)
+}
+document.addEventListener('wizardNext', callWizardNext)
 
 document.addEventListener('resize', init)
 onMounted(() => init())
 
 onBeforeUnmount(() => {
   document.removeEventListener('resize', init)
+  document.removeEventListener('wizardNext', callWizardNext)
 })
 
 </script>
