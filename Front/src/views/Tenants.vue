@@ -35,11 +35,11 @@
             <label class="wizard-group-label" for="wizard-long-description">Longue description</label>
           </div>
           <div class="wizard-group">
-            <input type="file" id="wizard-img-url" class="wizard-input" v-model="formCretaePlace.img_url">
+            <input type="file" id="wizard-img-url" class="wizard-input" @change="fileChange($event, 'image')">
             <label class="wizard-group-label" for="wizard-img-url">Url image</label>
           </div>
           <div class="wizard-group">
-            <input type="file" id="wizard-logo-url" class="wizard-input" v-model="formCretaePlace.logo_url">
+            <input type="file" id="wizard-logo-url" class="wizard-input" @change="fileChange($event, 'logo')">
             <label class="wizard-group-label" for="wizard-logo-url">Url logo</label>
           </div>
         </div>
@@ -135,6 +135,16 @@ const espacesType = [
     categorie: 'P'
   }
 ]
+
+function fileChange(evt, typeFile) {
+  if (typeFile === 'image') {
+    formCretaePlace.img_url = evt.target.files[0]
+  }
+  if (typeFile === 'logo') {
+    formCretaePlace.logo_url = evt.target.files[0]
+  }
+
+}
 
 function callWizardNext (evt) {
   evt.preventDefault()
