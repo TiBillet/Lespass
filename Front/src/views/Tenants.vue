@@ -187,11 +187,11 @@ async function validerCreationPlace () {
     erreurs.push(`La courte description doit être renseignée !`)
   }
 
-  if (formCreatePlace.img_url !== null) {
+  if (formCreatePlace.img_url === null) {
     erreurs.push(`Veuillez sélectionner une image !`)
   }
 
-  if (formCreatePlace.logo_url !== null) {
+  if (formCreatePlace.logo_url === null) {
     erreurs.push(`Veuillez sélectionner un logo !`)
   }
 
