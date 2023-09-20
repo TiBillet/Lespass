@@ -166,10 +166,44 @@ function cursorOff (state) {
 }
 
 function validerCreationPlace () {
-  const coin = document.querySelector('input[name="coin"]:checked').value;
 
-  console.log('formCretaePlace =', formCretaePlace)
-  console.log('coin =', coin)
+    const coin = document.querySelector('input[name="coin"]:checked').value
+
+    console.log('formCretaePlace =', formCretaePlace)
+    console.log('coin =', coin)
+
+    let erreurs = ['test erreur']
+
+    if (erreurs.lenght > 0) {
+      erreurs.forEach(erreur => {
+              emitter.emit('toastSend', {
+          title: 'Attention',
+          contenu: erreur,
+          typeMsg: 'warning',
+          delay: 6000
+        })
+
+      })
+    }
+      // Add the file to the FormData object
+      let fd = new FormData()
+      fd.append('organisation', formCretaePlace.organisation)
+      fd.append('short_description', formCretaePlace.short_description)
+      fd.append('long_description', formCretaePlace.long_description)
+      fd.append('img_url', formCretaePlace.img_url)
+      fd.append('img_url', formCretaePlace.logo_url)
+      fd.append('categorie', formCretaePlace.categorie)
+
+      // Send a POST request
+      fetch('/upload-avatar', {
+        method: 'POST',
+        body: fd
+      })
+        .then(res => res.json())
+        .then(json => console.log(json))
+        .catch(err => console.error(err))
+
+
 }
 
 document.addEventListener('validerCreationPlace', validerCreationPlace)
