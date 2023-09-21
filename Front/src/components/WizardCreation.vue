@@ -1,6 +1,6 @@
 <template>
-  <div class="container-fluid vw-100 vh-100 d-flex justify-content-center align-items-center"
-       :style="`background-image: url('${wizardBackground}');background-repeat:no-repeat;background-size:100% 100%;`">
+    <div class="container-fluid vw-100 vh-100 d-flex justify-content-center align-items-center"
+       :style="`background-image: url('${wizardBackground}');background-position:50% 50%;background-size:cover`">
     <div class="container">
       <div class="card wizard-card" data-color="red">
         <form action="" method="">

@@ -204,6 +204,7 @@ async function goStripe () {
 }
 
 async function validerCreationPlace () {
+  // coin est de type string
   const coin = document.querySelector('input[name="coin"]:checked').value
 
   let erreurs = []
@@ -228,7 +229,6 @@ async function validerCreationPlace () {
     erreurs.push(`Veuillez sélectionner un logo !`)
   }
 
-  console.log('formCreatePlace =', formCreatePlace)
   if (erreurs.length > 0) {
     erreurs.forEach(erreur => {
       emitter.emit('toastSend', {
@@ -240,7 +240,8 @@ async function validerCreationPlace () {
     })
   } else {
     // nom monétaire
-    if (coin === false) {
+    if (coin === 'false') {
+      console.log('choix non monétaire.')
       try {
         const response = await fetch('/api/place/', {
           method: 'POST',
@@ -263,7 +264,8 @@ async function validerCreationPlace () {
       }
     } else {
       // monétaire
-      goStripe()
+      console.log('choix monétaire: stripe')
+      // goStripe()
     }
   }
 }
