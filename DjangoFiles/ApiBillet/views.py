@@ -218,22 +218,22 @@ class TenantViewSet(viewsets.ViewSet):
             with tenant_context(tenant):
                 rootConf = RootConfiguration.get_solo()
                 conf = Configuration.get_solo()
-                info_stripe = serializer.info_stripe
-
                 serializer.update(instance=conf, validated_data=futur_conf)
 
                 conf.slug = slug
 
-                conf.email = info_stripe.email
-                conf.site_web = info_stripe.business_profile.url
-                conf.phone = info_stripe.business_profile.support_phone
+                conf.email = request.user
+                if getattr(serializer, 'info_srtipe', None):
+                    info_stripe = serializer.info_stripe
+                    conf.email = info_stripe.email
+                    conf.site_web = info_stripe.business_profile.url
+                    conf.phone = info_stripe.business_profile.support_phone
 
-                conf.stripe_mode_test = rootConf.stripe_mode_test
-
-                if rootConf.stripe_mode_test:
-                    conf.stripe_connect_account_test = info_stripe.id
-                else:
-                    conf.stripe_connect_account = info_stripe.id
+                    conf.stripe_mode_test = rootConf.stripe_mode_test
+                    if rootConf.stripe_mode_test:
+                        conf.stripe_connect_account_test = info_stripe.id
+                    else:
+                        conf.stripe_connect_account = info_stripe.id
 
                 if getattr(serializer, 'img_img', None):
                     conf.img.save(serializer.img_name, serializer.img_img.fp)
@@ -242,7 +242,6 @@ class TenantViewSet(viewsets.ViewSet):
 
                 conf.save()
                 conf.check_serveur_cashless()
-                # user.client_admin.add(tenant)
 
                 staff_group = Group.objects.get(name="staff")
 

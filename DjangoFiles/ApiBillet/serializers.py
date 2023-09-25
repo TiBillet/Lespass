@@ -278,6 +278,8 @@ class NewConfigSerializer(serializers.ModelSerializer):
             "short_description",
             "long_description",
             "stripe_connect_account",
+            "server_cashless",
+            "key_cashless",
             # "adress",
             # "postal_code",
             # "city",
@@ -293,8 +295,6 @@ class NewConfigSerializer(serializers.ModelSerializer):
             # "carte_restaurant",
             # "img",
             # "logo",
-            "server_cashless",
-            "key_cashless",
         ]
         # # un seul tenant par compte stripe, sauf en test
         # if rootConf.stripe_mode_test :
