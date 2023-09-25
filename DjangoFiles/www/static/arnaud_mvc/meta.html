@@ -1,0 +1,297 @@
+ <!DOCTYPE html>
+<html lang="fr">
+    <head>
+<meta charset="UTF-8">
+<title>TiBillet, Billeterie en réseau</title>
+
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- LES FONTS -->
+<style>@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700;800&display=swap');</style> 
+<style>@import url('https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700&display=swap');</style>
+<!-- LES CSS  -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta2/css/all.min.css">
+<link rel="stylesheet" href="css/creative.css">
+</head>
+<body>
+<!-- -------------------------------------------------------------------------------- MENU ------------------------------------------------------------------------------------------------------>
+<nav class="menu">
+        <div><img src="img/logotibillet.png" alt="logo billeterie Ti Billet" class="logotibillet"></div>
+            <ul class="menutb">
+               <li class="m"><a href="#Accueil" title="ACCUEIL"><img src="img/menu/home.svg" alt="logo billeterie Ti Billet" class="menutibillet  m1"></a></li>
+                <li class="m"><a href="#Apropos" title="FAVORIS"><img src="img/menu/like.svg" alt="logo billeterie Ti Billet" class="menutibillet  m2"></a></li>
+                <li class="m"><a href="#Contact" title="CALENDRIER"><img src="img/menu/calendrier.svg" alt="logo billeterie Ti Billet" class="menutibillet  m3"></a></li>
+                <li class="m"><a href="#Contact" title="RECHERCHE" onClick="asideswipe()"><img src="img/menu/search.svg" alt="logo billeterie Ti Billet" class="menutibillet  m4"></a></li>
+                <li class="m"><a id="filter" class="filter" title="FILTRER"><img src="img/menu/filtrer.svg" alt="logo billeterie Ti Billet" class="menutibillet filter  m5"></a></li>
+            </ul>
+</nav>
+<!-- --------------------------------------------------------------------------------ASIDE ------------------------------------------------------------------------------------------------------>
+<nav class="aside " id="aside">
+    <div class="menu-aside">
+           <a href="#" class="btn-aside2 dnone">
+                <div class="btnside btnconcerts">
+                    <img src="img/aside/concerts.svg" alt="logo billeterie Ti Billet" class="imgaside-concert">
+                    <h4 class="H41">CONCERTS</h4>
+                </div>
+            </a>
+            <a href="#" class="btn-aside3 dnone">
+                <div class="btnside btnlieux">
+                    <img src="img/aside/lieux.svg" alt="logo billeterie Ti Billet" class="imgaside-lieux">
+                    <h4 class="H42">LIEUX</h4>
+                </div>
+            </a>
+            <a href="#" class="btn-aside4 dnone">
+                <div class="btnside btnartiste">
+                    <img src="img/aside/artistes.svg" alt="logo billeterie Ti Billet" class="imgaside-artiste">
+                    <h4 class="H43">ARTISTES</h4>
+                </div>
+            </a>
+          
+    </div> 
+</nav>
+<div class="search" id="search">
+    <form action="/ma-page-de-traitement" method="post" class="form-search">
+        <div class="div-label-search">
+            <label for="msg" class="label-search"><span href="pages/artiste.html" class="icone" title="Visiter la page de l'artiste">
+                <img src="img/menu/searchnoir.png" alt="Image de la vignette" style="scale: 0.7;">
+            </span><h1>Recherche</h1></label>
+            <input type="search"/>
+            <input type="submit" value="Submit" class="btn-adherer" style="margin-top: 30px;"">
+            <a href="#" class="btn-adherer" style="margin-top: 30px;">Go</a>
+            <a href="#" class="btn-adherer" onClick="asideswipe()">Fermer</a>
+        </div>
+    </form>
+</div>
+
+<!-- -------------------------------------------------------------------------- META BILLETERIE -------------------------------------------------------------------------------------------------->
+<!-- ON A TROIS TYPES DE CARDS CARD-META / CARD-META-50 / CARD-META-100 POUR DEFINIR LA TAILLE DES CARDS 
+ENSUITE LES CLASS Y OU B POUR DEFINIR LES COULEURS -->
+<div class="meta">
+   <!-- -------------------------------------------------------------------- CARD ARTISTE ----------------------------------------------------------------------------------------- -->
+    <div class="card card-meta ">
+                        <!-- ----------------------------------------------------IMG CARD META ------------------------------------------------->
+        <a href="pages/artiste.html" class="img-card-meta">
+            <div class="content-img">
+                <span href="pages/artiste.html" class="icone" title="Visiter la page de l'artiste">
+                    <img src="img/aside/artistes.svg" alt="Image de la vignette" style="width: 25px;">
+                </span>
+                <h1>BALAPHONIK SOUND SYSTEM</h1>
+                <div class="effetxt"></div>
+                </div>
+            <div class="effet"></div>
+            <div class="effetnoir"></div>
+            <img src="img/meta/bala.jpg" alt="Image de la vignette" class="cover">
+        </a>
+                        <!-- ----------------------------------------------------INFO CARD META ------------------------------------------------->
+        <div class="info-card-meta">
+            <h2 class="card-title">Beat Box / Looper</h2>
+            <div class="card-footer">
+                <span>Artiste</span>
+                <div class="card-footer-link">
+                    <!-- Pour un artiste on affiche que le LIKE et la CARD est le lien vers la page ARtiste -->
+                    <a href="">
+                        <img src="img/meta/likebtn.png" alt="logo billeterie Ti Billet" class="linkcard">
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- ---------------------------------------------------------------------------- CARD LIEUX------------------------------------------------------------------------------------------- -->
+    <!--  PAS DE DATE / TARIF  / RESERVER SUR UN LIEU on peut accéder à la page du LIEU en cliquant sur la CARD ou alors LIKE pour mettre de coté           ------------------------------- -->
+    <div class="card card-meta ">
+        <a href="pages/lieux.html" class="img-card-meta">
+            <div class="content-img">
+                <span class="icone" title="Visiter la page de l'artiste"><img src="img/aside/lieux.svg" alt="Image de la vignette" style="width: 22px;"></span>
+                <h1>LE BISIK</h1>
+               <div class="effetxt"></div>
+            </div>
+            <div class="effet"></div>
+            <div class="effetnoir"></div>
+            <img src="img/meta/bala.jpg" alt="Image de la vignette" class="cover">
+        </a>
+        <div class="info-card-meta">
+            <h2 class="card-title">Bar & Concers</h2>
+            <div class="card-footer">
+                <span>Lieux</span>
+                <div class="card-footer-link">
+                    <a href=""><img src="img/meta/likebtn.png" alt="logo billeterie Ti Billet" class="linkcard"></a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- ---------------------------------------------------------------------------- CARD EVENT------------------------------------------------------------------------------------------------------------- -->
+    <div class="card card-meta ">
+        <a href="pages/event.html" class="img-card-meta">
+            <div class="content-img">
+                <span href="pages/artiste.html" class="icone" title="Visiter la page de l'artiste"><img src="img/aside/artistes.svg" alt="Image de la vignette" style="width: 25px;"></span>
+                <h1>BALAPHONIK EVENT</h1>
+                <div class="effetxt"></div>
+            </div>
+            <div class="effet"></div>
+            <div class="effetnoir"></div>
+             <img src="img/meta/bala.jpg" alt="Image de la vignette" class="cover">
+        </a>
+        <div class="info-card-meta">
+            <h2 class="card-title">Manapany Festival 2022</h2>
+            <div class="card-footer" >
+                <span>10 Octobre 2022</span> 
+                <div class="card-footer-link">
+                    <a href="">
+                        <img src="img/meta/likebtn.png" alt="logo billeterie Ti Billet" class="linkcard">
+                    </a>
+                    <a href="">
+                        <img src="img/meta/reserver.png" alt="logo billeterie Ti Billet" class="linkcard">
+                    </a>
+                    <a href="" class="tarif-card">20€</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="card card-meta ">
+        <a href="pages/event.html" class="img-card-meta">
+            <div class="content-img">
+                <span href="pages/artiste.html" class="icone" title="Visiter la page de l'artiste"><img src="img/aside/artistes.svg" alt="Image de la vignette" style="width: 25px;"></span>
+                <h1>BALAPHONIK EVENT</h1>
+                <div class="effetxt"></div>
+            </div>
+            <div class="effet"></div>
+            <div class="effetnoir"></div>
+             <img src="img/meta/bala.jpg" alt="Image de la vignette" class="cover">
+        </a>
+        <div class="info-card-meta">
+            <h2 class="card-title">MANAPANY FESTIVAL 2022</h2>
+            <div class="card-footer" >
+                <span>10 Octobre 2022</span> 
+                <div class="card-footer-link">
+                    <a href="">
+                        <img src="img/meta/likebtn.png" alt="logo billeterie Ti Billet" class="linkcard">
+                    </a>
+                    <a href="">
+                        <img src="img/meta/reserver.png" alt="logo billeterie Ti Billet" class="linkcard">
+                    </a>
+                    <a href="" class="tarif-card">20€</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- CARD META 50 POUR UNE CARD QUI FAIT LA MOITIE DE LA ZONE -->
+    <div class="card card-meta-50">
+        <a href="" class="img-card-meta">
+            <div class="content-img">
+                <span href="pages/artiste.html" class="icone" title="Visiter la page de l'artiste">
+                    <img src="img/aside/artistes.svg" alt="Image de la vignette" style="width: 25px;">
+                </span>
+                <h1>BALAPHONIK SOUND SYSTEM</h1>
+                <div class="effetxt"></div>
+                </div>
+            <div class="effet"></div>
+            <div class="effetnoir"></div>
+             <img src="img/meta/balafonik-1.jpg" alt="Image de la vignette" class="cover">
+        </a>
+        <!-- PARTIE BASSE INFO LIEUX / TARIFS -->
+        <div class="info-card-meta">
+            <h2 class="card-title">MANAPANY FESTIVAL 2022</h2>
+            <div class="card-footer" >
+                10 Octobre 2022
+                <div class="card-footer-link">
+                    <a href=""><img src="img/meta/likebtn.png" alt="logo billeterie Ti Billet" class="linkcard"></a>
+                    <a href=""><img src="img/meta/reserver.png" alt="logo billeterie Ti Billet" class="linkcard"></a>
+                    <a href="" class="tarif-card">20€</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="card card-meta ">
+        <a href="pages/event.html" class="img-card-meta">
+            <div class="content-img">
+                <span href="pages/artiste.html" class="icone" title="Visiter la page de l'artiste"><img src="img/aside/artistes.svg" alt="Image de la vignette" style="width: 25px;"></span>
+                <h1>BALAPHONIK EVENT</h1>
+                <div class="effetxt"></div>
+            </div>
+            <div class="effet"></div>
+            <div class="effetnoir"></div>
+             <img src="img/meta/bala.jpg" alt="Image de la vignette" class="cover">
+        </a>
+        <div class="info-card-meta">
+            <h2 class="card-title">MANAPANY FESTIVAL 2022</h2>
+            <div class="card-footer" >
+                <span>10 Octobre 2022</span> 
+                <div class="card-footer-link">
+                    <a href="">
+                        <img src="img/meta/likebtn.png" alt="logo billeterie Ti Billet" class="linkcard">
+                    </a>
+                    <a href="">
+                        <img src="img/meta/reserver.png" alt="logo billeterie Ti Billet" class="linkcard">
+                    </a>
+                    <a href="" class="tarif-card">20€</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="card card-meta Y mapageTB">
+       <h3>Créer ma page</h3>
+       <img src="img/logotibilletnoir.png" alt="logo billeterie Ti Billet" class="logotibillet-card">
+    </div>
+    <!-- CARD META 100 POUR UNE CARD WIDTH 100% -->
+    <div class="card card-meta-100">
+        <a href="" class="img-card-meta">
+            <div class="content-img">
+                <span href="pages/artiste.html" class="icone" title="Visiter la page de l'artiste">
+                    <img src="img/aside/artistes.svg" alt="Image de la vignette" style="width: 25px;">
+                </span>
+                <h1>ZANMARI BARE</h1>
+                <div class="effetxt"></div>
+                </div>
+            <div class="effet"></div>
+            <div class="effetnoir"></div>
+             <img src="img/meta/zan.jpg" alt="Image de la vignette" class="cover">
+        </a>
+        <!-- PARTIE BASSE INFO LIEUX / TARIFS -->
+        <div class="info-card-meta">
+            <h2 class="card-title">MANAPANY FESTIVAL 2022</h2>
+            <div class="card-footer" >
+                10 Octobre 2022
+                <div class="card-footer-link">
+                    <a href=""><img src="img/meta/likebtn.png" alt="logo billeterie Ti Billet" class="linkcard"></a>
+                    <a href=""><img src="img/meta/reserver.png" alt="logo billeterie Ti Billet" class="linkcard"></a>
+                    <a href="" class="linkcard">20€</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- CLASS Y pour la couleur JAUNE et CLASS B pour la couleur BLACK du FOND -->
+    <div class="card card-meta Y" style=" font-size: 1rem; justify-content: center; align-items: center; "> class="card-meta Y"(card jaune)</div>
+    <div class="card card-meta B" style="color:white;  font-size: 1rem; justify-content: center; align-items: center; ">class="card-meta B"(card black)</div>
+    <div class="card card-meta-50" style="color:white;  font-size: 1rem; justify-content: center; align-items: center; ">card-meta-50</div>
+    <div class="card card-meta" style="color:white;  font-size: 1rem; justify-content: center; align-items: center; ">card-meta</div>
+    <div class="card card-meta">test</div>
+    <div class="card card-meta-50 Y" style="text-align: center; color:white;"> <h1>H1 titre des EVENT AFFICHER SUR LES CARDS</h1><h2> H2 titre du footer de la CARD</h2><h3>H3 POLICE MERRYWHEATHER SOUS TITRE / TARIFS ETC titre title</h3><h4>H4 POUR LES BTNS titre title</h4></div>
+    
+
+    
+
+    
+</div>
+<!-- FOOTER -->
+<div class="footer">
+    <a href="" style="padding: 5px; color: black;"><i class="fab fa-facebook-square fa-2x"></i></a>
+     <a href="" style="padding: 5px; color: black;"><i class="fab fa-instagram-square fa-2x"></i></a>
+</div>
+<!-- AFFICHER CACHER DIV SEARCHrecherche -->
+<script type="text/javascript">
+    function asideswipe()   {
+        var div = document.getElementById('search'),
+        display = getComputedStyle(div, null).display;
+         
+        if(display == "flex")  {
+            document.getElementById("search").style.display = "none";
+        }else   {
+            document.getElementById("search").style.display = "flex";
+        }
+    }  
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.8.0/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.8.0/CSSRulePlugin.min.js"></script>
+<script src="tibillet.js"></script>
+</body>
+</html> 

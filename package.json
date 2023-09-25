@@ -1,0 +1,7 @@
+{
+  "name": "TiBillet",
+  "version": "1.0.0",
+  "dependencies": {
+    "vite": "^4.4.6"
+  }
+}

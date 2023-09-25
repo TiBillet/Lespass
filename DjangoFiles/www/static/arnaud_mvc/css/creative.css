@@ -1,0 +1,759 @@
+/* ------------------------------------------------------------------------------------------ GLOBAL ------------------------------------------------------------------------------------------*/
+html {
+    background-color: #140f0c;
+    display: flex;
+    justify-content: center;
+}
+
+body {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    font-family: "Open Sans Bold 700", sans-serif;
+    font-size: 1rem;
+}
+
+h1 {
+    font-family: "Open Sans Bold 700", sans-serif;
+    text-align: center;
+    font-size: 1.4rem;
+}
+
+h2 {
+    font-family: "Open Sans Bold 700", sans-serif;
+    font-size: 1rem;
+    margin: 0;
+}
+
+h3 {
+    font-family: "Merriweather Light 300", serif;
+    margin: 0;
+    font-weight: 300;
+}
+
+h4 {
+    font-family: "Open Sans Bold 700", sans-serif;
+    font-size: 0.6rem;
+    margin: 0;
+    padding: 0;
+}
+
+/* -------------------------------------------------------------------------------------------- MENU ---------------------------------------------------------------------------------------- */
+.menu {
+    display: flex;
+    flex-direction: row;
+    max-width: 1200px;
+    width: 100%;
+    justify-content: space-between;
+    position: fixed;
+    z-index: 30000;
+    background-color: #140f0c;
+    top: 0;
+    padding-top: 10px;
+}
+
+.logotibillet {
+    width: 100%;
+    max-width: 150px;
+    padding-left: 15px;
+}
+
+.logotibillet-card {
+    width: 100%;
+    max-width: 150px;
+}
+
+.menu ul {
+    display: flex;
+    flex-direction: row;
+    list-style: none;
+    width: 185px;
+    justify-content: space-between;
+    padding-right: 15px;
+    margin: 0;
+    align-items: center;
+}
+
+.menutibillet {
+    max-height: 25px;
+}
+
+.filter {
+    cursor: pointer;
+}
+
+.m {
+    transition: transform 150ms ease-in-out;
+}
+
+.m:hover {
+    transform: scale(1.4);
+}
+
+/*  ------------------------------------------------------------------------------ MENU ASIDE --------------------------------------------------------------------------------------------  */
+
+.menu-aside ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.aside {
+    position: fixed;
+    top: 0;
+    left: 0;
+    padding-top: 85px;
+    z-index: 2000;
+}
+
+.btn-aside {
+    width: 90px;
+    background-color: #ffc800;
+    height: 90px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-decoration: none;
+    color: #140f0c;
+    margin-top: 1px;
+}
+
+.btn-aside2 {
+    width: 90px;
+    height: 90px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.btn-aside2 img {
+    padding: 5px;
+    width: 65%;
+}
+
+.btn-aside3 img {
+    padding: 5px;
+    width: 65%;
+}
+
+.btn-aside4 img {
+    padding: 5px;
+    width: 65%;
+}
+
+.btnside {
+    background-color: #ffc800;
+    text-align: center;
+    width: 90px;
+    height: 90px;
+    text-decoration: none;
+    color: #140f0c;
+    margin-top: 1px;
+    transition: 300ms;
+}
+
+.btn-aside img {
+    padding: 5px;
+    width: 65%;
+    color: green;
+}
+
+.dnone {
+    text-decoration: none;
+}
+
+.btnside:hover {
+    translate: -10px;
+}
+
+/* ------------------------------------------------------------------------------------- META BILLETERIE -------------------------------------------------------------------------------------- */
+.meta {
+    padding-top: 70px;
+    display: flex;
+    max-width: 1200px;
+    flex-wrap: wrap;
+    justify-content: center;
+    position: relative;
+}
+
+/* LES DIFFERENTS TYPES DE CARD  */
+/* CARD CLASSIQUE */
+.card-meta {
+    width: 24%;
+    height: 415px;
+    background-color: #24211f;
+    margin: 5px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    justify-content: center;
+    align-items: center;
+}
+
+/* CARD DEMI ECRAN */
+.card-meta-50 {
+    width: 49%;
+    height: 415px;
+    background-color: #24211f;
+    margin: 5px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+/* CARD FULL WIDTH */
+.card-meta-100 {
+    width: 98.5%;
+    height: 415px;
+    background-color: #24211f;
+    margin: 5px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.mapageTB {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.5rem;
+    transition: 300ms;
+}
+
+.mapageTB h3 {
+    margin: 0;
+}
+
+.mapageTB:hover {
+    scale: 0.95;
+}
+
+/* CLASSE Y ET B POUR CHANGER LA COULEUR DE LA CARD */
+.Y {
+    background-color: #ffc800;
+}
+
+.B {
+    background-color: #140f0c;
+}
+
+.colW {
+    color: white;
+}
+
+/* CONTENU DUNE CARD */
+
+.img-card-meta {
+    height: 80%;
+    width: 100%;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: all 300ms ease-in-out;
+    color: white;
+}
+
+/* IMG SIZE COVER RESPONSIVE */
+.cover {
+    object-fit: cover;
+    width: 100%;
+    height: 100%;
+}
+
+/* CONTENU DE LA ZONE IMG DE LA CAR */
+.content-img {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+}
+
+.icone {
+    border-radius: 20px;
+    background-color: #ffc801;
+    width: 30px;
+    height: 30px;
+    transition: 300ms;
+    display: flex;
+    justify-content: center;
+}
+
+.icone:hover {
+    scale: 1.2;
+}
+
+.card-title {
+    margin: 10px 0px 0px 10px;
+    color: white;
+}
+
+/* EFFET DE DEGRADE SUR LA CARD */
+.effet {
+    display: none;
+    background: rgb(65, 24, 77);
+    background: linear-gradient(
+            135deg,
+            rgba(65, 24, 77, 0.2805322812718838) 0%,
+            rgba(222, 108, 38, 0.406582701439951) 100%
+    );
+    position: absolute;
+    z-index: 1000;
+    height: 100%;
+    width: 100%;
+    /* display: flex; */
+    align-items: center;
+    justify-content: center;
+    transition: 800ms;
+}
+
+.card:hover .effet {
+    height: 0%;
+    width: 0%;
+    background: linear-gradient(
+            135deg,
+            rgba(65, 24, 77, 0.1) 0%,
+            rgba(222, 108, 38, 0.1) 100%
+    );
+}
+
+/* BARRE HORYZONTAL QUI SOUVRE AU SURVOL */
+.effetxt {
+    height: 3px;
+    width: 0%;
+    transition: all 600ms ease-in-out;
+}
+
+.card:hover .effetxt {
+    background-color: #ffc800;
+    height: 3px;
+    width: 70%;
+}
+
+/* SCALE IMG ON HOVER  */
+.card:hover .img-card-meta {
+    scale: 0.97;
+}
+
+/* EFFET D ASSOMBRISSEMENT DE IMG ON HOVER */
+.effetnoir {
+    display: none;
+    background-color: #00000056;
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    z-index: 9000;
+}
+
+.card:hover .effetnoir {
+    display: block;
+}
+
+/* FOOTER OU INFO CARD META */
+.info-card-meta {
+    background-color: #24211f;
+    height: 20%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    width: 100%;
+}
+
+.card-footer {
+    display: flex;
+    flex-direction: row;
+    color: #ffc800;
+    margin: 10px;
+    justify-content: space-between;
+    font-family: "Merriweather", serif;
+    align-items: center;
+}
+
+.card-footer-link {
+    display: flex;
+    align-items: center;
+}
+
+.linkcard {
+    max-height: 30px;
+    padding-left: 5px;
+}
+
+.card-footer-link a {
+    text-decoration: none;
+    color: #ffc800;
+}
+
+.linkcard {
+    transition: 300ms;
+}
+
+.linkcard:hover {
+    scale: 0.8;
+}
+
+.tarif-card {
+    max-height: 30px;
+    padding-left: 5px;
+}
+
+/* ------------------------------------------------------------------------------------------------- ARTISTE / LIEUX / FESTIVAL ----------------------------------------------------------------------------------- */
+.card-programme {
+    align-items: center;
+}
+
+.title-programme {
+    color: white;
+    padding-top: 20px;
+    padding-bottom: 20px;
+}
+
+.date-programme {
+    display: flex;
+    flex-direction: row;
+}
+
+.date-programme-link {
+    padding-bottom: 10px;
+}
+
+.date-programme-link h2 {
+    color: white;
+}
+
+/* IMAGE DACCUEIL ARTISTE / LIEUX / FESTIVAL */
+.img-card-full {
+    height: 100%;
+    position: relative;
+    width: 100%;
+}
+
+.title-fullcard {
+    margin-top: 0px;
+    margin-bottom: 5px;
+}
+
+.info-fullcard {
+    color: white;
+    background-color: #140f0c;
+    height: 100%;
+    width: 25%;
+    position: absolute;
+    left: 50%;
+    z-index: 9000;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.date-fullcard {
+    margin-top: 10px;
+    color: #ffc800;
+}
+
+.style-fullcard {
+    margin-bottom: 20px;
+    color: #ffc800;
+}
+
+/* DESCRIPTION TEXTE */
+.description {
+    background-color: #ffc800;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 308px;
+}
+
+/* NOM  */
+.title-artiste {
+    color: #140f0c;
+    text-align: right;
+    margin-left: 5%;
+    text-decoration: underline;
+}
+
+/* ZONE RESEAUX SOCIAUX */
+.linksocial {
+    display: flex;
+    flex-direction: row;
+    padding-top: 10px;
+    padding-bottom: 5px;
+    width: 90%;
+    margin-left: 4%;
+    align-items: center;
+}
+
+.linksocial img {
+    max-height: 30px;
+    padding-left: 5px;
+    padding-right: 5px;
+}
+
+/* MENU INTERNE PAGE  */
+.menu-page {
+    width: 100%;
+    height: 100px;
+    margin-top: 5px;
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-end;
+}
+
+.menu-page img {
+    max-width: 35%;
+    padding: 5px;
+}
+
+.btn-menu-page {
+    background-color: #ffc800;
+    height: 100px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-decoration: none;
+    color: #140f0c;
+    margin-right: 5px;
+    max-width: 105px;
+    transition: 0.1s;
+}
+
+.btn-menu-page:hover {
+    scale: 0.95;
+}
+
+.btn-adherer {
+    border-radius: 5px;
+    background-color: #140f0c;
+    color: #ffc800;
+    width: 200px;
+    height: 28px;
+    transition: 300ms;
+    display: flex;
+    justify-content: center;
+    margin: 5px;
+    align-items: center;
+    text-decoration: none;
+    text-align: center;
+}
+
+.btn-adherer:hover {
+    scale: 1.05;
+}
+
+/*----------------------------------------------------------------------------------- NAV BAR RESPONSIVE ----------------------------------------------------------------------------- */
+.nav-responsive {
+    position: fixed;
+    bottom: 0;
+    height: 10%;
+    background-color: #ffc800;
+    width: 100%;
+    z-index: 20000;
+    display: none;
+}
+
+.btn-responsive {
+    width: 17%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    text-decoration: none;
+    color: black;
+}
+
+.btn-responsive img {
+    max-width: 60%;
+}
+
+/*---------------------------------------------------------------------------------------------- EVENT ----------------------------------------------------------------------------------------- */
+.title-event {
+    margin-top: 30px;
+    color: #140f0c;
+    text-align: right;
+    padding-right: 35px;
+}
+
+.text-event {
+    padding-left: 5%;
+    padding-right: 5%;
+}
+
+.artiste-bloc {
+    height: auto;
+}
+
+/* -------------------------------------------------------------------------------------------- FOOTER ------------------------------------------------------------------------------------------ */
+.footer {
+    background-color: #ffc800;
+    width: 100%;
+    height: 60px;
+    margin-top: 50px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.footer a img {
+    max-height: 40px;
+    padding-left: 5px;
+    padding-right: 5px;
+}
+
+/* FORM */
+.search {
+    display: none;
+    position: fixed;
+    width: 100%;
+    height: 100vh;
+    background-color: #000000e0;
+    z-index: 20000;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    margin-top: 70px;
+}
+
+.form-search {
+    width: 100%;
+}
+
+.div-label-search {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.label-search {
+    display: flex;
+
+    margin-bottom: 20px;
+    justify-content: center;
+    align-items: center;
+}
+
+.div-label-search input {
+    width: 30%;
+    height: 40px;
+    background-color: #ffffff1c;
+    border: none;
+    color: white;
+    font-size: 1rem;
+}
+
+.div-label-search h1 {
+    padding-left: 10px;
+}
+
+/* -------------------------------------------------------------------------------------------- RESPONSIVE ----------------------------------------------------------------------------------- */
+@media screen and (max-width: 1200px) {
+    .meta {
+        max-width: 1200px;
+    }
+
+    .menu {
+        max-width: 1200px;
+        width: 100%;
+    }
+
+    .card-meta {
+        width: 30%;
+        /* max-width: 268px; */
+    }
+
+    .card-meta-50 {
+        width: 100%;
+    }
+}
+
+@media screen and (max-width: 768px) {
+    .meta {
+        max-width: 768px;
+    }
+
+    .menu {
+        max-width: 768px;
+
+        padding-bottom: 10px;
+    }
+
+    .card-meta {
+        width: 45%;
+        max-width: 268px;
+        height: unset;
+    }
+
+    .card-meta-50 {
+        width: 90%;
+        height: unset;
+    }
+
+    .logotibillet {
+        width: 60%;
+    }
+}
+
+@media screen and (max-width: 576px) {
+    .meta {
+        max-width: 576px;
+    }
+
+    .menu {
+        max-width: 576px;
+
+        padding-bottom: 10px;
+    }
+
+    .card-meta {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .card-meta-50 {
+        width: 100%;
+    }
+
+    .logotibillet {
+        width: 60%;
+    }
+
+    .info-fullcard {
+        background-color: transparent;
+        width: 100%;
+        height: 100%;
+        left: unset;
+    }
+
+    .info-card-meta {
+        height: auto;
+    }
+
+    .nav-responsive {
+        display: flex;
+    }
+
+    .menu-page {
+        display: none;
+    }
+}
+
+.fab {
+    transition: 300ms;
+}
+
+.fab:hover {
+    scale: 1.2;
+}
