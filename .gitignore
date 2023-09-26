@@ -164,3 +164,5 @@ tempo/
 /Front/node_modules/
 /Docker/Test/Front/
 /Docker/Development/dockerfile_node/nonfree/
+
+node_modules/
