@@ -159,3 +159,8 @@ tempo/
 /Front/src/assets/css/nucleo-icons.css
 /Front/src/assets/css/nucleo-svg.css
 /DjangoFiles/www/media/images/
+/DjangoFiles/www/
+/DjangoFiles/logs/
+/Front/node_modules/
+/Docker/Test/Front/
+/Docker/Development/dockerfile_node/nonfree/
