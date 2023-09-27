@@ -222,7 +222,7 @@ class TenantViewSet(viewsets.ViewSet):
 
                 conf.slug = slug
 
-                conf.email = request.user
+                conf.email = request.user.email
                 if getattr(serializer, 'info_srtipe', None):
                     info_stripe = serializer.info_stripe
                     conf.email = info_stripe.email
