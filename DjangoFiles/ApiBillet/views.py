@@ -221,11 +221,11 @@ class TenantViewSet(viewsets.ViewSet):
                 serializer.update(instance=conf, validated_data=futur_conf)
 
                 conf.slug = slug
+                user: TibilletUser = request.user
+                conf.email  = user.email
 
-                conf.email = request.user.email
                 if getattr(serializer, 'info_srtipe', None):
                     info_stripe = serializer.info_stripe
-                    conf.email = info_stripe.email
                     conf.site_web = info_stripe.business_profile.url
                     conf.phone = info_stripe.business_profile.support_phone
 
@@ -245,11 +245,10 @@ class TenantViewSet(viewsets.ViewSet):
 
                 staff_group = Group.objects.get(name="staff")
 
-                user_from_email_nouveau_tenant = get_or_create_user(conf.email, force_mail=True)
-                user_from_email_nouveau_tenant.client_admin.add(tenant)
-                user_from_email_nouveau_tenant.is_staff = True
-                user_from_email_nouveau_tenant.groups.add(staff_group)
-                user_from_email_nouveau_tenant.save()
+                user.client_admin.add(tenant)
+                user.is_staff = True
+                user.groups.add(staff_group)
+                user.save()
 
                 place_serialized = ConfigurationSerializer(Configuration.get_solo(), context={'request': request})
                 place_serialized_with_uuid = {'uuid': f"{tenant.uuid}"}
