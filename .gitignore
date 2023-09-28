@@ -166,3 +166,4 @@ tempo/
 /Docker/Development/dockerfile_node/nonfree/
 
 node_modules/
+.idea/

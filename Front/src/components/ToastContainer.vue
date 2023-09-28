@@ -2,11 +2,12 @@
   <div v-if="listToast.length > 0" class="position-relative">
     <div class="position-fixed top-10 end-0 p-3" style="z-index: 11 !important;max-height: 70%;overflow-y: auto;">
       <div v-for="(toast, index) in listToast" :key="index" :id="'toastMessage-' + toast.uuid" class="my-toast"
-      role="alert" :aria-label="toast.contenu">
+        role="alert" :aria-label="toast.contenu">
         <div class="toast-header">
           <div :class="'toast-type-size rounded me-2 ' + toast.typeMsg"></div>
           <strong class="me-auto">{{ toast.title }}</strong>
-          <button class="btn-close" type="button" @click="deleteToast( toast.uuid)" :aria-label="'Fermer toast message -' + toast.uuid"></button>
+          <button class="btn-close" type="button" @click="deleteToast(toast.uuid)"
+            :aria-label="'Fermer toast message -' + toast.uuid"></button>
         </div>
         <div class="toast-body">
           {{ toast.contenu }}
@@ -48,7 +49,7 @@ emitter.on('toastSend', (data) => {
   data['uuid'] = uuidv4()
 
   if (data.delay) {
-     setTimeout(() => {
+    setTimeout(() => {
       deleteToast(data.uuid);
     }, data.delay);
   }
@@ -72,10 +73,11 @@ function deleteToast(uuid) {
   background-color: rgb(255, 255, 255);
   background-clip: padding-box;
   border: 1px solid rgba(0, 0, 0, .1);
-  box-shadow: 0 .3125rem .625rem 0 rgba(0,0,0,.08) !important;
+  box-shadow: 0 .3125rem .625rem 0 rgba(0, 0, 0, .08) !important;
   border-radius: .25rem;
   margin-bottom: 6px;
 }
+
 .btn-close {
   box-sizing: content-box;
   width: 1em;
@@ -89,12 +91,13 @@ function deleteToast(uuid) {
 }
 
 .toast-header {
-  border-bottom: 1px solid rgba(0,0,0,.05) !important;
+  border-bottom: 1px solid rgba(0, 0, 0, .05) !important;
 }
 
 .bg-primary-1 {
   background-color: #2ca8ff !important;
 }
+
 .toast-type-size {
   width: 20px;
   height: 20px;

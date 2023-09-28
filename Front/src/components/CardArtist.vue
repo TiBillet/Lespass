@@ -8,6 +8,7 @@
         {{ artist.short_description }}</p>
     </div>
   </div>
+  <div></div>
 </template>
 
 <script setup>
