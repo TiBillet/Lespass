@@ -22,6 +22,7 @@ class EventDirectory(models.Model):
     artist = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="artist")
 
 
+
 # On stocke ici tous les ID Product de Stripe.
 # Utile par exemple :
 # Savoir depuis quel tenant vient la mise à jour auto depuis le webhook Stripe
