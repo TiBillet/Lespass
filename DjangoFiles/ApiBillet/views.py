@@ -376,7 +376,6 @@ class EventsViewSet(viewsets.ViewSet):
             events_serialized_data = []
             with schema_context('public'):
                 events_from_public_directory = EventDirectory.objects.filter(
-                    published=True,
                     datetime__gte=four_hour_before_now,
                     artist=artist
                 )
