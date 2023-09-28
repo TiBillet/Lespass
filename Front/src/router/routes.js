@@ -66,8 +66,9 @@ export const routes = [
     component: () => import(/* webpackChunkName: "StatusPlace" */ '../views/StatusPlace.vue')
   },
   {
-    path: '/tenants',
-    name: 'Tenants',
-    component: () => import(/* webpackChunkName: "Tenants" */ '../views/Tenants.vue')
+    path: '/tenant',
+    name: 'Tenant',
+    meta: { requiresAuth: true },
+    component: () => import(/* webpackChunkName: "Tenant" */ '../views/Tenant.vue')
   }
 ]

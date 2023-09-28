@@ -85,8 +85,8 @@
           </a>
         </li>
 
-        <li v-if="['M'].includes(headerPlace.categorie)" class="nav-item">
-          <router-link to="/tenants"
+        <li v-if="['M'].includes(headerPlace.categorie) && accessToken !== ''" class="nav-item">
+          <router-link to="/tenant"
             class="nav-link ps-1 d-flex justify-content-between align-items-center cursor-pointer">
             <i class="fa fa-plane me-1 text-white" aria-hidden="true"></i>
             <h6 class="m-0 text-white" data-test-id="seConnecter">Créer son espace</h6>
