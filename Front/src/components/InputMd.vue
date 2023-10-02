@@ -25,7 +25,6 @@ function focus(evt) {
   const input = evt.target;
   const label = input.parentNode.querySelector("label");
   label.style.top = "-18px";
-  label.style.left = 0;
   label.style.fontSize = "11px";
   label.style.lineHeight = "1.07143";
   input.style.backgroundSize = "100% 2px,100% 1px";
@@ -38,7 +37,6 @@ function blur(evt) {
   if (input.value.length === 0) {
     const label = input.parentNode.querySelector("label");
     label.style.top = 0;
-    label.style.left = 0;
     label.style.fontSize = "14px";
     label.style.lineHeight = 1.42857;
     input.style.backgroundSize = "0 2px,100% 1px";

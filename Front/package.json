@@ -1,6 +1,6 @@
 {
   "name": "tibillet-gestion-lieu-vue",
-  "version": "0.0.0",
+  "version": "0.0.001",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
