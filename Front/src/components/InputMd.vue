@@ -1,7 +1,11 @@
 <template>
-  <div class="input-md-group" :style="`height:${height}px;`">
+  <div class="input-md-group has-validation" :style="`height:${height}px;`">
     <label :for="id">{{ label }}</label>
-    <input :id="id" type="text" :value="modelValue" @input="sendInput($event)" @focus="focus($event)" @blur="blur($event)" :style="`background-image: linear-gradient(${color}, ${color});`" />
+    <input :id="id" type="text" :value="modelValue" @input="sendInput($event)" @focus="focus($event)" @blur="blur($event)"
+      :style="`background-image: linear-gradient(${color}, ${color});`" />
+    <div class="invalid-feedback" role="heading" :aria-label="msgError">
+      {{ msgError }}
+    </div>
   </div>
 </template>
 
@@ -10,7 +14,8 @@ const props = defineProps({
   id: String,
   modelValue: String,
   label: String,
-  height: Number,
+  msgError: String,
+  height: String,
   color: String
 });
 
@@ -47,6 +52,7 @@ function blur(evt) {
 
 <style scoped>
 .input-md-group {
+  width: 100%;
   position: relative;
   margin: 18px 0;
   padding: 0;
@@ -62,6 +68,7 @@ function blur(evt) {
 }
 
 .input-md-group input {
+  width: 100%;
   position: absolute;
   left: 0;
   border: 0;

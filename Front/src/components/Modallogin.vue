@@ -18,7 +18,7 @@
 
             <div class="card-body">
               <form class="text-left needs-validation" @submit.prevent="validerLogin($event)" novalidate>
-                <div class="input-group has-validation">
+                <div class="input-group input-group-dynamic has-validation">
                   <input id="login-email" :value="getEmail" laria-describedby="email-addon" aria-label="Email"
                          class="form-control" placeholder="Email" type="email"
                           @keyup="validateEmail($event)" required>
@@ -63,7 +63,7 @@ import { log } from '../communs/LogError.js'
 // store
 import { useSessionStore } from '@/stores/session'
 import { setLocalStateKey } from '../communs/storeLocal'
-
+// import * as bootstrap from 'bootstrap/dist/js/bootstrap.bundle.js'
 // asset
 import communecterLogo from '@/assets/img/communecterLogo_31x28.png'
 
@@ -91,7 +91,7 @@ async function validerLogin (event) {
     const email = document.querySelector('#login-email').value
     // enregistre l'email dans le storeUser
     updateEmail(email)
-    console.log('-> validerLogin, email =', email)
+    // console.log('-> validerLogin, email =', email)
 
     const api = `/api/user/create/`
     try {
@@ -105,7 +105,7 @@ async function validerLogin (event) {
         body: JSON.stringify({ email: email })
       })
       const retour = await response.json()
-      console.log('retour =', retour)
+      // console.log('retour =', retour)
       // if (response.status === 201 || response.status === 401 || response.status === 202) {
 
       if (response.status === 200) {

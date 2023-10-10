@@ -24,6 +24,7 @@
 
 <script setup>
 import {ref} from 'vue'
+import * as bootstrap from 'bootstrap/dist/js/bootstrap.bundle.js'
 
 const dataModal = ref({})
 const message = ref(false)

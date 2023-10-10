@@ -101,6 +101,8 @@
 // console.log(' -> Navbar.vue !')
 import { storeToRefs } from 'pinia'
 import { useSessionStore } from '@/stores/session'
+// import * as bootstrap from 'bootstrap/dist/js/bootstrap.bundle.js'
+
 
 const sessionStore = useSessionStore()
 // reactif

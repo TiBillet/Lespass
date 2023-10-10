@@ -4,18 +4,13 @@
     <template #wizard-tabs-content>
       <div id="espace" class="wizard-tab-content">
         <div class="espace-content d-flex flex-wrap justify-content-around">
-          <div
-            v-for="(espace, index) in espacesType"
-            :key="index"
-            class="espace-card"
-            :title="espace.description"
-            :style="cursorOff(espace.disable)"
-            @click="
+          <div v-for="(espace, index) in espacesType" :key="index" class="espace-card" :title="espace.description"
+            :style="cursorOff(espace.disable)" @click="
               changeTenantCategorie(espace.categorie);
-              callWizardNext($event);
-            "
-          >
-            <img :src="espace.urlImage" class="espace-card-sub espace-type-img" :alt="'image - ' + espace.name" loading="lazy" />
+            callWizardNext($event);
+            ">
+            <img :src="espace.urlImage" class="espace-card-sub espace-type-img" :alt="'image - ' + espace.name"
+              loading="lazy" />
             <div class="espace-card-sub d-flex flex-column justify-content-center align-content-center">
               <h5 class="card-title" :style="{ color: espace.colorText }">{{ espace.name }}</h5>
             </div>
@@ -25,14 +20,21 @@
       </div>
       <div id="informations" class="wizard-tab-content">
         <div class="espace-content d-flex flex-column">
-          <InputMd id="wizard-organisation" label="Organisation" height="22.4" color="red" v-model="formCreatePlace.organisation" />
+          <InputMd id="wizard-organisation" label="Organisation" height="22.4" color="red"
+            v-model="formCreatePlace.organisation" />
 
-          <InputMd id="wizard-short-description" label="Courte description" height="22.4" color="red" v-model="formCreatePlace.short_description" />
+          <InputMd id="wizard-short-description" label="Courte description" height="22.4" color="red"
+            v-model="formCreatePlace.short_description" />
 
+          <!--
           <div class="wizard-group">
             <textarea id="wizard-long-description" class="wizard-input" placeholder="Votre longue description" v-model="formCreatePlace.long_description" rows="3"></textarea>
             <label class="wizard-group-label" for="wizard-long-description">Longue description</label>
           </div>
+-->
+          <TextareaMd id="wizard-long-description" label="Votre longue description"
+            v-model="formCreatePlace.long_description" />
+
           <div class="wizard-group">
             <input type="file" id="wizard-img-url" class="wizard-input" @change="fileChange($event, 'image')" />
             <label class="wizard-group-label" for="wizard-img-url">Url image</label>
@@ -67,7 +69,8 @@
             <div class="d-flex align-items-start w-25">Url du logo</div>
             <div v-if="formCreatePlace.logo_url !== null" class="resume-valeur">{{ formCreatePlace.logo_url.name }}</div>
           </div>
-          <h3 class="mt-4" style="white-space: pre-line">Aurez vous besoin de récolter de l'argent ? (adhésion, billetterie, crowdfundind, caisse enregistreuse, cashless)</h3>
+          <h3 class="mt-4" style="white-space: pre-line">Aurez vous besoin de récolter de l'argent ? (adhésion,
+            billetterie, crowdfundind, caisse enregistreuse, cashless)</h3>
 
           <div class="d-flex flex-row justify-content-center">
             <div class="d-flex flex-row">
@@ -89,10 +92,11 @@
 console.log("-> Tenants.vue");
 import { useSessionStore } from "../stores/session";
 import { emitEvent } from "../communs/EmitEvent";
+
 import WizardCreation from "../components/WizardCreation.vue";
 import InputMd from "../components/InputMd.vue";
-// material-bootstrap-wizard
-import wizardBackground from "../assets/img/wizard-profile.jpg";
+import TextareaMd from "../components/TextareaMd.vue";
+
 
 const sessionStore = useSessionStore();
 const { setLoadingValue, updateHeader, getAccessToken } = sessionStore;

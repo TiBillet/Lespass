@@ -1,15 +1,15 @@
 <template>
-  <Loading v-if="loading"/>
+  <Loading v-if="loading" />
   <!-- en cours -->
-  <Navbar v-if="identitySite && loadingPlace"/>
-  <Header v-if="identitySite && loadingPlace"/>
+  <Navbar v-if="identitySite && loadingPlace" />
+  <Header v-if="identitySite && loadingPlace" />
   <router-view></router-view>
-  <ModalMessage/>
-  <Modallogin/>
-  <ModalMembershipOwned/>
-  <ToastContainer/>
-  <ModalReservationList/>
-  <ModalOnboard/>
+  <ModalMessage />
+  <Modallogin />
+  <ModalMembershipOwned />
+  <ToastContainer />
+  <ModalReservationList />
+  <ModalOnboard />
   <!--
   <ModalPassword/>
   <ModalCardsList/>
@@ -34,35 +34,16 @@ import ToastContainer from "./components/ToastContainer.vue"
 import ModalReservationList from "@/components/ModalReservationList.vue"
 import ModalOnboard from "@/components/ModalOnboard.vue"
 
-/*
-import ModalPassword from '@/components/ModalPassword.vue'
-import ModalCardsList from '@/components/ModalCardsList.vue'
 
-*/
+// import ModalPassword from '@/components/ModalPassword.vue'
+// import ModalCardsList from '@/components/ModalCardsList.vue'
+
 // store
 import { storeToRefs } from 'pinia'
 import { useSessionStore } from '@/stores/session'
 
 // font monserrat
-import '@/assets/css/font_Montserrat_Open_Sans_Condensed.css'
-
-// Nucleo Icons (ui)
-import '@/assets/css/nucleo-icons.css'
-
-// Font Awesome Free 5.15.4 MIT License
-import '@/assets/js/kit-fontawesome-42d5adcbca.js'
-
-// bootstrap (ui)
-import '@/assets/css/bootstrap-5.0.2/bootstrap.min.css'
-import '@/assets/js/bootstrap-5.0.2/bootstrap.bundle.min.js'
-
-// perfect-scrollbar
-import '@/assets/css/perfect-scrollbar.css'
-import '@/assets/js/perfect-scrollbar/perfect-scrollbar.min.js'
-
-// css (ui)
-import '@/assets/css/now-design-system-pro.min.css'
-import '@/assets/js/now-design-system-pro.js'
+import './assets/css/font_Montserrat_Open_Sans_Condensed.css'
 
 // session store
 const sessionStore = useSessionStore()
@@ -71,7 +52,7 @@ const { loadPlace } = sessionStore
 const loadingPlace = ref(false)
 
 // gestion synchrone du chargement des informations du tenant/lieu/artist/...
-async function waitLoadPlace () {
+async function waitLoadPlace() {
   loadingPlace.value = await loadPlace()
 }
 
@@ -83,7 +64,7 @@ const plausible = Plausible({
 </script>
 
 <style>
-/* ajout partie arrondie sur groupe input por l'ensemble de l'application */
+/* ajout partie arrondie sur groupe input por l'ensemble de l'application 
 .app-rounded-right-20 {
   border-bottom-right-radius: 20px !important;
   border-top-right-radius: 20px !important;
@@ -91,5 +72,16 @@ const plausible = Plausible({
 
 .w-15 {
   width: 15% !important;
+}
+*/
+
+
+.boutik-outline-primary {
+  color: #f05f3e !important;
+  border-color: #f05f3e !important;
+}
+
+.boutik-text-primary span {
+  color: #f05f3e !important;
 }
 </style>

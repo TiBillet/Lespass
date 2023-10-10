@@ -19,7 +19,7 @@ const props = defineProps({
     },
     rows: {
         type: Number,
-        default: 5
+        default: 3
     },
     color: String
 });
@@ -28,11 +28,12 @@ const emit = defineEmits(["update:content"])
 let contentSize = ref(0)
 
 
-onMounted(() => {
-    const id = JSON.parse(JSON.stringify(props)).id
-    console.log('id =', id);
-    const test = document.querySelector('#' + id).value
-    console.log('test =', test);
+onMounted(() => {  
+    const textarea = document.querySelector('#' + props.id)
+    contentSize.value = textarea.value
+    const parent = textarea.parentNode
+    parent.style.height = (props.cols * 22.4) + 'px'
+    
 })
 
 function stateFocus(element) {
@@ -88,6 +89,8 @@ function sendInput(evt) {
 }
 
 .textarea-md-group textarea {
+    position: absolute;
+    left: 0;
     border: 0;
     outline: 0;
     border-radius: 0;

@@ -5,6 +5,25 @@ import router from "./router";
 import App from "./App.vue";
 import mitt from "mitt";
 
+
+// bootstrap 5.3.2
+import 'bootstrap/dist/css/bootstrap.min.css'
+import * as Bootstrap from 'bootstrap/dist/js/bootstrap.bundle.js'
+window.bootstrap = Bootstrap
+
+// material-kit-2
+import './assets/css/material-kit-2/material-kit.min.css'
+
+// import the fontawesome core
+// import { library } from '@fortawesome/fontawesome-svg-core'
+// import font awesome icon component
+import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
+// import specific icons
+// import { faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons'
+
+// add icons to the library
+// library.add(faMagnifyingGlass)
+
 window.emitter = mitt();
 
 const pinia = createPinia();
@@ -16,6 +35,9 @@ pinia.use(({ store }) => {
 });
 
 const app = createApp(App);
+
+// ajout "blobal" du composant "font-awesome-icon" 
+app.component('font-awesome-icon', FontAwesomeIcon)
 
 // --- directives ---
 /**
