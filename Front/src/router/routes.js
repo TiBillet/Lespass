@@ -1,3 +1,4 @@
+import { log } from '../communs/LogError.js'
 import Accueil from '../views/Accueil.vue'
 
 export const routes = [

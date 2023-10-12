@@ -25,7 +25,7 @@
     "pinia": "^2.1.6",
     "pinia-plugin-persistedstate": "^3.2.0",
     "plausible-tracker": "^0.3.8",
-    "uuid": "^9.0.0",
+    "uuid": "^9.0.1",
     "vue": "^3.2.26",
     "vue-router": "^4.0.12"
   },

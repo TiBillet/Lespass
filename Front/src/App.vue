@@ -61,6 +61,8 @@ waitLoadPlace()
 const plausible = Plausible({
   domain: `${window.location.protocol}//${window.location.host}`
 })
+
+
 </script>
 
 <style>
@@ -75,13 +77,24 @@ const plausible = Plausible({
 }
 */
 
+#app {
+  --app-color-primary: #f05f3e;
+}
 
 .boutik-outline-primary {
-  color: #f05f3e !important;
+  color: var(--app-color-primary) !important;
   border-color: #f05f3e !important;
 }
 
 .boutik-text-primary span {
+  color: #f05f3e !important;
+}
+
+.boutik-bg-primary {
+  background-color: #f05f3e !important;
+}
+
+.boutik-color-primary {
   color: #f05f3e !important;
 }
 </style>

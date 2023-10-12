@@ -8,21 +8,30 @@ import mitt from "mitt";
 
 // bootstrap 5.3.2
 import 'bootstrap/dist/css/bootstrap.min.css'
-import * as Bootstrap from 'bootstrap/dist/js/bootstrap.bundle.js'
+import * as Bootstrap from 'bootstrap/dist/js/bootstrap.bundle.min.js'
 window.bootstrap = Bootstrap
 
 // material-kit-2
 import './assets/css/material-kit-2/material-kit.min.css'
 
 // import the fontawesome core
-// import { library } from '@fortawesome/fontawesome-svg-core'
+import { library } from '@fortawesome/fontawesome-svg-core'
 // import font awesome icon component
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
 // import specific icons
-// import { faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons'
+import { faPaintBrush } from '@fortawesome/free-solid-svg-icons'
+import { faMusic } from '@fortawesome/free-solid-svg-icons'
+import { faWheatAwn } from '@fortawesome/free-solid-svg-icons'
+import { faCamera } from '@fortawesome/free-solid-svg-icons'
+import { faImage } from '@fortawesome/free-solid-svg-icons'
+import { faFilm } from '@fortawesome/free-solid-svg-icons'
+import { faHouseFlag } from '@fortawesome/free-solid-svg-icons'
+import { faPeopleGroup } from '@fortawesome/free-solid-svg-icons'
+import { faBuilding } from '@fortawesome/free-solid-svg-icons'
+
 
 // add icons to the library
-// library.add(faMagnifyingGlass)
+library.add(faPaintBrush,faMusic,faWheatAwn,faCamera,faImage,faFilm, faHouseFlag, faPeopleGroup, faBuilding)
 
 window.emitter = mitt();
 

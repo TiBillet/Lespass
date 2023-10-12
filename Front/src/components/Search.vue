@@ -17,8 +17,7 @@
 
 <script setup>
 let research = ''
-// import font awesome icon component
-// import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
+// Le composant "font-awesome-icon" est importé globallement dans main.js
 // import specific icons
 import { faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons'
 </script>

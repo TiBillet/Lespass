@@ -1,91 +1,79 @@
 <template>
-  <WizardCreation title="Créer votre espace">
-    <template #wizard-subtitle> Sélectionner, éditer un type d'espace. </template>
-    <template #wizard-tabs-content>
-      <div id="espace" class="wizard-tab-content">
-        <div class="espace-content d-flex flex-wrap justify-content-around">
-          <div v-for="(espace, index) in espacesType" :key="index" class="espace-card" :title="espace.description"
-            :style="cursorOff(espace.disable)" @click="
-              changeTenantCategorie(espace.categorie);
-            callWizardNext($event);
-            ">
-            <img :src="espace.urlImage" class="espace-card-sub espace-type-img" :alt="'image - ' + espace.name"
-              loading="lazy" />
-            <div class="espace-card-sub d-flex flex-column justify-content-center align-content-center">
-              <h5 class="card-title" :style="{ color: espace.colorText }">{{ espace.name }}</h5>
-            </div>
-            <div v-if="espace.disable" class="espace-card-sub bg-dark opacity-5"></div>
+  <CreationStep title="Créer votre espace" sub-title="Sélectionner, éditer un type d'espace." validation-creation-msg="validerCreationPlace">
+    <div id="espace" class="creation-tab-content">
+      <div class="espace-content d-flex flex-wrap justify-content-around">
+
+        <InputRadioImg v-for="(espace, index) in espacesType" :key="index" :label="espace.name" name="type-espace"
+          :value="espace.categorie" :info="espace.description" :icons="espace.icons" :disable="espace.disable"
+          :v-model="formCreatePlace.categorie" @update:model-value="newValue => formCreatePlace.categorie = newValue"
+          style="margin: auto 0;"/>
+
+      </div>
+    </div>
+
+    <div id="informations" class="creation-tab-content">
+      <div class="espace-content d-flex flex-column">
+        <InputMd id="creation-organisation" label="Organisation" height="22.4" color="red"
+          v-model="formCreatePlace.organisation" class="mt-3" />
+
+        <InputMd id="creation-short-description" label="Courte description" v-model="formCreatePlace.short_description" />
+
+        <TextareaMd id="creation-long-description" label="Votre longue description"
+          v-model="formCreatePlace.long_description" />
+
+        <InputFileMd type="file" id="creation-img-url" label="Url image" v-model="formCreatePlace.img_url" class="mt-2" />
+
+        <InputFileMd type="file" id="creation-logo-url" label="Url logo" v-model="formCreatePlace.logo_url" class="mt-2" />
+
+      </div>
+    </div>
+
+    <div id="validation" class="creation-tab-content">
+      <div class="espace-content d-flex flex-column">
+        <h3>Résumé</h3>
+
+        <div class="d-flex flex-row">
+          <div class="d-flex align-items-start w-25">Catégorie</div>
+          <div v-if="formCreatePlace.categorie !== ''" class="resume-valeur">{{ espacesType.find(espace => espace.categorie === formCreatePlace.categorie).name }}</div>
+        </div>
+
+        <div class="d-flex flex-row">
+          <div class="d-flex align-items-start w-25">Organisation</div>
+          <div class="resume-valeur">{{ formCreatePlace.organisation }}</div>
+        </div>
+
+        <div class="d-flex flex-row">
+          <div class="d-flex align-items-start w-25">Coute description</div>
+          <div class="resume-valeur">{{ formCreatePlace.short_description }}</div>
+        </div>
+        <div class="d-flex flex-row">
+          <div class="d-flex align-items-start w-25">Longue description</div>
+          <div class="resume-valeur">{{ formCreatePlace.long_description }}</div>
+        </div>
+        <div class="d-flex flex-row">
+          <div class="d-flex align-items-start w-25">Url de l'image</div>
+          <div v-if="formCreatePlace.img_url !== null" class="resume-valeur">{{ formCreatePlace.img_url.name }}</div>
+        </div>
+        <div class="d-flex flex-row">
+          <div class="d-flex align-items-start w-25">Url du logo</div>
+          <div v-if="formCreatePlace.logo_url !== null" class="resume-valeur">{{ formCreatePlace.logo_url.name }}</div>
+        </div>
+        <h3 class="mt-4" style="white-space: pre-line">Aurez vous besoin de récolter de l'argent ? (adhésion,
+          billetterie, crowdfundind, caisse enregistreuse, cashless)</h3>
+
+        <div class="d-flex flex-row justify-content-center">
+          <div class="d-flex flex-row">
+            <input type="radio" id="money" name="coin" value="true" />
+            <label for="money">Oui</label>
+          </div>
+          <div class="d-flex flex-row ms-4">
+            <input type="radio" id="no-money" name="coin" value="false" checked />
+            <label for="no-money">Non</label>
           </div>
         </div>
       </div>
-      <div id="informations" class="wizard-tab-content">
-        <div class="espace-content d-flex flex-column">
-          <InputMd id="wizard-organisation" label="Organisation" height="22.4" color="red"
-            v-model="formCreatePlace.organisation" />
-
-          <InputMd id="wizard-short-description" label="Courte description" height="22.4" color="red"
-            v-model="formCreatePlace.short_description" />
-
-          <!--
-          <div class="wizard-group">
-            <textarea id="wizard-long-description" class="wizard-input" placeholder="Votre longue description" v-model="formCreatePlace.long_description" rows="3"></textarea>
-            <label class="wizard-group-label" for="wizard-long-description">Longue description</label>
-          </div>
--->
-          <TextareaMd id="wizard-long-description" label="Votre longue description"
-            v-model="formCreatePlace.long_description" />
-
-          <div class="wizard-group">
-            <input type="file" id="wizard-img-url" class="wizard-input" @change="fileChange($event, 'image')" />
-            <label class="wizard-group-label" for="wizard-img-url">Url image</label>
-          </div>
-          <div class="wizard-group">
-            <input type="file" id="wizard-logo-url" class="wizard-input" @change="fileChange($event, 'logo')" />
-            <label class="wizard-group-label" for="wizard-logo-url">Url logo</label>
-          </div>
-        </div>
-      </div>
-      <div id="validation" class="wizard-tab-content">
-        <div class="espace-content d-flex flex-column">
-          <h3>Résumé</h3>
-          <div class="d-flex flex-row">
-            <div class="d-flex align-items-start w-25">organisation</div>
-            <div class="resume-valeur">{{ formCreatePlace.organisation }}</div>
-          </div>
-
-          <div class="d-flex flex-row">
-            <div class="d-flex align-items-start w-25">Coute description</div>
-            <div class="resume-valeur">{{ formCreatePlace.short_description }}</div>
-          </div>
-          <div class="d-flex flex-row">
-            <div class="d-flex align-items-start w-25">Longue description</div>
-            <div class="resume-valeur">{{ formCreatePlace.long_description }}</div>
-          </div>
-          <div class="d-flex flex-row">
-            <div class="d-flex align-items-start w-25">Url de l'image</div>
-            <div v-if="formCreatePlace.img_url !== null" class="resume-valeur">{{ formCreatePlace.img_url.name }}</div>
-          </div>
-          <div class="d-flex flex-row">
-            <div class="d-flex align-items-start w-25">Url du logo</div>
-            <div v-if="formCreatePlace.logo_url !== null" class="resume-valeur">{{ formCreatePlace.logo_url.name }}</div>
-          </div>
-          <h3 class="mt-4" style="white-space: pre-line">Aurez vous besoin de récolter de l'argent ? (adhésion,
-            billetterie, crowdfundind, caisse enregistreuse, cashless)</h3>
-
-          <div class="d-flex flex-row justify-content-center">
-            <div class="d-flex flex-row">
-              <input type="radio" id="money" name="coin" value="true" />
-              <label for="money">Oui</label>
-            </div>
-            <div class="d-flex flex-row ms-4">
-              <input type="radio" id="no-money" name="coin" value="false" checked />
-              <label for="no-money">Non</label>
-            </div>
-          </div>
-        </div>
-      </div>
-    </template>
-  </WizardCreation>
+    </div>
+  </CreationStep>
 </template>
 
 <script setup>
@@ -93,34 +81,49 @@ console.log("-> Tenants.vue");
 import { useSessionStore } from "../stores/session";
 import { emitEvent } from "../communs/EmitEvent";
 
-import WizardCreation from "../components/WizardCreation.vue";
+import CreationStep from "../components/CreationStep.vue";
 import InputMd from "../components/InputMd.vue";
+import InputFileMd from "../components/InputFileMd.vue";
 import TextareaMd from "../components/TextareaMd.vue";
+import InputRadioImg from "../components/InputRadioImg.vue";
 
 
 const sessionStore = useSessionStore();
 const { setLoadingValue, updateHeader, getAccessToken } = sessionStore;
+
+const iconsEspaceArtistique = [
+  { name: "paint-brush", left: "20px", top: "20px" },
+  { name: "music", left: "66px", top: "20px" },
+  { name: "wheat-awn", left: "40px", top: "50px" },
+  { name: "camera", left: "56px", top: "50px" },
+  { name: "image", left: "20px", top: "76px" },
+  { name: "film", left: "76px", top: "76px" }
+]
+
+// les données du formulaire
 let formCreatePlace = {
   organisation: "",
   short_description: "",
   long_description: "",
   img_url: null,
   logo_url: null,
-  categorie: ""
+  categorie: "",
 };
+
+// les différents types d'espace à créer
 const espacesType = [
   {
     name: "Artistique",
     description: "Pour tous projet artistique ...",
-    urlImage: "https://picsum.photos/300/300",
+    icons: iconsEspaceArtistique,
     colorText: "white",
     disable: false,
-    categorie: "A"
+    categorie: "A",
   },
   {
     name: "Lieu / association",
     description: "Pour tous lieu ou association ...",
-    urlImage: "https://picsum.photos/300/300",
+    icons: [{ name: "house-flag", left: "40px", top: "40px" }, { name: "people-group", left: "56px", top: "50px" }],
     colorText: "white",
     disable: false,
     categorie: "S"
@@ -128,7 +131,7 @@ const espacesType = [
   {
     name: "Festival",
     description: "Le Lorem Ipsum est simplement du faux texte employé dans la composition et la mise en page avant impression. Le Lorem Ipsum.",
-    urlImage: "https://picsum.photos/300/300",
+    icons: [{ name: "music", left: "40px", top: "40px" }, { name: "people-group", left: "56px", top: "50px" }],
     colorText: "white",
     disable: true,
     categorie: "C"
@@ -136,7 +139,7 @@ const espacesType = [
   {
     name: "Producteur",
     description: "On sait depuis longtemps que travailler avec du texte lisible et contenant du sens est source de distractions, et empêche de se concentrer sur la mise en page elle-même.",
-    urlImage: "https://picsum.photos/300/300",
+    icons: [{ name: "building", left: "46px", top: "46px" }],
     colorText: "white",
     disable: true,
     categorie: "P"
@@ -145,24 +148,6 @@ const espacesType = [
 
 updateHeader(null);
 
-function fileChange(evt, typeFile) {
-  if (typeFile === "image") {
-    formCreatePlace.img_url = evt.target.files[0];
-  }
-  if (typeFile === "logo") {
-    formCreatePlace.logo_url = evt.target.files[0];
-  }
-}
-
-function callWizardNext(evt) {
-  evt.preventDefault();
-  emitEvent("wizardNext", {});
-}
-
-function changeTenantCategorie(categorie) {
-  formCreatePlace.categorie = categorie;
-}
-
 function cursorOff(state) {
   if (state === true) {
     return "";
@@ -170,41 +155,9 @@ function cursorOff(state) {
     return "cursor: pointer;";
   }
 }
-async function goStripe() {
-  // enregistre l'email dans le storeUser
-  console.log("-> goStripe Onboard");
 
-  const api = `/api/onboard/`;
-  try {
-    setLoadingValue(true);
-
-    const response = await fetch(api, {
-      method: "GET",
-      cache: "no-cache",
-      headers: {
-        "Content-Type": "application/json"
-      }
-    });
-    const retour = await response.json();
-    console.log("retour =", retour);
-    if (response.status === 202) {
-      location.href = retour;
-    } else {
-      throw new Error(`Erreur goStripe Onboard'`);
-    }
-  } catch (erreur) {
-    console.log("-> validerLogin, erreur :", erreur);
-    setLoadingValue(false);
-    emitter.emit("toastSend", {
-      title: "validerLogin, erreur :",
-      contenu: erreur,
-      typeMsg: "danger",
-      delay: 8000
-    });
-  }
-}
-
-async function validerCreationPlace() {
+// validation
+document.addEventListener("validerCreationPlace", () => {
   // coin est de type string
   const coin = document.querySelector('input[name="coin"]:checked').value;
 
@@ -242,56 +195,17 @@ async function validerCreationPlace() {
       });
     });
   }
-
-  if (erreurs.length === 0) {
-    // nom monétaire
-    if (coin === "false") {
-      console.log("choix non monétaire.");
-      try {
-        // lieu / association
-        let urlApi = "/api/place/";
-
-        // artiste
-        if (formCreatePlace.categorie === "A") {
-          urlApi = "/api/artist/";
-        }
-
-        const response = await fetch(urlApi, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: "Bearer " + getAccessToken
-          },
-          body: JSON.stringify(formCreatePlace)
-        });
-        console.log("response =", response);
-        const retour = await response.json();
-        console.log("retour =", retour);
-      } catch (error) {
-        console.log(error);
-        emitter.emit("toastSend", {
-          title: "Erreur",
-          contenu: error,
-          typeMsg: "danger",
-          delay: 8000
-        });
-      }
-    } else {
-      // monétaire
-      console.log("choix monétaire: stripe");
-      // goStripe()
-    }
-  }
-}
-
-document.addEventListener("validerCreationPlace", validerCreationPlace);
+})
 </script>
+
 <style scoped>
-.wizard-tab-content {
-  --wizard-content-height: 412px;
-  min-height: var(--wizard-content-height);
-  max-height: var(--wizard-content-height);
+.creation-tab-content {
+  --creation-content-height: 412px;
+  min-height: var(--creation-content-height);
+  max-height: var(--creation-content-height);
+  display: none;
 }
+
 
 .espace-card,
 .espace-card-sub {
@@ -316,37 +230,9 @@ document.addEventListener("validerCreationPlace", validerCreationPlace);
 
 .espace-content {
   width: 100%;
-  min-height: var(--wizard-content-height);
-  max-height: var(--wizard-content-height);
+  min-height: var(--creation-content-height);
+  max-height: var(--creation-content-height);
   overflow-x: hidden;
   overflow-y: auto;
-}
-
-.wizard-group {
-  position: relative;
-  padding: 15px 0 0;
-  margin-top: 6px;
-}
-
-.wizard-input {
-  font-family: inherit;
-  width: 100%;
-  border: 0;
-  border-bottom: 1px solid #d2d2d2;
-  outline: 0;
-  font-size: 16px;
-  color: #212121;
-  padding: 7px 0;
-  background: transparent;
-  transition: border-color 0.2s;
-}
-
-.wizard-group-label {
-  position: absolute;
-  top: 0;
-  display: block;
-  transition: 0.2s;
-  font-size: 12px;
-  color: #9b9b9b;
 }
 </style>

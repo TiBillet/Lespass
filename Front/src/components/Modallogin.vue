@@ -18,17 +18,12 @@
 
             <div class="card-body">
               <form class="text-left needs-validation" @submit.prevent="validerLogin($event)" novalidate>
-                <div class="input-group input-group-dynamic has-validation">
-                  <input id="login-email" :value="getEmail" laria-describedby="email-addon" aria-label="Email"
-                         class="form-control" placeholder="Email" type="email"
-                          @keyup="validateEmail($event)" required>
-                  <div class="invalid-feedback">
-                    Merci de renseigner une adresse email valide.
-                  </div>
-                </div>
+                <InputMd id="login-email" label="Email" msg-error="Merci de renseigner une adresse email valide."
+                type="email" :validation="true"/>
+
                 <p class="mt-2">Nul besoin de mot de passe : un email vous sera envoyé pour validation.</p>
                 <div class="text-center">
-                  <button class="btn btn-round bg-gradient-info btn-lg mt-4 mb-0 h-44px" type="submit">Valider
+                  <button class="btn btn-round bg-gradient-info btn-lg mt-4 mb-0 h-44px l-120px" type="submit">Valider
                   </button>
                 </div>
               </form>
@@ -42,9 +37,9 @@
               </div>
 
               <div class="text-center mt-2">
-                <button class="btn btn-round bg-gradient-info btn-lg" type="button"
+                <button class="btn btn-round bg-gradient-info btn-lg mt-4 mb-0 h-44px l-120px" type="button"
                         @click="goCommunecter()">
-                  <div class="d-flex flex-row justify-content-center align-items-center w-100">
+                  <div class="d-flex flex-row justify-content-center align-items-center h-100 w-100">
                     <img :src="communecterLogo" class="communecter-logo" alt="logo communecter">
                   </div>
                 </button>
@@ -57,37 +52,42 @@
   </div>
 </template>
 <script setup>
+import InputMd from './InputMd.vue'
 // log
 import { log } from '../communs/LogError.js'
 
 // store
 import { useSessionStore } from '@/stores/session'
 import { setLocalStateKey } from '../communs/storeLocal'
-// import * as bootstrap from 'bootstrap/dist/js/bootstrap.bundle.js'
+
 // asset
 import communecterLogo from '@/assets/img/communecterLogo_31x28.png'
 
 const domain = `${location.protocol}//${location.host}`
 let { getEmail, updateEmail, loading } = useSessionStore()
 
-function validateEmail (event) {
-  let value = event.target.value
-  event.target.setAttribute('type', 'text')
+function validateEmail () {
+  const input =  document.querySelector('#login-email')
+  let value = input.value
   const re = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$/
   if (value.match(re) === null) {
-    event.target.parentNode.querySelector('.invalid-feedback').style.display = "block"
+    input.parentNode.querySelector('.invalid-feedback').style.display = "block"
+    return false
   } else {
-    event.target.parentNode.querySelector('.invalid-feedback').style.display = "none"
+    input.parentNode.querySelector('.invalid-feedback').style.display = "none"
+    return true
   }
 }
 
 async function validerLogin (event) {
+  const emailOk = validateEmail()
   if (!event.target.checkValidity()) {
     event.preventDefault()
     event.stopPropagation()
   }
   event.target.classList.add('was-validated')
-  if (event.target.checkValidity() === true) {
+  
+  if (event.target.checkValidity() === true && emailOk === true) {
     const email = document.querySelector('#login-email').value
     // enregistre l'email dans le storeUser
     updateEmail(email)
@@ -146,8 +146,11 @@ function goCommunecter () {
   height: 44px;
 }
 
+.l-120px {
+  width: 120px;
+}
 .communecter-logo {
-  height: 26px;
-  width: auto;
+  /* height: 26px; */
+  /* width: auto; */
 }
 </style>

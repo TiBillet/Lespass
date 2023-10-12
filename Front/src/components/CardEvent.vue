@@ -46,10 +46,11 @@
         {{ event.artists[0].configuration.short_description }}
       </p>
 
-      <div class="btn btn-outline-primary boutik-outline-primary btn-sm" @click="$router.push({ path: '/event/' + event.slug })"
+      <div class="btn btn-outline-primary boutik-outline-primary btn-sm" @click="$router.push({ path: '/event/' + event.slug, query: {url: event.url, categorie: place.categorie}})"
       role="button" :aria-label="`Réserver ${event.slug}`">
        {{ event.products.length === 0 ?  "Informations" : "Réserver" }}
       </div>
+
     </div>
   </div>
 
@@ -57,7 +58,8 @@
 
 <script setup>
 const props = defineProps({
-  event: Object
+  event: Object,
+  place: Object
 })
 
 function formateDate (dateString) {

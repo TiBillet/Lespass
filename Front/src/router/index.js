@@ -9,6 +9,7 @@ import { routes } from './routes.js'
 
 // ensemble de fonctions de près chargementt de données
 import * as preload from './preload.js'
+import { log } from '../communs/LogError.js'
 
 const router = createRouter({
   history: createWebHistory(),
