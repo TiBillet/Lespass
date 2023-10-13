@@ -8,8 +8,6 @@ import mitt from "mitt";
 
 // bootstrap 5.3.2
 import 'bootstrap/dist/css/bootstrap.min.css'
-import * as Bootstrap from 'bootstrap/dist/js/bootstrap.bundle.min.js'
-window.bootstrap = Bootstrap
 
 // material-kit-2
 import './assets/css/material-kit-2/material-kit.min.css'
@@ -59,3 +57,6 @@ app.directive("focuselement", (el, binding) => {
 });
 
 app.use(pinia).use(router).mount("#app");
+
+import * as Bootstrap from "bootstrap/dist/js/bootstrap.bundle.js"
+window.bootstrap = Bootstrap

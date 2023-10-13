@@ -9,6 +9,7 @@
 </template>
 
 <script setup>
+import { onMounted } from "vue"
 
 const props = defineProps({
   id: String,
@@ -51,6 +52,16 @@ function isFilled(evt) {
     parent.classList.remove('is-filled');
   }
 }
+
+onMounted(() => {
+  const input = document.querySelector('#' + props.id)
+  const parent = input.parentNode
+  if (input.value != "") {
+    parent.classList.add('is-filled');
+  } else {
+    parent.classList.remove('is-filled');
+  }
+})
 </script>
 
 <style>

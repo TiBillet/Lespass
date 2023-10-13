@@ -1,3 +1,4 @@
+import "bootstrap/dist/js/bootstrap.bundle.js"
 // store
 import { useSessionStore } from '../stores/session'
 import { getLocalStateKey } from '../communs/storeLocal.js'

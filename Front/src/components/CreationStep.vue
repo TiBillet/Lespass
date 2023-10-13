@@ -11,7 +11,7 @@
           </div>
           
           <!-- navigation -->
-          <div class="creation-navigation">
+          <div class="creation-navigation" @vue:updated="updateNav()">
             <ul class="nav nav-pills">
               <li v-for="item in navigation" :key="item.id" @click="moveBt($event)" class="nav-item-creation" :data-cible="item.name" :data-index="item.id" :style="{ width: itemNavWidth + '%' }">
                 {{ item.name.toUpperCase() }}
@@ -56,20 +56,24 @@ const props = defineProps({
   validationCreationMsg: String
 });
 
-let navigation = ref([]);
-let itemNavWidth = ref(0);
-let etape = ref(0);
-let styleBtMobile = ref({
+const initStyleBtMobile = {
   width: "10%",
   transform: "translate3d(-8px, 0px, 0px)",
   transition: "all 0.5s cubic-bezier(0.29, 1.42, 0.79, 1) 0s"
-});
+}
+let navigation = ref([]);
+let itemNavWidth = ref(0);
+let etape = ref(0);
+let styleBtMobile = ref(initStyleBtMobile);
 
 
 function init() {
   navigation.value = [];
+  itemNavWidth.value = 0
+  etape.value = 0
+  styleBtMobile.value = initStyleBtMobile
   const contents = document.querySelectorAll(".creation-tab-content");
-  // construire la navigation à partir des ".creation-tab-content"
+  // construire la navigation à partir des ".creation-tab-content" pour le template (v-for)
   const itemsNav = contents.length;
   itemNavWidth.value = (100 / itemsNav).toFixed(3);
   styleBtMobile.value.width = itemNavWidth.value + "%";
@@ -78,40 +82,43 @@ function init() {
     const nameRaw = element.getAttribute("id");
     const name = nameRaw !== undefined ? nameRaw : "inconnu";
     navigation.value.push({ id: i, name });
-    // met à jour le bouton mobile avec le nom du premier item
-    if (i === 0) {
-      // text du bouton mobile
-      document.querySelector('div[class~="bt-nav-creation"]').innerText = name.toUpperCase();
-      element.style.display = "block";
-    } else {
-      element.style.display = "none";
-    }
   }
 }
 
-function moveBt(event) {
-  const ele = event.target;
+function updateNav() {
+  const indexBt = etape.value
+
   // text du bouton mobile
-  document.querySelector('div[class~="bt-nav-creation"]').innerText = ele.innerText;
-  // animation
-  const index = parseInt(ele.getAttribute("data-index"));
-  etape.value = index;
+  const currentItem = document.querySelector(`li[data-index="${indexBt}"]`)
+  const textBt = currentItem.innerText
+  document.querySelector('div[class~="bt-nav-creation"]').innerText = textBt; 
+  // pour l'animation du bouton
   const nbItem = document.querySelectorAll(".creation-tab-content").length;
-  const navWidth = document.querySelector('ul[class="nav nav-pills"]').offsetWidth / nbItem;
-  // const itemNavs = document.querySelectorAll('ul[class="nav nav-pills"] li')
+  const menuWidth = document.querySelector('ul[class="nav nav-pills"]').offsetWidth
+  const navWidth = menuWidth / nbItem;
   let decX = 0;
-  if (index === 0) {
+  if (indexBt === 0) {
     decX = -8;
   }
-  if (index + 1 === nbItem) {
+  if (indexBt + 1 === nbItem) {
     decX = 8;
   }
-  styleBtMobile.value.transform = `translate3d(${decX + index * navWidth}px, 0px, 0px)`;
+  // actualise la position du bouton
+  styleBtMobile.value.transform = `translate3d(${decX + indexBt * navWidth}px, 0px, 0px)`;
   // désactivation / activation des onglets
   document.querySelectorAll(".creation-tab-content").forEach((tab) => {
     tab.style.display = "none";
   });
-  document.querySelector("#" + ele.getAttribute("data-cible")).style.display = "block";
+  // active le contenu adequate
+  const currentIdContent = "#" + currentItem.getAttribute("data-cible")
+  document.querySelector(currentIdContent).style.display = "block";
+}
+
+function moveBt(event) {
+  const itemMenu = event.target;
+  const index = parseInt(itemMenu.getAttribute("data-index"));
+  etape.value = index;
+  updateNav()
 }
 
 function getNbItemNav() {
@@ -136,13 +143,16 @@ function callNavCreationNext() {
 }
 
 
-document.addEventListener("resize", init);
+window.addEventListener("resize", updateNav, false);
 document.addEventListener("navCreationNext", callNavCreationNext);
 
-onMounted(() => init());
+// initialise le menu de navigation du composant
+onMounted(() => {
+  init()
+});
 
 onBeforeUnmount(() => {
-  document.removeEventListener("resize", init);
+  window.removeEventListener("resize", updateNav);
   document.removeEventListener("navCreationNext", callNavCreationNext);
 });
 </script>

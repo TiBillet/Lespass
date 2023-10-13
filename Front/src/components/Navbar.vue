@@ -101,7 +101,6 @@
 // console.log(' -> Navbar.vue !')
 import { storeToRefs } from 'pinia'
 import { useSessionStore } from '@/stores/session'
-// import * as bootstrap from 'bootstrap/dist/js/bootstrap.bundle.js'
 
 
 const sessionStore = useSessionStore()
@@ -123,10 +122,6 @@ const getTitle = (headerPlace) => {
   }
 }
 
-
-
-
-
 function showModalLogin() {
   const elementModal = document.querySelector('#modal-form-login')
   const modal = bootstrap.Modal.getOrCreateInstance(elementModal) // Returns a Bootstrap modal instance
@@ -147,10 +142,7 @@ async function showModal(id) {
 
 }
 
-if (getIsLogin) {
-  automaticConnection()
-}
-
+automaticConnection()
 </script>
 
 <style scoped>

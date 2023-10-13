@@ -12,7 +12,7 @@
 
 const props = defineProps({
   id: String,
-  modelValue: String,
+  modelValue: Object,
   label: String,
   msgError: String,
   type: {

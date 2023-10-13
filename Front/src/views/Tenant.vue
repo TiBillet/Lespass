@@ -1,12 +1,13 @@
 <template>
-  <CreationStep title="Créer votre espace" sub-title="Sélectionner, éditer un type d'espace." validation-creation-msg="validerCreationPlace">
+  <CreationStep title="Créer votre espace" sub-title="Sélectionner, éditer un type d'espace."
+    validation-creation-msg="validerCreationPlace">
     <div id="espace" class="creation-tab-content">
       <div class="espace-content d-flex flex-wrap justify-content-around">
 
         <InputRadioImg v-for="(espace, index) in espacesType" :key="index" :label="espace.name" name="type-espace"
           :value="espace.categorie" :info="espace.description" :icons="espace.icons" :disable="espace.disable"
           :v-model="formCreatePlace.categorie" @update:model-value="newValue => formCreatePlace.categorie = newValue"
-          style="margin: auto 0;"/>
+          style="margin: auto 0;" />
 
       </div>
     </div>
@@ -23,7 +24,8 @@
 
         <InputFileMd type="file" id="creation-img-url" label="Url image" v-model="formCreatePlace.img_url" class="mt-2" />
 
-        <InputFileMd type="file" id="creation-logo-url" label="Url logo" v-model="formCreatePlace.logo_url" class="mt-2" />
+        <InputFileMd type="file" id="creation-logo-url" label="Url logo" v-model="formCreatePlace.logo_url"
+          class="mt-2" />
 
       </div>
     </div>
@@ -34,7 +36,8 @@
 
         <div class="d-flex flex-row">
           <div class="d-flex align-items-start w-25">Catégorie</div>
-          <div v-if="formCreatePlace.categorie !== ''" class="resume-valeur">{{ espacesType.find(espace => espace.categorie === formCreatePlace.categorie).name }}</div>
+          <div v-if="formCreatePlace.categorie !== ''" class="resume-valeur">{{ espacesType.find(espace =>
+            espace.categorie === formCreatePlace.categorie).name }}</div>
         </div>
 
         <div class="d-flex flex-row">
@@ -156,8 +159,43 @@ function cursorOff(state) {
   }
 }
 
+async function goStripe() {
+  // enregistre l'email dans le storeUser
+  console.log("-> goStripe Onboard");
+
+  const api = `/api/onboard/`;
+  try {
+    setLoadingValue(true);
+
+    const response = await fetch(api, {
+      method: "GET",
+      cache: "no-cache",
+      headers: {
+        "Content-Type": "application/json"
+      }
+    });
+    const retour = await response.json();
+    console.log("retour =", retour);
+    if (response.status === 202) {
+      location.href = retour;
+    } else {
+      throw new Error(`Erreur goStripe Onboard'`);
+    }
+  } catch (erreur) {
+    console.log("-> validerLogin, erreur :", erreur);
+    setLoadingValue(false);
+    emitter.emit("toastSend", {
+      title: "validerLogin, erreur :",
+      contenu: erreur,
+      typeMsg: "danger",
+      delay: 8000
+    });
+  }
+}
+
+
 // validation
-document.addEventListener("validerCreationPlace", () => {
+document.addEventListener("validerCreationPlace", async () => {
   // coin est de type string
   const coin = document.querySelector('input[name="coin"]:checked').value;
 
@@ -194,6 +232,57 @@ document.addEventListener("validerCreationPlace", () => {
         delay: 6000
       });
     });
+  }
+
+  if (erreurs.length === 0) {
+    // choix nom monétaire
+    if (coin === "false") {
+      console.log("choix non monétaire.");
+      try {
+        // lieu / association
+        let urlApi = "/api/place/";
+
+        // artiste
+        if (formCreatePlace.categorie === "A") {
+          urlApi = "/api/artist/";
+        }
+
+        const response = await fetch(urlApi, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + getAccessToken
+          },
+          body: JSON.stringify(formCreatePlace)
+        });
+        console.log("response =", response);
+        const retour = await response.json();
+        if (response.status === 201) {
+          // message de succès
+          const typeEspace = espacesType.find(espace => espace.categorie === retour.categorie).name
+          const msg = `Votre espace "${retour.organisation}" de type "${typeEspace.name}" a été créé.
+          Lien: ${retour.domain}`
+          emitter.emit('modalMessage', {
+            titre: 'Validation',
+            typeMsg: 'success',
+            contenu: msg
+          })
+        }
+        console.log("retour =", retour);
+      } catch (error) {
+        console.log(error);
+        emitter.emit("toastSend", {
+          title: "Erreur",
+          contenu: error,
+          typeMsg: "danger",
+          delay: 8000
+        });
+      }
+    } else {
+      // choix monétaire
+      console.log("choix monétaire: stripe");
+      // goStripe()
+    }
   }
 })
 </script>
@@ -234,5 +323,4 @@ document.addEventListener("validerCreationPlace", () => {
   max-height: var(--creation-content-height);
   overflow-x: hidden;
   overflow-y: auto;
-}
-</style>
+}</style>
