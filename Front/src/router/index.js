@@ -98,6 +98,16 @@ router.beforeEach(async (to, from, next) => {
     redirection = true
   }
 
+  // intercepte retour de stripe
+  if (to.name === 'StripeReturnCreateTenant') {
+    const { postStripeReturn } = useSessionStore()
+
+    const stripeStep = getLocalStateKey('stripeStep')
+  }
+
+  
+
+
   // près chargement
   if (to.meta.preload) {
     const result = await preload[to.meta.preload.name](to)

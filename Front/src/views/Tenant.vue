@@ -82,6 +82,7 @@
 <script setup>
 console.log("-> Tenants.vue");
 import { useSessionStore } from "../stores/session";
+import { setLocalStateKey } from '../communs/storeLocal.js'
 import { useRouter } from 'vue-router'
 
 import CreationStep from "../components/CreationStep.vue";
@@ -168,6 +169,9 @@ async function goStripe() {
   try {
     setLoadingValue(true);
 
+    // init étape creation stripe enregistrement en local(long durée)
+    setLocalStateKey('stripeStep', { action: 'expect_payment_stripe_createTenant', tenantOrganisation: formCreatePlace.organisation, tenantCategorie: formCreatePlace.categorie, nextPath: '/' })
+
     const response = await fetch(api, {
       method: "GET",
       cache: "no-cache",
@@ -182,15 +186,17 @@ async function goStripe() {
     } else {
       throw new Error(`Erreur goStripe Onboard'`);
     }
+    
   } catch (erreur) {
     console.log("-> validerLogin, erreur :", erreur);
-    setLoadingValue(false);
     emitter.emit("toastSend", {
       title: "validerLogin, erreur :",
       contenu: erreur,
       typeMsg: "danger",
       delay: 8000
     });
+  } finally {
+    setLoadingValue(false);
   }
 }
 
@@ -290,7 +296,7 @@ document.addEventListener("validerCreationPlace", async () => {
     } else {
       // choix monétaire
       console.log("choix monétaire: stripe");
-      // goStripe()
+      goStripe()
     }
   }
 })
