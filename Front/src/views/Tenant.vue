@@ -82,7 +82,7 @@
 <script setup>
 console.log("-> Tenants.vue");
 import { useSessionStore } from "../stores/session";
-import { emitEvent } from "../communs/EmitEvent";
+import { useRouter } from 'vue-router'
 
 import CreationStep from "../components/CreationStep.vue";
 import InputMd from "../components/InputMd.vue";
@@ -93,6 +93,7 @@ import InputRadioImg from "../components/InputRadioImg.vue";
 
 const sessionStore = useSessionStore();
 const { setLoadingValue, updateHeader, getAccessToken } = sessionStore;
+const router = useRouter()
 
 const iconsEspaceArtistique = [
   { name: "paint-brush", left: "20px", top: "20px" },
@@ -247,6 +248,7 @@ document.addEventListener("validerCreationPlace", async () => {
           urlApi = "/api/artist/";
         }
 
+        setLoadingValue(true)
         const response = await fetch(urlApi, {
           method: "POST",
           headers: {
@@ -258,14 +260,18 @@ document.addEventListener("validerCreationPlace", async () => {
         console.log("response =", response);
         const retour = await response.json();
         if (response.status === 201) {
+          // retour à l'accueil
+          router.push({ path: '/' })
           // message de succès
           const typeEspace = espacesType.find(espace => espace.categorie === retour.categorie).name
-          const msg = `Votre espace "${retour.organisation}" de type "${typeEspace.name}" a été créé.
-          Lien: ${retour.domain}`
+          const msg = `
+            <div>Votre espace "${retour.organisation}" de type "${typeEspace}" a été créé.</div>
+            <div>Lien: ${retour.domain}</div>`
           emitter.emit('modalMessage', {
             titre: 'Validation',
             typeMsg: 'success',
-            contenu: msg
+            contenu: msg,
+            dynamic: true // pour insérer du html
           })
         }
         console.log("retour =", retour);
@@ -277,7 +283,10 @@ document.addEventListener("validerCreationPlace", async () => {
           typeMsg: "danger",
           delay: 8000
         });
+      } finally {
+        setLoadingValue(false)
       }
+
     } else {
       // choix monétaire
       console.log("choix monétaire: stripe");
@@ -323,4 +332,5 @@ document.addEventListener("validerCreationPlace", async () => {
   max-height: var(--creation-content-height);
   overflow-x: hidden;
   overflow-y: auto;
-}</style>
+}
+</style>

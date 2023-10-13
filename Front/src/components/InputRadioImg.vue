@@ -58,6 +58,7 @@ function sendInput(evt) {
   input.parentNode.classList.add('input-radio-image-active')
 }
 
+// init tooltip
 onMounted(() => {
   const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
   const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))

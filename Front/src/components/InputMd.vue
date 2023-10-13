@@ -54,6 +54,7 @@ function isFilled(evt) {
 }
 
 onMounted(() => {
+  console.log('--> props.id =', props.id);
   const input = document.querySelector('#' + props.id)
   const parent = input.parentNode
   if (input.value != "") {

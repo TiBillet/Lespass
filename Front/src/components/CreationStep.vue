@@ -43,7 +43,6 @@
 
 <script setup>
 console.log("-> CreationStep.vue");
-
 import { onMounted, onBeforeUnmount, ref } from "vue";
 import { emitEvent } from "../communs/EmitEvent";
 

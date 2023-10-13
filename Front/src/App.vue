@@ -61,8 +61,6 @@ waitLoadPlace()
 const plausible = Plausible({
   domain: `${window.location.protocol}//${window.location.host}`
 })
-
-
 </script>
 
 <style>
