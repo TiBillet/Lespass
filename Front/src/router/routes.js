@@ -52,6 +52,7 @@ export const routes = [
   {
     // route interceptée
     path: '/stripe/return/:id',
+    alias: '/onboard_stripe_return/:id',
     name: 'StripeReturn',
     component: {}
   },

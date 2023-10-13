@@ -460,7 +460,20 @@ export const sessionActions = {
 
     const stripeStep = getLocalStateKey('stripeStep')
     // console.log('stripeStep =', stripeStep)
+    console.log('stripeStep =', stripeStep);
 
+
+    // attente stripe create tenant
+    if (stripeStep.action === 'expect_payment_stripe_createTenant') {
+      messageValidation = `
+        <h3>Création  de votre expace "${stripeStep.tenantOrganisation}" OK.</h3>
+        <h3>Un émail vous est envoyé Pour confirmation !</h3>
+        `
+      messageErreur = `Retour stripe pour la création de tenant:`
+      // action stripe = aucune
+      setLocalStateKey('stripeStep', { action: null })
+    }
+    
     // adhésion, attente stripe adhesion
     if (stripeStep.action === 'expect_payment_stripe_membership') {
       messageValidation = `<h3>Adhésion OK !</h3>`
@@ -511,6 +524,7 @@ export const sessionActions = {
         // console.log('-> postStripeReturn, expect_payment_stripe_membership !')
         this.getMe()
       }
+    
     }).catch(function (error) {
       log({ message: 'postStripeReturn, /api/webhook_stripe/ error: ', error })
       emitter.emit('modalMessage', {

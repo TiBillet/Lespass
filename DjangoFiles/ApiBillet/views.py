@@ -1281,8 +1281,8 @@ def create_account_link_for_onboard(id_acc_connect=False):
 
     account_link = stripe.AccountLink.create(
         account=id_acc_connect,
-        refresh_url=f"https://{meta_url}/api/onboard_stripe_return/{id_acc_connect}",
-        return_url=f"https://{meta_url}/api/onboard_stripe_return/{id_acc_connect}",
+        refresh_url=f"https://{meta_url}/onboard_stripe_return/{id_acc_connect}",
+        return_url=f"https://{meta_url}/onboard_stripe_return/{id_acc_connect}",
         type="account_onboarding",
     )
 
