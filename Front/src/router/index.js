@@ -1,3 +1,4 @@
+import "bootstrap/dist/js/bootstrap.bundle.js"
 // store
 import { useSessionStore } from '../stores/session'
 import { getLocalStateKey } from '../communs/storeLocal.js'
@@ -9,6 +10,7 @@ import { routes } from './routes.js'
 
 // ensemble de fonctions de près chargementt de données
 import * as preload from './preload.js'
+import { log } from '../communs/LogError.js'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -27,9 +29,20 @@ router.beforeEach(async (to, from, next) => {
   let redirection = false
   let nouvelleRoute = '/'
 
+  // pour les routes sécurisé par token (connexion)
+  const { getIsLogin } = useSessionStore() 
+
   if (from.name !== undefined) {
     nouvelleRoute = from.path
   }
+
+
+  if (to.meta.requiresAuth && !getIsLogin) {
+    nouvelleRoute = '/'
+    console.log('-> demande le login!')
+    redirection = true
+  }
+
 
   // par défaut le header et la navbar son affiché
   let { setIdentitySite } = useSessionStore()
@@ -42,7 +55,7 @@ router.beforeEach(async (to, from, next) => {
 
   // intercepte la route "NotFound" et redirige sur le wiki tibillet
   if (to.name === 'NotFound') {
-    // window.location = "https://wiki.tibillet.re/"
+    window.location = "https://tibillet.org"
   }
 
   // intercepte la route "EmailConfirmation" et active l'email

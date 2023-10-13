@@ -22,7 +22,7 @@ export const sessionActions = {
     this.header = value
   },
   async getMe () {
-    console.log('-> etape 2 , getMe, accessToken = ', this.accessToken)
+    // console.log('-> etape 2 , getMe, accessToken = ', this.accessToken)
     try {
       const apiMe = `/api/user/me/`
       const options = {
@@ -40,8 +40,8 @@ export const sessionActions = {
         // console.log('-> getMe, retour =', retour)
         this.loading = false
         this.me = retour
-        console.log('retour =', retour)
-        console.log('this.me =', this.me)
+        // console.log('retour =', retour)
+        // console.log('this.me =', this.me)
       } else {
         throw new Error(`Erreur ${apiMe} !`)
       }
@@ -119,8 +119,9 @@ export const sessionActions = {
     this.loading = false
   },
   async automaticConnection () {
+    // console.log('-> automaticConnection.');
     const refreshToken = getLocalStateKey('refreshToken')
-    if (this.accessToken === '' && refreshToken !== undefined && refreshToken !== '') {
+    if (refreshToken !== undefined && refreshToken !== '') {
       log({ message: '-> automaticConnection' })
       const api = `/api/user/token/refresh/`
       this.loading = true
@@ -134,10 +135,19 @@ export const sessionActions = {
           body: JSON.stringify({ refresh: refreshToken })
         })
         const retour = await response.json()
-        // console.log('retour =', retour)
+        // refreshToken bon
         if (response.status === 200) {
           this.accessToken = retour.access
           await this.getMe()
+        } else {
+          // refreshToken n'est plus bon
+          this.disconnect()
+          emitter.emit('toastSend', {
+            title: 'Information',
+            contenu: "Vous n'êtes plus connecté.",
+            typeMsg: 'primary',
+            delay: 6000
+          })
         }
       } catch (error) {
         log({ message: 'automaticConnection, /api/user/token/refresh/, error:', error })

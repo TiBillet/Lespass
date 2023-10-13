@@ -1,7 +1,7 @@
 <!--inspiré de card4 : https://demos.creative-tim.com/now-ui-design-system-pro/sections/page-sections/general-cards.html-->
 <template>
-  <div class="card test-card-event">
-    <div class="card-header p-0 position-relative z-index-1">
+  <div class="card test-card-event" data-animation="true">
+    <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
       <a class="d-block">
         <img
             class="img-fluid shadow border-radius-lg"
@@ -21,7 +21,7 @@
       <p class="text-dark">
         {{ formateDate(event.datetime) }}
 
-        <span class="text-primary text-uppercase text-sm font-weight-bold">
+        <span class="text-primary text-uppercase text-sm font-weight-bold boutik-text-primary">
         <span v-for="(produit, index) in event.products" :key="index">
           <span v-if="produit.categorie_article === 'B'">
             <span v-for="price in produit.prices" :key="produit.uuid">
@@ -46,10 +46,11 @@
         {{ event.artists[0].configuration.short_description }}
       </p>
 
-      <div class="btn btn-outline-primary btn-sm" @click="$router.push({ path: '/event/' + event.slug })"
+      <div class="btn btn-outline-primary boutik-outline-primary btn-sm" @click="$router.push({ path: '/event/' + event.slug, query: {url: event.url, categorie: place.categorie}})"
       role="button" :aria-label="`Réserver ${event.slug}`">
        {{ event.products.length === 0 ?  "Informations" : "Réserver" }}
       </div>
+
     </div>
   </div>
 
@@ -57,7 +58,8 @@
 
 <script setup>
 const props = defineProps({
-  event: Object
+  event: Object,
+  place: Object
 })
 
 function formateDate (dateString) {

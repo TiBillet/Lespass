@@ -4,7 +4,7 @@
             <label></label>
             <div class="input-group">
                 <span class="input-group-text">
-                    <i class="fas fa-search" aria-hidden="true"></i>
+                    <font-awesome-icon :icon="faMagnifyingGlass" />
                 </span>
                 <input v-model.lazy="research" class="form-control" placeholder="Rechechez un évènement" type="text" />
             </div>
@@ -17,7 +17,9 @@
 
 <script setup>
 let research = ''
+// Le composant "font-awesome-icon" est importé globallement dans main.js
+// import specific icons
+import { faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons'
 </script>
 
-<style>
-</style>
+<style></style>

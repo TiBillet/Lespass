@@ -1,5 +1,5 @@
 <template>
-  <div class="card card-background">
+  <div class="card card-background mb-5">
     <div class="full-background" :style="{ backgroundImage: getBackgroundImage() }"></div>
     <div class="card-body pt-12">
       <h4 class="text-white" role="heading" :aria-label="artist.organisation">{{ artist.organisation }}</h4>
@@ -8,6 +8,7 @@
         {{ artist.short_description }}</p>
     </div>
   </div>
+  <div></div>
 </template>
 
 <script setup>

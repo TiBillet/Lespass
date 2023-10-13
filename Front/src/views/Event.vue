@@ -2,7 +2,7 @@
   <div class="container mt-5 test-view-event">
     <!-- artistes -->
     <div v-for="(artist, index) in getEventForm.artists" :key="index">
-      <CardArtist :artist="artist.configuration" class="mb-6"/>
+      <CardArtist :artist="artist.configuration"/>
     </div>
 
     <form v-if="getEventForm.products.length > 0" id="reservation" @submit.prevent="validerAchats($event)"
