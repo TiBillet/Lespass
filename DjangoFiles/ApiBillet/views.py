@@ -1296,6 +1296,7 @@ class Onboard_stripe_return(APIView):
         details_submitted = info_connected_account_stripe(id_acc_connect).details_submitted
         if details_submitted:
             logger.info(f"details_submitted : {details_submitted}")
+            #TODO: créer le tenant en base de donnée et envoyer un mail de confirmation
             return Response(f"{details_submitted}", status=status.HTTP_200_OK)
         else:
             return Response(f"{create_account_link_for_onboard()}", status=status.HTTP_206_PARTIAL_CONTENT)
