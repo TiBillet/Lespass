@@ -296,6 +296,8 @@ document.addEventListener("validerCreationPlace", async () => {
     } else {
       // choix monétaire
       console.log("choix monétaire: stripe");
+      // TODO: envoyer les data wizard à "/api/place/" et ensuite goStripe()
+      
       goStripe()
     }
   }

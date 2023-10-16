@@ -505,6 +505,7 @@ export const sessionActions = {
     this.loading = true
     fetch(domain + apiStripe, options).then(response => {
       // console.log('/api/webhook_stripe/ -> response =', response)
+      // TODO: stripe return 206 pour une redirection stripe si erreur
       if (response.status !== 226 && response.status !== 208 && response.status !== 202) {
         throw new Error(`${response.status} - ${response.statusText}`)
       }
