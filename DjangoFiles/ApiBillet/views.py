@@ -222,7 +222,7 @@ class TenantViewSet(viewsets.ViewSet):
 
                 conf.slug = slug
                 user: TibilletUser = request.user
-                conf.email  = user.email
+                conf.email = user.email
 
                 if getattr(serializer, 'info_srtipe', None):
                     info_stripe = serializer.info_stripe
@@ -1296,9 +1296,10 @@ class Onboard_stripe_return(APIView):
         details_submitted = info_connected_account_stripe(id_acc_connect).details_submitted
         if details_submitted:
             logger.info(f"details_submitted : {details_submitted}")
-            #TODO: créer le tenant en base de donnée et envoyer un mail de confirmation
+            # TODO: créer le tenant en base de donnée et envoyer un mail de confirmation
             return Response(f"{details_submitted}", status=status.HTTP_200_OK)
         else:
+            # Si les infos stripe ne sont pas complète, on renvoie l'url onboard pour les completer
             return Response(f"{create_account_link_for_onboard()}", status=status.HTTP_206_PARTIAL_CONTENT)
 
 
