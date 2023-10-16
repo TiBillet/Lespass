@@ -186,7 +186,7 @@ async function goStripe() {
     } else {
       throw new Error(`Erreur goStripe Onboard'`);
     }
-    
+
   } catch (erreur) {
     console.log("-> validerLogin, erreur :", erreur);
     emitter.emit("toastSend", {
@@ -242,34 +242,35 @@ document.addEventListener("validerCreationPlace", async () => {
   }
 
   if (erreurs.length === 0) {
-    // choix nom monétaire
-    if (coin === "false") {
-      console.log("choix non monétaire.");
-      try {
-        // lieu / association
-        let urlApi = "/api/place/";
 
-        // artiste
-        if (formCreatePlace.categorie === "A") {
-          urlApi = "/api/artist/";
-        }
+    console.log("choix non monétaire.");
+    try {
+      // lieu / association
+      let urlApi = "/api/place/";
 
-        setLoadingValue(true)
-        const response = await fetch(urlApi, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: "Bearer " + getAccessToken
-          },
-          body: JSON.stringify(formCreatePlace)
-        });
-        console.log("response =", response);
-        const retour = await response.json();
-        if (response.status === 201) {
-          // retour à l'accueil
-          router.push({ path: '/' })
-          // message de succès
-          const typeEspace = espacesType.find(espace => espace.categorie === retour.categorie).name
+      // artiste
+      if (formCreatePlace.categorie === "A") {
+        urlApi = "/api/artist/";
+      }
+
+      setLoadingValue(true)
+      const response = await fetch(urlApi, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + getAccessToken
+        },
+        body: JSON.stringify(formCreatePlace)
+      });
+      console.log("response =", response);
+      const retour = await response.json();
+      if (response.status === 201) {
+        // retour à l'accueil
+        router.push({ path: '/' })
+        // message de succès
+        const typeEspace = espacesType.find(espace => espace.categorie === retour.categorie).name
+        if (coin === "false") {
+          setLoadingValue(false)
           const msg = `
             <div>Votre espace "${retour.organisation}" de type "${typeEspace}" a été créé.</div>
             <div>Lien: ${retour.domain}</div>`
@@ -279,26 +280,20 @@ document.addEventListener("validerCreationPlace", async () => {
             contenu: msg,
             dynamic: true // pour insérer du html
           })
+        } else {
+          goStripe()
         }
-        console.log("retour =", retour);
-      } catch (error) {
-        console.log(error);
-        emitter.emit("toastSend", {
-          title: "Erreur",
-          contenu: error,
-          typeMsg: "danger",
-          delay: 8000
-        });
-      } finally {
-        setLoadingValue(false)
       }
-
-    } else {
-      // choix monétaire
-      console.log("choix monétaire: stripe");
-      // TODO: envoyer les data wizard à "/api/place/" et ensuite goStripe()
-      
-      goStripe()
+      console.log("retour =", retour);
+    } catch (error) {
+      setLoadingValue(false)
+      console.log(error);
+      emitter.emit("toastSend", {
+        title: "Erreur",
+        contenu: error,
+        typeMsg: "danger",
+        delay: 8000
+      });
     }
   }
 })
