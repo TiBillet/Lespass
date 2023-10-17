@@ -1,41 +1,41 @@
 <template>
+  {{ etape }}
   <div class="container-fluid vw-100 vh-100 d-flex justify-content-center align-items-center"
     :style="`background-image: url('${wizardBackground}');background-position:50% 50%;background-size:cover`">
     <div class="container">
       <div class="card creation-card">
-        <form>
+        <div class="creation-header">
+          <h3 class="creation-title">{{ title }}</h3>
+          <h5 class="creation-sub-title">{{ subTitle }}</h5>
+        </div>
 
-          <div class="creation-header">
-            <h3 class="creation-title">{{ title }}</h3>
-            <h5 class="creation-sub-title">{{ subTitle }}</h5>
-          </div>
-          
-          <!-- navigation -->
-          <div class="creation-navigation" @vue:updated="updateNav()">
-            <ul class="nav nav-pills">
-              <li v-for="item in navigation" :key="item.id" @click="moveBt($event)" class="nav-item-creation" :data-cible="item.name" :data-index="item.id" :style="{ width: itemNavWidth + '%' }">
-                {{ item.name.toUpperCase() }}
-              </li>
-            </ul>
-            <!-- bouton mobile -->
-            <div class="bt-nav-creation boutik-bg-primary" :style="styleBtMobile"></div>
-          </div>
+        <!-- navigation -->
+        <div class="creation-navigation" @vue:updated="updateNav()">
+          <ul class="nav nav-pills">
+            <li v-for="item in navigation" :key="item.id" @click="moveBt($event)" class="nav-item-creation"
+              :data-cible="item.name" :data-index="item.id" :style="{ width: itemNavWidth + '%' }">
+              {{ item.name.toUpperCase() }}
+            </li>
+          </ul>
+          <!-- bouton mobile -->
+          <div class="bt-nav-creation boutik-bg-primary" :style="styleBtMobile"></div>
+        </div>
 
-          <!-- content -->
-          <div class="creation-tabs-content ps-3 pe-3">
-            <slot></slot>
-          </div>
+        <!-- content -->
+        <div class="creation-tabs-content ps-3 pe-3">
+          <slot></slot>
+        </div>
 
-          <div class="d-flex creation-footer">
-            <div class="w-50 d-flex flex-column">
-              <button v-if="etape > 0" class="btn btn-creation btn-previous align-self-start" @click="navCreationPrev($event)">Précédent</button>
-            </div>
-            <div class="w-50 d-flex flex-column">
-              <button v-if="etape <= 1" type="button" class="btn btn-creation boutik-bg-primary align-self-end" @click="navCreationNext($event)">Suivant</button>
-              <button v-if="etape === getNbItemNav() - 1" type="button" class="btn btn-creation boutik-bg-primary align-self-end" @click="emitEvent(validationCreationMsg)">Valider</button>
-            </div>
+        <div class="d-flex creation-footer">
+          <div class="w-50 d-flex flex-column">
+            <button v-if="etape > 0" class="btn btn-creation btn-previous align-self-start"
+              @click="navCreationPrev($event)">Précédent</button>
           </div>
-        </form>
+          <div class="w-50 d-flex flex-column">
+            <button v-if="etape < getNbItemNav() - 1" type="button"
+              class="btn btn-creation boutik-bg-primary align-self-end" @click="navCreationNext($event)">Suivant</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -90,7 +90,7 @@ function updateNav() {
   // text du bouton mobile
   const currentItem = document.querySelector(`li[data-index="${indexBt}"]`)
   const textBt = currentItem.innerText
-  document.querySelector('div[class~="bt-nav-creation"]').innerText = textBt; 
+  document.querySelector('div[class~="bt-nav-creation"]').innerText = textBt;
   // pour l'animation du bouton
   const nbItem = document.querySelectorAll(".creation-tab-content").length;
   const menuWidth = document.querySelector('ul[class="nav nav-pills"]').offsetWidth
@@ -214,6 +214,7 @@ onBeforeUnmount(() => {
   padding: 12px;
   cursor: pointer;
 }
+
 .btn-creation {
   font-size: 12px;
   text-transform: uppercase;
@@ -233,5 +234,4 @@ onBeforeUnmount(() => {
 .btn-previous {
   background-color: #999;
   color: #fff;
-}
-</style>
+}</style>
