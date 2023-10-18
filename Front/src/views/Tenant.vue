@@ -276,6 +276,7 @@ async function validerCreationPlace() {
         },
         body: JSON.stringify(formCreatePlace)
       });
+      // TODO: 409 = le tenant existe déjà
       console.log("response =", response);
       const retour = await response.json();
       if (response.status === 201) {
