@@ -1298,7 +1298,7 @@ class Onboard_stripe_return(APIView):
             logger.info(f"details_submitted : {details_submitted}")
             # TODO: créer le tenant en base de donnée et envoyer un mail de confirmation
             # Coté front : on valide la création de tenant et on demande la validation par mail
-            return Response(f"{details_submitted}", status=status.HTTP_200_OK)
+            return Response(f"ok", status=status.HTTP_200_OK)
         else:
             # Si les infos stripe ne sont pas complète, on renvoie l'url onboard pour les completer
             return Response(f"{create_account_link_for_onboard()}", status=status.HTTP_206_PARTIAL_CONTENT)

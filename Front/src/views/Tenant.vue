@@ -30,10 +30,8 @@
       </div>
     </div>
 
-    <div id="validation" class="creation-tab-content">
+    <div id="résumé" class="creation-tab-content">
       <div class="espace-content d-flex flex-column">
-        <h3>Résumé</h3>
-
         <div class="d-flex flex-row">
           <div class="d-flex align-items-start w-25">Catégorie</div>
           <div v-if="formCreatePlace.categorie !== ''" class="resume-valeur">{{ espacesType.find(espace =>
@@ -66,21 +64,40 @@
 
         <div class="d-flex flex-row justify-content-center">
           <div class="d-flex flex-row">
-            <input type="radio" id="money" name="coin" value="true" />
+            <input type="radio" id="money" name="coin" :value="true" v-model="coin" />
             <label for="money">Oui</label>
           </div>
           <div class="d-flex flex-row ms-4">
-            <input type="radio" id="no-money" name="coin" value="false" checked />
+            <input type="radio" id="no-money" name="coin" :value="false" v-model="coin" checked />
             <label for="no-money">Non</label>
           </div>
         </div>
       </div>
     </div>
+
+    <div id="Validation" class="creation-tab-content">
+      coin = {{ coin }} -- etapeValidation = {{ etapeValidation }}
+      <div class="espace-content d-flex flex-column">
+        <button v-if="etapeValidation === 'creationEspace'" type="button"
+          class="btn btn-creation boutik-bg-primary align-self-center text-white" @click="validerCreationPlace()">
+          Valider la création de votre espace
+        </button>
+
+        <button v-if="coin === true && etapeValidation === 'creationCompteStripe'" type="button"
+          class="btn btn-creation boutik-bg-primary align-self-center text-white" @click="CreationComteStripe()">
+          Créer votrecompte stripe
+        </button>
+      </div>
+    </div>
+
   </CreationStep>
 </template>
 
 <script setup>
 console.log("-> Tenants.vue");
+
+import { ref } from "vue"
+
 import { useSessionStore } from "../stores/session";
 import { setLocalStateKey } from '../communs/storeLocal.js'
 import { useRouter } from 'vue-router'
@@ -91,6 +108,8 @@ import InputFileMd from "../components/InputFileMd.vue";
 import TextareaMd from "../components/TextareaMd.vue";
 import InputRadioImg from "../components/InputRadioImg.vue";
 
+let coin = ref(false)
+let etapeValidation = ref('creationEspace')
 
 const sessionStore = useSessionStore();
 const { setLoadingValue, updateHeader, getAccessToken } = sessionStore;
@@ -161,7 +180,7 @@ function cursorOff(state) {
   }
 }
 
-async function goStripe() {
+async function CreationComteStripe() {
   // enregistre l'email dans le storeUser
   console.log("-> goStripe Onboard");
 
@@ -202,10 +221,7 @@ async function goStripe() {
 
 
 // validation
-document.addEventListener("validerCreationPlace", async () => {
-  // coin est de type string
-  const coin = document.querySelector('input[name="coin"]:checked').value;
-
+async function validerCreationPlace() {
   let erreurs = [];
 
   if (formCreatePlace.categorie === "") {
@@ -242,8 +258,6 @@ document.addEventListener("validerCreationPlace", async () => {
   }
 
   if (erreurs.length === 0) {
-
-    console.log("choix non monétaire.");
     try {
       // lieu / association
       let urlApi = "/api/place/";
@@ -265,23 +279,26 @@ document.addEventListener("validerCreationPlace", async () => {
       console.log("response =", response);
       const retour = await response.json();
       if (response.status === 201) {
-        // retour à l'accueil
-        router.push({ path: '/' })
-        // message de succès
+        // message de succès , non monétaire
         const typeEspace = espacesType.find(espace => espace.categorie === retour.categorie).name
-        if (coin === "false") {
-          setLoadingValue(false)
-          const msg = `
+        setLoadingValue(false)
+
+        console.log('coin =', typeof(coin.value));
+        if (coin.value === false) {
+          router.push({ path: '/' })
+        }
+        const msg = `
             <div>Votre espace "${retour.organisation}" de type "${typeEspace}" a été créé.</div>
             <div>Lien: ${retour.domain}</div>`
-          emitter.emit('modalMessage', {
-            titre: 'Validation',
-            typeMsg: 'success',
-            contenu: msg,
-            dynamic: true // pour insérer du html
-          })
-        } else {
-          goStripe()
+        emitter.emit('modalMessage', {
+          titre: 'Validation',
+          typeMsg: 'success',
+          contenu: msg,
+          dynamic: true // pour insérer du html
+        })
+        if (coin.value === true) {
+          // monétaire
+          etapeValidation.value = "creationCompteStripe"
         }
       }
       console.log("retour =", retour);
@@ -296,7 +313,7 @@ document.addEventListener("validerCreationPlace", async () => {
       });
     }
   }
-})
+}
 </script>
 
 <style scoped>
