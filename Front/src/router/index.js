@@ -112,7 +112,7 @@ router.beforeEach(async (to, from, next) => {
         contenu: `Retour stipe (création), erreur: id indéfini !`,
       });
     }
-    redirection = true;
+    redirection = false;
   }
 
   // près chargement

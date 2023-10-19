@@ -522,60 +522,66 @@ export const sessionActions = {
     const options = { method: "GET" };
 
     // pour le dev.
-    stripeStep = { action: 'expect_payment_stripe_createTenant', tenantOrganisation: 'lacase', tenantCategorie: 'S', nextPath: '/' }
-
+    /*
+    stripeStep = {
+      action: "expect_payment_stripe_createTenant",
+      tenantOrganisation: "lacase",
+      tenantCategorie: "S",
+      nextPath: "/",
+    };
+*/
 
     // attente stripe create tenant
     if (stripeStep.action === "expect_payment_stripe_createTenant") {
       messageValidation = `
-          <h4>La création de votre expace "${stripeStep.tenantOrganisation}" OK.</h4>
+          <h4>La création de votre expace "${stripeStep.formCreatePlace.organisation}" OK.</h4>
           <h4>Un émail vous est envoyé pour valider cette étape.</h4>
           `;
       messageErreur = `Retour stripe pour la création de tenant:`;
-      // action stripe = aucune
-      setLocalStateKey("stripeStep", { action: null });
     }
 
     this.loading = true;
-    fetch(domain + apiStripe, options)
-      .then((response) => {
-        // 200 = stripe ok et email de validation, 206 = retour stripe avec erreur
-        if (response.status !== 200 && response.status !== 206) {
-          throw new Error(`${response.status} - ${response.statusText}`);
-        }
-        console.log('response =', response);
-        return response.json();
-      })
-      .then((retour) => {
-        this.loading = false;
-        // message ok
-        if (response.status === 200) {
-          emitter.emit("modalMessage", {
-            titre: "Succès",
-            dynamic: true,
-            typeMsg: "success",
-            contenu: messageValidation,
-          });
-  
-        } else {
-          console.log('retour =', retour);
+    try {
+      const response = await fetch(domain + apiStripe, options);
+      if (response.status < 200 && response.status >= 300) {
+        throw new Error(`${response.status} - ${response.statusText}`);
+      }
+      const retour = await response.text();
+      this.loading = false;
+      // message ok
+      if (response.status === 200) {
+        // action stripe = aucune
+        setLocalStateKey("stripeStep", { action: null });
+        this.router.push("/");
 
-        }
-        
-  
-      })
-      .catch(function (error) {
-        this.loading = false;
-        log({
-          message: `postOnboardStripeReturn, ${apiStripe} error: `,
-          error,
-        });
         emitter.emit("modalMessage", {
-          titre: "Erreur",
+          titre: "Succès",
           dynamic: true,
-          contenu: `${messageErreur} ${error.message}`,
+          typeMsg: "success",
+          contenu: messageValidation,
         });
+      } else {
+        console.log("retour =", retour);
+        this.router.push("/tenant");
+        emitter.emit("toastSend", {
+          title: "Attention",
+          contenu: `Erreur lors de la création du compte stripe, recommencer SVP.`,
+          typeMsg: "warning",
+          delay: 10000,
+        });
+      }
+    } catch (error) {
+      this.loading = false;
+      log({
+        message: `postOnboardStripeReturn, ${apiStripe} error: `,
+        error,
       });
+      emitter.emit("modalMessage", {
+        titre: "Erreur",
+        dynamic: true,
+        contenu: `${messageErreur} ${error.message}`,
+      });
+    }
   },
   // status 226 = 'Paiement validé. Création des billets et envoi par mail en cours.' côté serveur
   // status 208 = 'Paiement validé. Billets envoyés par mail.'

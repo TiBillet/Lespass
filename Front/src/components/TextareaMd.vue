@@ -3,13 +3,13 @@
         <label class="form-label" :for="id">{{ label }}</label>
         <textarea :id="id" :rows="rowsMd" class="form-control" :value="modelValue" @input="sendInput($event)"
             aria-describedby="basic-addon3" @focusin="focused($event)" @focusout="defocused($event)"
-            @keyup="isFilled($event)" :required="validation"></textarea>
+            @keyup="isFilled($event)" :required="validation" ></textarea>
         <div class="invalid-feedback" role="heading" :aria-label="msgError">{{ msgError }}</div>
     </div>
 </template>
   
 <script setup>
-import { ref } from "vue";
+import { ref, onMounted } from "vue";
 const props = defineProps({
     id: String,
     modelValue: String,
@@ -56,6 +56,17 @@ function isFilled(evt) {
         rowsMd.value = 0
     }
 }
+
+onMounted(() => {
+    const textarea = document.querySelector('#' +props.id) 
+    const parent = textarea.parentNode
+    if (textarea.value != "") {
+        parent.classList.add('is-filled');
+    } else {
+        parent.classList.remove('is-filled');
+        rowsMd.value = 0
+    }
+})
 </script>
   
 <style scoped>

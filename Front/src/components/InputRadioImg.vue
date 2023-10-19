@@ -4,9 +4,11 @@
     <div class="input-radio-image-content" :class="disable ? 'espace-disabled' : ''">
       <input :id="getUuid()" type="radio" :name="name" :value="value" class="input-hidden" @input="sendInput($event)"
         :disabled="disable" :required="validation">
-      <!-- <slot></slot> -->
-      <font-awesome-icon v-for="(icon, index) in icons" :key="index" :icon="['fas', icon.name]"
+      <font-awesome-icon v-if="icons.length > 0" v-for="(icon, index) in icons" :key="index" :icon="['fas', icon.name]"
         :style="styleIcons(icon.name)" />
+        <div v-if="svg !== null" class="w-100 h-100 d-flex flex-column justify-content-center align-items-center">
+        <img :src="svg.src" alt="image" :style="`width:${svg.size};height:${svg.size};`"/>
+      </div>
     </div>
     <h6>{{ label }}</h6>
   </label>
@@ -24,6 +26,7 @@ const props = defineProps({
   value: String,
   label: String,
   icons: Array,
+  svg: Object,
   disable: Boolean,
   modelValue: String,
   validation: Boolean
