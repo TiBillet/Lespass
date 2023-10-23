@@ -1,0 +1,572 @@
+[
+  {
+    "uuid": "02daf1a6-986d-490c-ab80-0c63a055e044",
+    "name": "Balaphonik Sound System",
+    "slug": "balaphonik-sound-system-112323-1218",
+    "short_description": "Courte description",
+    "long_description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec ipsum lectus, ultrices vel placerat et, finibus ultricies dolor. Integer facilisis fermentum placerat. Nam malesuada fermentum nunc ac consectetur. Donec velit tortor, feugiat in euismod eu, semper blandit lacus. Nunc ultricies lorem sed libero bibendum, id vestibulum massa lacinia. In hac habitasse platea dictumst. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam interdum lacinia metus, nec rutrum diam congue ut. Phasellus accumsan at leo ac eleifend. Phasellus cursus vitae tortor vestibulum faucibus. Pellentesque dictum libero ut tellus tristique condimentum.",
+    "categorie": "LIV",
+    "tag": [
+      {
+        "uuid": "5aa3eceb-d1df-4c5c-96ff-9029809fa36f",
+        "name": "cool",
+        "color": "#000000"
+      },
+      {
+        "uuid": "a6d7a49d-7d54-4764-a53a-360e32b622cd",
+        "name": "balaise",
+        "color": "#000000"
+      },
+      {
+        "uuid": "d5435e6a-16df-4ecd-9876-63af3a58f347",
+        "name": "original",
+        "color": "#000000"
+      }
+    ],
+    "is_external": false,
+    "url_external": null,
+    "datetime": "2023-11-23T12:18:14.125000+04:00",
+    "products": [
+      {
+        "uuid": "c3927d51-c3ef-4cc3-b17b-8fe5fc006a75",
+        "name": "Billet",
+        "short_description": null,
+        "long_description": null,
+        "terms_and_conditions_document": null,
+        "publish": true,
+        "img": "http://demo.tibillet.localhost/media/images/400_XiS2pgx.jpg",
+        "categorie_article": "B",
+        "send_to_cashless": false,
+        "prices": [
+          {
+            "uuid": "d1bb03fa-9c47-4cc6-b14e-9e5b3952fee1",
+            "short_description": null,
+            "long_description": null,
+            "name": "Demi Tarif",
+            "prix": "5.00",
+            "vat": "NA",
+            "stock": 10,
+            "max_per_user": 4,
+            "subscription_type": "N",
+            "recurring_payment": false,
+            "product": "c3927d51-c3ef-4cc3-b17b-8fe5fc006a75",
+            "adhesion_obligatoire": null
+          },
+          {
+            "uuid": "d6e3e37d-739b-4dda-99e0-634a8fa0f416",
+            "short_description": null,
+            "long_description": null,
+            "name": "Plein Tarif",
+            "prix": "10.00",
+            "vat": "NA",
+            "stock": 100,
+            "max_per_user": 10,
+            "subscription_type": "N",
+            "recurring_payment": false,
+            "product": "c3927d51-c3ef-4cc3-b17b-8fe5fc006a75",
+            "adhesion_obligatoire": null
+          }
+        ],
+        "tag": [],
+        "option_generale_radio": [],
+        "option_generale_checkbox": [],
+        "legal_link": null
+      },
+      {
+        "uuid": "9d37c2a5-b6e0-4a98-a0b4-76b3d665350d",
+        "name": "Billet1prix",
+        "short_description": null,
+        "long_description": null,
+        "terms_and_conditions_document": null,
+        "publish": true,
+        "img": "http://demo.tibillet.localhost/media/images/400_jxyiWnj.jpg",
+        "categorie_article": "B",
+        "send_to_cashless": false,
+        "prices": [
+          {
+            "uuid": "2f3e064b-e5ea-48b1-8f20-210b101677b5",
+            "short_description": null,
+            "long_description": null,
+            "name": "TarifUnique",
+            "prix": "5.00",
+            "vat": "NA",
+            "stock": 5,
+            "max_per_user": 1,
+            "subscription_type": "N",
+            "recurring_payment": false,
+            "product": "9d37c2a5-b6e0-4a98-a0b4-76b3d665350d",
+            "adhesion_obligatoire": null
+          }
+        ],
+        "tag": [],
+        "option_generale_radio": [],
+        "option_generale_checkbox": [],
+        "legal_link": null
+      },
+      {
+        "uuid": "40c11ab3-0f72-4d3f-bec6-e0474e6d2e90",
+        "name": "Don pour la coopérative",
+        "short_description": null,
+        "long_description": null,
+        "terms_and_conditions_document": null,
+        "publish": false,
+        "img": null,
+        "categorie_article": "D",
+        "send_to_cashless": false,
+        "prices": [
+          {
+            "uuid": "8b78a172-cb8d-4b91-afde-23c6a9804b1c",
+            "short_description": null,
+            "long_description": null,
+            "name": "Coopérative TiBillet",
+            "prix": "1.00",
+            "vat": "NA",
+            "stock": null,
+            "max_per_user": 10,
+            "subscription_type": "N",
+            "recurring_payment": false,
+            "product": "40c11ab3-0f72-4d3f-bec6-e0474e6d2e90",
+            "adhesion_obligatoire": null
+          }
+        ],
+        "tag": [],
+        "option_generale_radio": [],
+        "option_generale_checkbox": [],
+        "legal_link": null
+      }
+    ],
+    "options_radio": [
+      {
+        "uuid": "93ad8be5-217a-4a60-9081-b3818e47db6f",
+        "name": "Balcon",
+        "description": null,
+        "poids": 2
+      },
+      {
+        "uuid": "d86c358e-b1e8-4a4b-a6ca-02a577730bec",
+        "name": "Fosse",
+        "description": null,
+        "poids": 3
+      }
+    ],
+    "options_checkbox": [
+      {
+        "uuid": "4a018cce-e8c2-4c13-9925-1b6a78142456",
+        "name": "Vegétarien",
+        "description": null,
+        "poids": 4
+      },
+      {
+        "uuid": "7d3ad1f7-43ca-4325-94f3-8c8db20ad8a7",
+        "name": "Vegan",
+        "description": null,
+        "poids": 5
+      }
+    ],
+    "img_variations": {
+      "fhd": "/media/images/balaphonik-3_oYpKzva.fhd.jpg",
+      "hdr": "/media/images/balaphonik-3_oYpKzva.hdr.jpg",
+      "med": "/media/images/balaphonik-3_oYpKzva.med.jpg",
+      "thumbnail": "/media/images/balaphonik-3_oYpKzva.thumbnail.jpg",
+      "crop_hdr": "/media/images/balaphonik-3_oYpKzva.crop_hdr.jpg",
+      "crop": "/media/images/balaphonik-3_oYpKzva.crop.jpg"
+    },
+    "reservations": 0,
+    "complet": false,
+    "artists": [
+      {
+        "datetime": "2023-10-06T12:18:14.125000+04:00",
+        "configuration": {
+          "organisation": "Balaphonik Sound System",
+          "slug": "balaphonik-sound-system",
+          "short_description": "Balaphonik Sound System",
+          "long_description": "Multi-instrumentiste, Alex a participé à des projets musicaux variés.",
+          "adress": null,
+          "postal_code": null,
+          "city": null,
+          "phone": "+262692921919",
+          "email": "jturbeaux+space@pm.me",
+          "site_web": "www.patron.re",
+          "legal_documents": null,
+          "twitter": null,
+          "facebook": null,
+          "instagram": null,
+          "map_img": null,
+          "carte_restaurant": null,
+          "img_variations": {
+            "fhd": "/media/images/balaphonik-3_oYpKzva.fhd.jpg",
+            "hdr": "/media/images/balaphonik-3_oYpKzva.hdr.jpg",
+            "med": "/media/images/balaphonik-3_oYpKzva.med.jpg",
+            "thumbnail": "/media/images/balaphonik-3_oYpKzva.thumbnail.jpg",
+            "crop_hdr": "/media/images/balaphonik-3_oYpKzva.crop_hdr.jpg",
+            "crop": "/media/images/balaphonik-3_oYpKzva.crop.jpg"
+          },
+          "logo_variations": {
+            "fhd": "/media/images/balaphonik-3_oYpKzva.fhd.jpg",
+            "hdr": "/media/images/balaphonik-3_oYpKzva.hdr.jpg",
+            "med": "/media/images/balaphonik-3_oYpKzva.med.jpg",
+            "thumbnail": "/media/images/balaphonik-3_oYpKzva.thumbnail.jpg"
+          },
+          "domain": "demo.tibillet.localhost",
+          "categorie": "S"
+        }
+      }
+    ],
+    "minimum_cashless_required": 0,
+    "max_per_user": 10,
+    "reservation_solo": false,
+    "url": "https://demo.tibillet.localhost/event/balaphonik-sound-system-112323-1218/",
+    "place": "Demo"
+  },
+  {
+    "uuid": "aa56ccf4-4565-46e7-9cc3-5f15427974f1",
+    "name": "Scène ouverte",
+    "slug": "scene-ouverte-121923-1218",
+    "short_description": "Viens jouer avec tes potes !",
+    "long_description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec ipsum lectus, ultrices vel placerat et, finibus ultricies dolor. Integer facilisis fermentum placerat. Nam malesuada fermentum nunc ac consectetur. Donec velit tortor, feugiat in euismod eu, semper blandit lacus. Nunc ultricies lorem sed libero bibendum, id vestibulum massa lacinia. In hac habitasse platea dictumst. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam interdum lacinia metus, nec rutrum diam congue ut. Phasellus accumsan at leo ac eleifend. Phasellus cursus vitae tortor vestibulum faucibus. Pellentesque dictum libero ut tellus tristique condimentum.",
+    "categorie": "LIV",
+    "tag": [
+      {
+        "uuid": "d5435e6a-16df-4ecd-9876-63af3a58f347",
+        "name": "original",
+        "color": "#000000"
+      },
+      {
+        "uuid": "f7cfbfde-6b28-4002-ba8d-21f9cb468fa7",
+        "name": "test3",
+        "color": "#000000"
+      }
+    ],
+    "is_external": false,
+    "url_external": null,
+    "datetime": "2023-12-19T12:18:17.370000+04:00",
+    "products": [
+      {
+        "uuid": "6c9e9aee-ce77-4793-a1f5-3bad2e31dcc1",
+        "name": "Reservation",
+        "short_description": null,
+        "long_description": null,
+        "terms_and_conditions_document": null,
+        "publish": false,
+        "img": null,
+        "categorie_article": "F",
+        "send_to_cashless": false,
+        "prices": [
+          {
+            "uuid": "42aee0ac-e966-49d8-a1e3-ae417af2ff27",
+            "short_description": null,
+            "long_description": null,
+            "name": "gratuite",
+            "prix": "0.00",
+            "vat": "NA",
+            "stock": null,
+            "max_per_user": 10,
+            "subscription_type": "N",
+            "recurring_payment": false,
+            "product": "6c9e9aee-ce77-4793-a1f5-3bad2e31dcc1",
+            "adhesion_obligatoire": null
+          }
+        ],
+        "tag": [],
+        "option_generale_radio": [],
+        "option_generale_checkbox": [],
+        "legal_link": null
+      }
+    ],
+    "options_radio": [
+      {
+        "uuid": "d86c358e-b1e8-4a4b-a6ca-02a577730bec",
+        "name": "Fosse",
+        "description": null,
+        "poids": 3
+      }
+    ],
+    "options_checkbox": [
+      {
+        "uuid": "4a018cce-e8c2-4c13-9925-1b6a78142456",
+        "name": "Vegétarien",
+        "description": null,
+        "poids": 4
+      },
+      {
+        "uuid": "7d3ad1f7-43ca-4325-94f3-8c8db20ad8a7",
+        "name": "Vegan",
+        "description": null,
+        "poids": 5
+      }
+    ],
+    "img_variations": {
+      "fhd": "/media/images/1080_IlEJt9a.fhd",
+      "hdr": "/media/images/1080_IlEJt9a.hdr",
+      "med": "/media/images/1080_IlEJt9a.med",
+      "thumbnail": "/media/images/1080_IlEJt9a.thumbnail",
+      "crop_hdr": "/media/images/1080_IlEJt9a.crop_hdr",
+      "crop": "/media/images/1080_IlEJt9a.crop"
+    },
+    "reservations": 0,
+    "complet": false,
+    "artists": [],
+    "minimum_cashless_required": 0,
+    "max_per_user": 10,
+    "reservation_solo": false,
+    "url": "https://demo.tibillet.localhost/event/scene-ouverte-121923-1218/",
+    "place": "Demo"
+  },
+  {
+    "uuid": "12adb137-68a5-449b-9c9a-f929d5a5539b",
+    "name": "Scène ouverte",
+    "slug": "scene-ouverte-022424-1218",
+    "short_description": "Viens jouer avec tes potes !",
+    "long_description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec ipsum lectus, ultrices vel placerat et, finibus ultricies dolor. Integer facilisis fermentum placerat. Nam malesuada fermentum nunc ac consectetur. Donec velit tortor, feugiat in euismod eu, semper blandit lacus. Nunc ultricies lorem sed libero bibendum, id vestibulum massa lacinia. In hac habitasse platea dictumst. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam interdum lacinia metus, nec rutrum diam congue ut. Phasellus accumsan at leo ac eleifend. Phasellus cursus vitae tortor vestibulum faucibus. Pellentesque dictum libero ut tellus tristique condimentum.",
+    "categorie": "LIV",
+    "tag": [
+      {
+        "uuid": "35c25c0f-d83f-43ba-b3a8-0976c2eb87a5",
+        "name": "test",
+        "color": "#000000"
+      }
+    ],
+    "is_external": false,
+    "url_external": null,
+    "datetime": "2024-02-24T12:18:14.257000+04:00",
+    "products": [
+      {
+        "uuid": "6c9e9aee-ce77-4793-a1f5-3bad2e31dcc1",
+        "name": "Reservation",
+        "short_description": null,
+        "long_description": null,
+        "terms_and_conditions_document": null,
+        "publish": false,
+        "img": null,
+        "categorie_article": "F",
+        "send_to_cashless": false,
+        "prices": [
+          {
+            "uuid": "42aee0ac-e966-49d8-a1e3-ae417af2ff27",
+            "short_description": null,
+            "long_description": null,
+            "name": "gratuite",
+            "prix": "0.00",
+            "vat": "NA",
+            "stock": null,
+            "max_per_user": 10,
+            "subscription_type": "N",
+            "recurring_payment": false,
+            "product": "6c9e9aee-ce77-4793-a1f5-3bad2e31dcc1",
+            "adhesion_obligatoire": null
+          }
+        ],
+        "tag": [],
+        "option_generale_radio": [],
+        "option_generale_checkbox": [],
+        "legal_link": null
+      }
+    ],
+    "options_radio": [
+      {
+        "uuid": "d86c358e-b1e8-4a4b-a6ca-02a577730bec",
+        "name": "Fosse",
+        "description": null,
+        "poids": 3
+      }
+    ],
+    "options_checkbox": [
+      {
+        "uuid": "4a018cce-e8c2-4c13-9925-1b6a78142456",
+        "name": "Vegétarien",
+        "description": null,
+        "poids": 4
+      },
+      {
+        "uuid": "7d3ad1f7-43ca-4325-94f3-8c8db20ad8a7",
+        "name": "Vegan",
+        "description": null,
+        "poids": 5
+      }
+    ],
+    "img_variations": {
+      "fhd": "/media/images/1080_ZYwcPKJ.fhd",
+      "hdr": "/media/images/1080_ZYwcPKJ.hdr",
+      "med": "/media/images/1080_ZYwcPKJ.med",
+      "thumbnail": "/media/images/1080_ZYwcPKJ.thumbnail",
+      "crop_hdr": "/media/images/1080_ZYwcPKJ.crop_hdr",
+      "crop": "/media/images/1080_ZYwcPKJ.crop"
+    },
+    "reservations": 0,
+    "complet": false,
+    "artists": [],
+    "minimum_cashless_required": 0,
+    "max_per_user": 10,
+    "reservation_solo": false,
+    "url": "https://demo.tibillet.localhost/event/scene-ouverte-022424-1218/",
+    "place": "Demo"
+  },
+  {
+    "uuid": "a7943bed-b05d-4acf-bc55-e2395a5e513a",
+    "name": "Ziskakan",
+    "slug": "ziskakan-052324-1218",
+    "short_description": "Lorem ipsum dolor",
+    "long_description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec ipsum lectus, ultrices vel placerat et, finibus ultricies dolor. Integer facilisis fermentum placerat. Nam malesuada fermentum nunc ac consectetur. Donec velit tortor, feugiat in euismod eu, semper blandit lacus. Nunc ultricies lorem sed libero bibendum, id vestibulum massa lacinia. In hac habitasse platea dictumst. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam interdum lacinia metus, nec rutrum diam congue ut. Phasellus accumsan at leo ac eleifend. Phasellus cursus vitae tortor vestibulum faucibus. Pellentesque dictum libero ut tellus tristique condimentum.",
+    "categorie": "LIV",
+    "tag": [
+      {
+        "uuid": "1a6df678-31db-4514-8862-15cfdbd600e9",
+        "name": "test2",
+        "color": "#000000"
+      }
+    ],
+    "is_external": false,
+    "url_external": null,
+    "datetime": "2024-05-23T12:18:14+04:00",
+    "products": [
+      {
+        "uuid": "2278dede-3cb0-4328-8ea4-2e974972484c",
+        "name": "Recharge cashless",
+        "short_description": null,
+        "long_description": null,
+        "terms_and_conditions_document": null,
+        "publish": true,
+        "img": "http://demo.tibillet.localhost/media/images/300_z2fWk2r.jpg",
+        "categorie_article": "S",
+        "send_to_cashless": false,
+        "prices": [],
+        "tag": [],
+        "option_generale_radio": [],
+        "option_generale_checkbox": [],
+        "legal_link": null
+      },
+      {
+        "uuid": "c3927d51-c3ef-4cc3-b17b-8fe5fc006a75",
+        "name": "Billet",
+        "short_description": null,
+        "long_description": null,
+        "terms_and_conditions_document": null,
+        "publish": true,
+        "img": "http://demo.tibillet.localhost/media/images/400_XiS2pgx.jpg",
+        "categorie_article": "B",
+        "send_to_cashless": false,
+        "prices": [
+          {
+            "uuid": "d1bb03fa-9c47-4cc6-b14e-9e5b3952fee1",
+            "short_description": null,
+            "long_description": null,
+            "name": "Demi Tarif",
+            "prix": "5.00",
+            "vat": "NA",
+            "stock": 10,
+            "max_per_user": 4,
+            "subscription_type": "N",
+            "recurring_payment": false,
+            "product": "c3927d51-c3ef-4cc3-b17b-8fe5fc006a75",
+            "adhesion_obligatoire": null
+          },
+          {
+            "uuid": "d6e3e37d-739b-4dda-99e0-634a8fa0f416",
+            "short_description": null,
+            "long_description": null,
+            "name": "Plein Tarif",
+            "prix": "10.00",
+            "vat": "NA",
+            "stock": 100,
+            "max_per_user": 10,
+            "subscription_type": "N",
+            "recurring_payment": false,
+            "product": "c3927d51-c3ef-4cc3-b17b-8fe5fc006a75",
+            "adhesion_obligatoire": null
+          }
+        ],
+        "tag": [],
+        "option_generale_radio": [],
+        "option_generale_checkbox": [],
+        "legal_link": null
+      },
+      {
+        "uuid": "40c11ab3-0f72-4d3f-bec6-e0474e6d2e90",
+        "name": "Don pour la coopérative",
+        "short_description": null,
+        "long_description": null,
+        "terms_and_conditions_document": null,
+        "publish": false,
+        "img": null,
+        "categorie_article": "D",
+        "send_to_cashless": false,
+        "prices": [
+          {
+            "uuid": "8b78a172-cb8d-4b91-afde-23c6a9804b1c",
+            "short_description": null,
+            "long_description": null,
+            "name": "Coopérative TiBillet",
+            "prix": "1.00",
+            "vat": "NA",
+            "stock": null,
+            "max_per_user": 10,
+            "subscription_type": "N",
+            "recurring_payment": false,
+            "product": "40c11ab3-0f72-4d3f-bec6-e0474e6d2e90",
+            "adhesion_obligatoire": null
+          }
+        ],
+        "tag": [],
+        "option_generale_radio": [],
+        "option_generale_checkbox": [],
+        "legal_link": null
+      }
+    ],
+    "options_radio": [],
+    "options_checkbox": [],
+    "img_variations": {
+      "fhd": "/media/images/Ziskakan-C2A9Pierre-Yves-Babelon-lespas-1-1200x1200_BNwxJ8Y.fhd.jpg",
+      "hdr": "/media/images/Ziskakan-C2A9Pierre-Yves-Babelon-lespas-1-1200x1200_BNwxJ8Y.hdr.jpg",
+      "med": "/media/images/Ziskakan-C2A9Pierre-Yves-Babelon-lespas-1-1200x1200_BNwxJ8Y.med.jpg",
+      "thumbnail": "/media/images/Ziskakan-C2A9Pierre-Yves-Babelon-lespas-1-1200x1200_BNwxJ8Y.thumbnail.jpg",
+      "crop_hdr": "/media/images/Ziskakan-C2A9Pierre-Yves-Babelon-lespas-1-1200x1200_BNwxJ8Y.crop_hdr.jpg",
+      "crop": "/media/images/Ziskakan-C2A9Pierre-Yves-Babelon-lespas-1-1200x1200_BNwxJ8Y.crop.jpg"
+    },
+    "reservations": 0,
+    "complet": false,
+    "artists": [
+      {
+        "datetime": "2024-04-29T12:18:14.002000+04:00",
+        "configuration": {
+          "organisation": "Ziskakan",
+          "slug": "ziskakan",
+          "short_description": "40 ans de Maloya Rock !",
+          "long_description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
+          "adress": null,
+          "postal_code": null,
+          "city": null,
+          "phone": "+262692921919",
+          "email": "jturbeaux+space@pm.me",
+          "site_web": "www.patron.re",
+          "legal_documents": null,
+          "twitter": null,
+          "facebook": null,
+          "instagram": null,
+          "map_img": null,
+          "carte_restaurant": null,
+          "img_variations": {
+            "fhd": "/media/images/Ziskakan-C2A9Pierre-Yves-Babelon-lespas-1-1200x1200_BNwxJ8Y.fhd.jpg",
+            "hdr": "/media/images/Ziskakan-C2A9Pierre-Yves-Babelon-lespas-1-1200x1200_BNwxJ8Y.hdr.jpg",
+            "med": "/media/images/Ziskakan-C2A9Pierre-Yves-Babelon-lespas-1-1200x1200_BNwxJ8Y.med.jpg",
+            "thumbnail": "/media/images/Ziskakan-C2A9Pierre-Yves-Babelon-lespas-1-1200x1200_BNwxJ8Y.thumbnail.jpg",
+            "crop_hdr": "/media/images/Ziskakan-C2A9Pierre-Yves-Babelon-lespas-1-1200x1200_BNwxJ8Y.crop_hdr.jpg",
+            "crop": "/media/images/Ziskakan-C2A9Pierre-Yves-Babelon-lespas-1-1200x1200_BNwxJ8Y.crop.jpg"
+          },
+          "logo_variations": {
+            "fhd": "/media/images/Ziskakan-C2A9Pierre-Yves-Babelon-lespas-1-1200x1200_BNwxJ8Y.fhd.jpg",
+            "hdr": "/media/images/Ziskakan-C2A9Pierre-Yves-Babelon-lespas-1-1200x1200_BNwxJ8Y.hdr.jpg",
+            "med": "/media/images/Ziskakan-C2A9Pierre-Yves-Babelon-lespas-1-1200x1200_BNwxJ8Y.med.jpg",
+            "thumbnail": "/media/images/Ziskakan-C2A9Pierre-Yves-Babelon-lespas-1-1200x1200_BNwxJ8Y.thumbnail.jpg"
+          },
+          "domain": "demo.tibillet.localhost",
+          "categorie": "S"
+        }
+      }
+    ],
+    "minimum_cashless_required": 0,
+    "max_per_user": 10,
+    "reservation_solo": false,
+    "url": "https://demo.tibillet.localhost/event/ziskakan-052324-1218/",
+    "place": "Demo"
+  }
+]

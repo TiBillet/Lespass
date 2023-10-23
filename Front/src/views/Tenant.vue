@@ -83,22 +83,22 @@
     </div>
 
     <div id="Validation" class="creation-tab-content">
-      <div>coin = {{ coin }} -- etapeValidation = {{ etapeValidation }} </div> stripeStep = {{ stripeStep }}
+      <!-- <div>coin = {{ coin }} -- etapeValidation = {{ etapeValidation }} </div> stripeStep = {{ stripeStep }} -->
       <div class="espace-content d-flex flex-column justify-content-center align-items-center">
         <button v-if="etapeValidation === 'creationEspace' && (stripeStep === undefined || stripeStep.action === null)"
-          type="button" class="btn btn-creation boutik-bg-primary align-self-center text-white"
+          type="button" class="btn btn-creation tibillet-bg-primary align-self-center text-white"
           @click="validerCreationPlace()">
-          Valider la création de votre espace
+          Valider la création de son espace
         </button>
 
         <button
           v-if="coin === true && (etapeValidation === 'creationCompteStripe' || stripeStep?.action === 'expect_payment_stripe_createTenant')"
-          type="button" class="btn btn-creation boutik-bg-primary align-self-center text-white"
+          type="button" class="btn btn-creation tibillet-bg-primary align-self-center text-white"
           @click="CreationComteStripe()">
           Créer votre compte stripe
         </button>
 
-        <button v-if="etapeValidation === 'creationCompteStripe'" type="button" class="btn btn-creation boutik-bg-secondary align-self-center text-white"
+        <button v-if="etapeValidation === 'creationCompteStripe'" type="button" class="btn btn-creation tibillet-bg-secondary align-self-center text-white"
           @click="resetState()">
           Annuler opération
         </button>

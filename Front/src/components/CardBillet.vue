@@ -24,7 +24,7 @@
             </h4>
             <!-- ajouter une réservation nominative -->
             <button v-if="getBtnAddCustomerCanBeSeen(product.uuid, price.uuid) && product.nominative === true"
-                    class="btn btn-primary mb-0 test-card-billet-bt-add"
+                    class="btn tibillet-outline-primary mb-0 test-card-billet-bt-add"
                     type="button" @click.stop="addCustomer(product.uuid, price.uuid)"
                     role="button" :aria-label="'Ajouter une réservation - ' + price.name">
               <i class="fa fa-plus" aria-hidden="true"></i>

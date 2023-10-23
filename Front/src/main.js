@@ -12,11 +12,15 @@ import 'bootstrap/dist/css/bootstrap.min.css'
 // material-kit-2
 import './assets/css/material-kit-2/material-kit.min.css'
 
-// import the fontawesome core
+// import the fontawesome core 6.4.2
 import { library } from '@fortawesome/fontawesome-svg-core'
 // import font awesome icon component
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
 // import specific icons
+import { faTrashCan } from '@fortawesome/free-solid-svg-icons'
+import { faSquareMinus } from '@fortawesome/free-solid-svg-icons'
+import { faSquarePlus } from '@fortawesome/free-solid-svg-icons'
+//
 import { faPaintBrush } from '@fortawesome/free-solid-svg-icons'
 import { faMusic } from '@fortawesome/free-solid-svg-icons'
 import { faWheatAwn } from '@fortawesome/free-solid-svg-icons'
@@ -29,7 +33,7 @@ import { faBuilding } from '@fortawesome/free-solid-svg-icons'
 
 
 // add icons to the library
-library.add(faPaintBrush,faMusic,faWheatAwn,faCamera,faImage,faFilm, faHouseFlag, faPeopleGroup, faBuilding)
+library.add(faSquareMinus, faSquarePlus, faTrashCan, faPaintBrush,faMusic,faWheatAwn,faCamera,faImage,faFilm, faHouseFlag, faPeopleGroup, faBuilding)
 
 window.emitter = mitt();
 

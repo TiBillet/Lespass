@@ -1,0 +1,16 @@
+- ajout les fichiers modifiés et supprimer
+git commit -am "message"
+
+- ajoute les fichiers modifiés ou nouveaux
+git add . 
+
+- défaire un ajout de fichiers (git add .):
+git reset .
+
+- Ajouter le contenu de tous les fichiers *.txt sous le répertoire Documentation et ses sous-répertoires :
+git add Documentation/\*.txt
+
+
+- git pull
+
+- git push

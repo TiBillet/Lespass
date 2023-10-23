@@ -3,7 +3,7 @@
     <label class="form-label" :for="id">{{ label }}</label>
     <input :type="type" class="form-control" :id="id" aria-describedby="basic-addon3" :value="modelValue"
       @input="sendInput($event)" @focusin="focused($event)" @focusout="defocused($event)" role="textbox"
-      aria-label="Entrer un email." @keyup="isFilled($event)" :required="validation">
+      :aria-label="msgRole" @keyup="isFilled($event)" :required="validation">
     <div class="invalid-feedback" role="heading" :aria-label="msgError">{{ msgError }}</div>
   </div>
 </template>
@@ -15,6 +15,7 @@ const props = defineProps({
   id: String,
   modelValue: String,
   label: String,
+  msgRole: String,
   msgError: String,
   type: {
     default: 'text',

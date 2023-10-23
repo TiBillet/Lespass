@@ -1,0 +1,42 @@
+{
+  "accessToken": "",
+  "identitySite": true,
+  "loading": false,
+  "language": "fr",
+  "routeName": "Event",
+  "header": {
+    "urlImage": "/media/images/1080_ceiQEMe.fhd.jpg",
+    "logo": "/media/images/1080_ceiQEMe.med.jpg",
+    "shortDescription": "Les scènes oniriques du Billetistan",
+    "longDescription": "Ah ben ça alors ! Un nouveau lieu dans un espace virtuel !",
+    "titre": "Demo",
+    "domain": "https://demo.tibillet.localhost",
+    "categorie": "S"
+  },
+  "membershipProducts": [
+    {
+      "uuid": "7a628223-a956-4ce6-8399-c8b303ba6ae0",
+      "name": "Adhésion Asso",
+      "short_description": null,
+      "long_description": null,
+      "terms_and_conditions_document": null,
+      "publish": true,
+      "img": "/media/images/300_obibr2P.jpg",
+      "categorie_article": "A",
+      "send_to_cashless": true,
+      "prices": [
+        {
+          "uuid": "6e0307d4-a1d0-445d-a92d-36629569f804",
+          "short_description": null,
+          "long_description": null,
+          "name": "récurente par mois",
+          "prix": "2.00",
+          "vat": "NA",
+          "stock": null,
+          "max_per_user": 10,
+          "subscription_type": "M",
+          "recurring_payment": true,
+          "product": "7a628223-a956-4ce6-8399-c8b303ba6ae0",
+          "adhesion_obligatoire": null
+        },
+        {

@@ -1,0 +1,36 @@
+{
+    "event": "{{first_event_uuid}}",
+    "email": "{{email}}",
+    "options": [
+        {{uuid_option}}
+    ],
+    "prices": [
+        {
+            "uuid": "{{price_billet_plein_tarif_uuid}}",
+            "qty": 2,
+            "customers": [
+                {
+                    "first_name": "{{$randomFirstName}}",
+                    "last_name": "{{$randomLastName}}"
+                },
+                {
+                    "first_name": "{{$randomFirstName}}",
+                    "last_name": "{{$randomLastName}}"
+                }
+            ]
+        },
+        {
+            "uuid": "{{price_adhesion_plein_tarif_uuid}}",
+            "qty": 1,
+            "customers": [
+                {
+                    "first_name": "{{$randomFirstName}}",
+                    "last_name": "{{$randomLastName}}",
+                    "phone": "{{$randomPhoneNumber}}",
+                    "postal_code": "97480",
+                    "birth_date": "1984-04-18"
+                }
+            ]
+        }
+    ]
+}

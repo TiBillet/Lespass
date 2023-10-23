@@ -1,0 +1,53 @@
+- tour des lieux pour la cohérence visuelle.
+
+
+https://agenda.filaos.re/emailconfirmation/Y2E1MDNjOWUtNTA2ZS00Y2NlLTliNjktOWM3MWIwYjRmZjYz/bwby1s-063a8a6cfdb76d03fc4140e94509d453
+
+filaos974+test0@hotmail.com
+lacaselacase
+re 692236935
+code récup urgence = nzix-ikyb-uifr-dbqb-ypry
+SIREN = 123456789
+num TVA = FRXX 999999999
+---
+nom légal = fi / laos
+1 allé fiorello micolini
+97480
+saint-joseph
+---
+intiyulé de poste = directeur
+date de naissance = 10/06/1971
+IBAN = FR1420041010050500013M02606
+
+apiBillet/views.py 1284
+retour strpie = https://agenda.filaos.re/onboard_stripe_return/acct_1O0jVPEQZApkJmRz/
+https://agenda.filaos.re/onboard_stripe_return/acct_1O0jVPEQZApkJmRz/
+
+1 - (côté vue) /api/onboard/ => django, redirection stripe
+2 - stripe => (côté vue) /api/onboard_stripe_return 
+3 - (côté vue) /api/webhook_stripe/ => django
+
+
+ https://agenda.filaos.re/onboard_stripe_return/acct_1O2ppiCoRHhw4Red
+
+ -------------------------
+ recharger la deb (npm run pop):
+ docker compose down -v --remove-orphans
+ dcupd
+ dexe billetterie_django bash
+ cd /Backup/dumps/
+ load_sql ./filaos.re-M0086-2023-10-18-13-25.sql
+---
+ajouter dans /media/travail/developpement/gits/Functional-testing/tls_challenge/env_files/billetterie.env:
+LOAD_SQL="/sql_test/billetterie/filaos.re-M0086-2023-10-18-13-25.sql"
+--------------
+docker network create frontend
+--------------
+dev:
+docker compose down -v --remove-orphans
+docker compose -f dev.yml up -d && docker compose -f dev.yml logs -f
+dexe billetterie_django bash
+
+--------------
+jonas:
+Je pense que tu peux mettre le bouton "valider la création de son espace" à la place du bouton valider de la page résumé

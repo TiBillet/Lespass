@@ -18,7 +18,7 @@
             </li>
           </ul>
           <!-- bouton mobile -->
-          <div class="bt-nav-creation boutik-bg-primary" :style="styleBtMobile"></div>
+          <div class="bt-nav-creation tibillet-bg-primary" :style="styleBtMobile"></div>
         </div>
 
         <!-- content -->
@@ -33,7 +33,7 @@
           </div>
           <div class="w-50 d-flex flex-column">
             <button v-if="etape < getNbItemNav() - 1" type="button"
-              class="btn btn-creation boutik-bg-primary align-self-end" @click="navCreationNext($event)">Suivant</button>
+              class="btn btn-creation tibillet-bg-primary align-self-end" @click="navCreationNext($event)">Suivant</button>
           </div>
         </div>
       </div>

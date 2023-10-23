@@ -80,25 +80,28 @@ const plausible = Plausible({
   --app-color-secondary: #0d6efd;
 }
 
-.boutik-outline-primary {
+.tibillet-outline-primary {
   color: var(--app-color-primary) !important;
   border-color:var(--app-color-primary) !important;
+  border: 1px solid var(--app-color-primary) !important;
 }
 
-.boutik-text-primary span {
+.tibillet-text-primary span {
   color:var(--app-color-primary) !important;
 }
 
-.boutik-bg-primary {
+.tibillet-bg-primary {
   background-color:var(--app-color-primary) !important;
+  color: white !important;
 }
 
 
-.boutik-bg-secondary {
+.tibillet-bg-secondary {
   background-color: var(--app-color-secondary) !important;
+  color: white !important;
 }
 
-.boutik-color-secondary {
+.tibillet-color-secondary {
   color: var(--app-color-secondary) !important;
 }
 </style>

@@ -1,26 +1,21 @@
 <template>
-  <div class="input-group mt-2" v-for="(customer, index) in customers" :key="index"
-  role="group" :aria-label="'Customer - ' + price.name + ' - ' + index">
-    <input type="text" :value="customer.last_name" @input="emitValue(customer.uuid, 'last_name', $event.target.value)"
-           placeholder="Nom" class="form-control"
-           required role="textbox" :aria-label="`Nom ${price.name} - ${index}`">
-    <input type="text" :value="customer.first_name" @input="emitValue(customer.uuid, 'first_name', $event.target.value)"
-           placeholder="Prénom" class="form-control"
-           required role="textbox" :aria-label="`Prénom ${price.name} - ${index}`">
-    <button class="btn btn-primary mb-0" type="button" @click="deleteCustomer(customer.uuid)"
-            style="border-top-right-radius: 30px; border-bottom-right-radius: 30px;"
-    role="button" :aria-label="`Supprimer champ ${price.name} - ${index}`">
-      <i class="fa fa-trash" aria-hidden="true"></i>
-    </button>
-    <div class="invalid-feedback">Donnée(s) manquante(s) !</div>
+  <div class="position-relative d-flex flex-row tibillet-input-group mt-4" v-for="(customer, index) in customers"
+    :key="index" role="group" :aria-label="'Customer - ' + price.name + ' - ' + index">
+    <InputMd :id="'customer-last-name' + index" label="Nom" :msg-role="`Nom ${price.name} - ${index}`"
+      msg-error="Entrer un nom." v-model="customer.last_name" type="email" :validation="true" style="width: 48%;" />
+    <InputMd :id="'customer-fist-name' + index" label="Prenom" :msg-role="`Prénom ${price.name} - ${index}`"
+      msg-error="Entrer un prénom." v-model="customer.first_name" type="email" :validation="true" style="width: 48%;" />
+    <font-awesome-icon icon="fa-solid fa-trash-can" @click="deleteCustomer(customer.uuid)" role="button"
+      :aria-label="`Supprimer champ ${price.name} - ${index}`" style="font-size: 1.3rem;"
+      class="tibillet-input-group-icon" />
   </div>
 </template>
 
 <script setup>
 // console.log('-> CardCustomers.vue !')
 // store
-import { useSessionStore } from '@/stores/session'
-
+import { useSessionStore } from "@/stores/session"
+import InputMd from "@/components/InputMd.vue"
 
 const emit = defineEmits(['update:customers'])
 const props = defineProps({
@@ -29,11 +24,6 @@ const props = defineProps({
 })
 
 const { deactivationProductMembership } = useSessionStore()
-
-function emitValue (customerUuid, key, value) {
-  props.customers.find(cust => cust.uuid === customerUuid)[key] = value
-  emit('update:customers', props.customers)
-}
 
 function deleteCustomer(customerUuid) {
   const newData = props.customers.filter(cust => cust.uuid !== customerUuid)
@@ -45,4 +35,14 @@ function deleteCustomer(customerUuid) {
 }
 </script>
 
-<style scoped></style>
+<style scoped>
+.mb-4 {
+  margin-bottom: 0 !important;
+}
+
+.tibillet-input-group-icon {
+  position: absolute;
+  top: calc(1rem + 2px);
+  right: 0;
+}
+</style>

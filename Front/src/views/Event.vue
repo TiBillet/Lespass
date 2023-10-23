@@ -23,7 +23,7 @@
 
       <CardGifts/>
 
-      <button type="submit" class="btn bg-gradient-dark w-100" role="button" aria-label="Valider la réservation">
+      <button type="submit" class="btn tibillet-bg-primary w-100" role="button" aria-label="Valider la réservation">
         Valider la réservation
       </button>
     </form>

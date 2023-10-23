@@ -1,0 +1,5 @@
+{
+    path: '/onboardreturn/:accstripe/',
+    name: 'OnboardReturn',
+    component: () => import(/* webpackChunkName: "OnboardReturn" */ '../views/OnboardReturn.vue')
+  }
