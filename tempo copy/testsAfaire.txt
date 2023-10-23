@@ -1,5 +1,0 @@
-bfc7e2ee-2329-4e53-b9fb-c62ad7fdbfd4
-
-prices	[ "customers name not find in ticket" ]
-
-{"uuid":"9f55dfe5-6756-4901-b749-0b7efd146778","qty":4}
