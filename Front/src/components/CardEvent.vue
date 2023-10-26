@@ -21,7 +21,7 @@
       <p class="text-dark">
         {{ formateDate(event.datetime) }}
 
-        <span class="text-primary text-uppercase text-sm font-weight-bold boutik-text-primary">
+        <span class="text-primary text-uppercase text-sm font-weight-bold tibillet-text-primary">
         <span v-for="(produit, index) in event.products" :key="index">
           <span v-if="produit.categorie_article === 'B'">
             <span v-for="price in produit.prices" :key="produit.uuid">
@@ -46,7 +46,7 @@
         {{ event.artists[0].configuration.short_description }}
       </p>
 
-      <div class="btn btn-outline-primary boutik-outline-primary btn-sm" @click="$router.push({ path: '/event/' + event.slug, query: {url: event.url, categorie: place.categorie}})"
+      <div class="btn btn-outline-primary tibillet-outline-primary btn-sm" @click="$router.push({ path: '/event/' + event.slug, query: {url: event.url, categorie: place.categorie}})"
       role="button" :aria-label="`Réserver ${event.slug}`">
        {{ event.products.length === 0 ?  "Informations" : "Réserver" }}
       </div>

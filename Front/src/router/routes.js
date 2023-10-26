@@ -11,6 +11,7 @@ export const routes = [
   {
     path: '/',
     name: 'Accueil',
+    alias: '/embed',
     meta: {
       // nom de la fonction de préchargement: "events", dans le module "preload.js"
       // avec retour de donnée dans les params ($route.params.events)
@@ -41,11 +42,13 @@ export const routes = [
   },
   {
     path: '/artist/:slug',
+    alias: '/artist/embed/:slug',
     name: 'Artist',
     component: () => import(/* webpackChunkName: "Artist" */ '../views/ArtistPage.vue')
   },
   {
     path: '/adhesions/',
+    alias: '/adhesions/embed',
     name: 'Adhesions',
     component: () => import(/* webpackChunkName: "Adhesions" */ '../views/Adhesions.vue')
   },
@@ -74,6 +77,7 @@ export const routes = [
   },
   {
     path: '/tenant',
+    alias: '/tenant/embed',
     name: 'Tenant',
     meta: { requiresAuth: true },
     component: () => import(/* webpackChunkName: "Tenant" */ '../views/Tenant.vue')

@@ -9,14 +9,26 @@
         </a>
       </div>
       <!-- partie droite -->
-      <ul class="navbar-nav d-flex flex-row-reverse ms-auto d-block">
+      <ul class="navbar-nav d-flex flex-row-reverse ms-auto">
         <!-- user connecté -->
         <li v-if="accessToken !== ''" class="nav-item dropdown">
-          <a class="nav-link d-flex justify-content-between align-items-center dropdown-toggle me-1" href="#"
+          <a class="nav-link d-flex flex-row justify-content-between align-items-center dropdown-toggle" href="#"
             id="menuUser" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-            <i class="fas fa-user me-1" aria-hidden="true"></i>
-            <h6 class="m-0 text-white">Mon compte</h6>
+            <font-awesome-icon icon="fa-solid fa-user" class="text-white mb-1" />
+            <h6 class="m-1 text-white">Mon compte</h6>
           </a>
+
+          <!--
+   <li v-if="!['M'].includes(headerPlace.categorie)" class="nav-item">
+          <a v-if="routeName !== 'Adhesions' && headerPlace !== null" href="/adhesions"
+            class="nav-link d-flex flex-row justify-content-center align-items-center"
+            :title="`Adhésions possibles à l'association '${headerPlace.titre}'`">
+            <font-awesome-icon icon="fa-solid fa-users" class="text-white mb-1"/>
+            <h6 class="m-1 text-white">Adhésions</h6>
+          </a>
+        </li>
+-->
+
           <!-- sous menu user -->
           <ul class="dropdown-menu" aria-labelledby="menuUser">
             <!-- info email user connecté -->
@@ -45,12 +57,12 @@
               <a v-if="me.membership.length > 0"
                 class="dropdown-item border-radius-md d-flex justify-content-star align-items-center" role="button"
                 data-bs-toggle="modal" data-bs-target="#membership-owned-modal">
-                <i class="fa fa-users fa-fw me-1 text-dark" aria-hidden="true"></i>
+                <font-awesome-icon icon="fa-solid fa-people-group" />
                 <h6 class="m-0 text-dark">Adhésions - {{ me.membership.length }}</h6>
               </a>
               <a v-if="me.membership.length === 0"
                 class="dropdown-item border-radius-md d-flex justify-content-star align-items-center">
-                <i class="fa fa-users fa-fw me-1 text-dark" aria-hidden="true"></i>
+                <font-awesome-icon icon="fa-solid fa-people-group" />
                 <h6 class="m-0 text-dark">Adhésions - 0</h6>
               </a>
             </li>
@@ -68,26 +80,26 @@
 
         <!-- pas de connexion -->
         <li v-else class="nav-item">
-          <a class="nav-link ps-1 d-flex justify-content-between align-items-center" role="button"
+          <a class="nav-link d-flex flex-row justify-content-center align-items-center" role="button"
             @click="showModalLogin()">
-            <i class="fa fa-user-circle-o me-1 text-white" aria-hidden="true"></i>
-            <h6 class="m-0 text-white" data-test-id="seConnecter">Se connecter</h6>
+            <font-awesome-icon icon="fa-solid fa-user" class="text-white mb-1" />
+            <h6 class="m-1 text-white" data-test-id="seConnecter">Se connecter</h6>
           </a>
         </li>
 
         <!-- Aller page adhésions -->
         <li v-if="!['M'].includes(headerPlace.categorie)" class="nav-item">
           <a v-if="routeName !== 'Adhesions' && headerPlace !== null" href="/adhesions"
-            class="nav-link ps-1 d-flex justify-content-between align-items-center"
+            class="nav-link d-flex flex-row justify-content-center align-items-center"
             :title="`Adhésions possibles à l'association '${headerPlace.titre}'`">
-            <i class="fa fa-users me-1 text-white" aria-hidden="true"></i>
-            <h6 class="m-0 text-white">Adhésions</h6>
+            <font-awesome-icon icon="fa-solid fa-users" class="text-white mb-1" />
+            <h6 class="m-1 text-white">Adhésions</h6>
           </a>
         </li>
 
         <li v-if="['M'].includes(headerPlace.categorie) && accessToken !== ''" class="nav-item">
           <router-link to="/tenant"
-            class="nav-link ps-1 d-flex justify-content-between align-items-center cursor-pointer">
+            class="nav-link d-flex flex-row justify-content-center align-items-center cursor-pointer">
             <i class="fa fa-plane me-1 text-white" aria-hidden="true"></i>
             <h6 class="m-0 text-white" data-test-id="seConnecter">Créer son espace</h6>
           </router-link>
@@ -148,5 +160,16 @@ automaticConnection()
 <style scoped>
 .tourne-ticket {
   transform: rotate(-20deg);
+}
+
+.dropdown .dropdown-menu::before {
+  content: "\f0d8";
+  position: absolute;
+  top: -20px;
+  left: 28px;
+  right: auto;
+  font-size: 22px;
+  color: #fff;
+  transition: top .35s ease;
 }
 </style>

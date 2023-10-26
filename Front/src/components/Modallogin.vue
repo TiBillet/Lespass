@@ -19,7 +19,7 @@
             <div class="card-body">
               <form class="text-left needs-validation" @submit.prevent="validerLogin($event)" novalidate>
                 <InputMd id="login-email" label="Email" msg-error="Merci de renseigner une adresse email valide."
-                type="email" :validation="true"/>
+                type="email" validation="true"/>
 
                 <p class="mt-2">Nul besoin de mot de passe : un email vous sera envoyé pour validation.</p>
                 <div class="text-center">

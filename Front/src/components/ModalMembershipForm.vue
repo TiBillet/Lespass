@@ -1,7 +1,7 @@
 <template>
   <!-- modal formulaire adhésion -->
-  <div id="modal-form-adhesion" class="modal fade" tabindex="-1" role="dialog"
-       aria-labelledby="modal-form-adhesion" data-mdb-backdrop="true" aria-hidden="true">
+  <div id="modal-form-adhesion" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="modal-form-adhesion"
+    data-mdb-backdrop="true" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" role="document">
       <div class="modal-content">
         <div class="modal-body p-0">
@@ -10,128 +10,85 @@
               <h3 class="font-weight-bolder text-info text-gradient align-self-start w-85">
                 {{
                   getMembershipData(props.productUuid)
-                      .name
+                    .name
                 }}</h3>
               <h5 style="white-space: pre-line">{{
-                  getMembershipData(props.productUuid)
-                      .short_description
-                }}</h5>
+                getMembershipData(props.productUuid)
+                  .short_description
+              }}</h5>
             </div>
             <div class="card-body">
               <!-- formulaire -->
               <form id="form-valid-membership" class="needs-validation"
-                    @submit.prevent="validerAdhesion($event, props.productUuid)"
-                    novalidate role="form" aria-label="Formulaire d'adhésion">
+                @submit.prevent="validerAdhesion($event, props.productUuid)" novalidate role="form"
+                aria-label="Formulaire d'adhésion">
                 <!-- conditions -->
                 <div class="input-group mb-2 has-validation">
                   <div class="form-check form-switch">
                     <input class="form-check-input" type="checkbox"
-                           v-model="getFormMembership(props.productUuid).readConditions"
-                           true-value="true" false-value="false" required
-                           role="checkbox" aria-labelledby="statuts et règlement intérieur de l'association"/>
+                      v-model="getFormMembership(props.productUuid).readConditions" true-value="true" false-value="false"
+                      required role="checkbox" aria-labelledby="statuts et règlement intérieur de l'association"
+                      :class="getFormMembership(props.productUuid).readConditions === 'true' ? 'bg-success' : ''" />
                     <label class="form-check-label text-dark" for="read-conditions">
                       <span>j'ai pris connaissance des </span>
                       <span v-if="getMembershipData(props.productUuid).categorie_article === 'A'">
-                          <a v-if="getMembershipData(props.productUuid).legal_link !== null" class="text-info"
-                             @click="goStatus()">statuts et du règlement intérieur de l'association.</a>
-                          <span v-else>statuts et du règlement intérieur de l'association</span>
-                        </span>
+                        <a v-if="getMembershipData(props.productUuid).legal_link !== null" class="text-info"
+                          @click="goStatus()">statuts et du règlement intérieur de l'association.</a>
+                        <span v-else>statuts et du règlement intérieur de l'association</span>
+                      </span>
                       <span v-else>
-                          <a v-if="getMembershipData(props.productUuid).legal_link !== null" class="text-info"
-                             @click="goStatus()">CGU/CGV.</a>
-                          <span v-else>CGU/CGV.</span>
-                        </span>
+                        <a v-if="getMembershipData(props.productUuid).legal_link !== null" class="text-info"
+                          @click="goStatus()">CGU/CGV.</a>
+                        <span v-else>CGU/CGV.</span>
+                      </span>
                     </label>
-                    <div class="invalid-feedback" role="heading" aria-label="Conditions non acceptées.">Conditions non acceptées.</div>
+                    <div class="invalid-feedback" role="heading" aria-label="Conditions non acceptées.">Conditions non
+                      acceptées.</div>
                   </div>
                 </div>
 
                 <!-- prix -->
-                <div class="input-group mb-2 has-validation">
-                  <div class="col form-check mb-2"
-                       v-for="(price, index) in getMembershipPrices(props.productUuid)" :key="index">
-                    <input name="membership-prices" :id="`uuidadhesionmodalpriceradio${index}`" type="radio"
-                           v-model="getFormMembership(props.productUuid).uuidPrice" :value="price.uuid"
-                           class="form-check-input input-adesion-modal-price" required
-                    />
-                    <label class="form-check-label text-dark" :for="`uuidadhesionmodalpriceradio${index}`">
-                      {{ price.name }} - {{ price.prix }}€
-                    </label>
-                    <div v-if="index === 0" class="invalid-feedback w-100" role="heading" aria-label="Tarif SVP.">
-                      Tarif SVP
-                    </div>
-                  </div>
-                </div>
+                <InputRadio :data-radio="convertForInputRadio()" v-model="getFormMembership(props.productUuid).uuidPrice"
+                  msg-error="Tarif SVP" validation="true" />
 
                 <!-- nom -->
-                <div class="input-group mb-2 has-validation">
-                  <span class="input-group-text" @click="inputFocus('adhesion-nom')">Nom ou Structure</span>
-                  <input id="adhesion-nom" v-model="getFormMembership(props.productUuid).last_name" type="text"
-                         class="form-control" required role="textbox" aria-label="Nom pour l'adhésion.">
-                  <div class="invalid-feedback" role="heading" aria-label="Merci de remplir votre nom.">Merci de remplir votre nom.</div>
-                </div>
+                <InputMd id="adhesion-nom" label="Nom ou Structure" msg-role="Nom pour l'adhésion."
+                  msg-error="Merci de remplir votre nom." v-model="getFormMembership(props.productUuid).last_name"
+                  class="mt-3" validation="true"/>
 
-
-                <div class="input-group mb-2 has-validation">
-                  <span class="input-group-text" @click="inputFocus('adhesion-prenom')">Prénom</span>
-                  <input id="adhesion-prenom" v-model="getFormMembership(props.productUuid).first_name" type="text"
-                         class="form-control" required role="textbox" aria-label="Prénom pour l'adhésion.">
-                  <div class="invalid-feedback" role="heading" aria-label="Merci de remplir votre prénom.">Merci de remplir votre prénom.</div>
-                </div>
+                <!--prénom -->
+                <InputMd id="adhesion-prenom" label="Prénom" msg-role="Prénom pour l'adhésion."
+                  msg-error="Merci de remplir votre prénom." v-model="getFormMembership(props.productUuid).first_name"
+                  class="mt-3" validation="true"/>
 
                 <!-- email -->
-                <div class="input-group mb-2 has-validation">
-                  <span class="input-group-text" @click="inputFocus('adhesion-email')">Email</span>
-                  <input id="adhesion-email" v-model="getFormMembership(props.productUuid).email" type="email"
-                         @keyup="validateEmail($event)" class="form-control" required
-                  role="textbox" aria-label="Email pour l'adhésion.">
-                  <div class="invalid-feedback" role="heading" aria-label="Merci de remplir votre email.">
-                    Merci de remplir votre email.
-                  </div>
-                </div>
+                <InputMd type="email" id="adhesion-email" label="Email" msg-role="Email pour l'adhésion."
+                  msg-error="Merci de remplir votre email." v-model="getFormMembership(props.productUuid).email"
+                  class="mt-3" validation="true" @keyup="validateEmail($event)"/>
 
                 <!-- code postal -->
-                <div class="input-group mb-2 has-validation">
-                  <span class="input-group-text" @click="inputFocus('adhesion-code-postal')">Code postal</span>
-                  <input id="adhesion-code-postal" v-model="getFormMembership(props.productUuid).postal_code"
-                         type="number" class="form-control" @keyup="formatNumber($event, 5)" required
-                   role="textbox" aria-label="Code postal pour l'adhésion.">
-                  <div class="invalid-feedback" role="heading" aria-label="Merci de remplir votre code postal.">Merci de remplir votre code postal.</div>
-                </div>
+                <InputMd type="number" id="adhesion-code-postal" label="Code postal" msg-role="Code postal pour l'adhésion."
+                  msg-error="Merci de remplir votre code postal." v-model="getFormMembership(props.productUuid).postal_code"
+                  class="mt-3" validation="true" @keyup="formatNumber($event, 5)"/>
 
                 <!-- téléphone -->
-                <div class="input-group has-validation">
-                                    <span class="input-group-text"
-                                          @click="inputFocus('adhesion-tel')">Fixe ou Mobile</span>
-                  <input id="adhesion-tel" v-model="getFormMembership(props.productUuid).phone" type="tel"
-                         class="form-control" @keyup="formatNumber($event, 10)" required
-                    role="textbox" aria-label="Fixe ou Mobile pour l'adhésion.">
-                  <div class="invalid-feedback" role="heading" aria-label="Merci de remplir votre numéro de téléphone.">Merci de remplir votre numéro de téléphone.</div>
-                </div>
+                <InputMd type="tel" id="adhesion-tel" label="Fixe ou Mobile" msg-role="Fixe ou Mobile pour l'adhésion."
+                  msg-error="Merci de remplir votre numéro de téléphone." v-model="getFormMembership(props.productUuid).phone"
+                  class="mt-3" validation="true" @keyup="formatNumber($event, 10)"/>
 
                 <!-- options radio -->
-                <div v-if="getMembershipOptionsRadio(props.productUuid).length > 0"
-                     class="input-group mb-2">
-                  <div class="col form-check mb-2"
-                       v-for="(option, index) in getMembershipOptionsRadio(props.productUuid)" :key="index">
-                    <input name="membership-options-radio" :id="`uuidmembershipoptionsradio${index}`" type="radio"
-                           v-model="getFormMembership(props.productUuid).option_radio" :value="option.uuid"
-                           class="form-check-input input-adesion-modal-price" role="radio" :aria-labelledby="`Choisir index radio ${index}.`"/>
-                    <label class="form-check-label text-dark mb-0" :for="`uuidmembershipoptionsradio${index}`">
-                      {{ option.name }}
-                    </label>
-                  </div>
-                </div>
+                <InputRadio v-if="getMembershipOptionsRadio(props.productUuid).length > 0" :data-radio="convertMembershipOptionsRadio()" v-model="getFormMembership(props.productUuid).option_radio"
+                  msg-error="Tarif SVP" msg-role="Choisir index radio " validation="true" />
 
                 <!-- options checkbox -->
                 <div v-if="getFormMembership(props.productUuid).option_checkbox.length > 0" class="mt-3">
-                  <div v-for="(option, index) in getFormMembership(props.productUuid).option_checkbox"
-                       :key="index" class="input-group mb-1">
+                  <div v-for="(option, index) in getFormMembership(props.productUuid).option_checkbox" :key="index"
+                    class="input-group mb-1">
                     <div class="form-check form-switch">
                       <input class="form-check-input me-2 options-adhesion-to-unchecked" type="checkbox"
-                             :id="`option-checkbox-adhesion${option.uuid}`" v-model="option.checked"
-                             true-value="true" false-value="false"
-                             role="checkbox" :aria-labelledby="`Choisir index checkbox ${index}.`">
+                        :id="`option-checkbox-adhesion${option.uuid}`" v-model="option.checked" true-value="true"
+                        false-value="false" role="checkbox" :aria-labelledby="`Choisir index checkbox ${index}.`"
+                        :class="option.checked === 'true' ? 'bg-success' : ''">
 
                       <label class="form-check-label text-dark mb-0" :for="`option-checkbox-adhesion${option.uuid}`">
                         {{ option.name }}
@@ -149,7 +106,8 @@
                     privée.
                   </p>
 
-                  <button type="submit" class="btn btn-round bg-gradient-info btn-lg w-100 mt-4 mb-0" role="button" aria-label="valider formulaire adhésion">
+                  <button type="submit" class="btn btn-round bg-gradient-info btn-lg w-100 mt-4 mb-0" role="button"
+                    aria-label="valider formulaire adhésion">
                     Valider
                   </button>
                 </div>
@@ -161,13 +119,16 @@
       </div>
     </div>
   </div>
-
 </template>
 
 <script setup>
 console.log('-> ModalMembershipForm.vue !')
 import { log } from '../communs/LogError'
 import { setLocalStateKey } from '../communs/storeLocal.js'
+
+// component
+import InputRadio from './InputRadio.vue'
+import InputMd from './InputMd.vue'
 
 // store
 import { useSessionStore } from '../stores/session'
@@ -187,7 +148,29 @@ const props = defineProps({
 
 const domain = `${window.location.protocol}//${window.location.host}`
 
-function validateEmail (event) {
+function convertForInputRadio() {
+  let options = []
+  getMembershipPrices(props.productUuid).forEach(data => {
+    options.push({
+      label: data.name + " - " + data.prix + "€",
+      value: data.uuid
+    })
+  })
+  return { options, name: 'membership-prices' }
+}
+
+function convertMembershipOptionsRadio() {
+  let options = []
+  getMembershipOptionsRadio(props.productUuid).forEach(data => {
+    options.push({
+      label: data.name,
+      value: data.uuid
+    })
+  })
+  return { options, name: 'membership-options-radio'}
+}
+
+function validateEmail(event) {
   let value = event.target.value
   // event.target.setAttribute('type', 'text')
   const re = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$/
@@ -198,7 +181,7 @@ function validateEmail (event) {
   }
 }
 
-function formatNumber (event, limit) {
+function formatNumber(event, limit) {
   const element = event.target
   // obligation de changer le type pour ce code, si non "replace" ne fait pas "correctement" son travail
   element.setAttribute('type', 'text')
@@ -211,7 +194,7 @@ function formatNumber (event, limit) {
   }
 }
 
-function goStatus () {
+function goStatus() {
   const lien = getMembershipData(props.productUuid).legal_link
   // console.log('-> goStatus, lien =', lien)
   if (lien !== null) {
@@ -219,11 +202,11 @@ function goStatus () {
   }
 }
 
-function inputFocus (id) {
+function inputFocus(id) {
   document.querySelector(`#${id}`).focus()
 }
 
-function postAdhesionModal (data, uuidForm) {
+function postAdhesionModal(data, uuidForm) {
   // console.log(`-> fonc postAdhesionModal !`)
   const domain = `${location.protocol}//${location.host}`
   const apiMemberShip = `/api/membership/`
@@ -261,7 +244,7 @@ function postAdhesionModal (data, uuidForm) {
   })
 }
 
-async function validerAdhesion (event, uuidForm) {
+async function validerAdhesion(event, uuidForm) {
   if (!event.target.checkValidity()) {
     event.preventDefault()
     event.stopPropagation()

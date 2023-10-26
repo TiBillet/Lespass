@@ -6,7 +6,7 @@
           <div class="row">
             <div class="col-md-4">
               <div class="card-image position-relative border-radius-lg">
-                <img class="img border-radius-lg" :src="product.img" alt="image product" loading="lazy">
+                <img class="img border-radius-lg w-100 h-auto" :src="product.img" alt="image product" loading="lazy">
               </div>
             </div>
             <div class="col-md-7 my-auto ms-md-3 mt-md-auto mt-4">

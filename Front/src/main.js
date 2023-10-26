@@ -20,20 +20,20 @@ import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
 import { faTrashCan } from '@fortawesome/free-solid-svg-icons'
 import { faSquareMinus } from '@fortawesome/free-solid-svg-icons'
 import { faSquarePlus } from '@fortawesome/free-solid-svg-icons'
-//
-import { faPaintBrush } from '@fortawesome/free-solid-svg-icons'
 import { faMusic } from '@fortawesome/free-solid-svg-icons'
-import { faWheatAwn } from '@fortawesome/free-solid-svg-icons'
-import { faCamera } from '@fortawesome/free-solid-svg-icons'
-import { faImage } from '@fortawesome/free-solid-svg-icons'
-import { faFilm } from '@fortawesome/free-solid-svg-icons'
-import { faHouseFlag } from '@fortawesome/free-solid-svg-icons'
 import { faPeopleGroup } from '@fortawesome/free-solid-svg-icons'
 import { faBuilding } from '@fortawesome/free-solid-svg-icons'
-
+import { faUser } from '@fortawesome/free-solid-svg-icons'
+import { faUsers } from '@fortawesome/free-solid-svg-icons'
+import { faAngleDown } from '@fortawesome/free-solid-svg-icons'
+import { faCaretUp } from '@fortawesome/free-solid-svg-icons'
+import { faCaretDown } from '@fortawesome/free-solid-svg-icons'
 
 // add icons to the library
-library.add(faSquareMinus, faSquarePlus, faTrashCan, faPaintBrush,faMusic,faWheatAwn,faCamera,faImage,faFilm, faHouseFlag, faPeopleGroup, faBuilding)
+library.add(
+  faSquareMinus, faSquarePlus, faTrashCan, faMusic, faPeopleGroup, faBuilding, faUser, faUsers,
+  faAngleDown, faCaretUp, faCaretDown
+)
 
 window.emitter = mitt();
 
