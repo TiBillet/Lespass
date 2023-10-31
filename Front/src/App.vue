@@ -64,17 +64,6 @@ const plausible = Plausible({
 </script>
 
 <style>
-/* ajout partie arrondie sur groupe input por l'ensemble de l'application 
-.app-rounded-right-20 {
-  border-bottom-right-radius: 20px !important;
-  border-top-right-radius: 20px !important;
-}
-
-.w-15 {
-  width: 15% !important;
-}
-*/
-
 #app {
   --app-color-primary: #f05f3e;
   --app-color-secondary: #0d6efd;

@@ -29,6 +29,13 @@ export const routes = [
     component: {}
   },
   {
+    path: '/create_event',
+    // si iframe
+    alias: '/create_event/embed',
+    name: 'CreateEvent',
+    component: () => import(/* webpackChunkName: "CreateEvent" */ '../views/CreateEvent.vue')
+  },
+  {
     path: '/event/:slug',
     // si iframe
     alias: '/event/embed/:slug',

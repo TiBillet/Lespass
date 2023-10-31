@@ -1,197 +1,232 @@
 // import { log } from '../../communs/LogError'
 
-const domain = `${window.location.protocol}//${window.location.host}`
+const domain = `${window.location.protocol}//${window.location.host}`;
 
 export const sessionGetters = {
-  getHeaderPlace (state) {
-    return state.headerPlace
+  getUserStatus(state) {
+    return state.me;
   },
-  getAccessToken (state) {
-    return state.accessToken
+  getHeaderPlace(state) {
+    return state.headerPlace;
   },
-  getCurrentFormUuid (state) {
-    return state.currentFormUuid
+  getAccessToken(state) {
+    return state.accessToken;
   },
-  getFormMembership (state) {
+  getCurrentFormUuid(state) {
+    return state.currentFormUuid;
+  },
+  getFormMembership(state) {
     return (uuid) => {
-      if (uuid !== '') {
-        let form = state.forms.find(obj => obj.uuid === uuid)
+      if (uuid !== "") {
+        let form = state.forms.find((obj) => obj.uuid === uuid);
         if (form === undefined) {
-          let optionsCheckbox = []
-          let rawOptionsCheckbox = JSON.parse(JSON.stringify(state.membershipProducts)).find(obj => obj.uuid === uuid).option_generale_checkbox
+          let optionsCheckbox = [];
+          let rawOptionsCheckbox = JSON.parse(
+            JSON.stringify(state.membershipProducts)
+          ).find((obj) => obj.uuid === uuid).option_generale_checkbox;
           rawOptionsCheckbox.forEach((option) => {
-            option['checked'] = false
-            optionsCheckbox.push(option)
-          })
+            option["checked"] = false;
+            optionsCheckbox.push(option);
+          });
 
           state.forms.push({
-            typeForm: 'membership',
+            typeForm: "membership",
             readConditions: false,
-            uuidPrice: '',
-            first_name: '',
-            last_name: '',
+            uuidPrice: "",
+            first_name: "",
+            last_name: "",
             email: this.me.email,
-            postal_code: '',
-            phone: '',
+            postal_code: "",
+            phone: "",
             option_checkbox: optionsCheckbox,
-            option_radio: '',
-            uuid
-          })
+            option_radio: "",
+            uuid,
+          });
         }
-        return state.forms.find(form => form.uuid === uuid)
+        return state.forms.find((form) => form.uuid === uuid);
       } else {
         return {
-          typeForm: 'membership',
+          typeForm: "membership",
           readConditions: false,
-          uuidPrice: '',
-          first_name: '',
-          last_name: '',
+          uuidPrice: "",
+          first_name: "",
+          last_name: "",
           email: this.me.email,
-          postal_code: '',
-          phone: '',
+          postal_code: "",
+          phone: "",
           option_checkbox: [],
-          option_radio: ''
-        }
+          option_radio: "",
+        };
       }
+    };
+  },
+  getIsLogin(state) {
+    return state.accessToken !== "" ? true : false;
+  },
+  getIsStaff(state) {
+    if (state.accessToken !== "" && state.me.is_staff === true) {
+      return true;
     }
+    return false;
   },
-  getIsLogin (state) {
-    return state.accessToken !== '' ? true : false
+  getEventForm(state) {
+    return state.forms.find(
+      (formRec) => formRec.uuid === state.currentUuidEventForm
+    );
   },
-  getEventForm (state) {
-    return state.forms.find(formRec => formRec.uuid === state.currentUuidEventForm)
-  },
-  getEventFormOptions (state) {
-    let form = state.forms.find(formRec => formRec.uuid === state.currentUuidEventForm)
-    const optionsCheckbox = form.options_checkbox
-    const nbOptionsCheckbox = optionsCheckbox.length
-    const optionsRadio = form.options_radio
-    const nbOptionsRadio = optionsRadio.length
+  getEventFormOptions(state) {
+    let form = state.forms.find(
+      (formRec) => formRec.uuid === state.currentUuidEventForm
+    );
+    const optionsCheckbox = form.options_checkbox;
+    const nbOptionsCheckbox = optionsCheckbox.length;
+    const optionsRadio = form.options_radio;
+    const nbOptionsRadio = optionsRadio.length;
     return {
       optionsCheckbox,
       optionsRadio,
       nbOptionsCheckbox,
-      nbOptionsRadio
-    }
+      nbOptionsRadio,
+    };
   },
-  getEmailForm (state) {
-    const form = state.forms.find(formRec => formRec.uuid === state.currentUuidEventForm)
-    return form.email
+  getEmailForm(state) {
+    const form = state.forms.find(
+      (formRec) => formRec.uuid === state.currentUuidEventForm
+    );
+    return form.email;
   },
-  getEmail (state) {
-    return state.me.email
+  getEmail(state) {
+    return state.me.email;
   },
-  getDataAdhesion (state) {
+  getDataAdhesion(state) {
     return (membershipsUuid) => {
-      return state.membershipProducts.find(membership => membership.uuid === membershipsUuid)
-    }
+      return state.membershipProducts.find(
+        (membership) => membership.uuid === membershipsUuid
+      );
+    };
   },
-  getRelatedProductIsActivated (state) {
+  getRelatedProductIsActivated(state) {
     return (productUuid) => {
       try {
-        const form = state.forms.find(formRec => formRec.uuid === state.currentUuidEventForm)
-        return form.products.find(prod => prod.uuid === productUuid).activated
+        const form = state.forms.find(
+          (formRec) => formRec.uuid === state.currentUuidEventForm
+        );
+        return form.products.find((prod) => prod.uuid === productUuid)
+          .activated;
       } catch (e) {
-        return false
+        return false;
       }
-    }
+    };
   },
-  getIsMemberShip (state) {
+  getIsMemberShip(state) {
     return (membershipUuuid) => {
       if (state.me.membership.length > 0) {
-        const productExist = state.me.membership.find(obj => obj.product_uuid === membershipUuuid)
-        return productExist !== undefined ? true : false
+        const productExist = state.me.membership.find(
+          (obj) => obj.product_uuid === membershipUuuid
+        );
+        return productExist !== undefined ? true : false;
       } else {
-        return false
+        return false;
       }
-    }
+    };
   },
-  getBtnAddCustomerCanBeSeen (state) {
+  getBtnAddCustomerCanBeSeen(state) {
     return (productUuid, priceUuid) => {
-      let customers = []
-      const formReservation = state.forms.filter(form => form.typeForm === 'reservation')
-      if (formReservation.length > 0 && state.currentUuidEventForm !== '') {
-        const products = formReservation.find(form => form.uuid === this.currentUuidEventForm).products
-        const product = products.find(prod => prod.uuid === productUuid)
-        const price = product.prices.find(prix => prix.uuid === priceUuid)
+      let customers = [];
+      const formReservation = state.forms.filter(
+        (form) => form.typeForm === "reservation"
+      );
+      if (formReservation.length > 0 && state.currentUuidEventForm !== "") {
+        const products = formReservation.find(
+          (form) => form.uuid === this.currentUuidEventForm
+        ).products;
+        const product = products.find((prod) => prod.uuid === productUuid);
+        const price = product.prices.find((prix) => prix.uuid === priceUuid);
         if (price.customers) {
-          customers = price.customers
+          customers = price.customers;
           // stock pas géré et maxi par user géré
           if (price.stock === null && customers.length < price.max_per_user) {
-            return true
+            return true;
           }
           // stock et maxi par user géré
-          if (price.stock !== null && (price.stock - customers.length) >= 1 && customers.length < price.max_per_user) {
-            return true
+          if (
+            price.stock !== null &&
+            price.stock - customers.length >= 1 &&
+            customers.length < price.max_per_user
+          ) {
+            return true;
           }
         } else {
-          return false
+          return false;
         }
       }
       // pas de clients/no customer
       if (customers.length === 0) {
-        return true
+        return true;
       }
-      return false
-    }
+      return false;
+    };
   },
-  getListAdhesions () {
+  getListAdhesions() {
     if (this.membershipProducts !== null) {
-      return this.membershipProducts
+      return this.membershipProducts;
     } else {
-      return []
+      return [];
     }
   },
-  getMembershipData (state) {
+  getMembershipData(state) {
     // console.log('-> getPartialDataAdhesion !')
     return (productUuid) => {
-      if (productUuid !== '') {
-        const dataArray = JSON.parse(JSON.stringify(state.membershipProducts))
-        const data = dataArray.find(obj => obj.uuid === productUuid)
-        return data
+      if (productUuid !== "") {
+        const dataArray = JSON.parse(JSON.stringify(state.membershipProducts));
+        const data = dataArray.find((obj) => obj.uuid === productUuid);
+        return data;
       } else {
         return {
-          name: '',
-          short_description: '',
-          categorie_article: 'INCONNUE',
+          name: "",
+          short_description: "",
+          categorie_article: "INCONNUE",
           option_generale_radio: [],
-          option_generale_checkbox: []
-        }
+          option_generale_checkbox: [],
+        };
       }
-    }
+    };
   },
-  getMembershipPrices (state) {
+  getMembershipPrices(state) {
     return (productUuid) => {
       // console.log('-> getPricesAdhesion !')
       try {
-        return state.membershipProducts.find(obj => obj.uuid === productUuid).prices
+        return state.membershipProducts.find((obj) => obj.uuid === productUuid)
+          .prices;
       } catch (error) {
-        return []
+        return [];
       }
-    }
+    };
   },
-  getMembershipOptionsRadio (state) {
+  getMembershipOptionsRadio(state) {
     return (productUuid) => {
       try {
-        return state.membershipProducts.find(obj => obj.uuid === productUuid).option_generale_radio
+        return state.membershipProducts.find((obj) => obj.uuid === productUuid)
+          .option_generale_radio;
       } catch (error) {
-        return []
+        return [];
       }
-    }
+    };
   },
-  getMembershipOptionsCheckbox (state) {
+  getMembershipOptionsCheckbox(state) {
     return (productUuid) => {
       try {
-        return state.membershipProducts.find(obj => obj.uuid === productUuid).option_generale_checkbox
+        return state.membershipProducts.find((obj) => obj.uuid === productUuid)
+          .option_generale_checkbox;
       } catch (error) {
-        return []
+        return [];
       }
-    }
+    };
   },
-  getEventName (state) {
+  getEventName(state) {
     return (uuidEvent) => {
-      console.log('-> getReservations')
-      return state.events.find(event => event.uuid === uuidEvent).name
-    }
-  }
-}
+      console.log("-> getReservations");
+      return state.events.find((event) => event.uuid === uuidEvent).name;
+    };
+  },
+};
