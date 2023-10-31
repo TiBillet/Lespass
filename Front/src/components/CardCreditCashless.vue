@@ -19,7 +19,7 @@
 
     <!-- la recharge -->
     <InputNumber v-if="product.activated === true" :button="false"
-                 v-model:price="products.filter(prod => prod.categorie_article === 'S')[index]" :min="10" :max="1000"
+                 v-model:price="products.filter(prod => prod.categorie_article === 'S')[index]" :min="min" :max="max"
                  info-aria="Recharge cashless"/>
 
   </fieldset>
@@ -33,7 +33,9 @@ import InputNumber from './InputNumber.vue'
 // attributs/props
 const emit = defineEmits(['update:products'])
 const props = defineProps({
-  products: Object
+  products: Object,
+  min: Number,
+  max: Number
 })
 
 function inputFocus(id) {

@@ -1,7 +1,7 @@
 <template>
   <div class="input-group input-group-dynamic mb-4" :class="validation === true ? 'has-validation' : ''">
     <label class="form-label" :for="id">{{ label }}</label>
-    <input v-if="validation === 'true'" :type="type" class="form-control" :id="id" aria-describedby="basic-addon3" :value="modelValue"
+    <input v-if="validation === true" :type="type" class="form-control" :id="id" aria-describedby="basic-addon3" :value="modelValue"
       @input="sendInput($event)" @focusin="focused($event)" @focusout="defocused($event)" role="textbox"
       :aria-label="msgRole" @keyup="isFilled($event)" required>
 
@@ -26,7 +26,7 @@ const props = defineProps({
     default: 'text',
     type: String
   },
-  validation: String
+  validation: Boolean
 });
 
 const emit = defineEmits(["update:modelValue"]);

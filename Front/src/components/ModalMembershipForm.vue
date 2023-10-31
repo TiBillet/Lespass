@@ -23,7 +23,7 @@
                 @submit.prevent="validerAdhesion($event, props.productUuid)" novalidate role="form"
                 aria-label="Formulaire d'adhésion">
                 <!-- conditions -->
-                <div class="input-group mb-2 has-validation">
+                <div class="input-group mb-4 has-validation" style="position:relative">
                   <div class="form-check form-switch">
                     <input class="form-check-input" type="checkbox"
                       v-model="getFormMembership(props.productUuid).readConditions" true-value="true" false-value="false"
@@ -42,75 +42,73 @@
                         <span v-else>CGU/CGV.</span>
                       </span>
                     </label>
-                    <div class="invalid-feedback" role="heading" aria-label="Conditions non acceptées.">Conditions non
+                    <div class="tibillet-msg-error-position invalid-feedback" role="heading"
+                      aria-label="Conditions non acceptées.">Conditions non
                       acceptées.</div>
                   </div>
                 </div>
 
                 <!-- prix -->
                 <InputRadio :data-radio="convertForInputRadio()" v-model="getFormMembership(props.productUuid).uuidPrice"
-                  msg-error="Tarif SVP" validation="true" />
+                  msg-error="Tarif SVP." msg-role="Tarif membership" :validation="true" />
 
                 <!-- nom -->
                 <InputMd id="adhesion-nom" label="Nom ou Structure" msg-role="Nom pour l'adhésion."
                   msg-error="Merci de remplir votre nom." v-model="getFormMembership(props.productUuid).last_name"
-                  class="mt-3" validation="true"/>
+                  class="mt-3" :validation="true" />
 
                 <!--prénom -->
                 <InputMd id="adhesion-prenom" label="Prénom" msg-role="Prénom pour l'adhésion."
                   msg-error="Merci de remplir votre prénom." v-model="getFormMembership(props.productUuid).first_name"
-                  class="mt-3" validation="true"/>
+                  class="mt-3" :validation="true" />
 
                 <!-- email -->
                 <InputMd type="email" id="adhesion-email" label="Email" msg-role="Email pour l'adhésion."
                   msg-error="Merci de remplir votre email." v-model="getFormMembership(props.productUuid).email"
-                  class="mt-3" validation="true" @keyup="validateEmail($event)"/>
+                  class="mt-3" :validation="true" @keyup="validateEmail($event)" />
 
                 <!-- code postal -->
-                <InputMd type="number" id="adhesion-code-postal" label="Code postal" msg-role="Code postal pour l'adhésion."
-                  msg-error="Merci de remplir votre code postal." v-model="getFormMembership(props.productUuid).postal_code"
-                  class="mt-3" validation="true" @keyup="formatNumber($event, 5)"/>
+                <InputMd type="number" id="adhesion-code-postal" label="Code postal"
+                  msg-role="Code postal pour l'adhésion." msg-error="Merci de remplir votre code postal."
+                  v-model="getFormMembership(props.productUuid).postal_code" class="mt-3" :validation="true"
+                  @keyup="formatNumber($event, 5)" />
 
                 <!-- téléphone -->
                 <InputMd type="tel" id="adhesion-tel" label="Fixe ou Mobile" msg-role="Fixe ou Mobile pour l'adhésion."
-                  msg-error="Merci de remplir votre numéro de téléphone." v-model="getFormMembership(props.productUuid).phone"
-                  class="mt-3" validation="true" @keyup="formatNumber($event, 10)"/>
+                  msg-error="Merci de remplir votre numéro de téléphone."
+                  v-model="getFormMembership(props.productUuid).phone" class="mt-3" :validation="true"
+                  @keyup="formatNumber($event, 10)" />
 
                 <!-- options radio -->
-                <InputRadio v-if="getMembershipOptionsRadio(props.productUuid).length > 0" :data-radio="convertMembershipOptionsRadio()" v-model="getFormMembership(props.productUuid).option_radio"
-                  msg-error="Tarif SVP" msg-role="Choisir index radio " validation="true" />
+                <InputRadio v-if="getMembershipOptionsRadio(props.productUuid).length > 0"
+                  :data-radio="convertMembershipOptionsRadio()"
+                  v-model="getFormMembership(props.productUuid).option_radio" msg-error="L'option SVP."
+                  msg-role="Choisir l'option" :validation="true" />
 
                 <!-- options checkbox -->
                 <div v-if="getFormMembership(props.productUuid).option_checkbox.length > 0" class="mt-3">
                   <div v-for="(option, index) in getFormMembership(props.productUuid).option_checkbox" :key="index"
                     class="input-group mb-1">
                     <div class="form-check form-switch">
-                      <input class="form-check-input me-2 options-adhesion-to-unchecked" type="checkbox"
-                        :id="`option-checkbox-adhesion${option.uuid}`" v-model="option.checked" true-value="true"
-                        false-value="false" role="checkbox" :aria-labelledby="`Choisir index checkbox ${index}.`"
-                        :class="option.checked === 'true' ? 'bg-success' : ''">
-
-                      <label class="form-check-label text-dark mb-0" :for="`option-checkbox-adhesion${option.uuid}`">
-                        {{ option.name }}
-                      </label>
+                        <InputSwitch v-model="option.checked" :label="option.name" :true-value="true" :false-value="false"
+                        msg-role="`Choisir index checkbox ${index}.`" />
                     </div>
-
+                    </div>
                   </div>
-                </div>
 
-                <div class="text-center">
-                  <p class="mb-2 mt-2">
-                    Aucune de ces informations ne sont et ne seront utilisées pour du démarchage
-                    commercial.
-                    TiBillet est une solution libre et open-source qui prend soin de votre vie
-                    privée.
-                  </p>
+                  <div class="text-center">
+                    <p class="mb-2 mt-2">
+                      Aucune de ces informations ne sont et ne seront utilisées pour du démarchage
+                      commercial.
+                      TiBillet est une solution libre et open-source qui prend soin de votre vie
+                      privée.
+                    </p>
 
-                  <button type="submit" class="btn btn-round bg-gradient-info btn-lg w-100 mt-4 mb-0" role="button"
-                    aria-label="valider formulaire adhésion">
-                    Valider
-                  </button>
-                </div>
+                    <button type="submit" class="btn btn-round bg-gradient-info btn-lg w-100 mt-4 mb-0" role="button"
+                      aria-label="valider formulaire adhésion">
+                      Valider
+                    </button>
+                  </div>
 
               </form>
             </div>
@@ -122,13 +120,14 @@
 </template>
 
 <script setup>
-console.log('-> ModalMembershipForm.vue !')
+// console.log('-> ModalMembershipForm.vue !')
 import { log } from '../communs/LogError'
 import { setLocalStateKey } from '../communs/storeLocal.js'
 
 // component
 import InputRadio from './InputRadio.vue'
 import InputMd from './InputMd.vue'
+import InputSwitch from './InputSwitch.vue';
 
 // store
 import { useSessionStore } from '../stores/session'
@@ -167,7 +166,7 @@ function convertMembershipOptionsRadio() {
       value: data.uuid
     })
   })
-  return { options, name: 'membership-options-radio'}
+  return { options, name: 'membership-options-radio' }
 }
 
 function validateEmail(event) {
@@ -263,7 +262,7 @@ async function validerAdhesion(event, uuidForm) {
 
     // récupération des options chekbox validés
     form.option_checkbox.forEach((opt) => {
-      if (opt.checked === 'true') {
+      if (opt.checked === true) {
         options.push(opt.uuid)
       }
     })
@@ -291,4 +290,9 @@ async function validerAdhesion(event, uuidForm) {
 .modal-click-info {
   cursor: pointer;
 }
-</style>
+
+.tibillet-msg-error-position {
+  position: absolute;
+  left: 0;
+  bottom: -18px;
+}</style>

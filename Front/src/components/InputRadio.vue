@@ -1,16 +1,15 @@
 <template>
-  <div :id="`tibillet-parent-radio-${uuidComponent}`" class="input-group mb-2 has-validation">
+  <div :id="`tibillet-parent-radio-${uuidComponent}`" class="input-group mb-2  has-validations">
     <div class="d-flex flex-row justify-content-start align-items-start mb-2 me-2"
-      v-for="(option, index) in dataRadio.options" :key="index">
-      <input v-if="index === 0" :name="dataRadio.name" :id="getUuid(index)" type="radio" @click="updateInputRadio($event)"
-        :value="option.value" required role="radio" :aria-labelledby="msgRole + index" :checked="option.value" />
-      <input v-else :name="dataRadio.name" :id="getUuid(index)" type="radio" @click="updateInputRadio($event)"
-        :value="option.value" role="radio" :aria-labelledby="msgRole + index" :checked="option.value" />
-      <div class="tibillet-custum-radio" :data-uuid="option.value" @click="clickInput($event)"></div>
-      <label class="flex flex-column flex-wrap text-dark mb-0" style="width: 118px;" :for="getUuid(index)">{{ option.label
-      }}</label>
-      <div v-if="index === 0" class="invalid-feedback w-100" role="heading" :aria-label="msgError">{{ msgError }}
-      </div>
+      v-for="(option, index) in dataRadio.options" :key="index" style="position:relative">
+      <div class="tibillet-custum-radio" :data-uuid="option.value" @click="clickInput($event)" role="fake-radio" :aria-labelledby="msgRole + ' - ' + index"></div>
+      <label class="flex flex-column flex-wrap text-dark mb-0" style="width: 118px;" :for="getUuid(index)">
+        {{ option.label }}
+      </label>
+      <input :name="dataRadio.name" :id="getUuid(index)" type="radio"
+        @click="updateInputRadio($event)" :value="option.value"
+        :checked="option.value === modelValue" :required="validation === true"/>
+      <div v-if="index === 0 && validation === true" class="tibillet-msg-error-position invalid-feedback w-100" role="heading" :aria-label="msgError">{{ msgError }}</div>
     </div>
   </div>
 </template>
@@ -19,6 +18,7 @@
 import { v4 as uuidv4 } from 'uuid'
 import { onMounted, onUpdated } from 'vue';
 
+// dataRadio = [{label: string, value: string}, ...]
 const props = defineProps({
   modelValue: String,
   msgRole: {
@@ -30,7 +30,7 @@ const props = defineProps({
     type: String
   },
   dataRadio: Object,
-  validation: String
+  validation: Boolean
 });
 const emit = defineEmits(["update:modelValue"]);
 const uuidComponent = uuidv4()
@@ -66,6 +66,16 @@ function updateInputRadio(evt) {
   const name = evt.target.getAttribute('name')
 }
 
+
+function radioIsValid() {
+  // tibillet-parent-radio-${uuidComponent
+  // document.querySelector('input[name="rate"]:checked').value;
+  const name = document.querySelector(`#tibillet-parent-radio-${uuidComponent} input`).getAttribute('name')
+  const value = document.querySelector(`input[name="${name}"]:checked`).value;
+  console.log('name =', name, '  --  value=', value);
+}
+
+
 onMounted(updateVisual)
 onUpdated(updateVisual)
 
@@ -73,7 +83,9 @@ onUpdated(updateVisual)
 
 <style scoped>
 input[type="radio"] {
-  display: none;
+  /* display: none; */
+  position: absolute;
+  left: -30000px;
 }
 
 .tibillet-custum-radio {
@@ -81,6 +93,7 @@ input[type="radio"] {
   flex-direction: row;
   justify-content: space-around;
   align-items: center;
+  min-width: 18px;
   width: 18px;
   height: 18px;
   border-radius: 50%;
@@ -93,11 +106,17 @@ input[type="radio"] {
   content: '';
   display: flex;
   border-radius: 50%;
-  width: 60%;
+  width: 58%;
   height: 60%;
   background-color: var(--tibillet-input-radio, transparent);
   cursor: pointer;
   margin: 0;
   padding: 0;
+}
+
+.tibillet-msg-error-position {
+  position: absolute;
+  left: 0;
+  bottom: -18px;
 }
 </style>

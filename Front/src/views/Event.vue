@@ -17,7 +17,7 @@
       -->
       <CardBillet v-model:products="getEventForm.products"/>
 
-      <CardCreditCashless v-model:products="getEventForm.products"/>
+      <CardCreditCashless v-model:products="getEventForm.products" :min="1" :max="1000"/>
 
       <CardOptions/>
 
@@ -57,6 +57,7 @@ try {
 } catch (e) {
   urlImage = '/medias/images/default_header_1080x300.jpg'
 }
+
 updateHeader({
   urlImage: urlImage,
   shortDescription: getEventForm.short_description,
@@ -64,6 +65,7 @@ updateHeader({
   titre: getEventForm.name,
   categorie: getEventForm.categorie
 })
+
 
 // formatage des données POST event
 function formatBodyPost () {
@@ -131,7 +133,7 @@ function formatBodyPost () {
       }
       // ajout des options à choix multiples(checkbox) de l'adhésions
       product.option_generale_checkbox.forEach((option) => {
-        if (option.checked === 'true') {
+        if (option.checked === true) {
          optionsMembership.push(option.uuid)
         }
       })

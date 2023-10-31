@@ -12,31 +12,18 @@
 
     <!-- options radio -->
     <div v-if="getEventFormOptions.nbOptionsRadio > 1">Choix unique:</div>
-    <div v-if="getEventFormOptions.nbOptionsRadio > 1" class="input-group mb-2 has-validation">
-      <div v-for="(option, index) in getEventFormOptions.optionsRadio" :key="index" class="form-check ps-0 me-3">
-        <input class="form-check-input " type="radio" name="event-option-radio" :id="`option-event-radio${index}`"
-               style="margin-left: 0;" role="radio" :aria-label="'Option évènement choix unique - ' + option.name"
-               v-model="getEventForm.optionRadioSelected" :value="option.uuid">
-        <label class="form-check-label text-dark ms-2" :for="`option-event-radio${index}`">
-          {{ option.name }}
-        </label>
-      </div>
-    </div>
+    <InputRadio v-if="getEventFormOptions.nbOptionsRadio > 1" :data-radio="convertOptionsRadio()" v-model="getEventForm.optionRadioSelected"
+                  msg-role="Option évènement choix unique" :validation="false" />
 
     <!-- options checkbox -->
     <div v-if="getEventFormOptions.nbOptionsCheckbox > 0">Choix multiples:</div>
     <div v-if="getEventFormOptions.nbOptionsCheckbox > 0" class="input-group mb-2 has-validation">
       <div v-for="(option, index) in getEventFormOptions.optionsCheckbox" :key="index"
            class="form-check form-switch me-3">
-        <input class="form-check-input" type="checkbox" :id="`option-event-checkbox${option.uuid}`"
-               v-model="option['checked']" true-value="true" false-value="false"
-               role="checkbox" :aria-label="'Option évènement choix multiples - ' + option.name">
-        <label class="form-check-label text-dark ms-0" :for="`option-event-checkbox${option.uuid}`">{{
-            option.name
-          }}</label>
+          <InputSwitch  v-model="option['checked']" :label="option.name" :true-value="true" :false-value="false"
+          msg-role="'Option évènement choix multiples - ' + option.name"/>
       </div>
     </div>
-
   </fieldset>
 </template>
 
@@ -45,7 +32,23 @@
 // store
 import { useSessionStore } from '../stores/session'
 
+// components
+import InputRadio from './InputRadio.vue'
+import InputSwitch from './InputSwitch.vue';
+
 const { getEventFormOptions, getEventForm, resetEventOptions } = useSessionStore()
+
+function convertOptionsRadio() {
+  let options = []
+  getEventFormOptions.optionsRadio .forEach(data => {
+    options.push({
+      label: data.name,
+      value: data.uuid
+    })
+  })
+  return { options, name: 'membership-options-radio'}
+}
+
 </script>
 
 <style scoped></style>

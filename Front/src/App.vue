@@ -18,7 +18,7 @@
 </template>
 
 <script setup>
-console.log('-> App.vue')
+// console.log('-> App.vue')
 import { ref } from 'vue'
 
 import Plausible from 'plausible-tracker'
