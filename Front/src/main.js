@@ -28,11 +28,12 @@ import { faUsers } from '@fortawesome/free-solid-svg-icons'
 import { faAngleDown } from '@fortawesome/free-solid-svg-icons'
 import { faCaretUp } from '@fortawesome/free-solid-svg-icons'
 import { faCaretDown } from '@fortawesome/free-solid-svg-icons'
+import { faImage } from '@fortawesome/free-solid-svg-icons'
 
 // add icons to the library
 library.add(
   faSquareMinus, faSquarePlus, faTrashCan, faMusic, faPeopleGroup, faBuilding, faUser, faUsers,
-  faAngleDown, faCaretUp, faCaretDown
+  faAngleDown, faCaretUp, faCaretDown, faImage
 )
 
 window.emitter = mitt();

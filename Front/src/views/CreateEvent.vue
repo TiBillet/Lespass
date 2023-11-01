@@ -1,10 +1,15 @@
 <template>
-    <form>
-    <div class="container-fuild">
-        
-            <CardUpdateHeader v-model:data-header="header" />
-    </div>
-</form>
+    <form id="tibillet-form-record-event" @submit.prevent="">
+        <div class="container-fuild">
+            <CardUpdateHeader v-model="header" />
+        </div>
+        <div class="container">
+            <div class="btn tibillet-bg-primary w-100" role="button" aria-label="Enregistrer l'évènement"
+                @click="recordEvent('#tibillet-form-record-event')">
+                Enregistrer l'évènement
+            </div>
+        </div>
+    </form>
 </template>
 
 <script setup>
@@ -20,26 +25,13 @@ const sessionStore = useSessionStore()
 const { updateHeader } = sessionStore
 updateHeader(null)
 
-console.log('window.location =', window.location);
-
-let headerRaw = {
+let header = {
     place: window.location.host.split('.')[0],
     name: "Entrer un nom pour votre évènement.",
     short_description: "Entrer une courte description.",
     long_description: "Entrer une longue description",
     img_url: null
 }
-
-let headerUpdate = {
-    placeActive: false,
-    nameActive: false,
-    shortDescriptionActive: false,
-    longDescriptionActive: false,
-    img_urlActive: false
-}
-
-let header = {...headerRaw, ...headerUpdate}
-console.log('header = ', header);
 
 let reste = {
     artists: [],
@@ -49,8 +41,10 @@ let reste = {
     tag: []
 }
 
-let event = { ...headerRaw, ...reste }
-console.log('event = ', event);
+function recordEvent(selectorForm) {
+    const event = { ...header, ...reste }
+    console.log('-> recordEvent, event =', JSON.stringify(event, null, 2));
+}
 
 </script>
 
