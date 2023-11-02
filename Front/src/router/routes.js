@@ -54,7 +54,7 @@ export const routes = [
     component: () => import(/* webpackChunkName: "Artist" */ '../views/ArtistPage.vue')
   },
   {
-    path: '/adhesions/',
+    path: '/adhesions',
     alias: '/adhesions/embed',
     name: 'Adhesions',
     component: () => import(/* webpackChunkName: "Adhesions" */ '../views/Adhesions.vue')

@@ -1,6 +1,6 @@
 <template>
   <input type="file" id="tibillet-input-file-header" style="display: none">
-  <div class="tibillet-header-event min-vh-50 bg-secondary text-white" :style="styleHeader">
+  <div class="tibillet-header-event bg-secondary text-white" :style="styleHeader" style="height: 250px;">
     <div class="tibillet-load-image-header-event d-flex">
       <div class="container d-flex flex-column justify-content-center align-items-center">
 
@@ -26,7 +26,8 @@
         title="Ajouter / modifier l'image de fond." @click="fakeClick('#tibillet-input-file-header')" />
     </div>
   </div>
-  <div class="container mt-5 mb-5 text-dark">
+  <div class="container mt-1 text-dark w-100" style="height: 100px;">
+    <!-- longue description -->
     <p class="tibillet-toggle-edit" data-toggle-edit-target="long_description" @click="toggleEdit($event)"
       style="white-space: pre-line;">
       {{ header.long_description }}
@@ -55,7 +56,6 @@ const header = computed({  // Use computed to wrap the object
 
 let styleHeader = ref({
   backgroundImage: "url('')",
-  maxHeight: "365px",
   backgroundRepeat: "no-repeat"
 })
 
@@ -80,7 +80,7 @@ function toggleEdit(evt, obj, key, state) {
   const commun = element.getAttribute('data-toggle-edit-target')
   let input = null, text = null
   element.style.display = "none"
-  console.log('element.tagName =',element.tagName)
+  console.log('element.tagName =', element.tagName)
   if (element.tagName !== "INPUT" && element.tagName !== "TEXTAREA") {
     input = document.querySelector(`input[class~="tibillet-toggle-edit"][data-toggle-edit-target="${commun}"]`)
     if (input === null) {
@@ -142,7 +142,7 @@ onUnmounted(() => {
 
 .tibillet-load-image-header-event {
   width: 100%;
-  height: calc(50vh - 8px);
+  height: calc(250px - 8px);
   color: aliceblue;
 }
 
@@ -157,12 +157,19 @@ onUnmounted(() => {
 }
 
 .tibillet-action-icon-header,
-input[class~="tibillet-toggle-edit"], textarea[class~="tibillet-toggle-edit"] {
+input[class~="tibillet-toggle-edit"],
+textarea[class~="tibillet-toggle-edit"] {
   display: none;
 }
 
 .tibillet-load-image-header-event:hover .tibillet-action-icon-header {
   display: flex;
   cursor: pointer;
+}
+
+textarea {
+  width: 100%;
+  height: 100%;
+  resize: none;
 }
 </style>

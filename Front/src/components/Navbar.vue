@@ -15,19 +15,8 @@
           <a class="nav-link d-flex flex-row justify-content-between align-items-center dropdown-toggle" href="#"
             id="menuUser" role="button" data-bs-toggle="dropdown" aria-expanded="false">
             <font-awesome-icon icon="fa-solid fa-user" class="text-white mb-1" />
-            <h6 class="m-1 text-white">Mon compte</h6>
+            <h6 class="ms-1 m-0 text-white">Mon compte</h6>
           </a>
-
-          <!--
-   <li v-if="!['M'].includes(headerPlace.categorie)" class="nav-item">
-          <a v-if="routeName !== 'Adhesions' && headerPlace !== null" href="/adhesions"
-            class="nav-link d-flex flex-row justify-content-center align-items-center"
-            :title="`Adhésions possibles à l'association '${headerPlace.titre}'`">
-            <font-awesome-icon icon="fa-solid fa-users" class="text-white mb-1"/>
-            <h6 class="m-1 text-white">Adhésions</h6>
-          </a>
-        </li>
--->
 
           <!-- sous menu user -->
           <ul class="dropdown-menu" aria-labelledby="menuUser">
@@ -41,13 +30,13 @@
               <a v-if="me.reservations.length > 0"
                 class="dropdown-item border-radius-md d-flex justify-content-star align-items-center" role="button"
                 @click="showModal('reservation-list-modal')">
-                <i class="fa fa-ticket fa-fw me-1 text-dark tourne-ticket" aria-hidden="true"></i>
-                <h6 class="m-0 text-dark">Réservations - {{ me.reservations.length }}</h6>
+                <font-awesome-icon icon="fa-solid fa-ticket" class="text-dark mb-1" />
+                <h6 class="ms-1 m-0 text-dark">Réservations - {{ me.reservations.length }}</h6>
               </a>
               <a v-if="me.reservations.length === 0"
                 class="dropdown-item border-radius-md d-flex justify-content-star align-items-center">
-                <i class="fa fa-ticket fa-fw me-1 text-dark tourne-ticket" aria-hidden="true"></i>
-                <h6 class="m-0 text-dark">Réservations - 0</h6>
+                <font-awesome-icon icon="fa-solid fa-ticket" class="text-dark mb-1" />
+                <h6 class="ms-1 m-0 text-dark">Réservations - 0</h6>
               </a>
 
             </li>
@@ -57,13 +46,13 @@
               <a v-if="me.membership.length > 0"
                 class="dropdown-item border-radius-md d-flex justify-content-star align-items-center" role="button"
                 data-bs-toggle="modal" data-bs-target="#membership-owned-modal">
-                <font-awesome-icon icon="fa-solid fa-people-group" />
-                <h6 class="m-0 text-dark">Adhésions - {{ me.membership.length }}</h6>
+                <font-awesome-icon icon="fa-solid fa-people-group" class="text-dark mb-1" />
+                <h6 class="ms-1 m-0 text-dark">Adhésions - {{ me.membership.length }}</h6>
               </a>
               <a v-if="me.membership.length === 0"
                 class="dropdown-item border-radius-md d-flex justify-content-star align-items-center">
-                <font-awesome-icon icon="fa-solid fa-people-group" />
-                <h6 class="m-0 text-dark">Adhésions - 0</h6>
+                <font-awesome-icon icon="fa-solid fa-people-group" class="text-dark mb-1" />
+                <h6 class="ms-1 m-0 text-dark">Adhésions - 0</h6>
               </a>
             </li>
 
@@ -71,11 +60,12 @@
             <li v-if="accessToken !== ''">
               <a class="dropdown-item border-radius-md d-flex justify-content-star align-items-center" role="button"
                 @click="disconnect()">
-                <i class="fa fa-sign-out fa-fw me-1 text-dark" aria-hidden="true"></i>
-                <h6 class="m-0 text-dark">Deconnexion</h6>
+                <font-awesome-icon icon="fa-solid fa-right-from-bracket" class="text-dark mb-1" />
+                <h6 class="ms-1 m-0 text-dark">Deconnexion</h6>
               </a>
             </li>
           </ul>
+          <!-- fin sous menu user -->
         </li>
 
         <!-- pas de connexion -->
@@ -83,25 +73,24 @@
           <a class="nav-link d-flex flex-row justify-content-center align-items-center" role="button"
             @click="showModalLogin()">
             <font-awesome-icon icon="fa-solid fa-user" class="text-white mb-1" />
-            <h6 class="m-1 text-white" data-test-id="seConnecter">Se connecter</h6>
+            <h6 class="ms-1 m-0 text-white" data-test-id="seConnecter">Se connecter</h6>
           </a>
         </li>
 
         <!-- Aller page adhésions -->
-        <li v-if="!['M'].includes(headerPlace.categorie)" class="nav-item">
-          <a v-if="routeName !== 'Adhesions' && headerPlace !== null" href="/adhesions"
-            class="nav-link d-flex flex-row justify-content-center align-items-center"
-            :title="`Adhésions possibles à l'association '${headerPlace.titre}'`">
+        <li v-if="!['M'].includes(headerPlace.categorie) && !['CreateEvent'].includes(routeName)" class="nav-item">
+          <router-link to="/adhesions"
+            class="nav-link d-flex flex-row justify-content-center align-items-center cursor-pointer">
             <font-awesome-icon icon="fa-solid fa-users" class="text-white mb-1" />
-            <h6 class="m-1 text-white">Adhésions</h6>
-          </a>
+            <h6 class="ms-1 m-0 text-white">Adhésions</h6>
+          </router-link>
         </li>
 
         <li v-if="['M'].includes(headerPlace.categorie) && accessToken !== ''" class="nav-item">
           <router-link to="/tenant"
             class="nav-link d-flex flex-row justify-content-center align-items-center cursor-pointer">
-            <i class="fa fa-plane me-1 text-white" aria-hidden="true"></i>
-            <h6 class="m-0 text-white" data-test-id="seConnecter">Créer son espace</h6>
+            <font-awesome-icon icon="fa-solid fa-house-flag" class="text-white mb-1" />
+            <h6 class="ms-1 m-0 text-white" data-test-id="seConnecter">Créer son espace</h6>
           </router-link>
         </li>
       </ul>
@@ -158,8 +147,16 @@ automaticConnection()
 </script>
 
 <style scoped>
-.tourne-ticket {
-  transform: rotate(-20deg);
+ul[class~="dropdown-menu"]::before {
+  content: '' !important;
+}
+
+.navbar .nav-link {
+  padding: 0.5rem;
+}
+
+svg[class~="fa-ticket"] {
+  transform: translateY(-2px) rotate(20deg);
 }
 
 .dropdown .dropdown-menu::before {

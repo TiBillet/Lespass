@@ -101,8 +101,6 @@ export const sessionActions = {
         setLocalStateKey("refreshToken", retour.refresh);
         // actu du profile
         await this.getMe();
-
-        // this.me.email = getLocalStateKey('email')
       } else {
         throw new Error(`Erreur conrfirmation mail !`);
       }

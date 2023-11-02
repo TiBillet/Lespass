@@ -1,8 +1,7 @@
 <template>
   <div class="container mt-7">
-    
     <div class="row">
-      <div v-if="getHeaderPlace.categorie !== 'M' && getIsStaff === true" class="col-lg-4 col-md-6 mb-7 test-card-event-container">
+      <div v-if="getIsStaff" class="col-lg-4 col-md-6 mb-7 test-card-event-container">
         <CardEvent :event="fakeEvent" :place="getHeaderPlace" />
       </div>
 
@@ -16,6 +15,8 @@
 
 <script setup>
 // console.log('-> Accueil.vue')
+import { storeToRefs } from 'pinia'
+
 // store
 import { useSessionStore } from '@/stores/session'
 
@@ -23,7 +24,8 @@ import { useSessionStore } from '@/stores/session'
 import CardEvent from '@/components/CardEvent.vue'
 
 const sessionStore = useSessionStore()
-const { updateHeader, getHeaderPlace , getIsStaff} = sessionStore
+const { updateHeader, getHeaderPlace } = sessionStore
+const { getIsStaff } = storeToRefs(sessionStore)
 updateHeader(getHeaderPlace)
 
 const fakeEvent = {
@@ -41,6 +43,7 @@ const fakeEvent = {
   },
   "artists": [],
 }
+
 </script>
 
 <style></style>
