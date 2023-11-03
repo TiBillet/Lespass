@@ -33,11 +33,13 @@ import { faHouseFlag } from '@fortawesome/free-solid-svg-icons'
 import { faRightFromBracket } from '@fortawesome/free-solid-svg-icons'
 import { faTicket } from '@fortawesome/free-solid-svg-icons'
 import { faCartArrowDown } from '@fortawesome/free-solid-svg-icons'
+import { faFolder } from '@fortawesome/free-solid-svg-icons'
 
 // add icons to the library
 library.add(
   faSquareMinus, faSquarePlus, faTrashCan, faMusic, faPeopleGroup, faBuilding, faUser, faUsers,
-  faAngleDown, faCaretUp, faCaretDown, faImage, faHouseFlag, faRightFromBracket, faTicket, faCartArrowDown
+  faAngleDown, faCaretUp, faCaretDown, faImage, faHouseFlag, faRightFromBracket, faTicket, faCartArrowDown,
+  faFolder
 )
 
 window.emitter = mitt();
