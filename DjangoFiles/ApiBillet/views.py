@@ -35,7 +35,7 @@ from django.utils.text import slugify
 from rest_framework.views import APIView
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
-    ReservationValidator, MembreValidator, ConfigurationSerializer, WaintingConfigSerializer, \
+    ReservationValidator, MembreValidator, ConfigurationSerializer, WaitingConfigSerializer, \
     EventCreateSerializer, TicketSerializer, OptionsSerializer, ChargeCashlessValidator, NewAdhesionValidator, \
     DetailCashlessCardsValidator, DetailCashlessCardsSerializer, CashlessCardsValidator, \
     UpdateFederatedAssetFromCashlessValidator, ProductCreateSerializer
@@ -193,7 +193,7 @@ def create_tenant(request, serializer):
         user: TibilletUser = request.user
         conf.email = user.email
 
-        if getattr(serializer, 'info_srtipe', None):
+        if getattr(serializer, 'info_stripe', None):
             info_stripe = serializer.info_stripe
             conf.site_web = info_stripe.business_profile.url
             conf.phone = info_stripe.business_profile.support_phone
@@ -239,22 +239,13 @@ class TenantViewSet(viewsets.ViewSet):
         except Client.DoesNotExist:
             pass
 
-        # L'url correspond bien à la catégorie choisie ?
-        if not request.data.get('categorie'):
-            raise serializers.ValidationError(_("categorie est obligatoire"))
-        categories = []
-        if 'place' in request.get_full_path():
-            categories = [Client.SALLE_SPECTACLE, Client.FESTIVAL]
-        if 'artist' in request.get_full_path():
-            categories = [Client.ARTISTE]
-
-        if request.data.get('categorie') not in categories:
-            raise serializers.ValidationError(_("categorie ne correspond pas à l'url"))
-
-        serializer = WaintingConfigSerializer(data=request.data, context={'request': request})
+        serializer = WaitingConfigSerializer(data=request.data, context={'request': request})
 
         if serializer.is_valid():
-            serializer.save()
+            waiting_config = serializer.save()
+            data = {
+                {uuid}: f"{waiting_config.uuid}",
+            }
             # Envoie le mail de confirmation de création.
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
@@ -270,7 +261,7 @@ class TenantViewSet(viewsets.ViewSet):
     #         return Response(_(f"Not Allowed"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
     #     with tenant_context(tenant):
     #         conf = Configuration.get_solo()
-    #         serializer = WaintingConfigSerializer(conf, data=request.data, partial=True)
+    #         serializer = WaitingConfigSerializer(conf, data=request.data, partial=True)
     #         if serializer.is_valid():
     #             # serializer.save()
     #             serializer.update(conf, serializer.validated_data)
