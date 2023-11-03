@@ -51,7 +51,7 @@ from TiBillet import settings
 
 import os
 
-from MetaBillet.models import EventDirectory, ProductDirectory
+from MetaBillet.models import EventDirectory, ProductDirectory, WaitingConfiguration
 from PaiementStripe.views import new_entry_from_stripe_invoice
 from QrcodeCashless.models import Detail, CarteCashless, Wallet, Asset, SyncFederatedLog
 from QrcodeCashless.views import WalletValidator
@@ -242,12 +242,20 @@ class TenantViewSet(viewsets.ViewSet):
         serializer = WaitingConfigSerializer(data=request.data, context={'request': request})
 
         if serializer.is_valid():
-            waiting_config = serializer.save()
+            waiting_config : WaitingConfiguration = serializer.save()
+            if getattr(serializer, 'img_img', None):
+                waiting_config.img.save(serializer.img_name, serializer.img_img.fp)
+            if getattr(serializer, 'logo_img', None):
+                waiting_config.logo.save(serializer.logo_name, serializer.logo_img.fp)
+
             data = {
-                {uuid}: f"{waiting_config.uuid}",
+                "uuid": f"{waiting_config.uuid}",
+                "stripe_onboard": f"",
             }
+            user = get_or_create_user(serializer.validated_data['email'], send_mail=True)
+
             # Envoie le mail de confirmation de création.
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(data, status=status.HTTP_201_CREATED)
 
         logger.error(f"serializer.errors : {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -300,7 +308,7 @@ class TenantViewSet(viewsets.ViewSet):
 
     def get_permissions(self):
         if self.action == 'create':
-            permission_classes = [permissions.IsAuthenticated]
+            permission_classes = [permissions.AllowAny]
             return [permission() for permission in permission_classes]
         else:
             return get_permission_Api_LR_Any(self)
