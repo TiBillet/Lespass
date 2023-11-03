@@ -249,6 +249,7 @@ function cursorOff(state) {
   }
 }
 
+/*
 async function CreationComteStripe() {
   // enregistre l'email dans le storeUser
   console.log("-> goStripe Onboard");
@@ -296,7 +297,7 @@ async function CreationComteStripe() {
     setLoadingValue(false);
   }
 }
-
+*/
 
 // validation
 async function validerCreationPlace() {
@@ -345,21 +346,19 @@ async function validerCreationPlace() {
         urlApi = "/api/artist/";
       }
 
+      // spinner on
       setLoadingValue(true)
-      // proxy to object
-      const formCreatePlaceObject = JSON.parse(JSON.stringify(formCreatePlace.value))
 
-  
       const formData = new FormData();
       formData.append('organisation', formCreatePlace.value.organisation);
       formData.append('short_description', formCreatePlace.value.short_description);
       formData.append('long_description', formCreatePlace.value.long_description);
       formData.append('email', formCreatePlace.value.email);
-      // formData.append('stripe', formCreatePlace.value.stripe);
+      formData.append('stripe', coin.value);
       formData.append('logo', formCreatePlace.value.logo);
       formData.append('img', formCreatePlace.value.img);
       console.log('formData =', formData);
-  
+
       const response = await fetch(urlApi, {
         method: "post",
         body: formData
@@ -369,6 +368,36 @@ async function validerCreationPlace() {
 
       console.log('retour ' + urlApi + ' =', retour);
 
+      if (response.status === 409) {
+        throw new Error(retour.join(' - '));
+      }
+      if (response.status === 201) {
+        console.log('coin =', typeof (coin.value));
+        if (coin.value === false) {
+          setLoadingValue(false)
+          // message de succès , non monétaire
+          const typeEspace = espacesType.find(espace => espace.categorie === formCreatePlace.value.categorie).name
+        
+          router.push({ path: '/' })
+
+          const msg = `
+            <div>Votre espace "${formCreatePlace.value.organisation}" de type "${typeEspace}" a été créé.</div>
+            `
+          emitter.emit('modalMessage', {
+            titre: 'Validation',
+            typeMsg: 'success',
+            contenu: msg,
+            dynamic: true // pour insérer du html
+          })
+        }
+        if (coin.value === true) {
+          // monétaire
+          // etapeValidation.value = "creationCompteStripe"
+          console.log("-> monétaire, go stripe");
+          setLocalStateKey('stripeStep', { action: 'expect_payment_stripe_createTenant', uuidTenant: retour.uuid, nextPath: '/' })
+          location.href = retour.stripe_onboard;
+        }
+      }
       /*
       console.log('formCreatePlace.value =', formCreatePlace.value);
       const response = await fetch(urlApi, {
