@@ -38,7 +38,8 @@ from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSeria
     ReservationValidator, MembreValidator, ConfigurationSerializer, WaitingConfigSerializer, \
     EventCreateSerializer, TicketSerializer, OptionsSerializer, ChargeCashlessValidator, NewAdhesionValidator, \
     DetailCashlessCardsValidator, DetailCashlessCardsSerializer, CashlessCardsValidator, \
-    UpdateFederatedAssetFromCashlessValidator, ProductCreateSerializer, create_account_link_for_onboard
+    UpdateFederatedAssetFromCashlessValidator, ProductCreateSerializer, create_account_link_for_onboard, \
+    CheckMailSerializer
 from AuthBillet.models import TenantAdminPermission, TibilletUser, RootPermission, TenantAdminPermissionWithRequest
 from AuthBillet.utils import user_apikey_valid, get_or_create_user
 from BaseBillet.tasks import create_ticket_pdf, report_to_pdf, report_celery_mailer
@@ -224,6 +225,14 @@ def create_tenant(request, serializer):
         place_serialized_with_uuid.update(place_serialized.data)
 
     return Response(place_serialized_with_uuid, status=status.HTTP_201_CREATED)
+
+def check_mail_before_create_tenant(request):
+    serializer = CheckMailSerializer(data=request.data)
+    if serializer.is_valid():
+        if WaitingConfiguration.objects.filter(email=serializer.validated_data.get('email')).exists():
+            data = WaitingConfigSerializer(WaitingConfiguration.objects.get(email=serializer.validated_data.get('email'))).data
+            return Response(data, status=status.HTTP_206_PARTIAL_CONTENT)
+        return Response(_(f""), status=status.HTTP_202_ACCEPTED)
 
 class TenantViewSet(viewsets.ViewSet):
 
