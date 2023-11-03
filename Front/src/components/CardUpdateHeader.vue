@@ -22,8 +22,11 @@
           @keyup.enter.prevent="toggleEdit($event, header, 'short_description', true)">
 
       </div>
+      <font-awesome-icon icon="fa-solid fa-folder" class="tibillet-action-icon-header text-white fs-3 align-self-end me-2"
+        data-toggle="tooltip" data-placement="top" title="Sélectionner l'image de fond." />
       <font-awesome-icon icon="fa-solid fa-image" class="tibillet-action-icon-header text-white fs-3 align-self-end"
-        title="Ajouter / modifier l'image de fond." @click="fakeClick('#tibillet-input-file-header')" />
+        data-toggle="tooltip" data-placement="top" title="Ajouter / modifier l'image de fond."
+        @click="fakeClick('#tibillet-input-file-header')" />
     </div>
   </div>
   <div class="container mt-1 text-dark w-100" style="height: 100px;">
