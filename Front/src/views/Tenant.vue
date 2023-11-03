@@ -2,13 +2,16 @@
   <CreationStep title="Créer votre espace" sub-title="Sélectionner, éditer un type d'espace."
     validation-creation-msg="validerCreationPlace">
     <div id="espace" class="creation-tab-content">
-      <div class="espace-content d-flex flex-wrap justify-content-around"
+      <div class="espace-content d-flex flex-column justify-content-around"
         :style="stripeStep?.action === 'expect_payment_stripe_createTenant' ? 'pointer-events:none;' : 'pointer-events: all;'">
-
-        <InputRadioImg v-for="(espace, index) in espacesType" :key="index" :label="espace.name" name="type-espace"
-          :value="espace.categorie" :info="espace.description" :svg="espace.svg" :icons="espace.icons"
-          :v-model="formCreatePlace.categorie" @update:model-value="newValue => formCreatePlace.categorie = newValue"
-          style="margin: auto 0;" :style="espace.disable ? 'pointer-events:none;' : 'pointer-events: all;'" />
+        <div class="d-flex flex-wrap justify-content-around">
+          <InputRadioImg v-for="(espace, index) in espacesType" :key="index" :label="espace.name" name="type-espace"
+            :value="espace.categorie" :info="espace.description" :svg="espace.svg" :icons="espace.icons"
+            :v-model="formCreatePlace.categorie" @update:model-value="newValue => formCreatePlace.categorie = newValue"
+            style="margin: auto 0;" :style="espace.disable ? 'pointer-events:none;' : 'pointer-events: all;'" />
+        </div>
+        <InputMd id="login-email" label="Email" msg-error="Merci de renseigner une adresse email valide." type="email"
+          :validation="true" class="w-50 ms-auto me-auto" />
 
       </div>
     </div>
@@ -16,6 +19,15 @@
     <div id="informations" class="creation-tab-content"
       :style="stripeStep?.action === 'expect_payment_stripe_createTenant' ? 'pointer-events:none;' : 'pointer-events: all;'">
       <div class="espace-content d-flex flex-column">
+        <!-- TODO: Importer vos données de communecté -->
+        <button class="btn bg-gradient-info mt-4 mb-0 h-44px w-50 p-4" type="button">
+          <div class="d-flex flex-row justify-content-center align-items-center h-100 w-100">
+            Importez vos données de <img :src="communecterLogo" class="ms-1" alt="logo communecter">
+          </div>
+        </button>
+
+
+
         <InputMd id="creation-organisation" label="Organisation" height="22.4" color="red"
           v-model="formCreatePlace.organisation" class="mt-3" />
 
@@ -98,8 +110,8 @@
           Créer votre compte stripe
         </button>
 
-        <button v-if="etapeValidation === 'creationCompteStripe'" type="button" class="btn btn-creation tibillet-bg-secondary align-self-center text-white"
-          @click="resetState()">
+        <button v-if="etapeValidation === 'creationCompteStripe'" type="button"
+          class="btn btn-creation tibillet-bg-secondary align-self-center text-white" @click="resetState()">
           Annuler opération
         </button>
       </div>
@@ -123,9 +135,11 @@ import InputFileMd from "../components/InputFileMd.vue";
 import TextareaMd from "../components/TextareaMd.vue";
 import InputRadioImg from "../components/InputRadioImg.vue";
 
-// svg
+// svg et image
 import artistSvg from "../assets/img/artist.svg";
 import homeSvg from "../assets/img/home.svg";
+import communecterLogo from "../assets/img/communecterLogo_31x28.png"
+
 
 let coin = ref(false)
 let etapeValidation = ref('creationEspace')
@@ -181,7 +195,7 @@ const espacesType = [
     colorText: "white",
     disable: false,
     categorie: "S"
-  },
+  }/*,
   {
     name: "Festival",
     description: "Le Lorem Ipsum est simplement du faux texte employé dans la composition et la mise en page avant impression. Le Lorem Ipsum.",
@@ -200,6 +214,7 @@ const espacesType = [
     disable: true,
     categorie: "P"
   }
+  */
 ];
 
 updateHeader(null);
@@ -414,4 +429,18 @@ async function validerCreationPlace() {
   max-height: var(--creation-content-height);
   overflow-x: hidden;
   overflow-y: auto;
-}</style>
+}
+
+.btn-creation {
+  font-size: 12px;
+  line-height: 12px;
+  text-transform: uppercase;
+  border-radius: 4px;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: bold;
+  box-shadow: 0 16px 26px -10px rgba(244, 67, 54, 0.56), 0 4px 25px 0 rgba(0, 0, 0, 0.12), 0 8px 10px -5px rgba(244, 67, 54, 0.2);
+  min-width: 140px;
+  padding: 1.3rem;
+}
+</style>

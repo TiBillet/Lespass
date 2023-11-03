@@ -64,6 +64,14 @@ const plausible = Plausible({
 </script>
 
 <style>
+.h-44px {
+  height: 44px !important;
+}
+
+.l-120px {
+  width: 120px;
+}
+
 #app {
   --app-color-primary: #f05f3e;
   --app-color-secondary: #0d6efd;

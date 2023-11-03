@@ -142,15 +142,4 @@ function goCommunecter () {
 </script>
 
 <style scoped>
-.h-44px {
-  height: 44px;
-}
-
-.l-120px {
-  width: 120px;
-}
-.communecter-logo {
-  /* height: 26px; */
-  /* width: auto; */
-}
 </style>
