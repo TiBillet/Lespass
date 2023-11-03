@@ -11,7 +11,7 @@
             style="margin: auto 0;" :style="espace.disable ? 'pointer-events:none;' : 'pointer-events: all;'" />
         </div>
         <InputMd id="login-email" label="Email" msg-error="Merci de renseigner une adresse email valide." type="email"
-          :validation="true" class="w-50 ms-auto me-auto" />
+          :validation="true" class="w-50 ms-auto me-auto" v-model="formCreatePlace.email"/>
 
       </div>
     </div>
@@ -51,6 +51,11 @@
           <div class="d-flex align-items-start w-25">Catégorie</div>
           <div v-if="formCreatePlace.categorie !== ''" class="resume-valeur">{{
             getCategorieName(formCreatePlace.categorie) }}</div>
+        </div>
+
+        <div class="d-flex flex-row">
+          <div class="d-flex align-items-start w-25">Email</div>
+          <div class="resume-valeur">{{ formCreatePlace.email }}</div>
         </div>
 
         <div class="d-flex flex-row">
@@ -166,7 +171,9 @@ const initStateForm = {
   img_url: null,
   logo_url: null,
   categorie: "",
+  email: ""
 }
+
 let formCreatePlace = ref(initStateForm)
 const stripeStep = getLocalStateKey("stripeStep");
 console.log('stripeStep.formCreatePlace =', stripeStep?.formCreatePlace);
