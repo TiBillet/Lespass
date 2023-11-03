@@ -272,6 +272,31 @@ class ConfigurationSerializer(serializers.ModelSerializer):
 #     contribution_value = serializers.FloatField()
 
 
+
+def create_account_link_for_onboard(id_acc_connect=False):
+    rootConf = RootConfiguration.get_solo()
+    stripe.api_key = rootConf.get_stripe_api()
+
+    meta = Client.objects.filter(categorie=Client.META)[0]
+    meta_url = meta.get_primary_domain().domain
+
+    if not id_acc_connect:
+        acc_connect = stripe.Account.create(
+            type="standard",
+            country="FR",
+        )
+        id_acc_connect = acc_connect.get('id')
+
+    account_link = stripe.AccountLink.create(
+        account=id_acc_connect,
+        refresh_url=f"https://{meta_url}/onboard_stripe_return/{id_acc_connect}",
+        return_url=f"https://{meta_url}/onboard_stripe_return/{id_acc_connect}",
+        type="account_onboarding",
+    )
+
+    url_onboard = account_link.get('url')
+    return url_onboard
+
 class WaitingConfigSerializer(serializers.ModelSerializer):
     stripe = serializers.BooleanField()
 
@@ -288,6 +313,19 @@ class WaitingConfigSerializer(serializers.ModelSerializer):
             "stripe",
         ]
 
+    def validate_organisation(self, value):
+            # Le slug est-il disponible ?
+        try:
+            slug = slugify(value)
+            Client.objects.get(schema_name=slug)
+            logger.warning(f"{slug} exist : Conflict")
+            raise serializers.ValidationError({f"{slug} existe déja : Conflit de nom"})
+        except Client.DoesNotExist:
+            pass
+
+    def validate_email(self, value):
+        self.user = get_or_create_user(value, send_mail=True)
+        return value
 
     def validate_stripe_connect_account(self, value):
         rootConf = RootConfiguration.get_solo()

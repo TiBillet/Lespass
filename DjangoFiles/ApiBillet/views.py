@@ -38,7 +38,7 @@ from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSeria
     ReservationValidator, MembreValidator, ConfigurationSerializer, WaitingConfigSerializer, \
     EventCreateSerializer, TicketSerializer, OptionsSerializer, ChargeCashlessValidator, NewAdhesionValidator, \
     DetailCashlessCardsValidator, DetailCashlessCardsSerializer, CashlessCardsValidator, \
-    UpdateFederatedAssetFromCashlessValidator, ProductCreateSerializer
+    UpdateFederatedAssetFromCashlessValidator, ProductCreateSerializer, create_account_link_for_onboard
 from AuthBillet.models import TenantAdminPermission, TibilletUser, RootPermission, TenantAdminPermissionWithRequest
 from AuthBillet.utils import user_apikey_valid, get_or_create_user
 from BaseBillet.tasks import create_ticket_pdf, report_to_pdf, report_celery_mailer
@@ -228,17 +228,6 @@ def create_tenant(request, serializer):
 class TenantViewSet(viewsets.ViewSet):
 
     def create(self, request):
-        # Le slug est-il disponible ?
-        try:
-            slug = slugify(request.data.get('organisation'))
-            Client.objects.get(schema_name=slug)
-            logger.warning(f"{slug} exist : Conflict")
-            return Response(
-                {f"{slug} existe déja : Conflit de nom"},
-                status=status.HTTP_409_CONFLICT)
-        except Client.DoesNotExist:
-            pass
-
         serializer = WaitingConfigSerializer(data=request.data, context={'request': request})
 
         if serializer.is_valid():
@@ -252,7 +241,6 @@ class TenantViewSet(viewsets.ViewSet):
                 "uuid": f"{waiting_config.uuid}",
                 "stripe_onboard": f"",
             }
-            user = get_or_create_user(serializer.validated_data['email'], send_mail=True)
 
             # Envoie le mail de confirmation de création.
             return Response(data, status=status.HTTP_201_CREATED)
@@ -1268,29 +1256,6 @@ def info_connected_account_stripe(id_acc_connect):
     return info_stripe
 
 
-def create_account_link_for_onboard(id_acc_connect=False):
-    rootConf = RootConfiguration.get_solo()
-    stripe.api_key = rootConf.get_stripe_api()
-
-    meta = Client.objects.filter(categorie=Client.META)[0]
-    meta_url = meta.get_primary_domain().domain
-
-    if not id_acc_connect:
-        acc_connect = stripe.Account.create(
-            type="standard",
-            country="FR",
-        )
-        id_acc_connect = acc_connect.get('id')
-
-    account_link = stripe.AccountLink.create(
-        account=id_acc_connect,
-        refresh_url=f"https://{meta_url}/onboard_stripe_return/{id_acc_connect}",
-        return_url=f"https://{meta_url}/onboard_stripe_return/{id_acc_connect}",
-        type="account_onboarding",
-    )
-
-    url_onboard = account_link.get('url')
-    return url_onboard
 
 
 @permission_classes([permissions.AllowAny])
