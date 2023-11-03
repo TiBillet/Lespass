@@ -218,7 +218,6 @@ onBeforeUnmount(() => {
 .btn-creation {
   font-size: 12px;
   text-transform: uppercase;
-  /* left: 0; */
   border-radius: 4px;
   color: #ffffff;
   cursor: pointer;
