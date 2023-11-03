@@ -240,11 +240,13 @@ class TenantViewSet(viewsets.ViewSet):
 
             data = {
                 "uuid": f"{waiting_config.uuid}",
-                "stripe_onboard": f"",
+                "stripe_onboard": False
             }
+            if serializer.validated_data.get('stripe'):
+                data['stripe_onboard'] = serializer.stripe_onboard
 
             # Envoie le mail de confirmation de création.
-            return Response(data, status=status.HTTP_201_CREATED)
+            return Response(json.dumps(data), status=status.HTTP_201_CREATED)
 
         logger.error(f"serializer.errors : {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

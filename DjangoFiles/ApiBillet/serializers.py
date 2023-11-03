@@ -318,6 +318,11 @@ class WaitingConfigSerializer(serializers.ModelSerializer):
         wconfig = WaitingConfiguration.objects.create(**validated_data)
         return wconfig
 
+    def validate_stripe(self, value):
+        if value:
+            self.stripe_onboard = create_account_link_for_onboard()
+        return value
+
     def validate_organisation(self, value):
         # Le slug est-il disponible ?
         try:
