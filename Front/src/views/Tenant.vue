@@ -11,7 +11,7 @@
             style="margin: auto 0;" :style="espace.disable ? 'pointer-events:none;' : 'pointer-events: all;'" />
         </div>
         <InputMd id="login-email" label="Email" msg-error="Merci de renseigner une adresse email valide." type="email"
-          :validation="true" class="w-50 ms-auto me-auto" v-model="formCreatePlace.email"/>
+          :validation="true" class="w-50 ms-auto me-auto" v-model="formCreatePlace.email" />
 
       </div>
     </div>
@@ -36,10 +36,9 @@
         <TextareaMd id="creation-long-description" label="Votre longue description"
           v-model="formCreatePlace.long_description" />
 
-        <InputFileMd type="file" id="creation-img-url" label="Url image" v-model="formCreatePlace.img_url" class="mt-2" />
+        <InputFileMd type="file" id="creation-img-url" label="Url image" v-model="formCreatePlace.img" class="mt-2" />
 
-        <InputFileMd type="file" id="creation-logo-url" label="Url logo" v-model="formCreatePlace.logo"
-          class="mt-2" />
+        <InputFileMd type="file" id="creation-logo-url" label="Url logo" v-model="formCreatePlace.logo" class="mt-2" />
 
       </div>
     </div>
@@ -73,8 +72,8 @@
         </div>
         <div class="d-flex flex-row">
           <div class="d-flex align-items-start w-25">Url de l'image</div>
-          <div v-if="formCreatePlace.img_url !== undefined && formCreatePlace.img_url !== null" class="resume-valeur">{{
-            formCreatePlace.img_url.name }}</div>
+          <div v-if="formCreatePlace.img_url !== undefined && formCreatePlace.img !== null" class="resume-valeur">{{
+            formCreatePlace.img.name }}</div>
         </div>
         <div class="d-flex flex-row">
           <div class="d-flex align-items-start w-25">Url du logo</div>
@@ -168,7 +167,7 @@ const initStateForm = {
   organisation: "",
   short_description: "",
   long_description: "",
-  img_url: null,
+  img: null,
   logo: null,
   categorie: "",
   email: "",
@@ -349,6 +348,29 @@ async function validerCreationPlace() {
       setLoadingValue(true)
       // proxy to object
       const formCreatePlaceObject = JSON.parse(JSON.stringify(formCreatePlace.value))
+
+  
+      const formData = new FormData();
+      formData.append('organisation', formCreatePlace.value.organisation);
+      formData.append('short_description', formCreatePlace.value.short_description);
+      formData.append('long_description', formCreatePlace.value.long_description);
+      formData.append('email', formCreatePlace.value.email);
+      // formData.append('stripe', formCreatePlace.value.stripe);
+      formData.append('logo', formCreatePlace.value.logo);
+      formData.append('img', formCreatePlace.value.img);
+      console.log('formData =', formData);
+  
+      const response = await fetch(urlApi, {
+        method: "post",
+        body: formData
+      });
+      console.log("response =", response);
+      const retour = await response.json();
+
+      console.log('retour ' + urlApi + ' =', retour);
+
+      /*
+      console.log('formCreatePlace.value =', formCreatePlace.value);
       const response = await fetch(urlApi, {
         method: "POST",
         headers: {
@@ -359,6 +381,8 @@ async function validerCreationPlace() {
       });
       console.log("response =", response);
       const retour = await response.json();
+
+      console.log('retour '+urlApi+ ' =', retour);
       // le tenant existe déjà
       if (response.status === 409) {
         throw new Error(retour.join(' - '));
@@ -387,6 +411,7 @@ async function validerCreationPlace() {
         }
       }
       console.log("retour =", retour);
+      */
     } catch (error) {
       setLoadingValue(false)
       console.log(error);
