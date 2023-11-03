@@ -21,7 +21,9 @@ from AuthBillet.utils import get_or_create_user
 
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, Paiement_stripe, \
     PriceSold, ProductSold, Artist_on_event, OptionGenerale, Membership, Tag, Weekday
+
 from Customers.models import Client
+from MetaBillet.models import WaitingConfiguration
 from PaiementStripe.views import CreationPaiementStripe
 
 import logging
@@ -254,7 +256,7 @@ class ConfigurationSerializer(serializers.ModelSerializer):
     #     return representation
 
 
-# class NewConfigSerializer(serializers.Serializer):
+# class WaintingConfigSerializer(serializers.Serializer):
 #     email = serializers.EmailField()
 #     name = serializers.CharField(max_length=50)
 #     short_description = serializers.CharField(max_length=250)
@@ -270,40 +272,19 @@ class ConfigurationSerializer(serializers.ModelSerializer):
 #     contribution_value = serializers.FloatField()
 
 
-class NewConfigSerializer(serializers.ModelSerializer):
+class WaintingConfigSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Configuration
+        model = WaitingConfiguration
         fields = [
             "organisation",
             "short_description",
             "long_description",
             "stripe_connect_account",
-            "server_cashless",
-            "key_cashless",
-            # "adress",
-            # "postal_code",
-            # "city",
-            # "phone",
-            # "email",
-            # "site_web",
-            # "twitter",
-            # "facebook",
-            # "instagram",
-            # "adhesion_obligatoire",
-            # "button_adhesion",
-            # "map_img",
-            # "carte_restaurant",
-            # "img",
-            # "logo",
+            "email",
+            "img",
+            "logo",
         ]
-        # # un seul tenant par compte stripe, sauf en test
-        # if rootConf.stripe_mode_test :
-        #     for tenant in Client.objects.all():
-        #         with tenant_context(tenant):
-        #             config = Configuration.get_solo()
-        #             if config.stripe_connect_account == value:
-        #                 raise serializers.ValidationError(
-        #                     _(f'Stripe account already connected to one Tenant. Please send mail to contact@tibillet.re to upgrade your plan.'))
+
 
     def validate_stripe_connect_account(self, value):
         rootConf = RootConfiguration.get_solo()
@@ -367,23 +348,23 @@ class NewConfigSerializer(serializers.ModelSerializer):
         #     raise serializers.ValidationError(
         #         _(f'stripe account not send nor valid'))
 
-        # if not attrs.get('img') and not img_url:
-        #     raise serializers.ValidationError(
-        #         _(f'img doit contenir un fichier, ou img_url doit contenir une url valide'))
 
         # On cherche la source de l'image principale :
         img_url = self.initial_data.get('img_url')
         if not attrs.get('img') and img_url:
             self.img_name, self.img_img = get_img_from_url(img_url)
+        if not attrs.get('img') and not img_url:
+            raise serializers.ValidationError(
+                _(f'img doit contenir un fichier, ou img_url doit contenir une url valide'))
 
-        # if not attrs.get('logo') and not logo_url:
-        #     raise serializers.ValidationError(
-        #         _(f'img doit contenir un fichier, ou logo_url doit contenir une url valide'))
 
         # On cherche la source de l'image du logo :
         logo_url = self.initial_data.get('logo_url')
         if not attrs.get('logo') and logo_url:
             self.logo_name, self.logo_img = get_img_from_url(logo_url)
+        if not attrs.get('logo') and not logo_url:
+            raise serializers.ValidationError(
+                _(f'img doit contenir un fichier, ou logo_url doit contenir une url valide'))
 
         return super().validate(attrs)
 

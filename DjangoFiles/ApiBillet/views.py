@@ -35,7 +35,7 @@ from django.utils.text import slugify
 from rest_framework.views import APIView
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
-    ReservationValidator, MembreValidator, ConfigurationSerializer, NewConfigSerializer, \
+    ReservationValidator, MembreValidator, ConfigurationSerializer, WaintingConfigSerializer, \
     EventCreateSerializer, TicketSerializer, OptionsSerializer, ChargeCashlessValidator, NewAdhesionValidator, \
     DetailCashlessCardsValidator, DetailCashlessCardsSerializer, CashlessCardsValidator, \
     UpdateFederatedAssetFromCashlessValidator, ProductCreateSerializer
@@ -150,6 +150,81 @@ class ProductViewSet(viewsets.ViewSet):
         return get_permission_Api_LR_Any(self)
 
 
+def create_tenant(request, serializer):
+    futur_conf = serializer.validated_data
+    slug = slugify(futur_conf.get('organisation'))
+    with schema_context('public'):
+        try:
+            tenant, created = Client.objects.get_or_create(
+                schema_name=slug,
+                name=futur_conf.get('organisation'),
+                categorie=request.data.get('categorie'),
+            )
+
+            if not created:
+                logger.error(f"{futur_conf.get('organisation')} existe déja")
+                return Response(_(json.dumps(
+                    {"uuid": f"{tenant.uuid}", "msg": f"{futur_conf.get('organisation')} existe déja"})),
+                    status=status.HTTP_409_CONFLICT)
+
+            domain, created = Domain.objects.get_or_create(
+                domain=f"{slug}.{os.getenv('DOMAIN')}",
+                tenant=tenant,
+                is_primary=True
+            )
+
+            # Ajoute des cartes de test DEMO
+            if settings.DEBUG and slug == "demo":
+                management.call_command("load_cards", "--demo")
+
+        except IntegrityError as e:
+            logger.error(e)
+            return Response(_(f"{e}"), status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(e)
+            return Response(_(f"{e}"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    with tenant_context(tenant):
+        rootConf = RootConfiguration.get_solo()
+        conf = Configuration.get_solo()
+        serializer.update(instance=conf, validated_data=futur_conf)
+
+        conf.slug = slug
+        user: TibilletUser = request.user
+        conf.email = user.email
+
+        if getattr(serializer, 'info_srtipe', None):
+            info_stripe = serializer.info_stripe
+            conf.site_web = info_stripe.business_profile.url
+            conf.phone = info_stripe.business_profile.support_phone
+
+            conf.stripe_mode_test = rootConf.stripe_mode_test
+            if rootConf.stripe_mode_test:
+                conf.stripe_connect_account_test = info_stripe.id
+            else:
+                conf.stripe_connect_account = info_stripe.id
+
+        if getattr(serializer, 'img_img', None):
+            conf.img.save(serializer.img_name, serializer.img_img.fp)
+        if getattr(serializer, 'logo_img', None):
+            conf.logo.save(serializer.logo_name, serializer.logo_img.fp)
+
+        conf.save()
+        conf.check_serveur_cashless()
+
+        staff_group = Group.objects.get(name="staff")
+
+        user.client_admin.add(tenant)
+        user.is_staff = True
+        user.groups.add(staff_group)
+        user.save()
+
+        place_serialized = ConfigurationSerializer(Configuration.get_solo(), context={'request': request})
+        place_serialized_with_uuid = {'uuid': f"{tenant.uuid}"}
+        place_serialized_with_uuid.update(place_serialized.data)
+
+    return Response(place_serialized_with_uuid, status=status.HTTP_201_CREATED)
+
 class TenantViewSet(viewsets.ViewSet):
 
     def create(self, request):
@@ -176,88 +251,17 @@ class TenantViewSet(viewsets.ViewSet):
         if request.data.get('categorie') not in categories:
             raise serializers.ValidationError(_("categorie ne correspond pas à l'url"))
 
-        serializer = NewConfigSerializer(data=request.data, context={'request': request})
-
-        # import ipdb; ipdb.set_trace()
+        serializer = WaintingConfigSerializer(data=request.data, context={'request': request})
 
         if serializer.is_valid():
-
-            futur_conf = serializer.validated_data
-            slug = slugify(futur_conf.get('organisation'))
-            with schema_context('public'):
-                try:
-                    tenant, created = Client.objects.get_or_create(
-                        schema_name=slug,
-                        name=futur_conf.get('organisation'),
-                        categorie=request.data.get('categorie'),
-                    )
-
-                    if not created:
-                        logger.error(f"{futur_conf.get('organisation')} existe déja")
-                        return Response(_(json.dumps(
-                            {"uuid": f"{tenant.uuid}", "msg": f"{futur_conf.get('organisation')} existe déja"})),
-                            status=status.HTTP_409_CONFLICT)
-
-                    domain, created = Domain.objects.get_or_create(
-                        domain=f"{slug}.{os.getenv('DOMAIN')}",
-                        tenant=tenant,
-                        is_primary=True
-                    )
-
-                    # Ajoute des cartes de test DEMO
-                    if settings.DEBUG and slug == "demo":
-                        management.call_command("load_cards", "--demo")
-
-                except IntegrityError as e:
-                    logger.error(e)
-                    return Response(_(f"{e}"), status=status.HTTP_400_BAD_REQUEST)
-                except Exception as e:
-                    logger.error(e)
-                    return Response(_(f"{e}"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
-
-            with tenant_context(tenant):
-                rootConf = RootConfiguration.get_solo()
-                conf = Configuration.get_solo()
-                serializer.update(instance=conf, validated_data=futur_conf)
-
-                conf.slug = slug
-                user: TibilletUser = request.user
-                conf.email = user.email
-
-                if getattr(serializer, 'info_srtipe', None):
-                    info_stripe = serializer.info_stripe
-                    conf.site_web = info_stripe.business_profile.url
-                    conf.phone = info_stripe.business_profile.support_phone
-
-                    conf.stripe_mode_test = rootConf.stripe_mode_test
-                    if rootConf.stripe_mode_test:
-                        conf.stripe_connect_account_test = info_stripe.id
-                    else:
-                        conf.stripe_connect_account = info_stripe.id
-
-                if getattr(serializer, 'img_img', None):
-                    conf.img.save(serializer.img_name, serializer.img_img.fp)
-                if getattr(serializer, 'logo_img', None):
-                    conf.logo.save(serializer.logo_name, serializer.logo_img.fp)
-
-                conf.save()
-                conf.check_serveur_cashless()
-
-                staff_group = Group.objects.get(name="staff")
-
-                user.client_admin.add(tenant)
-                user.is_staff = True
-                user.groups.add(staff_group)
-                user.save()
-
-                place_serialized = ConfigurationSerializer(Configuration.get_solo(), context={'request': request})
-                place_serialized_with_uuid = {'uuid': f"{tenant.uuid}"}
-                place_serialized_with_uuid.update(place_serialized.data)
-
-            return Response(place_serialized_with_uuid, status=status.HTTP_201_CREATED)
+            serializer.save()
+            # Envoie le mail de confirmation de création.
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         logger.error(f"serializer.errors : {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
 
     # def update(self, request, pk=None):
     #     tenant = get_object_or_404(Client, pk=pk)
@@ -266,7 +270,7 @@ class TenantViewSet(viewsets.ViewSet):
     #         return Response(_(f"Not Allowed"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
     #     with tenant_context(tenant):
     #         conf = Configuration.get_solo()
-    #         serializer = NewConfigSerializer(conf, data=request.data, partial=True)
+    #         serializer = WaintingConfigSerializer(conf, data=request.data, partial=True)
     #         if serializer.is_valid():
     #             # serializer.save()
     #             serializer.update(conf, serializer.validated_data)
