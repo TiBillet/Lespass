@@ -232,6 +232,7 @@ class TenantViewSet(viewsets.ViewSet):
 
         if serializer.is_valid():
             waiting_config : WaitingConfiguration = serializer.save()
+            #TODO: a mettre dans le serializer create/save
             if getattr(serializer, 'img_img', None):
                 waiting_config.img.save(serializer.img_name, serializer.img_img.fp)
             if getattr(serializer, 'logo_img', None):

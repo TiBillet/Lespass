@@ -1,8 +1,8 @@
 from django.core.management import call_command
 from django.test import TestCase
 from django_tenants.utils import schema_context
+import requests
 from django.db import models, connection
-
 from Customers.models import Client
 from root_billet.models import RootConfiguration
 

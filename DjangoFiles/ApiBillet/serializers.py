@@ -313,6 +313,11 @@ class WaitingConfigSerializer(serializers.ModelSerializer):
             "stripe",
         ]
 
+    def create(self, validated_data):
+        validated_data.pop('stripe')
+        wconfig = WaitingConfiguration.objects.create(**validated_data)
+        return wconfig
+
     def validate_organisation(self, value):
             # Le slug est-il disponible ?
         try:
