@@ -315,8 +315,15 @@ class WaitingConfigSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         validated_data.pop('stripe')
-        wconfig = WaitingConfiguration.objects.create(**validated_data)
-        return wconfig
+        waiting_config = WaitingConfiguration.objects.create(**validated_data)
+
+        # Pour le cas ou les images sont des url, on a créé nous même les binaire.
+        if getattr(self, 'img_img', None):
+            waiting_config.img.save(self.img_name, self.img_img.fp)
+        if getattr(self, 'logo_img', None):
+            waiting_config.logo.save(self.logo_name, self.logo_img.fp)
+
+        return waiting_config
 
     def validate_stripe(self, value):
         if value:
