@@ -256,7 +256,7 @@ class ConfigurationSerializer(serializers.ModelSerializer):
     #     return representation
 
 
-# class WaintingConfigSerializer(serializers.Serializer):
+# class WaitingConfigSerializer(serializers.Serializer):
 #     email = serializers.EmailField()
 #     name = serializers.CharField(max_length=50)
 #     short_description = serializers.CharField(max_length=250)
@@ -272,17 +272,20 @@ class ConfigurationSerializer(serializers.ModelSerializer):
 #     contribution_value = serializers.FloatField()
 
 
-class WaintingConfigSerializer(serializers.ModelSerializer):
+class WaitingConfigSerializer(serializers.ModelSerializer):
+    stripe = serializers.BooleanField()
+
     class Meta:
         model = WaitingConfiguration
         fields = [
             "organisation",
             "short_description",
             "long_description",
-            "stripe_connect_account",
+            # "stripe_connect_account",
             "email",
             "img",
             "logo",
+            "stripe",
         ]
 
 
