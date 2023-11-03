@@ -1,5 +1,6 @@
 from django.core.management import call_command
 from django.test import TestCase
+from django.urls import reverse
 from django_tenants.utils import schema_context
 import requests
 from django.db import models, connection
@@ -8,15 +9,17 @@ from root_billet.models import RootConfiguration
 
 from BaseBillet.models import Configuration
 
-# from django_tenants.test.cases import TenantTestCase
-# from django_tenants.test.client import TenantClient
+from django_tenants.test.cases import TenantTestCase
+from django_tenants.test.client import TenantClient
 
 # Create your tests here.
 
 
-class APITiBilletTestCase(TestCase):
+class APITiBilletTestCase(TenantTestCase):
     def setUp(self):
-        call_command('create_public')
+        super().setUp()
+        # call_command('create_public')
+        self.c = TenantClient(self.tenant)
 
     def xtest_Root(self):
         with schema_context('public'):
@@ -30,13 +33,11 @@ class APITiBilletTestCase(TestCase):
         #     meta_config = Configuration.get_solo()
         #     self.assertIsNotNone(meta_config)
 
-        meta = Client.objects.get(categorie=Client.META)
-        self.assertIsNotNone(meta)
+        # meta = Client.objects.get(categorie=Client.META)
+        # self.assertIsNotNone(meta)
+        response = self.c.get(reverse('here'))
+        # response = self.client.get(f"http://agenda.tibillet.localhost", verify=False)
 
-        import ipdb; ipdb.set_trace()
-        response = self.client.get(f"http://agenda.tibillet.localhost")
-
-        return response
 
 
 

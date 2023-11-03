@@ -185,8 +185,3 @@ class WaitingConfiguration(models.Model):
     class Meta:
         verbose_name = _('Paramètres')
         verbose_name_plural = _('Paramètres')
-
-    def __str__(self):
-        if self.organisation:
-            return f"Paramètres de {self.organisation}"
-        return f"Paramètres"

@@ -307,9 +307,9 @@ class WaitingConfigSerializer(serializers.ModelSerializer):
             "short_description",
             "long_description",
             # "stripe_connect_account",
-            "email",
             "img",
             "logo",
+            "email",
             "stripe",
         ]
 
@@ -319,7 +319,7 @@ class WaitingConfigSerializer(serializers.ModelSerializer):
         return wconfig
 
     def validate_organisation(self, value):
-            # Le slug est-il disponible ?
+        # Le slug est-il disponible ?
         try:
             slug = slugify(value)
             Client.objects.get(schema_name=slug)
@@ -327,6 +327,8 @@ class WaitingConfigSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({f"{slug} existe déja : Conflit de nom"})
         except Client.DoesNotExist:
             pass
+
+        return value
 
     def validate_email(self, value):
         self.user = get_or_create_user(value, send_mail=True)
