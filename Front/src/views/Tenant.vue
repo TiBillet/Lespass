@@ -38,7 +38,7 @@
 
         <InputFileMd type="file" id="creation-img-url" label="Url image" v-model="formCreatePlace.img_url" class="mt-2" />
 
-        <InputFileMd type="file" id="creation-logo-url" label="Url logo" v-model="formCreatePlace.logo_url"
+        <InputFileMd type="file" id="creation-logo-url" label="Url logo" v-model="formCreatePlace.logo"
           class="mt-2" />
 
       </div>
@@ -78,8 +78,8 @@
         </div>
         <div class="d-flex flex-row">
           <div class="d-flex align-items-start w-25">Url du logo</div>
-          <div v-if="formCreatePlace.logo_url !== undefined && formCreatePlace.logo_url !== null" class="resume-valeur">{{
-            formCreatePlace.logo_url.name }}</div>
+          <div v-if="formCreatePlace.logo !== undefined && formCreatePlace.logo !== null" class="resume-valeur">{{
+            formCreatePlace.logo.name }}</div>
         </div>
         <h3 class="mt-4" style="white-space: pre-line">Aurez vous besoin de récolter de l'argent ? (adhésion,
           billetterie, crowdfundind, caisse enregistreuse, cashless)</h3>
@@ -169,9 +169,10 @@ const initStateForm = {
   short_description: "",
   long_description: "",
   img_url: null,
-  logo_url: null,
+  logo: null,
   categorie: "",
-  email: ""
+  email: "",
+  stripe: false
 }
 
 let formCreatePlace = ref(initStateForm)
@@ -264,7 +265,7 @@ async function CreationComteStripe() {
       short_description: formCreatePlace.value.short_description,
       long_description: formCreatePlace.value.long_description,
       img_url: { name: formCreatePlace.value.img_url.name },
-      logo_url: { name: formCreatePlace.value.logo_url.name },
+      logo: { name: formCreatePlace.value.logo.name },
       categorie: formCreatePlace.value.categorie
     }
     // const creationStepData = JSON.parse(JSON.stringify(formCreatePlace.value))
@@ -314,11 +315,11 @@ async function validerCreationPlace() {
     erreurs.push(`La courte description doit être renseignée !`);
   }
 
-  if (formCreatePlace.value.img_url === null) {
+  if (formCreatePlace.value.img === null) {
     erreurs.push(`Veuillez sélectionner une image !`);
   }
 
-  if (formCreatePlace.value.logo_url === null) {
+  if (formCreatePlace.value.logo === null) {
     erreurs.push(`Veuillez sélectionner un logo !`);
   }
 
@@ -352,7 +353,7 @@ async function validerCreationPlace() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: "Bearer " + getAccessToken
+          // Authorization: "Bearer " + getAccessToken
         },
         body: JSON.stringify(formCreatePlaceObject)
       });
