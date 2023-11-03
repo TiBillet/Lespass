@@ -86,7 +86,7 @@
           </router-link>
         </li>
 
-        <li v-if="['M'].includes(headerPlace.categorie) && accessToken !== ''" class="nav-item">
+        <li v-if="['M'].includes(headerPlace.categorie)" class="nav-item">
           <router-link to="/tenant"
             class="nav-link d-flex flex-row justify-content-center align-items-center cursor-pointer">
             <font-awesome-icon icon="fa-solid fa-house-flag" class="text-white mb-1" />
