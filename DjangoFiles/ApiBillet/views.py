@@ -35,7 +35,7 @@ from django.utils.text import slugify
 from rest_framework.views import APIView
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
-    ReservationValidator, MembreValidator, ConfigurationSerializer, NewConfigSerializer, \
+    ReservationValidator, MembreValidator, ConfigurationSerializer, WaintingConfigSerializer, \
     EventCreateSerializer, TicketSerializer, OptionsSerializer, ChargeCashlessValidator, NewAdhesionValidator, \
     DetailCashlessCardsValidator, DetailCashlessCardsSerializer, CashlessCardsValidator, \
     UpdateFederatedAssetFromCashlessValidator, ProductCreateSerializer
@@ -251,9 +251,10 @@ class TenantViewSet(viewsets.ViewSet):
         if request.data.get('categorie') not in categories:
             raise serializers.ValidationError(_("categorie ne correspond pas à l'url"))
 
-        serializer = NewConfigSerializer(data=request.data, context={'request': request})
+        serializer = WaintingConfigSerializer(data=request.data, context={'request': request})
 
         if serializer.is_valid():
+            serializer.save()
             # Envoie le mail de confirmation de création.
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
@@ -269,7 +270,7 @@ class TenantViewSet(viewsets.ViewSet):
     #         return Response(_(f"Not Allowed"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
     #     with tenant_context(tenant):
     #         conf = Configuration.get_solo()
-    #         serializer = NewConfigSerializer(conf, data=request.data, partial=True)
+    #         serializer = WaintingConfigSerializer(conf, data=request.data, partial=True)
     #         if serializer.is_valid():
     #             # serializer.save()
     #             serializer.update(conf, serializer.validated_data)

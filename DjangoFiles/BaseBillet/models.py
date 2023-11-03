@@ -85,7 +85,6 @@ class OptionGenerale(models.Model):
         verbose_name = _('Option')
         verbose_name_plural = _('Options')
 
-
 # class ExternalLink(models.Model):
 #     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
 #     name = models.CharField(max_length=50, verbose_name=_("Nom du lien"))
@@ -221,8 +220,6 @@ class Configuration(SingletonModel):
         else:
             return []
 
-    # mollie_api_key = models.CharField(max_length=50,
-    #                                   blank=True, null=True)
 
     """
     ######### OPTION GENERALES #########
@@ -442,6 +439,8 @@ class Configuration(SingletonModel):
         if self.organisation:
             return f"Paramètres de {self.organisation}"
         return f"Paramètres"
+
+
 
 
 class Product(models.Model):
