@@ -86,7 +86,7 @@ export const routes = [
     path: '/tenant',
     alias: '/tenant/embed',
     name: 'Tenant',
-    meta: { requiresAuth: true },
+    // meta: { requiresAuth: true },
     component: () => import(/* webpackChunkName: "Tenant" */ '../views/Tenant.vue')
   }
 ]
