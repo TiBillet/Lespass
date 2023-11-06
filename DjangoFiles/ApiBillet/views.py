@@ -42,7 +42,7 @@ from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSeria
     CheckMailSerializer
 from AuthBillet.models import TenantAdminPermission, TibilletUser, RootPermission, TenantAdminPermissionWithRequest
 from AuthBillet.utils import user_apikey_valid, get_or_create_user
-from BaseBillet.tasks import create_ticket_pdf, report_to_pdf, report_celery_mailer
+from BaseBillet.tasks import create_ticket_pdf, report_to_pdf, report_celery_mailer, create_tenant
 from Customers.models import Client, Domain
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe, \
     OptionGenerale, Membership
@@ -151,95 +151,8 @@ class ProductViewSet(viewsets.ViewSet):
         return get_permission_Api_LR_Any(self)
 
 
-def create_tenant(request, serializer):
-    futur_conf = serializer.validated_data
-    slug = slugify(futur_conf.get('organisation'))
-    with schema_context('public'):
-        try:
-            tenant, created = Client.objects.get_or_create(
-                schema_name=slug,
-                name=futur_conf.get('organisation'),
-                categorie=request.data.get('categorie'),
-            )
-
-            if not created:
-                logger.error(f"{futur_conf.get('organisation')} existe déja")
-                return Response(_(json.dumps(
-                    {"uuid": f"{tenant.uuid}", "msg": f"{futur_conf.get('organisation')} existe déja"})),
-                    status=status.HTTP_409_CONFLICT)
-
-            domain, created = Domain.objects.get_or_create(
-                domain=f"{slug}.{os.getenv('DOMAIN')}",
-                tenant=tenant,
-                is_primary=True
-            )
-
-            # Ajoute des cartes de test DEMO
-            if settings.DEBUG and slug == "demo":
-                management.call_command("load_cards", "--demo")
-
-        except IntegrityError as e:
-            logger.error(e)
-            return Response(_(f"{e}"), status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            logger.error(e)
-            return Response(_(f"{e}"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
-
-    with tenant_context(tenant):
-        rootConf = RootConfiguration.get_solo()
-        conf = Configuration.get_solo()
-        serializer.update(instance=conf, validated_data=futur_conf)
-
-        conf.slug = slug
-        user: TibilletUser = request.user
-        conf.email = user.email
-
-        if getattr(serializer, 'info_stripe', None):
-            info_stripe = serializer.info_stripe
-            conf.site_web = info_stripe.business_profile.url
-            conf.phone = info_stripe.business_profile.support_phone
-
-            conf.stripe_mode_test = rootConf.stripe_mode_test
-            if rootConf.stripe_mode_test:
-                conf.stripe_connect_account_test = info_stripe.id
-            else:
-                conf.stripe_connect_account = info_stripe.id
-
-        if getattr(serializer, 'img_img', None):
-            conf.img.save(serializer.img_name, serializer.img_img.fp)
-        if getattr(serializer, 'logo_img', None):
-            conf.logo.save(serializer.logo_name, serializer.logo_img.fp)
-
-        conf.save()
-        conf.check_serveur_cashless()
-
-        staff_group = Group.objects.get(name="staff")
-
-        user.client_admin.add(tenant)
-        user.is_staff = True
-        user.groups.add(staff_group)
-        user.save()
-
-        place_serialized = ConfigurationSerializer(Configuration.get_solo(), context={'request': request})
-        place_serialized_with_uuid = {'uuid': f"{tenant.uuid}"}
-        place_serialized_with_uuid.update(place_serialized.data)
-
-    return Response(place_serialized_with_uuid, status=status.HTTP_201_CREATED)
-
-
-@permission_classes([permissions.AllowAny])
-class check_mail_before_create_tenant(APIView):
-    def get(self, request):
-        serializer = CheckMailSerializer(data=request.data)
-        if serializer.is_valid():
-            try :
-                data = WaitingConfigSerializer(WaitingConfiguration.objects.get(email=serializer.validated_data.get('email'))).data
-                return Response(data, status=status.HTTP_206_PARTIAL_CONTENT)
-            except WaitingConfiguration.DoesNotExist:
-                return Response("", status=status.HTTP_202_ACCEPTED)
 
 class TenantViewSet(viewsets.ViewSet):
-
     def create(self, request):
         serializer = WaitingConfigSerializer(data=request.data, context={'request': request})
 
@@ -253,7 +166,7 @@ class TenantViewSet(viewsets.ViewSet):
             if serializer.validated_data.get('stripe'):
                 data['stripe_onboard'] = serializer.stripe_onboard
 
-            # Envoie le mail de confirmation de création.
+            # Envoie le lien de stripe pour onboard
             return Response(json.dumps(data), status=status.HTTP_201_CREATED, content_type="application/json")
 
         logger.error(f"serializer.errors : {serializer.errors}")
@@ -1274,9 +1187,12 @@ class Onboard_stripe_return(APIView):
     def get(self, request, id_acc_connect):
         details_submitted = info_connected_account_stripe(id_acc_connect).details_submitted
         if details_submitted:
+            futur_conf = WaitingConfiguration.objects.get(stripe_connect_account=id_acc_connect)
             logger.info(f"details_submitted : {details_submitted}")
+            # create_tenant(futur_conf.pk)
             # TODO: créer le tenant en base de donnée et envoyer un mail de confirmation
             # Coté front : on valide la création de tenant et on demande la validation par mail
+
             return Response(f"ok", status=status.HTTP_200_OK)
         else:
             # Si les infos stripe ne sont pas complète, on renvoie l'url onboard pour les completer
