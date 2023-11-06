@@ -175,6 +175,7 @@ const initStateForm = {
 }
 
 let formCreatePlace = ref(initStateForm)
+/*
 const stripeStep = getLocalStateKey("stripeStep");
 console.log('stripeStep.formCreatePlace =', stripeStep?.formCreatePlace);
 if (stripeStep && stripeStep.action === 'expect_payment_stripe_createTenant') {
@@ -182,6 +183,7 @@ if (stripeStep && stripeStep.action === 'expect_payment_stripe_createTenant') {
   etapeValidation.value = "creationCompteStripe"
   coin.value = true
 }
+*/
 
 // les différents types d'espace à créer
 const espacesType = [
@@ -361,12 +363,16 @@ async function validerCreationPlace() {
 
       const response = await fetch(urlApi, {
         method: "post",
+        headers: {
+          Accept: "application/json"
+        },
         body: formData
       });
       console.log("response =", response);
       const retour = await response.json();
 
       console.log('retour ' + urlApi + ' =', retour);
+      console.log(' type retour =', typeof (retour));
 
       if (response.status === 409) {
         throw new Error(retour.join(' - '));
@@ -377,7 +383,7 @@ async function validerCreationPlace() {
           setLoadingValue(false)
           // message de succès , non monétaire
           const typeEspace = espacesType.find(espace => espace.categorie === formCreatePlace.value.categorie).name
-        
+
           router.push({ path: '/' })
 
           const msg = `
@@ -393,9 +399,9 @@ async function validerCreationPlace() {
         if (coin.value === true) {
           // monétaire
           // etapeValidation.value = "creationCompteStripe"
-          console.log("-> monétaire, go stripe");
+          console.log("-> monétaire, go stripe, url =", retour.stripe_onboard);
           setLocalStateKey('stripeStep', { action: 'expect_payment_stripe_createTenant', uuidTenant: retour.uuid, nextPath: '/' })
-          location.href = retour.stripe_onboard;
+          //location.href = retour.stripe_onboard;
         }
       }
       /*
