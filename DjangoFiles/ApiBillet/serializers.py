@@ -273,7 +273,7 @@ class ConfigurationSerializer(serializers.ModelSerializer):
 
 
 
-def create_account_link_for_onboard(id_acc_connect=False):
+def create_account_link_for_onboard(id_acc_connect=None):
     rootConf = RootConfiguration.get_solo()
     stripe.api_key = rootConf.get_stripe_api()
 
@@ -297,6 +297,14 @@ def create_account_link_for_onboard(id_acc_connect=False):
     url_onboard = account_link.get('url')
     return url_onboard
 
+class CheckMailSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def validate_email(self, value):
+        self.user = get_or_create_user(value, send_mail=False)
+        return value
+
+
 class WaitingConfigSerializer(serializers.ModelSerializer):
     stripe = serializers.BooleanField()
 
@@ -314,10 +322,10 @@ class WaitingConfigSerializer(serializers.ModelSerializer):
         ]
 
     def create(self, validated_data):
-        validated_data.pop('stripe')
+        stripe = validated_data.pop('stripe', None)
         waiting_config = WaitingConfiguration.objects.create(**validated_data)
 
-        # Pour le cas ou les images sont des url, on a créé nous même les binaire.
+        # Pour le cas ou les images sont des url, on a créé nous même les binaires.
         if getattr(self, 'img_img', None):
             waiting_config.img.save(self.img_name, self.img_img.fp)
         if getattr(self, 'logo_img', None):
@@ -332,13 +340,14 @@ class WaitingConfigSerializer(serializers.ModelSerializer):
 
     def validate_organisation(self, value):
         # Le slug est-il disponible ?
-        try:
-            slug = slugify(value)
-            Client.objects.get(schema_name=slug)
+        slug = slugify(value)
+        if Client.objects.filter(schema_name=slug).exists():
             logger.warning(f"{slug} exist : Conflict")
             raise serializers.ValidationError({f"{slug} existe déja : Conflit de nom"})
-        except Client.DoesNotExist:
-            pass
+
+        if WaitingConfiguration.objects.filter(slug=slug).exists():
+            logger.warning(f"{slug} exist : Conflict")
+            raise serializers.ValidationError({f"{slug} existe déja : Conflit de nom"})
 
         return value
 
