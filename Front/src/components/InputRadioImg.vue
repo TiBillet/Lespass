@@ -1,13 +1,13 @@
 <template>
   <label :for="getUuid()" data-bs-toggle="tooltip" data-bs-placement="top" :data-bs-title="info" :disabled="disable"
-    :style="disable ? '' : 'cursor:pointer;'">
+    :style="disable ? '' : 'cursor:pointer;'" role="fake-input-radio" :aria-labelledby="label">
     <div class="input-radio-image-content" :class="disable ? 'espace-disabled' : ''">
       <input :id="getUuid()" type="radio" :name="name" :value="value" class="input-hidden" @input="sendInput($event)"
         :disabled="disable" :required="validation">
       <font-awesome-icon v-if="icons.length > 0" v-for="(icon, index) in icons" :key="index" :icon="['fas', icon.name]"
         :style="styleIcons(icon.name)" />
-        <div v-if="svg !== null" class="w-100 h-100 d-flex flex-column justify-content-center align-items-center">
-        <img :src="svg.src" alt="image" :style="`width:${svg.size};height:${svg.size};`"/>
+      <div v-if="svg !== null" class="w-100 h-100 d-flex flex-column justify-content-center align-items-center">
+        <img :src="svg.src" alt="image" :style="`width:${svg.size};height:${svg.size};`" />
       </div>
     </div>
     <h6>{{ label }}</h6>
@@ -29,7 +29,8 @@ const props = defineProps({
   svg: Object,
   disable: Boolean,
   modelValue: String,
-  validation: Boolean
+  validation: Boolean,
+  espaceNumber: Number
 })
 
 let uuid = ''
@@ -65,6 +66,10 @@ function sendInput(evt) {
 onMounted(() => {
   const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
   const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+
+  // if(props.espaceNumber === 1) {
+  //   document.querySelector('#' + getUuid()).click()
+  // }
 })
 </script>
 

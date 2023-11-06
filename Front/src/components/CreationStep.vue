@@ -12,8 +12,9 @@
         <!-- navigation -->
         <div class="creation-navigation" @vue:updated="updateNav()">
           <ul class="nav nav-pills">
-            <li v-for="item in navigation" :key="item.id" @click="moveBt($event)" class="nav-item-creation"
-              :data-cible="item.name" :data-index="item.id" :style="{ width: itemNavWidth + '%' }">
+            <li v-for="(item, index) in navigation" :key="item.id" @click="moveBt($event)" class="nav-item-creation"
+              :data-cible="item.name" :data-index="item.id" :style="{ width: itemNavWidth + '%' }"
+              :class="index > 0 ? 'tibillet-no-clickable' : ''">
               {{ item.name.toUpperCase() }}
             </li>
           </ul>
@@ -32,9 +33,13 @@
               @click="navCreationPrev($event)">Précédent</button>
           </div>
           <div class="w-50 d-flex flex-column">
-            <button v-if="etape < getNbItemNav() - 1" type="button"
-              class="btn btn-creation tibillet-bg-primary align-self-end" @click="navCreationNext($event)">Suivant</button>
-            <button v-if="etape === getNbItemNav() - 1" type="button" class="btn btn-creation tibillet-bg-primary align-self-end" @click="validerCreation()">Valider</button>
+            <button v-if="etape <= (getNbItemNav() - 1)" type="button"
+              class="btn btn-creation tibillet-bg-primary align-self-end tibillet-no-display" @click="navCreationNext($event)"
+              role="button" :aria-label="'suivant' + etape">
+              Suivant
+            </button>
+
+            <button v-if="etape === getNbItemNav() - 1" type="button" class="btn btn-creation tibillet-bg-primary align-self-end tibillet-no-display" @click="validerCreation()">Valider</button>
           </div>
         </div>
       </div>
@@ -238,4 +243,17 @@ onBeforeUnmount(() => {
 .btn-previous {
   background-color: #999;
   color: #fff;
-}</style>
+}
+
+.tibillet-no-clickable {
+    -webkit-user-select: none; /* Safari, Chrome */
+    -khtml-user-select: none; /* Konqueror */
+    -moz-user-select: none; /* Firefox */
+    user-select: none; /* CSS3 */
+    pointer-events: none
+}
+
+.tibillet-no-display{
+  display: none;
+}
+</style>

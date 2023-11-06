@@ -2,22 +2,20 @@
   <CreationStep title="Créer votre espace" sub-title="Sélectionner, éditer un type d'espace."
     validation-creation-msg="validerCreationPlace">
     <div id="espace" class="creation-tab-content">
-      <div class="espace-content d-flex flex-column justify-content-around"
-        :style="stripeStep?.action === 'expect_payment_stripe_createTenant' ? 'pointer-events:none;' : 'pointer-events: all;'">
+      <div class="espace-content d-flex flex-column justify-content-around">
         <div class="d-flex flex-wrap justify-content-around">
           <InputRadioImg v-for="(espace, index) in espacesType" :key="index" :label="espace.name" name="type-espace"
             :value="espace.categorie" :info="espace.description" :svg="espace.svg" :icons="espace.icons"
             :v-model="formCreatePlace.categorie" @update:model-value="newValue => formCreatePlace.categorie = newValue"
-            style="margin: auto 0;" :style="espace.disable ? 'pointer-events:none;' : 'pointer-events: all;'" />
+            style="margin: auto 0;" :style="espace.disable ? 'pointer-events:none;' : 'pointer-events: all;'"
+             :espaceNumber="espacesType.length"/>
         </div>
         <InputMd id="login-email" label="Email" msg-error="Merci de renseigner une adresse email valide." type="email"
           :validation="true" class="w-50 ms-auto me-auto" v-model="formCreatePlace.email" />
-
       </div>
     </div>
 
-    <div id="informations" class="creation-tab-content"
-      :style="stripeStep?.action === 'expect_payment_stripe_createTenant' ? 'pointer-events:none;' : 'pointer-events: all;'">
+    <div id="informations" class="creation-tab-content">
       <div class="espace-content d-flex flex-column">
         <!-- TODO: Importer vos données de communecté -->
         <button class="btn bg-gradient-info mt-4 mb-0 h-44px w-50 p-4" type="button">
@@ -43,8 +41,7 @@
       </div>
     </div>
 
-    <div id="résumé" class="creation-tab-content"
-      :style="stripeStep?.action === 'expect_payment_stripe_createTenant' ? 'pointer-events:none;' : 'pointer-events: all;'">
+    <div id="résumé" class="creation-tab-content">
       <div class="espace-content d-flex flex-column">
         <div class="d-flex flex-row">
           <div class="d-flex align-items-start w-25">Catégorie</div>
@@ -80,44 +77,6 @@
           <div v-if="formCreatePlace.logo !== undefined && formCreatePlace.logo !== null" class="resume-valeur">{{
             formCreatePlace.logo.name }}</div>
         </div>
-        <h3 class="mt-4" style="white-space: pre-line">Aurez vous besoin de récolter de l'argent ? (adhésion,
-          billetterie, crowdfundind, caisse enregistreuse, cashless)</h3>
-
-        <div class="d-flex flex-row justify-content-center">
-          <div class="d-flex flex-row">
-            <input type="radio" id="money" name="coin" :value="true" v-model="coin"
-              :checked="coin === true ? true : false" />
-            <label for="money">Oui</label>
-          </div>
-          <div class="d-flex flex-row ms-4">
-            <input type="radio" id="no-money" name="coin" :value="false" v-model="coin"
-              :checked="coin === false ? true : false" />
-            <label for="no-money">Non</label>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div id="Validation" class="creation-tab-content">
-      <!-- <div>coin = {{ coin }} -- etapeValidation = {{ etapeValidation }} </div> stripeStep = {{ stripeStep }} -->
-      <div class="espace-content d-flex flex-column justify-content-center align-items-center">
-        <button v-if="etapeValidation === 'creationEspace' && (stripeStep === undefined || stripeStep.action === null)"
-          type="button" class="btn btn-creation tibillet-bg-primary align-self-center text-white"
-          @click="validerCreationPlace()">
-          Valider la création de son espace
-        </button>
-
-        <button
-          v-if="coin === true && (etapeValidation === 'creationCompteStripe' || stripeStep?.action === 'expect_payment_stripe_createTenant')"
-          type="button" class="btn btn-creation tibillet-bg-primary align-self-center text-white"
-          @click="CreationComteStripe()">
-          Créer votre compte stripe
-        </button>
-
-        <button v-if="etapeValidation === 'creationCompteStripe'" type="button"
-          class="btn btn-creation tibillet-bg-secondary align-self-center text-white" @click="resetState()">
-          Annuler opération
-        </button>
       </div>
     </div>
 
@@ -127,7 +86,11 @@
 <script setup>
 console.log("-> Tenants.vue");
 
-import { ref } from "vue"
+// machine
+import { CreateMachine} from "../communs/CreateMachine.js"
+import { machineCreateEvent } from "../communs/machineCreateEvent.js"
+
+import { ref, onMounted } from "vue"
 
 import { useSessionStore } from "../stores/session";
 import { setLocalStateKey, getLocalStateKey } from '../communs/storeLocal.js'
@@ -140,7 +103,7 @@ import TextareaMd from "../components/TextareaMd.vue";
 import InputRadioImg from "../components/InputRadioImg.vue";
 
 // svg et image
-import artistSvg from "../assets/img/artist.svg";
+// import artistSvg from "../assets/img/artist.svg";
 import homeSvg from "../assets/img/home.svg";
 import communecterLogo from "../assets/img/communecterLogo_31x28.png"
 
@@ -153,49 +116,8 @@ const { setLoadingValue, updateHeader, getAccessToken } = sessionStore;
 
 const router = useRouter()
 
-const iconsEspaceArtistique = [
-  { name: "paint-brush", left: "20px", top: "20px" },
-  { name: "music", left: "66px", top: "20px" },
-  { name: "wheat-awn", left: "40px", top: "50px" },
-  { name: "camera", left: "56px", top: "50px" },
-  { name: "image", left: "20px", top: "76px" },
-  { name: "film", left: "76px", top: "76px" }
-]
-
-// les données du formulaire
-const initStateForm = {
-  organisation: "",
-  short_description: "",
-  long_description: "",
-  img: null,
-  logo: null,
-  categorie: "",
-  email: "",
-  stripe: false
-}
-
-let formCreatePlace = ref(initStateForm)
-/*
-const stripeStep = getLocalStateKey("stripeStep");
-console.log('stripeStep.formCreatePlace =', stripeStep?.formCreatePlace);
-if (stripeStep && stripeStep.action === 'expect_payment_stripe_createTenant') {
-  formCreatePlace.value = stripeStep.formCreatePlace
-  etapeValidation.value = "creationCompteStripe"
-  coin.value = true
-}
-*/
-
 // les différents types d'espace à créer
 const espacesType = [
-  {
-    name: "Artistique",
-    description: "Pour tous projet artistique ...",
-    icons: [],
-    svg: { src: artistSvg, size: '4rem' },
-    colorText: "white",
-    disable: false,
-    categorie: "A",
-  },
   {
     name: "Lieu / association",
     description: "Pour tous lieu ou association ...",
@@ -205,6 +127,15 @@ const espacesType = [
     disable: false,
     categorie: "S"
   }/*,
+    {
+    name: "Artistique",
+    description: "Pour tous projet artistique ...",
+    icons: [],
+    svg: { src: artistSvg, size: '4rem' },
+    colorText: "white",
+    disable: false,
+    categorie: "A",
+  },
   {
     name: "Festival",
     description: "Le Lorem Ipsum est simplement du faux texte employé dans la composition et la mise en page avant impression. Le Lorem Ipsum.",
@@ -226,14 +157,33 @@ const espacesType = [
   */
 ];
 
-updateHeader(null);
-
-function resetState() {
-  setLocalStateKey("stripeStep", { action: null });
-  formCreatePlace.value = initStateForm
-  coin.value = false
-  etapeValidation.value = 'creationEspace'
+// les données du formulaire
+const initStateForm = {
+  organisation: "",
+  short_description: "",
+  long_description: "",
+  img: null,
+  logo: null,
+  categorie: "",
+  email: "",
+  stripe: false,
+  espacesType
 }
+
+let formCreatePlace = ref(initStateForm)
+
+const machine = new CreateMachine(initStateForm, machineCreateEvent)
+
+const iconsEspaceArtistique = [
+  { name: "paint-brush", left: "20px", top: "20px" },
+  { name: "music", left: "66px", top: "20px" },
+  { name: "wheat-awn", left: "40px", top: "50px" },
+  { name: "camera", left: "56px", top: "50px" },
+  { name: "image", left: "20px", top: "76px" },
+  { name: "film", left: "76px", top: "76px" }
+]
+
+updateHeader(null);
 
 function getCategorieName(categorie) {
   console.log('-> getCategorieName =', categorie);
@@ -243,228 +193,14 @@ function getCategorieName(categorie) {
     return ''
   }
 }
-function cursorOff(state) {
-  if (state === true) {
-    return "";
-  } else {
-    return "cursor: pointer;";
-  }
-}
 
-document.addEventListener("validerCreation", ({detail}) => {
-  console.log('detail =', detail);
+onMounted(() => {  
+  machine.init('selectEspace')
+  //console.log('machine.state =', JSON.stringify(machine.state, null, 2));
 })
 
-/*
-async function CreationComteStripe() {
-  // enregistre l'email dans le storeUser
-  console.log("-> goStripe Onboard");
 
-  const api = `/api/onboard/`;
-  try {
-    setLoadingValue(true);
 
-    // init étape creation stripe enregistrement en local(long durée)
-
-    const updateFormCreatePlace = {
-      organisation: formCreatePlace.value.organisation,
-      short_description: formCreatePlace.value.short_description,
-      long_description: formCreatePlace.value.long_description,
-      img_url: { name: formCreatePlace.value.img_url.name },
-      logo: { name: formCreatePlace.value.logo.name },
-      categorie: formCreatePlace.value.categorie
-    }
-    // const creationStepData = JSON.parse(JSON.stringify(formCreatePlace.value))
-    setLocalStateKey('stripeStep', { action: 'expect_payment_stripe_createTenant', formCreatePlace: updateFormCreatePlace, nextPath: '/' })
-
-    const response = await fetch(api, {
-      method: "GET",
-      cache: "no-cache",
-      headers: {
-        "Content-Type": "application/json"
-      }
-    });
-    const retour = await response.json();
-    console.log("retour =", retour);
-    if (response.status === 202) {
-      location.href = retour;
-    } else {
-      throw new Error(`Erreur goStripe Onboard'`);
-    }
-  } catch (erreur) {
-    console.log("-> validerLogin, erreur :", erreur);
-    emitter.emit("toastSend", {
-      title: "validerLogin, erreur :",
-      contenu: erreur,
-      typeMsg: "danger",
-      delay: 8000
-    });
-  } finally {
-    setLoadingValue(false);
-  }
-}
-*/
-
-// validation
-async function validerCreationPlace() {
-  let erreurs = [];
-
-  if (formCreatePlace.value.categorie === "") {
-    erreurs.push("Aucun type d'espace n'a été Selectionné !");
-  }
-
-  if (formCreatePlace.value.organisation === "") {
-    erreurs.push(`Votre "organistation" n'a pas été renseignée !`);
-  }
-
-  if (formCreatePlace.value.short_description === "") {
-    erreurs.push(`La courte description doit être renseignée !`);
-  }
-
-  if (formCreatePlace.value.img === null) {
-    erreurs.push(`Veuillez sélectionner une image !`);
-  }
-
-  if (formCreatePlace.value.logo === null) {
-    erreurs.push(`Veuillez sélectionner un logo !`);
-  }
-
-  console.log("formCreatePlace.value =", formCreatePlace.value);
-
-  if (erreurs.length > 0) {
-    erreurs.forEach((erreur) => {
-      emitter.emit("toastSend", {
-        title: "Attention",
-        contenu: erreur,
-        typeMsg: "warning",
-        delay: 6000
-      });
-    });
-  }
-
-  if (erreurs.length === 0) {
-    try {
-      // lieu / association
-      let urlApi = "/api/place/";
-
-      // artiste
-      if (formCreatePlace.value.categorie === "A") {
-        urlApi = "/api/artist/";
-      }
-
-      // spinner on
-      setLoadingValue(true)
-
-      const formData = new FormData();
-      formData.append('organisation', formCreatePlace.value.organisation);
-      formData.append('short_description', formCreatePlace.value.short_description);
-      formData.append('long_description', formCreatePlace.value.long_description);
-      formData.append('email', formCreatePlace.value.email);
-      formData.append('stripe', coin.value);
-      formData.append('logo', formCreatePlace.value.logo);
-      formData.append('img', formCreatePlace.value.img);
-      console.log('formData =', formData);
-
-      const response = await fetch(urlApi, {
-        method: "post",
-        headers: {
-          Accept: "application/json"
-        },
-        body: formData
-      });
-      console.log("response =", response);
-      const retour = await response.json();
-
-      console.log('retour ' + urlApi + ' =', retour);
-      console.log(' type retour =', typeof (retour));
-
-      if (response.status === 409) {
-        throw new Error(retour.join(' - '));
-      }
-      if (response.status === 201) {
-        console.log('coin =', typeof (coin.value));
-        if (coin.value === false) {
-          setLoadingValue(false)
-          // message de succès , non monétaire
-          const typeEspace = espacesType.find(espace => espace.categorie === formCreatePlace.value.categorie).name
-
-          router.push({ path: '/' })
-
-          const msg = `
-            <p>La mise en place de votre espace "${formCreatePlace.value.organisation}" de type "${typeEspace}" est en pause.
-              Pour finalisez sa création, veuillez confirmer par l'émail qui vous êtes envoyé.
-              Attention vérifier dans les émails en quarantaines / indésirables !</p>
-            `
-          emitter.emit('modalMessage', {
-            titre: 'Validation',
-            typeMsg: 'success',
-            contenu: msg,
-            dynamic: true // pour insérer du html
-          })
-        }
-        if (coin.value === true) {
-          // monétaire
-          // etapeValidation.value = "creationCompteStripe"
-          console.log("-> monétaire, go stripe, url =", retour.stripe_onboard);
-          setLocalStateKey('stripeStep', { action: 'expect_payment_stripe_createTenant', uuidTenant: retour.uuid, nextPath: '/' })
-          //location.href = retour.stripe_onboard;
-        }
-      }
-      /*
-      console.log('formCreatePlace.value =', formCreatePlace.value);
-      const response = await fetch(urlApi, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          // Authorization: "Bearer " + getAccessToken
-        },
-        body: JSON.stringify(formCreatePlaceObject)
-      });
-      console.log("response =", response);
-      const retour = await response.json();
-
-      console.log('retour '+urlApi+ ' =', retour);
-      // le tenant existe déjà
-      if (response.status === 409) {
-        throw new Error(retour.join(' - '));
-      }
-      if (response.status === 201) {
-        // message de succès , non monétaire
-        const typeEspace = espacesType.find(espace => espace.categorie === retour.categorie).name
-        setLoadingValue(false)
-
-        console.log('coin =', typeof (coin.value));
-        if (coin.value === false) {
-          router.push({ path: '/' })
-        }
-        const msg = `
-            <div>Votre espace "${retour.organisation}" de type "${typeEspace}" a été créé.</div>
-            <div>Lien: ${retour.domain}</div>`
-        emitter.emit('modalMessage', {
-          titre: 'Validation',
-          typeMsg: 'success',
-          contenu: msg,
-          dynamic: true // pour insérer du html
-        })
-        if (coin.value === true) {
-          // monétaire
-          etapeValidation.value = "creationCompteStripe"
-        }
-      }
-      console.log("retour =", retour);
-      */
-    } catch (error) {
-      setLoadingValue(false)
-      console.log(error);
-      emitter.emit("toastSend", {
-        title: "Erreur",
-        contenu: error,
-        typeMsg: "danger",
-        delay: 8000
-      });
-    }
-  }
-}
 </script>
 
 <style scoped>
