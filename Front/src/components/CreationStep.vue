@@ -34,6 +34,7 @@
           <div class="w-50 d-flex flex-column">
             <button v-if="etape < getNbItemNav() - 1" type="button"
               class="btn btn-creation tibillet-bg-primary align-self-end" @click="navCreationNext($event)">Suivant</button>
+            <button v-if="etape === getNbItemNav() - 1" type="button" class="btn btn-creation tibillet-bg-primary align-self-end" @click="validerCreation()">Valider</button>
           </div>
         </div>
       </div>
@@ -65,6 +66,10 @@ let itemNavWidth = ref(0);
 let etape = ref(0);
 let styleBtMobile = ref(initStyleBtMobile);
 
+
+function validerCreation() {
+  emitEvent("validerCreation", "createTenant")
+}
 
 function init() {
   navigation.value = [];
