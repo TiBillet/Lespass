@@ -251,6 +251,10 @@ function cursorOff(state) {
   }
 }
 
+document.addEventListener("validerCreation", ({detail}) => {
+  console.log('detail =', detail);
+})
+
 /*
 async function CreationComteStripe() {
   // enregistre l'email dans le storeUser
@@ -387,7 +391,9 @@ async function validerCreationPlace() {
           router.push({ path: '/' })
 
           const msg = `
-            <div>Votre espace "${formCreatePlace.value.organisation}" de type "${typeEspace}" a été créé.</div>
+            <p>La mise en place de votre espace "${formCreatePlace.value.organisation}" de type "${typeEspace}" est en pause.
+              Pour finalisez sa création, veuillez confirmer par l'émail qui vous êtes envoyé.
+              Attention vérifier dans les émails en quarantaines / indésirables !</p>
             `
           emitter.emit('modalMessage', {
             titre: 'Validation',
@@ -463,7 +469,7 @@ async function validerCreationPlace() {
 
 <style scoped>
 .creation-tab-content {
-  --creation-content-height: 412px;
+  --creation-content-height: 452px;
   min-height: var(--creation-content-height);
   max-height: var(--creation-content-height);
   display: none;
