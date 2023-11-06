@@ -226,13 +226,17 @@ def create_tenant(request, serializer):
 
     return Response(place_serialized_with_uuid, status=status.HTTP_201_CREATED)
 
-def check_mail_before_create_tenant(request):
-    serializer = CheckMailSerializer(data=request.data)
-    if serializer.is_valid():
-        if WaitingConfiguration.objects.filter(email=serializer.validated_data.get('email')).exists():
-            data = WaitingConfigSerializer(WaitingConfiguration.objects.get(email=serializer.validated_data.get('email'))).data
-            return Response(data, status=status.HTTP_206_PARTIAL_CONTENT)
-        return Response(_(f""), status=status.HTTP_202_ACCEPTED)
+
+@permission_classes([permissions.AllowAny])
+class check_mail_before_create_tenant(APIView):
+    def get(self, request):
+        serializer = CheckMailSerializer(data=request.data)
+        if serializer.is_valid():
+            try :
+                data = WaitingConfigSerializer(WaitingConfiguration.objects.get(email=serializer.validated_data.get('email'))).data
+                return Response(data, status=status.HTTP_206_PARTIAL_CONTENT)
+            except WaitingConfiguration.DoesNotExist:
+                return Response("", status=status.HTTP_202_ACCEPTED)
 
 class TenantViewSet(viewsets.ViewSet):
 
@@ -250,7 +254,7 @@ class TenantViewSet(viewsets.ViewSet):
                 data['stripe_onboard'] = serializer.stripe_onboard
 
             # Envoie le mail de confirmation de création.
-            return Response(json.dumps(data), status=status.HTTP_201_CREATED)
+            return Response(json.dumps(data), status=status.HTTP_201_CREATED, content_type="application/json")
 
         logger.error(f"serializer.errors : {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
