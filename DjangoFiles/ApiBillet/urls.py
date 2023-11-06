@@ -2,7 +2,7 @@ from django.urls import include, path, re_path
 from ApiBillet import views as api_view
 from rest_framework import routers
 from ApiBillet.views import TicketPdf, Webhook_stripe, Gauge, CancelSubscription, Onboard_stripe_return, Onboard, \
-    UpdateFederatedAssetFromCashless, ZReportPDF, GetFederatedAssetFromCashless, check_mail_before_create_tenant
+    UpdateFederatedAssetFromCashless, ZReportPDF, GetFederatedAssetFromCashless
 
 router = routers.DefaultRouter()
 router.register(r'place', api_view.TenantViewSet, basename='place')
@@ -29,7 +29,6 @@ urlpatterns = [
     path('update_federated_asset_from_cashless/', UpdateFederatedAssetFromCashless.as_view(), name='update_federated_asset'),
     path('get_federated_asset_from_cashless/<uuid:pk_uuid>', GetFederatedAssetFromCashless.as_view(), name='get_federated_asset'),
 
-    path('check_mail_before_create_tenant/', check_mail_before_create_tenant.as_view(), name='check_mail_before_create_tenant'),
     path('onboard/', Onboard.as_view()),
     path('onboard_stripe_return/<str:id_acc_connect>/', Onboard_stripe_return.as_view()),
     path('webhook_stripe/', Webhook_stripe.as_view()),
