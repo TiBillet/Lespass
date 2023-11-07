@@ -1,5 +1,5 @@
 <template>
-  <label :for="getUuid()" data-bs-toggle="tooltip" data-bs-placement="top" :data-bs-title="info" :disabled="disable"
+  <label :for="getUuid()" :disabled="disable"
     :style="disable ? '' : 'cursor:pointer;'" role="fake-input-radio" :aria-labelledby="label">
     <div class="input-radio-image-content" :class="disable ? 'espace-disabled' : ''">
       <input :id="getUuid()" type="radio" :name="name" :value="value" class="input-hidden" @input="sendInput($event)"
@@ -107,4 +107,5 @@ onMounted(() => {
 .espace-disabled {
   opacity: 0.4;
 }
+
 </style>

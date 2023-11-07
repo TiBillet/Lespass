@@ -1,5 +1,4 @@
 <template>
-  {{ etape }}
   <div class="container-fluid vw-100 vh-100 d-flex justify-content-center align-items-center"
     :style="`background-image: url('${wizardBackground}');background-position:50% 50%;background-size:cover`">
     <div class="container">
@@ -24,7 +23,8 @@
 
         <!-- content -->
         <div class="creation-tabs-content ps-3 pe-3">
-          <slot></slot>
+          navigation = {{ navigation }}
+          <slot v-for="(item, index) in navigation" :key="item.id" :name="'slot' + item.name"></slot>
         </div>
 
         <div class="d-flex creation-footer">
@@ -34,7 +34,7 @@
           </div>
           <div class="w-50 d-flex flex-column">
             <button v-if="etape <= (getNbItemNav() - 1)" type="button"
-              class="btn btn-creation tibillet-bg-primary align-self-end tibillet-no-display" @click="navCreationNext($event)"
+              class="btn tibillet-bg-primary align-self-end tibillet-no-display" @click="navCreationNext($event)"
               role="button" :aria-label="'suivant' + etape">
               Suivant
             </button>
