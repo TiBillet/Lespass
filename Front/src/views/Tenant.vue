@@ -1,92 +1,10 @@
 <template>
-  <!--
-  <CreationStep title="Créer votre espace" sub-title="Sélectionner, éditer un type d'espace."
-    validation-creation-msg="validerCreationPlace">
-
-    <div id="espace" class="creation-tab-content">
-      <div class="espace-content d-flex flex-column justify-content-around">
-        <div class="d-flex flex-wrap justify-content-around">
-          <InputRadioImg v-for="(espace, index) in espacesType" :key="index" :label="espace.name" name="type-espace"
-            :value="espace.categorie" :info="espace.description" :svg="espace.svg" :icons="espace.icons"
-            :v-model="formCreatePlace.categorie" @update:model-value="newValue => formCreatePlace.categorie = newValue"
-            style="margin: auto 0;" :style="espace.disable ? 'pointer-events:none;' : 'pointer-events: all;'"
-             :espaceNumber="espacesType.length"/>
-        </div>
-        <InputMd id="login-email" label="Email" msg-error="Merci de renseigner une adresse email valide." type="email"
-          :validation="true" class="w-50 ms-auto me-auto" v-model="formCreatePlace.email" />
-      </div>
-    </div>
-
-    <div id="informations" class="creation-tab-content">
-      <div class="espace-content d-flex flex-column">
-        //-- TODO: Importer vos données de communecté --
-        <button class="btn bg-gradient-info mt-4 mb-0 h-44px w-50 p-4" type="button">
-          <div class="d-flex flex-row justify-content-center align-items-center h-100 w-100">
-            Importez vos données de <img :src="communecterLogo" class="ms-1" alt="logo communecter">
-          </div>
-        </button>
-
-        <InputMd id="creation-organisation" label="Organisation" height="22.4" color="red"
-          v-model="formCreatePlace.organisation" class="mt-3" />
-
-        <InputMd id="creation-short-description" label="Courte description" v-model="formCreatePlace.short_description" />
-
-        <TextareaMd id="creation-long-description" label="Votre longue description"
-          v-model="formCreatePlace.long_description" />
-
-        <InputFileMd type="file" id="creation-img-url" label="Url image" v-model="formCreatePlace.img" class="mt-2" />
-
-        <InputFileMd type="file" id="creation-logo-url" label="Url logo" v-model="formCreatePlace.logo" class="mt-2" />
-
-      </div>
-    </div>
-
-    <div id="résumé" class="creation-tab-content">
-      <div class="espace-content d-flex flex-column">
-        <div class="d-flex flex-row">
-          <div class="d-flex align-items-start w-25">Catégorie</div>
-          <div v-if="formCreatePlace.categorie !== ''" class="resume-valeur">{{
-            getCategorieName(formCreatePlace.categorie) }}</div>
-        </div>
-
-        <div class="d-flex flex-row">
-          <div class="d-flex align-items-start w-25">Email</div>
-          <div class="resume-valeur">{{ formCreatePlace.email }}</div>
-        </div>
-
-        <div class="d-flex flex-row">
-          <div class="d-flex align-items-start w-25">Organisation</div>
-          <div class="resume-valeur">{{ formCreatePlace.organisation }}</div>
-        </div>
-
-        <div class="d-flex flex-row">
-          <div class="d-flex align-items-start w-25">Coute description</div>
-          <div class="resume-valeur">{{ formCreatePlace.short_description }}</div>
-        </div>
-        <div class="d-flex flex-row">
-          <div class="d-flex align-items-start w-25">Longue description</div>
-          <div class="resume-valeur">{{ formCreatePlace.long_description }}</div>
-        </div>
-        <div class="d-flex flex-row">
-          <div class="d-flex align-items-start w-25">Url de l'image</div>
-          <div v-if="formCreatePlace.img_url !== undefined && formCreatePlace.img !== null" class="resume-valeur">{{
-            formCreatePlace.img.name }}</div>
-        </div>
-        <div class="d-flex flex-row">
-          <div class="d-flex align-items-start w-25">Url du logo</div>
-          <div v-if="formCreatePlace.logo !== undefined && formCreatePlace.logo !== null" class="resume-valeur">{{
-            formCreatePlace.logo.name }}</div>
-        </div>
-      </div>
-    </div>
-  </CreationStep>
-  -->
-
   <div class="container-fluid vw-100 vh-100 d-flex justify-content-center align-items-center"
     :style="`background-image: url('${wizardBackground}');background-position:50% 50%;background-size:cover`">
     <div class="container">
       <div class="card creation-card">
         <div class="creation-header">
+          etape = {{ etape }}
           <h3 class="creation-title">Créer votre espace</h3>
           <h5 class="creation-sub-title">Sélectionner, éditer un type d'espace.</h5>
         </div>
@@ -114,31 +32,33 @@
         <div class="creation-tabs-content ps-3 pe-3">
 
           <!-- type d'espace -->
-          <div v-if="['espace', 'showBtNextForGoInformations'].includes(etape)" id="espace" class="creation-tab-content">
+          <div v-if="['espace', 'espaceFullData', 'showBtNextForGoInformations'].includes(etape)" id="espace" class="creation-tab-content">
             <div class="espace-content d-flex flex-column justify-content-around">
               <div class="d-flex flex-wrap justify-content-around">
                 <InputRadioImg v-for="(espace, index) in espacesType" :key="index" :label="espace.name" name="type-espace"
                   :value="espace.categorie" :info="espace.description" :svg="espace.svg" :icons="espace.icons"
-                  :v-model="stateForm.categorie" @update:model-value="newValue => stateForm.categorie = newValue"
-                  style="margin: auto 0;" :style="espace.disable ? 'pointer-events:none;' : 'pointer-events: all;'"
-                  :espaceNumber="espacesType.length" @click="service.send('evtInputsEspace')" />
+                  v-model="stateForm.categorie" @update:model-value="newValue => stateForm.categorie = newValue"
+                  style="margin: auto 0;" :espaceNumber="espacesType.length" @click="service.send('evtInputsEspace')" />
+
               </div>
               <InputMd id="login-email" label="Email" msg-error="Merci de renseigner une adresse email valide."
                 type="email" :validation="true" class="w-50 ms-auto me-auto" v-model="stateForm.email"
-                @change="service.send('evtInputsEspace')" />
+                @change="service.send('evtInputsEspace')" @blur="service.send('evtInputsEspace')"/>
+                 
             </div>
             <!-- footer -->
             <div class="d-flex flex-row-reverse w-100 creation-footer">
-              <button v-if="etape === 'showBtNextForGoInformations'" type="button"
-                @click="service.send('evtShowTabInformtions')" class="btn mb-1 tibillet-bg-primary" role="button"
-                aria-label="go-informations">
+              <button v-if="['showBtNextForGoInformations', 'espaceFullData'].includes(etape)" type="button"
+                @click="service.send('evtShowTabInformtions')" class="btn btn-creation tibillet-bg-primary" role="button"
+                aria-label="go-informatisons">
                 Suivant
               </button>
             </div>
           </div>
 
           <!-- informations -->
-          <div v-if="['showTabInformtions'].includes(etape)" id="informations" class="creation-tab-content">
+          <div v-if="['showTabInformtions', 'showTabInformtionsFullData', 'showBtNextForGoSummary'].includes(etape)" id="informations"
+            class="creation-tab-content">
             <div class="espace-content d-flex flex-column">
               <!-- TODO: Importer vos données de communecté -->
               <button class="btn bg-gradient-info mt-4 mb-0 h-44px w-50 p-4" type="button">
@@ -148,30 +68,88 @@
               </button>
 
               <InputMd id="creation-organisation" label="Organisation" height="22.4" color="red"
-                v-model="stateForm.organisation" class="mt-3" />
+                v-model="stateForm.organisation" class="mt-3" @change="service.send('evtInputsInformations')" />
 
-              <InputMd id="creation-short-description" label="Courte description" v-model="stateForm.short_description" />
+              <InputMd id="creation-short-description" label="Courte description" v-model="stateForm.short_description"
+                @change="service.send('evtInputsInformations')" />
 
               <TextareaMd id="creation-long-description" label="Votre longue description"
-                v-model="stateForm.long_description" />
+                v-model="stateForm.long_description" @change="service.send('evtInputsInformations')" />
 
-              <InputFileMd type="file" id="creation-img-url" label="Url image" v-model="stateForm.img" class="mt-2" />
+              <InputFileMd type="file" id="creation-img-url" label="Url image" v-model="stateForm.img" class="mt-2"
+                @change="service.send('evtInputsInformations')" />
 
-              <InputFileMd type="file" id="creation-logo-url" label="Url logo" v-model="stateForm.logo" class="mt-2" />
+              <InputFileMd type="file" id="creation-logo-url" label="Url logo" v-model="stateForm.logo" class="mt-2"
+                @change="service.send('evtInputsInformations')" />
             </div>
             <!-- footer -->
-            <div class="d-flex flex-row-reverse w-100 creation-footer">
-              <button type="button" class="btn mb-1 tibillet-bg-primary" role="button" aria-label="go-resume">
+            <div class="creation-footer d-flex justify-content-between">
+              <button class="btn btn-creation btn-previous" @click="service.send('evtReturnEspace')">
+                Précédent
+              </button>
+              <button v-if="['showBtNextForGoSummary', 'showTabInformtionsFullData'].includes(etape)" class="btn btn-creation tibillet-bg-primary"
+                role="button" aria-label="go-resume" @click="service.send('evtShowTabSummary')">
                 Suivant
               </button>
             </div>
           </div>
 
+          <!-- Résumé -->
+          <div v-if="['showTabSummary'].includes(etape)" id="résumé" class="creation-tab-content">
+            <div class="espace-content d-flex flex-column">
+              <div class="d-flex flex-row">
+                <div class="d-flex align-items-start w-25">Catégorie</div>
+                <div class="resume-valeur">
+                  {{ espacesType.find(espace => espace.categorie === stateForm.categorie).name }}
+                </div>
+              </div>
 
+              <div class="d-flex flex-row">
+                <div class="d-flex align-items-start w-25">Email</div>
+                <div class="resume-valeur">{{ stateForm.email }}</div>
+              </div>
+
+              <div class="d-flex flex-row">
+                <div class="d-flex align-items-start w-25">Organisation</div>
+                <div class="resume-valeur">{{ stateForm.organisation }}</div>
+              </div>
+
+              <div class="d-flex flex-row">
+                <div class="d-flex align-items-start w-25">Coute description</div>
+                <div class="resume-valeur">{{ stateForm.short_description }}</div>
+              </div>
+              <div class="d-flex flex-row">
+                <div class="d-flex align-items-start w-25">Longue description</div>
+                <div class="resume-valeur">{{ stateForm.long_description }}</div>
+              </div>
+
+              <div class="d-flex flex-row">
+                <div class="d-flex align-items-start w-25">Url de l'image</div>
+                <div class="resume-valeur">
+                  {{ stateForm.img.name }}
+                </div>
+              </div>
+
+              <div class="d-flex flex-row">
+                <div class="d-flex align-items-start w-25">Url du logo</div>
+                <div class="resume-valeur">
+                  {{ stateForm.logo.name }}
+                </div>
+              </div>
+            </div>
+             <!-- footer -->
+             <div class="creation-footer d-flex justify-content-between">
+              <button class="btn btn-creation btn-previous" @click="service.send('evtReturnInformations')">
+                Précédent
+              </button>
+              <button class="btn btn-creation tibillet-bg-primary"
+                role="button" aria-label="go-resume" @click="createTenant()">
+                Validation
+              </button>
+            </div>
+          </div>
 
         </div> <!-- fin du contenu -->
-
-        <!-- <button @click="test()">Test</button> -->
       </div>
     </div>
   </div>
@@ -219,7 +197,7 @@ const initStateForm = {
   logo: null,
   categorie: "",
   email: "",
-  stripe: false,
+  stripe: true,
   espacesType
 }
 let stateForm = initStateForm
@@ -236,14 +214,50 @@ let styleBtMobile = ref(initStyleBtMobile);
 let itemNavWidth = ref(0);
 let etape = ref('espace')
 
+function moveTitle(step) {
+  // console.log('-> moveTitle, etape =', step);
+  const convStepToIndex = {
+    showTabInformtions: 1,
+    showTabInformtionsFullData: 1,
+    espace: 0,
+    espaceFullData : 0,
+    showTabSummary: 2
+  }
+  const indexTitle = convStepToIndex[step]
+  if (indexTitle !== undefined) {
+    // get name
+    const name = document.querySelector(`li[class~="nav-item-creation"][data-index="${indexTitle}"]`).innerText
+    // replace name
+    document.querySelector('div[class~="bt-nav-creation"]').innerText = name;
+    // pour l'animation du bouton
+    const nbItem = document.querySelectorAll(".creation-navigation li").length;
+    const menuWidth = document.querySelector('ul[class="nav nav-pills"]').offsetWidth
+    const navWidth = menuWidth / nbItem;
+    let decX = 0;
+    if (indexTitle === 0) {
+      decX = -8;
+    }
+    if (indexTitle + 1 === nbItem) {
+      decX = 8;
+    }
+    // actualise la position du bouton
+    styleBtMobile.value.transform = `translate3d(${decX + indexTitle * navWidth}px, 0px, 0px)`;
+  }
+}
+
+
 const machine = createMachine(machineCreateEvent, contextMachine)
 const service = interpret(machine, () => {
   const ctx = service.machine.context()
   etape.value = service.machine.current
   console.log('-> Etape :', etape.value);
-  console.log('-> ctx :', ctx);
+  // console.log('-> ctx :', ctx);
+  // position titre
+  moveTitle(etape.value)
 });
 
+// dev
+window.serice = service
 
 updateHeader(null);
 
@@ -262,6 +276,10 @@ function init() {
 onMounted(() => {
   init()
 });
+
+function createTenant() {
+  console.log('Création du tenant !');
+}
 
 /*
 // machine
@@ -397,22 +415,6 @@ onMounted(() => {
   cursor: pointer;
 }
 
-.bt-nav-creation {
-  position: absolute;
-  left: 0;
-  top: -2px;
-  text-align: center;
-  padding: 14px 12px;
-  font-size: 12px;
-  text-transform: uppercase;
-  border-radius: 4px;
-  color: #ffffff;
-  cursor: pointer;
-  font-weight: bold;
-  box-shadow: 0 16px 26px -10px rgba(244, 67, 54, 0.56), 0 4px 25px 0 rgba(0, 0, 0, 0.12), 0 8px 10px -5px rgba(244, 67, 54, 0.2);
-  min-width: 140px;
-}
-
 .espace-content {
   width: 100%;
   height: calc(var(--creation-content-height) - 10%);
@@ -440,6 +442,37 @@ onMounted(() => {
   user-select: none;
   /* CSS3 */
   pointer-events: none
+}
+
+.btn-creation {
+  font-size: 12px;
+  text-transform: uppercase;
+  border-radius: 4px;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: bold;
+  box-shadow: 0 16px 26px -10px rgba(244, 67, 54, 0.56), 0 4px 25px 0 rgba(0, 0, 0, 0.12), 0 8px 10px -5px rgba(244, 67, 54, 0.2);
+  min-width: 140px;
+}
+
+.btn-previous {
+  background-color: #999;
+  color: #fff;
+}
+
+.bt-nav-creation {
+  position: absolute;
+  left: 0;
+  top: -2px;
+  text-align: center;
+  padding: 14px 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  border-radius: 4px;
+  color: #ffffff;
+  font-weight: bold;
+  box-shadow: 0 16px 26px -10px rgba(244, 67, 54, 0.56), 0 4px 25px 0 rgba(0, 0, 0, 0.12), 0 8px 10px -5px rgba(244, 67, 54, 0.2);
+  min-width: 140px;
 }
 
 /*

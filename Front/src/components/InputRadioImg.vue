@@ -1,8 +1,8 @@
 <template>
-  <label :for="getUuid()" :disabled="disable"
+  <label :for="'input-radio-image-' + uuidComponent" :disabled="disable"
     :style="disable ? '' : 'cursor:pointer;'" role="fake-input-radio" :aria-labelledby="label">
-    <div class="input-radio-image-content" :class="disable ? 'espace-disabled' : ''">
-      <input :id="getUuid()" type="radio" :name="name" :value="value" class="input-hidden" @input="sendInput($event)"
+    <div class="input-radio-image-content" :class="classPlus()">
+      <input :id="'input-radio-image-' + uuidComponent" type="radio" :name="name" :value="value" class="input-hidden" @input="sendInput($event)"
         :disabled="disable" :required="validation">
       <font-awesome-icon v-if="icons.length > 0" v-for="(icon, index) in icons" :key="index" :icon="['fas', icon.name]"
         :style="styleIcons(icon.name)" />
@@ -15,10 +15,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue"
 import { v4 as uuidv4 } from 'uuid'
 
 const emit = defineEmits(['update:modelValue'])
+
+
 const props = defineProps({
   positionIcons: Array,
   info: String,
@@ -33,7 +34,19 @@ const props = defineProps({
   espaceNumber: Number
 })
 
-let uuid = ''
+const uuidComponent = uuidv4()
+
+function classPlus() {
+  let ctClass = ''
+  if (props.disable === true) {
+    ctClass = 'espace-disabled'
+  }
+  if (props.modelValue === props.value) {
+    ctClass += ' input-radio-image-active'
+  }
+  return ctClass
+}
+
 
 function styleIcons(name) {
   const icon = props.icons.find(item => item.name === name)
@@ -43,16 +56,10 @@ function styleIcons(name) {
     top: icon.top
   }
 }
-function getUuid() {
-  if (uuid === '') {
-    uuid = 'input-radio-image-' + uuidv4()
-  }
-  return uuid
-}
 
 function sendInput(evt) {
   const input = evt.target
-  emit("update:modelValue", input.value);
+  emit("update:modelValue", props.value);
 
   // activation "visuelle" du "input radio image"
   const radios = document.querySelectorAll(`[name="${props.name}"]`)
@@ -62,15 +69,6 @@ function sendInput(evt) {
   input.parentNode.classList.add('input-radio-image-active')
 }
 
-// init tooltip
-onMounted(() => {
-  const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
-  const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
-
-  // if(props.espaceNumber === 1) {
-  //   document.querySelector('#' + getUuid()).click()
-  // }
-})
 </script>
 
 <style scoped>
