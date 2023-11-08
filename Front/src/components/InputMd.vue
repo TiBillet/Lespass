@@ -14,7 +14,7 @@
 </template>
 
 <script setup>
-import { onMounted, onUpdated } from "vue"
+import { onUpdated } from "vue"
 
 const props = defineProps({
   id: String,
@@ -30,6 +30,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["update:modelValue"]);
+
 
 function classPlus() {
   let ctClass = ''

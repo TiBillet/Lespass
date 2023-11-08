@@ -32,7 +32,8 @@
         <div class="creation-tabs-content ps-3 pe-3">
 
           <!-- type d'espace -->
-          <div v-if="['espace', 'espaceFullData', 'showBtNextForGoInformations'].includes(etape)" id="espace" class="creation-tab-content">
+          <div v-if="['espace', 'espaceFullData', 'showBtNextForGoInformations'].includes(etape)" id="espace"
+            class="creation-tab-content">
             <div class="espace-content d-flex flex-column justify-content-around">
               <div class="d-flex flex-wrap justify-content-around">
                 <InputRadioImg v-for="(espace, index) in espacesType" :key="index" :label="espace.name" name="type-espace"
@@ -43,12 +44,12 @@
               </div>
               <InputMd id="login-email" label="Email" msg-error="Merci de renseigner une adresse email valide."
                 type="email" :validation="true" class="w-50 ms-auto me-auto" v-model="stateForm.email"
-                @change="service.send('evtInputsEspace')" @blur="service.send('evtInputsEspace')"/>
-                 
+                @change="service.send('evtInputsEspace')" @blur="service.send('evtInputsEspace')" />
+
             </div>
             <!-- footer -->
             <div class="d-flex flex-row-reverse w-100 creation-footer">
-              <button v-if="['showBtNextForGoInformations', 'espaceFullData'].includes(etape)" type="button"
+              <button v-if="['showBtNextForGoInformations'].includes(etape)" type="button"
                 @click="service.send('evtShowTabInformtions')" class="btn btn-creation tibillet-bg-primary" role="button"
                 aria-label="go-informatisons">
                 Suivant
@@ -57,8 +58,8 @@
           </div>
 
           <!-- informations -->
-          <div v-if="['showTabInformtions', 'showTabInformtionsFullData', 'showBtNextForGoSummary'].includes(etape)" id="informations"
-            class="creation-tab-content">
+          <div v-if="['showTabInformtions', 'showBtNextForGoSummary'].includes(etape)"
+            id="informations" class="creation-tab-content">
             <div class="espace-content d-flex flex-column">
               <!-- TODO: Importer vos données de communecté -->
               <button class="btn bg-gradient-info mt-4 mb-0 h-44px w-50 p-4" type="button">
@@ -87,14 +88,15 @@
               <button class="btn btn-creation btn-previous" @click="service.send('evtReturnEspace')">
                 Précédent
               </button>
-              <button v-if="['showBtNextForGoSummary', 'showTabInformtionsFullData'].includes(etape)" class="btn btn-creation tibillet-bg-primary"
-                role="button" aria-label="go-resume" @click="service.send('evtShowTabSummary')">
+              <button v-if="['showBtNextForGoSummary'].includes(etape)"
+                class="btn btn-creation tibillet-bg-primary" role="button" aria-label="go-resume"
+                @click="service.send('evtShowTabSummary')">
                 Suivant
               </button>
             </div>
           </div>
 
-          <!-- Résumé -->
+          <!-- Résumé / Summary -->
           <div v-if="['showTabSummary'].includes(etape)" id="résumé" class="creation-tab-content">
             <div class="espace-content d-flex flex-column">
               <div class="d-flex flex-row">
@@ -137,13 +139,13 @@
                 </div>
               </div>
             </div>
-             <!-- footer -->
-             <div class="creation-footer d-flex justify-content-between">
+            <!-- footer -->
+            <div class="creation-footer d-flex justify-content-between">
               <button class="btn btn-creation btn-previous" @click="service.send('evtReturnInformations')">
                 Précédent
               </button>
-              <button class="btn btn-creation tibillet-bg-primary"
-                role="button" aria-label="go-resume" @click="createTenant()">
+              <button class="btn btn-creation tibillet-bg-primary" role="button" aria-label="go-resume"
+                @click="createTenant()">
                 Validation
               </button>
             </div>
@@ -175,7 +177,7 @@ import { createMachine, interpret } from 'robot3';
 import { machineCreateEvent } from "../communs/machineCreateEvent.js"
 
 const sessionStore = useSessionStore();
-const { updateHeader } = sessionStore;
+const { updateHeader, setLoadingValue } = sessionStore;
 
 // les différents types d'espace à créer
 const espacesType = [{
@@ -218,9 +220,9 @@ function moveTitle(step) {
   // console.log('-> moveTitle, etape =', step);
   const convStepToIndex = {
     showTabInformtions: 1,
-    showTabInformtionsFullData: 1,
+    showBtNextForGoSummary: 1,
     espace: 0,
-    espaceFullData : 0,
+    showBtNextForGoInformations: 0,
     showTabSummary: 2
   }
   const indexTitle = convStepToIndex[step]
@@ -251,9 +253,12 @@ const service = interpret(machine, () => {
   const ctx = service.machine.context()
   etape.value = service.machine.current
   console.log('-> Etape :', etape.value);
-  // console.log('-> ctx :', ctx);
+  console.log('-> ctx :', ctx);
+  console.log('-----------------------------------------------------------')
   // position titre
   moveTitle(etape.value)
+
+  // 
 });
 
 // dev
@@ -279,93 +284,39 @@ onMounted(() => {
 
 function createTenant() {
   console.log('Création du tenant !');
-}
+  try {
+    // lieu / association
+    let urlApi = "/api/place/";
 
-/*
-// machine
-import { CreateMachine } from "../communs/CreateMachine.js"
-import { machineCreateEvent } from "../communs/machineCreateEvent.js"
+    // artiste
+    if (stateForm.categorie === "A") {
+      urlApi = "/api/artist/";
+    }
 
-import { ref, onMounted } from "vue"
+    // spinner on
+    setLoadingValue(true)
 
-import { setLocalStateKey, getLocalStateKey } from '../communs/storeLocal.js'
-import { useRouter } from 'vue-router'
+    const formData = new FormData();
+    formData.append('organisation', stateForm.organisation);
+    formData.append('short_description', stateForm.short_description);
+    formData.append('long_description', stateForm.long_description);
+    formData.append('email', stateForm.email);
+    formData.append('stripe', stateForm.stripe);
+    formData.append('logo', stateForm.logo);
+    formData.append('img', stateForm.img);
+    console.log('formData =', formData);
 
-import CreationStep from "../components/CreationStep.vue";
-import InputMd from "../components/InputMd.vue";
-
-
-import InputRadioImg from "../components/InputRadioImg.vue";
-
-// svg et image
-// import artistSvg from "../assets/img/artist.svg";
-import homeSvg from "../assets/img/home.svg";
-import communecterLogo from "../assets/img/communecterLogo_31x28.png"
-
-
-let coin = ref(false)
-let etapeValidation = ref('creationEspace')
-
-const sessionStore = useSessionStore();
-const { setLoadingValue, updateHeader, getAccessToken } = sessionStore;
-
-const router = useRouter()
-
-// les différents types d'espace à créer
-const espacesType = [{
-  name: "Lieu / association",
-  description: "Pour tous lieu ou association ...",
-  icons: [],
-  svg: { src: homeSvg, size: '4rem' },
-  colorText: "white",
-  disable: false,
-  categorie: "S"
-}];
-
-// les données du formulaire
-const initStateForm = {
-  organisation: "",
-  short_description: "",
-  long_description: "",
-  img: null,
-  logo: null,
-  categorie: "",
-  email: "",
-  stripe: false,
-  espacesType
-}
-
-let formCreatePlace = ref(initStateForm)
-
-const machine = new CreateMachine(initStateForm, machineCreateEvent)
-
-const iconsEspaceArtistique = [
-  { name: "paint-brush", left: "20px", top: "20px" },
-  { name: "music", left: "66px", top: "20px" },
-  { name: "wheat-awn", left: "40px", top: "50px" },
-  { name: "camera", left: "56px", top: "50px" },
-  { name: "image", left: "20px", top: "76px" },
-  { name: "film", left: "76px", top: "76px" }
-]
-
-updateHeader(null);
-
-function getCategorieName(categorie) {
-  console.log('-> getCategorieName =', categorie);
-  if (categorie !== undefined) {
-    return espacesType.find(espace => espace.categorie === categorie).name
-  } else {
-    return ''
+  } catch (error) {
+    setLoadingValue(false)
+    console.log(error);
+    emitter.emit("toastSend", {
+      title: "Erreur",
+      contenu: error,
+      typeMsg: "danger",
+      delay: 8000
+    });
   }
 }
-
-onMounted(() => {
-  machine.init('selectEspace')
-  //console.log('machine.state =', JSON.stringify(machine.state, null, 2));
-})
-*/
-
-
 </script>
 
 <style scoped>
@@ -474,56 +425,4 @@ onMounted(() => {
   box-shadow: 0 16px 26px -10px rgba(244, 67, 54, 0.56), 0 4px 25px 0 rgba(0, 0, 0, 0.12), 0 8px 10px -5px rgba(244, 67, 54, 0.2);
   min-width: 140px;
 }
-
-/*
-.creation-tab-content {
-  --creation-content-height: 452px;
-  min-height: var(--creation-content-height);
-  max-height: var(--creation-content-height);
-  display: none;
-}
-
-
-.espace-card,
-.espace-card-sub {
-  width: 200px;
-  height: 200px;
-}
-
-.espace-card {
-  border-radius: 4px;
-  box-shadow: 0 16px 26px -10px rgba(244, 67, 54, 0.56), 0 4px 25px 0 rgba(0, 0, 0, 0.12), 0 8px 10px -5px rgba(244, 67, 54, 0.2);
-  margin-bottom: 6px;
-  overflow: hidden;
-  margin-top: 6px;
-  position: relative;
-}
-
-.espace-card-sub {
-  position: absolute;
-  top: 0;
-  left: 0;
-}
-
-.espace-content {
-  width: 100%;
-  min-height: var(--creation-content-height);
-  max-height: var(--creation-content-height);
-  overflow-x: hidden;
-  overflow-y: auto;
-}
-
-.btn-creation {
-  font-size: 12px;
-  line-height: 12px;
-  text-transform: uppercase;
-  border-radius: 4px;
-  color: #ffffff;
-  cursor: pointer;
-  font-weight: bold;
-  box-shadow: 0 16px 26px -10px rgba(244, 67, 54, 0.56), 0 4px 25px 0 rgba(0, 0, 0, 0.12), 0 8px 10px -5px rgba(244, 67, 54, 0.2);
-  min-width: 140px;
-  padding: 1.3rem;
-}
-*/
 </style>

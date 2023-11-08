@@ -9,7 +9,7 @@
 </template>
   
 <script setup>
-
+import { onMounted } from "vue";
 const props = defineProps({
   id: String,
   modelValue: Object,
@@ -41,6 +41,22 @@ function defocused(evt) {
   parent.classList.remove('is-focused')
   parent.classList.add('is-filled');
 }
+
+const reducer = (dataTransfer, file) => {
+    dataTransfer.items.add(file);
+    return dataTransfer;
+  }
+
+onMounted(() => {
+  if (props.modelValue !== null) {
+    const list = new DataTransfer(); 
+    list.items.add(props.modelValue); 
+    const inputFile = document.querySelector('#' + props.id)
+    inputFile.files = list.files
+    var event = new Event('change');
+    inputFile.dispatchEvent(event);
+  }
+})
 </script>
 
 <style scoped>

@@ -11,7 +11,7 @@ function validateEmail(email) {
 };
 
 function canSubmitTabEspace(ctx) {
-  // console.log('-> canSubmitTabEspace, ctx =', ctx);
+  console.log('-> canSubmitTabEspace, ctx.categorie  =', ctx.categorie, '  --  validateEmail(ctx.email)  =', validateEmail(ctx.email));
   if (ctx.categorie !== "" && validateEmail(ctx.email) === true) {
     return true
   }
@@ -38,7 +38,9 @@ function canSubmitTabInformations(ctx) {
     // TODO: afficher le message d'erreur "invalid-feedback" 
   }
 
-  if (ctx.long_description === "") {
+  // console.log('-> test textarea =', ctx.long_description.replace('\n', ''));
+  let longDescription = ctx.long_description
+  if (longDescription.replace('\n', '').replace(' ', '') === "") {
     error++
     // TODO: afficher le message d'erreur "invalid-feedback" 
   }
@@ -60,8 +62,16 @@ function canSubmitTabInformations(ctx) {
   return false
 }
 
+function cantSubmitTabInformations(ctx) {
+  let retour = true
+  if (canSubmitTabInformations(ctx) === true) {
+    retour = false
+  }
+  return retour
+}
+
 function informationsChange(ctx) {
-  const retour = false
+  let retour = false
   const testChange = {
     organisation: "",
     short_description: "",
@@ -92,49 +102,38 @@ export const machineCreateEvent = {
     transition('evtInputsEspace', 'showBtNextForGoInformations',
       guard(canSubmitTabEspace)
     ),
-    // dev
-    transition('evtShowTabSummary', 'showTabSummary')
   ),
-  espaceFullData: state(
-    transition('evtInputsEspace', 'showBtNextForGoInformations',
-      guard(canSubmitTabEspace)
-    ),
-    transition('evtShowTabInformtions', 'showTabInformtions',
-      guard(informationsNoChange)
-    )
-    ,
-    transition('evtShowTabInformtions', 'showTabInformtionsFullData',
-      guard(informationsChange)
-    )
-  ),
+  // TODO: remplacer showBtNextForGoInformations par "espaceValide"
   showBtNextForGoInformations: state(
-    transition('evtShowTabInformtions', 'showTabInformtions'),
+    transition('evtShowTabInformtions', 'showTabInformtions',
+      guard(cantSubmitTabInformations)
+    ),
+    transition('evtShowTabInformtions', 'showBtNextForGoSummary',
+      guard(canSubmitTabInformations)
+    ),
     transition('evtInputsEspace', 'espace',
       guard(cantSubmitTabEspace)
     ),
   ),
   showTabInformtions: state(
-    transition('evtReturnEspace', 'espaceFullData'),
-    transition('evtInputsInformations', 'showBtNextForGoSummary',
-      guard(canSubmitTabInformations)
-    )
-  ),
-  showTabInformtionsFullData: state(
-    transition('evtReturnEspace', 'espaceFullData'),
-    transition('evtShowTabSummary', 'showTabSummary'),
+    transition('evtReturnEspace', 'showBtNextForGoInformations'),
     transition('evtInputsInformations', 'showBtNextForGoSummary',
       guard(canSubmitTabInformations)
     )
   ),
   showBtNextForGoSummary: state(
-    // return
-    transition('evtReturnEspace', 'espaceFullData'),
-    // suivant
-    transition('evtShowTabSummary', 'showTabSummary'),
+    // retour
+    transition('evtReturnEspace', 'showBtNextForGoInformations'),
     // tester les entrées
-    transition('evtInputsInformations', 'showTabInformtionsFullData')
+    transition('evtInputsInformations', 'showTabInformtions',
+      guard(cantSubmitTabInformations)
+    ),
+    // aller au résumé / validation
+    transition('evtShowTabSummary', 'showTabSummary',
+      guard(canSubmitTabInformations)
+    )
   ),
   showTabSummary: state(
-    transition('evtReturnInformations', 'showTabInformtionsFullData'),
+    transition('evtReturnInformations', 'showBtNextForGoSummary'),
   )
 }
