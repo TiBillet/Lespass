@@ -1,13 +1,13 @@
 <template>
-  <label :for="getUuid()" data-bs-toggle="tooltip" data-bs-placement="top" :data-bs-title="info" :disabled="disable"
-    :style="disable ? '' : 'cursor:pointer;'">
-    <div class="input-radio-image-content" :class="disable ? 'espace-disabled' : ''">
-      <input :id="getUuid()" type="radio" :name="name" :value="value" class="input-hidden" @input="sendInput($event)"
+  <label :for="'input-radio-image-' + uuidComponent" :disabled="disable"
+    :style="disable ? '' : 'cursor:pointer;'" role="fake-input-radio" :aria-labelledby="label">
+    <div class="input-radio-image-content" :class="classPlus()">
+      <input :id="'input-radio-image-' + uuidComponent" type="radio" :name="name" :value="value" class="input-hidden" @input="sendInput($event)"
         :disabled="disable" :required="validation">
       <font-awesome-icon v-if="icons.length > 0" v-for="(icon, index) in icons" :key="index" :icon="['fas', icon.name]"
         :style="styleIcons(icon.name)" />
-        <div v-if="svg !== null" class="w-100 h-100 d-flex flex-column justify-content-center align-items-center">
-        <img :src="svg.src" alt="image" :style="`width:${svg.size};height:${svg.size};`"/>
+      <div v-if="svg !== null" class="w-100 h-100 d-flex flex-column justify-content-center align-items-center">
+        <img :src="svg.src" alt="image" :style="`width:${svg.size};height:${svg.size};`" />
       </div>
     </div>
     <h6>{{ label }}</h6>
@@ -15,10 +15,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue"
 import { v4 as uuidv4 } from 'uuid'
 
 const emit = defineEmits(['update:modelValue'])
+
+
 const props = defineProps({
   positionIcons: Array,
   info: String,
@@ -29,10 +30,23 @@ const props = defineProps({
   svg: Object,
   disable: Boolean,
   modelValue: String,
-  validation: Boolean
+  validation: Boolean,
+  espaceNumber: Number
 })
 
-let uuid = ''
+const uuidComponent = uuidv4()
+
+function classPlus() {
+  let ctClass = ''
+  if (props.disable === true) {
+    ctClass = 'espace-disabled'
+  }
+  if (props.modelValue === props.value) {
+    ctClass += ' input-radio-image-active'
+  }
+  return ctClass
+}
+
 
 function styleIcons(name) {
   const icon = props.icons.find(item => item.name === name)
@@ -42,16 +56,10 @@ function styleIcons(name) {
     top: icon.top
   }
 }
-function getUuid() {
-  if (uuid === '') {
-    uuid = 'input-radio-image-' + uuidv4()
-  }
-  return uuid
-}
 
 function sendInput(evt) {
   const input = evt.target
-  emit("update:modelValue", input.value);
+  emit("update:modelValue", props.value);
 
   // activation "visuelle" du "input radio image"
   const radios = document.querySelectorAll(`[name="${props.name}"]`)
@@ -61,11 +69,6 @@ function sendInput(evt) {
   input.parentNode.classList.add('input-radio-image-active')
 }
 
-// init tooltip
-onMounted(() => {
-  const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
-  const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
-})
 </script>
 
 <style scoped>
@@ -102,4 +105,5 @@ onMounted(() => {
 .espace-disabled {
   opacity: 0.4;
 }
+
 </style>

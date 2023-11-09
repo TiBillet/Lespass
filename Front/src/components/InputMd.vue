@@ -1,5 +1,5 @@
 <template>
-  <div class="input-group input-group-dynamic mb-4" :class="validation === true ? 'has-validation' : ''">
+  <div class="input-group input-group-dynamic mb-4" :class="classPlus()">
     <label class="form-label" :for="id">{{ label }}</label>
     <input v-if="validation === true" :type="type" class="form-control" :id="id" aria-describedby="basic-addon3" :value="modelValue"
       @input="sendInput($event)" @focusin="focused($event)" @focusout="defocused($event)" role="textbox"
@@ -14,7 +14,7 @@
 </template>
 
 <script setup>
-import { onMounted, onUpdated } from "vue"
+import { onUpdated } from "vue"
 
 const props = defineProps({
   id: String,
@@ -31,10 +31,21 @@ const props = defineProps({
 
 const emit = defineEmits(["update:modelValue"]);
 
+
+function classPlus() {
+  let ctClass = ''
+  if (props.validation === true) {
+    ctClass = 'has-validation'
+  }
+  if (props.modelValue !== '') {
+    ctClass += ' is-filled'
+  }
+  return ctClass
+}
+
 function sendInput(evt) {
   emit("update:modelValue", evt.target.value);
 }
-
 
 function focused(evt) {
   evt.target.parentNode.classList.add('is-focused')
@@ -60,7 +71,6 @@ function isFilled(evt) {
 }
 
 onUpdated(() => {
-  console.log('--> props.id =', props.id);
   const input = document.querySelector('#' + props.id)
   const parent = input.parentNode
   if (input.value != "") {

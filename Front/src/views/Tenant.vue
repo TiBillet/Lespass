@@ -1,166 +1,194 @@
 <template>
-  <CreationStep title="Créer votre espace" sub-title="Sélectionner, éditer un type d'espace."
-    validation-creation-msg="validerCreationPlace">
-    <div id="espace" class="creation-tab-content">
-      <div class="espace-content d-flex flex-column justify-content-around"
-        :style="stripeStep?.action === 'expect_payment_stripe_createTenant' ? 'pointer-events:none;' : 'pointer-events: all;'">
-        <div class="d-flex flex-wrap justify-content-around">
-          <InputRadioImg v-for="(espace, index) in espacesType" :key="index" :label="espace.name" name="type-espace"
-            :value="espace.categorie" :info="espace.description" :svg="espace.svg" :icons="espace.icons"
-            :v-model="formCreatePlace.categorie" @update:model-value="newValue => formCreatePlace.categorie = newValue"
-            style="margin: auto 0;" :style="espace.disable ? 'pointer-events:none;' : 'pointer-events: all;'" />
+  <div class="container-fluid vw-100 vh-100 d-flex justify-content-center align-items-center"
+    :style="`background-image: url('${wizardBackground}');background-position:50% 50%;background-size:cover`">
+    <div class="container">
+      <div class="card creation-card">
+        <div class="creation-header">
+          etape = {{ etape }}
+          <h3 class="creation-title">Créer votre espace</h3>
+          <h5 class="creation-sub-title">Sélectionner, éditer un type d'espace.</h5>
         </div>
-        <InputMd id="login-email" label="Email" msg-error="Merci de renseigner une adresse email valide." type="email"
-          :validation="true" class="w-50 ms-auto me-auto" v-model="formCreatePlace.email" />
 
-      </div>
-    </div>
+        <!-- navigation -->
+        <div class="creation-navigation position-relative">
+          <ul class="nav nav-pills">
+            <li class="nav-item-creation tibillet-no-clickable" data-cible="espace" data-index="0"
+              :style="{ width: itemNavWidth + '%' }">
+              espace
+            </li>
+            <li class="nav-item-creation tibillet-no-clickable" data-cible="informations" data-index="1"
+              :style="{ width: itemNavWidth + '%' }">
+              informations</li>
+            <li class="nav-item-creation tibillet-no-clickable" data-cible="résumé" data-index="2"
+              :style="{ width: itemNavWidth + '%' }">
+              résumé
+            </li>
+          </ul>
+          <!-- bouton mobile -->
+          <div class="bt-nav-creation tibillet-bg-primary" :style="styleBtMobile">Espaces</div>
+        </div> <!-- fin navigation -->
 
-    <div id="informations" class="creation-tab-content"
-      :style="stripeStep?.action === 'expect_payment_stripe_createTenant' ? 'pointer-events:none;' : 'pointer-events: all;'">
-      <div class="espace-content d-flex flex-column">
-        <!-- TODO: Importer vos données de communecté -->
-        <button class="btn bg-gradient-info mt-4 mb-0 h-44px w-50 p-4" type="button">
-          <div class="d-flex flex-row justify-content-center align-items-center h-100 w-100">
-            Importez vos données de <img :src="communecterLogo" class="ms-1" alt="logo communecter">
+        <!-- contenu -->
+        <div class="creation-tabs-content ps-3 pe-3">
+
+          <!-- type d'espace -->
+          <div v-if="['espace', 'espaceFullData', 'showBtNextForGoInformations'].includes(etape)" id="espace"
+            class="creation-tab-content">
+            <div class="espace-content d-flex flex-column justify-content-around">
+              <div class="d-flex flex-wrap justify-content-around">
+                <InputRadioImg v-for="(espace, index) in espacesType" :key="index" :label="espace.name" name="type-espace"
+                  :value="espace.categorie" :info="espace.description" :svg="espace.svg" :icons="espace.icons"
+                  v-model="stateForm.categorie" @update:model-value="newValue => stateForm.categorie = newValue"
+                  style="margin: auto 0;" :espaceNumber="espacesType.length" @click="service.send('evtInputsEspace')" />
+
+              </div>
+              <InputMd id="login-email" label="Email" msg-error="Merci de renseigner une adresse email valide."
+                type="email" :validation="true" class="w-50 ms-auto me-auto" v-model="stateForm.email"
+                @change="service.send('evtInputsEspace')" @blur="service.send('evtInputsEspace')" />
+
+            </div>
+            <!-- footer -->
+            <div class="d-flex flex-row-reverse w-100 creation-footer">
+              <button v-if="['showBtNextForGoInformations'].includes(etape)" type="button"
+                @click="service.send('evtShowTabInformtions')" class="btn btn-creation tibillet-bg-primary" role="button"
+                aria-label="go-informatisons">
+                Suivant
+              </button>
+            </div>
           </div>
-        </button>
 
+          <!-- informations -->
+          <div v-if="['showTabInformtions', 'showBtNextForGoSummary'].includes(etape)"
+            id="informations" class="creation-tab-content">
+            <div class="espace-content d-flex flex-column">
+              <!-- TODO: Importer vos données de communecté -->
+              <button class="btn bg-gradient-info mt-4 mb-0 h-44px w-50 p-4" type="button">
+                <div class="d-flex flex-row justify-content-center align-items-center h-100 w-100">
+                  Importez vos données de <img :src="communecterLogo" class="ms-1" alt="logo communecter">
+                </div>
+              </button>
 
+              <InputMd id="creation-organisation" label="Organisation" height="22.4" color="red"
+                v-model="stateForm.organisation" class="mt-3" @change="service.send('evtInputsInformations')" />
 
-        <InputMd id="creation-organisation" label="Organisation" height="22.4" color="red"
-          v-model="formCreatePlace.organisation" class="mt-3" />
+              <InputMd id="creation-short-description" label="Courte description" v-model="stateForm.short_description"
+                @change="service.send('evtInputsInformations')" />
 
-        <InputMd id="creation-short-description" label="Courte description" v-model="formCreatePlace.short_description" />
+              <TextareaMd id="creation-long-description" label="Votre longue description"
+                v-model="stateForm.long_description" @change="service.send('evtInputsInformations')" />
 
-        <TextareaMd id="creation-long-description" label="Votre longue description"
-          v-model="formCreatePlace.long_description" />
+              <InputFileMd type="file" id="creation-img-url" label="Url image" v-model="stateForm.img" class="mt-2"
+                @change="service.send('evtInputsInformations')" />
 
-        <InputFileMd type="file" id="creation-img-url" label="Url image" v-model="formCreatePlace.img" class="mt-2" />
-
-        <InputFileMd type="file" id="creation-logo-url" label="Url logo" v-model="formCreatePlace.logo" class="mt-2" />
-
-      </div>
-    </div>
-
-    <div id="résumé" class="creation-tab-content"
-      :style="stripeStep?.action === 'expect_payment_stripe_createTenant' ? 'pointer-events:none;' : 'pointer-events: all;'">
-      <div class="espace-content d-flex flex-column">
-        <div class="d-flex flex-row">
-          <div class="d-flex align-items-start w-25">Catégorie</div>
-          <div v-if="formCreatePlace.categorie !== ''" class="resume-valeur">{{
-            getCategorieName(formCreatePlace.categorie) }}</div>
-        </div>
-
-        <div class="d-flex flex-row">
-          <div class="d-flex align-items-start w-25">Email</div>
-          <div class="resume-valeur">{{ formCreatePlace.email }}</div>
-        </div>
-
-        <div class="d-flex flex-row">
-          <div class="d-flex align-items-start w-25">Organisation</div>
-          <div class="resume-valeur">{{ formCreatePlace.organisation }}</div>
-        </div>
-
-        <div class="d-flex flex-row">
-          <div class="d-flex align-items-start w-25">Coute description</div>
-          <div class="resume-valeur">{{ formCreatePlace.short_description }}</div>
-        </div>
-        <div class="d-flex flex-row">
-          <div class="d-flex align-items-start w-25">Longue description</div>
-          <div class="resume-valeur">{{ formCreatePlace.long_description }}</div>
-        </div>
-        <div class="d-flex flex-row">
-          <div class="d-flex align-items-start w-25">Url de l'image</div>
-          <div v-if="formCreatePlace.img_url !== undefined && formCreatePlace.img !== null" class="resume-valeur">{{
-            formCreatePlace.img.name }}</div>
-        </div>
-        <div class="d-flex flex-row">
-          <div class="d-flex align-items-start w-25">Url du logo</div>
-          <div v-if="formCreatePlace.logo !== undefined && formCreatePlace.logo !== null" class="resume-valeur">{{
-            formCreatePlace.logo.name }}</div>
-        </div>
-        <h3 class="mt-4" style="white-space: pre-line">Aurez vous besoin de récolter de l'argent ? (adhésion,
-          billetterie, crowdfundind, caisse enregistreuse, cashless)</h3>
-
-        <div class="d-flex flex-row justify-content-center">
-          <div class="d-flex flex-row">
-            <input type="radio" id="money" name="coin" :value="true" v-model="coin"
-              :checked="coin === true ? true : false" />
-            <label for="money">Oui</label>
+              <InputFileMd type="file" id="creation-logo-url" label="Url logo" v-model="stateForm.logo" class="mt-2"
+                @change="service.send('evtInputsInformations')" />
+            </div>
+            <!-- footer -->
+            <div class="creation-footer d-flex justify-content-between">
+              <button class="btn btn-creation btn-previous" @click="service.send('evtReturnEspace')">
+                Précédent
+              </button>
+              <button v-if="['showBtNextForGoSummary'].includes(etape)"
+                class="btn btn-creation tibillet-bg-primary" role="button" aria-label="go-resume"
+                @click="service.send('evtShowTabSummary')">
+                Suivant
+              </button>
+            </div>
           </div>
-          <div class="d-flex flex-row ms-4">
-            <input type="radio" id="no-money" name="coin" :value="false" v-model="coin"
-              :checked="coin === false ? true : false" />
-            <label for="no-money">Non</label>
+
+          <!-- Résumé / Summary -->
+          <div v-if="['showTabSummary'].includes(etape)" id="résumé" class="creation-tab-content">
+            <div class="espace-content d-flex flex-column">
+              <div class="d-flex flex-row">
+                <div class="d-flex align-items-start w-25">Catégorie</div>
+                <div class="resume-valeur">
+                  {{ espacesType.find(espace => espace.categorie === stateForm.categorie).name }}
+                </div>
+              </div>
+
+              <div class="d-flex flex-row">
+                <div class="d-flex align-items-start w-25">Email</div>
+                <div class="resume-valeur">{{ stateForm.email }}</div>
+              </div>
+
+              <div class="d-flex flex-row">
+                <div class="d-flex align-items-start w-25">Organisation</div>
+                <div class="resume-valeur">{{ stateForm.organisation }}</div>
+              </div>
+
+              <div class="d-flex flex-row">
+                <div class="d-flex align-items-start w-25">Coute description</div>
+                <div class="resume-valeur">{{ stateForm.short_description }}</div>
+              </div>
+              <div class="d-flex flex-row">
+                <div class="d-flex align-items-start w-25">Longue description</div>
+                <div class="resume-valeur">{{ stateForm.long_description }}</div>
+              </div>
+
+              <div class="d-flex flex-row">
+                <div class="d-flex align-items-start w-25">Url de l'image</div>
+                <div class="resume-valeur">
+                  {{ stateForm.img.name }}
+                </div>
+              </div>
+
+              <div class="d-flex flex-row">
+                <div class="d-flex align-items-start w-25">Url du logo</div>
+                <div class="resume-valeur">
+                  {{ stateForm.logo.name }}
+                </div>
+              </div>
+            </div>
+            <!-- footer -->
+            <div class="creation-footer d-flex justify-content-between">
+              <button class="btn btn-creation btn-previous" @click="service.send('evtReturnInformations')">
+                Précédent
+              </button>
+              <button class="btn btn-creation tibillet-bg-primary" role="button" aria-label="go-resume"
+                @click="createTenant()">
+                Validation
+              </button>
+            </div>
           </div>
-        </div>
+
+        </div> <!-- fin du contenu -->
       </div>
     </div>
-
-    <div id="Validation" class="creation-tab-content">
-      <!-- <div>coin = {{ coin }} -- etapeValidation = {{ etapeValidation }} </div> stripeStep = {{ stripeStep }} -->
-      <div class="espace-content d-flex flex-column justify-content-center align-items-center">
-        <button v-if="etapeValidation === 'creationEspace' && (stripeStep === undefined || stripeStep.action === null)"
-          type="button" class="btn btn-creation tibillet-bg-primary align-self-center text-white"
-          @click="validerCreationPlace()">
-          Valider la création de son espace
-        </button>
-
-        <button
-          v-if="coin === true && (etapeValidation === 'creationCompteStripe' || stripeStep?.action === 'expect_payment_stripe_createTenant')"
-          type="button" class="btn btn-creation tibillet-bg-primary align-self-center text-white"
-          @click="CreationComteStripe()">
-          Créer votre compte stripe
-        </button>
-
-        <button v-if="etapeValidation === 'creationCompteStripe'" type="button"
-          class="btn btn-creation tibillet-bg-secondary align-self-center text-white" @click="resetState()">
-          Annuler opération
-        </button>
-      </div>
-    </div>
-
-  </CreationStep>
+  </div>
 </template>
 
 <script setup>
 console.log("-> Tenants.vue");
-
-import { ref } from "vue"
-
+import { ref, onMounted } from "vue"
 import { useSessionStore } from "../stores/session";
-import { setLocalStateKey, getLocalStateKey } from '../communs/storeLocal.js'
-import { useRouter } from 'vue-router'
-
-import CreationStep from "../components/CreationStep.vue";
-import InputMd from "../components/InputMd.vue";
-import InputFileMd from "../components/InputFileMd.vue";
-import TextareaMd from "../components/TextareaMd.vue";
-import InputRadioImg from "../components/InputRadioImg.vue";
-
-// svg et image
-import artistSvg from "../assets/img/artist.svg";
-import homeSvg from "../assets/img/home.svg";
+// fond du wizard
+import wizardBackground from "../assets/img/wizard-profile.jpg";
+// communecte
 import communecterLogo from "../assets/img/communecterLogo_31x28.png"
-
-
-let coin = ref(false)
-let etapeValidation = ref('creationEspace')
+// svg et image
+import homeSvg from "../assets/img/home.svg";
+// composants
+import InputMd from "../components/InputMd.vue";
+import InputRadioImg from "../components/InputRadioImg.vue";
+import TextareaMd from "../components/TextareaMd.vue";
+import InputFileMd from "../components/InputFileMd.vue";
+// machine
+import { createMachine, interpret } from 'robot3';
+import { machineCreateEvent } from "../communs/machineCreateEvent.js"
 
 const sessionStore = useSessionStore();
-const { setLoadingValue, updateHeader, getAccessToken } = sessionStore;
+const { updateHeader, setLoadingValue } = sessionStore;
 
-const router = useRouter()
-
-const iconsEspaceArtistique = [
-  { name: "paint-brush", left: "20px", top: "20px" },
-  { name: "music", left: "66px", top: "20px" },
-  { name: "wheat-awn", left: "40px", top: "50px" },
-  { name: "camera", left: "56px", top: "50px" },
-  { name: "image", left: "20px", top: "76px" },
-  { name: "film", left: "76px", top: "76px" }
-]
+// les différents types d'espace à créer
+const espacesType = [{
+  name: "Lieu / association",
+  description: "Pour tous lieu ou association ...",
+  icons: [],
+  svg: { src: homeSvg, size: '4rem' },
+  colorText: "white",
+  disable: false,
+  categorie: "S"
+}];
 
 // les données du formulaire
 const initStateForm = {
@@ -171,343 +199,204 @@ const initStateForm = {
   logo: null,
   categorie: "",
   email: "",
-  stripe: false
+  stripe: true,
+  espacesType
 }
+let stateForm = initStateForm
 
-let formCreatePlace = ref(initStateForm)
-/*
-const stripeStep = getLocalStateKey("stripeStep");
-console.log('stripeStep.formCreatePlace =', stripeStep?.formCreatePlace);
-if (stripeStep && stripeStep.action === 'expect_payment_stripe_createTenant') {
-  formCreatePlace.value = stripeStep.formCreatePlace
-  etapeValidation.value = "creationCompteStripe"
-  coin.value = true
+const contextMachine = () => (stateForm);
+
+const initStyleBtMobile = {
+  width: "10%",
+  transform: "translate3d(-8px, 0px, 0px)",
+  transition: "all 0.5s cubic-bezier(0.29, 1.42, 0.79, 1) 0s"
 }
-*/
+let styleBtMobile = ref(initStyleBtMobile);
 
-// les différents types d'espace à créer
-const espacesType = [
-  {
-    name: "Artistique",
-    description: "Pour tous projet artistique ...",
-    icons: [],
-    svg: { src: artistSvg, size: '4rem' },
-    colorText: "white",
-    disable: false,
-    categorie: "A",
-  },
-  {
-    name: "Lieu / association",
-    description: "Pour tous lieu ou association ...",
-    icons: [],
-    svg: { src: homeSvg, size: '4rem' },
-    colorText: "white",
-    disable: false,
-    categorie: "S"
-  }/*,
-  {
-    name: "Festival",
-    description: "Le Lorem Ipsum est simplement du faux texte employé dans la composition et la mise en page avant impression. Le Lorem Ipsum.",
-    icons: [{ name: "music", left: "40px", top: "40px" }, { name: "people-group", left: "56px", top: "50px" }],
-    svg: null,
-    colorText: "white",
-    disable: true,
-    categorie: "C"
-  },
-  {
-    name: "Producteur",
-    description: "On sait depuis longtemps que travailler avec du texte lisible et contenant du sens est source de distractions, et empêche de se concentrer sur la mise en page elle-même.",
-    icons: [{ name: "building", left: "46px", top: "46px" }],
-    svg: null,
-    colorText: "white",
-    disable: true,
-    categorie: "P"
+let itemNavWidth = ref(0);
+let etape = ref('espace')
+
+function moveTitle(step) {
+  // console.log('-> moveTitle, etape =', step);
+  const convStepToIndex = {
+    showTabInformtions: 1,
+    showBtNextForGoSummary: 1,
+    espace: 0,
+    showBtNextForGoInformations: 0,
+    showTabSummary: 2
   }
-  */
-];
+  const indexTitle = convStepToIndex[step]
+  if (indexTitle !== undefined) {
+    // get name
+    const name = document.querySelector(`li[class~="nav-item-creation"][data-index="${indexTitle}"]`).innerText
+    // replace name
+    document.querySelector('div[class~="bt-nav-creation"]').innerText = name;
+    // pour l'animation du bouton
+    const nbItem = document.querySelectorAll(".creation-navigation li").length;
+    const menuWidth = document.querySelector('ul[class="nav nav-pills"]').offsetWidth
+    const navWidth = menuWidth / nbItem;
+    let decX = 0;
+    if (indexTitle === 0) {
+      decX = -8;
+    }
+    if (indexTitle + 1 === nbItem) {
+      decX = 8;
+    }
+    // actualise la position du bouton
+    styleBtMobile.value.transform = `translate3d(${decX + indexTitle * navWidth}px, 0px, 0px)`;
+  }
+}
+
+
+const machine = createMachine(machineCreateEvent, contextMachine)
+const service = interpret(machine, () => {
+  const ctx = service.machine.context()
+  etape.value = service.machine.current
+  console.log('-> Etape :', etape.value);
+  console.log('-> ctx :', ctx);
+  console.log('-----------------------------------------------------------')
+  // position titre
+  moveTitle(etape.value)
+
+  // 
+});
+
+// dev
+window.serice = service
 
 updateHeader(null);
 
-function resetState() {
-  setLocalStateKey("stripeStep", { action: null });
-  formCreatePlace.value = initStateForm
-  coin.value = false
-  etapeValidation.value = 'creationEspace'
+function test() {
+  console.log('stateForm =', JSON.stringify(stateForm, null, 2));
 }
 
-function getCategorieName(categorie) {
-  console.log('-> getCategorieName =', categorie);
-  if (categorie !== undefined) {
-    return espacesType.find(espace => espace.categorie === categorie).name
-  } else {
-    return ''
-  }
-}
-function cursorOff(state) {
-  if (state === true) {
-    return "";
-  } else {
-    return "cursor: pointer;";
-  }
+function init() {
+  const contents = document.querySelectorAll(".creation-navigation li");
+  const itemsNav = contents.length;
+  itemNavWidth.value = (100 / itemsNav).toFixed(3);
+  styleBtMobile.value.width = itemNavWidth.value + "%";
 }
 
-document.addEventListener("validerCreation", ({detail}) => {
-  console.log('detail =', detail);
-})
+// initialise le menu de navigation du composant
+onMounted(() => {
+  init()
+});
 
-/*
-async function CreationComteStripe() {
-  // enregistre l'email dans le storeUser
-  console.log("-> goStripe Onboard");
-
-  const api = `/api/onboard/`;
+function createTenant() {
+  console.log('Création du tenant !');
   try {
-    setLoadingValue(true);
+    // lieu / association
+    let urlApi = "/api/place/";
 
-    // init étape creation stripe enregistrement en local(long durée)
-
-    const updateFormCreatePlace = {
-      organisation: formCreatePlace.value.organisation,
-      short_description: formCreatePlace.value.short_description,
-      long_description: formCreatePlace.value.long_description,
-      img_url: { name: formCreatePlace.value.img_url.name },
-      logo: { name: formCreatePlace.value.logo.name },
-      categorie: formCreatePlace.value.categorie
+    // artiste
+    if (stateForm.categorie === "A") {
+      urlApi = "/api/artist/";
     }
-    // const creationStepData = JSON.parse(JSON.stringify(formCreatePlace.value))
-    setLocalStateKey('stripeStep', { action: 'expect_payment_stripe_createTenant', formCreatePlace: updateFormCreatePlace, nextPath: '/' })
 
-    const response = await fetch(api, {
-      method: "GET",
-      cache: "no-cache",
-      headers: {
-        "Content-Type": "application/json"
-      }
-    });
-    const retour = await response.json();
-    console.log("retour =", retour);
-    if (response.status === 202) {
-      location.href = retour;
-    } else {
-      throw new Error(`Erreur goStripe Onboard'`);
-    }
-  } catch (erreur) {
-    console.log("-> validerLogin, erreur :", erreur);
+    // spinner on
+    setLoadingValue(true)
+
+    const formData = new FormData();
+    formData.append('organisation', stateForm.organisation);
+    formData.append('short_description', stateForm.short_description);
+    formData.append('long_description', stateForm.long_description);
+    formData.append('email', stateForm.email);
+    formData.append('stripe', stateForm.stripe);
+    formData.append('logo', stateForm.logo);
+    formData.append('img', stateForm.img);
+    console.log('formData =', formData);
+
+  } catch (error) {
+    setLoadingValue(false)
+    console.log(error);
     emitter.emit("toastSend", {
-      title: "validerLogin, erreur :",
-      contenu: erreur,
+      title: "Erreur",
+      contenu: error,
       typeMsg: "danger",
       delay: 8000
     });
-  } finally {
-    setLoadingValue(false);
-  }
-}
-*/
-
-// validation
-async function validerCreationPlace() {
-  let erreurs = [];
-
-  if (formCreatePlace.value.categorie === "") {
-    erreurs.push("Aucun type d'espace n'a été Selectionné !");
-  }
-
-  if (formCreatePlace.value.organisation === "") {
-    erreurs.push(`Votre "organistation" n'a pas été renseignée !`);
-  }
-
-  if (formCreatePlace.value.short_description === "") {
-    erreurs.push(`La courte description doit être renseignée !`);
-  }
-
-  if (formCreatePlace.value.img === null) {
-    erreurs.push(`Veuillez sélectionner une image !`);
-  }
-
-  if (formCreatePlace.value.logo === null) {
-    erreurs.push(`Veuillez sélectionner un logo !`);
-  }
-
-  console.log("formCreatePlace.value =", formCreatePlace.value);
-
-  if (erreurs.length > 0) {
-    erreurs.forEach((erreur) => {
-      emitter.emit("toastSend", {
-        title: "Attention",
-        contenu: erreur,
-        typeMsg: "warning",
-        delay: 6000
-      });
-    });
-  }
-
-  if (erreurs.length === 0) {
-    try {
-      // lieu / association
-      let urlApi = "/api/place/";
-
-      // artiste
-      if (formCreatePlace.value.categorie === "A") {
-        urlApi = "/api/artist/";
-      }
-
-      // spinner on
-      setLoadingValue(true)
-
-      const formData = new FormData();
-      formData.append('organisation', formCreatePlace.value.organisation);
-      formData.append('short_description', formCreatePlace.value.short_description);
-      formData.append('long_description', formCreatePlace.value.long_description);
-      formData.append('email', formCreatePlace.value.email);
-      formData.append('stripe', coin.value);
-      formData.append('logo', formCreatePlace.value.logo);
-      formData.append('img', formCreatePlace.value.img);
-      console.log('formData =', formData);
-
-      const response = await fetch(urlApi, {
-        method: "post",
-        headers: {
-          Accept: "application/json"
-        },
-        body: formData
-      });
-      console.log("response =", response);
-      const retour = await response.json();
-
-      console.log('retour ' + urlApi + ' =', retour);
-      console.log(' type retour =', typeof (retour));
-
-      if (response.status === 409) {
-        throw new Error(retour.join(' - '));
-      }
-      if (response.status === 201) {
-        console.log('coin =', typeof (coin.value));
-        if (coin.value === false) {
-          setLoadingValue(false)
-          // message de succès , non monétaire
-          const typeEspace = espacesType.find(espace => espace.categorie === formCreatePlace.value.categorie).name
-
-          router.push({ path: '/' })
-
-          const msg = `
-            <p>La mise en place de votre espace "${formCreatePlace.value.organisation}" de type "${typeEspace}" est en pause.
-              Pour finalisez sa création, veuillez confirmer par l'émail qui vous êtes envoyé.
-              Attention vérifier dans les émails en quarantaines / indésirables !</p>
-            `
-          emitter.emit('modalMessage', {
-            titre: 'Validation',
-            typeMsg: 'success',
-            contenu: msg,
-            dynamic: true // pour insérer du html
-          })
-        }
-        if (coin.value === true) {
-          // monétaire
-          // etapeValidation.value = "creationCompteStripe"
-          console.log("-> monétaire, go stripe, url =", retour.stripe_onboard);
-          setLocalStateKey('stripeStep', { action: 'expect_payment_stripe_createTenant', uuidTenant: retour.uuid, nextPath: '/' })
-          //location.href = retour.stripe_onboard;
-        }
-      }
-      /*
-      console.log('formCreatePlace.value =', formCreatePlace.value);
-      const response = await fetch(urlApi, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          // Authorization: "Bearer " + getAccessToken
-        },
-        body: JSON.stringify(formCreatePlaceObject)
-      });
-      console.log("response =", response);
-      const retour = await response.json();
-
-      console.log('retour '+urlApi+ ' =', retour);
-      // le tenant existe déjà
-      if (response.status === 409) {
-        throw new Error(retour.join(' - '));
-      }
-      if (response.status === 201) {
-        // message de succès , non monétaire
-        const typeEspace = espacesType.find(espace => espace.categorie === retour.categorie).name
-        setLoadingValue(false)
-
-        console.log('coin =', typeof (coin.value));
-        if (coin.value === false) {
-          router.push({ path: '/' })
-        }
-        const msg = `
-            <div>Votre espace "${retour.organisation}" de type "${typeEspace}" a été créé.</div>
-            <div>Lien: ${retour.domain}</div>`
-        emitter.emit('modalMessage', {
-          titre: 'Validation',
-          typeMsg: 'success',
-          contenu: msg,
-          dynamic: true // pour insérer du html
-        })
-        if (coin.value === true) {
-          // monétaire
-          etapeValidation.value = "creationCompteStripe"
-        }
-      }
-      console.log("retour =", retour);
-      */
-    } catch (error) {
-      setLoadingValue(false)
-      console.log(error);
-      emitter.emit("toastSend", {
-        title: "Erreur",
-        contenu: error,
-        typeMsg: "danger",
-        delay: 8000
-      });
-    }
   }
 }
 </script>
 
 <style scoped>
+.creation-card {
+  min-height: 410px;
+  box-shadow: 0 16px 24px 2px rgba(0, 0, 0, 0.14), 0 6px 30px 5px rgba(0, 0, 0, 0.12), 0 8px 10px -5px rgba(0, 0, 0, 0.2);
+}
+
+.creation-card,
+.creation-header {
+  text-align: center;
+  padding: 25px 0 35px 0;
+}
+
+.creation-title {
+  font-weight: 700;
+}
+
+.creation-sub-title {
+  font-size: 1.2em;
+  font-weight: 200;
+}
+
+.creation-tabs-content {
+  --creation-content-height: 530px;
+  height: var(--creation-content-height);
+  padding: 0 6px;
+}
+
 .creation-tab-content {
-  --creation-content-height: 452px;
-  min-height: var(--creation-content-height);
-  max-height: var(--creation-content-height);
-  display: none;
+  width: 100%;
+  height: var(--creation-content-height);
+  margin: 0;
+  padding: 0;
 }
 
-
-.espace-card,
-.espace-card-sub {
-  width: 200px;
-  height: 200px;
-}
-
-.espace-card {
-  border-radius: 4px;
-  box-shadow: 0 16px 26px -10px rgba(244, 67, 54, 0.56), 0 4px 25px 0 rgba(0, 0, 0, 0.12), 0 8px 10px -5px rgba(244, 67, 54, 0.2);
-  margin-bottom: 6px;
-  overflow: hidden;
-  margin-top: 6px;
-  position: relative;
-}
-
-.espace-card-sub {
-  position: absolute;
-  top: 0;
-  left: 0;
+.nav-item-creation {
+  border: 0;
+  line-height: 18px;
+  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 500;
+  min-width: 100px;
+  text-align: center;
+  color: #555;
+  padding: 12px;
+  cursor: pointer;
 }
 
 .espace-content {
   width: 100%;
-  min-height: var(--creation-content-height);
-  max-height: var(--creation-content-height);
+  height: calc(var(--creation-content-height) - 10%);
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: scroll;
+  padding: 0 0 6px 0;
+}
+
+.creation-footer {
+  width: 100%;
+  height: calc(var(--creation-content-height) - 90%);
+}
+
+.tibillet-no-display {
+  display: none;
+}
+
+.tibillet-no-clickable {
+  -webkit-user-select: none;
+  /* Safari, Chrome */
+  -khtml-user-select: none;
+  /* Konqueror */
+  -moz-user-select: none;
+  /* Firefox */
+  user-select: none;
+  /* CSS3 */
+  pointer-events: none
 }
 
 .btn-creation {
   font-size: 12px;
-  line-height: 12px;
   text-transform: uppercase;
   border-radius: 4px;
   color: #ffffff;
@@ -515,6 +404,25 @@ async function validerCreationPlace() {
   font-weight: bold;
   box-shadow: 0 16px 26px -10px rgba(244, 67, 54, 0.56), 0 4px 25px 0 rgba(0, 0, 0, 0.12), 0 8px 10px -5px rgba(244, 67, 54, 0.2);
   min-width: 140px;
-  padding: 1.3rem;
+}
+
+.btn-previous {
+  background-color: #999;
+  color: #fff;
+}
+
+.bt-nav-creation {
+  position: absolute;
+  left: 0;
+  top: -2px;
+  text-align: center;
+  padding: 14px 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  border-radius: 4px;
+  color: #ffffff;
+  font-weight: bold;
+  box-shadow: 0 16px 26px -10px rgba(244, 67, 54, 0.56), 0 4px 25px 0 rgba(0, 0, 0, 0.12), 0 8px 10px -5px rgba(244, 67, 54, 0.2);
+  min-width: 140px;
 }
 </style>
