@@ -446,9 +446,11 @@ class WalletValidator:
 
         self.errors = []
 
+        # Check carte coté serveur cashless
+        self.carte_serveur_cashless: dict = check_carte_serveur_cashless(config, uuid)
+
         # Renvoi une carte cashless ou une erreur 404 si le tenant ne correspond pas à l'adresse
         self.carte_local: CarteCashless = check_carte_local(uuid)
-        self.carte_serveur_cashless: dict = check_carte_serveur_cashless(config, uuid)
 
         self.user = self._user()
 

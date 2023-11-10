@@ -146,8 +146,6 @@ services:
     volumes:
       - ./nginx:/etc/nginx/conf.d
 
-# pour demo : jturbeaux@pm.me / eiXom5mo
-
 networks:
   frontend:
     external: true
