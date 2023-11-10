@@ -32,7 +32,7 @@
         <div class="creation-tabs-content ps-3 pe-3">
 
           <!-- type d'espace -->
-          <form @submit.prevent="" class="needs-validation" novalidate>
+          <form @submit.prevent="" @keydown.enter="$event.preventDefault()" class="needs-validation" novalidate>
             <div v-if="['espace', 'espaceNoValidate'].includes(etape)" id="espace" class="creation-tab-content">
               <div class="espace-content d-flex flex-column justify-content-around">
                 <div class="d-flex flex-wrap justify-content-around">
@@ -57,7 +57,7 @@
           </form>
 
           <!-- informations -->
-          <form @submit.prevent="" class="needs-validation" novalidate>
+          <form @submit.prevent="" @keydown.enter="$event.preventDefault()" class="needs-validation" novalidate>
             <div v-if="['informations', 'informationsNoValidate'].includes(etape)" id="informations"
               class="creation-tab-content">
               <div class="espace-content d-flex flex-column">

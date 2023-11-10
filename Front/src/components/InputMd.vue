@@ -1,7 +1,7 @@
 <template>
   <div class="input-group input-group-dynamic mb-4" :class="classPlus()">
     <label class="form-label" :for="id">{{ label }}</label>
-    <input :type="type" class="form-control" :id="id" aria-describedby="basic-addon3" :value="modelValue"
+    <input :type="type" class="form-control tibillet-input-md" :id="id" aria-describedby="basic-addon3" :value="modelValue"
       @input="sendInput($event)" @focusin="focused($event)" @focusout="defocused($event)" role="textbox"
       :aria-label="msgRole" @keyup="isFilled($event)" :required="validation">
     <div class="invalid-feedback" role="heading" :aria-label="msgError">{{ msgError }}</div>
@@ -78,4 +78,8 @@ onUpdated(() => {
 
 <style>
 /* css de material-kit 2 et bootstrap 5.3.2 */
+.tibillet-input-md {
+  margin-left: 0 !important;
+  padding-left: 2px !important;
+}
 </style>
