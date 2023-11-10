@@ -166,7 +166,7 @@
 </template>
 
 <script setup>
-console.log("-> Tenants.vue");
+// console.log("-> Tenants.vue");
 import { ref, onMounted, onBeforeUnmount } from "vue"
 // store
 import { useSessionStore } from "../stores/session";
@@ -266,10 +266,8 @@ const machine = createMachine(machineCreateEvent, contextMachine)
 const service = interpret(machine, () => {
   const ctx = service.machine.context()
   etape.value = service.machine.current
-  console.log('-> Etape :', etape.value);
+  // console.log('-> Etape :', etape.value);
   // console.log('-> ctx :', ctx);
-  // console.log('-----------------------------------------------------------')
-  // position titre
   moveTitle(etape.value)
 });
 

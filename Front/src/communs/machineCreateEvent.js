@@ -39,10 +39,8 @@ function cantSubmitEspace(ctx) {
 }
 
 function canSubmitInformations(ctx) {
-  console.log('--------------------------------------------------');
-  console.log('-> canSubmitInformations, ctx =', ctx);
+  // console.log('-> canSubmitInformations, ctx =', ctx);
   let error = 0
-  console.log('-> canSubmitInformations.');
 
   const organisation = document.querySelector(`input[role="textbox"][aria-label="nom de l'organisation"]`).parentNode.querySelector('.invalid-feedback')
   const shortDescription = document.querySelector(`input[role="textbox"][aria-label="courte description"]`).parentNode.querySelector('.invalid-feedback')
