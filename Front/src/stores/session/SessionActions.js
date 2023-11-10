@@ -532,7 +532,7 @@ export const sessionActions = {
     // attente stripe create tenant
     if (stripeStep.action === "expect_payment_stripe_createTenant") {
       messageValidation = `
-          <h4>La création de votre expace "${stripeStep.formCreatePlace.organisation}" OK.</h4>
+          <h4>La création de votre expace "${stripeStep.organisation}" OK.</h4>
           <h4>Un émail vous est envoyé pour valider cette étape.</h4>
           `;
       messageErreur = `Retour stripe pour la création de tenant:`;

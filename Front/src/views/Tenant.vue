@@ -32,72 +32,73 @@
         <div class="creation-tabs-content ps-3 pe-3">
 
           <!-- type d'espace -->
-          <div v-if="['espace', 'espaceFullData', 'showBtNextForGoInformations'].includes(etape)" id="espace"
-            class="creation-tab-content">
-            <div class="espace-content d-flex flex-column justify-content-around">
-              <div class="d-flex flex-wrap justify-content-around">
-                <InputRadioImg v-for="(espace, index) in espacesType" :key="index" :label="espace.name" name="type-espace"
-                  :value="espace.categorie" :info="espace.description" :svg="espace.svg" :icons="espace.icons"
-                  v-model="stateForm.categorie" @update:model-value="newValue => stateForm.categorie = newValue"
-                  style="margin: auto 0;" :espaceNumber="espacesType.length" @click="service.send('evtInputsEspace')" />
-
+          <form @submit.prevent="" class="needs-validation" novalidate>
+            <div v-if="['espace', 'espaceNoValidate'].includes(etape)" id="espace" class="creation-tab-content">
+              <div class="espace-content d-flex flex-column justify-content-around">
+                <div class="d-flex flex-wrap justify-content-around">
+                  <InputRadioImg v-for="(espace, index) in espacesType" :key="index" :label="espace.name"
+                    name="type-espace" :value="espace.categorie" :info="espace.description" :svg="espace.svg"
+                    :icons="espace.icons" v-model="stateForm.categorie"
+                    @update:model-value="newValue => stateForm.categorie = newValue" style="margin: auto 0;"
+                    :espaceNumber="espacesType.length" msg-error="Sélectionner un espace." />
+                </div>
+                <InputMd id="login-email" label="Email" msg-error="Merci de renseigner une adresse email valide."
+                  type="email" :validation="true" class="w-50 ms-auto me-auto" v-model="stateForm.email"
+                  msg-role="email pour le login" />
               </div>
-              <InputMd id="login-email" label="Email" msg-error="Merci de renseigner une adresse email valide."
-                type="email" :validation="true" class="w-50 ms-auto me-auto" v-model="stateForm.email"
-                @change="service.send('evtInputsEspace')" @blur="service.send('evtInputsEspace')" />
-
+              <!-- footer -->
+              <div class="d-flex flex-row-reverse w-100 creation-footer">
+                <button type="button" @click="service.send('evtValidateEspace')"
+                  class="btn btn-creation tibillet-bg-primary" role="button" aria-label="go-informatisons">
+                  Suivant
+                </button>
+              </div>
             </div>
-            <!-- footer -->
-            <div class="d-flex flex-row-reverse w-100 creation-footer">
-              <button v-if="['showBtNextForGoInformations'].includes(etape)" type="button"
-                @click="service.send('evtShowTabInformtions')" class="btn btn-creation tibillet-bg-primary" role="button"
-                aria-label="go-informatisons">
-                Suivant
-              </button>
-            </div>
-          </div>
+          </form>
 
           <!-- informations -->
-          <div v-if="['showTabInformtions', 'showBtNextForGoSummary'].includes(etape)"
-            id="informations" class="creation-tab-content">
-            <div class="espace-content d-flex flex-column">
-              <!-- TODO: Importer vos données de communecté -->
-              <button class="btn bg-gradient-info mt-4 mb-0 h-44px w-50 p-4" type="button">
-                <div class="d-flex flex-row justify-content-center align-items-center h-100 w-100">
-                  Importez vos données de <img :src="communecterLogo" class="ms-1" alt="logo communecter">
-                </div>
-              </button>
+          <form @submit.prevent="" class="needs-validation" novalidate>
+            <div v-if="['informations', 'informationsNoValidate'].includes(etape)" id="informations"
+              class="creation-tab-content">
+              <div class="espace-content d-flex flex-column">
+                <!-- TODO: Importer vos données de communecté -->
+                <button class="btn bg-gradient-info mt-4 mb-0 h-44px w-50 p-4" type="button">
+                  <div class="d-flex flex-row justify-content-center align-items-center h-100 w-100">
+                    Importez vos données de <img :src="communecterLogo" class="ms-1" alt="logo communecter">
+                  </div>
+                </button>
+                <InputMd id="creation-organisation" label="Organisation" msg-error="Renseigner le nom del'organistation."
+                  :validation="true" v-model="stateForm.organisation" class="mt-3" msg-role="nom de l'organisation" />
 
-              <InputMd id="creation-organisation" label="Organisation" height="22.4" color="red"
-                v-model="stateForm.organisation" class="mt-3" @change="service.send('evtInputsInformations')" />
+                <InputMd id="creation-short-description" label="Courte description"
+                  v-model="stateForm.short_description" msg-error="Renseigner la courte description" 
+                  msg-role="courte description" :validation="true" />
 
-              <InputMd id="creation-short-description" label="Courte description" v-model="stateForm.short_description"
-                @change="service.send('evtInputsInformations')" />
+                <TextareaMd id="creation-long-description" label="Votre longue description"
+                  v-model="stateForm.long_description" />
 
-              <TextareaMd id="creation-long-description" label="Votre longue description"
-                v-model="stateForm.long_description" @change="service.send('evtInputsInformations')" />
+                <InputFileMd type="file" id="creation-img" label="Url image" v-model="stateForm.img" class="mt-2" 
+                msg-error="Sélectionner une image." msg-role="Sélectionner une image" :validation="true" />
 
-              <InputFileMd type="file" id="creation-img-url" label="Url image" v-model="stateForm.img" class="mt-2"
-                @change="service.send('evtInputsInformations')" />
-
-              <InputFileMd type="file" id="creation-logo-url" label="Url logo" v-model="stateForm.logo" class="mt-2"
-                @change="service.send('evtInputsInformations')" />
+                <InputFileMd type="file" id="creation-logo-url" label="Url logo" v-model="stateForm.logo" class="mt-2"
+                msg-error="Sélectionner un logo." msg-role="Sélectionner un logo" :validation="true"/>
+                
+              </div>
+              <!-- footer -->
+              <div class="creation-footer d-flex justify-content-between">
+                <button class="btn btn-creation btn-previous" @click="service.send('evtReturnEspace')">
+                  Précédent
+                </button>
+                <button class="btn btn-creation tibillet-bg-primary" role="button" aria-label="go-resume"
+                  @click.prevent="service.send('evtValidateInformations')">
+                  Suivant
+                </button>
+              </div>
             </div>
-            <!-- footer -->
-            <div class="creation-footer d-flex justify-content-between">
-              <button class="btn btn-creation btn-previous" @click="service.send('evtReturnEspace')">
-                Précédent
-              </button>
-              <button v-if="['showBtNextForGoSummary'].includes(etape)"
-                class="btn btn-creation tibillet-bg-primary" role="button" aria-label="go-resume"
-                @click="service.send('evtShowTabSummary')">
-                Suivant
-              </button>
-            </div>
-          </div>
+          </form>
 
           <!-- Résumé / Summary -->
-          <div v-if="['showTabSummary'].includes(etape)" id="résumé" class="creation-tab-content">
+          <div v-if="['summary'].includes(etape)" id="résumé" class="creation-tab-content">
             <div class="espace-content d-flex flex-column">
               <div class="d-flex flex-row">
                 <div class="d-flex align-items-start w-25">Catégorie</div>
@@ -138,6 +139,13 @@
                   {{ stateForm.logo.name }}
                 </div>
               </div>
+
+              <div class="d-flex flex-row">
+                <div class="d-flex align-items-start w-25">Stripe</div>
+                <div class="resume-valeur">
+                  {{ stateForm.stripe === true ? 'oui' : 'non' }}
+                </div>
+              </div>
             </div>
             <!-- footer -->
             <div class="creation-footer d-flex justify-content-between">
@@ -159,8 +167,10 @@
 
 <script setup>
 console.log("-> Tenants.vue");
-import { ref, onMounted } from "vue"
+import { ref, onMounted, onBeforeUnmount } from "vue"
+// store
 import { useSessionStore } from "../stores/session";
+import { setLocalStateKey } from '../communs/storeLocal.js'
 // fond du wizard
 import wizardBackground from "../assets/img/wizard-profile.jpg";
 // communecte
@@ -216,14 +226,19 @@ let styleBtMobile = ref(initStyleBtMobile);
 let itemNavWidth = ref(0);
 let etape = ref('espace')
 
+function test() {
+  service.send('evtInputsEspace')
+  console.log('stateForm =', stateForm);
+}
+
 function moveTitle(step) {
   // console.log('-> moveTitle, etape =', step);
   const convStepToIndex = {
-    showTabInformtions: 1,
-    showBtNextForGoSummary: 1,
     espace: 0,
-    showBtNextForGoInformations: 0,
-    showTabSummary: 2
+    espaceNoValidate: 0,
+    informations: 1,
+    informationsNoValidate: 1,
+    summary: 2
   }
   const indexTitle = convStepToIndex[step]
   if (indexTitle !== undefined) {
@@ -247,28 +262,20 @@ function moveTitle(step) {
   }
 }
 
-
 const machine = createMachine(machineCreateEvent, contextMachine)
 const service = interpret(machine, () => {
   const ctx = service.machine.context()
   etape.value = service.machine.current
   console.log('-> Etape :', etape.value);
-  console.log('-> ctx :', ctx);
-  console.log('-----------------------------------------------------------')
+  // console.log('-> ctx :', ctx);
+  // console.log('-----------------------------------------------------------')
   // position titre
   moveTitle(etape.value)
-
-  // 
 });
 
-// dev
-window.serice = service
+const serice = service
 
 updateHeader(null);
-
-function test() {
-  console.log('stateForm =', JSON.stringify(stateForm, null, 2));
-}
 
 function init() {
   const contents = document.querySelectorAll(".creation-navigation li");
@@ -277,12 +284,22 @@ function init() {
   styleBtMobile.value.width = itemNavWidth.value + "%";
 }
 
+function update() {
+  init()
+  moveTitle(etape.value)
+}
+
 // initialise le menu de navigation du composant
 onMounted(() => {
   init()
+  window.addEventListener("resize", update, false);
 });
 
-function createTenant() {
+onBeforeUnmount(() => {
+  window.removeEventListener("resize", update);
+});
+
+async function createTenant() {
   console.log('Création du tenant !');
   try {
     // lieu / association
@@ -306,6 +323,58 @@ function createTenant() {
     formData.append('img', stateForm.img);
     console.log('formData =', formData);
 
+    const response = await fetch(urlApi, {
+      method: "post",
+      headers: {
+        Accept: "application/json"
+      },
+      body: formData
+    });
+    console.log("response =", response);
+    const retourRaw = await response.json();
+
+    console.log('retourRaw ' + urlApi + ' =', retourRaw);
+    console.log(' type retourRaw =', typeof (retourRaw));
+
+    const retour = JSON.parse(retourRaw)
+
+    // gestion des erreurs
+    if (response.status > 399 && response.status < 500) {
+      throw new Error(retour.join(' - '));
+    }
+
+    if (response.status === 201) {
+      if (stateForm.stripe === false) {
+        setLoadingValue(false)
+        // message de succès , non monétaire
+        const typeEspace = espacesType.find(espace => espace.categorie === stateForm.categorie).name
+
+        router.push({ path: '/' })
+
+        const msg = `
+            <p>La mise en place de votre espace "${stateForm.organisation}" de type "${typeEspace}" est en pause.
+              Pour finalisez sa création, veuillez confirmer par l'émail qui vous êtes envoyé.
+              Attention vérifier dans les émails en quarantaines / indésirables !</p>
+            `
+        emitter.emit('modalMessage', {
+          titre: 'Validation',
+          typeMsg: 'success',
+          contenu: msg,
+          dynamic: true // pour insérer du html
+        })
+      } else {
+        // monétaire
+        // etapeValidation.value = "creationCompteStripe"
+        console.log("-> monétaire, go stripe, url =", retour.stripe_onboard);
+        setLocalStateKey('stripeStep', {
+          action: 'expect_payment_stripe_createTenant',
+          organisation: stateForm.organisation,
+          uuidTenant: retour.uuid,
+          nextPath: '/'
+        })
+        location.href = retour.stripe_onboard;
+      }
+    }
   } catch (error) {
     setLoadingValue(false)
     console.log(error);

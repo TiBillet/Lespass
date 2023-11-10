@@ -2,8 +2,7 @@
   <div class="input-group input-group-dynamic mb-4" :class="validation === true ? 'has-validation' : ''">
     <label class="form-label" :for="id">{{ label }}</label>
     <input type="file" class="form-control" :id="id" @change="sendInput($event)" @focusout="defocused($event)"
-      :required="validation">
-
+      :required="validation" role="textbox" :aria-label="msgRole">
     <div class="invalid-feedback" role="heading" :aria-label="msgError">{{ msgError }}</div>
   </div>
 </template>
@@ -15,6 +14,7 @@ const props = defineProps({
   modelValue: Object,
   label: String,
   msgError: String,
+  msgRole: String,
   type: {
     default: 'text',
     type: String

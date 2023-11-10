@@ -10,49 +10,72 @@ function validateEmail(email) {
   }
 };
 
-function canSubmitTabEspace(ctx) {
-  console.log('-> canSubmitTabEspace, ctx.categorie  =', ctx.categorie, '  --  validateEmail(ctx.email)  =', validateEmail(ctx.email));
-  if (ctx.categorie !== "" && validateEmail(ctx.email) === true) {
-    return true
-  }
-  return false
-}
-
-function cantSubmitTabEspace(ctx) {
-  // console.log('-> cantSubmitTabEspace, ctx =', ctx);
-  if (ctx.categorie === "" || validateEmail(ctx.email) === false) {
-    return true
-  }
-  return false
-}
-
-
-function canSubmitTabInformations(ctx) {
+function canSubmitEspace(ctx) {
+  // console.log('-> canSubmitEspace, ctx =', ctx);
   let error = 0
-  if (ctx.organistaion === "") {
+  const input = document.querySelector('input[role="textbox"][aria-label="email pour le login"]').parentNode.querySelector('.invalid-feedback')
+  const radioImg = document.querySelector('label[role="fake-input-radio"][aria-labelledby="Lieu / association"] .invalid-feedback')
+  // DOM
+  if (ctx.categorie === "") {
     error++
-    // TODO: afficher le message d'erreur "invalid-feedback" 
+    radioImg.style.display = "flex"
+  } else {
+    radioImg.style.display = "none"
   }
+  if (validateEmail(ctx.email) === false) {
+    error++
+    input.style.display = "flex"
+  } else {
+    input.style.display = "none"
+  }
+  if (error === 0) {
+    return true
+  }
+  return false
+}
+
+function cantSubmitEspace(ctx) {
+  return !canSubmitEspace(ctx)
+}
+
+function canSubmitInformations(ctx) {
+  console.log('--------------------------------------------------');
+  console.log('-> canSubmitInformations, ctx =', ctx);
+  let error = 0
+  console.log('-> canSubmitInformations.');
+
+  const organisation = document.querySelector(`input[role="textbox"][aria-label="nom de l'organisation"]`).parentNode.querySelector('.invalid-feedback')
+  const shortDescription = document.querySelector(`input[role="textbox"][aria-label="courte description"]`).parentNode.querySelector('.invalid-feedback')
+  const img = document.querySelector(`input[role="textbox"][aria-label="Sélectionner une image"]`).parentNode.querySelector('.invalid-feedback')
+  const logo = document.querySelector(`input[role="textbox"][aria-label="Sélectionner un logo"]`).parentNode.querySelector('.invalid-feedback')
+
+  // DOM
+  if (ctx.organisation === "") {
+    error++
+    organisation.style.display = "flex"
+  } else {
+    organisation.style.display = "none"
+  }
+
   if (ctx.short_description === "") {
     error++
-    // TODO: afficher le message d'erreur "invalid-feedback" 
-  }
-
-  // console.log('-> test textarea =', ctx.long_description.replace('\n', ''));
-  let longDescription = ctx.long_description
-  if (longDescription.replace('\n', '').replace(' ', '') === "") {
-    error++
-    // TODO: afficher le message d'erreur "invalid-feedback" 
+    shortDescription.style.display = "flex"
+  } else {
+    shortDescription.style.display = "none"
   }
 
   if (ctx.img === null) {
     error++
-    // TODO: afficher le message d'erreur "invalid-feedback" 
+    img.style.display = "flex"
+  } else {
+    img.style.display = "none"
   }
 
   if (ctx.logo === null) {
     error++
-    // TODO: afficher le message d'erreur "invalid-feedback" 
+    logo.style.display = "flex"
+  } else {
+    logo.style.display = "none"
   }
 
   // retour
@@ -62,78 +85,46 @@ function canSubmitTabInformations(ctx) {
   return false
 }
 
-function cantSubmitTabInformations(ctx) {
-  let retour = true
-  if (canSubmitTabInformations(ctx) === true) {
-    retour = false
-  }
-  return retour
+function cantSubmitInformations(ctx) {
+  return !canSubmitInformations(ctx)
 }
-
-function informationsChange(ctx) {
-  let retour = false
-  const testChange = {
-    organisation: "",
-    short_description: "",
-    long_description: "",
-    img: null,
-    logo: null
-  }
-  for (const key in testChange) {
-    console.log('key =', key);
-    if (ctx[key] !== testChange[key]) {
-      retour = true
-      break
-    }
-  }
-  return retour
-}
-
-function informationsNoChange(ctx) {
-  // if (informationsChange(ctx) === true) {
-  //   return false
-  // }
-  return !informationsChange(ctx)
-}
-
 
 export const machineCreateEvent = {
   espace: state(
-    transition('evtInputsEspace', 'showBtNextForGoInformations',
-      guard(canSubmitTabEspace)
+    transition('evtValidateEspace', 'espaceNoValidate',
+      guard(cantSubmitEspace)
     ),
-  ),
-  // TODO: remplacer showBtNextForGoInformations par "espaceValide"
-  showBtNextForGoInformations: state(
-    transition('evtShowTabInformtions', 'showTabInformtions',
-      guard(cantSubmitTabInformations)
-    ),
-    transition('evtShowTabInformtions', 'showBtNextForGoSummary',
-      guard(canSubmitTabInformations)
-    ),
-    transition('evtInputsEspace', 'espace',
-      guard(cantSubmitTabEspace)
-    ),
-  ),
-  showTabInformtions: state(
-    transition('evtReturnEspace', 'showBtNextForGoInformations'),
-    transition('evtInputsInformations', 'showBtNextForGoSummary',
-      guard(canSubmitTabInformations)
+    transition('evtValidateEspace', 'informations',
+      guard(canSubmitEspace)
     )
   ),
-  showBtNextForGoSummary: state(
-    // retour
-    transition('evtReturnEspace', 'showBtNextForGoInformations'),
-    // tester les entrées
-    transition('evtInputsInformations', 'showTabInformtions',
-      guard(cantSubmitTabInformations)
+  espaceNoValidate: state(
+    transition('evtValidateEspace', 'espaceNoValidate',
+      guard(cantSubmitEspace)
     ),
-    // aller au résumé / validation
-    transition('evtShowTabSummary', 'showTabSummary',
-      guard(canSubmitTabInformations)
+    transition('evtValidateEspace', 'informations',
+      guard(canSubmitEspace)
     )
   ),
-  showTabSummary: state(
-    transition('evtReturnInformations', 'showBtNextForGoSummary'),
+  informations: state(
+    transition('evtReturnEspace', 'espace'),
+    transition('evtValidateInformations', 'summary',
+      guard(canSubmitInformations)
+    ),
+    transition('evtValidateInformations', 'informationsNoValidate',
+      guard(cantSubmitInformations)
+    )
+  ),
+  informationsNoValidate: state(
+    transition('evtReturnEspace', 'espace'),
+    transition('evtValidateInformations', 'informationsNoValidate',
+      guard(cantSubmitInformations)
+    ),
+    transition('evtValidateInformations', 'summary',
+      guard(canSubmitInformations)
+    ),
+  ),
+  summary: state(
+    transition('evtReturnInformations', 'informations')
   )
 }

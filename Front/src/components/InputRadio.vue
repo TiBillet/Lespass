@@ -75,7 +75,6 @@ function radioIsValid() {
   console.log('name =', name, '  --  value=', value);
 }
 
-
 onMounted(updateVisual)
 onUpdated(updateVisual)
 
@@ -83,9 +82,7 @@ onUpdated(updateVisual)
 
 <style scoped>
 input[type="radio"] {
-  /* display: none; */
-  position: absolute;
-  left: -30000px;
+  display: none;
 }
 
 .tibillet-custum-radio {

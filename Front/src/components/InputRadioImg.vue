@@ -1,8 +1,9 @@
 <template>
   <label :for="'input-radio-image-' + uuidComponent" :disabled="disable"
-    :style="disable ? '' : 'cursor:pointer;'" role="fake-input-radio" :aria-labelledby="label">
+    :style="disable ? '' : 'cursor:pointer;'" role="fake-input-radio" :aria-labelledby="label"
+    class="d-flex flex-column">
     <div class="input-radio-image-content" :class="classPlus()">
-      <input :id="'input-radio-image-' + uuidComponent" type="radio" :name="name" :value="value" class="input-hidden" @input="sendInput($event)"
+      <input :id="'input-radio-image-' + uuidComponent" type="radio" :name="name" :value="value" class="input-hidden" @click="sendInput($event)"
         :disabled="disable" :required="validation">
       <font-awesome-icon v-if="icons.length > 0" v-for="(icon, index) in icons" :key="index" :icon="['fas', icon.name]"
         :style="styleIcons(icon.name)" />
@@ -10,7 +11,8 @@
         <img :src="svg.src" alt="image" :style="`width:${svg.size};height:${svg.size};`" />
       </div>
     </div>
-    <h6>{{ label }}</h6>
+    <h6 class="m-0">{{ label }}</h6>
+    <div class="invalid-feedback m-0" role="heading" :aria-label="msgError">{{ msgError }}</div>
   </label>
 </template>
 
@@ -31,7 +33,8 @@ const props = defineProps({
   disable: Boolean,
   modelValue: String,
   validation: Boolean,
-  espaceNumber: Number
+  espaceNumber: Number,
+  msgError: String
 })
 
 const uuidComponent = uuidv4()
@@ -97,13 +100,15 @@ function sendInput(evt) {
 }
 
 .input-hidden {
+  /*
   position: absolute;
   left: -10000px;
   z-index: -1;
+  */
+  display: none;
 }
 
 .espace-disabled {
   opacity: 0.4;
 }
-
 </style>
