@@ -1,4 +1,4 @@
-import { guard, immediate, state, transition } from 'robot3';
+import { guard, state, transition } from 'robot3';
 
 
 function validateEmail(email) {
@@ -87,7 +87,7 @@ function cantSubmitInformations(ctx) {
   return !canSubmitInformations(ctx)
 }
 
-export const machineCreateEvent = {
+export const machineCreateTenant = {
   espace: state(
     transition('evtValidateEspace', 'espaceNoValidate',
       guard(cantSubmitEspace)

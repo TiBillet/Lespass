@@ -1,175 +1,162 @@
 <template>
-  <CreationStep title="Créer votre espace" sub-title="Ajouter un évènement"
-    validation-creation-msg="validerCreationPlace">
-
-    <!-- Présentation -->
-    <div id="presentation" class="creation-tab-content">
+  <BodyWizard background="wizard-profile.jpg">
+    <!-- nom et date -->
+    <div v-if="['event'].includes(currentStep.id)" class="creation-tab-content">
       <div class="espace-content d-flex flex-column">
-        <CardUpdateHeader v-model="header" />
+        <input type="datetime">
+
+        <InputMd id="nom-evenement" label="Intitulé" msg-error="Renseigner le nom de l'évènement." :validation="true"
+          v-model="stateForm.name" class="mt-3" msg-role="nom de l'évènement" />
+
+      </div>
+      <!-- footer -->
+      <div class="d-flex flex-row-reverse w-100 creation-footer">
+        <button type="button" @click="service.send('evtValidateEvent')" class="btn btn-creation tibillet-bg-primary"
+          role="button" aria-label="go-informations">
+          Suivant
+        </button>
       </div>
     </div>
 
-    <!-- Produits -->
-    <div id="produits" class="creation-tab-content">
-      <div class="espace-content d-flex flex-column overflow-x-hidden overflow-y-scroll">
-        <ListProducts name="Produits existants" :list="lists.products" :show="true" />
+    <!-- informations -->
+    <div v-if="['informations'].includes(currentStep.id)" class="creation-tab-content">
+      <div class="espace-content d-flex flex-column">
+        <InputMd id="creation-short-description" label="Courte description" v-model="stateForm.short_description"
+          msg-error="Renseigner la courte description" msg-role="courte description" :validation="true" />
 
-        <!--
-        <fieldset class="col shadow-sm p-3 mb-5 bg-body rounded">
-          <legend>
-            <h3 class="font-weight-bolder text-info text-gradient align-self-start">Produits</h3>
-          </legend>
-          <div>
-            <h2>produit sélectionné ou ajouté.</h2>
+        <TextareaMd id="creation-long-description" label="Votre longue description"
+          v-model="stateForm.long_description" />
 
-          </div>
-        </fieldset>
-        -->
+        <InputFileMd type="file" id="creation-img" label="Url image" v-model="stateForm.img" class="mt-2"
+          msg-error="Sélectionner une image." msg-role="Sélectionner une image" :validation="true" />
+
+      </div>
+      <!-- footer -->
+      <div class="creation-footer d-flex justify-content-between">
+        <button class="btn btn-creation btn-previous" @click="service.send('evtReturnEvent')">
+          Précédent
+        </button>
+        <button class="btn btn-creation tibillet-bg-primary" role="button" aria-label="go-prices"
+          @click.prevent="service.send('evtValidateInformations')">
+          Suivant
+        </button>
       </div>
     </div>
 
-    <!-- Prix -->
-    <div id="prix" class="creation-tab-content">
-      <div class="espace-content d-flex flex-wrap justify-content-around">
-        <h1>Prix</h1>
+    <!-- tarifs -->
+    <div v-if="['prices'].includes(currentStep.id)" class="creation-tab-content">
+      <div class="espace-content d-flex flex-column">
+        <h1>Tarifs</h1>
       </div>
+      <!-- footer -->
+      <div class="creation-footer d-flex justify-content-between">
+              <button class="btn btn-creation btn-previous" @click="service.send('evtReturnInformations')">
+                Précédent
+              </button>
+              <button class="btn btn-creation tibillet-bg-primary" role="button" aria-label="go-resume"
+                @click="createEvent()">
+                Validation
+              </button>
+            </div>
     </div>
 
-    <!-- Options -->
-    <div id="options" class="creation-tab-content">
-      <div class="espace-content d-flex flex-wrap justify-content-around">
-        <h1>Options</h1>
-      </div>
-    </div>
-
-    <!-- Tags -->
-    <div id="tags" class="creation-tab-content">
-      <div class="espace-content d-flex flex-wrap justify-content-around">
-        <h1>Tags</h1>
-      </div>
-    </div>
-
-    <!-- Validation -->
-    <div id="validation" class="creation-tab-content">
-      <div class="espace-content d-flex flex-wrap justify-content-around">
-        <h1>Validation</h1>
-      </div>
-    </div>
-
-  </CreationStep>
+  </BodyWizard>
 </template>
 
 <script setup>
-console.log('-> CreateEvent.vue');
-import { ref } from "vue";
-import { useSessionStore } from "../stores/session";
+import { provide, ref } from 'vue'
 
-// components
-import CreationStep from "../components/CreationStep.vue";
-import CardUpdateHeader from "../components/CardUpdateHeader.vue"
-import ListProducts from "../components/ListProducts.vue"
+import { emitEvent } from '../communs/EmitEvent.js'
+// store
+import { useSessionStore } from "../stores/session";
+import { setLocalStateKey } from '../communs/storeLocal.js'
+
+// composants
+import BodyWizard from "../components/BodyWizard.vue";
+import InputMd from "../components/InputMd.vue";
+import TextareaMd from "../components/TextareaMd.vue";
+import InputFileMd from "../components/InputFileMd.vue";
+
+// machine
+import { createMachine, interpret } from 'robot3';
+import { machineCreateEvent } from "../machines/machineCreateEvent.js"
 
 const sessionStore = useSessionStore();
-const { updateHeader } = sessionStore;
+const { updateHeader, setLoadingValue } = sessionStore;
 
-let header = {
-  place: window.location.host.split('.')[0],
-  name: "Entrer un nom pour votre évènement.",
-  short_description: "Entrer une courte description.",
-  long_description: "Entrer une longue description",
-  img_url: null
-}
-
-let lists = ref({
-  products: [],
-  options: [],
+// les données du wizard
+let stateForm = {
+  dateEvenement: null,
+  name: "",
+  short_description: "",
+  long_description: "",
+  img: null,
+  stripe: true,
   prices: []
-})
-
-let selected = ref({
-  products: [],
-  options: [],
-  prices: []
-})
-
-updateHeader(null)
-
-async function loadLists() {
-  lists.value.products = await getJson('/api/products')
 }
 
-loadLists()
+const contextMachine = () => (stateForm);
 
-async function getJson(url) {
-  try {
-    const response = await fetch(url);
-    const retour = await response.json();
-    console.log('retour =', retour);
-    return retour
-  } catch (error) {
-    console.log('error =', error);
-  }
+const steps = ref([
+  { id: 'event', name: 'évènement' },
+  { id: 'informations', name: 'informations' },
+  { id: 'prices', name: 'tarifs' }
+])
+provide('steps', steps)
+
+let currentStep = ref(steps.value[0])
+provide('currentStep', currentStep)
+
+
+const machine = createMachine(machineCreateEvent, contextMachine)
+const service = interpret(machine, () => {
+  const ctx = service.machine.context()
+  currentStep.value = steps.value.find(step => step.id === service.machine.current)
+  emitEvent('wizardStepChange', {})
+  // console.log('-> Etape :', etape.value);
+  // console.log('-> ctx :', ctx);
+});
+
+function createEvent() {
+console.log('-> createEvent, stateForm =', stateForm);
 }
-
-
-/*
-// store
-import { useSessionStore } from '@/stores/session'
-
-// components
-import CardUpdateHeader from "../components/CardUpdateHeader.vue"
-import CardCreateProduct from "../components/CardCreateProduct.vue"
-
-
-const sessionStore = useSessionStore()
-const { updateHeader } = sessionStore
-updateHeader(null)
-
-
-let reste = {
-    artists: [],
-    products: [],
-    options_checkbox: [],
-    options_radio: [],
-    tag: []
-}
-
-function recordEvent(selectorForm) {
-    const event = { ...header, ...reste }
-    console.log('-> recordEvent, event =', JSON.stringify(event, null, 2));
-}
-
-// products
-// const url = `https://${productR.place}.${env.domain}/api/products/`
-
-// prices
-// const url = `https://${priceR.place}.${env.domain}/api/prices/`
-
-// events
-// const url = `https://${eventR.place}.${env.domain}/api/events/`
-async function postJson(url, rawPostData, token) {
-  try {
-    const response = await fetch(url, {
-      method: "post",
-      body: JSON.stringify(rawPostData),
-      agent: httpsAgent,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + token
-      }
-    });
-    console.log("response =", response);
-    const retour = await response.json();
-    console.log("retour =", retour);
-    return { status: response.status, content: retour };
-  } catch (error) {
-    log(`   - postJson, ${url} error !`, "red");
-    console.log(error);
-  }
-}
-
-
-*/
 </script>
 
-<style scoped></style>
+<style scoped>
+.creation-tab-content {
+  --creation-content-height: 530px;
+  width: 100%;
+  height: var(--creation-content-height);
+  margin: 0;
+  padding: 0;
+}
+
+.espace-content {
+  width: 100%;
+  height: calc(var(--creation-content-height) - 10%);
+  overflow-x: hidden;
+  overflow-y: scroll;
+  padding: 0 0 6px 0;
+}
+
+.creation-footer {
+  width: 100%;
+  height: calc(var(--creation-content-height) - 90%);
+}
+
+.btn-creation {
+  font-size: 12px;
+  text-transform: uppercase;
+  border-radius: 4px;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: bold;
+  box-shadow: 0 16px 26px -10px rgba(244, 67, 54, 0.56), 0 4px 25px 0 rgba(0, 0, 0, 0.12), 0 8px 10px -5px rgba(244, 67, 54, 0.2);
+  min-width: 140px;
+}
+
+.btn-previous {
+  background-color: #999;
+  color: #fff;
+}
+</style>
