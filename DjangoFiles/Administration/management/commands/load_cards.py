@@ -10,7 +10,19 @@ from django.core.validators import URLValidator
 
 import csv, uuid
 
-
+"""
+Methode manuelle :
+depuis cashless :
+[[str(c.pk),str(c.uuid_qrcode),c.number,c.tag_id] for c in CarteCashless.objects.all()]
+copier et coller dans un dic sur billetterie
+for c in cartes:
+    CarteCashless.objects.get_or_create(
+                                uuid=c[1],
+                                number=c[2],
+                                tag_id=c[3],
+                                detail=origin,
+                            )
+"""
 
 class Command(BaseCommand):
 

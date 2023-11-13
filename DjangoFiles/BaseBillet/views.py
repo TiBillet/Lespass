@@ -1,5 +1,6 @@
 from django.http import HttpResponseRedirect
 from django.shortcuts import render
+from django.template.response import TemplateResponse
 
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
@@ -96,3 +97,8 @@ class Ticket_html_view(APIView):
 
         return render(request, 'ticket/ticket.html', context=context)
         # return render(request, 'ticket/qrtest.html', context=context)
+
+
+
+def products(request):
+    return TemplateResponse(request, 'htmx/products/modal.html', {})
