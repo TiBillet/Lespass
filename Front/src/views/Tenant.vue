@@ -1,10 +1,10 @@
 <template>
-  <div class="container-fluid vw-100 vh-100 d-flex justify-content-center align-items-center"
+  <div class="container-fluid vw-100 d-flex flex-column  align-items-center tibillet-page-tenant"
     :style="`background-image: url('${wizardBackground}');background-position:50% 50%;background-size:cover`">
-    <div class="container">
+    <!-- <div class="tibillet-size-navbar vw-100"></div> -->
+    <div class="container mt-7">
       <div class="card creation-card">
         <div class="creation-header">
-          etape = {{ etape }}
           <h3 class="creation-title">Créer votre espace</h3>
           <h5 class="creation-sub-title">Sélectionner, éditer un type d'espace.</h5>
         </div>
@@ -32,70 +32,64 @@
         <div class="creation-tabs-content ps-3 pe-3">
 
           <!-- type d'espace -->
-          <form @submit.prevent="" @keydown.enter="$event.preventDefault()" class="needs-validation" novalidate>
-            <div v-if="['espace', 'espaceNoValidate'].includes(etape)" id="espace" class="creation-tab-content">
-              <div class="espace-content d-flex flex-column justify-content-around">
-                <div class="d-flex flex-wrap justify-content-around">
-                  <InputRadioImg v-for="(espace, index) in espacesType" :key="index" :label="espace.name"
-                    name="type-espace" :value="espace.categorie" :info="espace.description" :svg="espace.svg"
-                    :icons="espace.icons" v-model="stateForm.categorie"
-                    @update:model-value="newValue => stateForm.categorie = newValue" style="margin: auto 0;"
-                    :espaceNumber="espacesType.length" msg-error="Sélectionner un espace." />
-                </div>
-                <InputMd id="login-email" label="Email" msg-error="Merci de renseigner une adresse email valide."
-                  type="email" :validation="true" class="w-50 ms-auto me-auto" v-model="stateForm.email"
-                  msg-role="email pour le login" />
+          <div v-if="['espace', 'espaceNoValidate'].includes(etape)" id="espace" class="creation-tab-content">
+            <div class="espace-content d-flex flex-column justify-content-around">
+              <div class="d-flex flex-wrap justify-content-around">
+                <InputRadioImg v-for="(espace, index) in espacesType" :key="index" :label="espace.name" name="type-espace"
+                  :value="espace.categorie" :info="espace.description" :svg="espace.svg" :icons="espace.icons"
+                  v-model="stateForm.categorie" @update:model-value="newValue => stateForm.categorie = newValue"
+                  style="margin: auto 0;" :espaceNumber="espacesType.length" msg-error="Sélectionner un espace." />
               </div>
-              <!-- footer -->
-              <div class="d-flex flex-row-reverse w-100 creation-footer">
-                <button type="button" @click="service.send('evtValidateEspace')"
-                  class="btn btn-creation tibillet-bg-primary" role="button" aria-label="go-informatisons">
-                  Suivant
-                </button>
-              </div>
+              <InputMd id="login-email" label="Email" msg-error="Merci de renseigner une adresse email valide."
+                type="email" :validation="true" class="w-50 ms-auto me-auto" v-model="stateForm.email"
+                msg-role="email pour le login" />
             </div>
-          </form>
+            <!-- footer -->
+            <div class="d-flex flex-row-reverse w-100 creation-footer">
+              <button type="button" @click="service.send('evtValidateEspace')"
+                class="btn btn-creation tibillet-bg-primary" role="button" aria-label="go-informatisons">
+                Suivant
+              </button>
+            </div>
+          </div>
 
           <!-- informations -->
-          <form @submit.prevent="" @keydown.enter="$event.preventDefault()" class="needs-validation" novalidate>
-            <div v-if="['informations', 'informationsNoValidate'].includes(etape)" id="informations"
-              class="creation-tab-content">
-              <div class="espace-content d-flex flex-column">
-                <!-- TODO: Importer vos données de communecté -->
-                <button class="btn bg-gradient-info mt-4 mb-0 h-44px w-50 p-4" type="button">
-                  <div class="d-flex flex-row justify-content-center align-items-center h-100 w-100">
-                    Importez vos données de <img :src="communecterLogo" class="ms-1" alt="logo communecter">
-                  </div>
-                </button>
-                <InputMd id="creation-organisation" label="Organisation" msg-error="Renseigner le nom del'organistation."
-                  :validation="true" v-model="stateForm.organisation" class="mt-3" msg-role="nom de l'organisation" />
+          <div v-if="['informations', 'informationsNoValidate'].includes(etape)" id="informations"
+            class="creation-tab-content">
+            <div class="espace-content d-flex flex-column">
+              <!-- TODO: Importer vos données de communecté -->
+              <button class="btn bg-gradient-info mt-4 mb-0 h-44px w-50 p-4" type="button">
+                <div class="d-flex flex-row justify-content-center align-items-center h-100 w-100">
+                  Importez vos données de <img :src="communecterLogo" class="ms-1" alt="logo communecter">
+                </div>
+              </button>
+              <InputMd id="creation-organisation" label="Organisation" msg-error="Renseigner le nom del'organistation."
+                :validation="true" v-model="stateForm.organisation" class="mt-3" msg-role="nom de l'organisation" />
 
-                <InputMd id="creation-short-description" label="Courte description"
-                  v-model="stateForm.short_description" msg-error="Renseigner la courte description" 
-                  msg-role="courte description" :validation="true" />
+              <InputMd id="creation-short-description" label="Courte description" v-model="stateForm.short_description"
+                msg-error="Renseigner la courte description" msg-role="courte description" :validation="true" />
 
-                <TextareaMd id="creation-long-description" label="Votre longue description"
-                  v-model="stateForm.long_description" />
+              <TextareaMd id="creation-long-description" label="Votre longue description"
+                v-model="stateForm.long_description" />
 
-                <InputFileMd type="file" id="creation-img" label="Url image" v-model="stateForm.img" class="mt-2" 
+              <InputFileMd type="file" id="creation-img" label="Url image" v-model="stateForm.img" class="mt-2"
                 msg-error="Sélectionner une image." msg-role="Sélectionner une image" :validation="true" />
 
-                <InputFileMd type="file" id="creation-logo-url" label="Url logo" v-model="stateForm.logo" class="mt-2"
-                msg-error="Sélectionner un logo." msg-role="Sélectionner un logo" :validation="true"/>
-                
-              </div>
-              <!-- footer -->
-              <div class="creation-footer d-flex justify-content-between">
-                <button class="btn btn-creation btn-previous" @click="service.send('evtReturnEspace')">
-                  Précédent
-                </button>
-                <button class="btn btn-creation tibillet-bg-primary" role="button" aria-label="go-resume"
-                  @click.prevent="service.send('evtValidateInformations')">
-                  Suivant
-                </button>
-              </div>
+              <InputFileMd type="file" id="creation-logo-url" label="Url logo" v-model="stateForm.logo" class="mt-2"
+                msg-error="Sélectionner un logo." msg-role="Sélectionner un logo" :validation="true" />
+
             </div>
-          </form>
+            <!-- footer -->
+            <div class="creation-footer d-flex justify-content-between">
+              <button class="btn btn-creation btn-previous" @click="service.send('evtReturnEspace')">
+                Précédent
+              </button>
+              <button class="btn btn-creation tibillet-bg-primary" role="button" aria-label="go-resume"
+                @click.prevent="service.send('evtValidateInformations')">
+                Suivant
+              </button>
+            </div>
+          </div>
 
           <!-- Résumé / Summary -->
           <div v-if="['summary'].includes(etape)" id="résumé" class="creation-tab-content">
@@ -184,7 +178,7 @@ import TextareaMd from "../components/TextareaMd.vue";
 import InputFileMd from "../components/InputFileMd.vue";
 // machine
 import { createMachine, interpret } from 'robot3';
-import { machineCreateEvent } from "../communs/machineCreateEvent.js"
+import { machineCreateTenant } from "../machines/machineCreateTenant.js"
 
 const sessionStore = useSessionStore();
 const { updateHeader, setLoadingValue } = sessionStore;
@@ -200,7 +194,7 @@ const espacesType = [{
   categorie: "S"
 }];
 
-// les données du formulaire
+// les données du wizard
 const initStateForm = {
   organisation: "",
   short_description: "",
@@ -225,11 +219,6 @@ let styleBtMobile = ref(initStyleBtMobile);
 
 let itemNavWidth = ref(0);
 let etape = ref('espace')
-
-function test() {
-  service.send('evtInputsEspace')
-  console.log('stateForm =', stateForm);
-}
 
 function moveTitle(step) {
   // console.log('-> moveTitle, etape =', step);
@@ -262,7 +251,7 @@ function moveTitle(step) {
   }
 }
 
-const machine = createMachine(machineCreateEvent, contextMachine)
+const machine = createMachine(machineCreateTenant, contextMachine)
 const service = interpret(machine, () => {
   const ctx = service.machine.context()
   etape.value = service.machine.current
@@ -270,8 +259,6 @@ const service = interpret(machine, () => {
   // console.log('-> ctx :', ctx);
   moveTitle(etape.value)
 });
-
-const serice = service
 
 updateHeader(null);
 
