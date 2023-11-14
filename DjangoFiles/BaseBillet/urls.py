@@ -7,6 +7,7 @@ urlpatterns = [
     path('event/<slug:slug>/', base_view.event.as_view(), name='show_event'),
 
     path('mvt/products/', base_view.products, name='products'),
+    path('mvt/getOptionGenerale/', base_view.getOptionGenerale, name='getOptionGenerale'),
 
     path('', base_view.index.as_view(), name="index"),
 ]

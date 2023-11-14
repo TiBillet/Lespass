@@ -1,0 +1,7 @@
+{% macro input_md(id, type='text', msg_role, msg_error, required) %}
+<div class="form-group bmd-form-group">
+    <label for="{{ id }}" class="bmd-label-floating">{{ label }}</label>
+    <input id="{{ id }}" type="{{ type }}" class="form-control">
+    <div class="invalid-feedback" role="heading" aria-label="msg_error">{{ msg_error }}</div>
+  </div>
+{% endmacro %}

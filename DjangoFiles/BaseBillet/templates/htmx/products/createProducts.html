@@ -1,0 +1,69 @@
+{% extends "htmx/base.html" %}
+
+
+
+{% block content %}
+<div class="container mt-7">
+    <form hx-post="/contact">
+        
+        <div>
+            <label>Nom</label>
+            <input type="text" placeholder="nom d'un produit">
+        </div>
+
+        <div>
+            <label>Courte description</label>
+            <input type="text">
+        </div>
+
+        <div>
+            <label>Longue description</label>
+            <textarea></textarea>
+        </div>
+
+        <div>
+            <label>Catégorie</label>
+            <select id="product-categorie">
+                <option value="A">Adhésion</option>
+                <option value="B">Billet</option>
+            </select>
+        </div>
+
+        <div class="d-flex flex-row">
+            <label>Options (multiples)</label>
+            <div hx-get="https://demo.filaos.re/mvt/getOptionGenerale/?id=checkbox" hx-target="this" hx-swap="outerHTML"
+                hx-trigger="load"></div>
+        </div>
+
+        <div class="d-flex flex-row">
+            <label>Option (choix unique)</label>
+            <div hx-get="https://demo.filaos.re/mvt/getOptionGenerale/?id=radio" hx-target="this" hx-swap="outerHTML"
+                hx-trigger="load"></div>
+        </div>
+
+        <div>
+            <label>Image</label>
+            <input id="img" type="file">
+        </div>
+
+        <button class="btn btn-default">Submit</button>
+    </form>
+</div>
+{% endblock content %}
+
+{% block script %}
+<script>
+    const domain = window.location.protocol + '//' + window.location.host;
+    console.log('domain =', domain);
+
+    const stateForm = {
+        name: "",
+        img_url: null,
+        categorie_article: "",
+        short_description: "",
+        long_description: "",
+        option_generale_checkbox: [],
+        option_generale_radio: []
+    }
+</script>
+{% endblock script %}

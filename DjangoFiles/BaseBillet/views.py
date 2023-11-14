@@ -1,4 +1,4 @@
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, HttpResponse
 from django.shortcuts import render
 from django.template.response import TemplateResponse
 
@@ -6,7 +6,7 @@ from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 
-from BaseBillet.models import Configuration, Ticket
+from BaseBillet.models import Configuration, Ticket, OptionGenerale
 
 import segno
 import barcode
@@ -101,4 +101,17 @@ class Ticket_html_view(APIView):
 
 
 def products(request):
-    return TemplateResponse(request, 'htmx/products/modal.html', {})
+    return TemplateResponse(request, 'htmx/products/createProducts.html', {})
+
+def getOptionGenerale(request):
+    queryset = OptionGenerale.objects.all()
+    fragmentHtml = '<select id="product-options-checkbox" multiple>'
+    if request.GET.get('id') == 'radio':
+        fragmentHtml = '<select id="product-options-radio" multiple>'
+
+    for ele in queryset:
+        fragmentHtml = fragmentHtml + '<option value="' + str(ele.uuid) +'">' + ele.name + '</option>'
+    
+    fragmentHtml = fragmentHtml + '</select>'
+    print(request.GET.get('id'))
+    return HttpResponse(fragmentHtml, content_type="text/plain")
