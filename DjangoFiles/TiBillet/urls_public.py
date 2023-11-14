@@ -20,6 +20,8 @@ from Administration.admin_public import public_admin_site
 # from AuthBillet.views import TokenCreateView_custom
 from ApiBillet.views import Webhook_stripe
 from AuthBillet.views import create_terminal_user, validate_token_terminal
+from TiBillet import settings
+from django.conf.urls.static import static
 
 urlpatterns = [
     # path('jet/', include('jet.urls', 'jet')),  # Django JET URLS
@@ -37,3 +39,7 @@ urlpatterns = [
     path('', include('MetaBillet.urls')),
     # path('admin/', admin.site.urls, name="public_admin_url"),
 ]
+
+if settings.DEBUG is True:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
