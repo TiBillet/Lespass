@@ -3,68 +3,50 @@
 
 {% block content %}
 <div class="container mt-7">
-    <form hx-post="/contact">
+  <form hx-post="/mvt/createProducts">
 
-        {% include "htmx/components/inputMd.html" with id="test1" label="labeltest1" type="text"  msg_error="l'info svp" %}
+    <!-- nom -->
+    {% include "htmx/components/inputMd.html" with id="tibillet-product-name" label="Nom" type="text" msg_error="Renseigner le nom svp" %}
 
-        <div>
-            <label>Nom</label>
-            <input type="text" placeholder="nom d'un produit">
-        </div>
+    <!-- Courte description -->
+    {% include "htmx/components/inputMd.html" with id="tibillet-product-short-description" label="Courte description" type="text" msg_error="Renseigner la courte description svp" %}
 
-        <div>
-            <label>Courte description</label>
-            <input type="text">
-        </div>
+    <!-- Longue description -->
+    {% include "htmx/components/textareaMd.html" with id="tibillet-product-long-description" label="Longue description" type="text" msg_error="Renseigner la longue description svp" %}
 
-        <div>
-            <label>Longue description</label>
-            <textarea></textarea>
-        </div>
+    <!-- categories -->
+    {% include "htmx/components/selectMd.html" with list=categorie_list id="tibillet-product-categorie" label="Catégorie" msg_error="Renseigner la catégorie svp" %}
 
-        <div>
-            <label>Catégorie</label>
-            <select id="product-categorie">
-                <option value="A">Adhésion</option>
-                <option value="B">Billet</option>
-            </select>
-        </div>
+    <!-- option choix multiple -->
+    {% include "htmx/components/selectMd.html" with multiple="true" list=options_list id="tibillet-option-checkbox" label="Options (multiples)" msg_error="Renseigner l'option svp" %}
 
-        <div class="d-flex flex-row">
-            <label>Options (multiples)</label>
-            <div hx-get="https://demo.filaos.re/mvt/getOptionGenerale/?id=checkbox" hx-target="this" hx-swap="outerHTML"
-                hx-trigger="load"></div>
-        </div>
+    <!-- option choix unique -->
+    {% include "htmx/components/selectMd.html" with multiple="true" list=options_list id="tibillet-option-radio" label="Option (choix unique)" msg_error="Renseigner l'option svp" %}
 
-        <div class="d-flex flex-row">
-            <label>Option (choix unique)</label>
-            <div hx-get="https://demo.filaos.re/mvt/getOptionGenerale/?id=radio" hx-target="this" hx-swap="outerHTML"
-                hx-trigger="load"></div>
-        </div>
+    {% include "htmx/components/inputMd.html" with id="tibillet-product-img" label="Image" type="file" msg_error="Sélectionner une image svp" %}
 
-        <div>
-            <label>Image</label>
-            <input id="img" type="file">
-        </div>
-
-        <button class="btn btn-default">Submit</button>
-    </form>
+    <button class="btn btn-default" onclick="validateForm()">Submit</button>
+  </form>
 </div>
 {% endblock content %}
 
 {% block script %}
 <script>
-    const domain = window.location.protocol + '//' + window.location.host;
-    console.log('domain =', domain);
+  const domain = window.location.protocol + '//' + window.location.host;
+  console.log('domain =', domain);
 
-    const stateForm = {
-        name: "",
-        img_url: null,
-        categorie_article: "",
-        short_description: "",
-        long_description: "",
-        option_generale_checkbox: [],
-        option_generale_radio: []
-    }
+  const stateForm = {
+    name: "",
+    img_url: null,
+    categorie_article: "",
+    short_description: "",
+    long_description: "",
+    option_generale_checkbox: [],
+    option_generale_radio: []
+  }
+
+  function validateForm() {
+
+  }
 </script>
 {% endblock script %}

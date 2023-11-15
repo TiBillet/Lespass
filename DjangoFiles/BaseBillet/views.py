@@ -101,7 +101,29 @@ class Ticket_html_view(APIView):
 
 
 def products(request):
-    return TemplateResponse(request, 'htmx/products/createProducts.html', {})
+    options = OptionGenerale.objects.all()
+    options_list = []
+    for ele in options:
+        options_list.append({'value': str(ele.uuid), 'name': ele.name})
+
+    categorie_list = [
+        { 'value': 'B', 'name': 'Billet payant'},
+        { 'value': 'P', 'name': "Pack d'objets"},
+        { 'value': 'R', 'name': 'Recharge cashless'},
+        { 'value': 'S', 'name': 'Recharge suspendue'},
+        { 'value': 'T', 'name': 'Vetement'},
+        { 'value': 'M', 'name': 'Merchandasing'},
+        { 'value': 'A', 'name': "Abonnement et/ou adhésion associative"},
+        { 'value': 'D', 'name': 'Don'},
+        { 'value': 'F', 'name': 'Reservation gratuite'},
+        { 'value': 'V', 'name': 'Nécessite une validation manuelle'}
+    ]
+    context = {
+        'options_list': options_list,
+        'categorie_list': categorie_list
+    }
+    return TemplateResponse(request, 'htmx/products/createProducts.html', context=context)
+    
 
 def getOptionGenerale(request):
     queryset = OptionGenerale.objects.all()
