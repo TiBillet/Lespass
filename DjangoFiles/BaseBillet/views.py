@@ -6,7 +6,7 @@ from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 
-from BaseBillet.models import Configuration, Ticket, OptionGenerale
+from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product
 
 import segno
 import barcode
@@ -121,7 +121,8 @@ def create_product(request):
 
     context = {
         'options_list': options_list,
-        'categorie_list': categorie_list
+        'categorie_list': categorie_list,
+        'Product': Product,
     }
     return TemplateResponse(request, 'htmx/views/create_product.html', context=context)
 

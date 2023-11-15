@@ -2,54 +2,58 @@
 
 
 {% block content %}
-<div class="container mt-7">
-  <form hx-post="/mvt/createProducts">
 
-    <!-- nom -->
-    {% include "htmx/components/inputMd.html" with id="tibillet-product-name" label="Nom" type="text" msg_error="Renseigner le nom svp" %}
+    {% include 'htmx/subscription/modal_create.html' %}
 
-    <!-- Courte description -->
-    {% include "htmx/components/inputMd.html" with id="tibillet-product-short-description" label="Courte description" type="text" msg_error="Renseigner la courte description svp" %}
 
-    <!-- Longue description -->
-    {% include "htmx/components/textareaMd.html" with id="tibillet-product-long-description" label="Longue description" type="text" msg_error="Renseigner la longue description svp" %}
+    <div class="container mt-7">
+        <form hx-post="/mvt/createProducts">
 
-    <!-- categories -->
-    {% include "htmx/components/selectMd.html" with list=categorie_list id="tibillet-product-categorie" label="Catégorie" msg_error="Renseigner la catégorie svp" %}
+            <!-- nom -->
+            {% include "htmx/components/inputMd.html" with id="tibillet-product-name" label="Nom" type="text" msg_error="Renseigner le nom svp" %}
 
-    <!-- option choix multiple -->
-    {% include "htmx/components/selectMd.html" with multiple="true" list=options_list id="tibillet-option-checkbox" label="Options (multiples)" msg_error="Renseigner l'option svp" %}
+            <!-- Courte description -->
+            {% include "htmx/components/inputMd.html" with id="tibillet-product-short-description" label="Courte description" type="text" msg_error="Renseigner la courte description svp" %}
 
-    <!-- option choix unique -->
-    {% include "htmx/components/selectMd.html" with multiple="true" list=options_list id="tibillet-option-radio" label="Option (choix unique)" msg_error="Renseigner l'option svp" %}
+            <!-- Longue description -->
+            {% include "htmx/components/textareaMd.html" with id="tibillet-product-long-description" label="Longue description" type="text" msg_error="Renseigner la longue description svp" %}
 
-    <!-- image -->
-    {% include "htmx/components/inputMd.html" with id="tibillet-product-img" label="Image" type="file" msg_error="Sélectionner une image svp" %}
+            <!-- categories -->
+            {% include "htmx/components/selectMd.html" with list=categorie_list id="tibillet-product-categorie" label="Catégorie" msg_error="Renseigner la catégorie svp" %}
 
-    <button class="btn btn-default" onclick="validateForm()">Submit</button>
-  </form>
-</div>
+            <!-- option choix multiple -->
+            {% include "htmx/components/selectMd.html" with multiple="true" list=options_list id="tibillet-option-checkbox" label="Options (multiples)" msg_error="Renseigner l'option svp" %}
+
+            <!-- option choix unique -->
+            {% include "htmx/components/selectMd.html" with multiple="true" list=options_list id="tibillet-option-radio" label="Option (choix unique)" msg_error="Renseigner l'option svp" %}
+
+            <!-- image -->
+            {% include "htmx/components/inputMd.html" with id="tibillet-product-img" label="Image" type="file" msg_error="Sélectionner une image svp" %}
+
+            <button class="btn btn-default" onclick="validateForm()">Submit</button>
+        </form>
+    </div>
 
 {% endblock content %}
 
 {% block script %}
 
-<script>
-  const domain = window.location.protocol + '//' + window.location.host;
-  console.log('domain =', domain);
+    <script>
+        const domain = window.location.protocol + '//' + window.location.host;
+        console.log('domain =', domain);
 
-  const stateForm = {
-    name: "",
-    img_url: null,
-    categorie_article: "",
-    short_description: "",
-    long_description: "",
-    option_generale_checkbox: [],
-    option_generale_radio: []
-  }
+        const stateForm = {
+            name: "",
+            img_url: null,
+            categorie_article: "",
+            short_description: "",
+            long_description: "",
+            option_generale_checkbox: [],
+            option_generale_radio: []
+        }
 
-  function validateForm() {
+        function validateForm() {
 
-  }
-</script>
+        }
+    </script>
 {% endblock script %}
