@@ -100,8 +100,11 @@ def create_product(request):
         print(f"reception du formulaire {request.POST}")
 
         # Erreur :
-        context = {"msg_error": "erreur de validation"}
-        return TemplateResponse(request, 'htmx/subscription/modal_ok.html', context=context)
+        errors = [
+            {'id': 'tibillet-product-name', 'msg': 'erreur de validation'},
+        ]
+        context = {"errors": errors}
+        return TemplateResponse(request, 'htmx/subscription/modal.html', context=context)
 
     options = OptionGenerale.objects.all()
     options_list = []

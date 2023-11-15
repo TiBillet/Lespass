@@ -12,9 +12,10 @@
 
                                 <div class="card-body" id="subscription_input">
 
-                                    {% include "htmx/components/inputMd.html" with id="tibillet-product-name" label="Nom" type="text" msg_error=msg_error %}
 
-                                    {% include "htmx/components/inputMd.html" with id="tibillet-product-short-description" label="Courte description" type="text" msg_error=msg_error %}
+                                    {% include "htmx/components/inputMd.html" with id="tibillet-product-name" label="Nom" type="text" errors=errors %}
+
+                                    {% include "htmx/components/inputMd.html" with id="tibillet-product-short-description" label="Courte description" type="text" errors=errors %}
 
                                     <button hx-post="/mvt/create_product/" hx-include="closest div"
                                             hx-target="#modal_adh" hx-swap="outerHTML"
