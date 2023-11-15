@@ -100,7 +100,7 @@ class Ticket_html_view(APIView):
 
 
 
-def products(request):
+def create_products(request):
     options = OptionGenerale.objects.all()
     options_list = []
     for ele in options:
@@ -122,18 +122,8 @@ def products(request):
         'options_list': options_list,
         'categorie_list': categorie_list
     }
-    return TemplateResponse(request, 'htmx/products/createProducts.html', context=context)
-    
+    return TemplateResponse(request, 'htmx/views/create_products.html', context=context)
 
-def getOptionGenerale(request):
-    queryset = OptionGenerale.objects.all()
-    fragmentHtml = '<select id="product-options-checkbox" multiple>'
-    if request.GET.get('id') == 'radio':
-        fragmentHtml = '<select id="product-options-radio" multiple>'
-
-    for ele in queryset:
-        fragmentHtml = fragmentHtml + '<option value="' + str(ele.uuid) +'">' + ele.name + '</option>'
-    
-    fragmentHtml = fragmentHtml + '</select>'
-    print(request.GET.get('id'))
-    return HttpResponse(fragmentHtml, content_type="text/plain")
+def test_jinja(request):
+  context = {}
+  return TemplateResponse(request, 'htmx/views/test_jinja.html', context=context)
