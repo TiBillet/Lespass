@@ -1,30 +1,14 @@
-FROM python:3.11-bullseye
+FROM python:3.8-bullseye
 
 ## UPDATE
-RUN apt-get update && apt-get upgrade -y
-
-## POSTGRES CLIENT
-RUN mkdir -p /usr/share/man/man1
-RUN mkdir -p /usr/share/man/man7
-RUN apt-get install -y --no-install-recommends postgresql-client
-
-
-RUN useradd -ms /bin/bash tibillet
-USER tibillet
-
-ENV \
-    POETRY_VIRTUALENVS_IN_PROJECT=true \
-    POETRY_NO_INTERACTION=1
-
-RUN curl -sSL https://install.python-poetry.org | python3 -
-ENV PATH="/home/tibillet/.local/bin:$PATH"
-
-
+RUN apt-get update
+RUN apt-get upgrade -y
 RUN apt install -y python3-pip
+
 RUN pip install pip --upgrade
 
 ## PYTHON
-RUN pip install django==4.2
+RUN pip install django==3.2
 # RUN pip install django-admin-sortable2==1.0.2
 RUN pip install djangorestframework
 # RUN pip install django-jet
@@ -46,9 +30,15 @@ RUN pip install djangorestframework_simplejwt
 RUN pip install ipython
 RUN pip install ipdb
 # RUN pip install django_debug_toolbar
-RUN pip install Werkzeug
+RUN pip install Werkzeug==2.0.3
 RUN pip install django-extensions
 
+
+## POSTGRES CLIENT
+RUN pip install psycopg2-binary==2.8.6
+RUN mkdir -p /usr/share/man/man1
+RUN mkdir -p /usr/share/man/man7
+RUN apt-get install -y --no-install-recommends postgresql-client
 
 
 ## LATER ?
@@ -96,7 +86,6 @@ RUN pip install authlib
 RUN pip install djangorestframework-api-key
 RUN pip install flower
 
-RUN pip install django-browser-reload
 
 RUN apt-get -y clean
 

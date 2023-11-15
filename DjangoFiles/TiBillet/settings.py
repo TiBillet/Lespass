@@ -72,6 +72,8 @@ SHARED_APPS = (
     'django.contrib.staticfiles',
     'django.contrib.humanize',
 
+    'django_browser_reload',
+
     'channels',
     'django_extensions',
     'Administration',
@@ -90,6 +92,8 @@ TENANT_COLOR_ADMIN_APPS = False
 TENANT_APPS = (
     # The following Django contrib apps must be in TENANT_APPS
     'django.contrib.contenttypes',
+    'django.contrib.staticfiles',
+
     'rest_framework_api_key',
     # your tenant-specific apps
     'BaseBillet',
@@ -118,6 +122,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django_browser_reload.middleware.BrowserReloadMiddleware',
 ]
 
 TEMPLATES = [
@@ -186,7 +191,6 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 10
 }
 
-
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
@@ -220,25 +224,6 @@ SIMPLE_JWT = {
     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
 }
 
-
-# DJOSER = {
-#     "SEND_ACTIVATION_EMAIL": True,
-#     "PASSWORD_CHANGED_EMAIL_CONFIRMATION": True,
-#     "PASSWORD_RESET_CONFIRM_URL": "password/reset/confirm/{uid}/{token}",
-#     "USERNAME_RESET_CONFIRM_URL": "username/reset/confirm/{uid}/{token}",
-#     # "ACTIVATION_URL": "activate/{uid}/{token}",
-#     "ACTIVATION_URL": "user/activate/{uid}/{token}",
-#     # "SOCIAL_AUTH_ALLOWED_REDIRECT_URIS": ["http://manap.django-local.org:8002/"],
-#     'EMAIL': {
-#         'activation': 'AuthBillet.email.ActivationEmail',
-#         'confirmation': 'AuthBillet.email.ConfirmationEmail',
-#         'password_reset': 'AuthBillet.email.PasswordResetEmail',
-#         'password_changed_confirmation': 'AuthBillet.email.PasswordChangedConfirmationEmail',
-#         'username_changed_confirmation': 'AuthBillet.email.UsernameChangedConfirmationEmail',
-#         'username_reset': 'AuthBillet.email.UsernameResetEmail',
-#     },
-# }
-
 # Internationalization
 # https://docs.djangoproject.com/en/3.1/topics/i18n/
 
@@ -257,6 +242,8 @@ USE_TZ = True
 
 STATIC_ROOT = os.path.join(BASE_DIR, "www", "static")
 STATIC_URL = '/static/'
+
+STATICFILES_DIRS = ['BaseBillet/static','MetaBillet/static','QrcodeCashless/static',]
 
 MEDIA_ROOT = os.path.join(BASE_DIR, "www", "media")
 MEDIA_URL = '/media/'
@@ -295,7 +282,7 @@ CHANNEL_LAYERS = {
 OAUTH_URL_WHITELISTS = []
 OAUTH_CLIENT_NAME = 'communecter'
 OAUTH_CLIENT = {
-    'name':'communecter',
+    'name': 'communecter',
     'client_id': os.environ.get('COMMUNECTER_SSO_CLIENTID'),
     'client_secret': os.environ.get('COMMUNECTER_SSO_SECRET'),
     'access_token_url': 'https://sso.communecter.org/oauth/token',
@@ -314,7 +301,7 @@ OAUTH_COOKIE_SESSION_ID = 'sso_session_id'
 # LLM
 # -------------------------------------/
 
-OPENAI_API_KEY=os.environ.get('OPENAI_API_KEY')
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 
 # -------------------------------------/
 # LOGGING

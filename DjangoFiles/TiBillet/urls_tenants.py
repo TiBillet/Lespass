@@ -40,12 +40,7 @@ urlpatterns = [
     # pour carte GEN1 Bisik
     re_path(r'(?P<numero_carte>^[qsdf974]{5}$)', include('QrcodeCashless.urls')),
 
-    # catché par le front node JS, à supprimer prochainement
-    # path('stripe/return/<uuid:uuid_paiement>', Webhook_stripe.as_view()),
-
-    # tuto websocket
-    # path('chat/', include('wsocket.urls')),
-
+    path("__reload__/", include("django_browser_reload.urls")),
     path('', include('BaseBillet.urls')),
 
     # path('admin/', admin.site.urls, name="public_admin_url"),

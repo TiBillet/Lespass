@@ -118,6 +118,7 @@ def create_product(request):
         { 'value': 'F', 'name': 'Reservation gratuite'},
         { 'value': 'V', 'name': 'Nécessite une validation manuelle'}
     ]
+
     context = {
         'options_list': options_list,
         'categorie_list': categorie_list

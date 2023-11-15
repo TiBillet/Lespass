@@ -15,7 +15,7 @@ services:
     hostname: redis
 
   billetterie_django:
-    image: tibillet/tibillet_django:2022-10-01
+    image: tibillet/tibillet_dev:2023-11
     container_name: billetterie_django
     build: ../Dockerfile/
     restart: always
@@ -26,7 +26,7 @@ services:
     working_dir: /DjangoFiles
 
   billetterie_celery:
-    image: tibillet/tibillet_django:2022-10-01
+    image: tibillet/tibillet_dev:2023-11
     container_name: billetterie_celery
     build: ../Dockerfile/
     restart: always
