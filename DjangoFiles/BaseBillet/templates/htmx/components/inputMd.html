@@ -1,5 +1,8 @@
-<div class="input-group input-group-dynamic mb-4">
+<div class="input-group input-group-dynamic mb-4 is-filled">
     <label for="{{ id }}" class="form-label">{{ label }}</label>
-    <input id="{{ id }}" type="{{ type }}" class="form-control">
-    <div class="invalid-feedback" role="heading" aria-label="{{ msg_error }}">{{ msg_error }}</div>
+    <input name="{{ id }}" id="{{ id }}" type="{{ type }}" class="form-control">
+    {% if msg_error %}
+        <div class="invalid-feedback" role="heading" aria-label="{{ msg_error }}"
+             style="display: block">{{ msg_error }}</div>
+    {% endif %}
 </div>

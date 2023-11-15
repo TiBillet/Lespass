@@ -22,7 +22,7 @@
     {% endblock head %}
 </head>
 
-<body>
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
     {% include "htmx/layout/navbar.html" %}
    
     {% block content %}

@@ -1,96 +1,31 @@
 {% extends "htmx/base.html" %}
 
-
 {% block content %}
 
     <div class="container py-7">
         <div class="row mt-5">
             <div class="col-sm-3 col-6 mx-auto">
 
-                <!-- Modal -->
-                <div class="modal fade" id="exampleModalForm" tabindex="-1" aria-labelledby="exampleModalForm"
-                     aria-hidden="true">
-                    <div class="modal-dialog modal-danger modal-dialog-centered modal-" role="document">
-                        <div class="modal-content">
-                            <div class="modal-body p-0">
-                                <div class="card bg-gray-200 shadow border-0 mb-0">
-                                    <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
-                                        <div class="bg-gradient-info shadow-info border-radius-lg py-3 pe-1 text-center py-4">
-                                            <h4 class="font-weight-bolder text-white mt-1 mb-0">Adhésion /
-                                                Abonnement</h4>
-                                            <p class="mb-1 text-sm text-white">Créez un abonnement ou une adhésion
-                                                associative</p>
-                                        </div>
-                                    </div>
-                                    <div class="card-body">
-                                        <form hx-post="/mvt/createProducts">
+                <div class="container py-7">
+                    <div class="row mt-5">
+                        <div class="col-sm-3 col-6 mx-auto">
 
-                                            <!-- image -->
-                                            {% include "htmx/components/inputMd.html" with id="tibillet-product-img" label="Image" type="file" msg_error="Sélectionner une image svp" %}
+                            <!-- Modal -->
+                            <div class="modal fade" id="exampleModalForm" tabindex="-1"
+                                 aria-labelledby="exampleModalForm"
+                                 aria-hidden="true">
+                                <div class="modal-dialog modal-danger modal-dialog-centered modal-" role="document">
 
-                                            <!-- nom -->
-                                            {% include "htmx/components/inputMd.html" with id="tibillet-product-name" label="Nom" type="text" msg_error="Renseigner le nom svp" %}
+                                    {% include 'htmx/subscription/modal.html' %}
 
-                                            <!-- Courte description -->
-                                            {% include "htmx/components/inputMd.html" with id="tibillet-product-short-description" label="Courte description" type="text" msg_error="Renseigner la courte description svp" %}
-
-                                            <!-- Longue description -->
-                                            {#                                            {% include "htmx/components/textareaMd.html" with id="tibillet-product-long-description" label="Longue description" type="text" msg_error="Renseigner la longue description svp" %}#}
-
-                                            <!-- categories -->
-                                            {#                                            {% include "htmx/components/selectMd.html" with list=categorie_list id="tibillet-product-categorie" label="Catégorie" msg_error="Renseigner la catégorie svp" %}#}
-
-                                            <!-- option choix multiple -->
-                                            {#                                            {% include "htmx/components/selectMd.html" with multiple="true" list=options_list id="tibillet-option-checkbox" label="Options (multiples)" msg_error="Renseigner l'option svp" %}#}
-
-                                            <!-- option choix unique -->
-                                            {% include "htmx/components/selectMd.html" with multiple="true" list=options_list id="tibillet-option-radio" label="Option (choix unique)" msg_error="Renseigner l'option svp" %}
-
-
-                                            <button class="btn btn-default" onclick="validateForm()">Submit</button>
-                                        </form>
-                                    </div>
-                                    <div class="card-footer text-center pt-0">
-                                        <p class="mb-4 text-sm mx-auto">
-                                            Don`t have an account?
-                                            <a href="javascript:;" class="text-info text-gradient font-weight-bold">Sign
-                                                up</a>
-                                        </p>
-                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
+
             </div>
         </div>
     </div>
 
-
-
-
-
-
 {% endblock content %}
-
-{% block script %}
-
-    <script>
-        const domain = window.location.protocol + '//' + window.location.host;
-        console.log('domain =', domain);
-
-        const stateForm = {
-            name: "",
-            img_url: null,
-            categorie_article: "",
-            short_description: "",
-            long_description: "",
-            option_generale_checkbox: [],
-            option_generale_radio: []
-        }
-
-        function validateForm() {
-
-        }
-    </script>
-{% endblock script %}

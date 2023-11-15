@@ -39,8 +39,6 @@ class index(APIView):
         #     return render(request, 'arnaud_mvc/lieu.html', context=context)
 
 
-
-
 class event(APIView):
     permission_classes = [AllowAny]
 
@@ -59,8 +57,6 @@ class event(APIView):
     #         return render(request, f'{configuration.template_billetterie}/event.html', context=context)
     #     else :
     #         return render(request, 'arnaud_mvc/event.html', context=context)
-
-
 
 
 class Ticket_html_view(APIView):
@@ -99,24 +95,30 @@ class Ticket_html_view(APIView):
         # return render(request, 'ticket/qrtest.html', context=context)
 
 
-
 def create_product(request):
+    if request.method == 'POST':
+        print(f"reception du formulaire {request.POST}")
+
+        # Erreur :
+        context = {"msg_error": "erreur de validation"}
+        return TemplateResponse(request, 'htmx/subscription/modal_ok.html', context=context)
+
     options = OptionGenerale.objects.all()
     options_list = []
     for ele in options:
         options_list.append({'value': str(ele.uuid), 'name': ele.name})
 
     categorie_list = [
-        { 'value': 'B', 'name': 'Billet payant'},
-        { 'value': 'P', 'name': "Pack d'objets"},
-        { 'value': 'R', 'name': 'Recharge cashless'},
-        { 'value': 'S', 'name': 'Recharge suspendue'},
-        { 'value': 'T', 'name': 'Vetement'},
-        { 'value': 'M', 'name': 'Merchandasing'},
-        { 'value': 'A', 'name': "Abonnement et/ou adhésion associative"},
-        { 'value': 'D', 'name': 'Don'},
-        { 'value': 'F', 'name': 'Reservation gratuite'},
-        { 'value': 'V', 'name': 'Nécessite une validation manuelle'}
+        {'value': 'B', 'name': 'Billet payant'},
+        {'value': 'P', 'name': "Pack d'objets"},
+        {'value': 'R', 'name': 'Recharge cashless'},
+        {'value': 'S', 'name': 'Recharge suspendue'},
+        {'value': 'T', 'name': 'Vetement'},
+        {'value': 'M', 'name': 'Merchandasing'},
+        {'value': 'A', 'name': "Abonnement et/ou adhésion associative"},
+        {'value': 'D', 'name': 'Don'},
+        {'value': 'F', 'name': 'Reservation gratuite'},
+        {'value': 'V', 'name': 'Nécessite une validation manuelle'}
     ]
 
     context = {
@@ -126,12 +128,13 @@ def create_product(request):
     }
     return TemplateResponse(request, 'htmx/views/create_product.html', context=context)
 
+
 def test_jinja(request):
-  context = {
-    'list': [1,2,3,4,5,6],
-    'var1': '',
-    'var2': '',
-    'var3': '',
-    'var4': 'hello'
-  }
-  return TemplateResponse(request, 'htmx/views/test_jinja.html', context=context)
+    context = {
+        'list': [1, 2, 3, 4, 5, 6],
+        'var1': '',
+        'var2': '',
+        'var3': '',
+        'var4': 'hello'
+    }
+    return TemplateResponse(request, 'htmx/views/test_jinja.html', context=context)
