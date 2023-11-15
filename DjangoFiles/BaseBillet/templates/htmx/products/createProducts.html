@@ -1,11 +1,12 @@
 {% extends "htmx/base.html" %}
 
 
-
 {% block content %}
 <div class="container mt-7">
     <form hx-post="/contact">
-        
+
+        {% include "htmx/components/inputMd.html" with id="test1" label="labeltest1" type="text"  msg_error="l'info svp" %}
+
         <div>
             <label>Nom</label>
             <input type="text" placeholder="nom d'un produit">
