@@ -23,6 +23,7 @@
     <!-- option choix unique -->
     {% include "htmx/components/selectMd.html" with multiple="true" list=options_list id="tibillet-option-radio" label="Option (choix unique)" msg_error="Renseigner l'option svp" %}
 
+    <!-- image -->
     {% include "htmx/components/inputMd.html" with id="tibillet-product-img" label="Image" type="file" msg_error="Sélectionner une image svp" %}
 
     <button class="btn btn-default" onclick="validateForm()">Submit</button>
