@@ -100,7 +100,7 @@ class Ticket_html_view(APIView):
 
 
 
-def create_products(request):
+def create_product(request):
     options = OptionGenerale.objects.all()
     options_list = []
     for ele in options:
@@ -122,8 +122,14 @@ def create_products(request):
         'options_list': options_list,
         'categorie_list': categorie_list
     }
-    return TemplateResponse(request, 'htmx/views/create_products.html', context=context)
+    return TemplateResponse(request, 'htmx/views/create_product.html', context=context)
 
 def test_jinja(request):
-  context = {}
+  context = {
+    'list': [1,2,3,4,5,6],
+    'var1': '',
+    'var2': '',
+    'var3': '',
+    'var4': 'hello'
+  }
   return TemplateResponse(request, 'htmx/views/test_jinja.html', context=context)

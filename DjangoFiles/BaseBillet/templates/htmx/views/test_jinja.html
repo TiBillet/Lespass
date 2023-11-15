@@ -1,8 +1,25 @@
 {% extends "htmx/base.html" %}
 
-
 {% block content %}
-<h1>Test jinja</h1>
+<div class="container mt-7">
+    <h1>Test jinja</h1>
+    <h4 class="mt-2">cycle</h4>
+    {% for item in list %}
+    <div class="text-white {% cycle 'bg-success' 'bg-dark' %}">test cycle - {{ item }}</div>
+    {% endfor %}
+
+    <h4 class="mt-2">firstof</h4>
+    <div>
+        <span>Cas 1 :</span>{% firstof var1 var2 var3 %}
+    </div>
+    <div>
+        <span>Cas 2, fallback :</span>{% firstof var1 var2 var3 "tout est vide !" %}
+    </div>
+    <div>
+        <span>Cas 3, une valeur + fallback :</span>{% firstof var1 var2 var3 var4 "tout est vide !" %}
+    </div>
+
+</div>
 {% endblock content %}
 
 {% block script %}
