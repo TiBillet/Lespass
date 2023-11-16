@@ -29,10 +29,49 @@
 
             <span class="text-primary text-uppercase text-sm font-weight-bold tibillet-text-primary">
                 {% for product in event.products.all %}
-                <pre>{{ product }}</pre>
+                <span>
+                    {% if product.categorie_article == 'B' %}
+                    {% for price in product.prices.all %}
+                    <span> - {{ price.prix }}€</span>
+                    {% endfor %}
+                    {% endif %}
+                </span>
+                {% if product.categorie_article == 'F' %}
+                <span> - ENTRÉE LIBRE</span>
+                {% endif %}
+                {% empty %}
+                <span> - ENTRÉE LIBRE</span>
                 {% endfor %}
             </span>
         </p>
 
+        {% if event.short_description != None %}
+        <p class="card-description mb-4">
+            {{ event.short_description }}
+        </p>
+        {% endif %}
+
+        {% if event.short_description == None and event.artists.first != None %}
+        <p class="card-description mb-4">
+            {{ event.artists.first.configuration.short_description }}
+        </p>
+        {% endif %}
+
+        {% if event.categorie == 'CARDE_CREATE' %}
+        <!-- TODO: pensez à modifier les urls (/mvt/xxxxx) -->
+        <div class="btn btn-outline-primary tibillet-outline-primary btn-sm" onclick="window.location = '/mvt/create_event'"
+            role="button" aria-label="Créer un évènement">
+            Valider
+        </div>
+        {% else %}
+        <!-- TODO: pensez à modifier les urls (/mvt/xxxxx) -->
+        <div class="btn btn-outline-primary tibillet-outline-primary btn-sm" onclick="window.location = '/mvt/event/{{ event.slug }}'" role="button" aria-label="Réserver {{ event.slug }}">
+            {% if event.products.first == None %}
+            Informations
+            {% else %}
+            Réserver
+            {% endif %}
+        </div>
+        {% endif %}
     </div>
 </div>
