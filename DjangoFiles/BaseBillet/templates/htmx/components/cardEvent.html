@@ -2,7 +2,7 @@
 <div class="card test-card-event" data-animation="true">
     <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
         <a class="d-block">
-            {% if athlete_list %}
+            {% if event.categorie == 'CARDE_CREATE' %}
             <img v-if="event.categorie === 'CARDE_CREATE'" class="img-fluid shadow border-radius-lg"
                 src="{% static 'mvt_htmx/images/createEvent.jpg' %}" loading="lazy" alt="Image de l'évènement !" />
             {% else %}
@@ -28,7 +28,9 @@
             {% endif %}
 
             <span class="text-primary text-uppercase text-sm font-weight-bold tibillet-text-primary">
-                <pre>{{ event.products }}</pre>
+                {% for product in event.products.all %}
+                <pre>{{ product }}</pre>
+                {% endfor %}
             </span>
         </p>
 
