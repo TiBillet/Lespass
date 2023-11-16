@@ -1,0 +1,36 @@
+{% load static %}
+<div class="card test-card-event" data-animation="true">
+    <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
+        <a class="d-block">
+            {% if athlete_list %}
+            <img v-if="event.categorie === 'CARDE_CREATE'" class="img-fluid shadow border-radius-lg"
+                src="{% static 'mvt_htmx/images/createEvent.jpg' %}" loading="lazy" alt="Image de l'évènement !" />
+            {% else %}
+            <img v-else class="img-fluid shadow border-radius-lg" src="{{ event.img_variations.crop }}" loading="lazy"
+                alt="Image de l'évènement !" />
+            {% endif %}
+        </a>
+    </div>
+    <div class="card-body">
+        <span class="card-title mt-3 h5 d-block text-dark">
+            {% if event.categorie == 'CARDE_CREATE' %}
+            Créer votre évènement
+            {% else %}
+            {{ event.name }}
+            {% endif %}
+        </span>
+
+        <p class="text-dark">
+            {% if event.categorie == 'CARDE_CREATE' %}
+            Maintenant
+            {% else %}
+            {{ event.datetime|date:"j/m/Y - H:i:s" }}
+            {% endif %}
+
+            <span class="text-primary text-uppercase text-sm font-weight-bold tibillet-text-primary">
+                <pre>{{ event.products }}</pre>
+            </span>
+        </p>
+
+    </div>
+</div>

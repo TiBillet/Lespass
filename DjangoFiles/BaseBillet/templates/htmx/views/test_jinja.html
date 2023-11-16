@@ -19,6 +19,13 @@
         <span>Cas 3, une valeur + fallback :</span>{% firstof var1 var2 var3 var4 "tout est vide !" %}
     </div>
 
+    <h4 class="mt-2">verbatim</h4>
+    verbatim bloque le rendu jinja, les données sont brutes:
+    <div>
+        {% verbatim %}
+        {{if dying}}Still alive.{{/if}}
+        {% endverbatim %}
+    </div>
 </div>
 {% endblock content %}
 

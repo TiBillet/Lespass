@@ -1,6 +1,6 @@
 <div class="input-group input-group-dynamic mb-4 is-filled">
-    <label for="{{ id }}" class="form-label">{{ label }}</label>
-    <input name="{{ id }}" id="{{ id }}" type="{{ type }}" class="form-control">
+    <label for="tibillet-input-{{ uuid.uuid4 }}" class="form-label">{{ label }}</label>
+    <input name="{{ name }}" id="tibillet-input-{{ uuid.uuid4 }}" type="{{ type }}" class="form-control">
 
     {% for error in errors %}
         {% if error.id == id %}

@@ -10,6 +10,7 @@ from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Ev
 
 import segno
 import barcode
+import uuid
 
 from io import BytesIO
 
@@ -127,6 +128,7 @@ def create_product(request):
     ]
 
     context = {
+        "uuid": uuid,
         "options_list": options_list,
         "categorie_list": categorie_list,
         "Product": Product,
@@ -143,7 +145,6 @@ def test_jinja(request):
         "var4": "hello",
     }
     return TemplateResponse(request, "htmx/views/test_jinja.html", context=context)
-
 
 def accueil(request):
     context = {
