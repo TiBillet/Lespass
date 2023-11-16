@@ -20,7 +20,7 @@ class index(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        return HttpResponseRedirect('https://tibillet.org')
+        return HttpResponseRedirect("https://tibillet.org")
 
         # configuration = Configuration.get_solo()
         # if not configuration.activer_billetterie:
@@ -43,7 +43,8 @@ class event(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, slug):
-        return HttpResponseRedirect('https://www.tibillet.re')
+        return HttpResponseRedirect("https://www.tibillet.re")
+
     #     configuration = Configuration.get_solo()
     #     event = get_object_or_404(Event, slug=slug)
     #
@@ -67,77 +68,97 @@ class Ticket_html_view(APIView):
         qr = segno.make(f"{ticket.uuid}", micro=False)
 
         buffer_svg = BytesIO()
-        qr.save(buffer_svg, kind='svg', scale=8)
+        qr.save(buffer_svg, kind="svg", scale=8)
 
-        CODE128 = barcode.get_barcode_class('code128')
+        CODE128 = barcode.get_barcode_class("code128")
         buffer_barcode_SVG = BytesIO()
-        bar_secret = encode_uid(f"{ticket.uuid}".split('-')[4])
+        bar_secret = encode_uid(f"{ticket.uuid}".split("-")[4])
 
         bar = CODE128(f"{bar_secret}")
         options = {
-            'module_height': 30,
-            'module_width': 0.6,
-            'font_size': 10,
+            "module_height": 30,
+            "module_width": 0.6,
+            "font_size": 10,
         }
         bar.write(buffer_barcode_SVG, options=options)
 
         context = {
-            'ticket': ticket,
-            'config': Configuration.get_solo(),
-            'img_svg': buffer_svg.getvalue().decode('utf-8'),
+            "ticket": ticket,
+            "config": Configuration.get_solo(),
+            "img_svg": buffer_svg.getvalue().decode("utf-8"),
             # 'img_svg64': base64.b64encode(buffer_svg.getvalue()).decode('utf-8'),
-            'bar_svg': buffer_barcode_SVG.getvalue().decode('utf-8'),
+            "bar_svg": buffer_barcode_SVG.getvalue().decode("utf-8"),
             # 'bar_svg64': base64.b64encode(buffer_barcode_SVG.getvalue()).decode('utf-8'),
-
         }
 
-        return render(request, 'ticket/ticket.html', context=context)
+        return render(request, "ticket/ticket.html", context=context)
         # return render(request, 'ticket/qrtest.html', context=context)
 
 
 def create_product(request):
-    if request.method == 'POST':
+    if request.method == "POST":
         print(f"reception du formulaire {request.POST}")
 
         # Erreur :
         errors = [
-            {'id': 'tibillet-product-name', 'msg': 'erreur de validation'},
+            {"id": "tibillet-product-name", "msg": "erreur de validation"},
         ]
         context = {"errors": errors}
-        return TemplateResponse(request, 'htmx/subscription/modal.html', context=context)
+        return TemplateResponse(
+            request, "htmx/subscription/modal.html", context=context
+        )
 
     options = OptionGenerale.objects.all()
     options_list = []
     for ele in options:
-        options_list.append({'value': str(ele.uuid), 'name': ele.name})
+        options_list.append({"value": str(ele.uuid), "name": ele.name})
 
     categorie_list = [
-        {'value': 'B', 'name': 'Billet payant'},
-        {'value': 'P', 'name': "Pack d'objets"},
-        {'value': 'R', 'name': 'Recharge cashless'},
-        {'value': 'S', 'name': 'Recharge suspendue'},
-        {'value': 'T', 'name': 'Vetement'},
-        {'value': 'M', 'name': 'Merchandasing'},
-        {'value': 'A', 'name': "Abonnement et/ou adhésion associative"},
-        {'value': 'D', 'name': 'Don'},
-        {'value': 'F', 'name': 'Reservation gratuite'},
-        {'value': 'V', 'name': 'Nécessite une validation manuelle'}
+        {"value": "B", "name": "Billet payant"},
+        {"value": "P", "name": "Pack d'objets"},
+        {"value": "R", "name": "Recharge cashless"},
+        {"value": "S", "name": "Recharge suspendue"},
+        {"value": "T", "name": "Vetement"},
+        {"value": "M", "name": "Merchandasing"},
+        {"value": "A", "name": "Abonnement et/ou adhésion associative"},
+        {"value": "D", "name": "Don"},
+        {"value": "F", "name": "Reservation gratuite"},
+        {"value": "V", "name": "Nécessite une validation manuelle"},
     ]
 
     context = {
-        'options_list': options_list,
-        'categorie_list': categorie_list,
-        'Product': Product,
+        "options_list": options_list,
+        "categorie_list": categorie_list,
+        "Product": Product,
     }
-    return TemplateResponse(request, 'htmx/views/create_product.html', context=context)
+    return TemplateResponse(request, "htmx/views/create_product.html", context=context)
 
 
 def test_jinja(request):
     context = {
-        'list': [1, 2, 3, 4, 5, 6],
-        'var1': '',
-        'var2': '',
-        'var3': '',
-        'var4': 'hello'
+        "list": [1, 2, 3, 4, 5, 6],
+        "var1": "",
+        "var2": "",
+        "var3": "",
+        "var4": "hello",
     }
-    return TemplateResponse(request, 'htmx/views/test_jinja.html', context=context)
+    return TemplateResponse(request, "htmx/views/test_jinja.html", context=context)
+
+
+def accueil(request):
+    context = {
+        fakeEvent: {
+            "uuid": "fakeEven-ece7-4b30-aa15-b4ec444a6a73",
+            "name": "Nom de l'évènement",
+            "short_description": "Cliquer sur le bouton si-dessous.",
+            "long_description": null,
+            "categorie": "CARDE_CREATE",
+            "tag": [],
+            "products": [],
+            "options_radio": [],
+            "options_checkbox": [],
+            "img_variations": {"crop": "/media/images/1080_v39ZV53.crop"},
+            "artists": [],
+        }
+    }
+    return TemplateResponse(request, "htmx/views/accueil.html", context=context)
