@@ -6,7 +6,7 @@ from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 
-from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product
+from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Event
 
 import segno
 import barcode
@@ -147,11 +147,14 @@ def test_jinja(request):
 
 def accueil(request):
     context = {
-        fakeEvent: {
+        "config": Configuration.get_solo(),
+        "events": Event.objects.all(),
+        "user": request.user,
+        "fakeEvent": {
             "uuid": "fakeEven-ece7-4b30-aa15-b4ec444a6a73",
             "name": "Nom de l'évènement",
             "short_description": "Cliquer sur le bouton si-dessous.",
-            "long_description": null,
+            "long_description": None,
             "categorie": "CARDE_CREATE",
             "tag": [],
             "products": [],
