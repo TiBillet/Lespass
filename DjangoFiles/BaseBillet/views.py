@@ -147,11 +147,18 @@ def test_jinja(request):
     return TemplateResponse(request, "htmx/views/test_jinja.html", context=context)
 
 def accueil(request):
+    base_template = "htmx/base.html"
+    # if request.htmx:
+    #     base_template = "htmx/partial.html"
+
+
     host = 'http://' + request.get_host()
     if request.is_secure():
         protocol = 'https://' + request.get_host()
+    # import ipdb; ipdb.set_trace()
     print(f"-> info = {request.user.is_active}")
     context = {
+        "base_template": base_template,
         "host": host,
         "url_name": request.resolver_match.url_name,
         "config": Configuration.get_solo(),
