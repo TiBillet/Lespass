@@ -24,7 +24,7 @@
                 </li>
                 {% endif %}
 
-                {% if config.categorie|not_in_list:'M' and page_name != 'Adhésion' %}
+                {% if config.categorie|not_in_list:'M' and url_name != 'adhesion' %}
                 <li class="nav-item mx-2 cursor-pointer">
                     <i class="fa fa-users" aria-hidden="true"></i>
                     Adhésion

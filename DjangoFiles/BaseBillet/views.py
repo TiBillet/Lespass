@@ -153,7 +153,7 @@ def accueil(request):
     print(f"-> info = {request.user.is_active}")
     context = {
         "host": host,
-        "page_name": "Accueil",
+        "url_name": request.resolver_match.url_name,
         "config": Configuration.get_solo(),
         "events": Event.objects.all(),
         "user": request.user,
