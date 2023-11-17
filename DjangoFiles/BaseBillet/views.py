@@ -150,7 +150,7 @@ def accueil(request):
     host = 'http://' + request.get_host()
     if request.is_secure():
         protocol = 'https://' + request.get_host()
-    
+    print(f"-> info = {request.user.is_active}")
     context = {
         "host": host,
         "page_name": "Accueil",

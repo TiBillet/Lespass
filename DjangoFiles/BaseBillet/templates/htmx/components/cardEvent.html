@@ -58,14 +58,13 @@
         {% endif %}
 
         {% if event.categorie == 'CARDE_CREATE' %}
-        <!-- TODO: pensez à modifier les urls (/mvt/xxxxx) -->
-        <div class="btn btn-outline-primary tibillet-outline-primary btn-sm" onclick="window.location = '/mvt/create_event'"
+        <div class="btn btn-outline-primary tibillet-outline-primary btn-sm" onclick="goPage('/create_event')"
             role="button" aria-label="Créer un évènement">
             Valider
         </div>
         {% else %}
-        <!-- TODO: pensez à modifier les urls (/mvt/xxxxx) -->
-        <div class="btn btn-outline-primary tibillet-outline-primary btn-sm" onclick="window.location = '/mvt/event/{{ event.slug }}'" role="button" aria-label="Réserver {{ event.slug }}">
+        <div class="btn btn-outline-primary tibillet-outline-primary btn-sm"
+         onclick="goPage('/event/{{ event.slug }}')" role="button" aria-label="Réserver {{ event.slug }}">
             {% if event.products.first == None %}
             Informations
             {% else %}
