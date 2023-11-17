@@ -24,6 +24,7 @@
 
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
     {% include "htmx/layout/navbar.html" %}
+    {% include "htmx/layout/header.html" %}
    
     {% block content %}
     {% endblock content %}

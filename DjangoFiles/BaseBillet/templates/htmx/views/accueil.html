@@ -8,11 +8,6 @@
       <div v-if="getIsStaff" class="col-lg-4 col-md-6 mb-7">
         <CardEvent :event="fakeEvent" :place="getHeaderPlace" />
       </div>
-
-      <div class="col-lg-4 col-md-6 mb-7 " v-for="(event, index) in $route.params.events"
-        :key="index">
-        <CardEvent :event="event" :place="getHeaderPlace" />
-      </div>
       -->
     {% for event in events %}
     <div class="col-lg-4 col-md-6 mb-7 ">

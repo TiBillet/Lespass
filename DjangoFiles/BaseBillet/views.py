@@ -147,11 +147,17 @@ def test_jinja(request):
     return TemplateResponse(request, "htmx/views/test_jinja.html", context=context)
 
 def accueil(request):
+    host = 'http://' + request.get_host()
+    if request.is_secure():
+        protocol = 'https://' + request.get_host()
+    
     context = {
+        "host": host,
+        "page_name": "Accueil",
         "config": Configuration.get_solo(),
         "events": Event.objects.all(),
         "user": request.user,
-        "fakeEvent": {
+        "fake_event": {
             "uuid": "fakeEven-ece7-4b30-aa15-b4ec444a6a73",
             "name": "Nom de l'évènement",
             "short_description": "Cliquer sur le bouton si-dessous.",
