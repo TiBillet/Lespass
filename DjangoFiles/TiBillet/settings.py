@@ -84,6 +84,7 @@ SHARED_APPS = (
     'solo',
     'stdimage',
     'corsheaders',
+    'django_htmx',
 )
 
 # CodeLogin_app/settings.py
@@ -123,6 +124,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django_browser_reload.middleware.BrowserReloadMiddleware',
+    'django_htmx.middleware.HtmxMiddleware',
 ]
 
 TEMPLATES = [
@@ -244,6 +246,7 @@ STATIC_ROOT = os.path.join(BASE_DIR, "www", "static")
 STATIC_URL = '/static/'
 
 STATICFILES_DIRS = ['BaseBillet/static','MetaBillet/static','QrcodeCashless/static',]
+# STATICFILES_DIRS = [BASE_DIR / "static"]
 
 MEDIA_ROOT = os.path.join(BASE_DIR, "www", "media")
 MEDIA_URL = '/media/'
