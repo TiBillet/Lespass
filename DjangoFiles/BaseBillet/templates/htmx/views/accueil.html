@@ -3,13 +3,14 @@
 {% block content %}
 
 <div class="container mt-7">
-  <div class="mt-1 mb-7 w-100">{{ user }}</div>
   <div class="row">
-    <!--
-      <div v-if="getIsStaff" class="col-lg-4 col-md-6 mb-7">
-        <CardEvent :event="fakeEvent" :place="getHeaderPlace" />
-      </div>
-      -->
+
+    {% if user.is_staff == True %}
+    <div class="col-lg-4 col-md-6 mb-7">
+      {% include "htmx/components/cardEvent.html" with event=fake_event %}
+    </div>
+    {% endif %}
+
     {% for event in events %}
     <div class="col-lg-4 col-md-6 mb-7 ">
       {% include "htmx/components/cardEvent.html" with event=event %}
@@ -20,9 +21,3 @@
   </div>
 </div>
 {% endblock content %}
-
-{% block script %}
-function goPage(url) {
-  window.location = url
-}
-{% endblock script %}
