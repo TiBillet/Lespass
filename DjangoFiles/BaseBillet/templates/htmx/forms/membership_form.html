@@ -3,20 +3,8 @@
     {{ membership }}
 </div>
 
-<div class="container py-7">
-    <div class="row mt-5">
-      <div class="col-sm-3 col-6 mx-auto">
-        //-- Button trigger modal --
-        <button type="button" class="btn bg-gradient-primary" data-bs-toggle="modal" data-bs-target="#exampleModal">
-          Launch demo modal
-        </button>
-  
-        
-      </div>
-    </div>
-  </div>
 -->
-<!-- Modal -->
+
 <div class="modal fade" id="tibillet-membership-modal" tabindex="-1" aria-labelledby="exampleModalLabel"
     aria-hidden="true">
     <div class="modal-dialog">
@@ -28,15 +16,49 @@
                 <h5 style="white-space: pre-line">{{ membership.short_description }}</h5>
             </div>
             <div class="modal-body">
-                Society has put up so many boundaries, so many limitations on what’s right and wrong that it’s almost
-                impossible to get a pure thought out.
-                <br><br>
-                It’s like a little kid, a little boy, looking at colors, and no one told him what colors are good,
-                before somebody tells you you shouldn’t like pink because that’s for girls, or you’d instantly become a
-                gay two-year-old.
+
+                <!-- conditions -->
+                <div class="input-group mb-4 has-validation" style="position:relative">
+
+                    <div class="form-check form-switch d-flex flex-row" style="padding-left: 0;">
+                        <input name="tibillet-membership-read-conditions"
+                            class="form-check-input ms-auto mt-1 tibillet-input-checkbox" type="checkbox"
+                            id="tibillet-membership-read-conditions-id">
+                        <label class="form-check-label ms-2" for="tibillet-membership-read-conditions-id">
+                            <span>j'ai pris connaissance des </span>
+                            {% if membership.categorie_article == 'A' %}
+                            <span>
+                                {% if membership.legal_link != None %}
+                                <a class="text-info" href="{{ membership.legal_link }}" target="_blank">
+                                    statuts et du règlement intérieur de l'association.
+                                </a>
+                                {% else %}
+                                <span>statuts et du règlement intérieur de l'association</span>
+                                {% endif %}
+                            </span>
+                            {% else %}
+                            {% if membership.legal_link != None %}
+                            <a class="text-info" href="{{ membership.legal_link }}" target="_blank">CGU/CGV.</a>
+                            {% else %}
+                            <span>CGU/CGV.</span>
+                            {% endif %}
+                            {% endif %}
+                        </label>
+                        <div class="invalid-feedback" role="heading" aria-label="Conditions non acceptées.">
+                            Conditions non acceptées.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- prix -->
+                {% for price in membership.prices.all %}
+                    <div>{{ price.name }}</div>
+                {% endfor %}
+
+
             </div>
             <div class="modal-footer justify-content-between">
-                <button type="submit" class="btn bg-gradient-info btn-lg w-100 mt-4 mb-0" role="button"
+                <button class="btn bg-gradient-info btn-lg w-100 mt-4 mb-0" role="button"
                     aria-label="valider formulaire adhésion">
                     Valider
                 </button>
@@ -44,3 +66,5 @@
         </div>
     </div>
 </div>
+
+</script>

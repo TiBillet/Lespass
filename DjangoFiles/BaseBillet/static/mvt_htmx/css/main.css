@@ -1,3 +1,7 @@
 .tibillet-hide-element {
     display: none;
 }
+
+input[class~="tibillet-input-checkbox"]:checked {
+    background-color: var(--bs-success) !important;
+}
