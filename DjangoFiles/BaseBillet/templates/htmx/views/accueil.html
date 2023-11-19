@@ -1,23 +1,23 @@
 {% extends base_template %}
 
-{% block content %}
+  {% block main %}
 
-<div class="container mt-7">
-  <div class="row">
+  <div class="container mt-7">
+    <div class="row">
 
-    {% if user.is_staff == True %}
-    <div class="col-lg-4 col-md-6 mb-7">
-      {% include "htmx/components/cardEvent.html" with event=fake_event %}
+      {% if user.is_staff == True %}
+      <div class="col-lg-4 col-md-6 mb-7">
+        {% include "htmx/components/cardEvent.html" with event=fake_event %}
+      </div>
+      {% endif %}
+
+      {% for event in events %}
+      <div class="col-lg-4 col-md-6 mb-7 ">
+        {% include "htmx/components/cardEvent.html" with event=event %}
+      </div>
+      {% endfor %}
+
+
     </div>
-    {% endif %}
-
-    {% for event in events %}
-    <div class="col-lg-4 col-md-6 mb-7 ">
-      {% include "htmx/components/cardEvent.html" with event=event %}
-    </div>
-    {% endfor %}
-
-
   </div>
-</div>
-{% endblock content %}
+  {% endblock main %}

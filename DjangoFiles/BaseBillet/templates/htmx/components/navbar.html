@@ -1,0 +1,64 @@
+{% load not_in_list %}
+<nav class="navbar navbar-expand-lg fixed-top bg-dark opacity-8 z-index-3 w-100 shadow-none">
+    <div class="container">
+        <a class="navbar-brand  text-white cursor-pointer" rel="tooltip" title="Designed and Coded by Creative Tim"
+            data-placement="bottom" target="_blank" hx-get="/mvt/accueil" hx-target="#main" hx-swap="outerHTML"
+            hx-push-url="true">
+            {{ config.organisation }}
+        </a>
+        <button class="navbar-toggler shadow-none ms-2" type="button" data-bs-toggle="collapse"
+            data-bs-target="#tibilet-navigation" aria-controls="tibilet-navigation" aria-expanded="false"
+            aria-label="Toggle tibilet-navigation">
+            <span class="navbar-toggler-icon mt-2">
+                <span class="navbar-toggler-bar bar1"></span>
+                <span class="navbar-toggler-bar bar2"></span>
+                <span class="navbar-toggler-bar bar3"></span>
+            </span>
+        </button>
+        <div class="collapse navbar-collapse w-100 pt-3 pb-2 py-lg-0 ms-lg-12 ps-lg-5" id="tibilet-navigation">
+            <!-- positionner les li inversés -->
+            <ul class="navbar-nav navbar-nav-hover w-100 flex-row-reverse text-white">
+                {% if user.is_active == False %}
+                <li class="nav-item mx-2 cursor-pointer">
+                    <i class="fa fa-user" aria-hidden="true"></i>
+                    Se connecter
+                </li>
+                {% endif %}
+
+                {% if config.categorie|not_in_list:'M' and url_name != 'adhesion' %}
+                <li class="nav-item mx-2 cursor-pointer" hx-get="/mvt/adhesion" hx-target="#main" hx-swap="outerHTML"
+                    hx-push-url="true" role="button" aria-label="Sélectionner une adhésion">
+                    <i class="fa fa-users" aria-hidden="true"></i>
+                    Adhésion
+                </li>
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+</nav>
+<!--
+        <button type="button" class="btn bg-gradient-info" data-bs-toggle="modal"
+                data-bs-target="#exampleModalForm">
+            Launch demo modal
+        </button>
+-->
+
+<script>
+    const prefixUrl = '/mvt'
+    document.body.addEventListener('htmx:pushedIntoHistory', function (evt) {
+        console.log('evt.detail =', evt.detail);
+        const domain = `${window.location.protocol}//${window.location.host}`;
+        console.log('window.location.pathname =', window.location.pathname);
+
+        // --- binding navbar ---
+
+        // affiche / efface le menu adhésion
+        const btAdhesion = document.querySelector(`#tibilet-navigation li[role="button"][aria-label="Sélectionner une adhésion"]`)
+        if (evt.detail.path.includes('adhesion') && window.location.pathname.includes('adhesion')) {
+            btAdhesion.classList.add('tibillet-hide-element')
+        } else {
+            btAdhesion.classList.remove('tibillet-hide-element')
+        }
+
+    });
+</script>

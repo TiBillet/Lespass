@@ -1,6 +1,8 @@
-from django.http import HttpResponseRedirect, HttpResponse
+from django.http import HttpResponseRedirect, HttpResponse, HttpRequest
 from django.shortcuts import render
 from django.template.response import TemplateResponse
+
+from django.views.decorators.http import require_GET
 
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
@@ -146,17 +148,19 @@ def test_jinja(request):
     }
     return TemplateResponse(request, "htmx/views/test_jinja.html", context=context)
 
-def accueil(request):
-    base_template = "htmx/base.html"
-    # if request.htmx:
-    #     base_template = "htmx/partial.html"
-
+@require_GET
+def accueil(request: HttpRequest) -> HttpResponse:
+    if request.htmx:
+        base_template = "htmx/partial.html"
+    else:
+        base_template = "htmx/base.html"
 
     host = 'http://' + request.get_host()
     if request.is_secure():
-        protocol = 'https://' + request.get_host()
+        host = 'https://' + request.get_host()
+    
     # import ipdb; ipdb.set_trace()
-    print(f"-> info = {request.user.is_active}")
+    # print(f"-> info = {request.user.is_active}")
     context = {
         "base_template": base_template,
         "host": host,
@@ -178,4 +182,45 @@ def accueil(request):
             "artists": [],
         }
     }
-    return TemplateResponse(request, "htmx/views/accueil.html", context=context)
+    return render(request, "htmx/views/accueil.html", context=context)
+
+class membership_form(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, uuid):
+        print(f"uuid = {uuid}")
+
+        host = 'http://' + request.get_host()
+        if request.is_secure():
+            host = 'https://' + request.get_host()
+        
+        context = {
+            "host": host,
+            "url_name": request.resolver_match.url_name,
+            "config": Configuration.get_solo(),
+            "membership": Product.objects.get(uuid=uuid)
+        }
+
+        return render(request, "htmx/forms/membership_form.html", context=context)
+
+
+@require_GET
+def adhesion(request: HttpRequest) -> HttpResponse:
+    if request.htmx:
+        base_template = "htmx/partial.html"
+    else:
+        base_template = "htmx/base.html"
+    
+    host = 'http://' + request.get_host()
+    if request.is_secure():
+        host = 'https://' + request.get_host()
+    
+    context = {
+        "base_template": base_template,
+        "host": host,
+        "url_name": request.resolver_match.url_name,
+        "config": Configuration.get_solo(),
+        "memberships": Product.objects.filter(categorie_article='A')
+    }
+
+    return render(request, "htmx/views/memberships.html", context=context)

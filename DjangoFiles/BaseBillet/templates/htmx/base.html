@@ -1,7 +1,7 @@
 {% load static %}
 <!DOCTYPE html>
 <html lang="fr">
-    
+
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
@@ -18,16 +18,22 @@
     <!-- Material Kit - v3.0.4 -->
     <link href="{% static 'mvt_htmx/material_kit_2.0.7/css_v3.0.4/material-kit.css' %}" rel="stylesheet" />
 
+    <!-- Tibillet css -->
+    <link href="{% static 'mvt_htmx/css/main.css' %}" rel="stylesheet" />
+
     {% block head %}
     {% endblock head %}
 </head>
 
+<!-- <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' class="dark-version"> -->
+
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
-    {% include "htmx/layout/navbar.html" %}
-    {% include "htmx/layout/header.html" %}
-   
-    {% block content %}
-    {% endblock content %}
+    {% include "htmx/components/navbar.html" %}
+    {% include "htmx/components/header.html" %}
+    
+    <main id="main">
+        {% block main %}{% endblock main %}
+    </main>
 
     <!-- Bootstrap v5.2.3 -->
     <script src="{% static 'mvt_htmx/material_kit_2.0.7/js/core/bootstrap.min.js' %}"></script>
@@ -36,7 +42,7 @@
     <script src="{% static 'mvt_htmx/material_kit_2.0.7/js/material-kit.js' %}"></script>
     <!-- htmx -->
     <script src="{% static 'mvt_htmx/js/htmx.min.1.9.8.js' %}"></script>
-    
+
     <!-- commun -->
     <script src="{% static 'mvt_htmx/js/commun.js' %}"></script>
     {% block script %}
@@ -44,6 +50,12 @@
 
     {% block footer %}
     {% endblock footer %}
+
+    <script>
+        const root = document.querySelector(':root');
+        root.style.setProperty('--bs-primary', 'green');
+        /* --bs-primary: #f05f3e !important; */
+    </script>
 </body>
 
 </html>

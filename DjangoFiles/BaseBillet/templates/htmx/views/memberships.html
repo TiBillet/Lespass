@@ -1,0 +1,50 @@
+{% extends base_template %}
+
+{% block main %}
+<div class="container pt-7 pb-5">
+    {% for membership in memberships %}
+    <div class="row justify-space-between py-2">
+        <div class="card card-plain card-blog mt-5">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="card-image position-relative border-radius-lg">
+                        <img class="img border-radius-lg w-100 h-auto" src="/media/{{ membership.img  }}"
+                            alt="image product" loading="lazy">
+                    </div>
+                </div>
+                <div class="col-md-7 my-auto ms-md-3 mt-md-auto mt-4">
+                    <h3>{{ membership.name }}
+                    </h3>
+                    <p style="white-space: pre-line">
+                        {{ membership.short_description }}
+                    </p>
+                    <p style="white-space: pre-line">
+                        {{ membership.long_description }}
+                    </p>
+
+                    <button class="btn btn-outline-secondary btn-sm" hx-get="/mvt/membership_form/{{membership.uuid}}"
+                        hx-target="#tibillet-membership-modal" hx-swap="outerHTML" role="button"
+                        :aria-label="Adhérez {{ membership.name }}">Adhérez
+                    </button>
+
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+<div id="tibillet-membership-modal"></div>
+{% endblock main %}
+
+{% block script %}
+<script>
+    // une fois l'élément remplacé par le contenu de la requête
+    htmx.on('htmx:afterSettle', (evt) => {
+        if (evt.target.id === 'tibillet-membership-modal') {
+            const elementModal = document.querySelector('#tibillet-membership-modal')
+            const modal = bootstrap.Modal.getOrCreateInstance(elementModal) // Returns a Bootstrap modal instance
+            modal.show()
+        }
+    })
+</script>
+{% endblock script %}
