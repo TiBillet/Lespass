@@ -42,27 +42,6 @@ class index(APIView):
         #     return render(request, 'arnaud_mvc/lieu.html', context=context)
 
 
-class event(APIView):
-    permission_classes = [AllowAny]
-
-    def get(self, request, slug):
-        return HttpResponseRedirect("https://www.tibillet.re")
-
-    #     configuration = Configuration.get_solo()
-    #     event = get_object_or_404(Event, slug=slug)
-    #
-    #     context = {
-    #         'configuration': configuration,
-    #         'categorie_billet': Product.BILLET,
-    #         'event': event,
-    #     }
-    #
-    #     if configuration.template_billetterie :
-    #         return render(request, f'{configuration.template_billetterie}/event.html', context=context)
-    #     else :
-    #         return render(request, 'arnaud_mvc/event.html', context=context)
-
-
 class Ticket_html_view(APIView):
     permission_classes = [AllowAny]
 
@@ -184,6 +163,28 @@ def home(request: HttpRequest) -> HttpResponse:
         },
     }
     return render(request, "htmx/views/home.html", context=context)
+
+@require_GET
+def event(request: HttpRequest, slug) -> HttpResponse:
+    if request.htmx:
+        base_template = "htmx/partial.html"
+    else:
+        base_template = "htmx/base.html"
+
+    host = "http://" + request.get_host()
+    if request.is_secure():
+        host = "https://" + request.get_host()
+
+    context = {
+        "base_template": base_template,
+        "host": host,
+        "url_name": request.resolver_match.url_name,
+        "config": Configuration.get_solo(),
+        "slug": slug,
+        "event": Event.objects.get(slug=slug)
+    }
+    return render(request, "htmx/views/event.html", context=context)
+
 
 
 class membership_form(APIView):

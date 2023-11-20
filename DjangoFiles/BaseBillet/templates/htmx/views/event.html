@@ -1,8 +1,10 @@
-{% extends "htmx/base.html" %}
+{% extends base_template %}
 
-{% block content %}
-
-<div class="container mt-7">
-<h1>Event</h1>
-</div>
-{% endblock content %}
+  {% block main %}
+  {% include "htmx/header_groupe.html" %}
+    
+  <div class="container mt-7">
+   <h1>Event</h1>
+   {{ event.name }}
+  </div>
+  {% endblock main %}

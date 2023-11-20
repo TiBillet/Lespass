@@ -4,7 +4,7 @@ from BaseBillet import views as base_view
 
 urlpatterns = [
     path('ticket/<uuid:pk_uuid>', base_view.Ticket_html_view.as_view()),
-    path('event/<slug:slug>/', base_view.event.as_view(), name='event'),
+    path('mvt/event/<slug:slug>/', base_view.event, name='event'),
 
     path('mvt/membership_form/<uuid:uuid>/', base_view.membership_form.as_view(), name='membership_form'),
 

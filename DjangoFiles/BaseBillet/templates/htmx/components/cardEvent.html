@@ -58,19 +58,23 @@
         {% endif %}
 
         {% if event.categorie == 'CARDE_CREATE' %}
-        <div class="btn btn-outline-primary tibillet-outline-primary btn-sm" onclick="goPage('/create_event')"
-            role="button" aria-label="Créer un évènement">
-            Valider
-        </div>
+        <a href="/mvt/create_event/">
+            <div class="btn btn-outline-primary tibillet-outline-primary btn-sm" role="button"
+                aria-label="Créer un évènement">
+                Valider
+            </div>
+        </a>
         {% else %}
-        <div class="btn btn-outline-primary tibillet-outline-primary btn-sm"
-         onclick="goPage('/event/{{ event.slug }}')" role="button" aria-label="Réserver {{ event.slug }}">
-            {% if event.products.first == None %}
-            Informations
-            {% else %}
-            Réserver
-            {% endif %}
-        </div>
+        <a href="/mvt/event/{{ event.slug }}/">
+            <div class="btn btn-outline-primary tibillet-outline-primary btn-sm" role="button"
+                aria-label="Réserver {{ event.slug }}">
+                {% if event.products.first == None %}
+                Informations
+                {% else %}
+                Réserver
+                {% endif %}
+            </div>
+        </a>
         {% endif %}
     </div>
 </div>
