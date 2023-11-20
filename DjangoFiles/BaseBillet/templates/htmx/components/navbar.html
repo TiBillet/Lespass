@@ -2,7 +2,7 @@
 <nav class="navbar navbar-expand-lg fixed-top bg-dark opacity-8 z-index-3 w-100 shadow-none">
     <div class="container">
         <a class="navbar-brand  text-white cursor-pointer" rel="tooltip" title="Designed and Coded by Creative Tim"
-            data-placement="bottom" target="_blank" hx-get="/mvt/accueil" hx-target="#main" hx-swap="outerHTML"
+            data-placement="bottom" target="_blank" hx-get="/mvt/home" hx-target="#main" hx-swap="outerHTML"
             hx-push-url="true">
             {{ config.organisation }}
         </a>
@@ -25,13 +25,17 @@
                 </li>
                 {% endif %}
 
-                {% if config.categorie|not_in_list:'M' and url_name != 'adhesion' %}
-                <li class="nav-item mx-2 cursor-pointer" hx-get="/mvt/adhesion" hx-target="#main" hx-swap="outerHTML"
+                {% if config.categorie|not_in_list:'M' and url_name != 'memberships' %}
+                <li class="nav-item mx-2 cursor-pointer" hx-get="/mvt/memberships" hx-target="#main" hx-swap="outerHTML"
                     hx-push-url="true" role="button" aria-label="Sélectionner une adhésion">
                     <i class="fa fa-users" aria-hidden="true"></i>
                     Adhésion
                 </li>
                 {% endif %}
+                <li class="nav-item mx-2 cursor-pointer"  role="button" aria-label="Thème sombre" 
+                onclick="document.querySelector('body').classList.toggle('dark-version')">
+                    <i class="fa fa-moon-o" aria-hidden="true"></i>
+                </li>
             </ul>
         </div>
     </div>
@@ -42,23 +46,3 @@
             Launch demo modal
         </button>
 -->
-
-<script>
-    const prefixUrl = '/mvt'
-    document.body.addEventListener('htmx:pushedIntoHistory', function (evt) {
-        console.log('evt.detail =', evt.detail);
-        const domain = `${window.location.protocol}//${window.location.host}`;
-        console.log('window.location.pathname =', window.location.pathname);
-
-        // --- binding navbar ---
-
-        // affiche / efface le menu adhésion
-        const btAdhesion = document.querySelector(`#tibilet-navigation li[role="button"][aria-label="Sélectionner une adhésion"]`)
-        if (evt.detail.path.includes('adhesion') && window.location.pathname.includes('adhesion')) {
-            btAdhesion.classList.add('tibillet-hide-element')
-        } else {
-            btAdhesion.classList.remove('tibillet-hide-element')
-        }
-
-    });
-</script>

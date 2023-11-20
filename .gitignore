@@ -167,3 +167,4 @@ tempo/
 
 node_modules/
 .idea/
+.prettierrc

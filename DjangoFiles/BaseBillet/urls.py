@@ -9,8 +9,8 @@ urlpatterns = [
     path('mvt/membership_form/<uuid:uuid>/', base_view.membership_form.as_view(), name='membership_form'),
 
     path('mvt/create_product/', base_view.create_product, name='create_product'),
-    path('mvt/accueil/', base_view.accueil, name='accueil'),
-    path("mvt/adhesion/", base_view.adhesion, name='adhesion'),
+    path('mvt/home/', base_view.home, name='home'),
+    path("mvt/memberships/", base_view.memberships, name='memberships'),
     path('mvt/test_jinja/', base_view.test_jinja, name='test_jinja'),
 
     path('', base_view.index.as_view(), name="index"),

@@ -25,12 +25,7 @@
     {% endblock head %}
 </head>
 
-<!-- <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' class="dark-version"> -->
-
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
-    {% include "htmx/components/navbar.html" %}
-    {% include "htmx/components/header.html" %}
-    
     <main id="main">
         {% block main %}{% endblock main %}
     </main>

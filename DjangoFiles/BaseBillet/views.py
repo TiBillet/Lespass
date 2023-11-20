@@ -148,17 +148,18 @@ def test_jinja(request):
     }
     return TemplateResponse(request, "htmx/views/test_jinja.html", context=context)
 
+
 @require_GET
-def accueil(request: HttpRequest) -> HttpResponse:
+def home(request: HttpRequest) -> HttpResponse:
     if request.htmx:
         base_template = "htmx/partial.html"
     else:
         base_template = "htmx/base.html"
 
-    host = 'http://' + request.get_host()
+    host = "http://" + request.get_host()
     if request.is_secure():
-        host = 'https://' + request.get_host()
-    
+        host = "https://" + request.get_host()
+
     # import ipdb; ipdb.set_trace()
     # print(f"-> info = {request.user.is_active}")
     context = {
@@ -180,9 +181,10 @@ def accueil(request: HttpRequest) -> HttpResponse:
             "options_checkbox": [],
             "img_variations": {"crop": "/media/images/1080_v39ZV53.crop"},
             "artists": [],
-        }
+        },
     }
-    return render(request, "htmx/views/accueil.html", context=context)
+    return render(request, "htmx/views/home.html", context=context)
+
 
 class membership_form(APIView):
     permission_classes = [AllowAny]
@@ -190,37 +192,37 @@ class membership_form(APIView):
     def get(self, request, uuid):
         print(f"uuid = {uuid}")
 
-        host = 'http://' + request.get_host()
+        host = "http://" + request.get_host()
         if request.is_secure():
-            host = 'https://' + request.get_host()
-        
+            host = "https://" + request.get_host()
+
         context = {
             "host": host,
             "url_name": request.resolver_match.url_name,
             "config": Configuration.get_solo(),
-            "membership": Product.objects.get(uuid=uuid)
+            "membership": Product.objects.get(uuid=uuid),
         }
 
         return render(request, "htmx/forms/membership_form.html", context=context)
 
 
 @require_GET
-def adhesion(request: HttpRequest) -> HttpResponse:
+def memberships(request: HttpRequest) -> HttpResponse:
     if request.htmx:
         base_template = "htmx/partial.html"
     else:
         base_template = "htmx/base.html"
-    
-    host = 'http://' + request.get_host()
+
+    host = "http://" + request.get_host()
     if request.is_secure():
-        host = 'https://' + request.get_host()
-    
+        host = "https://" + request.get_host()
+
     context = {
         "base_template": base_template,
         "host": host,
         "url_name": request.resolver_match.url_name,
         "config": Configuration.get_solo(),
-        "memberships": Product.objects.filter(categorie_article='A')
+        "memberships": Product.objects.filter(categorie_article="A"),
     }
 
     return render(request, "htmx/views/memberships.html", context=context)
