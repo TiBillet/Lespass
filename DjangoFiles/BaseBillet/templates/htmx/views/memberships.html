@@ -32,6 +32,7 @@
                 hx-get="/mvt/membership_form/{{ membership.uuid }}"
                 hx-target="#tibillet-membership-modal"
                 hx-swap="outerHTML"
+                hx-trigger=""
                 role="button"
                 :aria-label="Adhérez {{ membership.name }}"
               >
@@ -45,18 +46,3 @@
   </div>
   <div id="tibillet-membership-modal"></div>
 {% endblock main %}
-
-{% block script %}
-  <script>
-    // une fois l'élément remplacé par le contenu de la requête
-    htmx.on("htmx:afterSettle", (evt) => {
-      if (evt.target.id === "tibillet-membership-modal") {
-        const elementModal = document.querySelector(
-          "#tibillet-membership-modal",
-        );
-        const modal = bootstrap.Modal.getOrCreateInstance(elementModal); // Returns a Bootstrap modal instance
-        modal.show();
-      }
-    });
-  </script>
-{% endblock script %}
