@@ -1,0 +1,23 @@
+<fieldset class="col shadow-sm p-3 mb-5 bg-body rounded">
+  <legend>
+    <h3 class="font-weight-bolder text-info text-gradient align-self-start">
+      Email
+    </h3>
+  </legend>
+  {% if user.is_active == True %}
+    <h4 role="heading" aria-label="Email de l'utilisateur connecté.">
+      {{ email }}
+    </h4>
+  {% else %}
+    <div>
+      {% include "htmx/components/inputMd.html" with name="card-email-email" label="Email" type="email" errors=errors %}
+
+      <!-- message pour l'adresse email -->
+      <div class="text-warning mb-0">
+        Merci de bien vérifier votre adresse email afin de bien recevoir
+        votre(vos) billet(s).
+      </div>
+    </div>
+  {% endif %}
+
+</fieldset>

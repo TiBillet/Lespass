@@ -1,7 +1,15 @@
 .tibillet-hide-element {
-    display: none;
+	display: none;
 }
 
 input[class~="tibillet-input-checkbox"]:checked {
-    background-color: var(--bs-success) !important;
+	background-color: var(--bs-success) !important;
+}
+
+body {
+	--app-color-primary: #f05f3e;
+}
+
+button .bg-prymary {
+	background-color: var(--app-color-primary) !important;
 }

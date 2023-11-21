@@ -1,15 +1,15 @@
 <header>
   <div class="page-header min-vh-50"
-    style="background-image: url('{{ host }}/media/{{ config.img }}');max-height: 365px">
+    style="background-image: url('{{ host }}/media/{{ header.img }}');max-height: 365px">
     <span class="mask bg-dark opacity-8"></span>
     <div class="container">
       <div class="row">
         <div class="col-lg-8 mx-auto text-white text-center">
-          <h2 class="text-white" role="heading" aria-label="Titre de l'évènement : {{ config.organisation }}">
-            {{ config.organisation }}
+          <h2 class="text-white" role="heading" aria-label="Titre de l'évènement : {{ header.organisation }}">
+            {{ header.organisation }}
           </h2>
-          {% if config.short_description != None%}
-          <p class="lead" style="white-space: pre-line">{{ config.short_description }}</p>
+          {% if header.short_description != None%}
+          <p class="lead" style="white-space: pre-line">{{ header.short_description }}</p>
           {% endif %}
         </div>
       </div>
@@ -21,9 +21,9 @@
     {% include "htmx/components/search.html" %}
   </div>
   {% endif %}
-  {% if config.long_description != None%}
+  {% if header.long_description != None%}
   <div class="container mt-5 mb-5" style="white-space: pre-line">
-    {{ config.long_description }}
+    {{ header.long_description }}
   </div>
   {% endif %}
 </header>

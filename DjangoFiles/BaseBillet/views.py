@@ -140,12 +140,13 @@ def home(request: HttpRequest) -> HttpResponse:
         host = "https://" + request.get_host()
 
     # import ipdb; ipdb.set_trace()
-    # print(f"-> info = {request.user.is_active}")
+    print(f"-> img = {Configuration.get_solo().img}")
     context = {
         "base_template": base_template,
         "host": host,
         "url_name": request.resolver_match.url_name,
-        "config": Configuration.get_solo(),
+        "header": Configuration.get_solo(),
+        "tenant": Configuration.get_solo().organisation,
         "events": Event.objects.all(),
         "user": request.user,
         "fake_event": {
@@ -175,13 +176,22 @@ def event(request: HttpRequest, slug) -> HttpResponse:
     if request.is_secure():
         host = "https://" + request.get_host()
 
+    event = Event.objects.get(slug=slug)
+    
     context = {
         "base_template": base_template,
         "host": host,
         "url_name": request.resolver_match.url_name,
-        "config": Configuration.get_solo(),
+        "header": {
+            "img": event.img_variations()['fhd'],
+            "organisation": event.name,
+            "short_description": event.short_description,
+            "long_description": event.long_description
+        },
+        "tenant": Configuration.get_solo().organisation,
         "slug": slug,
-        "event": Event.objects.get(slug=slug)
+        "event": event,
+        "user": request.user,
     }
     return render(request, "htmx/views/event.html", context=context)
 

@@ -1,10 +1,24 @@
 {% extends base_template %}
 
-  {% block main %}
+{% block main %}
   {% include "htmx/header_groupe.html" %}
-    
-  <div class="container mt-7">
-   <h1>Event</h1>
-   {{ event.name }}
+
+  <!-- artistes -->
+  <div class="container mt-5">
+    {% if event.artists != None %}
+      {% for art in event.artists.all %}
+        {% include "htmx/components/cardArtist.html" with artist=art.configuration %}
+      {% endfor %}
+    {% endif %}
   </div>
-  {% endblock main %}
+  {% if event.products.all.count > 0 %}
+    <form>
+      {% include "htmx/components/cardEmail.html" with email=event.email %}
+        
+      </button>
+      <div class="d-flex flex-row">
+        <button type="submit" class="btn bg-primary text-white w-75 mx-auto"  role="button" aria-label="Valider la réservation">Valider la réservation</button>
+      </div>
+    </form>
+  {% endif %}
+{% endblock main %}
