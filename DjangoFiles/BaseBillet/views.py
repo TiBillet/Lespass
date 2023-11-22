@@ -9,6 +9,7 @@ from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 
+from ApiBillet.views import request_for_data_cashless
 from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Event
@@ -164,6 +165,9 @@ def home(request: HttpRequest) -> HttpResponse:
         host = "https://" + request.get_host()
 
     serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
+    #TODO: le faire dans le serializer
+    if config.server_cashless and config.key_cashless:
+        serialized_user['cashless'] = request_for_data_cashless(request.user)
 
     # import ipdb; ipdb.set_trace()
     img = '/media/' + str(Configuration.get_solo().img)
