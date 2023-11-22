@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.http import HttpResponseRedirect, HttpResponse, HttpRequest
 from django.shortcuts import render
 from django.template.response import TemplateResponse
@@ -8,6 +9,8 @@ from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 
+from AuthBillet.serializers import MeSerializer
+from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Event
 
 import segno
@@ -129,28 +132,38 @@ def test_jinja(request):
     }
     return TemplateResponse(request, "htmx/views/test_jinja.html", context=context)
 
+
 def login(request):
     print(f"methode = {request.method}")
     if request.method == 'GET':
         return TemplateResponse(request, "htmx/forms/login.html", context={})
     
     if request.method == 'POST':
-        data = request.POST.get('login-email')
-        print(f"login-email = {data}")
-        time.sleep(10)
+        email = request.POST.get('login-email')
+
+        # Création de l'user et envoie du mail de validation
+        user = get_or_create_user(email=email, send_mail=True)
+
+        # login auto en DEBUG
+        if settings.DEBUG:
+            request.login(user)
+            return HttpResponseRedirect('/')
+
+        # Sinon, en prod, on renvoi vers le message de vérification de mail
+        #TODO: mettre à jour le modal
         return TemplateResponse(request, "htmx/views/test.html", context={})
 
 
 @require_GET
 def home(request: HttpRequest) -> HttpResponse:
-    if request.htmx:
-        base_template = "htmx/partial.html"
-    else:
-        base_template = "htmx/base.html"
+    config = Configuration.get_solo()
+    base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
 
     host = "http://" + request.get_host()
     if request.is_secure():
         host = "https://" + request.get_host()
+
+    serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
 
     # import ipdb; ipdb.set_trace()
     img = '/media/' + str(Configuration.get_solo().img)
@@ -159,14 +172,16 @@ def home(request: HttpRequest) -> HttpResponse:
         "base_template": base_template,
         "host": host,
         "url_name": request.resolver_match.url_name,
+        "configuration": config,
+        "user": request.user,
+        "serialized_user": serialized_user,
         "header": {
-            "img": img,
-            "tenant": Configuration.get_solo().organisation,
-            "short_description": Configuration.get_solo().short_description,
-            "long_description": Configuration.get_solo().long_description
+            "img": config.img.fhd.url,
+            "tenant": config.organisation,
+            "short_description": config.short_description,
+            "long_description": config.long_description
         },
         "events": Event.objects.all(),
-        "user": request.user,
         "fake_event": {
             "uuid": "fakeEven-ece7-4b30-aa15-b4ec444a6a73",
             "name": "Nom de l'évènement",
@@ -185,10 +200,8 @@ def home(request: HttpRequest) -> HttpResponse:
 
 @require_GET
 def event(request: HttpRequest, slug) -> HttpResponse:
-    if request.htmx:
-        base_template = "htmx/partial.html"
-    else:
-        base_template = "htmx/base.html"
+    config = Configuration.get_solo()
+    base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
 
     host = "http://" + request.get_host()
     if request.is_secure():
@@ -201,8 +214,8 @@ def event(request: HttpRequest, slug) -> HttpResponse:
         "host": host,
         "url_name": request.resolver_match.url_name,
         "header": {
-            "img": event.img_variations()['fhd'],
-            "tenant": Configuration.get_solo().organisation,
+            "img": event.img.fhd.url,
+            "tenant": config.organisation,
             "short_description": event.short_description,
             "long_description": event.long_description
         },
