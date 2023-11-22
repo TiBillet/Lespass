@@ -166,7 +166,7 @@ def home(request: HttpRequest) -> HttpResponse:
 
     serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
     #TODO: le faire dans le serializer
-    if config.server_cashless and config.key_cashless:
+    if config.server_cashless and config.key_cashless and request.user.is_authenticated:
         serialized_user['cashless'] = request_for_data_cashless(request.user)
 
     # import ipdb; ipdb.set_trace()
