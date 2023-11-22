@@ -5,3 +5,9 @@
 input[class~="tibillet-input-checkbox"]:checked {
 	background-color: var(--bs-success) !important;
 }
+
+:root {
+	--tibillet-spinner-width: 20rem;
+	--tibillet-spinner-height: 20rem;
+	--tibillet-spinner-borderWidth: 0.5em;
+}

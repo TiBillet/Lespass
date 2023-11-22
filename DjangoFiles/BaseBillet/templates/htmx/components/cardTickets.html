@@ -1,9 +1,9 @@
-{% load in_list %}
+{% load tibitags %}
 
 <div class="container">
     {% for product in products.all %}
     {% if product.categorie_article|in_list:'F,B' %}
-    <fieldset class="shadow-sm p-3 mb-5 bg-body rounded test-card-billet">
+    <fieldset class="maj-theme shadow-sm p-3 mb-5 bg-body rounded test-card-billet">
         <legend>
             <!-- nom ou image du produit -->
             {% if replace_name_by_image == True %}
@@ -22,7 +22,16 @@
             <h6 class="text-info">{{ product.short_description }}</h6>
             {% endif %}
         </legend>
+         <!-- prix -->
+         {% for price in product.prices.all %}
+         <div class="mt-5">
+
+         </div>
+
+         {% endfor %}
+
     </fieldset>
     {% endif %}
     {% endfor %}
+    <pre>{{ user }}</pre>
 </div>

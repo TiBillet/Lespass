@@ -45,7 +45,8 @@
 
     {% block footer %}
     {% endblock footer %}
-
+    <!-- spinner -->
+    {% include "htmx/components/loading.html" %}
     <script>
         const root = document.querySelector(':root');
         root.style.setProperty('--bs-primary', 'green');

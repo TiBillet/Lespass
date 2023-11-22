@@ -18,6 +18,8 @@ from io import BytesIO
 
 from BaseBillet.tasks import encode_uid
 
+# dev test
+import time
 
 class index(APIView):
     permission_classes = [AllowAny]
@@ -127,6 +129,17 @@ def test_jinja(request):
     }
     return TemplateResponse(request, "htmx/views/test_jinja.html", context=context)
 
+def login(request):
+    print(f"methode = {request.method}")
+    if request.method == 'GET':
+        return TemplateResponse(request, "htmx/forms/login.html", context={})
+    
+    if request.method == 'POST':
+        data = request.POST.get('login-email')
+        print(f"login-email = {data}")
+        time.sleep(10)
+        return TemplateResponse(request, "htmx/views/test.html", context={})
+
 
 @require_GET
 def home(request: HttpRequest) -> HttpResponse:
@@ -148,11 +161,10 @@ def home(request: HttpRequest) -> HttpResponse:
         "url_name": request.resolver_match.url_name,
         "header": {
             "img": img,
-            "organisation": Configuration.get_solo().organisation,
+            "tenant": Configuration.get_solo().organisation,
             "short_description": Configuration.get_solo().short_description,
             "long_description": Configuration.get_solo().long_description
         },
-        "tenant": Configuration.get_solo().organisation,
         "events": Event.objects.all(),
         "user": request.user,
         "fake_event": {
@@ -190,11 +202,10 @@ def event(request: HttpRequest, slug) -> HttpResponse:
         "url_name": request.resolver_match.url_name,
         "header": {
             "img": event.img_variations()['fhd'],
-            "organisation": event.name,
+            "tenant": Configuration.get_solo().organisation,
             "short_description": event.short_description,
             "long_description": event.long_description
         },
-        "tenant": Configuration.get_solo().organisation,
         "slug": slug,
         "event": event,
         "user": request.user,
@@ -217,7 +228,6 @@ class membership_form(APIView):
         context = {
             "host": host,
             "url_name": request.resolver_match.url_name,
-            "config": Configuration.get_solo(),
             "membership": Product.objects.get(uuid=uuid),
         }
 
@@ -235,11 +245,17 @@ def memberships(request: HttpRequest) -> HttpResponse:
     if request.is_secure():
         host = "https://" + request.get_host()
 
+    img = '/media/' + str(Configuration.get_solo().img)
     context = {
         "base_template": base_template,
         "host": host,
         "url_name": request.resolver_match.url_name,
-        "config": Configuration.get_solo(),
+        "header": {
+            "img": img,
+            "tenant": Configuration.get_solo().organisation,
+            "short_description": Configuration.get_solo().short_description,
+            "long_description": Configuration.get_solo().long_description
+        },
         "memberships": Product.objects.filter(categorie_article="A"),
     }
 

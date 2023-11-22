@@ -1,10 +1,10 @@
-{% load not_in_list %}
+{% load tibitags %}
 <nav class="navbar navbar-expand-lg fixed-top bg-dark opacity-8 z-index-3 w-100 shadow-none">
     <div class="container">
         <a class="navbar-brand  text-white cursor-pointer" rel="tooltip" title="Designed and Coded by Creative Tim"
             data-placement="bottom" target="_blank" hx-get="/mvt/home" hx-target="#main" hx-swap="outerHTML"
             hx-push-url="true">
-            {{ tenant }}
+            {{ header.tenant }}
         </a>
         <button class="navbar-toggler shadow-none ms-2" type="button" data-bs-toggle="collapse"
             data-bs-target="#tibilet-navigation" aria-controls="tibilet-navigation" aria-expanded="false"
@@ -19,7 +19,10 @@
             <!-- positionner les li inversés -->
             <ul class="navbar-nav navbar-nav-hover w-100 flex-row-reverse text-white">
                 {% if user.is_active == False %}
-                <li class="nav-item mx-2 cursor-pointer">
+                <li class="nav-item mx-2 cursor-pointer" role="button" aria-label="Se connecter" 
+                hx-get="/mvt/login/"
+                hx-target="#tibillet-login-modal"
+                hx-swap="outerHTML">
                     <i class="fa fa-user" aria-hidden="true"></i>
                     Se connecter
                 </li>
@@ -40,9 +43,7 @@
         </div>
     </div>
 </nav>
-<!--
-        <button type="button" class="btn bg-gradient-info" data-bs-toggle="modal"
-                data-bs-target="#exampleModalForm">
-            Launch demo modal
-        </button>
--->
+
+<!-- modal login -->
+<div id="tibillet-login-modal"></div>
+<!-- <pre class="mt-7">infos = {{ header }}</pre> -->

@@ -1,0 +1,42 @@
+<div class="maj-theme modal fade" id="tibillet-login-modal" tabindex="-1" aria-labelledby="modal-form-login"
+    aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header d-flex flex-column align-items-star">
+                <h3 class="font-weight-bolder text-info text-center mb-4">
+                    Connectez vous
+                </h3>
+                <div class="modal-body">
+                    <div>
+                        <h4 class="font-weight-bolder text-info text-center">Avec votre e-mail</h4>
+                    </div>
+                    <form class="text-left needs-validation mb-7" hx-post="/mvt/login/">
+                        {% include "htmx/components/inputMd.html" with name="login-email" label="Email" type="email" errors=errors %}
+
+                        <p class="">Nul besoin de mot de passe : un email vous sera envoyé pour validation.</p>
+                        <div class="text-center">
+                            <button class="btn bg-gradient-info btn-lg mt-0 mb-0" type="submit" style="width:120px;height:44px;">Valider
+                            </button>
+                        </div>
+                    </form>
+
+                    <div class="d-flex flex-row justify-content-center mt-2">
+                        <h4 class="font-weight-bolder text-info text-center">Avec communecter</h4>
+                    </div>
+
+                    <div class="text-center mt-2">
+                        <button class="btn bg-gradient-info btn-lg mt-0 mb-0" type="button" style="width:120px;height:44px;"
+                            @click="location.href = '/api/user/requestoauth/';">
+                            <div class="d-flex flex-row justify-content-center align-items-center h-100 w-100">
+                                <img src="{{ host }}/media/images/communecterLogo_31x28.png" class="communecter-logo" alt="logo communecter">
+                            </div>
+                        </button>
+                    </div>
+
+
+
+                </div>
+            </div>
+        </div>
+    </div>
+    </script>

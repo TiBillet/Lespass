@@ -12,6 +12,7 @@ urlpatterns = [
     path('mvt/home/', base_view.home, name='home'),
     path("mvt/memberships/", base_view.memberships, name='memberships'),
     path('mvt/test_jinja/', base_view.test_jinja, name='test_jinja'),
+    path('mvt/login/', base_view.login, name='login'),
 
     path('', base_view.index.as_view(), name="index"),
 ]

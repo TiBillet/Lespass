@@ -20,3 +20,15 @@ def range_by(events: list, val: int):
         iteration += 1
 
     return list_ranged
+
+@register.filter
+def in_list(value, list):
+    value = str(value)
+    retour = value in list.split(',')
+    return retour
+
+@register.filter
+def not_in_list(value, list):
+    value = str(value)
+    retour = value not in list.split(',')
+    return retour
