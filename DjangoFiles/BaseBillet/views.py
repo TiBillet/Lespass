@@ -160,7 +160,7 @@ def home(request: HttpRequest) -> HttpResponse:
     config = Configuration.get_solo()
     base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
 
-    host = (f"https://{request.get_host()}") if request.is_secure() else host = (f"http://{request.get_host()}")
+    host = f"https://{request.get_host()}" if request.is_secure() else f"http://{request.get_host()}"
     
 
     serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
