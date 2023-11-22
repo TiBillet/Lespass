@@ -46,9 +46,7 @@
         </p>
 
         {% if event.short_description != None %}
-        <p class="card-description mb-4">
-            {{ event.short_description }}
-        </p>
+        <p class="card-description mb-4">{{ event.short_description }}</p>
         {% endif %}
 
         {% if event.short_description == None and event.artists.first != None %}

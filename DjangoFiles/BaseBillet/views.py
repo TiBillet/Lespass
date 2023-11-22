@@ -140,12 +140,18 @@ def home(request: HttpRequest) -> HttpResponse:
         host = "https://" + request.get_host()
 
     # import ipdb; ipdb.set_trace()
-    print(f"-> img = {Configuration.get_solo().img}")
+    img = '/media/' + str(Configuration.get_solo().img)
+
     context = {
         "base_template": base_template,
         "host": host,
         "url_name": request.resolver_match.url_name,
-        "header": Configuration.get_solo(),
+        "header": {
+            "img": img,
+            "organisation": Configuration.get_solo().organisation,
+            "short_description": Configuration.get_solo().short_description,
+            "long_description": Configuration.get_solo().long_description
+        },
         "tenant": Configuration.get_solo().organisation,
         "events": Event.objects.all(),
         "user": request.user,
@@ -192,6 +198,7 @@ def event(request: HttpRequest, slug) -> HttpResponse:
         "slug": slug,
         "event": event,
         "user": request.user,
+        "uuid": uuid
     }
     return render(request, "htmx/views/event.html", context=context)
 

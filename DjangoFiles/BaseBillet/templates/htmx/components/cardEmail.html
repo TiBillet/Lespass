@@ -1,4 +1,4 @@
-<fieldset class="col shadow-sm p-3 mb-5 bg-body rounded">
+<fieldset class="maj-theme col shadow-sm p-3 mb-5 bg-body rounded">
   <legend>
     <h3 class="font-weight-bolder text-info text-gradient align-self-start">
       Email
@@ -11,6 +11,7 @@
   {% else %}
     <div>
       {% include "htmx/components/inputMd.html" with name="card-email-email" label="Email" type="email" errors=errors %}
+      {% include "htmx/components/inputMd.html" with name="card-email-confirm-email" label="Confirmez l'email" type="email" errors=errors %}
 
       <!-- message pour l'adresse email -->
       <div class="text-warning mb-0">
@@ -19,5 +20,4 @@
       </div>
     </div>
   {% endif %}
-
 </fieldset>

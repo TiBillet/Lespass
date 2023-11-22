@@ -1,0 +1,28 @@
+{% load in_list %}
+
+<div class="container">
+    {% for product in products.all %}
+    {% if product.categorie_article|in_list:'F,B' %}
+    <fieldset class="shadow-sm p-3 mb-5 bg-body rounded test-card-billet">
+        <legend>
+            <!-- nom ou image du produit -->
+            {% if replace_name_by_image == True %}
+            <img src="{{ host }}/media/{{ product.img }}" class="image-product" alt="{{ product.name }}"
+                style="height:20px;width:auto;">
+            {% else %}
+            <h3 class="font-weight-bolder text-info text-gradient align-self-start"
+            role="heading" :aria-label="Carte {{ forloop.counter0 }} : {{ product.name }}">
+            {{ product.name }}
+            </h3>
+            {% endif %}
+            {% if product.short_description != None %}
+            <h6 class="text-info">{{ product.short_description }}</h6>
+            {% endif %}
+            {% if product.short_description != None %}
+            <h6 class="text-info">{{ product.short_description }}</h6>
+            {% endif %}
+        </legend>
+    </fieldset>
+    {% endif %}
+    {% endfor %}
+</div>

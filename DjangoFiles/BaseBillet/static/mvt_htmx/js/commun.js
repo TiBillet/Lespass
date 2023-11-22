@@ -14,3 +14,9 @@ console.log('domain =', domain);
     modal.show();
   }
 });
+
+function updateTheme() {
+  document.querySelectorAll('.maj-theme').forEach(ele => {
+    ele.classList.toggle('dark-version')
+  })
+}
