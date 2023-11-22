@@ -159,14 +159,13 @@ def home(request: HttpRequest) -> HttpResponse:
     config = Configuration.get_solo()
     base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
 
-    host = "http://" + request.get_host()
-    if request.is_secure():
-        host = "https://" + request.get_host()
+    host = (f"https://{request.get_host()}") if request.is_secure() else host = (f"http://{request.get_host()}")
+    
 
     serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
 
     # import ipdb; ipdb.set_trace()
-    img = '/media/' + str(Configuration.get_solo().img)
+    # img = '/media/' + str(Configuration.get_solo().img)
 
     context = {
         "base_template": base_template,
