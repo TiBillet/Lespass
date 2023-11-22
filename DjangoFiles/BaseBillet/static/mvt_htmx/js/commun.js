@@ -27,11 +27,11 @@ function showModal(id) {
 // gestion du spinner
 document.body.addEventListener('htmx:beforeRequest', function (evt) {
   console.log('-> lance le spinner');
-  document.querySelector('#tibillet-spinner').display = "block"
+  document.querySelector('#tibillet-spinner').style.display = "flex"
 });
 document.body.addEventListener('htmx:afterRequest', function (evt) {
   console.log('-> stop le spinner');
-  document.querySelector('#tibillet-spinner').display = "none"
+  document.querySelector('#tibillet-spinner').style.display = "none"
 });
 
 
