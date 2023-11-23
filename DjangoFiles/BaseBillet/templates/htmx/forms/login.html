@@ -13,7 +13,7 @@
           <h4 class="font-weight-bolder text-info text-center">Avec votre e-mail</h4>
         </div>
         <form class="text-left needs-validation mb-7" hx-post="/mvt/login/"
-              hx-target="#tibillet-login-response" hx-swap="outerHTML">
+              hx-target="#tibillet-modal-message" hx-swap="outerHTML">
           {% include "htmx/components/inputMd.html" with name="login-email" label="Email" type="email" errors=errors %}
 
           <p class="">Nul besoin de mot de passe : un email vous sera envoyé pour validation.</p>
@@ -43,6 +43,3 @@
   </div>
 </div>
 </div>
-
-<div id="tibillet-login-response"></div>
-

@@ -249,7 +249,11 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
 
     uid = encode_uid(user.pk)
     token = default_token_generator.make_token(user)
+    #dev
+    base_url = 'http://demo.filaos.re:8002'
+    print(f"-> base_url = {base_url}")
     connexion_url = f"{base_url}/mvt/emailconfirmation/{uid}/{token}"
+
 
     if connection.tenant.schema_name != "public":
         config = Configuration.get_solo()

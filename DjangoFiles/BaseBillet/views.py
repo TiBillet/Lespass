@@ -18,7 +18,6 @@ from ApiBillet.views import request_for_data_cashless
 from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
 
-
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 
@@ -36,8 +35,57 @@ from BaseBillet.tasks import encode_uid
 # dev test
 import time
 
+globalContext = None
+def get_context(request):
+  config = Configuration.get_solo()
+  base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
+
+  host = f"https://{request.get_host()}" if request.is_secure() else f"http://{request.get_host()}"
+  print(f"-> host = {host}")
+
+  serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
+  # TODO: le faire dans le serializer
+  if config.server_cashless and config.key_cashless and request.user.is_authenticated:
+    serialized_user['cashless'] = request_for_data_cashless(request.user)
+
+    # import ipdb; ipdb.set_trace()
+    # img = '/media/' + str(Configuration.get_solo().img)
+
+  context = {
+    "messageToShowInEnterPage": None,
+    "base_template": base_template,
+    "host": host,
+    "url_name": request.resolver_match.url_name,
+    "configuration": config,
+    "user": request.user,
+    "serialized_user": serialized_user,
+    "tenant": config.organisation,
+    "header": {
+      "img": config.img.fhd.url,
+      "title": config.organisation,
+      "short_description": config.short_description,
+      "long_description": config.long_description
+    },
+    "events": Event.objects.all(),
+    "fake_event": {
+      "uuid": "fakeEven-ece7-4b30-aa15-b4ec444a6a73",
+      "name": "Nom de l'évènement",
+      "short_description": "Cliquer sur le bouton si-dessous.",
+      "long_description": None,
+      "categorie": "CARDE_CREATE",
+      "tag": [],
+      "products": [],
+      "options_radio": [],
+      "options_checkbox": [],
+      "img_variations": {"crop": "/media/images/1080_v39ZV53.crop"},
+      "artists": [],
+    }
+  }
+  return context
+
 def decode_uid(pk):
-    return force_str(urlsafe_base64_decode(pk))
+  return force_str(urlsafe_base64_decode(pk))
+
 
 class index(APIView):
   permission_classes = [AllowAny]
@@ -182,46 +230,35 @@ def login(request):
       }
       return TemplateResponse(request, 'htmx/components/modal_message.html', context=context)
 
+
 def emailconfirmation(request, uuid, token):
+  global globalContext
+  context = get_context(request)
   User = get_user_model()
   try:
     user = User.objects.get(pk=decode_uid(uuid))
     print(f"user = {user}")
   except User.DoesNotExist:
-     context = {
-        "modal_message": {
-          "title": "Attention",
-          "content": 'Token non valide. DoesNotExist',
-          "type": 'warning'
-        }
-     }
-     # prod
-     '''
-     1 - redirection /mvt/home
-     1 - websocket: envoyer le message au modal (context)
-     '''
-     # dev
-     return TemplateResponse(request, 'htmx/components/modal_message.html', context=context)
+    context['messageToShowInEnterPage'] = {
+      "title": "Attention",
+      "content": 'Token non valide. DoesNotExist',
+      "type": 'warning'
+    }
+    globalContext = context
+    return render(request, "htmx/views/home.html", context=context)
 
   except Exception as e:
     logging.getLogger(__name__).error(e)
     raise e
 
   if user.email_error:
-    context = {
-        "modal_message": {
-          "title": "Attention",
-          "content": 'Mail non valide',
-          "type": 'warning'
-        }
-     }
-    # prod
-    '''
-     1 - redirection /mvt/home
-     1 - websocket: envoyer le message au modal (context)
-    '''
-    # dev
-    return TemplateResponse(request, 'htmx/components/modal_message.html', context=context)
+    context['messageToShowInEnterPage'] = {
+      "title": "Attention",
+      "content": 'Mail non valide',
+      "type": 'warning'
+    }
+    globalContext = context
+    return render(request, "htmx/views/home.html", context=context)
 
   PR = PasswordResetTokenGenerator()
   is_token_valid = PR.check_token(user, token)
@@ -229,40 +266,43 @@ def emailconfirmation(request, uuid, token):
     user.is_active = True
     RefreshToken.for_user(user)
     user.save()
-    context = {
-        "modal_message": {
-          "title": "Information",
-          "content": 'Utilisateur activé / connecté !',
-          "type": 'success'
-        }
-     }
-    # prod
-    '''
-     1 - redirection /mvt/home
-     2 - websocket: envoyer le message au modal (context)
-          ou
-     1 - context/message modal = variable globale
-     2 - redirection /mvt/home/?showMessageModal=true
-     '''
-    # pour le dev
-    return TemplateResponse(request, 'htmx/components/modal_message.html', context=context)
+    context['messageToShowInEnterPage'] = {
+      "title": "Information",
+      "content": 'Utilisateur activé / connecté !',
+      "type": 'success'
+    }
+    globalContext = context
+    return render(request, "htmx/views/home.html", context=context)
 
   else:
-    context = {
-        "modal_message": {
-          "title": "Attention",
-          "content": 'Token non valide',
-          "type": 'warning'
-        }
-     }
-    return TemplateResponse(request, 'htmx/components/modal_message.html', context=context)
+    context['messageToShowInEnterPage'] = {
+      "title": "Attention",
+      "content": 'Token non valide',
+      "type": 'warning'
+    }
+    globalContext = context
+    return render(request, "htmx/views/home.html", context=context)
+
+def showModalMessageInEnterPage(request):
+  global globalContext
+  context = {
+   "modal_message": globalContext['messageToShowInEnterPage']
+  }
+  globalContext['messageToShowInEnterPage'] = None
+  return TemplateResponse(request, 'htmx/components/modal_message.html', context=context)
 
 @require_GET
 def home(request: HttpRequest) -> HttpResponse:
+  global globalContext
+  if globalContext != None:
+    print("messageToShowInEnterPage = {globalContext['messageToShowInEnterPage']}")
+  context = get_context(request)
+  '''
   config = Configuration.get_solo()
   base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
 
   host = f"https://{request.get_host()}" if request.is_secure() else f"http://{request.get_host()}"
+  print(f"-> host = {host}")
 
   serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
   # TODO: le faire dans le serializer
@@ -273,6 +313,7 @@ def home(request: HttpRequest) -> HttpResponse:
     # img = '/media/' + str(Configuration.get_solo().img)
 
   context = {
+    "messageToShowInEnterPage": messageToShowInEnterPage,
     "base_template": base_template,
     "host": host,
     "url_name": request.resolver_match.url_name,
@@ -301,6 +342,7 @@ def home(request: HttpRequest) -> HttpResponse:
       "artists": [],
     }
   }
+  '''
   return render(request, "htmx/views/home.html", context=context)
 
 

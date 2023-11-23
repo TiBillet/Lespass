@@ -14,6 +14,7 @@ urlpatterns = [
     path('mvt/test_jinja/', base_view.test_jinja, name='test_jinja'),
     path('mvt/login/', base_view.login, name='login'),
     path('mvt/emailconfirmation/<str:uuid>/<str:token>/',base_view.emailconfirmation, name='emailconfirmation'),
+    path('mvt/showModalMessageInEnterPage/', base_view.showModalMessageInEnterPage, name='showModalMessageInEnterPage'),
 
     path('', base_view.index.as_view(), name="index"),
 ]
