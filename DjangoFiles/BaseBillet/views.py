@@ -135,10 +135,6 @@ def test_jinja(request):
 
 
 def login(request):
-    print(f"methode = {request.method}")
-    if request.method == 'GET':
-        return TemplateResponse(request, "htmx/forms/login.html", context={})
-    
     if request.method == 'POST':
         email = request.POST.get('login-email')
 
