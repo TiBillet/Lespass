@@ -8,20 +8,27 @@ function showModal(id) {
   modal.show();
 }
 
+function hideModal(id) {
+  const elementModal = document.querySelector(id);
+  const modal = bootstrap.Modal.getOrCreateInstance(elementModal);
+  modal.hide();
+}
+
+
  // une fois l'élément remplacé par le contenu de la requête
- htmx.on("htmx:afterSettle", (evt) => {
-  // console.log('-> htmx:afterSwap evt =', evt);
-  
+document.body.addEventListener("htmx:afterSettle", (evt) => {
+  console.log('-> htmx:afterSwap evt =', evt);
+
   // show modal membership_form.html
   if (evt.target.id === "tibillet-membership-modal") {
     showModal("#tibillet-membership-modal");
   }
 
-    // show modal login.html
-    if (evt.target.id === "tibillet-login-modal") {
-      showModal("#tibillet-login-modal");
-    }
-  
+
+  if (evt.target.id === "tibillet-login-response-success") {
+    hideModal("#tibillet-login-modal");
+    showModal('#tibillet-login-response-success')
+  }
 });
 
 // gestion du spinner

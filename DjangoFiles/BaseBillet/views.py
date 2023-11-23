@@ -5,18 +5,29 @@ from django.template.response import TemplateResponse
 
 from django.views.decorators.http import require_GET
 
+from django.utils.encoding import force_str
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
+from rest_framework import status
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from ApiBillet.views import request_for_data_cashless
 from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
+
+
+from django.contrib.auth import get_user_model
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
+
 from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Event
 
 import segno
 import barcode
 import uuid
+import logging
 
 from io import BytesIO
 
@@ -25,133 +36,226 @@ from BaseBillet.tasks import encode_uid
 # dev test
 import time
 
+def decode_uid(pk):
+    return force_str(urlsafe_base64_decode(pk))
+
 class index(APIView):
-    permission_classes = [AllowAny]
+  permission_classes = [AllowAny]
 
-    def get(self, request):
-        return HttpResponseRedirect("https://tibillet.org")
+  def get(self, request):
+    return HttpResponseRedirect("https://tibillet.org")
 
-        # configuration = Configuration.get_solo()
-        # if not configuration.activer_billetterie:
-        #     return HttpResponseRedirect('https://www.tibillet.re')
-        #
-        #
-        # context = {
-        #     'configuration': configuration,
-        #     'events': Event.objects.filter(datetime__gt=datetime.now()),
-        #     'categorie_billet': Product.BILLET,
-        # }
-        #
-        # if configuration.template_billetterie :
-        #     return render(request, f'{configuration.template_billetterie}/lieu.html', context=context)
-        # else :
-        #     return render(request, 'arnaud_mvc/lieu.html', context=context)
+    # configuration = Configuration.get_solo()
+    # if not configuration.activer_billetterie:
+    #     return HttpResponseRedirect('https://www.tibillet.re')
+    #
+    #
+    # context = {
+    #     'configuration': configuration,
+    #     'events': Event.objects.filter(datetime__gt=datetime.now()),
+    #     'categorie_billet': Product.BILLET,
+    # }
+    #
+    # if configuration.template_billetterie :
+    #     return render(request, f'{configuration.template_billetterie}/lieu.html', context=context)
+    # else :
+    #     return render(request, 'arnaud_mvc/lieu.html', context=context)
 
 
 class Ticket_html_view(APIView):
-    permission_classes = [AllowAny]
+  permission_classes = [AllowAny]
 
-    def get(self, request, pk_uuid):
-        ticket = get_object_or_404(Ticket, uuid=pk_uuid)
-        qr = segno.make(f"{ticket.uuid}", micro=False)
+  def get(self, request, pk_uuid):
+    ticket = get_object_or_404(Ticket, uuid=pk_uuid)
+    qr = segno.make(f"{ticket.uuid}", micro=False)
 
-        buffer_svg = BytesIO()
-        qr.save(buffer_svg, kind="svg", scale=8)
+    buffer_svg = BytesIO()
+    qr.save(buffer_svg, kind="svg", scale=8)
 
-        CODE128 = barcode.get_barcode_class("code128")
-        buffer_barcode_SVG = BytesIO()
-        bar_secret = encode_uid(f"{ticket.uuid}".split("-")[4])
+    CODE128 = barcode.get_barcode_class("code128")
+    buffer_barcode_SVG = BytesIO()
+    bar_secret = encode_uid(f"{ticket.uuid}".split("-")[4])
 
-        bar = CODE128(f"{bar_secret}")
-        options = {
-            "module_height": 30,
-            "module_width": 0.6,
-            "font_size": 10,
-        }
-        bar.write(buffer_barcode_SVG, options=options)
+    bar = CODE128(f"{bar_secret}")
+    options = {
+      "module_height": 30,
+      "module_width": 0.6,
+      "font_size": 10,
+    }
+    bar.write(buffer_barcode_SVG, options=options)
 
-        context = {
-            "ticket": ticket,
-            "config": Configuration.get_solo(),
-            "img_svg": buffer_svg.getvalue().decode("utf-8"),
-            # 'img_svg64': base64.b64encode(buffer_svg.getvalue()).decode('utf-8'),
-            "bar_svg": buffer_barcode_SVG.getvalue().decode("utf-8"),
-            # 'bar_svg64': base64.b64encode(buffer_barcode_SVG.getvalue()).decode('utf-8'),
-        }
+    context = {
+      "ticket": ticket,
+      "config": Configuration.get_solo(),
+      "img_svg": buffer_svg.getvalue().decode("utf-8"),
+      # 'img_svg64': base64.b64encode(buffer_svg.getvalue()).decode('utf-8'),
+      "bar_svg": buffer_barcode_SVG.getvalue().decode("utf-8"),
+      # 'bar_svg64': base64.b64encode(buffer_barcode_SVG.getvalue()).decode('utf-8'),
+    }
 
-        return render(request, "ticket/ticket.html", context=context)
-        # return render(request, 'ticket/qrtest.html', context=context)
+    return render(request, "ticket/ticket.html", context=context)
+    # return render(request, 'ticket/qrtest.html', context=context)
 
 
 def create_product(request):
-    if request.method == "POST":
-        print(f"reception du formulaire {request.POST}")
+  if request.method == "POST":
+    print(f"reception du formulaire {request.POST}")
 
-        # Erreur :
-        errors = [
-            {"id": "tibillet-product-name", "msg": "erreur de validation"},
-        ]
-        context = {"errors": errors}
-        return TemplateResponse(
-            request, "htmx/subscription/modal.html", context=context
-        )
-
-    options = OptionGenerale.objects.all()
-    options_list = []
-    for ele in options:
-        options_list.append({"value": str(ele.uuid), "name": ele.name})
-
-    categorie_list = [
-        {"value": "B", "name": "Billet payant"},
-        {"value": "P", "name": "Pack d'objets"},
-        {"value": "R", "name": "Recharge cashless"},
-        {"value": "S", "name": "Recharge suspendue"},
-        {"value": "T", "name": "Vetement"},
-        {"value": "M", "name": "Merchandasing"},
-        {"value": "A", "name": "Abonnement et/ou adhésion associative"},
-        {"value": "D", "name": "Don"},
-        {"value": "F", "name": "Reservation gratuite"},
-        {"value": "V", "name": "Nécessite une validation manuelle"},
+    # Erreur :
+    errors = [
+      {"id": "tibillet-product-name", "msg": "erreur de validation"},
     ]
+    context = {"errors": errors}
+    return TemplateResponse(
+      request, "htmx/subscription/modal.html", context=context
+    )
 
-    context = {
-        "uuid": uuid,
-        "options_list": options_list,
-        "categorie_list": categorie_list,
-        "Product": Product,
-    }
-    return TemplateResponse(request, "htmx/views/create_product.html", context=context)
+  options = OptionGenerale.objects.all()
+  options_list = []
+  for ele in options:
+    options_list.append({"value": str(ele.uuid), "name": ele.name})
+
+  categorie_list = [
+    {"value": "B", "name": "Billet payant"},
+    {"value": "P", "name": "Pack d'objets"},
+    {"value": "R", "name": "Recharge cashless"},
+    {"value": "S", "name": "Recharge suspendue"},
+    {"value": "T", "name": "Vetement"},
+    {"value": "M", "name": "Merchandasing"},
+    {"value": "A", "name": "Abonnement et/ou adhésion associative"},
+    {"value": "D", "name": "Don"},
+    {"value": "F", "name": "Reservation gratuite"},
+    {"value": "V", "name": "Nécessite une validation manuelle"},
+  ]
+
+  context = {
+    "uuid": uuid,
+    "options_list": options_list,
+    "categorie_list": categorie_list,
+    "Product": Product,
+  }
+  return TemplateResponse(request, "htmx/views/create_product.html", context=context)
 
 
 def test_jinja(request):
-    context = {
-        "list": [1, 2, 3, 4, 5, 6],
-        "var1": "",
-        "var2": "",
-        "var3": "",
-        "var4": "hello",
-    }
-    return TemplateResponse(request, "htmx/views/test_jinja.html", context=context)
+  context = {
+    "list": [1, 2, 3, 4, 5, 6],
+    "var1": "",
+    "var2": "",
+    "var3": "",
+    "var4": "hello",
+  }
+  return TemplateResponse(request, "htmx/views/test_jinja.html", context=context)
 
 
 def login(request):
-    if request.method == 'POST':
-        email = request.POST.get('login-email')
+  if request.method == 'POST':
+    try:
+      email = request.POST.get('login-email')
+      # Création de l'user et envoie du mail de validation
+      user = get_or_create_user(email=email, send_mail=True)
 
-        # Création de l'user et envoie du mail de validation
-        user = get_or_create_user(email=email, send_mail=True)
+      '''
+      # login auto en DEBUG
+      if settings.DEBUG:
+          request.login(user)
+          return HttpResponseRedirect('/')
+      '''
 
-        '''
-        # login auto en DEBUG
-        if settings.DEBUG:
-            request.login(user)
-            return HttpResponseRedirect('/')
-        '''
+      # Sinon, en prod, on renvoi vers le message de vérification de mail
+      context = {
+        "modal_message": {
+          "title": "Validation",
+          "content": "Pour acceder à votre espace et réservations, merci de valider\n votre adresse email. Pensez à regarder dans les spams !",
+          "type": 'success'
+        }
+      }
+      return TemplateResponse(request, 'htmx/components/modal_message.html', context=context)
 
-        # Sinon, en prod, on renvoi vers le message de vérification de mail
-        #TODO: mettre à jour le modal
-        return TemplateResponse(request, "htmx/views/test.html", context={})
+    except Exception as error:
+      context = {
+        "modal_message": {
+          "title": "Erreur",
+          "content": str(error),
+          "type": 'danger'
+        }
+      }
+      return TemplateResponse(request, 'htmx/components/modal_message.html', context=context)
 
+def emailconfirmation(request, uuid, token):
+  User = get_user_model()
+  try:
+    user = User.objects.get(pk=decode_uid(uuid))
+    print(f"user = {user}")
+  except User.DoesNotExist:
+     context = {
+        "modal_message": {
+          "title": "Attention",
+          "content": 'Token non valide. DoesNotExist',
+          "type": 'warning'
+        }
+     }
+     # prod
+     '''
+     1 - redirection /mvt/home
+     1 - websocket: envoyer le message au modal (context)
+     '''
+     # dev
+     return TemplateResponse(request, 'htmx/components/modal_message.html', context=context)
+
+  except Exception as e:
+    logging.getLogger(__name__).error(e)
+    raise e
+
+  if user.email_error:
+    context = {
+        "modal_message": {
+          "title": "Attention",
+          "content": 'Mail non valide',
+          "type": 'warning'
+        }
+     }
+    # prod
+    '''
+     1 - redirection /mvt/home
+     1 - websocket: envoyer le message au modal (context)
+    '''
+    # dev
+    return TemplateResponse(request, 'htmx/components/modal_message.html', context=context)
+
+  PR = PasswordResetTokenGenerator()
+  is_token_valid = PR.check_token(user, token)
+  if is_token_valid:
+    user.is_active = True
+    RefreshToken.for_user(user)
+    user.save()
+    context = {
+        "modal_message": {
+          "title": "Information",
+          "content": 'Utilisateur activé / connecté !',
+          "type": 'success'
+        }
+     }
+    # prod
+    '''
+     1 - redirection /mvt/home
+     2 - websocket: envoyer le message au modal (context)
+          ou
+     1 - context/message modal = variable globale
+     2 - redirection /mvt/home/?showMessageModal=true
+     '''
+    # pour le dev
+    return TemplateResponse(request, 'htmx/components/modal_message.html', context=context)
+
+  else:
+    context = {
+        "modal_message": {
+          "title": "Attention",
+          "content": 'Token non valide',
+          "type": 'warning'
+        }
+     }
+    return TemplateResponse(request, 'htmx/components/modal_message.html', context=context)
 
 @require_GET
 def home(request: HttpRequest) -> HttpResponse:
@@ -161,7 +265,7 @@ def home(request: HttpRequest) -> HttpResponse:
   host = f"https://{request.get_host()}" if request.is_secure() else f"http://{request.get_host()}"
 
   serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
-  #TODO: le faire dans le serializer
+  # TODO: le faire dans le serializer
   if config.server_cashless and config.key_cashless and request.user.is_authenticated:
     serialized_user['cashless'] = request_for_data_cashless(request.user)
 
@@ -177,98 +281,100 @@ def home(request: HttpRequest) -> HttpResponse:
     "serialized_user": serialized_user,
     "tenant": config.organisation,
     "header": {
-        "img": config.img.fhd.url,
-        "title": config.organisation,
-        "short_description": config.short_description,
-        "long_description": config.long_description
+      "img": config.img.fhd.url,
+      "title": config.organisation,
+      "short_description": config.short_description,
+      "long_description": config.long_description
     },
     "events": Event.objects.all(),
     "fake_event": {
-        "uuid": "fakeEven-ece7-4b30-aa15-b4ec444a6a73",
-        "name": "Nom de l'évènement",
-        "short_description": "Cliquer sur le bouton si-dessous.",
-        "long_description": None,
-        "categorie": "CARDE_CREATE",
-        "tag": [],
-        "products": [],
-        "options_radio": [],
-        "options_checkbox": [],
-        "img_variations": {"crop": "/media/images/1080_v39ZV53.crop"},
-        "artists": [],
+      "uuid": "fakeEven-ece7-4b30-aa15-b4ec444a6a73",
+      "name": "Nom de l'évènement",
+      "short_description": "Cliquer sur le bouton si-dessous.",
+      "long_description": None,
+      "categorie": "CARDE_CREATE",
+      "tag": [],
+      "products": [],
+      "options_radio": [],
+      "options_checkbox": [],
+      "img_variations": {"crop": "/media/images/1080_v39ZV53.crop"},
+      "artists": [],
     }
   }
   return render(request, "htmx/views/home.html", context=context)
 
+
 @require_GET
 def event(request: HttpRequest, slug) -> HttpResponse:
-    config = Configuration.get_solo()
-    base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
+  config = Configuration.get_solo()
+  base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
+
+  host = "http://" + request.get_host()
+  if request.is_secure():
+    host = "https://" + request.get_host()
+
+  event = Event.objects.get(slug=slug)
+
+  context = {
+    "base_template": base_template,
+    "host": host,
+    "url_name": request.resolver_match.url_name,
+    "tenant": config.organisation,
+    "header": {
+      "img": f"/media/{event.img}",
+      "title": event.name,
+      "short_description": event.short_description,
+      "long_description": event.long_description
+    },
+    "slug": slug,
+    "event": event,
+    "user": request.user,
+    "uuid": uuid
+  }
+  return render(request, "htmx/views/event.html", context=context)
+
+
+class membership_form(APIView):
+  permission_classes = [AllowAny]
+
+  def get(self, request, uuid):
+    print(f"uuid = {uuid}")
 
     host = "http://" + request.get_host()
     if request.is_secure():
-        host = "https://" + request.get_host()
+      host = "https://" + request.get_host()
 
-    event = Event.objects.get(slug=slug)
-    
     context = {
-        "base_template": base_template,
-        "host": host,
-        "url_name": request.resolver_match.url_name,
-        "tenant": config.organisation,
-        "header": {
-            "img": f"/media/{event.img}",
-            "title": event.name,
-            "short_description": event.short_description,
-            "long_description": event.long_description
-        },
-        "slug": slug,
-        "event": event,
-        "user": request.user,
-        "uuid": uuid
+      "host": host,
+      "url_name": request.resolver_match.url_name,
+      "membership": Product.objects.get(uuid=uuid)
     }
-    return render(request, "htmx/views/event.html", context=context)
 
-class membership_form(APIView):
-    permission_classes = [AllowAny]
-
-    def get(self, request, uuid):
-        print(f"uuid = {uuid}")
-
-        host = "http://" + request.get_host()
-        if request.is_secure():
-            host = "https://" + request.get_host()
-
-        context = {
-            "host": host,
-            "url_name": request.resolver_match.url_name,
-            "membership": Product.objects.get(uuid=uuid)
-        }
-
-        return render(request, "htmx/forms/membership_form.html", context=context)
+    return render(request, "htmx/forms/membership_form.html", context=context)
 
 
 @require_GET
 def memberships(request: HttpRequest) -> HttpResponse:
-    config = Configuration.get_solo()
-    base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
+  config = Configuration.get_solo()
+  base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
 
-    host = "http://" + request.get_host()
-    if request.is_secure():
-        host = "https://" + request.get_host()
+  host = "http://" + request.get_host()
+  if request.is_secure():
+    host = "https://" + request.get_host()
 
-    img = '/media/' + str(Configuration.get_solo().img)
-    context = {
-        "base_template": base_template,
-        "host": host,
-        "url_name": request.resolver_match.url_name,
-        "tenant": config.organisation,
-        "header": {
-            "img": config.img.fhd.url,
-            "title": config.organisation,
-            "short_description": config.short_description,
-            "long_description": config.long_description
-        },
-        "memberships": Product.objects.filter(categorie_article="A"),
-    }
+  img = '/media/' + str(Configuration.get_solo().img)
+  context = {
+    "base_template": base_template,
+    "host": host,
+    "url_name": request.resolver_match.url_name,
+    "tenant": config.organisation,
+    "header": {
+      "img": config.img.fhd.url,
+      "title": config.organisation,
+      "short_description": config.short_description,
+      "long_description": config.long_description
+    },
+    "memberships": Product.objects.filter(categorie_article="A"),
+  }
 
-    return render(request, "htmx/views/memberships.html", context=context)
+  return render(request, "htmx/views/memberships.html", context=context)
