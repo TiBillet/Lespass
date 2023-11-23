@@ -145,10 +145,12 @@ def login(request):
         # Création de l'user et envoie du mail de validation
         user = get_or_create_user(email=email, send_mail=True)
 
+        '''
         # login auto en DEBUG
         if settings.DEBUG:
             request.login(user)
             return HttpResponseRedirect('/')
+        '''
 
         # Sinon, en prod, on renvoi vers le message de vérification de mail
         #TODO: mettre à jour le modal
@@ -157,49 +159,49 @@ def login(request):
 
 @require_GET
 def home(request: HttpRequest) -> HttpResponse:
-    config = Configuration.get_solo()
-    base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
+  config = Configuration.get_solo()
+  base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
 
-    host = f"https://{request.get_host()}" if request.is_secure() else f"http://{request.get_host()}"
-    
+  host = f"https://{request.get_host()}" if request.is_secure() else f"http://{request.get_host()}"
 
-    serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
-    #TODO: le faire dans le serializer
-    if config.server_cashless and config.key_cashless and request.user.is_authenticated:
-        serialized_user['cashless'] = request_for_data_cashless(request.user)
+  serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
+  #TODO: le faire dans le serializer
+  if config.server_cashless and config.key_cashless and request.user.is_authenticated:
+    serialized_user['cashless'] = request_for_data_cashless(request.user)
 
     # import ipdb; ipdb.set_trace()
     # img = '/media/' + str(Configuration.get_solo().img)
 
-    context = {
-        "base_template": base_template,
-        "host": host,
-        "url_name": request.resolver_match.url_name,
-        "configuration": config,
-        "user": request.user,
-        "serialized_user": serialized_user,
-        "header": {
-            "img": config.img.fhd.url,
-            "tenant": config.organisation,
-            "short_description": config.short_description,
-            "long_description": config.long_description
-        },
-        "events": Event.objects.all(),
-        "fake_event": {
-            "uuid": "fakeEven-ece7-4b30-aa15-b4ec444a6a73",
-            "name": "Nom de l'évènement",
-            "short_description": "Cliquer sur le bouton si-dessous.",
-            "long_description": None,
-            "categorie": "CARDE_CREATE",
-            "tag": [],
-            "products": [],
-            "options_radio": [],
-            "options_checkbox": [],
-            "img_variations": {"crop": "/media/images/1080_v39ZV53.crop"},
-            "artists": [],
-        },
+  context = {
+    "base_template": base_template,
+    "host": host,
+    "url_name": request.resolver_match.url_name,
+    "configuration": config,
+    "user": request.user,
+    "serialized_user": serialized_user,
+    "tenant": config.organisation,
+    "header": {
+        "img": config.img.fhd.url,
+        "title": config.organisation,
+        "short_description": config.short_description,
+        "long_description": config.long_description
+    },
+    "events": Event.objects.all(),
+    "fake_event": {
+        "uuid": "fakeEven-ece7-4b30-aa15-b4ec444a6a73",
+        "name": "Nom de l'évènement",
+        "short_description": "Cliquer sur le bouton si-dessous.",
+        "long_description": None,
+        "categorie": "CARDE_CREATE",
+        "tag": [],
+        "products": [],
+        "options_radio": [],
+        "options_checkbox": [],
+        "img_variations": {"crop": "/media/images/1080_v39ZV53.crop"},
+        "artists": [],
     }
-    return render(request, "htmx/views/home.html", context=context)
+  }
+  return render(request, "htmx/views/home.html", context=context)
 
 @require_GET
 def event(request: HttpRequest, slug) -> HttpResponse:
@@ -216,9 +218,10 @@ def event(request: HttpRequest, slug) -> HttpResponse:
         "base_template": base_template,
         "host": host,
         "url_name": request.resolver_match.url_name,
+        "tenant": config.organisation,
         "header": {
-            "img": event.img.fhd.url,
-            "tenant": config.organisation,
+            "img": f"/media/{event.img}",
+            "title": event.name,
             "short_description": event.short_description,
             "long_description": event.long_description
         },
@@ -228,8 +231,6 @@ def event(request: HttpRequest, slug) -> HttpResponse:
         "uuid": uuid
     }
     return render(request, "htmx/views/event.html", context=context)
-
-
 
 class membership_form(APIView):
     permission_classes = [AllowAny]
@@ -244,7 +245,7 @@ class membership_form(APIView):
         context = {
             "host": host,
             "url_name": request.resolver_match.url_name,
-            "membership": Product.objects.get(uuid=uuid),
+            "membership": Product.objects.get(uuid=uuid)
         }
 
         return render(request, "htmx/forms/membership_form.html", context=context)
@@ -252,10 +253,8 @@ class membership_form(APIView):
 
 @require_GET
 def memberships(request: HttpRequest) -> HttpResponse:
-    if request.htmx:
-        base_template = "htmx/partial.html"
-    else:
-        base_template = "htmx/base.html"
+    config = Configuration.get_solo()
+    base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
 
     host = "http://" + request.get_host()
     if request.is_secure():
@@ -266,11 +265,12 @@ def memberships(request: HttpRequest) -> HttpResponse:
         "base_template": base_template,
         "host": host,
         "url_name": request.resolver_match.url_name,
+        "tenant": config.organisation,
         "header": {
-            "img": img,
-            "tenant": Configuration.get_solo().organisation,
-            "short_description": Configuration.get_solo().short_description,
-            "long_description": Configuration.get_solo().long_description
+            "img": config.img.fhd.url,
+            "title": config.organisation,
+            "short_description": config.short_description,
+            "long_description": config.long_description
         },
         "memberships": Product.objects.filter(categorie_article="A"),
     }

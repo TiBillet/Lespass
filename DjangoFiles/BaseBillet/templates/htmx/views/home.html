@@ -5,8 +5,7 @@
     
   <div class="container mt-7">
     <div class="row">
-
-      {% if user.is_staff == True %}
+      {% if user.is_staff == True and configuration.categorie == 'M' %}
       <div class="col-lg-4 col-md-6 mb-7">
         {% include "htmx/components/cardEvent.html" with event=fake_event %}
       </div>
@@ -17,8 +16,6 @@
         {% include "htmx/components/cardEvent.html" with event=event %}
       </div>
       {% endfor %}
-
-
     </div>
   </div>
   {% endblock main %}
