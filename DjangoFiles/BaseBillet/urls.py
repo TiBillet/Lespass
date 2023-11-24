@@ -13,6 +13,7 @@ urlpatterns = [
     path("memberships/", base_view.memberships, name='memberships'),
     path('test_jinja/', base_view.test_jinja, name='test_jinja'),
     path('login/', base_view.login, name='login'),
+    path('logout/', base_view.logout, name='logout'),
     path('emailconfirmation/<str:uuid>/<str:token>/',base_view.emailconfirmation, name='emailconfirmation'),
     path('showModalMessageInEnterPage/', base_view.showModalMessageInEnterPage, name='showModalMessageInEnterPage'),
 

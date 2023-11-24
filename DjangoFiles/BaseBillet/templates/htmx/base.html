@@ -36,13 +36,6 @@
     <!-- conteneur pour les "modal message" -->
     <div id="tibillet-modal-message"></div>
 
-    <!-- au lancement des pages si messageToShowInEnterPage != None, un message est affiché -->
-    <!-- messageToShowInEnterPage est un objet content le message -->
-    {% if messageToShowInEnterPage != None %}
-        <div hx-get="/mvt/showModalMessageInEnterPage" hx-target="#tibillet-modal-message"
-             hx-swap="outerHTML" hx-trigger="load" hx-push-url="/mvt/home/"></div>
-    {% endif %}
-
     <!-- Bootstrap v5.2.3 -->
     <script src="{% static 'mvt_htmx/material_kit_2.0.7/js/core/bootstrap.bundle.min.js' %}"></script>
     <!-- Material Kit 2 - v3.0.4 -->

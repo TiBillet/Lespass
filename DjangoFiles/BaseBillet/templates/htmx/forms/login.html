@@ -12,7 +12,7 @@
         <div>
           <h4 class="font-weight-bolder text-info text-center">Avec votre e-mail</h4>
         </div>
-        <form class="text-left needs-validation mb-7" hx-post="/mvt/login/"
+        <form class="text-left needs-validation mb-7" hx-post="/login/"
               hx-target="#tibillet-modal-message" hx-swap="outerHTML">
           {% include "htmx/components/inputMd.html" with name="login-email" label="Email" type="email" errors=errors %}
 

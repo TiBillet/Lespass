@@ -1,6 +1,7 @@
 import logging
 from django.contrib import messages
-from django.contrib.auth import get_user_model
+# nico: ajout de "login"
+from django.contrib.auth import get_user_model, login
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.http import HttpResponseRedirect
 from django.shortcuts import redirect
@@ -141,6 +142,7 @@ class test_api_key(APIView):
 
 
 def activate(request, uid, token):
+    print("-> def activate !")
     try:
         user = User.objects.get(pk=decode_uid(uid))
         if user.email_error:
@@ -154,6 +156,7 @@ def activate(request, uid, token):
             user.is_active = True
             user.save()
             messages.add_message(request, messages.SUCCESS, "Welcome User")
+            login(request, user)
 
     except User.DoesNotExist:
         messages.add_message(request, messages.ERROR, "Token non valide")
@@ -162,7 +165,7 @@ def activate(request, uid, token):
         raise e
 
     messages.add_message(request, messages.ERROR, "Token non valide")
-    return redirect('home')
+
 
 
 

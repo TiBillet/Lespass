@@ -1,42 +1,32 @@
 from django.conf import settings
 from django.http import HttpResponseRedirect, HttpResponse, HttpRequest
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.template.response import TemplateResponse
+from django.contrib.auth import logout
 
 from django.views.decorators.http import require_GET
 
 from django.utils.encoding import force_str
-from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 
-from rest_framework.generics import get_object_or_404
+# from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
-from rest_framework import status
-from rest_framework_simplejwt.tokens import RefreshToken
 
 from ApiBillet.views import request_for_data_cashless
 from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
-
-from django.contrib.auth import get_user_model
-from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from AuthBillet.views import activate
 
 from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Event
 
 import segno
 import barcode
 import uuid
-import logging
 
 from io import BytesIO
 
-from BaseBillet.tasks import encode_uid
-
 # dev test
 import time
-
-globalContext = None
-
 
 def get_context(request):
     config = Configuration.get_solo()
@@ -179,6 +169,16 @@ def test_jinja(request):
     }
     return TemplateResponse(request, "htmx/views/test_jinja.html", context=context)
 
+def logout(request):
+    logout(request)
+    context = {
+        "modal_message": {
+            "title": "Information",
+            "content": "Déconnexion !",
+            "type": 'success'
+        }
+    }
+    return TemplateResponse(request, 'htmx/components/modal_message.html', context=context)
 
 def login(request):
     if request.method == 'POST':
@@ -217,81 +217,20 @@ def login(request):
 
 # TODO: authentifier le user/email (si-dessous, ne fonctionne pas)
 def emailconfirmation(request, uuid, token):
-    global globalContext
-    context = get_context(request)
-    User = get_user_model()
-    try:
-        user = User.objects.get(pk=decode_uid(uuid))
-        print(f"user = {user}")
-    except User.DoesNotExist:
-        context['messageToShowInEnterPage'] = {
-            "title": "Attention",
-            "content": 'Token non valide. DoesNotExist',
-            "type": 'warning'
-        }
-        globalContext = context
-        return render(request, "htmx/views/home.html", context=context)
-
-    except Exception as e:
-        logging.getLogger(__name__).error(e)
-        raise e
-
-    if user.email_error:
-        context['messageToShowInEnterPage'] = {
-            "title": "Attention",
-            "content": 'Mail non valide',
-            "type": 'warning'
-        }
-        globalContext = context
-        return render(request, "htmx/views/home.html", context=context)
-
-    PR = PasswordResetTokenGenerator()
-    is_token_valid = PR.check_token(user, token)
-    if is_token_valid:
-        user.is_active = True
-        # si besoin ?
-        context['refresh_token'] = RefreshToken.for_user(user)
-        print(f"-> user.is_authenticated = {user.is_authenticated}")
-        user.save()
-        context['user'] = request.user
-        # import ipdb; ipdb.set_trace()
-        context['messageToShowInEnterPage'] = {
-            "title": "Information",
-            "content": 'Utilisateur activé / connecté !',
-            "type": 'success'
-        }
-        globalContext = context
-        return render(request, "htmx/views/home.html", context=context)
-
-    else:
-        context['messageToShowInEnterPage'] = {
-            "title": "Attention",
-            "content": 'Token non valide',
-            "type": 'warning'
-        }
-        globalContext = context
-        return render(request, "htmx/views/home.html", context=context)
-
+    activate(request, uuid, token)
+    return redirect('home')
 
 def showModalMessageInEnterPage(request):
-    global globalContext
     context = {
         "modal_message": globalContext['messageToShowInEnterPage']
     }
-    globalContext['messageToShowInEnterPage'] = None
-    return TemplateResponse(request, 'htmx/components/modal_message.html', context=context)
+    return TemplateResponse(request, 'htmx/components/modal_message.html', context={})
 
 
 @require_GET
-def home(request: HttpRequest) -> HttpResponse:
-    userTest = get_user_model()
-    global globalContext
-    # import ipdb; ipdb.set_trace()
-    if globalContext != None:
-        print("messageToShowInEnterPage = {globalContext['messageToShowInEnterPage']}")
+def home(request):
     context = get_context(request)
     return render(request, "htmx/views/home.html", context=context)
-
 
 @require_GET
 def event(request: HttpRequest, slug) -> HttpResponse:
