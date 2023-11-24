@@ -85,27 +85,11 @@ def decode_uid(pk):
   return force_str(urlsafe_base64_decode(pk))
 
 
-class index(APIView):
-  permission_classes = [AllowAny]
-
-  def get(self, request):
-    return HttpResponseRedirect("https://tibillet.org")
-
-    # configuration = Configuration.get_solo()
-    # if not configuration.activer_billetterie:
-    #     return HttpResponseRedirect('https://www.tibillet.re')
-    #
-    #
-    # context = {
-    #     'configuration': configuration,
-    #     'events': Event.objects.filter(datetime__gt=datetime.now()),
-    #     'categorie_billet': Product.BILLET,
-    # }
-    #
-    # if configuration.template_billetterie :
-    #     return render(request, f'{configuration.template_billetterie}/lieu.html', context=context)
-    # else :
-    #     return render(request, 'arnaud_mvc/lieu.html', context=context)
+# class index(APIView):
+#   permission_classes = [AllowAny]
+#
+#   def get(self, request):
+#     return HttpResponseRedirect("https://tibillet.org")
 
 
 class Ticket_html_view(APIView):
