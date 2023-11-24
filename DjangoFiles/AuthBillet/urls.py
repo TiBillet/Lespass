@@ -27,5 +27,5 @@ urlpatterns = [
     # uniquement pour tenant public :
     # path('terminal/', create_terminal_user.as_view(), name='create_terminal_user'),
 
-    path('activate/<str:uid>/<str:token>', auth_view.activate.as_view()),
+    path('activate/<str:uid>/<str:token>', auth_view.activate, name='activate'),
 ]

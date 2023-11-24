@@ -1,7 +1,9 @@
 import logging
+from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.http import HttpResponseRedirect
+from django.shortcuts import redirect
 
 # Create your views here.
 from rest_framework import status, permissions, viewsets
@@ -138,18 +140,9 @@ class test_api_key(APIView):
 
 
 
-class activate(APIView):
-    permission_classes = [AllowAny]
-
-    def get(self, request, uid, token):
-        try:
-            user = User.objects.get(pk=decode_uid(uid))
-        except User.DoesNotExist:
-            return Response('Token non valide. DoesNotExist', status=status.HTTP_406_NOT_ACCEPTABLE)
-        except Exception as e:
-            logger.error(e)
-            raise e
-
+def activate(request, uid, token):
+    try:
+        user = User.objects.get(pk=decode_uid(uid))
         if user.email_error:
             return Response('Mail non valide', status=status.HTTP_406_NOT_ACCEPTABLE)
 
@@ -158,16 +151,19 @@ class activate(APIView):
         # print(user)
         if is_token_valid:
             user.is_active = True
-            refresh = RefreshToken.for_user(user)
             user.save()
-            data = {
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-            }
-            return Response(data, status=status.HTTP_200_OK)
+            messages.add_message(request, messages.SUCCESS, "Welcome User")
+            return redirect('home')
 
-        else:
-            return Response('Token non valide', status=status.HTTP_400_BAD_REQUEST)
+    except User.DoesNotExist:
+        return Response('DoesNotExist', status=status.HTTP_406_NOT_ACCEPTABLE)
+    except Exception as e:
+        logger.error(e)
+        raise e
+
+    return Response('Token non valide', status=status.HTTP_400_BAD_REQUEST)
+
+
 
 
 class create_user(APIView):
