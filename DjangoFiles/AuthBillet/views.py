@@ -144,8 +144,9 @@ def activate(request, uid, token):
     try:
         user = User.objects.get(pk=decode_uid(uid))
         if user.email_error:
-            return Response('Mail non valide', status=status.HTTP_406_NOT_ACCEPTABLE)
+            messages.add_message(request, messages.ERROR, "Mail non valide")
 
+        # On utilise le même algo que pour le reset password
         PR = PasswordResetTokenGenerator()
         is_token_valid = PR.check_token(user, token)
         # print(user)
@@ -153,15 +154,15 @@ def activate(request, uid, token):
             user.is_active = True
             user.save()
             messages.add_message(request, messages.SUCCESS, "Welcome User")
-            return redirect('home')
 
     except User.DoesNotExist:
-        return Response('DoesNotExist', status=status.HTTP_406_NOT_ACCEPTABLE)
+        messages.add_message(request, messages.ERROR, "Token non valide")
     except Exception as e:
         logger.error(e)
         raise e
 
-    return Response('Token non valide', status=status.HTTP_400_BAD_REQUEST)
+    messages.add_message(request, messages.ERROR, "Token non valide")
+    return redirect('home')
 
 
 
