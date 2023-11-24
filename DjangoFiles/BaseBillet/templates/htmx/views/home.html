@@ -4,6 +4,7 @@
   {% include "htmx/header_groupe.html" %}
     
   <div class="container mt-7">
+    <div hx-trigger="load" hx-call="testJs()" >Test</div>
     <pre class="bg-success text-white">messageToShowInEnterPage = {{ messageToShowInEnterPage }}</pre>
     <pre class="bg-success text-white">user = {{ user }}</pre>
     <pre class="bg-success text-white">profile = {{ profile }}</pre>

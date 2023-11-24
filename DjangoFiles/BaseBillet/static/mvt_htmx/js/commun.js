@@ -46,3 +46,7 @@ function updateTheme() {
     ele.classList.toggle('dark-version')
   })
 }
+
+function testJs() {
+console.log('-> fonc testJs ' + new Date() + ' !')
+}

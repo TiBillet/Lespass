@@ -3,7 +3,7 @@
 <nav class="navbar navbar-expand-lg fixed-top bg-dark opacity-8 z-index-3 w-100 shadow-none">
   <div class="container-fluid">
     <a class="navbar-brand  text-white cursor-pointer" rel="tooltip" title="Designed and Coded by Creative Tim"
-       data-placement="bottom" target="_blank" hx-get="/mvt/home" hx-target="#main" hx-swap="outerHTML"
+       data-placement="bottom" target="_blank" hx-get="/home/" hx-target="#main" hx-swap="outerHTML"
        hx-push-url="true">
       {{ tenant }}
     </a>
@@ -48,7 +48,7 @@
 
         {% if config.categorie|not_in_list:'M' and url_name != 'memberships' %}
         <li>
-          <a href="#" class="nav-item text-white mx-2" hx-get="/mvt/memberships" hx-target="#main"
+          <a href="#" class="nav-item text-white mx-2" hx-get="/memberships/" hx-target="#main"
              hx-swap="outerHTML"
              hx-push-url="true" role="button" aria-label="Sélectionner une adhésion">
             <i class="fa fa-users" aria-hidden="true"></i>
