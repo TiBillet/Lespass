@@ -20,7 +20,7 @@
       <!-- positionner les li inversés -->
       <ul class="navbar-nav navbar-nav-hover w-100 flex-row-reverse text-white">
         <!-- utilisateur non connecté -->
-        {% if user.is_active == False %}
+        {% if user.is_authenticated == False %}
         <li>
           <a href="#" class="nav-item text-white mx-2" role="button" aria-label="Se connecter"
              data-bs-toggle="modal" data-bs-target="#tibillet-login-modal">

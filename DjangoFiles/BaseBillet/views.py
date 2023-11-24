@@ -48,8 +48,6 @@ def get_context(request):
   if config.server_cashless and config.key_cashless and request.user.is_authenticated:
     serialized_user['cashless'] = request_for_data_cashless(request.user)
 
-    # import ipdb; ipdb.set_trace()
-    # img = '/media/' + str(Configuration.get_solo().img)
 
   context = {
     "messageToShowInEnterPage": None,
@@ -58,7 +56,7 @@ def get_context(request):
     "url_name": request.resolver_match.url_name,
     "configuration": config,
     "user": request.user,
-    "serialized_user": serialized_user,
+    "profile": serialized_user,
     "tenant": config.organisation,
     "header": {
       "img": config.img.fhd.url,
@@ -230,7 +228,7 @@ def login(request):
       }
       return TemplateResponse(request, 'htmx/components/modal_message.html', context=context)
 
-
+# TODO: authentifier le user/email (si-dessous, ne fonctionne pas)
 def emailconfirmation(request, uuid, token):
   global globalContext
   context = get_context(request)
@@ -264,8 +262,12 @@ def emailconfirmation(request, uuid, token):
   is_token_valid = PR.check_token(user, token)
   if is_token_valid:
     user.is_active = True
-    RefreshToken.for_user(user)
+    # si besoin ?
+    context['refresh_token'] = RefreshToken.for_user(user)
+    print(f"-> user.is_authenticated = {user.is_authenticated}")
     user.save()
+    context['user'] = request.user
+    # import ipdb; ipdb.set_trace()
     context['messageToShowInEnterPage'] = {
       "title": "Information",
       "content": 'Utilisateur activé / connecté !',
@@ -293,61 +295,18 @@ def showModalMessageInEnterPage(request):
 
 @require_GET
 def home(request: HttpRequest) -> HttpResponse:
+  userTest = get_user_model()
   global globalContext
+  # import ipdb; ipdb.set_trace()
   if globalContext != None:
     print("messageToShowInEnterPage = {globalContext['messageToShowInEnterPage']}")
   context = get_context(request)
-  '''
-  config = Configuration.get_solo()
-  base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
-
-  host = f"https://{request.get_host()}" if request.is_secure() else f"http://{request.get_host()}"
-  print(f"-> host = {host}")
-
-  serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
-  # TODO: le faire dans le serializer
-  if config.server_cashless and config.key_cashless and request.user.is_authenticated:
-    serialized_user['cashless'] = request_for_data_cashless(request.user)
-
-    # import ipdb; ipdb.set_trace()
-    # img = '/media/' + str(Configuration.get_solo().img)
-
-  context = {
-    "messageToShowInEnterPage": messageToShowInEnterPage,
-    "base_template": base_template,
-    "host": host,
-    "url_name": request.resolver_match.url_name,
-    "configuration": config,
-    "user": request.user,
-    "serialized_user": serialized_user,
-    "tenant": config.organisation,
-    "header": {
-      "img": config.img.fhd.url,
-      "title": config.organisation,
-      "short_description": config.short_description,
-      "long_description": config.long_description
-    },
-    "events": Event.objects.all(),
-    "fake_event": {
-      "uuid": "fakeEven-ece7-4b30-aa15-b4ec444a6a73",
-      "name": "Nom de l'évènement",
-      "short_description": "Cliquer sur le bouton si-dessous.",
-      "long_description": None,
-      "categorie": "CARDE_CREATE",
-      "tag": [],
-      "products": [],
-      "options_radio": [],
-      "options_checkbox": [],
-      "img_variations": {"crop": "/media/images/1080_v39ZV53.crop"},
-      "artists": [],
-    }
-  }
-  '''
   return render(request, "htmx/views/home.html", context=context)
 
 
 @require_GET
 def event(request: HttpRequest, slug) -> HttpResponse:
+  serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
   config = Configuration.get_solo()
   base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
 
@@ -362,6 +321,7 @@ def event(request: HttpRequest, slug) -> HttpResponse:
     "host": host,
     "url_name": request.resolver_match.url_name,
     "tenant": config.organisation,
+    "profile": serialized_user,
     "header": {
       "img": f"/media/{event.img}",
       "title": event.name,

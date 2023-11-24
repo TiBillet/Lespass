@@ -4,7 +4,10 @@
   {% include "htmx/header_groupe.html" %}
     
   <div class="container mt-7">
-    <pre class="bg-success text-white mb-4">{{ messageToShowInEnterPage }}</pre>
+    <pre class="bg-success text-white">messageToShowInEnterPage = {{ messageToShowInEnterPage }}</pre>
+    <pre class="bg-success text-white">user = {{ user }}</pre>
+    <pre class="bg-success text-white">profile = {{ profile }}</pre>
+
     <div class="row">
       {% if user.is_staff == True and configuration.categorie == 'M' %}
       <div class="col-lg-4 col-md-6 mb-7">
