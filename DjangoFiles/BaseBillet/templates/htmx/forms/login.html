@@ -12,8 +12,8 @@
         <div>
           <h4 class="font-weight-bolder text-info text-center">Avec votre e-mail</h4>
         </div>
-        <form class="text-left needs-validation mb-7" hx-post="/login/"
-              hx-target="#tibillet-modal-message" hx-swap="outerHTML">
+        <form class="text-left needs-validation mb-7" action="/connexion/" method="POST">
+          {% csrf_token %}
           {% include "htmx/components/inputMd.html" with name="login-email" label="Email" type="email" errors=errors %}
 
           <p class="">Nul besoin de mot de passe : un email vous sera envoyé pour validation.</p>

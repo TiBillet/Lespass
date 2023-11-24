@@ -1,6 +1,5 @@
 import logging
 from django.contrib import messages
-# nico: ajout de "login"
 from django.contrib.auth import get_user_model, login
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.http import HttpResponseRedirect

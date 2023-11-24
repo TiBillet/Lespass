@@ -33,6 +33,13 @@
     <!-- modal login -->
     {% include "htmx/forms/login.html" %}
 
+    <!-- gestion des messages django -->
+    {% if messages %}
+        {% for message in messages %}
+        {% include "htmx/components/toast.html" %}
+        {% endfor %}
+    {% endif %}
+
     <!-- conteneur pour les "modal message" -->
     <div id="tibillet-modal-message"></div>
 

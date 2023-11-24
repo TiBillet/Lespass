@@ -2,13 +2,11 @@ from django.conf import settings
 from django.http import HttpResponseRedirect, HttpResponse, HttpRequest
 from django.shortcuts import render, redirect
 from django.template.response import TemplateResponse
-from django.contrib.auth import logout
 
 from django.views.decorators.http import require_GET
 
 from django.utils.encoding import force_str
 
-# from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 
@@ -18,6 +16,9 @@ from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
 
 from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Event
+
+from django.contrib.auth import logout, login
+from django.contrib import messages
 
 import segno
 import barcode
@@ -169,51 +170,31 @@ def test_jinja(request):
     }
     return TemplateResponse(request, "htmx/views/test_jinja.html", context=context)
 
-def logout(request):
+def deconnexion(request):
     logout(request)
-    context = {
-        "modal_message": {
-            "title": "Information",
-            "content": "Déconnexion !",
-            "type": 'success'
-        }
-    }
-    return TemplateResponse(request, 'htmx/components/modal_message.html', context=context)
+    messages.add_message(request, messages.SUCCESS, "Déconnexion")
+    return redirect('home')
 
-def login(request):
+def connexion(request):
     if request.method == 'POST':
         try:
             email = request.POST.get('login-email')
             # Création de l'user et envoie du mail de validation
             user = get_or_create_user(email=email, send_mail=True)
 
-            '''
-            # login auto en DEBUG
-            if settings.DEBUG:
-                request.login(user)
-                return HttpResponseRedirect('/')
-            '''
+            if user.is_authenticated == True:
+                login(request, user)
+                messages.add_message(request, messages.SUCCESS, "Connexion ok.")
+                return redirect('home')
 
-            # Sinon, en prod, on renvoi vers le message de vérification de mail
-            context = {
-                "modal_message": {
-                    "title": "Validation",
-                    "content": "Pour acceder à votre espace et réservations, merci de valider\n votre adresse email. Pensez à regarder dans les spams !",
-                    "type": 'success'
-                }
-            }
-            return TemplateResponse(request, 'htmx/components/modal_message.html', context=context)
+            print(f"user = {user.__dict__}")
+            if user.is_authenticated == False:
+                messages.add_message(request, messages.SUCCESS, "Pour acceder à votre espace et réservations, merci de valider\n votre adresse email. Pensez à regarder dans les spams !")
 
         except Exception as error:
-            context = {
-                "modal_message": {
-                    "title": "Erreur",
-                    "content": str(error),
-                    "type": 'danger'
-                }
-            }
-            return TemplateResponse(request, 'htmx/components/modal_message.html', context=context)
+            messages.add_message(request, messages.WARNING, str(error))
 
+        return redirect('home')
 
 # TODO: authentifier le user/email (si-dessous, ne fonctionne pas)
 def emailconfirmation(request, uuid, token):

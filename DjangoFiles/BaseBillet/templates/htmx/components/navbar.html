@@ -39,11 +39,11 @@
             <!-- info email user connecté -->
             <li>
               <a class="dropdown-item" href="#">
-                test1
+                {{ profile.email }}
               </a>
             </li>
             <li>
-              <a href="#" class="ps-1" hx-get="/logout/" hx-target="#tibillet-modal-message" hx-swap="outerHTML">
+              <a href="/deconnexion/" class="ps-1">
                 <i class="fa fa-sign-out" aria-hidden="true"></i>
                 Deconnexion
               </a>
