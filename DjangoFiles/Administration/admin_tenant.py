@@ -2,20 +2,19 @@ import datetime
 import uuid
 
 from django import forms
-from django.conf.urls import url
 from django.contrib import admin, messages
 from django.contrib.admin import AdminSite, SimpleListFilter
 from django.contrib.admin.views.main import ChangeList
 from django.contrib.auth.models import Group
 from django.http import HttpResponseRedirect
 from django.template.response import TemplateResponse
-from django.urls import reverse, NoReverseMatch
+from django.urls import reverse, NoReverseMatch, re_path
 from django.utils.html import format_html
 from django.utils.text import capfirst
 # from rest_framework_api_key.models import APIKey
 from rest_framework_api_key.models import APIKey
 from solo.admin import SingletonModelAdmin
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 
 from AuthBillet.models import HumanUser, SuperHumanUser, TermUser
 from AuthBillet.utils import get_client_ip
@@ -562,7 +561,7 @@ class TicketAdmin(admin.ModelAdmin):
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
-            url(
+            re_path(
                 r'^(?P<ticket_pk>.+)/scanner/$',
                 self.admin_site.admin_view(self.scanner),
                 name='ticket-scann',

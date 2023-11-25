@@ -44,27 +44,10 @@ CORS_ORIGIN_WHITELIST = [
 
 SHARED_APPS = (
     'django_tenants',  # mandatory
-    # 'jet.dashboard',
-    # 'jet',
     'Customers',  # you must list the app where your tenant model resides in
 
-    'django.contrib.contenttypes',
-
-    # everything below here is optional
     'django.contrib.auth',
-    'AuthBillet',
-    'QrcodeCashless',
-
-    'rest_framework',
-    'rest_framework.authtoken',
-    'rest_framework_simplejwt',
-    'rest_framework_simplejwt.token_blacklist',
-
-    # "allauth",
-    # "allauth.account",
-    # "allauth.socialaccount",
-    # "allauth.socialaccount.providers.github",
-
+    'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.sites',
     'django.contrib.messages',
@@ -72,8 +55,16 @@ SHARED_APPS = (
     'django.contrib.staticfiles',
     'django.contrib.humanize',
 
+    'AuthBillet',
+    'QrcodeCashless',
+
+    'rest_framework',
+    'rest_framework.authtoken',
+    'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'django_browser_reload',
 
+    # 'daphne',
     'channels',
     'django_extensions',
     'Administration',

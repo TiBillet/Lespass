@@ -1,0 +1,48 @@
+[tool.poetry]
+name = "tibillet"
+version = "0.9.0"
+description = "Cashless ticketing and federated network"
+authors = ["Jonas Legion <jturbeaux@pm.me>"]
+license = "AGPLv3"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "3.11.6"
+django = "4.2"
+djangorestframework = "^3.14.0"
+requests = "^2.31.0"
+pillow = "^10.1.0"
+django-stdimage = "^6.0.2"
+stripe = "^7.6.0"
+django-weasyprint = "^2.2.1"
+gunicorn = "^21.2.0"
+sentry-sdk = "^1.37.1"
+python-dateutil = "^2.8.2"
+django-solo = "^2.1.0"
+django-tenants = "^3.5.0"
+Markdown = "^3.5.1"
+djangorestframework-simplejwt = "^5.3.0"
+celery = "^5.3.6"
+redis = "^5.0.1"
+tenant-schemas-celery = "^2.2.0"
+segno = "^1.5.3"
+python-barcode = "^0.15.1"
+django-cors-headers = "^4.3.1"
+channels = {extras = ["daphne"], version = "^4.0.0"}
+djangorestframework-api-key = "^3.0.0"
+flower = "^2.0.1"
+django-htmx = "^1.17.2"
+authlib = "^1.2.1"
+psycopg = "^3.1.13"
+
+[tool.poetry.group.dev.dependencies]
+django-debug-toolbar = "^4.2.0"
+django-extensions = "^3.2.3"
+Werkzeug = "^3.0.1"
+ipdb = "^0.13.13"
+ipython = "^8.18.0"
+django-browser-reload = "^1.12.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

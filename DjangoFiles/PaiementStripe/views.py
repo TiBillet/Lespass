@@ -14,7 +14,7 @@ from rest_framework import serializers
 from stripe.error import InvalidRequestError
 
 from BaseBillet.models import Configuration, LigneArticle, Paiement_stripe, Reservation, Price, PriceSold
-from django.utils.translation import gettext, gettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 
 import logging
 

@@ -1,3 +1,5 @@
-#sleep 34d
+set -e
+sleep infinity
 #celery flower --port=5566
-celery -A TiBillet worker -l INFO
+poetry update
+poetry run celery -A TiBillet worker -l INFO

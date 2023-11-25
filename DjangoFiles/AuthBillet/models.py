@@ -4,7 +4,7 @@ from django.contrib.auth.base_user import BaseUserManager, AbstractBaseUser
 from django.db import models
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 import uuid
 from django.contrib.auth.models import AbstractUser, Group, Permission
 

@@ -21,7 +21,7 @@ from django.utils.text import slugify
 from django_tenants.utils import tenant_context, schema_context
 from rest_framework_api_key.models import APIKey
 from solo.models import SingletonModel
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from stdimage import StdImageField
 from stdimage.validators import MaxSizeValidator, MinSizeValidator
 from django.db import connection

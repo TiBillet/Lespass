@@ -12,7 +12,7 @@ from django.core import files
 from django.utils.text import slugify
 from rest_framework import serializers
 import json
-from django.utils.translation import gettext, gettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from rest_framework.generics import get_object_or_404
 from django_tenants.utils import schema_context, tenant_context
 

@@ -10,7 +10,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from ApiBillet.serializers import ProductSerializer, OptionsSerializer
 from AuthBillet.models import TibilletUser, TermUser, TerminalPairingToken
 import logging
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 
 from AuthBillet.utils import MacAdressField
 from BaseBillet.models import Reservation, Ticket, Membership

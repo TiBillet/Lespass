@@ -2,7 +2,7 @@ version: '3.7'
 services:
   billetterie_postgres:
     container_name: billetterie_postgres
-    image: postgres:11.5-alpine
+    image: postgres:13-bookworm
     restart: always
     volumes:
       - "../../Postgres/dbdata:/var/lib/postgresql/data"
@@ -10,35 +10,42 @@ services:
 
   billetterie_redis:
     container_name: billetterie_redis
-    image: redis:6-alpine
+    image: redis:7.2.3-bookworm
     restart: always
     hostname: redis
 
   billetterie_django:
-    image: tibillet/tibillet_dev:2023-11-17-htmx
+    image: tibillet/poetry:2023-11-25
     container_name: billetterie_django
     build: ../Dockerfile/
     restart: always
     volumes:
       - "../../DjangoFiles:/DjangoFiles"
       - "../../Backup:/Backup"
-      - "../../Docker/bashrc:/root/.bashrc"
+      - "../../Docker/bashrc:/home/tibillet/.bashrc"
     working_dir: /DjangoFiles
+    extra_hosts:
+      - "cashless.tibillet.localhost:172.17.0.1"
+      - "cashless2.tibillet.localhost:172.17.0.1"
+      - "demo.tibillet.localhost:172.17.0.1"
+      - "billetistan.tibillet.localhost:172.17.0.1"
+      - "fedow.tibillet.localhost:172.17.0.1"
+      - "tibillet.localhost:172.17.0.1"
 
-  billetterie_celery:
-    image: tibillet/tibillet_dev:2023-11-17-htmx
-    container_name: billetterie_celery
-    build: ../Dockerfile/
-    restart: always
-    volumes:
-      - "../../DjangoFiles:/DjangoFiles"
-      - "../../Docker/bashrc:/root/.bashrc"
-    working_dir: /DjangoFiles
+#  billetterie_celery:
+#    image: tibillet/tibillet_dev:2023-11-17-htmx
+#    container_name: billetterie_celery
+#    build: ../Dockerfile/
+#    restart: always
+#    volumes:
+#      - "../../DjangoFiles:/DjangoFiles"
+#      - "../../Docker/bashrc:/root/.bashrc"
+#    working_dir: /DjangoFiles
 
 
   billetterie_nginx:
     container_name: billetterie_nginx
-    image: nginx
+    image: nginx:latest
     restart: always
     volumes:
       - ../../Front/dist:/usr/share/nginx/html
@@ -46,31 +53,31 @@ services:
       - ../../DjangoFiles/www:/DjangoFiles/www
       - ../../DjangoFiles/logs:/DjangoFiles/logs
 
-  billetterie_nodejs:
-    image: node:16-bullseye
-    container_name: billetterie_nodejs
-    hostname: billetterie_nodejs
-    environment:
-      DEV: 1
-      TIMEZONE: Indian/Reunion
-    volumes:
-      - ../../Front:/Front
-    working_dir: /Front
+#  billetterie_nodejs:
+#    image: node:16-bullseye
+#    container_name: billetterie_nodejs
+#    hostname: billetterie_nodejs
+#    environment:
+#      DEV: 1
+#      TIMEZONE: Indian/Reunion
+#    volumes:
+#      - ../../Front:/Front
+#    working_dir: /Front
+##    command: "bash /Front/start.sh"
+#
+#
+#
+#  billetterie_nodejs_dev:
+#    image: tibillet/tibillet_node:2022-10-14
+#    container_name: billetterie_nodejs_dev
+#    hostname: billetterie_nodejs_dev
+#    ports:
+#      - 3000:3000
+#    environment:
+#      DEV: 1
+#      TIMEZONE: Indian/Reunion
+#    restart: on-failure
+#    volumes:
+#      - ../../Front:/Front
+#    working_dir: /Front
 #    command: "bash /Front/start.sh"
-
-
-
-  billetterie_nodejs_dev:
-    image: tibillet/tibillet_node:2022-10-14
-    container_name: billetterie_nodejs_dev
-    hostname: billetterie_nodejs_dev
-    ports:
-      - 3000:3000
-    environment:
-      DEV: 1
-      TIMEZONE: Indian/Reunion
-    restart: on-failure
-    volumes:
-      - ../../Front:/Front
-    working_dir: /Front
-    command: "bash /Front/start.sh"

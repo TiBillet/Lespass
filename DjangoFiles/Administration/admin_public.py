@@ -10,7 +10,7 @@ from AuthBillet.utils import get_client_ip
 from BaseBillet.models import Configuration
 from Customers.models import Client, Domain
 from AuthBillet.models import TibilletUser, HumanUser, TermUser, SuperHumanUser
-from django.utils.translation import gettext, gettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 
 from MetaBillet.models import EventDirectory, ProductDirectory
 from QrcodeCashless.models import Detail, CarteCashless, FederatedCashless, SyncFederatedLog

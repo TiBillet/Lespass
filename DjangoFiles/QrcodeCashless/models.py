@@ -8,7 +8,7 @@ from stdimage.validators import MaxSizeValidator
 
 from Customers.models import Client as Customers_Client
 from TiBillet import settings
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 
 import logging
 

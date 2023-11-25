@@ -3,18 +3,17 @@
 alias mm="python /DjangoFiles/manage.py migrate"
 # alias mm="python /DjangoFiles/manage.py migrate_schemas --shared"
 
-alias sp="python manage.py tenant_command shell_plus"
-alias rspp="python /DjangoFiles/manage.py runserver_plus 0.0.0.0:8002"
-alias rsp="python /DjangoFiles/manage.py runserver 0.0.0.0:8002"
+alias sp="poetry run python manage.py tenant_command shell_plus"
+alias rspp="poetry run python /DjangoFiles/manage.py runserver_plus 0.0.0.0:8002"
+alias rsp="poetry run python /DjangoFiles/manage.py runserver 0.0.0.0:8002"
 
 tibinstall() {
-python /DjangoFiles/manage.py collectstatic
-python /DjangoFiles/manage.py migrate
-python /DjangoFiles/manage.py create_public
+poetry run python /DjangoFiles/manage.py collectstatic
+poetry run python /DjangoFiles/manage.py migrate
+poetry run python /DjangoFiles/manage.py create_public
 echo "Création du super utilisateur :"
-python /DjangoFiles/manage.py create_tenant_superuser -s public
+poetry run python /DjangoFiles/manage.py create_tenant_superuser -s public
 }
-#alias flush="python manage.py flushall --noinput"
 
 load_sql() {
 export PGPASSWORD=$POSTGRES_PASSWORD

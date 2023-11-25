@@ -2,7 +2,7 @@ from django.utils import timezone
 
 from django.db import models
 from django_tenants.models import TenantMixin, DomainMixin
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 import uuid
 
 class Client(TenantMixin):

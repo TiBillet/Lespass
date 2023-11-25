@@ -130,7 +130,7 @@ def get_or_create_user(email,
 import re
 from rest_framework.fields import Field
 from django.core.validators import RegexValidator
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 
 
 class MacAdressField(Field):
