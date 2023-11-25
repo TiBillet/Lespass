@@ -24,15 +24,7 @@ fi
 
 # poetry run python /DjangoFiles/manage.py collectstatic --noinput
 poetry run python /DjangoFiles/manage.py migrate
+echo "Run rsp pour lancer le serveur web tout neuf"
 sleep infinity
 
-echo "Run rsp pour lancer le serveur web tout neuf"
 #python /DjangoFiles/manage.py runserver 0.0.0.0:8002
-
-
-# Passage de postgres 13 a 14 :
-# Passer la version de postgres à 13-alpine
-# echo $POSTGRES_PASSWORD
-# export && psql --dbname $POSTGRES_DB
-# \password
-# retourner sur le conteneur et lancer le backup

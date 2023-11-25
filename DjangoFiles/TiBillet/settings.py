@@ -29,7 +29,14 @@ if os.environ.get('DEBUG_DJANGO') == "True":
 else:
     DEBUG = False
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['*'] if DEBUG else [f'{os.environ.get("DOMAIN")}', ]
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost",
+    "https://tibillet.localhost",
+    "https://filaos.re",
+    f'https://{os.environ.get("DOMAIN")}',
+] if DEBUG else [f'https://{os.environ.get("DOMAIN")}', ]
+
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 # Application definition
 
@@ -44,6 +51,7 @@ CORS_ORIGIN_WHITELIST = [
 
 SHARED_APPS = (
     'django_tenants',  # mandatory
+    "daphne",
     'Customers',  # you must list the app where your tenant model resides in
 
     'django.contrib.auth',
@@ -65,7 +73,7 @@ SHARED_APPS = (
     'django_browser_reload',
 
     # 'daphne',
-    'channels',
+    # 'channels',
     'django_extensions',
     'Administration',
     'MetaBillet',
@@ -235,7 +243,7 @@ USE_TZ = True
 STATIC_ROOT = os.path.join(BASE_DIR, "www", "static")
 STATIC_URL = '/static/'
 
-STATICFILES_DIRS = ['BaseBillet/static','MetaBillet/static','QrcodeCashless/static',]
+STATICFILES_DIRS = ['BaseBillet/static', 'MetaBillet/static', 'QrcodeCashless/static', ]
 # STATICFILES_DIRS = [BASE_DIR / "static"]
 
 MEDIA_ROOT = os.path.join(BASE_DIR, "www", "media")
