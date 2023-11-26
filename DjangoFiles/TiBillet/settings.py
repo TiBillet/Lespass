@@ -33,22 +33,15 @@ ALLOWED_HOSTS = ['*'] if DEBUG else [f'{os.environ.get("DOMAIN")}', ]
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost",
     "https://tibillet.localhost",
-    "https://filaos.re",
     f'https://{os.environ.get("DOMAIN")}',
 ] if DEBUG else [f'https://{os.environ.get("DOMAIN")}', ]
 
+CORS_ORIGIN_WHITELIST = CSRF_TRUSTED_ORIGINS
+
+
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
+
 # Application definition
-
-CORS_ORIGIN_WHITELIST = [
-    'http://localhost',
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://django-local.org:3000',
-    'http://demo.django-local.org:3000',
-    'http://demo.django-local.org',
-]
-
 SHARED_APPS = (
     'django_tenants',  # mandatory
     "daphne",
