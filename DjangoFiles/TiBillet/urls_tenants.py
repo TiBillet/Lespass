@@ -36,6 +36,7 @@ urlpatterns = [
     re_path(r'api/', include('ApiBillet.urls')),
     re_path(r'qr/', include('QrcodeCashless.urls')),
     re_path(r'rss/', include('tibrss.urls')),
+    re_path(r'chat/', include('wsocket.urls')),
 
     # pour carte GEN1 Bisik
     re_path(r'(?P<numero_carte>^[qsdf974]{5}$)', include('QrcodeCashless.urls')),

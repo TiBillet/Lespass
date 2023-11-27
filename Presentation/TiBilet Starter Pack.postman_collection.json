@@ -1,0 +1,1388 @@
+{
+	"info": {
+		"_postman_id": "c6d34d92-fb0b-47af-ab55-78c28e27055f",
+		"name": "TiBilet Starter Pack",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Get Root JWT Token",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							""
+						],
+						"type": "text/javascript"
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"    const jsonResponse = pm.response.json();",
+							"",
+							"    pm.collectionVariables.unset(\"jwt_token\");",
+							"    pm.collectionVariables.unset(\"jwt_token_refresh\");",
+							"",
+							"    pm.collectionVariables.set(\"jwt_token\", jsonResponse.access);",
+							"    pm.collectionVariables.set(\"jwt_token_refresh\", jsonResponse.refresh);",
+							"",
+							"    pm.expect(pm.collectionVariables.get(\"jwt_token\")).exist;",
+							"    pm.expect(pm.collectionVariables.get(\"jwt_token_refresh\")).exist;",
+							"",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"username\": \"{{email_root}}\",\n    \"password\": \"{{password_root}}\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{url_root}}/api/user/token/",
+					"host": [
+						"{{url_root}}"
+					],
+					"path": [
+						"api",
+						"user",
+						"token",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Refresh root JWT Token",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							""
+						],
+						"type": "text/javascript"
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"    const jsonResponse = pm.response.json();",
+							"",
+							"    pm.collectionVariables.unset(\"jwt_token\");",
+							"",
+							"    pm.collectionVariables.set(\"jwt_token\", jsonResponse.access);",
+							"",
+							"    pm.expect(pm.collectionVariables.get(\"jwt_token\")).exist;",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "refresh",
+							"value": "{{jwt_token_refresh}}",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{url_root}}/api/user/token/refresh/",
+					"host": [
+						"{{url_root}}"
+					],
+					"path": [
+						"api",
+						"user",
+						"token",
+						"refresh",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Verify root JWT Token",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							""
+						],
+						"type": "text/javascript"
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "token",
+							"value": "{{jwt_token}}",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{url_root}}/api/user/token/verify/",
+					"host": [
+						"{{url_root}}"
+					],
+					"path": [
+						"api",
+						"user",
+						"token",
+						"verify",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Here Meta",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"    const jsonResponse = pm.response.json();",
+							"",
+							"    pm.collectionVariables.unset(\"uuid_place_meta\");",
+							"    pm.collectionVariables.set(\"uuid_place_meta\", jsonResponse.uuid);",
+							"    pm.expect(pm.collectionVariables.get(\"uuid_place_meta\")).exist;",
+							"    ",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"url": {
+					"raw": "{{url_meta}}/api/here/",
+					"host": [
+						"{{url_meta}}"
+					],
+					"path": [
+						"api",
+						"here",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Place Raffinerie Create",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"    const jsonResponse = pm.response.json();",
+							"",
+							"    pm.collectionVariables.unset(\"uuid_place_raffinerie\");",
+							"    pm.collectionVariables.set(\"uuid_place_raffinerie\", jsonResponse.uuid);",
+							"    pm.expect(pm.collectionVariables.get(\"uuid_place_raffinerie\")).exist;",
+							"    ",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"disabledSystemHeaders": {}
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"organisation\": \"La Raffinerie\",\n    \"slug\": \"raffinerie\",\n    \"short_description\": \"Tiers-lieux eco-culturel de Savannah\",\n    \"long_description\": \"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.\",\n    \"phone\": \"0692929292\",\n    \"email\": \"contact@tibillet.re\",\n    \"site_web\": \"https://www.larafinnerie.re\",\n    \"postal_code\": \"97410\",\n    \"img_url\": \"https://picsum.photos/1920/1080.jpg\",\n    \"logo_url\": \"https://picsum.photos/300/300.jpg\",\n    \"categorie\": \"S\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{url_meta}}/api/place/",
+					"host": [
+						"{{url_meta}}"
+					],
+					"path": [
+						"api",
+						"place",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Place Bisik Create",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"    const jsonResponse = pm.response.json();",
+							"",
+							"    pm.collectionVariables.unset(\"uuid_place_bisik\");",
+							"    pm.collectionVariables.set(\"uuid_place_bisik\", jsonResponse.uuid);",
+							"    pm.expect(pm.collectionVariables.get(\"uuid_place_bisik\")).exist;",
+							"    ",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"disabledSystemHeaders": {}
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"organisation\": \"Le Bisik\",\n    \"slug\": \"bisik\",\n    \"short_description\": \" Le lieu des musiques actuelles de Saint-Benoît\",\n    \"long_description\": \"ACTER (Agir pour la Culture et le Tourisme dans l’Est de La Réunion) est née il y cinq ans de la volonté farouche de porter un projet culturel populaire et de créer un lieu de diffusion original de Musiques Actuelles dans l’Est de La Réunion. Avec le Bisik nous avons inventé un tiers-lieu original, un espace de convivialité pluriel qui pourrait préfigurer une Scène De Musiques Actuelles adaptée au territoire souhaitée par notre équipe et d’ores et déjà par nombre de nos partenaires avec qui nous signerons prochainement un conventionnement pluriannuel.\",\n    \"phone\": \"0692929292\",\n    \"email\": \"contact@tibillet.re\",\n    \"site_web\": \"http://bisik.re\",\n    \"postal_code\": \"97410\",\n    \"img_url\": \"http://bisik.re/wp-content/uploads/2019/01/MayaBisik.jpg\",\n    \"logo_url\": \"http://bisik.re/wp-content/uploads/2017/05/logo-Bisik.png\",\n    \"categorie\": \"S\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{url_meta}}/api/place/",
+					"host": [
+						"{{url_meta}}"
+					],
+					"path": [
+						"api",
+						"place",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Place Vavang'Art Create",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"    const jsonResponse = pm.response.json();",
+							"",
+							"    pm.collectionVariables.unset(\"uuid_place_vvart\");",
+							"    pm.collectionVariables.set(\"uuid_place_vvart\", jsonResponse.uuid);",
+							"    pm.expect(pm.collectionVariables.get(\"uuid_place_vvart\")).exist;",
+							"    ",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"disabledSystemHeaders": {}
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"organisation\": \"Vavang'Art\",\n    \"slug\": \"vavangart\",\n    \"short_description\": \"Centre d'art, d'artisanat et restaurant coopératifs, créatifs et décalés.\",\n    \"long_description\": \"Un café-restaurant unique et atypique qui pétille de bonne humeur et de magie. Des assiettes créatives et parfumées : en cuisine, le chef s’exerce à régaler les sens en revisitant les produits du terroir autour d’un voyage gastronomique.\",\n    \"phone\": \"0692929292\",\n    \"email\": \"contact@tibillet.re\",\n    \"site_web\": \"https://www.vavangart.com\",\n    \"postal_code\": \"97410\",\n    \"img_url\": \"https://vavangart.com/wp-content/uploads/2021/05/lenacrea.jpg\",\n    \"logo_url\": \"https://vavangart.com/wp-content/uploads/2021/04/cropped-LOGO_BLEU_BEIGE.png\",\n    \"categorie\": \"S\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{url_meta}}/api/place/",
+					"host": [
+						"{{url_meta}}"
+					],
+					"path": [
+						"api",
+						"place",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Place 3Peaks Create",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"    const jsonResponse = pm.response.json();",
+							"",
+							"    pm.collectionVariables.unset(\"uuid_place_3peaks\");",
+							"    pm.collectionVariables.set(\"uuid_place_3peaks\", jsonResponse.uuid);",
+							"    pm.expect(pm.collectionVariables.get(\"uuid_place_3peaks\")).exist;",
+							"    ",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"disabledSystemHeaders": {}
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"organisation\": \"3Peaks\",\n    \"slug\": \"3peaks\",\n    \"short_description\": \"Organise le Manapany Festival\",\n    \"long_description\": \"Le Manap', plus vieux festival musical et décalé de l'île de la Réunion, a perdu son lieu, mais pas son esprit !\",\n    \"phone\": \"0692929292\",\n    \"email\": \"contact@tibillet.re\",\n    \"site_web\": \"https://www.manapanyfestival.com\",\n    \"postal_code\": \"97410\",\n    \"img_url\": \"https://wiki.tibillet.re/images/5/51/MF19.jpg\",\n    \"logo_url\": \"https://wiki.tibillet.re/images/0/0d/3peaks-ori.png\",\n    \"categorie\": \"F\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{url_meta}}/api/place/",
+					"host": [
+						"{{url_meta}}"
+					],
+					"path": [
+						"api",
+						"place",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Places List",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"    const jsonResponse = pm.response.json();",
+							"",
+							"    pm.collectionVariables.unset(\"uuid_place_raffinerie\");",
+							"    for(var i=0;i<jsonResponse.length;i++){",
+							"        item = jsonResponse[i];",
+							"        if (item.slug == \"raffinerie\"){",
+							"            pm.collectionVariables.set(\"uuid_place_raffinerie\", item.uuid);",
+							"            pm.collectionVariables.set(\"slug_place_raffinerie\", item.slug);",
+							"        };",
+							"    }",
+							"    first_place = jsonResponse[0]",
+							"    pm.collectionVariables.set(\"first_place_uuid\", first_place.uuid);",
+							"    pm.expect(pm.collectionVariables.get(\"uuid_place_raffinerie\")).exist;",
+							"",
+							"    })"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"url": {
+					"raw": "{{url_meta}}/api/place/",
+					"host": [
+						"{{url_meta}}"
+					],
+					"path": [
+						"api",
+						"place",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Artist Ziskakan Create",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"    const jsonResponse = pm.response.json();",
+							"",
+							"    pm.collectionVariables.unset(\"uuid_artist_ziskakan\");",
+							"    pm.collectionVariables.set(\"uuid_artist_ziskakan\", jsonResponse.uuid);",
+							"    pm.expect(pm.collectionVariables.get(\"uuid_artist_ziskakan\")).exist;",
+							"    ",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"disabledSystemHeaders": {}
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"organisation\": \"Ziskakan\",\n    \"slug\": \"ziskakan\",\n    \"short_description\": \"40 ans de Maloya Rock !\",\n    \"long_description\": \"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.\",\n    \"phone\": \"0692929292\",\n    \"email\": \"contact@tibillet.re\",\n    \"site_web\": \"https://www.ziskakan.re\",\n    \"postal_code\": \"97410\",\n    \"img_url\": \"https://medias.quartierdesspectacles.com/import/vitrine/activity/13695/13695.jpg\",\n    \"logo_url\": \"https://lespas.re/wp-content/uploads/2021/06/Ziskakan-%C2%A9Pierre-Yves-Babelon-lespas-1-1200x1200.jpg\",\n    \"categorie\": \"A\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{url_meta}}/api/artist/",
+					"host": [
+						"{{url_meta}}"
+					],
+					"path": [
+						"api",
+						"artist",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Artist Balaphonik Create",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"    const jsonResponse = pm.response.json();",
+							"",
+							"    pm.collectionVariables.unset(\"uuid_artist_bala\");",
+							"    pm.collectionVariables.set(\"uuid_artist_bala\", jsonResponse.uuid);",
+							"    pm.expect(pm.collectionVariables.get(\"uuid_artist_bala\")).exist;",
+							"    ",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"disabledSystemHeaders": {}
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"organisation\": \"Balaphonik Sound System\",\n    \"slug\": \"balaphonik\",\n    \"short_description\": \"Balaphonik Sound System fait danser les corps, ressource et rafraîchit les esprits.\",\n    \"long_description\": \"Multi-instrumentiste, Alex a participé à des projets musicaux variés. Usant tous les genres, du métal au gnawa et du reggae au hiphop, il étudie le rythme sous toutes ses formes, à travers ses rencontres et ses voyages.\",\n    \"phone\": \"0692929292\",\n    \"email\": \"contact@tibillet.re\",\n    \"site_web\": \"https://balaphonik.wixsite.com/balaphonik\",\n    \"postal_code\": \"97410\",\n    \"img_url\": \"https://www.festival-arbre-creux.fr/wp-content/uploads/2019/05/balaphonik-3.jpg\",\n    \"logo_url\": \"https://i.ytimg.com/vi/HkRYJg7dnNM/hqdefault.jpg\",\n    \"categorie\": \"A\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{url_meta}}/api/artist/",
+					"host": [
+						"{{url_meta}}"
+					],
+					"path": [
+						"api",
+						"artist",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Artist List Copy",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"    const jsonResponse = pm.response.json();",
+							"    pm.collectionVariables.unset(\"uuid_artist_ziskakan\");",
+							"    for(var i=0;i<jsonResponse.length;i++){",
+							"        item = jsonResponse[i];",
+							"        if (item.slug == \"ziskakan\"){",
+							"            pm.collectionVariables.set(\"uuid_artist_ziskakan\", item.uuid);",
+							"            pm.collectionVariables.set(\"slug_artist_ziskakan\", item.slug);",
+							"",
+							"        };",
+							"    }",
+							"    first_place = jsonResponse[0]",
+							"    pm.collectionVariables.set(\"first_artist_uuid\", first_place.uuid);",
+							"    pm.expect(pm.collectionVariables.get(\"uuid_artist_ziskakan\")).exist;",
+							"",
+							"    })"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"url": {
+					"raw": "{{url_meta}}/api/artist/",
+					"host": [
+						"{{url_meta}}"
+					],
+					"path": [
+						"api",
+						"artist",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Product Reservation gratuite Create",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"Reservation\",\n    \"publish\": true,\n    \"img_url\": \"https://wiki.tibillet.re/images/b/bd/Reservation.png\",\n    \"categorie_article\": \"F\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://{{slug_place_raffinerie}}.{{domain}}/api/products/",
+					"protocol": "https",
+					"host": [
+						"{{slug_place_raffinerie}}",
+						"{{domain}}"
+					],
+					"path": [
+						"api",
+						"products",
+						""
+					]
+				},
+				"description": "```python\n    BILLET, PACK, RECHARGE_CASHLESS, VETEMENT, MERCH, ADHESION = 'B', 'P', 'R', 'T', 'M', 'A'\n\n    TYPE_CHOICES = [\n        (BILLET, _('Billet')),\n        (PACK, _(\"Pack d'objets\")),\n        (RECHARGE_CASHLESS, _('Recharge cashless')),\n        (VETEMENT, _('Vetement')),\n        (MERCH, _('Merchandasing')),\n        (ADHESION, ('Adhésion')),\n    ]\n```"
+			},
+			"response": []
+		},
+		{
+			"name": "Product Adhesion Create",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"Adhésion\",\n    \"publish\": true,\n    \"img_url\": \"https://wiki.tibillet.re/images/1/12/Adhesion.png\",\n    \"categorie_article\": \"A\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://{{slug_place_raffinerie}}.{{domain}}/api/products/",
+					"protocol": "https",
+					"host": [
+						"{{slug_place_raffinerie}}",
+						"{{domain}}"
+					],
+					"path": [
+						"api",
+						"products",
+						""
+					]
+				},
+				"description": "```python\n    BILLET, PACK, RECHARGE_CASHLESS, VETEMENT, MERCH, ADHESION = 'B', 'P', 'R', 'T', 'M', 'A'\n\n    TYPE_CHOICES = [\n        (BILLET, _('Billet')),\n        (PACK, _(\"Pack d'objets\")),\n        (RECHARGE_CASHLESS, _('Recharge cashless')),\n        (VETEMENT, _('Vetement')),\n        (MERCH, _('Merchandasing')),\n        (ADHESION, ('Adhésion')),\n    ]\n```"
+			},
+			"response": []
+		},
+		{
+			"name": "Product Billet Create",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"Billet\",\n    \"publish\": true,\n    \"img_url\": \"https://wiki.tibillet.re/images/c/c2/Billet.png\",\n    \"categorie_article\": \"B\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://{{slug_place_raffinerie}}.{{domain}}/api/products/",
+					"protocol": "https",
+					"host": [
+						"{{slug_place_raffinerie}}",
+						"{{domain}}"
+					],
+					"path": [
+						"api",
+						"products",
+						""
+					]
+				},
+				"description": "```python\n    BILLET, PACK, RECHARGE_CASHLESS, VETEMENT, MERCH, ADHESION = 'B', 'P', 'R', 'T', 'M', 'A'\n\n    TYPE_CHOICES = [\n        (BILLET, _('Billet')),\n        (PACK, _(\"Pack d'objets\")),\n        (RECHARGE_CASHLESS, _('Recharge cashless')),\n        (VETEMENT, _('Vetement')),\n        (MERCH, _('Merchandasing')),\n        (ADHESION, ('Adhésion')),\n    ]\n```"
+			},
+			"response": []
+		},
+		{
+			"name": "Product TShirt Create",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"Tshirt\",\n    \"publish\": true,\n    \"img_url\": \"https://wiki.tibillet.re/images/5/54/T-shirt-manap.jpg\",\n    \"categorie_article\": \"T\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://{{slug_place_raffinerie}}.{{domain}}/api/products/",
+					"protocol": "https",
+					"host": [
+						"{{slug_place_raffinerie}}",
+						"{{domain}}"
+					],
+					"path": [
+						"api",
+						"products",
+						""
+					]
+				},
+				"description": "```python\n    BILLET, PACK, RECHARGE_CASHLESS, VETEMENT, MERCH, ADHESION = 'B', 'P', 'R', 'T', 'M', 'A'\n\n    TYPE_CHOICES = [\n        (BILLET, _('Billet')),\n        (PACK, _(\"Pack d'objets\")),\n        (RECHARGE_CASHLESS, _('Recharge cashless')),\n        (VETEMENT, _('Vetement')),\n        (MERCH, _('Merchandasing')),\n        (ADHESION, ('Adhésion')),\n    ]\n```"
+			},
+			"response": []
+		},
+		{
+			"name": "Products List Copy",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"    const jsonResponse = pm.response.json();",
+							"",
+							"    pm.collectionVariables.unset(\"product_freeres_uuid\");",
+							"    pm.collectionVariables.unset(\"product_billet_uuid\");",
+							"    pm.collectionVariables.unset(\"product_adhesion_uuid\");",
+							"    pm.collectionVariables.unset(\"product_tshirt_uuid\");",
+							"    ",
+							"    for(var i=0;i<jsonResponse.length;i++){",
+							"        product = jsonResponse[i];",
+							"        if (product.categorie_article == \"F\"){",
+							"            pm.collectionVariables.set(\"product_freeres_uuid\", product.uuid);",
+							"        };",
+							"        if (product.categorie_article == \"B\"){",
+							"            pm.collectionVariables.set(\"product_billet_uuid\", product.uuid);",
+							"        };",
+							"        if (product.categorie_article == \"A\"){",
+							"            pm.collectionVariables.set(\"product_adhesion_uuid\", product.uuid);",
+							"        };",
+							"        if (product.categorie_article == \"T\"){",
+							"            pm.collectionVariables.set(\"product_tshirt_uuid\", product.uuid);",
+							"        };",
+							"",
+							"    }",
+							"    pm.expect(pm.collectionVariables.get(\"product_freeres_uuid\")).exist;",
+							"    pm.expect(pm.collectionVariables.get(\"product_billet_uuid\")).exist;",
+							"    pm.expect(pm.collectionVariables.get(\"product_adhesion_uuid\")).exist;",
+							"    pm.expect(pm.collectionVariables.get(\"product_tshirt_uuid\")).exist;",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"url": {
+					"raw": "https://{{slug_place_raffinerie}}.{{domain}}/api/products/",
+					"protocol": "https",
+					"host": [
+						"{{slug_place_raffinerie}}",
+						"{{domain}}"
+					],
+					"path": [
+						"api",
+						"products",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Prices Billet demi tarif Create",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"Demi Tarif\",\n    \"prix\": \"5\",\n    \"vat\": \"NA\",\n    \"max_per_user\": \"10\",\n    \"product\": \"{{product_billet_uuid}}\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://{{slug_place_raffinerie}}.{{domain}}/api/prices/",
+					"protocol": "https",
+					"host": [
+						"{{slug_place_raffinerie}}",
+						"{{domain}}"
+					],
+					"path": [
+						"api",
+						"prices",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Prices Billet plein tarif Create",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"Plein Tarif\",\n    \"prix\": \"10\",\n    \"vat\": \"NA\",\n    \"max_per_user\": \"10\",\n    \"product\": \"{{product_billet_uuid}}\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://{{slug_place_raffinerie}}.{{domain}}/api/prices/",
+					"protocol": "https",
+					"host": [
+						"{{slug_place_raffinerie}}",
+						"{{domain}}"
+					],
+					"path": [
+						"api",
+						"prices",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Prices TShirt L Create",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"L\",\n    \"prix\": \"25\",\n    \"vat\": \"NA\",\n    \"max_per_user\": \"10\",\n    \"stock\": \"30\",\n    \"product\": \"{{product_tshirt_uuid}}\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://{{slug_place_raffinerie}}.{{domain}}/api/prices/",
+					"protocol": "https",
+					"host": [
+						"{{slug_place_raffinerie}}",
+						"{{domain}}"
+					],
+					"path": [
+						"api",
+						"prices",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Prices Adhésion plein tarif Create",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"Plein Tarif\",\n    \"prix\": \"20\",\n    \"product\": \"{{product_adhesion_uuid}}\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://{{slug_place_raffinerie}}.{{domain}}/api/prices/",
+					"protocol": "https",
+					"host": [
+						"{{slug_place_raffinerie}}",
+						"{{domain}}"
+					],
+					"path": [
+						"api",
+						"prices",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Prices Adhésion social Create",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"Tarif solidaire\",\n    \"prix\": \"10\",\n    \"product\": \"{{product_adhesion_uuid}}\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://{{slug_place_raffinerie}}.{{domain}}/api/prices/",
+					"protocol": "https",
+					"host": [
+						"{{slug_place_raffinerie}}",
+						"{{domain}}"
+					],
+					"path": [
+						"api",
+						"prices",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Prices List",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"    const jsonResponse = pm.response.json();",
+							"",
+							"    pm.expect(pm.collectionVariables.get(\"product_billet_uuid\")).exist;",
+							"    pm.expect(pm.collectionVariables.get(\"product_adhesion_uuid\")).exist;",
+							"    pm.expect(pm.collectionVariables.get(\"product_tshirt_uuid\")).exist;",
+							"",
+							"    const product_billet_uuid = pm.collectionVariables.get(\"product_billet_uuid\");",
+							"    const product_adhesion_uuid = pm.collectionVariables.get(\"product_adhesion_uuid\");",
+							"    const product_tshirt_uuid = pm.collectionVariables.get(\"product_tshirt_uuid\");",
+							"    ",
+							"    pm.collectionVariables.unset(\"price_billet_demi_tarif_uuid\");",
+							"    pm.collectionVariables.unset(\"price_billet_plein_tarif_uuid\");",
+							"    pm.collectionVariables.unset(\"price_adhesion_plein_tarif_uuid\");",
+							"    pm.collectionVariables.unset(\"price_adhesion_tarif_solidaire_uuid\");",
+							"    pm.collectionVariables.unset(\"price_tshirt_L_uuid\");",
+							"",
+							"    for(var i=0;i<jsonResponse.length;i++){",
+							"        price = jsonResponse[i];",
+							"        if (price.product == product_billet_uuid ){",
+							"            if (price.name == \"Demi Tarif\" ){",
+							"                pm.collectionVariables.set(\"price_billet_demi_tarif_uuid\", price.uuid);",
+							"            };",
+							"            if (price.name == \"Plein Tarif\" ){",
+							"                pm.collectionVariables.set(\"price_billet_plein_tarif_uuid\", price.uuid);",
+							"            };",
+							"        };",
+							"        if (price.product == product_adhesion_uuid ){",
+							"            if (price.name == \"Plein Tarif\" ){",
+							"                pm.collectionVariables.set(\"price_adhesion_plein_tarif_uuid\", price.uuid);",
+							"            };",
+							"            if (price.name == \"Tarif solidaire\" ){",
+							"                pm.collectionVariables.set(\"price_adhesion_tarif_solidaire_uuid\", price.uuid);",
+							"            };",
+							"        };",
+							"        if (price.product == product_tshirt_uuid ){",
+							"            if (price.name == \"L\" ){",
+							"                pm.collectionVariables.set(\"price_tshirt_L_uuid\", price.uuid);",
+							"            };",
+							"        };",
+							"    }",
+							"",
+							"    pm.expect(pm.collectionVariables.get(\"price_billet_demi_tarif_uuid\")).exist;",
+							"    pm.expect(pm.collectionVariables.get(\"price_billet_plein_tarif_uuid\")).exist;",
+							"    pm.expect(pm.collectionVariables.get(\"price_adhesion_plein_tarif_uuid\")).exist;",
+							"    pm.expect(pm.collectionVariables.get(\"price_adhesion_tarif_solidaire_uuid\")).exist;",
+							"    pm.expect(pm.collectionVariables.get(\"price_tshirt_L_uuid\")).exist;",
+							"",
+							"});",
+							""
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"url": {
+					"raw": "https://{{slug_place_raffinerie}}.{{domain}}/api/prices/",
+					"protocol": "https",
+					"host": [
+						"{{slug_place_raffinerie}}",
+						"{{domain}}"
+					],
+					"path": [
+						"api",
+						"prices",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Events Create",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"const moment = require(\"moment\");",
+							"var date_r = moment().add(\"days\", _.random(1,3000));",
+							"pm.variables.set(\"random_date\", date_r.format(\"YYYY-MM-DD\"));"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"disabledSystemHeaders": {}
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"datetime\": \"{{random_date}}T18:30\",\n    \"name\": \"{{$randomWords}}\",\n    \"short_description\": \"{{$randomLoremSentence}}\",\n    \"long_description\": \"{{$randomLoremParagraph}}\",\n    \"img_url\": \"https://picsum.photos/1920/1080\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://{{slug_place_raffinerie}}.{{domain}}/api/events/",
+					"protocol": "https",
+					"host": [
+						"{{slug_place_raffinerie}}",
+						"{{domain}}"
+					],
+					"path": [
+						"api",
+						"events",
+						""
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{jwt_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "domain",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "url_root",
+			"value": "https://www.<YOURDOMAIN>",
+			"type": "string"
+		},
+		{
+			"key": "url_meta",
+			"value": "https://<META>.<YOURDOMAIN>",
+			"type": "string"
+		},
+		{
+			"key": "email_root",
+			"value": "./manage.py create_tenant_superuser",
+			"type": "string"
+		},
+		{
+			"key": "password_root",
+			"value": "./manage.py create_tenant_superuser",
+			"type": "string"
+		},
+		{
+			"key": "jwt_token_refresh",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "jwt_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "email_user",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "email_tenant_creator",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "uuid_place_meta",
+			"value": ""
+		},
+		{
+			"key": "first_place_uuid",
+			"value": ""
+		},
+		{
+			"key": "first_artist_uuid",
+			"value": ""
+		},
+		{
+			"key": "uuid_place_raffinerie",
+			"value": ""
+		},
+		{
+			"key": "uuid_artist_ziskakan",
+			"value": ""
+		},
+		{
+			"key": "slug_artist_ziskakan",
+			"value": ""
+		},
+		{
+			"key": "slug_place_raffinerie",
+			"value": ""
+		},
+		{
+			"key": "product_freeres_uuid",
+			"value": ""
+		},
+		{
+			"key": "product_billet_uuid",
+			"value": ""
+		},
+		{
+			"key": "product_tshirt_uuid",
+			"value": ""
+		},
+		{
+			"key": "product_adhesion_uuid",
+			"value": ""
+		},
+		{
+			"key": "price_billet_demi_tarif_uuid",
+			"value": ""
+		},
+		{
+			"key": "price_adhesion_plein_tarif_uuid",
+			"value": ""
+		},
+		{
+			"key": "price_adhesion_tarif_solidaire_uuid",
+			"value": ""
+		},
+		{
+			"key": "price_billet_plein_tarif_uuid",
+			"value": ""
+		},
+		{
+			"key": "price_tshirt_L_uuid",
+			"value": ""
+		}
+	]
+}

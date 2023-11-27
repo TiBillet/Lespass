@@ -24,10 +24,7 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # noinspection DjangoDebugModeSettings
-if os.environ.get('DEBUG_DJANGO') == "True":
-    DEBUG = True
-else:
-    DEBUG = False
+DEBUG = True if os.environ.get('DEBUG_DJANGO', None) == "True" else False
 
 ALLOWED_HOSTS = ['*'] if DEBUG else [f'{os.environ.get("DOMAIN")}', ]
 CSRF_TRUSTED_ORIGINS = [
@@ -56,23 +53,22 @@ SHARED_APPS = (
     'django.contrib.staticfiles',
     'django.contrib.humanize',
 
-    'AuthBillet',
-    'QrcodeCashless',
-
     'rest_framework',
     'rest_framework.authtoken',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
     'django_browser_reload',
 
-    # 'daphne',
     # 'channels',
-    'django_extensions',
+    'AuthBillet',
+    'QrcodeCashless',
     'Administration',
     'MetaBillet',
     'root_billet',
     'llmTB',
+    'wsocket',
 
+    'django_extensions',
     'solo',
     'stdimage',
     'corsheaders',
