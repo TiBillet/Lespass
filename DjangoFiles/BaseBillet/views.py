@@ -1,11 +1,12 @@
-from django.conf import settings
-from django.http import HttpResponseRedirect, HttpResponse, HttpRequest
-from django.shortcuts import render, redirect
+from django.http import HttpResponse, HttpRequest
+from django.shortcuts import render, redirect,  get_object_or_404
+
 from django.template.response import TemplateResponse
 
 from django.views.decorators.http import require_GET
 
-from django.utils.encoding import force_str
+from django.utils.encoding import force_str, force_bytes
+from django.utils.http import urlsafe_base64_encode
 
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
@@ -26,8 +27,8 @@ import uuid
 
 from io import BytesIO
 
-# dev test
-import time
+def encode_uid(pk):
+    return force_str(urlsafe_base64_encode(force_bytes(pk)))
 
 def get_context(request):
     config = Configuration.get_solo()
@@ -72,10 +73,6 @@ def get_context(request):
         }
     }
     return context
-
-
-def decode_uid(pk):
-    return force_str(urlsafe_base64_decode(pk))
 
 
 # class index(APIView):
@@ -202,9 +199,6 @@ def emailconfirmation(request, uuid, token):
     return redirect('home')
 
 def showModalMessageInEnterPage(request):
-    context = {
-        "modal_message": globalContext['messageToShowInEnterPage']
-    }
     return TemplateResponse(request, 'htmx/components/modal_message.html', context={})
 
 
@@ -273,7 +267,6 @@ def memberships(request: HttpRequest) -> HttpResponse:
     if request.is_secure():
         host = "https://" + request.get_host()
 
-    img = '/media/' + str(Configuration.get_solo().img)
     context = {
         "base_template": base_template,
         "host": host,
