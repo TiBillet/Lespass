@@ -1,5 +1,5 @@
 from django.http import HttpResponse, HttpRequest
-from django.shortcuts import render, redirect,  get_object_or_404
+from django.shortcuts import render, redirect, get_object_or_404
 
 from django.template.response import TemplateResponse
 
@@ -27,8 +27,10 @@ import uuid
 
 from io import BytesIO
 
+
 def encode_uid(pk):
     return force_str(urlsafe_base64_encode(force_bytes(pk)))
+
 
 def get_context(request):
     config = Configuration.get_solo()
@@ -43,7 +45,7 @@ def get_context(request):
         serialized_user['cashless'] = request_for_data_cashless(request.user)
 
     context = {
-        "messageToShowInEnterPage": None,
+        "uuid": uuid,
         "base_template": base_template,
         "host": host,
         "url_name": request.resolver_match.url_name,
@@ -167,10 +169,12 @@ def test_jinja(request):
     }
     return TemplateResponse(request, "htmx/views/test_jinja.html", context=context)
 
+
 def deconnexion(request):
     logout(request)
     messages.add_message(request, messages.SUCCESS, "Déconnexion")
     return redirect('home')
+
 
 def connexion(request):
     if request.method == 'POST':
@@ -186,17 +190,20 @@ def connexion(request):
 
             print(f"user = {user.__dict__}")
             if user.is_authenticated == False:
-                messages.add_message(request, messages.SUCCESS, "Pour acceder à votre espace et réservations, merci de valider\n votre adresse email. Pensez à regarder dans les spams !")
+                messages.add_message(request, messages.SUCCESS,
+                                     "Pour acceder à votre espace et réservations, merci de valider\n votre adresse email. Pensez à regarder dans les spams !")
 
         except Exception as error:
             messages.add_message(request, messages.WARNING, str(error))
 
         return redirect('home')
 
+
 # TODO: authentifier le user/email (si-dessous, ne fonctionne pas)
 def emailconfirmation(request, uuid, token):
     activate(request, uuid, token)
     return redirect('home')
+
 
 def showModalMessageInEnterPage(request):
     return TemplateResponse(request, 'htmx/components/modal_message.html', context={})
@@ -206,6 +213,7 @@ def showModalMessageInEnterPage(request):
 def home(request):
     context = get_context(request)
     return render(request, "htmx/views/home.html", context=context)
+
 
 @require_GET
 def event(request: HttpRequest, slug) -> HttpResponse:
