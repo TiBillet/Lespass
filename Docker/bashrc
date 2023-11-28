@@ -1,10 +1,8 @@
 # only for convenient :)
 
-alias mm="python /DjangoFiles/manage.py migrate"
-# alias mm="python /DjangoFiles/manage.py migrate_schemas --shared"
+alias mm="poetry run python /DjangoFiles/manage.py migrate"
 
 alias sp="poetry run python manage.py tenant_command shell_plus"
-alias rspp="poetry run python /DjangoFiles/manage.py runserver_plus 0.0.0.0:8002"
 alias rsp="poetry run python /DjangoFiles/manage.py runserver 0.0.0.0:8002"
 
 tibinstall() {
@@ -19,6 +17,5 @@ load_sql() {
 export PGPASSWORD=$POSTGRES_PASSWORD
 export PGUSER=$POSTGRES_USER
 export PGHOST=$POSTGRES_HOST
-
 psql --dbname $POSTGRES_DB -f $1
 }
