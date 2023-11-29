@@ -14,7 +14,7 @@ urlpatterns = [
     path('test_jinja/', base_view.test_jinja, name='test_jinja'),
     path('connexion/', base_view.connexion, name='connexion'),
     path('deconnexion/', base_view.deconnexion, name='deconnexion'),
-    path('emailconfirmation/<str:uuid>/<str:token>/',base_view.emailconfirmation, name='emailconfirmation'),
+    # path('emailconfirmation/<str:uuid>/<str:token>/',base_view.emailconfirmation, name='emailconfirmation'),
 
     path('', base_view.home, name="index"),
 ]
