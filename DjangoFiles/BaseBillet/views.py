@@ -1,3 +1,6 @@
+import logging
+
+from django.conf import settings
 from django.http import HttpResponse, HttpRequest
 from django.shortcuts import render, redirect, get_object_or_404
 
@@ -26,6 +29,7 @@ import barcode
 import uuid
 
 from io import BytesIO
+logger = logging.getLogger(__name__)
 
 
 def encode_uid(pk):
@@ -40,9 +44,10 @@ def get_context(request):
     print(f"-> host = {host}")
 
     serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
-    # TODO: le faire dans le serializer
-    if config.server_cashless and config.key_cashless and request.user.is_authenticated:
-        serialized_user['cashless'] = request_for_data_cashless(request.user)
+
+    # TODO: le faire dans le serializer et renvoyer en async via wsocket (requete trop lente)
+    # if config.server_cashless and config.key_cashless and request.user.is_authenticated:
+    #     serialized_user['cashless'] = request_for_data_cashless(request.user)
 
     context = {
         "uuid": uuid,
@@ -182,20 +187,24 @@ def connexion(request):
             # Création de l'user et envoie du mail de validation
             user = get_or_create_user(email=email, send_mail=True)
 
-            if user.is_authenticated == True:
+            if settings.DEBUG:
                 login(request, user)
-                messages.add_message(request, messages.SUCCESS, "Connexion ok.")
+                messages.add_message(request, messages.SUCCESS, "Debug : on login auto, Connexion ok.")
                 return redirect('home')
 
             print(f"user = {user.__dict__}")
-            if user.is_authenticated == False:
-                messages.add_message(request, messages.SUCCESS,
-                                     "Pour acceder à votre espace et réservations, merci de valider\n votre adresse email. Pensez à regarder dans les spams !")
+            # Le mail a été ernvoyé par le get__or_create, on redirige vers la page d'accueil et on leur demande de valider leur email
+            messages.add_message(request, messages.SUCCESS,
+                                 "Pour acceder à votre espace et réservations, merci de valider\n votre adresse email. Pensez à regarder dans les spams !")
 
+        # Exception WIDE = C'EST LE MAL.
+        # Une exception large doit retourner une erreur serveur, pas un message client
         except Exception as error:
-            messages.add_message(request, messages.WARNING, str(error))
+            logger.error(f"Erreur lors de la connexion : {error}")
+            raise error
+            # messages.add_message(request, messages.WARNING, str(error))
 
-        return redirect('home')
+    return redirect('home')
 
 
 # TODO: authentifier le user/email (si-dessous, ne fonctionne pas)
