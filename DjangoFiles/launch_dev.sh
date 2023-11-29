@@ -14,6 +14,7 @@ if psql -lqtA | cut -d\| -f1 | grep -qxF "$DB_NAME"; then
   echo "La base de données ${DB_NAME} existe déjà"
 else
   echo "La base de données ${DB_NAME} n'existe pas"
+  sleep 5
   psql --dbname $POSTGRES_DB -f $LOAD_SQL
   echo "SQL file loaded : $LOAD_SQL"
 fi
