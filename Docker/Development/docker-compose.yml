@@ -27,7 +27,6 @@ services:
       - backend-billeterie
 
   billetterie_django_dev:
-    image: tibillet/tibillet_django:2022-10-01
     container_name: billetterie_django
     extends:
       file: ../compose/docker-compose-base.yml
