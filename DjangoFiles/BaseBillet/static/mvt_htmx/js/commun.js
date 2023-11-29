@@ -60,3 +60,23 @@ document.addEventListener('DOMContentLoaded', () => {
         toast.classList.add('show')
     })
 })
+
+// for components
+function inputNumberNomNominatif(id,action, value1, value2) {
+    const element = document.querySelector('#' + id)
+    let number = parseInt(element.value)
+    if (action === 'plus') {
+        let max = value2
+        if (value1 < value2) {
+            max = value1
+        }
+        if ((number +1) <= max ) {
+            element.value = number + 1
+        }
+    } else{
+        // value1 = min
+        if ((number -1) >= value1) {
+            element.value = number - 1
+        }
+    }
+}

@@ -1,0 +1,24 @@
+{% load tibitags %}
+<div>stock = {{ price.stock }}</div>
+<div>max_per_user = {{ price.max_per_user }}</div>
+<div class="d-flex flex-row justify-content-center align-items-center w-25">
+    <button class="btn btn-icon btn-2 btn-primary btn-sm mb-0 me-2" type="button"
+    onclick="inputNumberNomNominatif('tibillet-price-non-nominatif-{{ price.uuid }}','moins',{{ min }})">
+        <span class="btn-inner--icon">
+            <i class="fa fa-minus" aria-hidden="true"></i>
+        </span>
+    </button>
+
+    <div class="input-group input-group-dynamic my-3 is-filled">
+        <label class="form-label">Quantité</label>
+        <input type="number" class="form-control" id="tibillet-price-non-nominatif-{{ price.uuid }}" value="0" name="tibillet-price-non-nominatif-{{ price.uuid }}">
+    </div>
+
+    <button class="btn btn-icon btn-2 btn-primary btn-sm mb-0 ms-2" type="button"
+    onclick="inputNumberNomNominatif('tibillet-price-non-nominatif-{{ price.uuid }}','plus',{{ price.stock }},{{ price.max_per_user }})">
+        <span class="btn-inner--icon">
+            <i class="fa fa-plus" aria-hidden="true"></i>
+        </span>
+    </button>
+
+</div>

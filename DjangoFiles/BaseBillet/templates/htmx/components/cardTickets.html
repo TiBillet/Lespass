@@ -1,67 +1,86 @@
 {% load tibitags %}
 
 <div class="container">
-  {% for product in products.all %}
-    {% if product.categorie_article|in_list:'F,B' %}
-    <fieldset class="maj-theme shadow-sm p-3 mb-5 bg-body rounded test-card-billet">
-      <legend>
-        <!-- nom ou image du produit -->
-        {% if replace_name_by_image == True %}
-        <img src="{{ host }}/media/{{ product.img }}" class="image-product" alt="{{ product.name }}"
-             style="height:20px;width:auto;">
-        {% else %}
-        <h3 class="font-weight-bolder text-info text-gradient align-self-start"
-            role="heading" :aria-label="Carte {{ forloop.counter0 }} : {{ product.name }}">
-          {{ product.name }}
-        </h3>
-        {% endif %}
-        {% if product.short_description != None %}
-        <h6 class="text-info">{{ product.short_description }}</h6>
-        {% endif %}
-        {% if product.short_description != None %}
-        <h6 class="text-info">{{ product.short_description }}</h6>
-        {% endif %}
-      </legend>
-      <!-- prix -->
-      {% for price in product.prices.all %}
-      <div class="mt-5">
-        <div>price.name = {{ price.name }}  --  price.adhesion_obligatoire = {{ price.adhesion_obligatoire }}</div>
-        {% if user.is_authenticated == True %}
-          <!-- connecté -->
-        {% else %}
-          <!-- non connecté et pas d'adhésion obligatoire -->
-          {% if price.adhesion_obligatoire == None %}
-          <div class="d-flex flex-row justify-content-between align-items-center" role="group"
-               :aria-label="'groupe interaction tarif ' + price.name">
-            <!-- nom tarif -->
-            <h4 class="d-flex flex-row align-items-center mb-0 font-weight-bolder text-info text-gradient"
-                role="heading" :aria-label="price.name">
-               {{price.name|lower }} : {{ price.prix }} €
-            </h4>
-          </div>
-          {% else %}
-          <!-- non connecté avec d'adhésion obligatoire -->
-          <div class="d-flex flex-column" role="group"
-               :aria-label="'groupe interaction tarif ' + price.name">
-            <!-- nom tarif -->
-            <h4 class="font-weight-bolder text-dark text-gradient" role="heading" :aria-label="price.name">
-              {{price.name|lower }} : {{ price.prix }} €
-            </h4>
-            <div v-if="getIsLogin === false" class="mt-0 text-info font-weight-500"
-               role="heading" aria-label="Connectez vous pour accéder à ce produit.">
-              Connectez vous pour accéder à ce produit.
-            </div>
-          </div>
-            {% endif %}
-        {% endif %}
-      </div>
-      {% endfor %}
+    {% for product in products.all %}
+        {% if product.categorie_article|in_list:'F,B' %}
+            <fieldset class="maj-theme shadow-sm p-3 mb-5 bg-body rounded test-card-billet">
+                <legend>
+                    <!-- nom ou image du produit -->
+                    {% if replace_name_by_image == True %}
+                        <img src="{{ host }}/media/{{ product.img }}" class="image-product" alt="{{ product.name }}"
+                             style="height:20px;width:auto;">
+                    {% else %}
+                        <h3 class="font-weight-bolder text-info text-gradient align-self-start"
+                            role="heading" :aria-label="Carte {{ forloop.counter0 }} : {{ product.name }}">
+                            {{ product.name }}
+                        </h3>
+                    {% endif %}
+                    {% if product.short_description != None %}
+                        <h6 class="text-info">{{ product.short_description }}</h6>
+                    {% endif %}
+                    {% if product.short_description != None %}
+                        <h6 class="text-info">{{ product.short_description }}</h6>
+                    {% endif %}
+                </legend>
+                <!-- prix -->
+                {% for price in product.prices.all %}
+                    {% if price.adhesion_obligatoire != None %}
+                        <!-- adhésion obligatoire -->
+                        <div class="d-flex mb-3
+                            {% if user.is_authenticated == False %} flex-column {% endif %}
+                            {% if user.is_authenticated == True %} flex-row justify-content-between align-items-center {% endif %}"
+                             role="group"
+                             :aria-label="groupe interaction tarif, {{ price.name }}">
+                            <!-- nom tarif -->
+                            <h4 class="font-weight-bolder text-dark text-gradient" role="heading"
+                                :aria-label="price.name">
+                                {{ price.name|lower }} : {{ price.prix }} €
+                            </h4>
 
-    </fieldset>
-    {% endif %}
-    <!-- produits "A" -->
-    <!-- afficher ici carte adhésion -->
+                            {% if user.is_authenticated == False %}
+                                <!-- non connecté -->
+                                <div class="mt-0 text-info font-weight-500"
+                                     role="heading" aria-label="Connectez vous pour accéder à ce produit.">
+                                    Connectez vous pour accéder à ce produit.
+                                </div>
+                            {% else %}
+                                <!-- connecté non membre -->
+                                <button class="btn btn-primary mb-0" type="button" role="button"
+                                        aria-label="Ajouter 'TODO: nom adhésion'">
+                                    <i class="fa fa-plus" aria-hidden="true"></i>
+                                    <span class="ms-1">Je m'abonne</span>
+                                </button>
+                            {% endif %}
+                        </div>
+                    {% else %}
+                        <!-- pas d'adhésion obligatoire -->
+                        <div class="d-flex flex-row justify-content-between align-items-center mb-3" role="group"
+                             :aria-label="groupe interaction tarif {{ price.name }}">
+                            <!-- nom tarif -->
+                            <h4 class="d-flex flex-row  align-items-center mb-0 font-weight-bolder text-info text-gradient"
+                                role="heading" :aria-label="price.name">
+                                {{ price.name|lower }} : {{ price.prix }} €
+                            </h4>
 
-  {% endfor %}
-  <pre>user = {{ user }}</pre>
+                            {% if product.nominative == True %}
+                                <!-- produit nominatif -->
+                                <!-- TODO: getBtnAddCustomerCanBeSeen(product.uuid, price.uuid) -->
+                                <button class="btn bg-primary text-white mb-0" type="button"
+                                        role="button" aria-label="Ajouter une réservation - {{ price.name }}">
+                                    <i class="fa fa-plus" aria-hidden="true"></i>
+                                    <span class="ms-1">Ajouter une réservation</span>
+                                </button>
+                            {% else %}
+                                <!-- produit non nominatif -->
+                                {% include 'htmx/components/inputNumberNonNominatif.html' with min=0 %}
+                            {% endif %}
+                        </div>
+                        {% if  product.nominative == True and product.prices.count == 1 %}
+                            {% include 'htmx/components/inputCustomer.html' %}
+                        {% endif %}
+                    {% endif %}
+                {% endfor %}
+            </fieldset>
+        {% endif %}
+    {% endfor %}
 </div>

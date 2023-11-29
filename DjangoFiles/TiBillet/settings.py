@@ -30,6 +30,7 @@ ALLOWED_HOSTS = ['*'] if DEBUG else [f'{os.environ.get("DOMAIN")}', ]
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost",
     "https://tibillet.localhost",
+    "https://demo.filaos.re",
     f'https://{os.environ.get("DOMAIN")}',
 ] if DEBUG else [f'https://{os.environ.get("DOMAIN")}', ]
 

@@ -15,7 +15,6 @@ urlpatterns = [
     path('connexion/', base_view.connexion, name='connexion'),
     path('deconnexion/', base_view.deconnexion, name='deconnexion'),
     path('emailconfirmation/<str:uuid>/<str:token>/',base_view.emailconfirmation, name='emailconfirmation'),
-    path('showModalMessageInEnterPage/', base_view.showModalMessageInEnterPage, name='showModalMessageInEnterPage'),
 
     path('', base_view.home, name="index"),
 ]

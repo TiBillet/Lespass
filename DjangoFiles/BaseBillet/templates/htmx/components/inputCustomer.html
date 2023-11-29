@@ -1,0 +1,10 @@
+<div class="position-relative d-flex flex-row tibillet-input-group mt-4" role="group"
+     aria-label="Customer - {{ price.name }}  - {{ forloop.counter0 }}">
+    {% include "htmx/components/inputMd.html" with name="tibillet-customer-last-name-{{ forloop.counter0 }}-{{ price.uuid }}" label="Nom" errors=errors %}
+    {% include "htmx/components/inputMd.html" with name="tibillet-customer-fist-name-{{ forloop.counter0 }}-{{ price.uuid }}" label="Prénom" errors=errors %}
+    <button class="btn bg-primary btn-sm text-white mb-0" type="button"
+            role="button" aria-label="Ajouter une réservation - {{ price.name }}">
+        <i class="fa fa-plus" aria-hidden="true"></i>
+
+    </button>
+</div>

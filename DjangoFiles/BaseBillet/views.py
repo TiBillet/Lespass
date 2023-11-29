@@ -76,7 +76,6 @@ def get_context(request):
     }
     return context
 
-
 # class index(APIView):
 #   permission_classes = [AllowAny]
 #
@@ -204,11 +203,6 @@ def emailconfirmation(request, uuid, token):
     activate(request, uuid, token)
     return redirect('home')
 
-
-def showModalMessageInEnterPage(request):
-    return TemplateResponse(request, 'htmx/components/modal_message.html', context={})
-
-
 @require_GET
 def home(request):
     context = get_context(request)
@@ -226,6 +220,7 @@ def event(request: HttpRequest, slug) -> HttpResponse:
         host = "https://" + request.get_host()
 
     event = Event.objects.get(slug=slug)
+    print(f"event = {event.img.__dict__}")
 
     context = {
         "base_template": base_template,
@@ -242,7 +237,7 @@ def event(request: HttpRequest, slug) -> HttpResponse:
         "slug": slug,
         "event": event,
         "user": request.user,
-        "uuid": uuid
+        "uuid": uuid,
     }
     return render(request, "htmx/views/event.html", context=context)
 
