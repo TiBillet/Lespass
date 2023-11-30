@@ -189,10 +189,9 @@ def connexion(request):
 
             if settings.DEBUG:
                 login(request, user)
-                messages.add_message(request, messages.SUCCESS, "Debug : on login auto, Connexion ok.")
+                messages.add_message(request, messages.DEBUG, "Debug : on login auto, Connexion ok.")
                 return redirect('home')
 
-            print(f"user = {user.__dict__}")
             # Le mail a été ernvoyé par le get__or_create, on redirige vers la page d'accueil et on leur demande de valider leur email
             messages.add_message(request, messages.SUCCESS,
                                  "Pour acceder à votre espace et réservations, merci de valider\n votre adresse email. Pensez à regarder dans les spams !")
@@ -229,7 +228,7 @@ def event(request: HttpRequest, slug) -> HttpResponse:
         host = "https://" + request.get_host()
 
     event = Event.objects.get(slug=slug)
-    print(f"event = {event.img.__dict__}")
+    print(f"serialized_user = {serialized_user}")
 
     context = {
         "base_template": base_template,

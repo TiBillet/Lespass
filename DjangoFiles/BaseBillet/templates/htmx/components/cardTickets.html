@@ -1,5 +1,7 @@
 {% load tibitags %}
-
+<template id="tibillet-customer-template">
+    {% include 'htmx/components/inputCustomer.html' with name="modele-template" %}
+</template>
 <div class="container">
     {% for product in products.all %}
         {% if product.categorie_article|in_list:'F,B' %}
@@ -44,14 +46,18 @@
                                     Connectez vous pour accéder à ce produit.
                                 </div>
                             {% else %}
-                                <!-- connecté non membre -->
-                                <button class="btn btn-primary mb-0" type="button" role="button"
-                                        aria-label="Ajouter 'TODO: nom adhésion'">
-                                    <i class="fa fa-plus" aria-hidden="true"></i>
-                                    <span class="ms-1">Je m'abonne</span>
-                                </button>
+                                <!-- connecté, je suis adhérant -->
+                                <!-- connecté, je ne suis pas adhérant -->
+                                {% if profile.membership|length == 0 %}
+                                    <button class="btn btn-primary mb-0" type="button" role="button"
+                                            aria-label="Ajouter 'TODO: nom adhésion'">
+                                        <i class="fa fa-plus" aria-hidden="true"></i>
+                                        <span class="ms-1">Je m'abonne</span>
+                                    </button>
+                                {% endif %}
                             {% endif %}
                         </div>
+                        <div> profile.membership = {{ profile.membership|length }}</div>
                     {% else %}
                         <!-- pas d'adhésion obligatoire -->
                         <div class="d-flex flex-row justify-content-between align-items-center mb-3" role="group"
@@ -65,8 +71,11 @@
                             {% if product.nominative == True %}
                                 <!-- produit nominatif -->
                                 <!-- TODO: getBtnAddCustomerCanBeSeen(product.uuid, price.uuid) -->
-                                <button class="btn bg-primary text-white mb-0" type="button"
-                                        role="button" aria-label="Ajouter une réservation - {{ price.name }}">
+                                <button id="tibillet-add-reservation-{{ price.uuid }}"
+                                        class="btn bg-primary text-white mb-0" type="button"
+                                        role="button" aria-label="Ajouter une réservation - {{ price.name }}"
+                                        data-index="{% if product.prices.count == 1 %}1{% else %}0{% endif %}"
+                                        onclick="addReservation(this,'tibillet-customer','{{ price.uuid }}','{{ price.name }}',{{ price.stock }},{{ price.max_per_user }})">
                                     <i class="fa fa-plus" aria-hidden="true"></i>
                                     <span class="ms-1">Ajouter une réservation</span>
                                 </button>
@@ -75,8 +84,12 @@
                                 {% include 'htmx/components/inputNumberNonNominatif.html' with min=0 %}
                             {% endif %}
                         </div>
-                        {% if  product.nominative == True and product.prices.count == 1 %}
-                            {% include 'htmx/components/inputCustomer.html' %}
+                        {% if  product.nominative == True %}
+                            <div id="tibillet-container-customers-{{ price.uuid }}" class="d-flex flex-column">
+                                {% if  product.prices.count == 1 %}
+                                    {% include 'htmx/components/inputCustomer.html' with name="tibillet-customer" %}
+                                {% endif %}
+                            </div>
                         {% endif %}
                     {% endif %}
                 {% endfor %}
