@@ -39,10 +39,7 @@ def encode_uid(pk):
 def get_context(request):
     config = Configuration.get_solo()
     base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
-
     host = f"https://{request.get_host()}" if request.is_secure() else f"http://{request.get_host()}"
-    print(f"-> host = {host}")
-
     serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
 
     # TODO: le faire dans le serializer et renvoyer en async via wsocket (requete trop lente)
@@ -228,7 +225,7 @@ def event(request: HttpRequest, slug) -> HttpResponse:
         host = "https://" + request.get_host()
 
     event = Event.objects.get(slug=slug)
-    print(f"serialized_user = {serialized_user}")
+    # print(f"serialized_user = {serialized_user['membership']}")
 
     context = {
         "base_template": base_template,
