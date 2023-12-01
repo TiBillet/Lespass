@@ -80,8 +80,8 @@
                             {% endif %}
                         {% endif %}
                     {% endif %}
-                        {% if price.adhesion_obligatoire == None or price.adhesion_obligatoire in valid_memberships %}
-{#                    {% if price.adhesion_obligatoire == None or profile.membership|is_membership:price.adhesion_obligatoire == True %}#}
+{#                        {% if price.adhesion_obligatoire == None or price.adhesion_obligatoire in valid_memberships %}#}
+                    {% if price.adhesion_obligatoire == None or profile.membership|is_membership:price.adhesion_obligatoire == True %}
                         <!-- pas d'adhésion obligatoire ou utilisateur possède l'adhésion -->
                         <div class="d-flex flex-row justify-content-between align-items-center mb-3" role="group"
                              aria-label="groupe interaction tarif {{ price.name }}">
