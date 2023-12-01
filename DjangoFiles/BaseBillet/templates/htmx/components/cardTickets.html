@@ -2,6 +2,20 @@
 <template id="tibillet-customer-template">
     {% include 'htmx/components/inputCustomer.html' with name="modele-template" %}
 </template>
+<template id="tibillet-nominative-price">
+    <div class="d-flex flex-row justify-content-between align-items-center mb-3" role="group"
+         aria-label="groupe interaction tarif xxxxx">
+        <!-- nom tarif -->
+        <h4 class="d-flex flex-row  align-items-center mb-0 font-weight-bolder text-info text-gradient"
+            role="heading" aria-label="price.name"></h4>
+        <!-- produit nominatif -->
+        <button class="btn bg-primary text-white mb-0" type="button" role="button">
+            <i class="fa fa-plus" aria-hidden="true"></i>
+            <span class="ms-1">Ajouter une réservation</span>
+        </button>
+    </div>
+</template>
+
 <div class="container">
     {% for product in products.all %}
         {% if product.categorie_article|in_list:'F,B' %}
@@ -27,45 +41,53 @@
                 <!-- prix -->
                 {% for price in product.prices.all %}
                     {% if price.adhesion_obligatoire != None %}
-                        <!-- adhésion obligatoire -->
-                        <div class="d-flex mb-3
-                            {% if user.is_authenticated == False %} flex-column {% endif %}
-                            {% if user.is_authenticated == True %} flex-row justify-content-between align-items-center {% endif %}"
-                             role="group"
-                             :aria-label="groupe interaction tarif, {{ price.name }}">
-                            <!-- nom tarif -->
-                            <h4 class="font-weight-bolder text-dark text-gradient" role="heading"
-                                :aria-label="price.name">
-                                {{ price.name|lower }} : {{ price.prix }} €
-                            </h4>
-
-                            {% if user.is_authenticated == False %}
-                                <!-- non connecté -->
+                        {% if user.is_authenticated == False %}
+                            <!-- non connecté -->
+                            <div class="d-flex mb-3 flex-column" role="group"
+                                 aria-label="groupe interaction tarif, {{ price.name }}">
+                                <!-- nom tarif -->
+                                <h4 class="font-weight-bolder text-dark text-gradient" role="heading"
+                                    aria-label="{{ price.name }}">
+                                    {{ price.name|lower }} : {{ price.prix }} €
+                                </h4>
                                 <div class="mt-0 text-info font-weight-500"
                                      role="heading" aria-label="Connectez vous pour accéder à ce produit.">
                                     Connectez vous pour accéder à ce produit.
                                 </div>
-                            {% else %}
-                                <!-- connecté, je suis adhérant -->
-                                <!-- connecté, je ne suis pas adhérant -->
-                                {% if profile.membership|length == 0 %}
+                            </div>
+                        {% else %}
+                            <!-- connecté -->
+                            {% if  profile.membership|is_membership:price.adhesion_obligatoire == False %}
+                                <!-- je ne suis pas adhérant -->
+                                <div id="tibillet-activation-price-{{ price.uuid }}"
+                                     class="d-flex flex-row justify-content-between align-items-center mb-3"
+                                     role="group" aria-label="groupe interaction tarif {{ price.name }}">
+                                    <!-- nom tarif -->
+                                    <h4 class="font-weight-bolder text-dark text-gradient" role="heading"
+                                        aria-label="{{ price.name }}">
+                                        {{ price.name|lower }} : {{ price.prix }} €
+                                    </h4>
                                     <button class="btn btn-primary mb-0" type="button" role="button"
-                                            aria-label="Ajouter 'TODO: nom adhésion'">
+                                            aria-label="Ajouter 'TODO: nom adhésion'"
+                                            onclick="join('{{ price.uuid }}', '{{ price.name }}', '{{ price.prix }}',{{ price.stock }},{{ price.max_per_user }})">
                                         <i class="fa fa-plus" aria-hidden="true"></i>
                                         <span class="ms-1">Je m'abonne</span>
                                     </button>
-                                {% endif %}
+                                <template id="tibillet-template-adhesion-required-{{ price.uuid }}">
+                                    {% include 'htmx/components/cardMembership.html' with adhesion=price.adhesion_obligatoire %}
+                                </template>
+                                </div>
                             {% endif %}
-                        </div>
-                        <div> adhésion obligatoire, product name = {{ price.adhesion_obligatoire }}  --  profile.membership = {{ profile.membership|is_membership:price.adhesion_obligatoire }}</div>
-
-                    {% else %}
-                        <!-- pas d'adhésion obligatoire -->
+                        {% endif %}
+                    {% endif %}
+                        {% if price.adhesion_obligatoire == None or price.adhesion_obligatoire in valid_memberships %}
+{#                    {% if price.adhesion_obligatoire == None or profile.membership|is_membership:price.adhesion_obligatoire == True %}#}
+                        <!-- pas d'adhésion obligatoire ou utilisateur possède l'adhésion -->
                         <div class="d-flex flex-row justify-content-between align-items-center mb-3" role="group"
-                             :aria-label="groupe interaction tarif {{ price.name }}">
+                             aria-label="groupe interaction tarif {{ price.name }}">
                             <!-- nom tarif -->
                             <h4 class="d-flex flex-row  align-items-center mb-0 font-weight-bolder text-info text-gradient"
-                                role="heading" :aria-label="price.name">
+                                role="heading" aria-label="{{ price.name }}">
                                 {{ price.name|lower }} : {{ price.prix }} €
                             </h4>
 
@@ -96,5 +118,11 @@
                 {% endfor %}
             </fieldset>
         {% endif %}
+        {% for price in product.prices.all %}
+            {% if price.adhesion_obligatoire != None %}
+                <!-- position adhésions obligatoire -->
+                <div id="tibillet-adhesion-container-{{ price.uuid }}"></div>
+            {% endif %}
+        {% endfor %}
     {% endfor %}
 </div>

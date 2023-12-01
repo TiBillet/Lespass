@@ -151,3 +151,66 @@ function deleteCustomer(id, priceUuid) {
   // affiche le bouton "ajouter réservation
   document.querySelector(`#tibillet-add-reservation-${priceUuid}`).style.display = 'block'
 }
+
+function join(priceUuid, priceName, pricePrix, priceStock, priceMaxPerUser) {
+  console.log('priceUuid =', priceUuid, '  --  priceName =', priceName, '  -- pricePrix =', pricePrix, '  --  priceStock =', priceStock, '  --  priceMaxPerUser =', priceMaxPerUser)
+  if ("content" in document.createElement("template")) {
+    // le navigateur gère <template>
+
+    // 1- remplacer "block je m'abonne" par "block price, ajouter une réservation"
+    const templatePrice = document.querySelector('#tibillet-nominative-price')
+    let clone = document.importNode(templatePrice.content, true);
+    // adapter le template
+    let parent = clone.querySelector('div[role="group"]')
+    let button = parent.querySelector('button')
+    let h4 = parent.querySelector('h4')
+    parent.setAttribute('id', `tibillet-price-with-adhesion-required-${priceUuid}`)
+    parent.setAttribute('aria-label', `groupe interaction tarif ${priceName}`)
+    h4.setAttribute('aria-label', priceName)
+    h4.innerText = `${priceName.toLowerCase()} : ${pricePrix} €`
+    button.setAttribute('id', `tibillet-add-reservation-${priceUuid}`)
+    button.setAttribute('aria-label', `Ajouter une réservation - ${priceName}`)
+    button.setAttribute('data-index', 0)
+    button.setAttribute('onclick', `addReservation(this,'tibillet-customer','${priceUuid}','${priceName}',${priceStock},${priceMaxPerUser})`)
+
+    const cible = document.querySelector('#tibillet-activation-price-' + priceUuid)
+    // effacer le bloc "nom:prix + bouton je m'abonne"
+    cible.style.setProperty('display', 'none', 'important')
+    // ajouter un "block prix"
+    cible.before(clone)
+    // ajout du container customers
+    cible.insertAdjacentHTML('afterend', `<div id="tibillet-container-customers-${priceUuid}" class="d-flex flex-column">`)
+
+    // 2 - ajouter l'adhésion
+    const templateAdhesion = document.querySelector(`#tibillet-template-adhesion-required-${ priceUuid }`)
+    let cloneAdhesion = document.importNode(templateAdhesion.content, true);
+    const cibleAdhesion = document.querySelector(`#tibillet-adhesion-container-${ priceUuid }`)
+
+    cibleAdhesion.append(cloneAdhesion)
+  } else {
+    // le navigateur ne gère pas <template>
+    console.log('Le navigateur ne gère pas le tag "<template>" !')
+  }
+}
+
+function unsubscribeAdhesionRequired(priceUuid) {
+  // enlever l'adhésion obligatoire
+  document.querySelector(`#tibillet-adhesion-required-${ priceUuid}`).remove()
+  // enlever le "block price + ajouter une réservation"
+  document.querySelector(`#tibillet-price-with-adhesion-required-${priceUuid}`).remove()
+  // réafficher le "block price + je m'abonne"
+  document.querySelector(`#tibillet-activation-price-${priceUuid}`).style.setProperty('display', 'flex', 'important')
+}
+
+function formatNumberParentNode2 (event, limit) {
+  const element = event.target
+  // obligation de changer le type pour ce code, si non "replace" ne fait pas "correctement" son travail
+  element.setAttribute('type', 'text')
+  let initValue = element.value
+  element.value = initValue.replace(/[^\d+]/g, '').substring(0, limit)
+  if (element.value.length < limit) {
+    element.parentNode.parentNode.querySelector('.invalid-feedback').style.display = 'block'
+  } else {
+    element.parentNode.parentNode.querySelector('.invalid-feedback').style.display = 'none'
+  }
+}
