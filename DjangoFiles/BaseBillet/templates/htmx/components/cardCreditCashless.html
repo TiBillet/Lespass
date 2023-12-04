@@ -21,12 +21,13 @@
             </div>
 
             <!-- la recharge -->
+            <div>{{ product.prices.all.0.uuid }}</div>
             <div id="tibillet-cashless-input-position-{{ forloop.counter0 }}-{{ product.uuid }}"></div>
             <template id="tibillet-cashless-number-template-{{ forloop.counter0 }}-{{ product.uuid }}">
                 <div class="d-flex flex-row justify-content-center align-items-center w-25 tibillet-container-cashless-number"
                      data-container-template="true">
                     <button class="btn btn-icon btn-2 btn-primary btn-sm mb-0 me-2" type="button"
-                    onclick="inputNumberGroup('under', 'tibillet-cashless-{{ forloop.counter0 }}-{{ product.uuid }}', {{ min }}, {{ max }})">
+                    onclick="inputNumberGroup('under', 'tibillet-cashless-{{ product.prices.all.0.uuid }}', {{ min }}, {{ max }})">
                         <span class="btn-inner--icon">
                             <i class="fa fa-minus" aria-hidden="true"></i>
                         </span>
@@ -35,14 +36,14 @@
                     <div class="input-group input-group-dynamic my-3 is-filled tibillet-number-group-bt-input">
                         <label class="form-label"
                                for="tibillet-cashless-{{ forloop.counter0 }}-{{ product.uuid }}">Quantité</label>
-                        <!-- TODO: obtenir l'uuid price cashless au lieu de l'uuid product -->
-                        <input name="tibillet-cashless-{{ forloop.counter0 }}-{{ product.uuid }}" type="number"
+                        <!-- si-dessous uuid price du cashless -->
+                        <input name="tibillet-cashless-{{ product.prices.all.0.uuid }}" type="number"
                                class="form-control" id="tibillet-cashless-{{ forloop.counter0 }}-{{ product.uuid }}"
                         value="{{ min }}">
                     </div>
 
                     <button class="btn btn-icon btn-2 btn-primary btn-sm mb-0 ms-2" type="button"
-                    onclick="inputNumberGroup('over', 'tibillet-cashless-{{ forloop.counter0 }}-{{ product.uuid }}', {{ min }}, {{ max }})">
+                    onclick="inputNumberGroup('over', 'tibillet-cashless-{{ product.prices.all.0.uuid }}', {{ min }}, {{ max }})">
                     <span class="btn-inner--icon">
                         <i class="fa fa-plus" aria-hidden="true"></i>
                     </span>
