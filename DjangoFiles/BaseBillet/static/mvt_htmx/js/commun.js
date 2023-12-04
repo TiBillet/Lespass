@@ -49,8 +49,16 @@ function updateTheme() {
  * Affiche les "toasts" présent dans le document
  */
 document.addEventListener('DOMContentLoaded', () => {
+  // --- init ---
+
+  // toasts
   document.querySelectorAll('.toast').forEach(toast => {
     toast.classList.add('show')
+  })
+
+  // reset input checkbox
+  document.querySelectorAll('input[type="checkbox"]').forEach(input => {
+    input.checked = false
   })
 })
 
@@ -97,6 +105,41 @@ function inputNumberNomNominatif(id, action, value1, value2) {
     }
   }
 }
+
+/**
+ * Gère le groupe bouton "-" + input + bouton "+"
+ * @param {string} action - under=moins ou over=plus
+ * @param {string} inputId - Dom, id (sans le #) de l'input contenant le nombre
+ * @param {number} min - valeur minimale
+ * @param {number} max - valeur maximale
+ */
+function inputNumberGroup( action, inputId, min, max) {
+  console.log('-> inputNumberGroup, action =', action, '  -- min =', min, '  --  max =', max)
+  const input = document.querySelector('#' + inputId)
+  let valueInput = input.value
+  console.log('valueInput =', valueInput)
+
+  // moins
+  if (action === 'under') {
+    if(valueInput === '') {
+      valueInput = 6
+    }
+    if (valueInput > min) {
+      --valueInput
+    }
+  }
+  // plus
+  if (action === 'over') {
+    if(valueInput === '') {
+      valueInput = 4
+    }
+    if (valueInput < max) {
+      ++valueInput
+    }
+  }
+  input.value = valueInput
+}
+
 
 /**
  * Gére un produit avec plusieurs clients
@@ -212,5 +255,13 @@ function formatNumberParentNode2 (event, limit) {
     element.parentNode.parentNode.querySelector('.invalid-feedback').style.display = 'block'
   } else {
     element.parentNode.parentNode.querySelector('.invalid-feedback').style.display = 'none'
+  }
+}
+
+function colorInputCheckBox(element) {
+  if(element.checked) {
+    element.classList.add('bg-success')
+  } else {
+    element.classList.remove('bg-success')
   }
 }
