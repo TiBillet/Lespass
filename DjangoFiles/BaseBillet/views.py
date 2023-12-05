@@ -31,10 +31,11 @@ import uuid
 from io import BytesIO
 logger = logging.getLogger(__name__)
 
+#  dev
+import json
 
 def encode_uid(pk):
     return force_str(urlsafe_base64_encode(force_bytes(pk)))
-
 
 def get_context(request):
     config = Configuration.get_solo()
@@ -288,5 +289,5 @@ def memberships(request: HttpRequest) -> HttpResponse:
         },
         "memberships": Product.objects.filter(categorie_article="A"),
     }
-
+    # import ipdb; ipdb.set_trace()
     return render(request, "htmx/views/memberships.html", context=context)

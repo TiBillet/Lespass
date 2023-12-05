@@ -1,13 +1,29 @@
 .tibillet-hide-element {
-	display: none;
+    display: none;
 }
 
 input[class~="tibillet-input-checkbox"]:checked {
-	background-color: var(--bs-success) !important;
+    background-color: var(--bs-success) !important;
 }
 
 :root {
-	--tibillet-spinner-width: 20rem;
-	--tibillet-spinner-height: 20rem;
-	--tibillet-spinner-borderWidth: 0.5em;
+    --tibillet-spinner-width: 20rem;
+    --tibillet-spinner-height: 20rem;
+    --tibillet-spinner-borderWidth: 0.5em;
+}
+
+input[type=radio]::after {
+    background-image: linear-gradient(195deg, #4CAF50 0%, #4CAF50 100%), var(--bs-gradient) !important;
+}
+
+input[type=radio]:checked {
+    border-color: #42424a !important;
+}
+
+input[type=checkbox]:checked {
+    background-color: #4CAF50 !important;
+}
+
+a[target="_blank"] {
+    color: #1A73E8 !important;
 }

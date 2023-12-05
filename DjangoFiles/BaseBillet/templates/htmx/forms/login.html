@@ -14,7 +14,12 @@
         </div>
         <form class="text-left needs-validation mb-7" action="/connexion/" method="POST">
           {% csrf_token %}
-          {% include "htmx/components/inputMd.html" with name="login-email" label="Email" type="email" errors=errors %}
+            <!-- email -->
+            <div class="input-group input-group-dynamic mb-4 is-filled">
+                <label class="form-label">Email</label>
+                <input name="login-email" type="email" class="form-control">
+            </div>
+
 
           <p class="">Nul besoin de mot de passe : un email vous sera envoyé pour validation.</p>
           <div class="text-center">

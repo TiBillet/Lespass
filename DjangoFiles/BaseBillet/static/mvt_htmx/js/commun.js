@@ -46,11 +46,12 @@ function updateTheme() {
 }
 
 /**
- * Affiche les "toasts" présent dans le document
+ * Initialise
+ * L'affichage des "toasts" présent dans le document
+ * Reset des inputs radio et checkbox
+ * Le test des émails
  */
 document.addEventListener('DOMContentLoaded', () => {
-  // --- init ---
-
   // toasts
   document.querySelectorAll('.toast').forEach(toast => {
     toast.classList.add('show')
@@ -59,6 +60,15 @@ document.addEventListener('DOMContentLoaded', () => {
   // reset input checkbox
   document.querySelectorAll('input[type="checkbox"]').forEach(input => {
     input.checked = false
+  })
+  // reset input radio
+  document.querySelectorAll('input[type="radio"]').forEach(input => {
+    input.checked = false
+  })
+  // test email
+  document.querySelectorAll('input[type="email"]').forEach(input => {
+    input.addEventListener("keyup", validateEmail)
+    input.addEventListener("change", validateEmail)
   })
 })
 
@@ -113,7 +123,7 @@ function inputNumberNomNominatif(id, action, value1, value2) {
  * @param {number} min - valeur minimale
  * @param {number} max - valeur maximale
  */
-function inputNumberGroup( action, inputId, min, max) {
+function inputNumberGroup(action, inputId, min, max) {
   console.log('-> inputNumberGroup, action =', action, '  -- min =', min, '  --  max =', max)
   const input = document.querySelector('#' + inputId)
   let valueInput = input.value
@@ -121,7 +131,7 @@ function inputNumberGroup( action, inputId, min, max) {
 
   // moins
   if (action === 'under') {
-    if(valueInput === '') {
+    if (valueInput === '') {
       valueInput = 6
     }
     if (valueInput > min) {
@@ -130,7 +140,7 @@ function inputNumberGroup( action, inputId, min, max) {
   }
   // plus
   if (action === 'over') {
-    if(valueInput === '') {
+    if (valueInput === '') {
       valueInput = 4
     }
     if (valueInput < max) {
@@ -225,9 +235,9 @@ function join(priceUuid, priceName, pricePrix, priceStock, priceMaxPerUser) {
     cible.insertAdjacentHTML('afterend', `<div id="tibillet-container-customers-${priceUuid}" class="d-flex flex-column">`)
 
     // 2 - ajouter l'adhésion
-    const templateAdhesion = document.querySelector(`#tibillet-template-adhesion-required-${ priceUuid }`)
+    const templateAdhesion = document.querySelector(`#tibillet-template-adhesion-required-${priceUuid}`)
     let cloneAdhesion = document.importNode(templateAdhesion.content, true);
-    const cibleAdhesion = document.querySelector(`#tibillet-adhesion-container-${ priceUuid }`)
+    const cibleAdhesion = document.querySelector(`#tibillet-adhesion-container-${priceUuid}`)
 
     cibleAdhesion.append(cloneAdhesion)
   } else {
@@ -238,14 +248,14 @@ function join(priceUuid, priceName, pricePrix, priceStock, priceMaxPerUser) {
 
 function unsubscribeAdhesionRequired(priceUuid) {
   // enlever l'adhésion obligatoire
-  document.querySelector(`#tibillet-adhesion-required-${ priceUuid}`).remove()
+  document.querySelector(`#tibillet-adhesion-required-${priceUuid}`).remove()
   // enlever le "block price + ajouter une réservation"
   document.querySelector(`#tibillet-price-with-adhesion-required-${priceUuid}`).remove()
   // réafficher le "block price + je m'abonne"
   document.querySelector(`#tibillet-activation-price-${priceUuid}`).style.setProperty('display', 'flex', 'important')
 }
 
-function formatNumberParentNode2 (event, limit) {
+function formatNumberParentNode2(event, limit) {
   const element = event.target
   // obligation de changer le type pour ce code, si non "replace" ne fait pas "correctement" son travail
   element.setAttribute('type', 'text')
@@ -258,10 +268,14 @@ function formatNumberParentNode2 (event, limit) {
   }
 }
 
-function colorInputCheckBox(element) {
-  if(element.checked) {
-    element.classList.add('bg-success')
+function validateEmail(evt) {
+  let value = evt.target.value
+  const re = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$/
+  if (value.match(re) === null) {
+    evt.target.parentNode.classList.remove('is-valid')
+    evt.target.parentNode.classList.add('is-invalid')
   } else {
-    element.classList.remove('bg-success')
+    evt.target.parentNode.classList.remove('is-invalid')
+    evt.target.parentNode.classList.add('is-valid')
   }
 }

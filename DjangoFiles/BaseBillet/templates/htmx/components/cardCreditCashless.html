@@ -12,8 +12,8 @@
             <!-- activation -->
             <div class="form-switch">
                 <input class="form-check-input" id="credit-cashless-{{ forloop.counter0 }}-{{ product.uuid }}"
-                       type="checkbox" aria-label="Activer cashless."
-                       onclick="colorInputCheckBox(this);addInputCashless(this.checked, {{ forloop.counter0 }}, '{{ product.uuid }}');">
+                       type="checkbox" role="checkbox" aria-label="Activer cashless."
+                       onclick="addInputCashless(this.checked, {{ forloop.counter0 }}, '{{ product.uuid }}');">
                 <label class="form-check-label text-dark ms-2"
                        for="credit-cashless-{{ forloop.counter0 }}-{{ product.uuid }}">
                     Recharger carte
@@ -60,10 +60,7 @@
     if (state) {
       const templateCashless = document.querySelector(`#tibillet-cashless-number-template-${index}-${productUuid}`)
       let cloneTemplateCashless = document.importNode(templateCashless.content, true);
-      // ciblage élément à afficher du template
-      let parent = cloneTemplateCashless.querySelector('div[data-container-template="true"]')
-
-      console.log('parent = ', parent)
+      // ajout du contenu du template au dom
       cible.append(cloneTemplateCashless)
     } else {
       cible.querySelector('.tibillet-container-cashless-number').remove()

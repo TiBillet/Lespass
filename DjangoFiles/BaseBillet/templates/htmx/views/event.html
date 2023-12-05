@@ -21,7 +21,14 @@
                 <!-- tickets / billets -->
                 {% include "htmx/components/cardTickets.html" with products=event.products replace_name_by_image=False %}
 
+                <!-- cashless -->
                 {% include "htmx/components/cardCreditCashless.html" with products=event.products min=5 max=1000 %}
+
+                <!-- options de l'évènement -->
+                {% include "htmx/components/cardOptions.html" %}
+
+                <!-- don -->
+                {% include "htmx/components/cardGifts.html" %}
 
                 <div class="d-flex flex-row">
                     <button type="submit" class="btn bg-primary text-white w-75 mx-auto" role="button"

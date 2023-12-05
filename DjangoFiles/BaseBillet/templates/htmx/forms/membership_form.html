@@ -1,58 +1,90 @@
-<div class="maj-theme modal fade" id="tibillet-membership-modal" tabindex="-1" aria-labelledby="exampleModalLabel"
-    aria-hidden="true">
+<div class="maj-theme modal fade" id="tibillet-membership-modal-{{ membership.uuid }}" tabindex="-1"
+     aria-labelledby="exampleModalLabel"
+     aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header d-flex flex-column align-items-star">
                 <h3 class="font-weight-bolder text-info text-gradient align-self-start w-85">
-                    {{ membership.name}}
+                    {{ membership.name }}
                 </h3>
                 <h5 style="white-space: pre-line">{{ membership.short_description }}</h5>
             </div>
             <div class="modal-body">
 
-                <!-- conditions -->
-                <div class="input-group mb-4 has-validation" style="position:relative">
+                <form>
+                    <!-- conditions -->
+                    <div class="input-group mb-4 has-validation" style="position:relative">
 
-                    <div class="form-check form-switch d-flex flex-row" style="padding-left: 0;">
-                        <input name="tibillet-membership-read-conditions"
-                            class="form-check-input ms-auto mt-1 tibillet-input-checkbox" type="checkbox"
-                            id="tibillet-membership-read-conditions-id">
-                        <label class="form-check-label ms-2" for="tibillet-membership-read-conditions-id">
-                            <span>j'ai pris connaissance des </span>
-                            {% if membership.categorie_article == 'A' %}
-                            <span>
+                        <div class="form-check form-switch d-flex flex-row" style="padding-left: 0;">
+                            <input name="tibillet-membership-read-conditions"
+                                   class="form-check-input ms-auto mt-1 tibillet-input-checkbox" type="checkbox"
+                                   id="tibillet-membership-read-conditions-id">
+                            <label class="form-check-label ms-2" for="tibillet-membership-read-conditions-id">
+                                <span>j'ai pris connaissance des </span>
+                                {% if membership.categorie_article == 'A' %}
+                                    <span>
                                 {% if membership.legal_link != None %}
-                                <a class="text-info" href="{{ membership.legal_link }}" target="_blank">
+                                    <a class="text-info" href="{{ membership.legal_link }}" target="_blank">
                                     statuts et du règlement intérieur de l'association.
                                 </a>
                                 {% else %}
-                                <span>statuts et du règlement intérieur de l'association</span>
+                                    <span>statuts et du règlement intérieur de l'association</span>
                                 {% endif %}
                             </span>
-                            {% else %}
-                            {% if membership.legal_link != None %}
-                            <a class="text-info" href="{{ membership.legal_link }}" target="_blank">CGU/CGV.</a>
-                            {% else %}
-                            <span>CGU/CGV.</span>
-                            {% endif %}
-                            {% endif %}
-                        </label>
-                        <div class="invalid-feedback" role="heading" aria-label="Conditions non acceptées.">
-                            Conditions non acceptées.
+                                {% else %}
+                                    {% if membership.legal_link != None %}
+                                        <a class="text-info" href="{{ membership.legal_link }}"
+                                           target="_blank">CGU/CGV.</a>
+                                    {% else %}
+                                        <span>CGU/CGV.</span>
+                                    {% endif %}
+                                {% endif %}
+                            </label>
+                            <div class="invalid-feedback" role="heading" aria-label="Conditions non acceptées.">
+                                Conditions non acceptées.
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- prix -->
-                {% for price in membership.prices.all %}
-                    <div>{{ price.name }}</div>
-                {% endfor %}
+                    <!-- prix -->
+                    <div class="d-flex flex-row justify-content-start align-items-start me-2 mb-4">
+                        {% for price in membership.prices.all %}
+                            <div class="form-check me-3" style="padding-left: 0;">
+                                <input class="form-check-input" type="radio"
+                                       name="tibillet-membership-price-{{ membership.uuid }}"
+                                       id="tibillet-membership-radio-{{ price.uuid }}"
+                                       value="{{ price.uuid }}">
+                                <label class="custom-control-label text-dark ms-0"
+                                       for="tibillet-membership-radio-{{ price.uuid }}">
+                                    {{ price.name }}
+                                </label>
+                            </div>
+                        {% endfor %}
+                    </div>
 
+                    <!-- nom -->
+                    <div class="input-group input-group-dynamic mb-4 is-filled">
+                        <label class="form-label">Nom</label>
+                        <input name="membership-first-name" type="text" class="form-control">
+                    </div>
 
+                    <!-- prénom -->
+                    <div class="input-group input-group-dynamic mb-4 is-filled">
+                        <label class="form-label">Prénom</label>
+                        <input name="membership-last-name" type="text" class="form-control">
+                    </div>
+
+                    <!-- email -->
+                    <div class="input-group input-group-dynamic mb-4 is-filled">
+                        <label class="form-label">Email</label>
+                        <input name="membership-email" type="email" class="form-control" onkeyup="validateEmail(this)">
+                    </div>
+
+                </form>
             </div>
             <div class="modal-footer justify-content-between">
                 <button class="btn bg-gradient-info btn-lg w-100 mt-4 mb-0" role="button"
-                    aria-label="valider formulaire adhésion">
+                        aria-label="valider formulaire adhésion">
                     Valider
                 </button>
             </div>

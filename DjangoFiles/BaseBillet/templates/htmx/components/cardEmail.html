@@ -1,23 +1,32 @@
 <fieldset class="maj-theme col shadow-sm p-3 mb-5 bg-body rounded">
-  <legend>
-    <h3 class="font-weight-bolder text-info text-gradient align-self-start">
-      Email
-    </h3>
-  </legend>
-  {% if user.is_active == True %}
-    <h4 role="heading" aria-label="Email de l'utilisateur connecté.">
-      {{ profile.email }}
-    </h4>
-  {% else %}
-    <div>
-      {% include "htmx/components/inputMd.html" with name="card-email-email" label="Email" type="email" errors=errors %}
-      {% include "htmx/components/inputMd.html" with name="card-email-confirm-email" label="Confirmez l'email" type="email" errors=errors %}
+    <legend>
+        <h3 class="font-weight-bolder text-info text-gradient align-self-start">
+            Email
+        </h3>
+    </legend>
+    {% if user.is_active == True %}
+        <h4 role="heading" aria-label="Email de l'utilisateur connecté.">
+            {{ profile.email }}
+        </h4>
+    {% else %}
+        <div>
+            <!-- email -->
+            <div class="input-group input-group-dynamic mb-4 is-filled">
+                <label class="form-label">Email</label>
+                <input name="card-email-email" type="email" class="form-control" onkeyup="validateEmail(this)">
+            </div>
 
-      <!-- message pour l'adresse email -->
-      <div class="text-warning mb-0">
-        Merci de bien vérifier votre adresse email afin de bien recevoir
-        votre(vos) billet(s).
-      </div>
-    </div>
-  {% endif %}
+            <!-- confirm email -->
+            <div class="input-group input-group-dynamic mb-4 is-filled">
+                <label class="form-label">Email</label>
+                <input name="card-email-confirm-email" type="email" class="form-control" onkeyup="validateEmail(this)">
+            </div>
+
+            <!-- message pour l'adresse email -->
+            <div class="text-warning mb-0">
+                Merci de bien vérifier votre adresse email afin de bien recevoir
+                votre(vos) billet(s).
+            </div>
+        </div>
+    {% endif %}
 </fieldset>
