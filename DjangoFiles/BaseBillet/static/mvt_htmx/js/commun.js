@@ -3,11 +3,6 @@ function showModal(id) {
 }
 
 function hideModal(id) {
-  /*
-  const elementModal = document.querySelector(id);
-  const modal = bootstrap.Modal.getOrCreateInstance(elementModal);
-  modal.hide();
-   */
   bootstrap.Modal.getOrCreateInstance(document.querySelector(id)).hide()
 }
 
@@ -61,15 +56,36 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('input[type="checkbox"]').forEach(input => {
     input.checked = false
   })
+
   // reset input radio
   document.querySelectorAll('input[type="radio"]').forEach(input => {
     input.checked = false
   })
-  // test email
-  document.querySelectorAll('input[type="email"]').forEach(input => {
-    input.addEventListener("keyup", validateEmail)
-    input.addEventListener("change", validateEmail)
+
+  // gère le formatage des entrées
+  document.querySelectorAll('input').forEach(input => {
+    const inputType = input.getAttribute('type')
+    // number et tel
+    // test input number si attribut "number-control" présent
+    const max = input.getAttribute('number-control')
+    if ((inputType === 'number' || inputType === 'tel') && max !== null) {
+      input.addEventListener("keyup", formatNumber)
+      input.addEventListener("change", formatNumber)
+      input.addEventListener("click", formatNumber)
+    }
+    // email
+    if (inputType === 'email') {
+      input.addEventListener("keyup", validateEmail)
+      input.addEventListener("change", validateEmail)
+      input.addEventListener("click", validateEmail)
+    }
+
+    // correction "is-filled" de material kit
+    if (['number', 'email', 'text', 'tel'].includes(inputType) && input.value !== "") {
+      input.parentNode.classList.add('is-filled')
+    }
   })
+
 })
 
 /**
@@ -277,5 +293,19 @@ function validateEmail(evt) {
   } else {
     evt.target.parentNode.classList.remove('is-invalid')
     evt.target.parentNode.classList.add('is-valid')
+  }
+}
+
+function formatNumber(event) {
+  const element = event.target
+  const limit = parseInt(element.getAttribute('number-control'))
+  let initValue = element.value
+  element.value = initValue.replace(/[^\d+]/g, '').substring(0, limit)
+  if (element.value.length < limit) {
+    element.parentNode.classList.remove('is-valid')
+    element.parentNode.classList.add('is-invalid')
+  } else {
+    element.parentNode.classList.remove('is-invalid')
+    element.parentNode.classList.add('is-valid')
   }
 }

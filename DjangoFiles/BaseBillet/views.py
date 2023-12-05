@@ -228,6 +228,15 @@ def event(request: HttpRequest, slug) -> HttpResponse:
     event = Event.objects.get(slug=slug)
     # print(f"serialized_user = {serialized_user['membership']}")
 
+    # valid_memberships = list()
+    # if request.user.is_authenticated :
+    #     memberships = request.user.membership.all()
+    #     for membership in memberships:
+    #         if membership.is_valid():
+    #TODO: membership.product => l'attribut "product" peut ne pas existé !
+    #             valid_memberships.append(membership.product)
+
+    # import ipdb; ipdb.set_trace()
     context = {
         "base_template": base_template,
         "host": host,
@@ -243,8 +252,10 @@ def event(request: HttpRequest, slug) -> HttpResponse:
         "slug": slug,
         "event": event,
         "user": request.user,
+        # "valid_memberships":valid_memberships,
         "uuid": uuid,
     }
+
     return render(request, "htmx/views/event.html", context=context)
 
 

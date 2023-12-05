@@ -63,21 +63,41 @@
                     </div>
 
                     <!-- nom -->
-                    <div class="input-group input-group-dynamic mb-4 is-filled">
+                    <div class="input-group input-group-dynamic mb-4">
                         <label class="form-label">Nom</label>
-                        <input name="membership-first-name" type="text" class="form-control">
+                        <input name="membership-first-name" type="text" class="form-control"
+                               role="textbox" aria-label="Nom pour l'adhésion.">
                     </div>
 
                     <!-- prénom -->
-                    <div class="input-group input-group-dynamic mb-4 is-filled">
+                    <div class="input-group input-group-dynamic mb-4">
                         <label class="form-label">Prénom</label>
-                        <input name="membership-last-name" type="text" class="form-control">
+                        <input name="membership-last-name" type="text" class="form-control"
+                               role="textbox" aria-label="Prénom pour l'adhésion.">
                     </div>
 
                     <!-- email -->
-                    <div class="input-group input-group-dynamic mb-4 is-filled">
+                    <div class="input-group input-group-dynamic mb-4">
                         <label class="form-label">Email</label>
-                        <input name="membership-email" type="email" class="form-control" onkeyup="validateEmail(this)">
+                        <input name="membership-email" type="email" class="form-control"
+                               role="textbox" aria-label="Email pour l'adhésion.">
+                    </div>
+
+                    <!-- code postal -->
+                    <div class="input-group input-group-dynamic mb-4">
+                        <label class="form-label">Code postal</label>
+                        <!-- l'attribut "number-control" permet le control/formatage du nombre -->
+                        <input name="membership-postal-code" type="number" number-control="5"
+                               class="form-control"
+                               role="textbox" aria-label="Code postal pour l'adhésion.">
+                    </div>
+
+                    <!-- téléphone -->
+                    <div class="input-group input-group-dynamic mb-4">
+                        <label class="form-label">Fixe ou Mobile</label>
+                        <input name="membership-tel" type="tel" number-control="10"
+                               class="form-control tibillet-number-control" role="textbox"
+                               aria-label="Fixe ou Mobile pour l'adhésion.">
                     </div>
 
                 </form>
@@ -91,5 +111,3 @@
         </div>
     </div>
 </div>
-
-</script>
