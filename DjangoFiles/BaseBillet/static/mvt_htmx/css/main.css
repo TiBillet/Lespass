@@ -2,14 +2,20 @@
     display: none;
 }
 
+/*
 input[class~="tibillet-input-checkbox"]:checked {
     background-color: var(--bs-success) !important;
 }
+*/
 
 :root {
     --tibillet-spinner-width: 20rem;
     --tibillet-spinner-height: 20rem;
     --tibillet-spinner-borderWidth: 0.5em;
+}
+
+input[type="text"], input[type="tel"], input[type="number"], input[type="email"] {
+    border-color: transparent !important;
 }
 
 input[type=radio]::after {

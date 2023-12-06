@@ -2,15 +2,15 @@
      aria-label="Customer - {{ price.name }}  - {{ forloop.counter0  }}">
 
     <!-- first name -->
-    <div class="input-group input-group-dynamic mb-4 is-filled" style="width: 44%;">
+    <div class="input-group input-group-dynamic mb-4" style="width: 44%;">
         <label class="form-label">Nom</label>
-        <input name="{{ name }}-first-name-{{ forloop.counter0 }}-{{ price.uuid }}" type="text" class="form-control">
+        <input name="{{ name }}-first-name-{{ forloop.counter0 }}-{{ price.uuid }}" type="text" class="form-control" required>
     </div>
 
     <!-- last-name -->
-    <div class="input-group input-group-dynamic mb-4 is-filled"  style="width: 44%;">
+    <div class="input-group input-group-dynamic mb-4"  style="width: 44%;">
         <label class="form-label">Prénom</label>
-        <input name="{{ name }}-last-name-{{ forloop.counter0 }}-{{ price.uuid }}" type="text" class="form-control">
+        <input name="{{ name }}-last-name-{{ forloop.counter0 }}-{{ price.uuid }}" type="text" class="form-control" required>
     </div>
 
     <button class="btn btn-sm bg-primary text-white ms-1" type="button"

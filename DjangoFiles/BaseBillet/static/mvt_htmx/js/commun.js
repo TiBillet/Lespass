@@ -1,3 +1,5 @@
+// Le code commun à plusieurs éléments est mis si-dessous
+
 function showModal(id) {
   bootstrap.Modal.getOrCreateInstance(document.querySelector(id)).show()
 }
@@ -24,12 +26,10 @@ document.body.addEventListener("htmx:afterSettle", (evt) => {
 // --- gestion du spinner ---
 // affiche
 document.body.addEventListener('htmx:beforeRequest', function () {
-  console.log('-> lance le spinner');
   document.querySelector('#tibillet-spinner').style.display = "flex"
 });
 // efface
 document.body.addEventListener('htmx:afterRequest', function () {
-  console.log('-> stop le spinner');
   document.querySelector('#tibillet-spinner').style.display = "none"
 });
 
@@ -40,11 +40,34 @@ function updateTheme() {
   })
 }
 
+
+function initManageInputs() {
+  document.querySelectorAll('input').forEach(input => {
+    const inputType = input.getAttribute('type')
+    // number et tel
+    if ((inputType === 'number' || inputType === 'tel')) {
+      input.addEventListener("change", formatNumber)
+      input.addEventListener("blur", formatNumber)
+    }
+    // email
+    if (inputType === 'email') {
+      input.addEventListener("keyup", validateEmail)
+      input.addEventListener("change", validateEmail)
+      input.addEventListener("blur", validateEmail)
+    }
+
+    // correction "is-filled" de material kit
+    if (['number', 'email', 'text', 'tel'].includes(inputType) && input.value !== "") {
+      input.parentNode.classList.add('is-filled')
+    }
+  })
+}
+
 /**
  * Initialise
  * L'affichage des "toasts" présent dans le document
  * Reset des inputs radio et checkbox
- * Le test des émails
+ * Gère le formatage des entrées(input)
  */
 document.addEventListener('DOMContentLoaded', () => {
   // toasts
@@ -62,30 +85,22 @@ document.addEventListener('DOMContentLoaded', () => {
     input.checked = false
   })
 
-  // gère le formatage des entrées
-  document.querySelectorAll('input').forEach(input => {
-    const inputType = input.getAttribute('type')
-    // number et tel
-    // test input number si attribut "number-control" présent
-    const max = input.getAttribute('number-control')
-    if ((inputType === 'number' || inputType === 'tel') && max !== null) {
-      input.addEventListener("keyup", formatNumber)
-      input.addEventListener("change", formatNumber)
-      input.addEventListener("click", formatNumber)
-    }
-    // email
-    if (inputType === 'email') {
-      input.addEventListener("keyup", validateEmail)
-      input.addEventListener("change", validateEmail)
-      input.addEventListener("click", validateEmail)
-    }
+  // gère le formatage des entrées(input)
+  initManageInputs()
+})
 
-    // correction "is-filled" de material kit
-    if (['number', 'email', 'text', 'tel'].includes(inputType) && input.value !== "") {
-      input.parentNode.classList.add('is-filled')
+// manage validation forms
+const forms = document.querySelectorAll('.needs-validation')
+// Loop over them and prevent submission
+Array.from(forms).forEach(form => {
+  form.addEventListener('submit', event => {
+    console.log('validation =', form.checkValidity())
+    if (!form.checkValidity()) {
+      event.preventDefault()
+      event.stopPropagation()
     }
-  })
-
+    form.classList.add('was-validated')
+  }, false)
 })
 
 /**
@@ -119,7 +134,7 @@ function getMin(value1, value2) {
 function inputNumberNomNominatif(id, action, value1, value2) {
   const element = document.querySelector('#' + id)
   let number = parseInt(element.value)
-  if (action === 'plus') {
+  if (action === 'over') {
     let max = getMin(value1, value2)
     if ((number + 1) <= max) {
       element.value = number + 1
@@ -134,17 +149,27 @@ function inputNumberNomNominatif(id, action, value1, value2) {
 
 /**
  * Gère le groupe bouton "-" + input + bouton "+"
+ * min = valeur minimale fixée si pas attribué (attribut min du input)
+ * max = valeur maximale fixée si pas attribué (attribut max du input)
  * @param {string} action - under=moins ou over=plus
  * @param {string} inputId - Dom, id (sans le #) de l'input contenant le nombre
- * @param {number} min - valeur minimale
- * @param {number} max - valeur maximale
  */
-function inputNumberGroup(action, inputId, min, max) {
-  console.log('-> inputNumberGroup, action =', action, '  -- min =', min, '  --  max =', max)
+function inputNumberGroup(action, inputId) {
   const input = document.querySelector('#' + inputId)
-  let valueInput = input.value
-  console.log('valueInput =', valueInput)
+  let min = input.getAttribute('min')
+  if (min !== null) {
+    min = parseInt(min)
+  } else {
+    min = 1
+  }
+  let max = input.getAttribute('max')
+  if (max !== null) {
+    max = parseInt(max)
+  } else {
+    max = 100000
+  }
 
+  let valueInput = input.value
   // moins
   if (action === 'under') {
     if (valueInput === '') {
@@ -296,16 +321,50 @@ function validateEmail(evt) {
   }
 }
 
+/**
+ * Format la valeur entrée dans input
+ * Attribut DOM/variable js - limit = gère le nombre de chiffre max
+ * Attribut DOM/variable js - min = gère la valeur mini
+ * Attribut DOM/variable js - max = gère la valeur maxi
+ * @param {object} event - èvènement du input
+ */
 function formatNumber(event) {
+  // console.log('-> formatNumber !')
   const element = event.target
-  const limit = parseInt(element.getAttribute('number-control'))
+  // limite le nombre de chiffre
+  let limit = element.getAttribute('limit')
+  let min = element.getAttribute('min')
+  if (min !== null) {
+    min = parseInt(min)
+  } else {
+    min = 1
+  }
+  let max = element.getAttribute('max')
+  if (max !== null) {
+    max = parseInt(max)
+  } else {
+    max = 100000
+  }
   let initValue = element.value
-  element.value = initValue.replace(/[^\d+]/g, '').substring(0, limit)
+  element.value = initValue.replace(/[^\d+]/g, '')
+  // gère le nombre de chiffre max du input
+  if (limit !== null) {
+    limit = parseInt(limit)
+    element.value = element.value.substring(0, limit)
+  }
+
+  if (element.value < min) {
+    element.value = min
+  }
+  if (element.value > max) {
+    element.value = max
+  }
+
+  element.parentNode.classList.remove('is-invalid')
+  element.parentNode.classList.add('is-valid')
+
   if (element.value.length < limit) {
     element.parentNode.classList.remove('is-valid')
     element.parentNode.classList.add('is-invalid')
-  } else {
-    element.parentNode.classList.remove('is-invalid')
-    element.parentNode.classList.add('is-valid')
   }
 }

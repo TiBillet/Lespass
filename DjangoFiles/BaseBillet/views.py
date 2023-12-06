@@ -244,7 +244,7 @@ def event(request: HttpRequest, slug) -> HttpResponse:
         "tenant": config.organisation,
         "profile": serialized_user,
         "header": {
-            "img": f"/media/{event.img}",
+            "img": event.img_variations()['fhd'],
             "title": event.name,
             "short_description": event.short_description,
             "long_description": event.long_description

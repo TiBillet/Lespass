@@ -14,7 +14,7 @@
         {% endif %}
 
         {% if event.products.all.count > 0 %}
-            <form>
+            <form id="event-form" class="needs-validation" novalidate>
                 <!-- email-->
                 {% include "htmx/components/cardEmail.html" with email=event.email %}
 
@@ -38,4 +38,4 @@
             </form>
             </div>
         {% endif %}
-{% endblock main %}
+ {% endblock main %}
