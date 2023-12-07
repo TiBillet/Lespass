@@ -2,7 +2,7 @@
      aria-labelledby="exampleModalLabel"
      aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
+        <div class="modal-content dark-version">
             <div class="modal-header d-flex flex-column justify-content-between align-items-center">
                 <h3 class="font-weight-bolder text-info text-gradient">
                     {{ membership.name }}
@@ -51,7 +51,7 @@
                                        name="tibillet-membership-price-{{ membership.uuid }}"
                                        id="tibillet-membership-radio-{{ price.uuid }}"
                                        value="{{ price.uuid }}"
-                                       {% if forloop.counter0 == 0%}required {% endif %}>
+                                       {% if forloop.counter0 == 0 %}required {% endif %}>
                                 <label class="custom-control-label text-darkms-0"
                                        for="tibillet-membership-radio-{{ price.uuid }}">
                                     {{ price.name }}
@@ -115,5 +115,8 @@
     </div>
 </div>
 <script>
+  // du fait d'un rendu partiel
+  document.addEventListener('DOMContentLoaded', () => {
     blockSubmitFormIsNoValidate('membership-form-{{ membership.uuid }}')
+  })
 </script>
