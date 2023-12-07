@@ -1,4 +1,6 @@
 // Le code commun à plusieurs éléments est mis si-dessous
+const listInputsToFilled = ['number', 'email', 'text', 'tel']
+const listNumber = ['number', 'tel']
 
 function showModal(id) {
   bootstrap.Modal.getOrCreateInstance(document.querySelector(id)).show()
@@ -9,30 +11,6 @@ function hideModal(id) {
 }
 
 
-// une fois l'élément remplacé par le contenu de la requête
-document.body.addEventListener("htmx:afterSettle", (evt) => {
-  // console.log('-> htmx:afterSwap evt.target.id =', evt.target.id);
-
-  if (evt.target.id === "tibillet-membership-modal") {
-    showModal("#tibillet-membership-modal");
-  }
-
-  if (evt.target.id === "tibillet-modal-message") {
-    hideModal("#tibillet-login-modal");
-    showModal('#tibillet-modal-message')
-  }
-});
-
-// --- gestion du spinner ---
-// affiche
-document.body.addEventListener('htmx:beforeRequest', function () {
-  document.querySelector('#tibillet-spinner').style.display = "flex"
-});
-// efface
-document.body.addEventListener('htmx:afterRequest', function () {
-  document.querySelector('#tibillet-spinner').style.display = "none"
-});
-
 // TODO: à modifier fonctionne partiellement
 function updateTheme() {
   document.querySelectorAll('.maj-theme').forEach(ele => {
@@ -40,68 +18,21 @@ function updateTheme() {
   })
 }
 
+function setInputFilled(input) {
+  const inputType = input.getAttribute('type')
+  if (listInputsToFilled.includes(inputType) && input.value !== "") {
+    input.parentNode.classList.add('is-filled')
+  }
+}
 
-function initManageInputs() {
+function setAllInputFilled() {
   document.querySelectorAll('input').forEach(input => {
     const inputType = input.getAttribute('type')
-    // number et tel
-    if ((inputType === 'number' || inputType === 'tel')) {
-      input.addEventListener("change", formatNumber)
-      input.addEventListener("blur", formatNumber)
-    }
-    // email
-    if (inputType === 'email') {
-      input.addEventListener("keyup", validateEmail)
-      input.addEventListener("change", validateEmail)
-      input.addEventListener("blur", validateEmail)
-    }
-
-    // correction "is-filled" de material kit
-    if (['number', 'email', 'text', 'tel'].includes(inputType) && input.value !== "") {
+    if (listInputsToFilled.includes(inputType) && input.value !== "") {
       input.parentNode.classList.add('is-filled')
     }
   })
 }
-
-/**
- * Initialise
- * L'affichage des "toasts" présent dans le document
- * Reset des inputs radio et checkbox
- * Gère le formatage des entrées(input)
- */
-document.addEventListener('DOMContentLoaded', () => {
-  // toasts
-  document.querySelectorAll('.toast').forEach(toast => {
-    toast.classList.add('show')
-  })
-
-  // reset input checkbox
-  document.querySelectorAll('input[type="checkbox"]').forEach(input => {
-    input.checked = false
-  })
-
-  // reset input radio
-  document.querySelectorAll('input[type="radio"]').forEach(input => {
-    input.checked = false
-  })
-
-  // gère le formatage des entrées(input)
-  initManageInputs()
-})
-
-// manage validation forms
-const forms = document.querySelectorAll('.needs-validation')
-// Loop over them and prevent submission
-Array.from(forms).forEach(form => {
-  form.addEventListener('submit', event => {
-    console.log('validation =', form.checkValidity())
-    if (!form.checkValidity()) {
-      event.preventDefault()
-      event.stopPropagation()
-    }
-    form.classList.add('was-validated')
-  }, false)
-})
 
 /**
  * Donne la valeur mini
@@ -170,6 +101,7 @@ function inputNumberGroup(action, inputId) {
   }
 
   let valueInput = input.value
+
   // moins
   if (action === 'under') {
     if (valueInput === '') {
@@ -189,111 +121,6 @@ function inputNumberGroup(action, inputId) {
     }
   }
   input.value = valueInput
-}
-
-
-/**
- * Gére un produit avec plusieurs clients
- * Ajoute dans le formulaire un nouveau client (interface = nom/prénom/suppression client)
- * @param element
- * @param {string} prefixName - Préfixe contenu dans l'attribut name
- * @param {string} priceUuid - Uuid du prix
- * @param {string} priceName - Nom du prix
- * @param {number} stock - Nombre maxi de produit
- * @param {number} maxPerUser - Nombre maxi de produit par utilisateur
- */
-function addReservation(element, prefixName, priceUuid, priceName, stock, maxPerUser) {
-  const index = parseInt(element.getAttribute('data-index'))
-  const max = getMin(stock, maxPerUser)
-  // console.log('index =', index, '  --  max =', max)
-  if ("content" in document.createElement("template")) {
-    // le navigateur gère <template>
-    const templateCustomer = document.querySelector('#tibillet-customer-template')
-    let clone = document.importNode(templateCustomer.content, true);
-    let parent = clone.querySelector('div[role="group"]')
-    // modifier le parent (aria-label/id)
-    parent.setAttribute('aria-label', `Customer - ${priceName} - ${index + 1}`)
-    parent.setAttribute('id', `tibillet-group-customer-${index + 1}-${priceUuid}`)
-    // modifier input first name (name)
-    parent.querySelectorAll('input')[0].setAttribute('name', `${prefixName}-first-name-${index + 1}-${priceUuid}`)
-    // modifier input last name (name)
-    parent.querySelectorAll('input')[1].setAttribute('name', `${prefixName}-last-name-${index + 1}-${priceUuid}`)
-    // modifier bouton (aria-label/méthode)
-    parent.querySelector('button').setAttribute('aria-label', `Supprimer ce client, ${priceName}`)
-    parent.querySelector('button').setAttribute('onclick', `deleteCustomer('tibillet-group-customer-${index + 1}-${priceUuid}','${priceUuid}')`)
-    // modifier l'index du bouton "ajouter réservation"
-    element.setAttribute('data-index', index + 1)
-    document.querySelector(`#tibillet-container-customers-${priceUuid}`).appendChild(clone)
-  } else {
-    // le navigateur ne gère pas <template>
-    console.log('Le navigateur ne gère pas le tag "<template>" !')
-  }
-  const nbCustomers = document.querySelector(`#tibillet-container-customers-${priceUuid}`).querySelectorAll('.tibillet-group-customer').length
-  if (nbCustomers === max) {
-    element.style.display = 'none'
-  }
-}
-
-/**
- * Supprime le couple nom/prénom et affiche le bouton "Ajouter réservation"
- * @param {string} id - id(Dom) du groupe(prénom/nom) client à supprimer
- * @param {string} priceUuid - Uuid du prix concerné lors de la suppression
- */
-function deleteCustomer(id, priceUuid) {
-  // supprime le couple customer first name, las name
-  document.querySelector('#' + id).remove()
-  // affiche le bouton "ajouter réservation
-  document.querySelector(`#tibillet-add-reservation-${priceUuid}`).style.display = 'block'
-}
-
-function join(priceUuid, priceName, pricePrix, priceStock, priceMaxPerUser) {
-  console.log('priceUuid =', priceUuid, '  --  priceName =', priceName, '  -- pricePrix =', pricePrix, '  --  priceStock =', priceStock, '  --  priceMaxPerUser =', priceMaxPerUser)
-  if ("content" in document.createElement("template")) {
-    // le navigateur gère <template>
-
-    // 1- remplacer "block je m'abonne" par "block price, ajouter une réservation"
-    const templatePrice = document.querySelector('#tibillet-nominative-price')
-    let clone = document.importNode(templatePrice.content, true);
-    // adapter le template
-    let parent = clone.querySelector('div[role="group"]')
-    let button = parent.querySelector('button')
-    let h4 = parent.querySelector('h4')
-    parent.setAttribute('id', `tibillet-price-with-adhesion-required-${priceUuid}`)
-    parent.setAttribute('aria-label', `groupe interaction tarif ${priceName}`)
-    h4.setAttribute('aria-label', priceName)
-    h4.innerText = `${priceName.toLowerCase()} : ${pricePrix} €`
-    button.setAttribute('id', `tibillet-add-reservation-${priceUuid}`)
-    button.setAttribute('aria-label', `Ajouter une réservation - ${priceName}`)
-    button.setAttribute('data-index', 0)
-    button.setAttribute('onclick', `addReservation(this,'tibillet-customer','${priceUuid}','${priceName}',${priceStock},${priceMaxPerUser})`)
-
-    const cible = document.querySelector('#tibillet-activation-price-' + priceUuid)
-    // effacer le bloc "nom:prix + bouton je m'abonne"
-    cible.style.setProperty('display', 'none', 'important')
-    // ajouter un "block prix"
-    cible.before(clone)
-    // ajout du container customers
-    cible.insertAdjacentHTML('afterend', `<div id="tibillet-container-customers-${priceUuid}" class="d-flex flex-column">`)
-
-    // 2 - ajouter l'adhésion
-    const templateAdhesion = document.querySelector(`#tibillet-template-adhesion-required-${priceUuid}`)
-    let cloneAdhesion = document.importNode(templateAdhesion.content, true);
-    const cibleAdhesion = document.querySelector(`#tibillet-adhesion-container-${priceUuid}`)
-
-    cibleAdhesion.append(cloneAdhesion)
-  } else {
-    // le navigateur ne gère pas <template>
-    console.log('Le navigateur ne gère pas le tag "<template>" !')
-  }
-}
-
-function unsubscribeAdhesionRequired(priceUuid) {
-  // enlever l'adhésion obligatoire
-  document.querySelector(`#tibillet-adhesion-required-${priceUuid}`).remove()
-  // enlever le "block price + ajouter une réservation"
-  document.querySelector(`#tibillet-price-with-adhesion-required-${priceUuid}`).remove()
-  // réafficher le "block price + je m'abonne"
-  document.querySelector(`#tibillet-activation-price-${priceUuid}`).style.setProperty('display', 'flex', 'important')
 }
 
 function formatNumberParentNode2(event, limit) {
@@ -334,17 +161,13 @@ function formatNumber(event) {
   // limite le nombre de chiffre
   let limit = element.getAttribute('limit')
   let min = element.getAttribute('min')
-  if (min !== null) {
-    min = parseInt(min)
-  } else {
-    min = 1
-  }
   let max = element.getAttribute('max')
-  if (max !== null) {
-    max = parseInt(max)
-  } else {
-    max = 100000
+
+  if (limit !== null && (min !== null || max !== null)) {
+    console.log("Attention: l'attribut limit ne peut être utilisé avec min ou max !")
+    return
   }
+
   let initValue = element.value
   element.value = initValue.replace(/[^\d+]/g, '')
   // gère le nombre de chiffre max du input
@@ -353,11 +176,23 @@ function formatNumber(event) {
     element.value = element.value.substring(0, limit)
   }
 
-  if (element.value < min) {
-    element.value = min
-  }
-  if (element.value > max) {
-    element.value = max
+  if (limit === null) {
+    if (min !== null) {
+      min = parseInt(min)
+    } else {
+      min = 1
+    }
+    if (max !== null) {
+      max = parseInt(max)
+    } else {
+      max = 100000
+    }
+    if (element.value < min) {
+      element.value = min
+    }
+    if (element.value > max) {
+      element.value = max
+    }
   }
 
   element.parentNode.classList.remove('is-invalid')
@@ -368,3 +203,108 @@ function formatNumber(event) {
     element.parentNode.classList.add('is-invalid')
   }
 }
+
+function testInput(event) {
+  console.log('-> testInput, event=', event)
+  const input = event.target
+  let inputType = input.getAttribute('type')
+
+  // is-filled
+  setInputFilled(input)
+
+  // gestion number
+  const listNumber = ['number', 'tel']
+  if (listNumber.includes(inputType)) {
+    formatNumber(event)
+  }
+
+  // email
+  if (inputType === 'email') {
+    validateEmail(event)
+  }
+}
+
+// manage validation form, Block le "Post" si non valide
+function blockSubmitFormIsNoValidate(id) {
+  const form = document.querySelector('#' + id)
+  form.addEventListener('submit', event => {
+    console.log('validation =', form.checkValidity())
+    if (!form.checkValidity()) {
+      event.preventDefault()
+      event.stopPropagation()
+    }
+    form.classList.add('was-validated')
+  }, false)
+}
+
+// --- mise en place des écoutes(lancement de codes en fonctions d'un message du DOM ---
+// codes ou méthodes lancées une fois un élément remplacé par le contenu d'une requête
+document.body.addEventListener("htmx:afterSettle", (evt) => {
+  // console.log('-> htmx:afterSwap evt.target.id =', evt.target.id);
+
+  if (evt.target.id === "tibillet-membership-modal") {
+    showModal("#tibillet-membership-modal");
+  }
+
+  if (evt.target.id === "tibillet-modal-message") {
+    hideModal("#tibillet-login-modal");
+    showModal('#tibillet-modal-message')
+  }
+});
+
+// affiche le spinner
+document.body.addEventListener('htmx:beforeRequest', function () {
+  document.querySelector('#tibillet-spinner').style.display = "flex"
+});
+
+// efface  le spinner
+document.body.addEventListener('htmx:afterRequest', function () {
+  document.querySelector('#tibillet-spinner').style.display = "none"
+});
+
+// gestion des inputs
+document.addEventListener("keyup", (event) => {
+  testInput(event)
+});
+
+/**
+ * Initialise, une fois le contenu du DOM Chargé :
+ * L'affichage des "toasts" présent dans le document
+ * Reset des inputs radio et checkbox
+ * Corrige material kit 2 "is-filled"
+ */
+document.addEventListener('DOMContentLoaded', () => {
+  // toasts
+  document.querySelectorAll('.toast').forEach(toast => {
+    toast.classList.add('show')
+  })
+
+  // reset input checkbox
+  document.querySelectorAll('input[type="checkbox"]').forEach(input => {
+    input.checked = false
+  })
+
+  // reset input radio
+  document.querySelectorAll('input[type="radio"]').forEach(input => {
+    input.checked = false
+  })
+
+  // corrige material kit 2 "is-filled"
+  setAllInputFilled()
+})
+
+/*
+// manage validation forms, Block le "Post" si non valide
+const forms = document.querySelectorAll('.needs-validation')
+// Loop over them and prevent submission
+Array.from(forms).forEach(form => {
+  form.addEventListener('submit', event => {
+    console.log('validation =', form.checkValidity())
+    if (!form.checkValidity()) {
+      event.preventDefault()
+      event.stopPropagation()
+    }
+    form.classList.add('was-validated')
+  }, false)
+})
+*/

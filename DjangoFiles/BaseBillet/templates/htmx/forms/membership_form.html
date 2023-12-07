@@ -3,23 +3,23 @@
      aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header d-flex flex-column align-items-star">
-                <h3 class="font-weight-bolder text-info text-gradient align-self-start w-85">
+            <div class="modal-header d-flex flex-column justify-content-between align-items-center">
+                <h3 class="font-weight-bolder text-info text-gradient">
                     {{ membership.name }}
                 </h3>
                 <h5 style="white-space: pre-line">{{ membership.short_description }}</h5>
             </div>
             <div class="modal-body">
 
-                <form>
+                <form id="membership-form-{{ membership.uuid }}" class="needs-validation" novalidate>
                     <!-- conditions -->
                     <div class="input-group mb-4 has-validation" style="position:relative">
 
                         <div class="form-check form-switch d-flex flex-row" style="padding-left: 0;">
                             <input name="tibillet-membership-read-conditions"
                                    class="form-check-input ms-auto mt-1 tibillet-input-checkbox" type="checkbox"
-                                   id="tibillet-membership-read-conditions-id">
-                            <label class="form-check-label ms-2" for="tibillet-membership-read-conditions-id">
+                                   id="tibillet-membership-read-conditions-id" required>
+                            <label class="form-check-label ms-3" for="tibillet-membership-read-conditions-id">
                                 <span>j'ai pris connaissance des </span>
                                 {% if membership.categorie_article == 'A' %}
                                     <span>
@@ -40,9 +40,6 @@
                                     {% endif %}
                                 {% endif %}
                             </label>
-                            <div class="invalid-feedback" role="heading" aria-label="Conditions non acceptées.">
-                                Conditions non acceptées.
-                            </div>
                         </div>
                     </div>
 
@@ -53,8 +50,9 @@
                                 <input class="form-check-input" type="radio"
                                        name="tibillet-membership-price-{{ membership.uuid }}"
                                        id="tibillet-membership-radio-{{ price.uuid }}"
-                                       value="{{ price.uuid }}">
-                                <label class="custom-control-label text-dark ms-0"
+                                       value="{{ price.uuid }}"
+                                       {% if forloop.counter0 == 0%}required {% endif %}>
+                                <label class="custom-control-label text-darkms-0"
                                        for="tibillet-membership-radio-{{ price.uuid }}">
                                     {{ price.name }}
                                 </label>
@@ -66,14 +64,14 @@
                     <div class="input-group input-group-dynamic mb-4">
                         <label class="form-label">Nom</label>
                         <input name="membership-first-name" type="text" class="form-control"
-                               role="textbox" aria-label="Nom pour l'adhésion.">
+                               role="textbox" aria-label="Nom pour l'adhésion." required>
                     </div>
 
                     <!-- prénom -->
                     <div class="input-group input-group-dynamic mb-4">
                         <label class="form-label">Prénom</label>
                         <input name="membership-last-name" type="text" class="form-control"
-                               role="textbox" aria-label="Prénom pour l'adhésion.">
+                               role="textbox" aria-label="Prénom pour l'adhésion." required>
                     </div>
 
                     <!-- email -->
@@ -86,28 +84,36 @@
                     <!-- code postal -->
                     <div class="input-group input-group-dynamic mb-4">
                         <label class="form-label">Code postal</label>
-                        <!-- l'attribut "number-control" permet le control/formatage du nombre -->
-                        <input name="membership-postal-code" type="number" number-control="5"
+                        <!-- l'attribut "limit" permet le control/formatage du nombre -->
+                        <input name="membership-postal-code" type="number" limit="5"
                                class="form-control"
-                               role="textbox" aria-label="Code postal pour l'adhésion.">
+                               role="textbox" aria-label="Code postal pour l'adhésion." required>
                     </div>
 
                     <!-- téléphone -->
                     <div class="input-group input-group-dynamic mb-4">
                         <label class="form-label">Fixe ou Mobile</label>
-                        <input name="membership-tel" type="tel" number-control="10"
+                        <input name="membership-tel" type="tel" limit="10"
                                class="form-control tibillet-number-control" role="textbox"
-                               aria-label="Fixe ou Mobile pour l'adhésion.">
+                               aria-label="Fixe ou Mobile pour l'adhésion." required>
                     </div>
 
+                    <!-- options radio -->
+
+
+                    <!-- options checkbox -->
+
+                    <div class="d-flex flex-row">
+                        <button type="submit" class="btn bg-gradient-info btn-lg mt-4 mb-2 w-75 mx-auto" role="button"
+                                aria-label="valider formulaire adhésion">
+                            Valider
+                        </button>
+                    </div>
                 </form>
-            </div>
-            <div class="modal-footer justify-content-between">
-                <button class="btn bg-gradient-info btn-lg w-100 mt-4 mb-0" role="button"
-                        aria-label="valider formulaire adhésion">
-                    Valider
-                </button>
             </div>
         </div>
     </div>
 </div>
+<script>
+    blockSubmitFormIsNoValidate('membership-form-{{ membership.uuid }}')
+</script>

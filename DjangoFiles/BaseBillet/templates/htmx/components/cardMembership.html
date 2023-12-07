@@ -149,5 +149,19 @@
             {% endfor %}
         </div>
     {% endif %}
-
 </fieldset>
+<script>
+  /**
+   * Enlève l'ahésion obligatoire et retourne au block d'affichage du prix initial,
+   * nom du prix et tarif en noir + le bouton "je m'abonne"
+   * @param {string} priceUuid - Uuid du prix
+   */
+  function unsubscribeAdhesionRequired(priceUuid) {
+  // enlever l'adhésion obligatoire
+  document.querySelector(`#tibillet-adhesion-required-${priceUuid}`).remove()
+  // enlever le "block prix+ ajouter une réservation"
+  document.querySelector(`#tibillet-price-with-adhesion-required-${priceUuid}`).remove()
+  // réafficher le "block prix + je m'abonne"
+  document.querySelector(`#tibillet-activation-price-${priceUuid}`).style.setProperty('display', 'flex', 'important')
+}
+</script>

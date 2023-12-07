@@ -31,11 +31,18 @@
                 {% include "htmx/components/cardGifts.html" %}
 
                 <div class="d-flex flex-row">
-                    <button type="submit" class="btn bg-primary text-white w-75 mx-auto" role="button"
+                    <button type="submit" class="btn bg-gradient-info btn-lg mt-4 mb-2 w-75 mx-auto" role="button"
                             aria-label="Valider la réservation">Valider la réservation
                     </button>
                 </div>
             </form>
-            </div>
+            <script>
+              // du fait d'un rendu partiel
+              document.addEventListener('DOMContentLoaded', () => {
+                blockSubmitFormIsNoValidate('event-form')
+              })
+            </script>
+            })
         {% endif %}
- {% endblock main %}
+    </div>
+{% endblock main %}
