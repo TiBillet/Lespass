@@ -18,7 +18,7 @@
         <div class="form-check form-switch">
             <input class="form-check-input" type="checkbox" name="tibillet-read-conditions-adhesion-{{ adhesion.uuid }}"
                    true-value="true" false-value="false" required role="checkbox"
-                   aria-label="Pris connaissance du règlement de '{{ adhesion.name }}'"/>
+                   aria-label="Pris connaissance du règlement de '{{ adhesion.name }}'" required>
             <label class="form-check-label text-dark" for="read-conditions" role="alert"
                    aria-label="Information du règlement - '{{ adhesion.name }}'">
                 <span>j'ai pris connaissance des </span>
@@ -55,8 +55,8 @@
                 <input v-trigger="{index,nbPrices: product.prices.length}"
                        name="tibillet-adhesion-required-terms-{{ adhesion.uuid }}"
                        id="uuidcardmembershippriceradio{{ forloop.counter0 }}" type="radio"
-                       value="{{ price.uuid }}" class="form-check-input input-adesion-modal-price" required
-                       role="radio" aria-label="Pris abonnement - {{ price.name }}"/>
+                       value="{{ price.uuid }}" class="form-check-input input-adesion-modal-price"
+                       role="radio" aria-label="Pris abonnement - {{ price.name }}" required>
                 <label class="form-check-label text-dark" for="uuidcardmembershippriceradio{{ forloop.counter0 }}">
                     {{ price.name }} - {{ price.prix }}€
                 </label>

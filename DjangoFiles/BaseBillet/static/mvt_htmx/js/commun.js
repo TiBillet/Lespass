@@ -18,6 +18,10 @@ function updateTheme() {
   })
 }
 
+/**
+ * Ajoute la class "is-filled" si le input n'est pas vide
+ * @param {object} input - Elément DOM
+ */
 function setInputFilled(input) {
   const inputType = input.getAttribute('type')
   if (listInputsToFilled.includes(inputType) && input.value !== "") {
@@ -225,17 +229,53 @@ function testInput(event) {
 }
 
 // manage validation form, Block le "Post" si non valide
-function blockSubmitFormIsNoValidate(id) {
+function blockSubmitFormIsNoValidate(event, id) {
   const form = document.querySelector('#' + id)
-  form.addEventListener('submit', event => {
-    console.log('validation =', form.checkValidity())
-    if (!form.checkValidity()) {
-      event.preventDefault()
-      event.stopPropagation()
+
+  // console.log('-> blockSubmitFormIsNoValidate')
+  if (form.checkValidity() === false) {
+    event.preventDefault()
+    event.stopPropagation()
+    // élément invalid
+    const invalidElement = form.querySelector('input:invalid')
+    // éffacer les anciens/autres éléments invalident
+    form.querySelectorAll('input').forEach(ele => {
+      ele.parentNode.querySelector('label').classList.remove('track')
+    })
+    invalidElement.scrollIntoView({behavior: 'smooth', inline: 'center', block: 'center'})
+    invalidElement.focus()
+
+    if (invalidElement.type === 'radio') {
+      const multi = document.querySelectorAll(`input[name=${invalidElement.getAttribute('name')}]`)
+      multi.forEach(mele => {
+        mele.parentNode.querySelector('label').classList.add('track')
+      })
+    } else {
+      const label = invalidElement.parentNode.querySelector('label')
+      label.classList.add('track')
     }
-    form.classList.add('was-validated')
-  }, false)
+  } else {
+    form.submit()
+  }
 }
+
+// manage validation form, stop track after click for inputs
+// Vérifie is-filled
+document.body.addEventListener("click", (evt) => {
+  const element = evt.target
+  if (element.tagName === "INPUT") {
+    setInputFilled(element)
+
+    if (element.type === 'radio') {
+      const multi = document.querySelectorAll(`input[name=${element.getAttribute('name')}]`)
+      multi.forEach(mele => {
+        mele.parentNode.querySelector('label').classList.remove('track')
+      })
+    } else {
+      element.parentNode.querySelector('label').classList.remove('track')
+    }
+  }
+})
 
 // --- mise en place des écoutes(lancement de codes en fonctions d'un message du DOM ---
 // codes ou méthodes lancées une fois un élément remplacé par le contenu d'une requête
@@ -292,19 +332,3 @@ document.addEventListener('DOMContentLoaded', () => {
   // corrige material kit 2 "is-filled"
   setAllInputFilled()
 })
-
-/*
-// manage validation forms, Block le "Post" si non valide
-const forms = document.querySelectorAll('.needs-validation')
-// Loop over them and prevent submission
-Array.from(forms).forEach(form => {
-  form.addEventListener('submit', event => {
-    console.log('validation =', form.checkValidity())
-    if (!form.checkValidity()) {
-      event.preventDefault()
-      event.stopPropagation()
-    }
-    form.classList.add('was-validated')
-  }, false)
-})
-*/

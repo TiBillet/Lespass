@@ -14,7 +14,7 @@
         {% endif %}
 
         {% if event.products.all.count > 0 %}
-            <form id="event-form" class="needs-validation" novalidate>
+            <form id="event-form" method="post" action="/api/reservations/" novalidate>
                 <!-- email-->
                 {% include "htmx/components/cardEmail.html" with email=event.email %}
 
@@ -32,17 +32,17 @@
 
                 <div class="d-flex flex-row">
                     <button type="submit" class="btn bg-gradient-info btn-lg mt-4 mb-2 w-75 mx-auto" role="button"
-                            aria-label="Valider la réservation">Valider la réservation
+                            aria-label="Valider la réservation">
+                        Valider la réservation
                     </button>
                 </div>
             </form>
             <script>
               // du fait d'un rendu partiel
-              document.addEventListener('DOMContentLoaded', () => {
-                blockSubmitFormIsNoValidate('event-form')
+              document.addEventListener('submit', (event) => {
+                blockSubmitFormIsNoValidate(event, 'event-form')
               })
             </script>
-            })
         {% endif %}
     </div>
 {% endblock main %}

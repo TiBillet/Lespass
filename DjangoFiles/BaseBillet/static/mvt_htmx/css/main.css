@@ -33,3 +33,12 @@ input[type=checkbox]:checked {
 a[target="_blank"] {
     color: #1A73E8 !important;
 }
+
+input:invalid label {
+    color: red;
+    font-weight: bold;
+}
+
+.track {
+    color: red !important;
+}
