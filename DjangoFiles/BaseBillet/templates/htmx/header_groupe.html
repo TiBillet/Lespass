@@ -1,7 +1,7 @@
 {% if "embed" not in url_name %}
     {% include "htmx/components/navbar.html" %}
-    {% include "htmx/components/django_messages_toast.html" %}
-    {% include "htmx/components/header.html" %}
-{% else %}
-    {% include "htmx/components/django_messages_toast.html" %}
+    {% if "tenant" not in url_name %}
+        {% include "htmx/components/header.html" %}
+    {% endif %}
 {% endif %}
+{% include "htmx/components/django_messages_toast.html" %}

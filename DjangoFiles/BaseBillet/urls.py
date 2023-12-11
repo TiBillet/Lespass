@@ -11,6 +11,7 @@ urlpatterns = [
     path('create_product/', base_view.create_product, name='create_product'),
     path('home/', base_view.home, name='home'),
     path("memberships/", base_view.memberships, name='memberships'),
+    path("tenant/", base_view.tenant, name='tenant'),
     path('test_jinja/', base_view.test_jinja, name='test_jinja'),
     path('connexion/', base_view.connexion, name='connexion'),
     path('deconnexion/', base_view.deconnexion, name='deconnexion'),

@@ -1,0 +1,49 @@
+{% extends base_template %}
+{% load static %}
+{% block main %}
+    {% include "htmx/header_groupe.html" %}
+
+    <div class="container-fluid vw-100 vh-100 d-flex flex-column align-items-center tibillet-page-tenant"
+         style="background-image: url({{ MEDIA_URL }}'/media/images/create_tenant.jpeg');background-position:50% 50%;background-size:cover">
+        <div class="container mt-7">
+            <div class="card creation-card">
+                <div class="creation-header">
+                    <h3 class="creation-title">Créer votre espace</h3>
+                    <h5 class="creation-sub-title">Sélectionner, éditer un type d'espace.</h5>
+                </div>
+
+                <!-- navigation -->
+                <div class="creation-navigation position-relative">
+                    <ul class="nav nav-pills">
+                        <li class="nav-item-creation tibillet-no-clickable" data-cible="espace" data-index="0"
+                            style="width: 33.33%;">
+                            espace
+                        </li>
+                        <li class="nav-item-creation tibillet-no-clickable" data-cible="informations" data-index="1"
+                            style="width: 33.33%;">
+                            informations
+                        </li>
+                        <li class="nav-item-creation tibillet-no-clickable" data-cible="résumé" data-index="2"
+                            style="width: 33.33%;">
+                            résumé
+                        </li>
+                    </ul>
+                    <!-- bouton mobile -->
+                    <div class="bt-nav-creation bg-primary text-white">Espaces</div>
+                </div> <!-- fin navigation -->
+
+            </div> <!-- fin card -->
+        </div>
+    </div>
+    <script>
+      document.addEventListener('DOMContentLoaded', (event) => {
+        const navItemCreation = document.querySelectorAll('.creation-navigation li')[0]
+        console.log('navItemCreation =', navItemCreation.clientWidth)
+        const element = document.querySelector('.creation-navigation .bt-nav-creation')
+        console.log('element =', element)
+        element.style.setProperty('transform', "translate3d(-8px, 0px, 0px)");
+        element.style.setProperty('transition', "all 0.5s cubic-bezier(0.29, 1.42, 0.79, 1) 0s");
+        element.style.setProperty('min-width', navItemCreation.clientWidth + 'px', 'important')
+      })
+    </script>
+{% endblock main %}

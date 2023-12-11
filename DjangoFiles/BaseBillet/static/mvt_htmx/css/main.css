@@ -34,6 +34,10 @@ a[target="_blank"] {
     color: #1A73E8 !important;
 }
 
+a[class~="navbar-brand"] {
+    color: #FFFFFF !important;
+}
+
 input:invalid label {
     color: red;
     font-weight: bold;
@@ -41,4 +45,65 @@ input:invalid label {
 
 .track {
     color: red !important;
+}
+
+/* create tenant */
+.creation-card {
+    min-height: 410px;
+    box-shadow: 0 16px 24px 2px rgba(0, 0, 0, 0.14), 0 6px 30px 5px rgba(0, 0, 0, 0.12), 0 8px 10px -5px rgba(0, 0, 0, 0.2);
+}
+
+.creation-card,
+.creation-header {
+    text-align: center;
+    padding: 25px 0 35px 0;
+}
+
+.creation-title {
+    font-weight: 700;
+}
+
+.creation-sub-title {
+    font-size: 1.2em;
+    font-weight: 200;
+}
+
+.nav-item-creation {
+  border: 0;
+  line-height: 18px;
+  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 500;
+  min-width: 100px;
+  text-align: center;
+  color: #555;
+  padding: 12px;
+  cursor: pointer;
+}
+
+.tibillet-no-clickable {
+  -webkit-user-select: none;
+  /* Safari, Chrome */
+  -khtml-user-select: none;
+  /* Konqueror */
+  -moz-user-select: none;
+  /* Firefox */
+  user-select: none;
+  /* CSS3 */
+  pointer-events: none
+}
+
+.bt-nav-creation {
+  position: absolute;
+  left: 0;
+  top: -2px;
+  text-align: center;
+  padding: 14px 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  border-radius: 4px;
+  color: #ffffff;
+  font-weight: bold;
+  box-shadow: 0 16px 26px -10px rgba(244, 67, 54, 0.56), 0 4px 25px 0 rgba(0, 0, 0, 0.12), 0 8px 10px -5px rgba(244, 67, 54, 0.2);
+  min-width: 140px;
 }
