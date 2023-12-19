@@ -384,9 +384,12 @@ def tenant_informations(request: HttpRequest) -> HttpResponse:
   return render(request, "htmx/parts/tenant_informations.html", context=context)
 
 
-@require_GET
 def tenant_summary(request: HttpRequest) -> HttpResponse:
   context = {}
+  if request.method == 'POST':
+    print(f"requête : {request}")
+    # retour modal de sucess ou erreur
+
   return render(request, "htmx/parts/tenant_summary.html", context=context)
 
 

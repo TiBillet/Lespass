@@ -65,6 +65,7 @@
       }
 
 
+      // maj de la position du bouton de navigation
       function update(index) {
         const ul = document.querySelector('ul[class="nav tibillet-nav-bgc"]')
         const lis = ul.querySelectorAll('li')
@@ -76,7 +77,6 @@
         if (index === (nbLi - 1)) {
           dep += 8;
         }
-        console.log('-> nav, index =', index, '  --  nbLi =', nbLi, '  --  dep =', dep)
         const btNav = document.querySelector('div[class="bt-nav-creation"]')
         btNav.style.width = (ul.clientWidth / nbLi) + 'px'
         btNav.style.setProperty("transition", "all 0.5s cubic-bezier(0.29, 1.42, 0.79, 1)")
@@ -84,22 +84,20 @@
       }
 
       function nav(index) {
-        document.querySelector('div[class="bt-nav-creation"]').remove()
-        const ul = document.querySelector('ul[class="nav tibillet-nav-bgc"]')
-        const lis = ul.querySelectorAll('li')
-        const btNavHtml = '<div class="bt-nav-creation">' + lis[index].innerHTML + '</div>'
-        document.querySelector('div[class="creation-navigation position-relative"]').insertAdjacentHTML('beforeend', btNavHtml)
+        const lis = document.querySelectorAll('ul[class="nav tibillet-nav-bgc"] li')
+        const btNavInnerHtml = lis[index].innerHTML
         const btNav = document.querySelector('div[class="bt-nav-creation"]')
+        btNav.innerHTML = btNavInnerHtml
         btNav.querySelector('a').classList.remove('text-dark')
         btNav.querySelector('a').classList.add('text-white')
         update(index)
       }
 
+      // initialisation du wizard
       initCreateTenant()
-      let currentIndex = 0
 
+      // une fois le swap fini, actualise le bouton de navigation
       document.body.addEventListener("htmx:afterSettle", (evt) => {
-        console.log('-> create_tenant.html, evt.target =', evt.detail.pathInfo.requestPath)
         const convIndexRequest = {
           "/tenant/": 0,
           "/tenant/areas/": 0,
