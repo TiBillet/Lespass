@@ -324,6 +324,72 @@ def memberships(request: HttpRequest) -> HttpResponse:
   return render(request, "htmx/views/memberships.html", context=context)
 
 
+class Espaces:
+  def __init__(self, name, description, svg_src, svg_size, colorText, disable, categorie):
+    self.name = name
+    self.description = description
+    self.svg_src = svg_src
+    self.svg_size = svg_size
+    self.colorText = colorText
+    self.disable = disable
+    self.categorie = categorie
+
+
+class errorItem:
+  def __init__(self, name, value):
+    self.name = name
+    self.value = value
+
+
+def tenant_areas(request: HttpRequest) -> HttpResponse:
+  espaces = []
+  espaces.append(
+    Espaces("Lieu / association", "Pour tous lieu ou association ...", "/media/images/home.svg", "4rem", "white", False,
+            "S"))
+  espaces.append(
+    Espaces("Artist", "Pour tous lieu ou association ...", "/media/images/artist.svg", "4rem", "white", False,
+            "A"))
+
+  if request.method == 'GET':
+    context = {
+      "espaces": espaces
+    }
+
+  if request.method == 'POST':
+    # TODO: inputs provenant d'un "validateur" (si erreur valeur = '', sinon valeur = valeur entrée par client
+    clientInput = {"email": '', "categorie": 'S'}
+    # TODO: errors provenant d'un "validateur"
+    errors = {"email": True, "categorie": False}
+    context = {
+      "espaces": espaces,
+      "errors": errors,
+      "clientInput": clientInput
+    }
+
+  return render(request, "htmx/parts/tenant_areas.html", context=context)
+
+
+def tenant_informations(request: HttpRequest) -> HttpResponse:
+  context = {}
+  if request.method == 'POST':
+    # TODO: inputs provenant d'un "validateur" (si erreur valeur = '', sinon valeur = valeur entrée par client
+    clientInput = {"organisation": 'Au bon jardin', "short_description": "Mon petit coin de paradis", "long_description":"", "image": "", "logo": ""}
+    # TODO: errors provenant d'un "validateur"
+    errors = {"organisation": False, "short_description": False, "long_description": True, "image": True, "logo": True, }
+    context = {
+      "errors": errors,
+      "clientInput": clientInput
+    }
+
+  return render(request, "htmx/parts/tenant_informations.html", context=context)
+
+
+@require_GET
+def tenant_summary(request: HttpRequest) -> HttpResponse:
+  context = {}
+  return render(request, "htmx/parts/tenant_summary.html", context=context)
+
+
 @require_GET
 def tenant(request: HttpRequest) -> HttpResponse:
   config = Configuration.get_solo()
@@ -339,6 +405,13 @@ def tenant(request: HttpRequest) -> HttpResponse:
   else:
     header_img = "/media/images/image_non_disponible.jpg"
 
+  espaces = []
+  espaces.append(
+    Espaces("Lieu / association", "Pour tous lieu ou association ...", "/media/images/home.svg", "4rem", "white", False,
+            "S"))
+  espaces.append(
+    Espaces("Artist", "Pour tous lieu ou association ...", "/media/images/artist.svg", "4rem", "white", False,
+            "A"))
   context = {
     "base_template": base_template,
     "host": host,
@@ -352,6 +425,6 @@ def tenant(request: HttpRequest) -> HttpResponse:
       "long_description": config.long_description
     },
     "memberships": Product.objects.filter(categorie_article="A"),
+    "espaces": espaces
   }
-  # import ipdb; ipdb.set_trace()
   return render(request, "htmx/views/create_tenant.html", context=context)

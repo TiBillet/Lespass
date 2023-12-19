@@ -3,7 +3,7 @@
 {% block main %}
     {% include "htmx/header_groupe.html" %}
 
-    <div class="container-fluid vw-100 vh-100 d-flex flex-column align-items-center tibillet-page-tenant"
+    <div class="container-fluid vw-100 d-flex flex-column align-items-center tibillet-page-tenant"
          style="background-image: url({{ MEDIA_URL }}'/media/images/create_tenant.jpeg');background-position:50% 50%;background-size:cover">
         <div class="container mt-7">
             <div class="card creation-card">
@@ -14,36 +14,100 @@
 
                 <!-- navigation -->
                 <div class="creation-navigation position-relative">
-                    <ul class="nav nav-pills">
-                        <li class="nav-item-creation tibillet-no-clickable" data-cible="espace" data-index="0"
-                            style="width: 33.33%;">
-                            espace
+                    <ul class="nav tibillet-nav-bgc">
+                        <li data-cible="espaces">
+                            <a href="#" class="nav-link text-dark" hx-get="/tenant/areas/" hx-trigger="click"
+                               hx-target="#creation-content-parts" hx-swap="innerHTML">
+                                espaces
+                            </a>
                         </li>
-                        <li class="nav-item-creation tibillet-no-clickable" data-cible="informations" data-index="1"
-                            style="width: 33.33%;">
-                            informations
+                        <li data-cible="informations">
+                            <a href="#" class="nav-link text-dark" hx-get="/tenant/informations/" hx-trigger="click"
+                               hx-target="#creation-content-parts" hx-swap="innerHTML">
+                                informations
+                            </a>
                         </li>
-                        <li class="nav-item-creation tibillet-no-clickable" data-cible="résumé" data-index="2"
-                            style="width: 33.33%;">
-                            résumé
+                        <li data-cible="résumé">
+                            <a href="#" class="nav-link  text-dark" hx-get="/tenant/summary/" hx-trigger="click"
+                               hx-target="#creation-content-parts" hx-swap="innerHTML"
+                               hx-trigger-after-settle="nav(1)">
+                                résumé
+                            </a>
                         </li>
                     </ul>
-                    <!-- bouton mobile -->
-                    <div class="bt-nav-creation bg-primary text-white">Espaces</div>
                 </div> <!-- fin navigation -->
 
+                <!-- contenu -->
+                <div id="creation-content-parts" class="creation-tabs-content ps-3 pe-3">
+                    {% include 'htmx/parts/tenant_areas.html' %}
+                </div> <!-- fin contenu -->
             </div> <!-- fin card -->
         </div>
     </div>
     <script>
-      document.addEventListener('DOMContentLoaded', (event) => {
-        const navItemCreation = document.querySelectorAll('.creation-navigation li')[0]
-        console.log('navItemCreation =', navItemCreation.clientWidth)
-        const element = document.querySelector('.creation-navigation .bt-nav-creation')
-        console.log('element =', element)
-        element.style.setProperty('transform', "translate3d(-8px, 0px, 0px)");
-        element.style.setProperty('transition', "all 0.5s cubic-bezier(0.29, 1.42, 0.79, 1) 0s");
-        element.style.setProperty('min-width', navItemCreation.clientWidth + 'px', 'important')
+      function initCreateTenant() {
+        const ul = document.querySelector('ul[class="nav tibillet-nav-bgc"]')
+        const lis = ul.querySelectorAll('li')
+        const nbLi = lis.length
+        let width = 100 / nbLi
+        if (document.documentElement.clientWidth < 600 && nbLi > 3) {
+          width = 50
+        }
+        lis.forEach(li => {
+          li.style.width = width + '%'
+        })
+        const btNavHtml = '<div class="bt-nav-creation">' + lis[0].innerHTML + '</div>'
+        document.querySelector('div[class="creation-navigation position-relative"]').insertAdjacentHTML('beforeend', btNavHtml)
+        const btNav = document.querySelector('div[class="bt-nav-creation"]')
+        btNav.querySelector('a').classList.remove('text-dark')
+        btNav.querySelector('a').classList.add('text-white')
+        update(0)
+      }
+
+
+      function update(index) {
+        const ul = document.querySelector('ul[class="nav tibillet-nav-bgc"]')
+        const lis = ul.querySelectorAll('li')
+        const nbLi = lis.length
+        let dep = (ul.clientWidth / nbLi) * index
+        if (index === 0) {
+          dep -= 8;
+        }
+        if (index === (nbLi - 1)) {
+          dep += 8;
+        }
+        console.log('-> nav, index =', index, '  --  nbLi =', nbLi, '  --  dep =', dep)
+        const btNav = document.querySelector('div[class="bt-nav-creation"]')
+        btNav.style.width = (ul.clientWidth / nbLi) + 'px'
+        btNav.style.setProperty("transition", "all 0.5s cubic-bezier(0.29, 1.42, 0.79, 1)")
+        btNav.style.setProperty("transform", "translate3d(" + dep + "px, 0, 0)")
+      }
+
+      function nav(index) {
+        document.querySelector('div[class="bt-nav-creation"]').remove()
+        const ul = document.querySelector('ul[class="nav tibillet-nav-bgc"]')
+        const lis = ul.querySelectorAll('li')
+        const btNavHtml = '<div class="bt-nav-creation">' + lis[index].innerHTML + '</div>'
+        document.querySelector('div[class="creation-navigation position-relative"]').insertAdjacentHTML('beforeend', btNavHtml)
+        const btNav = document.querySelector('div[class="bt-nav-creation"]')
+        btNav.querySelector('a').classList.remove('text-dark')
+        btNav.querySelector('a').classList.add('text-white')
+        update(index)
+      }
+
+      initCreateTenant()
+      let currentIndex = 0
+
+      document.body.addEventListener("htmx:afterSettle", (evt) => {
+        console.log('-> create_tenant.html, evt.target =', evt.detail.pathInfo.requestPath)
+        const convIndexRequest = {
+          "/tenant/": 0,
+          "/tenant/areas/": 0,
+          "/tenant/informations/": 1,
+          "/tenant/summary/": 2
+        }
+        nav(convIndexRequest[evt.detail.pathInfo.requestPath])
       })
+
     </script>
 {% endblock main %}

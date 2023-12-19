@@ -2,6 +2,9 @@
 const listInputsToFilled = ['number', 'email', 'text', 'tel']
 const listNumber = ['number', 'tel']
 
+// create tenant
+let etape
+
 function showModal(id) {
   bootstrap.Modal.getOrCreateInstance(document.querySelector(id)).show()
 }
