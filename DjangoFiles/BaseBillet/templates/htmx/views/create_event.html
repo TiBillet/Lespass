@@ -1,7 +1,13 @@
-{% extends "htmx/base.html" %}
+{% extends base_template %}
+{% load static %}
+{% block main %}
+    {% include "htmx/header_groupe.html" %}
+    <div class="container-fluid vw-100 d-flex flex-column align-items-center">
+    <!-- image évènement -->
+    <!--  produits: nom du produit / prix (nom du prix et tarifs)-->
 
-{% block content %}
-
+    </div>
+    <!--
     <div class="container py-7">
         <div class="row mt-5">
             <div class="col-sm-3 col-6 mx-auto">
@@ -10,7 +16,7 @@
                     <div class="row mt-5">
                         <div class="col-sm-3 col-6 mx-auto">
 
-                            <!-- Modal -->
+                            //-- Modal --
                             <div class="modal fade" id="exampleModalForm" tabindex="-1"
                                  aria-labelledby="exampleModalForm"
                                  aria-hidden="true">
@@ -27,5 +33,5 @@
             </div>
         </div>
     </div>
-
-{% endblock content %}
+-->
+{% endblock main %}

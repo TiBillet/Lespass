@@ -39,7 +39,8 @@
                             Mon compte
                         </a>
                         <!-- sous menu user-->
-                        <ul class="dropdown-menu dropdown-menu-animation me-1 bg-white" aria-labelledby="menuUser">
+                        <ul class="menu-conection dropdown-menu dropdown-menu-animation me-1 bg-white"
+                            aria-labelledby="menuUser">
                             <!-- info email user connecté -->
                             <li>
                                 <a class="dropdown-item" href="#">
@@ -69,7 +70,7 @@
                 <!-- Créer son espace -->
                 {% if configuration.categorie|in_list:'M' %}
                     <li>
-                        <a href="#" class="nav-item text-white mx-2" hx-get="/tenant/" hx-target="#main"
+                        <a href="#" class="nav-item text-white mx-2" hx-get="/create_tenant/" hx-target="#main"
                            hx-swap="outerHTML"
                            hx-push-url="true" role="button" aria-label="Créer son espace">
                             <i class="fa fa-th-large" aria-hidden="true"></i>
@@ -88,3 +89,13 @@
         </div>
     </div>
 </nav>
+<style>
+    .menu-conection {
+        width: 236px !important;
+        left: -90px !important;
+    }
+
+    .menu-conection::before {
+        left: 140px !important;
+    }
+</style>

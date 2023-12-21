@@ -32,63 +32,46 @@ from io import BytesIO
 
 logger = logging.getLogger(__name__)
 
-#  dev
-import json
-
 
 def encode_uid(pk):
-  return force_str(urlsafe_base64_encode(force_bytes(pk)))
+    return force_str(urlsafe_base64_encode(force_bytes(pk)))
 
 
 def get_context(request):
-  config = Configuration.get_solo()
-  base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
-  host = f"https://{request.get_host()}" if request.is_secure() else f"http://{request.get_host()}"
-  serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
+    config = Configuration.get_solo()
+    base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
+    host = f"https://{request.get_host()}" if request.is_secure() else f"http://{request.get_host()}"
+    serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
 
-  # TODO: le faire dans le serializer et renvoyer en async via wsocket (requete trop lente)
-  # if config.server_cashless and config.key_cashless and request.user.is_authenticated:
-  #     serialized_user['cashless'] = request_for_data_cashless(request.user)
-  # import ipdb; ipdb.set_trace()
-  header_img = ""
+    # TODO: le faire dans le serializer et renvoyer en async via wsocket (requete trop lente)
+    # if config.server_cashless and config.key_cashless and request.user.is_authenticated:
+    #     serialized_user['cashless'] = request_for_data_cashless(request.user)
+    # import ipdb; ipdb.set_trace()
+    header_img = ""
 
-  # image par défaut
-  if hasattr(config.img, 'fhd'):
-    header_img = config.img.fhd.url
-  else:
-    header_img = "/media/images/image_non_disponible.jpg"
+    # image par défaut
+    if hasattr(config.img, 'fhd'):
+        header_img = config.img.fhd.url
+    else:
+        header_img = "/media/images/image_non_disponible.jpg"
 
-  context = {
-    "uuid": uuid,
-    "base_template": base_template,
-    "host": host,
-    "url_name": request.resolver_match.url_name,
-    "configuration": config,
-    "user": request.user,
-    "profile": serialized_user,
-    "tenant": config.organisation,
-    "header": {
-      "img": header_img,
-      "title": config.organisation,
-      "short_description": config.short_description,
-      "long_description": config.long_description
-    },
-    "events": Event.objects.all(),
-    "fake_event": {
-      "uuid": "fakeEven-ece7-4b30-aa15-b4ec444a6a73",
-      "name": "Nom de l'évènement",
-      "short_description": "Cliquer sur le bouton si-dessous.",
-      "long_description": None,
-      "categorie": "CARDE_CREATE",
-      "tag": [],
-      "products": [],
-      "options_radio": [],
-      "options_checkbox": [],
-      "img_variations": {"crop": "/media/images/1080_v39ZV53.crop"},
-      "artists": [],
+    context = {
+        "uuid": uuid,
+        "base_template": base_template,
+        "host": host,
+        "url_name": request.resolver_match.url_name,
+        "configuration": config,
+        "user": request.user,
+        "profile": serialized_user,
+        "tenant": config.organisation,
+        "header": {
+            "img": header_img,
+            "title": config.organisation,
+            "short_description": config.short_description,
+            "long_description": config.long_description
+        }
     }
-  }
-  return context
+    return context
 
 
 # class index(APIView):
@@ -99,335 +82,383 @@ def get_context(request):
 
 
 class Ticket_html_view(APIView):
-  permission_classes = [AllowAny]
+    permission_classes = [AllowAny]
 
-  def get(self, request, pk_uuid):
-    ticket = get_object_or_404(Ticket, uuid=pk_uuid)
-    qr = segno.make(f"{ticket.uuid}", micro=False)
+    def get(self, request, pk_uuid):
+        ticket = get_object_or_404(Ticket, uuid=pk_uuid)
+        qr = segno.make(f"{ticket.uuid}", micro=False)
 
-    buffer_svg = BytesIO()
-    qr.save(buffer_svg, kind="svg", scale=8)
+        buffer_svg = BytesIO()
+        qr.save(buffer_svg, kind="svg", scale=8)
 
-    CODE128 = barcode.get_barcode_class("code128")
-    buffer_barcode_SVG = BytesIO()
-    bar_secret = encode_uid(f"{ticket.uuid}".split("-")[4])
+        CODE128 = barcode.get_barcode_class("code128")
+        buffer_barcode_SVG = BytesIO()
+        bar_secret = encode_uid(f"{ticket.uuid}".split("-")[4])
 
-    bar = CODE128(f"{bar_secret}")
-    options = {
-      "module_height": 30,
-      "module_width": 0.6,
-      "font_size": 10,
-    }
-    bar.write(buffer_barcode_SVG, options=options)
+        bar = CODE128(f"{bar_secret}")
+        options = {
+            "module_height": 30,
+            "module_width": 0.6,
+            "font_size": 10,
+        }
+        bar.write(buffer_barcode_SVG, options=options)
 
-    context = {
-      "ticket": ticket,
-      "config": Configuration.get_solo(),
-      "img_svg": buffer_svg.getvalue().decode("utf-8"),
-      # 'img_svg64': base64.b64encode(buffer_svg.getvalue()).decode('utf-8'),
-      "bar_svg": buffer_barcode_SVG.getvalue().decode("utf-8"),
-      # 'bar_svg64': base64.b64encode(buffer_barcode_SVG.getvalue()).decode('utf-8'),
-    }
+        context = {
+            "ticket": ticket,
+            "config": Configuration.get_solo(),
+            "img_svg": buffer_svg.getvalue().decode("utf-8"),
+            # 'img_svg64': base64.b64encode(buffer_svg.getvalue()).decode('utf-8'),
+            "bar_svg": buffer_barcode_SVG.getvalue().decode("utf-8"),
+            # 'bar_svg64': base64.b64encode(buffer_barcode_SVG.getvalue()).decode('utf-8'),
+        }
 
-    return render(request, "ticket/ticket.html", context=context)
-    # return render(request, 'ticket/qrtest.html', context=context)
-
-
-def create_product(request):
-  if request.method == "POST":
-    print(f"reception du formulaire {request.POST}")
-
-    # Erreur :
-    errors = [
-      {"id": "tibillet-product-name", "msg": "erreur de validation"},
-    ]
-    context = {"errors": errors}
-    return TemplateResponse(
-      request, "htmx/subscription/modal.html", context=context
-    )
-
-  options = OptionGenerale.objects.all()
-  options_list = []
-  for ele in options:
-    options_list.append({"value": str(ele.uuid), "name": ele.name})
-
-  categorie_list = [
-    {"value": "B", "name": "Billet payant"},
-    {"value": "P", "name": "Pack d'objets"},
-    {"value": "R", "name": "Recharge cashless"},
-    {"value": "S", "name": "Recharge suspendue"},
-    {"value": "T", "name": "Vetement"},
-    {"value": "M", "name": "Merchandasing"},
-    {"value": "A", "name": "Abonnement et/ou adhésion associative"},
-    {"value": "D", "name": "Don"},
-    {"value": "F", "name": "Reservation gratuite"},
-    {"value": "V", "name": "Nécessite une validation manuelle"},
-  ]
-
-  context = {
-    "uuid": uuid,
-    "options_list": options_list,
-    "categorie_list": categorie_list,
-    "Product": Product,
-  }
-  return TemplateResponse(request, "htmx/views/create_product.html", context=context)
+        return render(request, "ticket/ticket.html", context=context)
+        # return render(request, 'ticket/qrtest.html', context=context)
 
 
 def test_jinja(request):
-  context = {
-    "list": [1, 2, 3, 4, 5, 6],
-    "var1": "",
-    "var2": "",
-    "var3": "",
-    "var4": "hello",
-  }
-  return TemplateResponse(request, "htmx/views/test_jinja.html", context=context)
+    context = {
+        "list": [1, 2, 3, 4, 5, 6],
+        "var1": "",
+        "var2": "",
+        "var3": "",
+        "var4": "hello",
+    }
+    return TemplateResponse(request, "htmx/views/test_jinja.html", context=context)
 
 
 def deconnexion(request):
-  logout(request)
-  messages.add_message(request, messages.SUCCESS, "Déconnexion")
-  return redirect('home')
+    logout(request)
+    messages.add_message(request, messages.SUCCESS, "Déconnexion")
+    return redirect('home')
 
 
 def connexion(request):
-  if request.method == 'POST':
-    try:
-      email = request.POST.get('login-email')
-      # Création de l'user et envoie du mail de validation
-      user = get_or_create_user(email=email, send_mail=True)
+    print("-> connexion:")
+    if request.method == 'POST':
+        try:
+            email = request.POST.get('login-email')
+            # Création de l'user et envoie du mail de validation
+            user = get_or_create_user(email=email, send_mail=True)
 
-      if settings.DEBUG:
-        login(request, user)
-        messages.add_message(request, messages.DEBUG, "Debug : on login auto, Connexion ok.")
-        return redirect('home')
+            if settings.DEBUG:
+                login(request, user)
+                messages.add_message(request, messages.DEBUG, "Debug : login auto, Connexion ok.")
+                return redirect('home')
 
-      # Le mail a été ernvoyé par le get__or_create, on redirige vers la page d'accueil et on leur demande de valider leur email
-      messages.add_message(request, messages.SUCCESS,
-                           "Pour acceder à votre espace et réservations, merci de valider\n votre adresse email. Pensez à regarder dans les spams !")
+            # Le mail a été ernvoyé par le get__or_create, on redirige vers la page d'accueil et on leur demande de valider leur email
+            messages.add_message(request, messages.SUCCESS,
+                                 "Pour acceder à votre espace et réservations, merci de valider\n votre adresse email. Pensez à regarder dans les spams !")
 
-    # Exception WIDE = C'EST LE MAL.
-    # Une exception large doit retourner une erreur serveur, pas un message client
-    except Exception as error:
-      logger.error(f"Erreur lors de la connexion : {error}")
-      raise error
-      # messages.add_message(request, messages.WARNING, str(error))
+        # Exception WIDE = C'EST LE MAL.
+        # Une exception large doit retourner une erreur serveur, pas un message client
+        except Exception as error:
+            logger.error(f"Erreur lors de la connexion : {error}")
+            raise error
+            # messages.add_message(request, messages.WARNING, str(error))
 
-  return redirect('home')
+    return redirect('home')
 
 
 # TODO: authentifier le user/email (si-dessous, ne fonctionne pas)
 def emailconfirmation(request, uuid, token):
-  activate(request, uuid, token)
-  return redirect('home')
+    activate(request, uuid, token)
+    return redirect('home')
 
 
 @require_GET
 def home(request):
-  context = get_context(request)
-  return render(request, "htmx/views/home.html", context=context)
+    context = get_context(request)
+    context['events'] = Event.objects.all()
+    context['fake_event'] = {
+        "uuid": "fakeEven-ece7-4b30-aa15-b4ec444a6a73",
+        "name": "Nom de l'évènement",
+        "short_description": "Cliquer sur le bouton si-dessous.",
+        "long_description": None,
+        "categorie": "CARDE_CREATE",
+        "tag": [],
+        "products": [],
+        "options_radio": [],
+        "options_checkbox": [],
+        "img_variations": {"crop": "/media/images/1080_v39ZV53.crop"},
+        "artists": [],
+    }
+    # dev
+    context['dev_user_is_staff'] = True
+    return render(request, "htmx/views/home.html", context=context)
 
 
 @require_GET
 def event(request: HttpRequest, slug) -> HttpResponse:
-  serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
-  config = Configuration.get_solo()
-  base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
-
-  host = "http://" + request.get_host()
-  if request.is_secure():
-    host = "https://" + request.get_host()
-
-  event = Event.objects.get(slug=slug)
-  # print(f"serialized_user = {serialized_user['membership']}")
-
-  # valid_memberships = list()
-  # if request.user.is_authenticated :
-  #     memberships = request.user.membership.all()
-  #     for membership in memberships:
-  #         if membership.is_valid():
-  # TODO: membership.product => l'attribut "product" peut ne pas existé !
-  #             valid_memberships.append(membership.product)
-
-  # import ipdb; ipdb.set_trace()
-  context = {
-    "base_template": base_template,
-    "host": host,
-    "url_name": request.resolver_match.url_name,
-    "tenant": config.organisation,
-    "profile": serialized_user,
-    "header": {
-      "img": event.img_variations()['fhd'],
-      "title": event.name,
-      "short_description": event.short_description,
-      "long_description": event.long_description
-    },
-    "slug": slug,
-    "event": event,
-    "user": request.user,
-    # "valid_memberships":valid_memberships,
-    "uuid": uuid,
-  }
-
-  return render(request, "htmx/views/event.html", context=context)
-
-
-class membership_form(APIView):
-  permission_classes = [AllowAny]
-
-  def get(self, request, uuid):
-    print(f"uuid = {uuid}")
+    serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
+    config = Configuration.get_solo()
+    base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
 
     host = "http://" + request.get_host()
     if request.is_secure():
-      host = "https://" + request.get_host()
+        host = "https://" + request.get_host()
 
+    event = Event.objects.get(slug=slug)
+    # print(f"serialized_user = {serialized_user['membership']}")
+
+    # valid_memberships = list()
+    # if request.user.is_authenticated :
+    #     memberships = request.user.membership.all()
+    #     for membership in memberships:
+    #         if membership.is_valid():
+    # TODO: membership.product => l'attribut "product" peut ne pas existé !
+    #             valid_memberships.append(membership.product)
+
+    # import ipdb; ipdb.set_trace()
     context = {
-      "host": host,
-      "url_name": request.resolver_match.url_name,
-      "membership": Product.objects.get(uuid=uuid)
+        "base_template": base_template,
+        "host": host,
+        "url_name": request.resolver_match.url_name,
+        "tenant": config.organisation,
+        "profile": serialized_user,
+        "header": {
+            "img": event.img_variations()['fhd'],
+            "title": event.name,
+            "short_description": event.short_description,
+            "long_description": event.long_description
+        },
+        "slug": slug,
+        "event": event,
+        "user": request.user,
+        # "valid_memberships":valid_memberships,
+        "uuid": uuid,
     }
 
-    return render(request, "htmx/forms/membership_form.html", context=context)
+    return render(request, "htmx/views/event.html", context=context)
+
+
+class membership_form(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, uuid):
+        print(f"uuid = {uuid}")
+
+        host = "http://" + request.get_host()
+        if request.is_secure():
+            host = "https://" + request.get_host()
+
+        context = {
+            "host": host,
+            "url_name": request.resolver_match.url_name,
+            "membership": Product.objects.get(uuid=uuid)
+        }
+
+        return render(request, "htmx/forms/membership_form.html", context=context)
 
 
 @require_GET
 def memberships(request: HttpRequest) -> HttpResponse:
-  config = Configuration.get_solo()
-  base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
+    config = Configuration.get_solo()
+    base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
 
-  host = "http://" + request.get_host()
-  if request.is_secure():
-    host = "https://" + request.get_host()
+    host = "http://" + request.get_host()
+    if request.is_secure():
+        host = "https://" + request.get_host()
 
-  # image par défaut
-  if hasattr(config.img, 'fhd'):
-    header_img = config.img.fhd.url
-  else:
-    header_img = "/media/images/image_non_disponible.jpg"
+    # image par défaut
+    if hasattr(config.img, 'fhd'):
+        header_img = config.img.fhd.url
+    else:
+        header_img = "/media/images/image_non_disponible.jpg"
 
-  context = {
-    "base_template": base_template,
-    "host": host,
-    "url_name": request.resolver_match.url_name,
-    "tenant": config.organisation,
-    "configuration": config,
-    "header": {
-      "img": header_img,
-      "title": config.organisation,
-      "short_description": config.short_description,
-      "long_description": config.long_description
-    },
-    "memberships": Product.objects.filter(categorie_article="A"),
-  }
-  # import ipdb; ipdb.set_trace()
-  return render(request, "htmx/views/memberships.html", context=context)
+    context = {
+        "base_template": base_template,
+        "host": host,
+        "url_name": request.resolver_match.url_name,
+        "tenant": config.organisation,
+        "configuration": config,
+        "header": {
+            "img": header_img,
+            "title": config.organisation,
+            "short_description": config.short_description,
+            "long_description": config.long_description
+        },
+        "memberships": Product.objects.filter(categorie_article="A"),
+    }
+    # import ipdb; ipdb.set_trace()
+    return render(request, "htmx/views/memberships.html", context=context)
 
 
 class Espaces:
-  def __init__(self, name, description, svg_src, svg_size, colorText, disable, categorie):
-    self.name = name
-    self.description = description
-    self.svg_src = svg_src
-    self.svg_size = svg_size
-    self.colorText = colorText
-    self.disable = disable
-    self.categorie = categorie
-
-
-class errorItem:
-  def __init__(self, name, value):
-    self.name = name
-    self.value = value
+    def __init__(self, name, description, svg_src, svg_size, colorText, disable, categorie):
+        self.name = name
+        self.description = description
+        self.svg_src = svg_src
+        self.svg_size = svg_size
+        self.colorText = colorText
+        self.disable = disable
+        self.categorie = categorie
 
 
 def tenant_areas(request: HttpRequest) -> HttpResponse:
-  espaces = []
-  espaces.append(
-    Espaces("Lieu / association", "Pour tous lieu ou association ...", "/media/images/home.svg", "4rem", "white", False,
-            "S"))
-  espaces.append(
-    Espaces("Artist", "Pour tous lieu ou association ...", "/media/images/artist.svg", "4rem", "white", False,
-            "A"))
+    espaces = []
+    espaces.append(
+        Espaces("Lieu / association", "Pour tous lieu ou association ...", "/media/images/home.svg", "4rem", "white",
+                False,
+                "S"))
+    espaces.append(
+        Espaces("Artist", "Pour tous lieu ou association ...", "/media/images/artist.svg", "4rem", "white", False,
+                "A"))
 
-  if request.method == 'GET':
-    context = {
-      "espaces": espaces
-    }
+    if request.method == 'GET':
+        context = {
+            "espaces": espaces
+        }
 
-  if request.method == 'POST':
-    # TODO: inputs provenant d'un "validateur" (si erreur valeur = '', sinon valeur = valeur entrée par client
-    clientInput = {"email": '', "categorie": 'S'}
-    # TODO: errors provenant d'un "validateur"
-    errors = {"email": True, "categorie": False}
-    context = {
-      "espaces": espaces,
-      "errors": errors,
-      "clientInput": clientInput
-    }
+    if request.method == 'POST':
+        # TODO: inputs provenant d'un "validateur" (si erreur valeur = '', sinon valeur = valeur entrée par client
+        clientInput = {"email": '', "categorie": 'S'}
+        # TODO: errors provenant d'un "validateur"
+        errors = {"email": True, "categorie": False}
+        context = {
+            "espaces": espaces,
+            "errors": errors,
+            "clientInput": clientInput
+        }
 
-  return render(request, "htmx/parts/tenant_areas.html", context=context)
+    return render(request, "htmx/parts/tenant_areas.html", context=context)
 
 
 def tenant_informations(request: HttpRequest) -> HttpResponse:
-  context = {}
-  if request.method == 'POST':
-    # TODO: inputs provenant d'un "validateur" (si erreur valeur = '', sinon valeur = valeur entrée par client
-    clientInput = {"organisation": 'Au bon jardin', "short_description": "Mon petit coin de paradis", "long_description":"", "image": "", "logo": ""}
-    # TODO: errors provenant d'un "validateur"
-    errors = {"organisation": False, "short_description": False, "long_description": True, "image": True, "logo": True, }
-    context = {
-      "errors": errors,
-      "clientInput": clientInput
-    }
+    context = {}
+    if request.method == 'POST':
+        # TODO: inputs provenant d'un "validateur" (si erreur valeur = '', sinon valeur = valeur entrée par client
+        clientInput = {"organisation": 'Au bon jardin', "short_description": "Mon petit coin de paradis",
+                       "long_description": "", "image": "", "logo": ""}
+        # TODO: errors provenant d'un "validateur"
+        errors = {"organisation": False, "short_description": False, "long_description": True, "image": True,
+                  "logo": True, }
+        context = {
+            "errors": errors,
+            "clientInput": clientInput
+        }
 
-  return render(request, "htmx/parts/tenant_informations.html", context=context)
+    return render(request, "htmx/parts/tenant_informations.html", context=context)
 
 
 def tenant_summary(request: HttpRequest) -> HttpResponse:
-  context = {}
-  if request.method == 'POST':
-    print(f"requête : {request}")
-    # retour modal de sucess ou erreur
+    context = {}
+    if request.method == 'POST':
+        print(f"requête : {request}")
+        # retour modal de sucess ou erreur
 
-  return render(request, "htmx/parts/tenant_summary.html", context=context)
+    return render(request, "htmx/parts/tenant_summary.html", context=context)
 
 
 @require_GET
-def tenant(request: HttpRequest) -> HttpResponse:
-  config = Configuration.get_solo()
-  base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
+def create_tenant(request: HttpRequest) -> HttpResponse:
+    config = Configuration.get_solo()
+    base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
 
-  host = "http://" + request.get_host()
-  if request.is_secure():
-    host = "https://" + request.get_host()
+    host = "http://" + request.get_host()
+    if request.is_secure():
+        host = "https://" + request.get_host()
 
-  # image par défaut
-  if hasattr(config.img, 'fhd'):
-    header_img = config.img.fhd.url
-  else:
-    header_img = "/media/images/image_non_disponible.jpg"
+    # image par défaut
+    if hasattr(config.img, 'fhd'):
+        header_img = config.img.fhd.url
+    else:
+        header_img = "/media/images/image_non_disponible.jpg"
 
-  espaces = []
-  espaces.append(
-    Espaces("Lieu / association", "Pour tous lieu ou association ...", "/media/images/home.svg", "4rem", "white", False,
-            "S"))
-  espaces.append(
-    Espaces("Artist", "Pour tous lieu ou association ...", "/media/images/artist.svg", "4rem", "white", False,
-            "A"))
-  context = {
-    "base_template": base_template,
-    "host": host,
-    "url_name": request.resolver_match.url_name,
-    "tenant": config.organisation,
-    "configuration": config,
-    "header": {
-      "img": header_img,
-      "title": config.organisation,
-      "short_description": config.short_description,
-      "long_description": config.long_description
-    },
-    "memberships": Product.objects.filter(categorie_article="A"),
-    "espaces": espaces
-  }
-  return render(request, "htmx/views/create_tenant.html", context=context)
+    espaces = []
+    espaces.append(
+        Espaces("Lieu / association", "Pour tous lieu ou association ...", "/media/images/home.svg", "4rem", "white",
+                False,
+                "S"))
+    espaces.append(
+        Espaces("Artist", "Pour tous lieu ou association ...", "/media/images/artist.svg", "4rem", "white", False,
+                "A"))
+    context = {
+        "base_template": base_template,
+        "host": host,
+        "url_name": request.resolver_match.url_name,
+        "tenant": config.organisation,
+        "configuration": config,
+        "header": {
+            "img": header_img,
+            "title": config.organisation,
+            "short_description": config.short_description,
+            "long_description": config.long_description
+        },
+        "memberships": Product.objects.filter(categorie_article="A"),
+        "espaces": espaces
+    }
+    return render(request, "htmx/views/create_tenant.html", context=context)
+
+
+def create_event(request):
+    config = Configuration.get_solo()
+    base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
+
+    host = "http://" + request.get_host()
+    if request.is_secure():
+        host = "https://" + request.get_host()
+
+    # image par défaut
+    if hasattr(config.img, 'fhd'):
+        header_img = config.img.fhd.url
+    else:
+        header_img = "/media/images/image_non_disponible.jpg"
+    '''
+    if request.method == "POST":
+        print(f"reception du formulaire {request.POST}")
+
+        # Erreur :
+        errors = [
+            {"id": "tibillet-product-name", "msg": "erreur de validation"},
+        ]
+        context = {"errors": errors}
+        return TemplateResponse(
+            request, "htmx/subscription/modal.html", context=context
+        )
+
+    
+    
+    context = {
+        "base_template": base_template,
+        "tenant": config.organisation,
+        "uuid": uuid,
+        "options_list": options_list,
+        "categorie_list": categorie_list,
+        "Product": Product,
+    }
+    '''
+    options = OptionGenerale.objects.all()
+    options_list = []
+    for ele in options:
+        options_list.append({"value": str(ele.uuid), "name": ele.name})
+
+    categorie_list = [
+        {"value": "B", "name": "Billet payant"},
+        {"value": "P", "name": "Pack d'objets"},
+        {"value": "R", "name": "Recharge cashless"},
+        {"value": "S", "name": "Recharge suspendue"},
+        {"value": "T", "name": "Vetement"},
+        {"value": "M", "name": "Merchandasing"},
+        {"value": "A", "name": "Abonnement et/ou adhésion associative"},
+        {"value": "D", "name": "Don"},
+        {"value": "F", "name": "Reservation gratuite"},
+        {"value": "V", "name": "Nécessite une validation manuelle"},
+    ]
+
+    context = {
+        "base_template": base_template,
+        "host": host,
+        "url_name": request.resolver_match.url_name,
+        "tenant": config.organisation,
+        "configuration": config,
+        "header": {
+            "img": header_img,
+            "title": "Création d'un évènement",
+            "short_description": "",
+            "long_description": ""
+        },
+        "options_list": options_list,
+        "categorie_list": categorie_list
+    }
+    return render(request, "htmx/views/create_event.html", context=context)

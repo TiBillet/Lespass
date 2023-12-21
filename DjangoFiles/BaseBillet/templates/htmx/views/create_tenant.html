@@ -3,7 +3,7 @@
 {% block main %}
     {% include "htmx/header_groupe.html" %}
 
-    <div class="container-fluid vw-100 d-flex flex-column align-items-center tibillet-page-tenant"
+    <div class="container-fluid vw-100 d-flex flex-column align-items-center"
          style="background-image: url({{ MEDIA_URL }}'/media/images/create_tenant.jpeg');background-position:50% 50%;background-size:cover">
         <div class="container mt-7">
             <div class="card creation-card">
@@ -99,7 +99,7 @@
       // une fois le swap fini, actualise le bouton de navigation
       document.body.addEventListener("htmx:afterSettle", (evt) => {
         const convIndexRequest = {
-          "/tenant/": 0,
+          "/create_tenant/": 0,
           "/tenant/areas/": 0,
           "/tenant/informations/": 1,
           "/tenant/summary/": 2

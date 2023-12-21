@@ -233,12 +233,11 @@ function testInput(event) {
 
 // manage validation form, Block le "Post" si non valide
 function blockSubmitFormIsNoValidate(event, id) {
+  // console.log('blockSubmitFormIsNoValidate, id=', id)
   const form = document.querySelector('#' + id)
 
   // console.log('-> blockSubmitFormIsNoValidate')
   if (form.checkValidity() === false) {
-    event.preventDefault()
-    event.stopPropagation()
     // élément invalid
     const invalidElement = form.querySelector('input:invalid')
     // éffacer les anciens/autres éléments invalident
@@ -334,4 +333,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // corrige material kit 2 "is-filled"
   setAllInputFilled()
+})
+
+document.addEventListener('submit', (event) => {
+  event.preventDefault()
+  event.stopPropagation()
+  console.log('-> écoute submit, id=', event.target.id)
+  blockSubmitFormIsNoValidate(event, event.target.id)
 })
