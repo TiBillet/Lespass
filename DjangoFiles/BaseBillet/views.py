@@ -390,7 +390,7 @@ def create_tenant(request: HttpRequest) -> HttpResponse:
     }
     return render(request, "htmx/views/create_tenant.html", context=context)
 
-
+@require_GET
 def create_event(request):
     config = Configuration.get_solo()
     base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
@@ -404,30 +404,7 @@ def create_event(request):
         header_img = config.img.fhd.url
     else:
         header_img = "/media/images/image_non_disponible.jpg"
-    '''
-    if request.method == "POST":
-        print(f"reception du formulaire {request.POST}")
 
-        # Erreur :
-        errors = [
-            {"id": "tibillet-product-name", "msg": "erreur de validation"},
-        ]
-        context = {"errors": errors}
-        return TemplateResponse(
-            request, "htmx/subscription/modal.html", context=context
-        )
-
-    
-    
-    context = {
-        "base_template": base_template,
-        "tenant": config.organisation,
-        "uuid": uuid,
-        "options_list": options_list,
-        "categorie_list": categorie_list,
-        "Product": Product,
-    }
-    '''
     options = OptionGenerale.objects.all()
     options_list = []
     for ele in options:
@@ -452,13 +429,32 @@ def create_event(request):
         "url_name": request.resolver_match.url_name,
         "tenant": config.organisation,
         "configuration": config,
-        "header": {
-            "img": header_img,
-            "title": "Création d'un évènement",
-            "short_description": "",
-            "long_description": ""
-        },
+        "header": None,
         "options_list": options_list,
         "categorie_list": categorie_list
     }
     return render(request, "htmx/views/create_event.html", context=context)
+
+def event_date(request: HttpRequest) -> HttpResponse:
+    context = {}
+    if request.method == 'POST':
+        print(f"requête : {request}")
+        # retour modal de sucess ou erreur
+
+    return render(request, "htmx/parts/event_date.html", context=context)
+
+def event_presentation(request: HttpRequest) -> HttpResponse:
+    context = {}
+    if request.method == 'POST':
+        print(f"requête : {request}")
+        # retour modal de sucess ou erreur
+
+    return render(request, "htmx/parts/event_presentation.html", context=context)
+
+def event_products(request: HttpRequest) -> HttpResponse:
+    context = {}
+    if request.method == 'POST':
+        print(f"requête : {request}")
+        # retour modal de sucess ou erreur
+
+    return render(request, "htmx/parts/event_products.html", context=context)
