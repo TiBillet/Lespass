@@ -439,6 +439,8 @@ def event_date(request: HttpRequest) -> HttpResponse:
     context = {}
     if request.method == 'POST':
         print(f"requête : {request}")
+        var = request.POST['ranges']
+        print(f"var : {var}")
         # retour modal de sucess ou erreur
 
     return render(request, "htmx/parts/event_date.html", context=context)

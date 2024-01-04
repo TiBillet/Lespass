@@ -1,15 +1,13 @@
-const weekDayTab = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
-
-function getDataMonth(month, year) {
+function getDataMonth (month, year) {
   let daysBefore = null, lastDayDateMontBefore = null
   if (month === 0) {
-    lastDayDateMontBefore = new Date((year - 1), 0, 0);
+    lastDayDateMontBefore = new Date((year - 1), 0, 0)
   } else {
-    lastDayDateMontBefore = new Date(year, month, 0);
+    lastDayDateMontBefore = new Date(year, month, 0)
   }
   daysBefore = lastDayDateMontBefore.getDate()
-  const firstDayDate = new Date(year, month, 1);
-  const lastDayDate = new Date(year, month + 1, 0);
+  const firstDayDate = new Date(year, month, 1)
+  const lastDayDate = new Date(year, month + 1, 0)
   const days = lastDayDate.getDate()
   let weekDay = firstDayDate.getDay()
   if (weekDay === 0) {
@@ -24,13 +22,13 @@ function getDataMonth(month, year) {
 // Dim Lun Mar Mer Jeu Ven Sam
 //  0   1   2   3   4   5   6
 
-function showMonth(month, year) {
+function showMonth (month, year) {
+  const weekDayTab = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
   let fragHtml = '<div class="agenda-month-container d-flex flex-column">'
   // mois
-  const monthName = new Date(year, month).toLocaleString('fr-FR', { month: "long" })
+  const monthName = new Date(year, month).toLocaleString('fr-FR', { month: 'long' })
   fragHtml += '<div class="agenda-month d-flex flex-row justify-content-center">' + monthName + '</div>'
   // légende des jours
-  // fragHtml += '<div class="d-flex flex-row justify-content-around">'
   fragHtml += '<div class="d-flex flex-row">'
   weekDayTab.forEach(day => {
     fragHtml += '<div class="agenda-day-size">' + day + '</div>'
@@ -73,7 +71,6 @@ function showMonth(month, year) {
   for (let i = 0; i < monthTotal.length; i++) {
     // début de semaine
     if (cd === 1) {
-      // fragHtml += '<div class="d-flex flex-row justify-content-around">'
       fragHtml += '<div class="d-flex flex-row">'
     }
     let day = '00'

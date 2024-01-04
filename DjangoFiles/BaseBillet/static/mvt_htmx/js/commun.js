@@ -2,20 +2,22 @@
 const listInputsToFilled = ['number', 'email', 'text', 'tel']
 const listNumber = ['number', 'tel']
 
+// pour la création d'un évènement
+let stepEvalRange, currentRangeStart
+
 // create tenant
 let etape
 
-function showModal(id) {
+function showModal (id) {
   bootstrap.Modal.getOrCreateInstance(document.querySelector(id)).show()
 }
 
-function hideModal(id) {
+function hideModal (id) {
   bootstrap.Modal.getOrCreateInstance(document.querySelector(id)).hide()
 }
 
-
 // TODO: à modifier fonctionne partiellement
-function updateTheme() {
+function updateTheme () {
   document.querySelectorAll('.maj-theme').forEach(ele => {
     ele.classList.toggle('dark-version')
   })
@@ -25,17 +27,17 @@ function updateTheme() {
  * Ajoute la class "is-filled" si le input n'est pas vide
  * @param {object} input - Elément DOM
  */
-function setInputFilled(input) {
+function setInputFilled (input) {
   const inputType = input.getAttribute('type')
-  if (listInputsToFilled.includes(inputType) && input.value !== "") {
+  if (listInputsToFilled.includes(inputType) && input.value !== '') {
     input.parentNode.classList.add('is-filled')
   }
 }
 
-function setAllInputFilled() {
+function setAllInputFilled () {
   document.querySelectorAll('input').forEach(input => {
     const inputType = input.getAttribute('type')
-    if (listInputsToFilled.includes(inputType) && input.value !== "") {
+    if (listInputsToFilled.includes(inputType) && input.value !== '') {
       input.parentNode.classList.add('is-filled')
     }
   })
@@ -47,7 +49,7 @@ function setAllInputFilled() {
  * @param {number} value2 - Valeur 2
  * @returns {number}
  */
-function getMin(value1, value2) {
+function getMin (value1, value2) {
   let min = 0
   if (value1 === value2) {
     min = value1
@@ -69,7 +71,7 @@ function getMin(value1, value2) {
  * @param {number} value1 - Pour action=plus: Nombre maxi de produit, Pour action=moins: nombre minimum
  * @param {number} value2 - Nombre maxi de produit par utilisateur
  */
-function inputNumberNomNominatif(id, action, value1, value2) {
+function inputNumberNomNominatif (id, action, value1, value2) {
   const element = document.querySelector('#' + id)
   let number = parseInt(element.value)
   if (action === 'over') {
@@ -92,7 +94,7 @@ function inputNumberNomNominatif(id, action, value1, value2) {
  * @param {string} action - under=moins ou over=plus
  * @param {string} inputId - Dom, id (sans le #) de l'input contenant le nombre
  */
-function inputNumberGroup(action, inputId) {
+function inputNumberGroup (action, inputId) {
   const input = document.querySelector('#' + inputId)
   let min = input.getAttribute('min')
   if (min !== null) {
@@ -130,7 +132,7 @@ function inputNumberGroup(action, inputId) {
   input.value = valueInput
 }
 
-function formatNumberParentNode2(event, limit) {
+function formatNumberParentNode2 (event, limit) {
   const element = event.target
   // obligation de changer le type pour ce code, si non "replace" ne fait pas "correctement" son travail
   element.setAttribute('type', 'text')
@@ -143,7 +145,7 @@ function formatNumberParentNode2(event, limit) {
   }
 }
 
-function validateEmail(evt) {
+function validateEmail (evt) {
   let value = evt.target.value
   const re = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$/
   if (value.match(re) === null) {
@@ -162,7 +164,7 @@ function validateEmail(evt) {
  * Attribut DOM/variable js - max = gère la valeur maxi
  * @param {object} event - èvènement du input
  */
-function formatNumber(event) {
+function formatNumber (event) {
   // console.log('-> formatNumber !')
   const element = event.target
   // limite le nombre de chiffre
@@ -171,7 +173,7 @@ function formatNumber(event) {
   let max = element.getAttribute('max')
 
   if (limit !== null && (min !== null || max !== null)) {
-    console.log("Attention: l'attribut limit ne peut être utilisé avec min ou max !")
+    console.log('Attention: l\'attribut limit ne peut être utilisé avec min ou max !')
     return
   }
 
@@ -211,7 +213,7 @@ function formatNumber(event) {
   }
 }
 
-function testInput(event) {
+function testInput (event) {
   console.log('-> testInput, event=', event)
   const input = event.target
   let inputType = input.getAttribute('type')
@@ -232,7 +234,7 @@ function testInput(event) {
 }
 
 // manage validation form, Block le "Post" si non valide
-function blockSubmitFormIsNoValidate(event, id) {
+function blockSubmitFormIsNoValidate (event, id) {
   // console.log('blockSubmitFormIsNoValidate, id=', id)
   const form = document.querySelector('#' + id)
 
@@ -244,7 +246,7 @@ function blockSubmitFormIsNoValidate(event, id) {
     form.querySelectorAll('input').forEach(ele => {
       ele.parentNode.querySelector('label').classList.remove('track')
     })
-    invalidElement.scrollIntoView({behavior: 'smooth', inline: 'center', block: 'center'})
+    invalidElement.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'center' })
     invalidElement.focus()
 
     if (invalidElement.type === 'radio') {
@@ -263,9 +265,9 @@ function blockSubmitFormIsNoValidate(event, id) {
 
 // manage validation form, stop track after click for inputs
 // Vérifie is-filled
-document.body.addEventListener("click", (evt) => {
+document.body.addEventListener('click', (evt) => {
   const element = evt.target
-  if (element.tagName === "INPUT") {
+  if (element.tagName === 'INPUT') {
     setInputFilled(element)
 
     if (element.type === 'radio') {
@@ -281,33 +283,33 @@ document.body.addEventListener("click", (evt) => {
 
 // --- mise en place des écoutes(lancement de codes en fonctions d'un message du DOM ---
 // codes ou méthodes lancées une fois un élément remplacé par le contenu d'une requête
-document.body.addEventListener("htmx:afterSettle", (evt) => {
+document.body.addEventListener('htmx:afterSettle', (evt) => {
   // console.log('-> htmx:afterSwap evt.target.id =', evt.target.id);
 
-  if (evt.target.id === "tibillet-membership-modal") {
-    showModal("#tibillet-membership-modal");
+  if (evt.target.id === 'tibillet-membership-modal') {
+    showModal('#tibillet-membership-modal')
   }
 
-  if (evt.target.id === "tibillet-modal-message") {
-    hideModal("#tibillet-login-modal");
+  if (evt.target.id === 'tibillet-modal-message') {
+    hideModal('#tibillet-login-modal')
     showModal('#tibillet-modal-message')
   }
-});
+})
 
 // affiche le spinner
 document.body.addEventListener('htmx:beforeRequest', function () {
-  document.querySelector('#tibillet-spinner').style.display = "flex"
-});
+  document.querySelector('#tibillet-spinner').style.display = 'flex'
+})
 
 // efface  le spinner
 document.body.addEventListener('htmx:afterRequest', function () {
-  document.querySelector('#tibillet-spinner').style.display = "none"
-});
+  document.querySelector('#tibillet-spinner').style.display = 'none'
+})
 
 // gestion des inputs
-document.addEventListener("keyup", (event) => {
+document.addEventListener('keyup', (event) => {
   testInput(event)
-});
+})
 
 /**
  * Initialise, une fois le contenu du DOM Chargé :
