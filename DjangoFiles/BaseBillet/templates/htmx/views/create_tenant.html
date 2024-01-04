@@ -1,0 +1,111 @@
+{% extends base_template %}
+{% load static %}
+{% block main %}
+    {% include "htmx/header_groupe.html" %}
+
+    <div class="container-fluid vw-100 d-flex flex-column align-items-center"
+         style="background-image: url({{ MEDIA_URL }}'/media/images/create_tenant.jpeg');background-position:50% 50%;background-size:cover">
+        <div class="container mt-7">
+            <div class="card creation-card">
+                <div class="creation-header">
+                    <h3 class="creation-title">Créer votre espace</h3>
+                    <h5 class="creation-sub-title">Sélectionner, éditer un type d'espace.</h5>
+                </div>
+
+                <!-- navigation -->
+                <div class="creation-navigation position-relative">
+                    <ul class="nav tibillet-nav-bgc">
+                        <li data-cible="espaces">
+                            <a href="#" class="nav-link text-dark" hx-get="/tenant/areas/" hx-trigger="click"
+                               hx-target="#creation-content-parts" hx-swap="innerHTML">
+                                espaces
+                            </a>
+                        </li>
+                        <li data-cible="informations">
+                            <a href="#" class="nav-link text-dark" hx-get="/tenant/informations/" hx-trigger="click"
+                               hx-target="#creation-content-parts" hx-swap="innerHTML">
+                                informations
+                            </a>
+                        </li>
+                        <li data-cible="résumé">
+                            <a href="#" class="nav-link  text-dark" hx-get="/tenant/summary/" hx-trigger="click"
+                               hx-target="#creation-content-parts" hx-swap="innerHTML"
+                               hx-trigger-after-settle="nav(1)">
+                                résumé
+                            </a>
+                        </li>
+                    </ul>
+                </div> <!-- fin navigation -->
+
+                <!-- contenu -->
+                <div id="creation-content-parts" class="creation-tabs-content ps-3 pe-3">
+                    {% include 'htmx/parts/tenant_areas.html' %}
+                </div> <!-- fin contenu -->
+            </div> <!-- fin card -->
+        </div>
+    </div>
+    <script>
+      function initCreateTenant() {
+        const ul = document.querySelector('ul[class="nav tibillet-nav-bgc"]')
+        const lis = ul.querySelectorAll('li')
+        const nbLi = lis.length
+        let width = 100 / nbLi
+        if (document.documentElement.clientWidth < 600 && nbLi > 3) {
+          width = 50
+        }
+        lis.forEach(li => {
+          li.style.width = width + '%'
+        })
+        const btNavHtml = '<div class="bt-nav-creation">' + lis[0].innerHTML + '</div>'
+        document.querySelector('div[class="creation-navigation position-relative"]').insertAdjacentHTML('beforeend', btNavHtml)
+        const btNav = document.querySelector('div[class="bt-nav-creation"]')
+        btNav.querySelector('a').classList.remove('text-dark')
+        btNav.querySelector('a').classList.add('text-white')
+        update(0)
+      }
+
+
+      // maj de la position du bouton de navigation
+      function update(index) {
+        const ul = document.querySelector('ul[class="nav tibillet-nav-bgc"]')
+        const lis = ul.querySelectorAll('li')
+        const nbLi = lis.length
+        let dep = (ul.clientWidth / nbLi) * index
+        if (index === 0) {
+          dep -= 8;
+        }
+        if (index === (nbLi - 1)) {
+          dep += 8;
+        }
+        const btNav = document.querySelector('div[class="bt-nav-creation"]')
+        btNav.style.width = (ul.clientWidth / nbLi) + 'px'
+        btNav.style.setProperty("transition", "all 0.5s cubic-bezier(0.29, 1.42, 0.79, 1)")
+        btNav.style.setProperty("transform", "translate3d(" + dep + "px, 0, 0)")
+      }
+
+      function nav(index) {
+        const lis = document.querySelectorAll('ul[class="nav tibillet-nav-bgc"] li')
+        const btNavInnerHtml = lis[index].innerHTML
+        const btNav = document.querySelector('div[class="bt-nav-creation"]')
+        btNav.innerHTML = btNavInnerHtml
+        btNav.querySelector('a').classList.remove('text-dark')
+        btNav.querySelector('a').classList.add('text-white')
+        update(index)
+      }
+
+      // initialisation du wizard
+      initCreateTenant()
+
+      // une fois le swap fini, actualise le bouton de navigation
+      document.body.addEventListener("htmx:afterSettle", (evt) => {
+        const convIndexRequest = {
+          "/create_tenant/": 0,
+          "/tenant/areas/": 0,
+          "/tenant/informations/": 1,
+          "/tenant/summary/": 2
+        }
+        nav(convIndexRequest[evt.detail.pathInfo.requestPath])
+      })
+
+    </script>
+{% endblock main %}

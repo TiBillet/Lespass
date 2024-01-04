@@ -21,6 +21,7 @@ def range_by(events: list, val: int):
 
     return list_ranged
 
+
 @register.filter
 def in_list(value, list):
     value = str(value)
@@ -31,4 +32,19 @@ def in_list(value, list):
 def not_in_list(value, list):
     value = str(value)
     retour = value not in list.split(',')
+    return retour
+
+# TODO: fonctionnel, juste vérifier/simplifier le code si-dessous
+@register.filter
+def is_membership(membership, product_name) -> bool:
+    retour = False
+    if len(membership) == 0:
+        return False
+    # une list
+    for adhesion in membership:
+        # un dictionnaire ordonné
+        for key, value in adhesion.items():
+            if key == 'product_name' and value == str(product_name):
+                retour = True
+                break
     return retour

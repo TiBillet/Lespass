@@ -31,6 +31,7 @@ CSRF_TRUSTED_ORIGINS = [
     "http://localhost",
     "https://tibillet.localhost",
     "https://demo.filaos.re",
+    "https://agenda.filaos.re",
     f'https://{os.environ.get("DOMAIN")}',
 ] if DEBUG else [f'https://{os.environ.get("DOMAIN")}', ]
 

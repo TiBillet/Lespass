@@ -11,13 +11,10 @@
     <!-- Font Roboto -->
     <link rel="stylesheet" type="text/css"
           href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700|Roboto+Slab:400,700|Material+Icons"/>
-
     <!-- Font Awesome 4.7.0 -->
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/latest/css/font-awesome.min.css">
-
     <!-- Material Kit - v3.0.4 (Bootstrap  v5.2.3) -->
     <link href="{% static 'mvt_htmx/material_kit_2.0.7/css_v3.0.4/material-kit.css' %}" rel="stylesheet"/>
-
     <!-- Tibillet css -->
     <link href="{% static 'mvt_htmx/css/main.css' %}" rel="stylesheet"/>
 
@@ -44,7 +41,7 @@
 <script src="{% static 'mvt_htmx/js/htmx.min.1.9.9.js' %}"></script>
 
 <!-- commun -->
-<script src="{% static 'mvt_htmx/js/commun.js' %}"></script>
+<script type="module" src="{% static 'mvt_htmx/js/commun.js' %}"></script>
 {% block script %}
 {% endblock script %}
 

@@ -1,32 +1,42 @@
 {% extends base_template %}
 
 {% block main %}
-{% include "htmx/header_groupe.html" %}
+    {% include "htmx/header_groupe.html" %}
 
-<!-- artistes -->
-<div class="container mt-5">
-  {% if event.artists != None %}
-  <div>
-    {% for art in event.artists.all %}
-    {% include "htmx/components/cardArtist.html" with artist=art.configuration %}
-    {% endfor %}
-  </div>
-  {% endif %}
+    <!-- artistes -->
+    <div class="container mt-5">
+        {% if event.artists != None %}
+            <div>
+                {% for art in event.artists.all %}
+                    {% include "htmx/components/cardArtist.html" with artist=art.configuration %}
+                {% endfor %}
+            </div>
+        {% endif %}
 
-  {% if event.products.all.count > 0 %}
-  <form>
-    <!-- email-->
-    {% include "htmx/components/cardEmail.html" with email=event.email %}
+        {% if event.products.all.count > 0 %}
+            <form id="event-form" method="post" action="/api/reservations/" novalidate>
+                <!-- email-->
+                {% include "htmx/components/cardEmail.html" with email=event.email %}
 
-    <!-- tickets / billets -->
-    {% include "htmx/components/cardTickets.html" with products=event.products replace_name_by_image=False %}
-    
-    </button>
-    <div class="d-flex flex-row">
-      <button type="submit" class="btn bg-primary text-white w-75 mx-auto" role="button"
-        aria-label="Valider la réservation">Valider la réservation</button>
+                <!-- tickets / billets -->
+                {% include "htmx/components/cardTickets.html" with products=event.products replace_name_by_image=False %}
+
+                <!-- cashless -->
+                {% include "htmx/components/cardCreditCashless.html" with products=event.products min=5 max=1000 %}
+
+                <!-- options de l'évènement -->
+                {% include "htmx/components/cardOptions.html" %}
+
+                <!-- don -->
+                {% include "htmx/components/cardGifts.html" %}
+
+                <div class="d-flex flex-row">
+                    <button type="submit" class="btn bg-gradient-info btn-lg mt-4 mb-2 w-75 mx-auto" role="button"
+                            aria-label="Valider la réservation">
+                        Valider la réservation
+                    </button>
+                </div>
+            </form>
+        {% endif %}
     </div>
-  </form>
-</div>
-{% endif %}
 {% endblock main %}
