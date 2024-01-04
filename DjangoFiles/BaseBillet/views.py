@@ -193,7 +193,7 @@ def connexion(request):
                 return redirect('home')
 
             print(f"user = {user.__dict__}")
-            # Le mail a été ernvoyé par le get__or_create, on redirige vers la page d'accueil et on leur demande de valider leur email
+            # Le mail a été envoyé par le get__or_create, on redirige vers la page d'accueil et on leur demande de valider leur email
             messages.add_message(request, messages.SUCCESS,
                                  "Pour acceder à votre espace et réservations, merci de valider\n votre adresse email. Pensez à regarder dans les spams !")
 
