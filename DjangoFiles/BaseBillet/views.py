@@ -452,7 +452,8 @@ def event_presentation(request: HttpRequest) -> HttpResponse:
         "event_image": "/media/images/image_non_disponible.jpg",
     }
     if request.method == 'POST':
-        print(f"requête : {request}")
+        data = dict(request.POST.lists())
+        print(f"data = {data}")
         # retour modal de sucess ou erreur
 
     return render(request, "htmx/parts/event_presentation.html", context=context)
