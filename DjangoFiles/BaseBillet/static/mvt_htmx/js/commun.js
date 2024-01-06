@@ -8,39 +8,43 @@ let stepEvalRange, currentRangeStart
 // create tenant
 let etape
 
-function showModal (id) {
-  bootstrap.Modal.getOrCreateInstance(document.querySelector(id)).show()
+function showModal(id) {
+	bootstrap.Modal.getOrCreateInstance(document.querySelector(id)).show()
 }
 
-function hideModal (id) {
-  bootstrap.Modal.getOrCreateInstance(document.querySelector(id)).hide()
+function hideModal(id) {
+	bootstrap.Modal.getOrCreateInstance(document.querySelector(id)).hide()
+}
+
+window['htmlEntities'] = function(str) {
+	return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 // TODO: à modifier fonctionne partiellement
-function updateTheme () {
-  document.querySelectorAll('.maj-theme').forEach(ele => {
-    ele.classList.toggle('dark-version')
-  })
+function updateTheme() {
+	document.querySelectorAll('.maj-theme').forEach(ele => {
+		ele.classList.toggle('dark-version')
+	})
 }
 
 /**
  * Ajoute la class "is-filled" si le input n'est pas vide
  * @param {object} input - Elément DOM
  */
-function setInputFilled (input) {
-  const inputType = input.getAttribute('type')
-  if (listInputsToFilled.includes(inputType) && input.value !== '') {
-    input.parentNode.classList.add('is-filled')
-  }
+function setInputFilled(input) {
+	const inputType = input.getAttribute('type')
+	if (listInputsToFilled.includes(inputType) && input.value !== '') {
+		input.parentNode.classList.add('is-filled')
+	}
 }
 
-function setAllInputFilled () {
-  document.querySelectorAll('input').forEach(input => {
-    const inputType = input.getAttribute('type')
-    if (listInputsToFilled.includes(inputType) && input.value !== '') {
-      input.parentNode.classList.add('is-filled')
-    }
-  })
+function setAllInputFilled() {
+	document.querySelectorAll('input').forEach(input => {
+		const inputType = input.getAttribute('type')
+		if (listInputsToFilled.includes(inputType) && input.value !== '') {
+			input.parentNode.classList.add('is-filled')
+		}
+	})
 }
 
 /**
@@ -49,18 +53,18 @@ function setAllInputFilled () {
  * @param {number} value2 - Valeur 2
  * @returns {number}
  */
-function getMin (value1, value2) {
-  let min = 0
-  if (value1 === value2) {
-    min = value1
-  }
-  if (value1 < value2) {
-    min = value1
-  }
-  if (value2 < value1) {
-    min = value2
-  }
-  return min
+function getMin(value1, value2) {
+	let min = 0
+	if (value1 === value2) {
+		min = value1
+	}
+	if (value1 < value2) {
+		min = value1
+	}
+	if (value2 < value1) {
+		min = value2
+	}
+	return min
 }
 
 // for components
@@ -71,20 +75,20 @@ function getMin (value1, value2) {
  * @param {number} value1 - Pour action=plus: Nombre maxi de produit, Pour action=moins: nombre minimum
  * @param {number} value2 - Nombre maxi de produit par utilisateur
  */
-function inputNumberNomNominatif (id, action, value1, value2) {
-  const element = document.querySelector('#' + id)
-  let number = parseInt(element.value)
-  if (action === 'over') {
-    let max = getMin(value1, value2)
-    if ((number + 1) <= max) {
-      element.value = number + 1
-    }
-  } else {
-    // value1 = min
-    if ((number - 1) >= value1) {
-      element.value = number - 1
-    }
-  }
+function inputNumberNomNominatif(id, action, value1, value2) {
+	const element = document.querySelector('#' + id)
+	let number = parseInt(element.value)
+	if (action === 'over') {
+		let max = getMin(value1, value2)
+		if ((number + 1) <= max) {
+			element.value = number + 1
+		}
+	} else {
+		// value1 = min
+		if ((number - 1) >= value1) {
+			element.value = number - 1
+		}
+	}
 }
 
 /**
@@ -94,67 +98,67 @@ function inputNumberNomNominatif (id, action, value1, value2) {
  * @param {string} action - under=moins ou over=plus
  * @param {string} inputId - Dom, id (sans le #) de l'input contenant le nombre
  */
-function inputNumberGroup (action, inputId) {
-  const input = document.querySelector('#' + inputId)
-  let min = input.getAttribute('min')
-  if (min !== null) {
-    min = parseInt(min)
-  } else {
-    min = 1
-  }
-  let max = input.getAttribute('max')
-  if (max !== null) {
-    max = parseInt(max)
-  } else {
-    max = 100000
-  }
+function inputNumberGroup(action, inputId) {
+	const input = document.querySelector('#' + inputId)
+	let min = input.getAttribute('min')
+	if (min !== null) {
+		min = parseInt(min)
+	} else {
+		min = 1
+	}
+	let max = input.getAttribute('max')
+	if (max !== null) {
+		max = parseInt(max)
+	} else {
+		max = 100000
+	}
 
-  let valueInput = input.value
+	let valueInput = input.value
 
-  // moins
-  if (action === 'under') {
-    if (valueInput === '') {
-      valueInput = 6
-    }
-    if (valueInput > min) {
-      --valueInput
-    }
-  }
-  // plus
-  if (action === 'over') {
-    if (valueInput === '') {
-      valueInput = 4
-    }
-    if (valueInput < max) {
-      ++valueInput
-    }
-  }
-  input.value = valueInput
+	// moins
+	if (action === 'under') {
+		if (valueInput === '') {
+			valueInput = 6
+		}
+		if (valueInput > min) {
+			--valueInput
+		}
+	}
+	// plus
+	if (action === 'over') {
+		if (valueInput === '') {
+			valueInput = 4
+		}
+		if (valueInput < max) {
+			++valueInput
+		}
+	}
+	input.value = valueInput
 }
 
-function formatNumberParentNode2 (event, limit) {
-  const element = event.target
-  // obligation de changer le type pour ce code, si non "replace" ne fait pas "correctement" son travail
-  element.setAttribute('type', 'text')
-  let initValue = element.value
-  element.value = initValue.replace(/[^\d+]/g, '').substring(0, limit)
-  if (element.value.length < limit) {
-    element.parentNode.parentNode.querySelector('.invalid-feedback').style.display = 'block'
-  } else {
-    element.parentNode.parentNode.querySelector('.invalid-feedback').style.display = 'none'
-  }
+function formatNumberParentNode2(event, limit) {
+	const element = event.target
+	// obligation de changer le type pour ce code, si non "replace" ne fait pas "correctement" son travail
+	element.setAttribute('type', 'text')
+	let initValue = element.value
+	element.value = initValue.replace(/[^\d+]/g, '').substring(0, limit)
+	if (element.value.length < limit) {
+		element.parentNode.parentNode.querySelector('.invalid-feedback').style.display = 'block'
+	} else {
+		element.parentNode.parentNode.querySelector('.invalid-feedback').style.display = 'none'
+	}
 }
 
-function validateEmail (evt) {
-  let value = evt.target.value
-  const re = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$/
-  if (value.match(re) === null) {
-    evt.target.parentNode.classList.remove('is-valid')
-    evt.target.parentNode.classList.add('is-invalid')
-  } else {
-    evt.target.parentNode.classList.remove('is-invalid')
-    evt.target.parentNode.classList.add('is-valid')
-  }
+function validateEmail(evt) {
+	let value = evt.target.value
+	const re = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$/
+	if (value.match(re) === null) {
+		evt.target.parentNode.classList.remove('is-valid')
+		evt.target.parentNode.classList.add('is-invalid')
+	} else {
+		evt.target.parentNode.classList.remove('is-invalid')
+		evt.target.parentNode.classList.add('is-valid')
+	}
 }
 
 /**
@@ -164,151 +168,154 @@ function validateEmail (evt) {
  * Attribut DOM/variable js - max = gère la valeur maxi
  * @param {object} event - èvènement du input
  */
-function formatNumber (event) {
-  // console.log('-> formatNumber !')
-  const element = event.target
-  // limite le nombre de chiffre
-  let limit = element.getAttribute('limit')
-  let min = element.getAttribute('min')
-  let max = element.getAttribute('max')
+function formatNumber(event) {
+	// console.log('-> formatNumber !')
+	const element = event.target
+	// limite le nombre de chiffre
+	let limit = element.getAttribute('limit')
+	let min = element.getAttribute('min')
+	let max = element.getAttribute('max')
 
-  if (limit !== null && (min !== null || max !== null)) {
-    console.log('Attention: l\'attribut limit ne peut être utilisé avec min ou max !')
-    return
-  }
+	if (limit !== null && (min !== null || max !== null)) {
+		console.log('Attention: l\'attribut limit ne peut être utilisé avec min ou max !')
+		return
+	}
 
-  let initValue = element.value
-  element.value = initValue.replace(/[^\d+]/g, '')
-  // gère le nombre de chiffre max du input
-  if (limit !== null) {
-    limit = parseInt(limit)
-    element.value = element.value.substring(0, limit)
-  }
+	let initValue = element.value
+	element.value = initValue.replace(/[^\d+]/g, '')
+	// gère le nombre de chiffre max du input
+	if (limit !== null) {
+		limit = parseInt(limit)
+		element.value = element.value.substring(0, limit)
+	}
 
-  if (limit === null) {
-    if (min !== null) {
-      min = parseInt(min)
-    } else {
-      min = 1
-    }
-    if (max !== null) {
-      max = parseInt(max)
-    } else {
-      max = 100000
-    }
-    if (element.value < min) {
-      element.value = min
-    }
-    if (element.value > max) {
-      element.value = max
-    }
-  }
+	if (limit === null) {
+		if (min !== null) {
+			min = parseInt(min)
+		} else {
+			min = 1
+		}
+		if (max !== null) {
+			max = parseInt(max)
+		} else {
+			max = 100000
+		}
+		if (element.value < min) {
+			element.value = min
+		}
+		if (element.value > max) {
+			element.value = max
+		}
+	}
 
-  element.parentNode.classList.remove('is-invalid')
-  element.parentNode.classList.add('is-valid')
+	element.parentNode.classList.remove('is-invalid')
+	element.parentNode.classList.add('is-valid')
 
-  if (element.value.length < limit) {
-    element.parentNode.classList.remove('is-valid')
-    element.parentNode.classList.add('is-invalid')
-  }
+	if (element.value.length < limit) {
+		element.parentNode.classList.remove('is-valid')
+		element.parentNode.classList.add('is-invalid')
+	}
 }
 
-function testInput (event) {
-  console.log('-> testInput, event=', event)
-  const input = event.target
-  let inputType = input.getAttribute('type')
+function testInput(event) {
+	const input = event.target
+	let inputType = input.getAttribute('type')
 
-  // is-filled
-  setInputFilled(input)
+	if (inputType !== null) {
+		// is-filled
+		setInputFilled(input)
 
-  // gestion number
-  const listNumber = ['number', 'tel']
-  if (listNumber.includes(inputType)) {
-    formatNumber(event)
-  }
+		// gestion number
+		const listNumber = ['number', 'tel']
+		if (listNumber.includes(inputType)) {
+			formatNumber(event)
+		}
 
-  // email
-  if (inputType === 'email') {
-    validateEmail(event)
-  }
+		// email
+		if (inputType === 'email') {
+			validateEmail(event)
+		}
+	}
 }
 
 // manage validation form, Block le "Post" si non valide
-function blockSubmitFormIsNoValidate (event, id) {
-  // console.log('blockSubmitFormIsNoValidate, id=', id)
-  const form = document.querySelector('#' + id)
+function blockSubmitFormIsNoValidate(event, id) {
+	// console.log('blockSubmitFormIsNoValidate, id=', id)
+	const form = document.querySelector('#' + id)
 
-  // console.log('-> blockSubmitFormIsNoValidate')
-  if (form.checkValidity() === false) {
-    // élément invalid
-    const invalidElement = form.querySelector('input:invalid')
-    // éffacer les anciens/autres éléments invalident
-    form.querySelectorAll('input').forEach(ele => {
-      ele.parentNode.querySelector('label').classList.remove('track')
-    })
-    invalidElement.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'center' })
-    invalidElement.focus()
+	// console.log('-> blockSubmitFormIsNoValidate')
+	if (form.checkValidity() === false) {
+		// élément invalid
+		const invalidElement = form.querySelector('input:invalid')
+		// éffacer les anciens/autres éléments invalident
+		form.querySelectorAll('input').forEach(ele => {
+			ele.parentNode.querySelector('label').classList.remove('track')
+		})
+		invalidElement.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'center' })
+		invalidElement.focus()
 
-    if (invalidElement.type === 'radio') {
-      const multi = document.querySelectorAll(`input[name=${invalidElement.getAttribute('name')}]`)
-      multi.forEach(mele => {
-        mele.parentNode.querySelector('label').classList.add('track')
-      })
-    } else {
-      const label = invalidElement.parentNode.querySelector('label')
-      label.classList.add('track')
-    }
-  } else {
-    form.submit()
-  }
+		if (invalidElement.type === 'radio') {
+			const multi = document.querySelectorAll(`input[name=${invalidElement.getAttribute('name')}]`)
+			multi.forEach(mele => {
+				mele.parentNode.querySelector('label').classList.add('track')
+			})
+		} else {
+			const label = invalidElement.parentNode.querySelector('label')
+			label.classList.add('track')
+		}
+	} else {
+		form.submit()
+	}
 }
 
 // manage validation form, stop track after click for inputs
 // Vérifie is-filled
 document.body.addEventListener('click', (evt) => {
-  const element = evt.target
-  if (element.tagName === 'INPUT') {
-    setInputFilled(element)
+	const element = evt.target
+	if (element.tagName === 'INPUT' && element.style.display !== 'none') {
+		setInputFilled(element)
 
-    if (element.type === 'radio') {
-      const multi = document.querySelectorAll(`input[name=${element.getAttribute('name')}]`)
-      multi.forEach(mele => {
-        mele.parentNode.querySelector('label').classList.remove('track')
-      })
-    } else {
-      element.parentNode.querySelector('label').classList.remove('track')
-    }
-  }
+		if (element.type === 'radio') {
+			const multi = document.querySelectorAll(`input[name=${element.getAttribute('name')}]`)
+			multi.forEach(mele => {
+				mele.parentNode.querySelector('label').classList.remove('track')
+			})
+		} else {
+			if (element.parentNode.querySelector('label') !== null) {
+				element.parentNode.querySelector('label').classList.remove('track')
+			}
+		}
+	}
 })
 
 // --- mise en place des écoutes(lancement de codes en fonctions d'un message du DOM ---
 // codes ou méthodes lancées une fois un élément remplacé par le contenu d'une requête
 document.body.addEventListener('htmx:afterSettle', (evt) => {
-  // console.log('-> htmx:afterSwap evt.target.id =', evt.target.id);
+	// console.log('-> htmx:afterSwap evt.target.id =', evt.target.id);
 
-  if (evt.target.id === 'tibillet-membership-modal') {
-    showModal('#tibillet-membership-modal')
-  }
+	if (evt.target.id === 'tibillet-membership-modal') {
+		showModal('#tibillet-membership-modal')
+	}
 
-  if (evt.target.id === 'tibillet-modal-message') {
-    hideModal('#tibillet-login-modal')
-    showModal('#tibillet-modal-message')
-  }
+	if (evt.target.id === 'tibillet-modal-message') {
+		hideModal('#tibillet-login-modal')
+		showModal('#tibillet-modal-message')
+	}
 })
 
 // affiche le spinner
-document.body.addEventListener('htmx:beforeRequest', function () {
-  document.querySelector('#tibillet-spinner').style.display = 'flex'
+document.body.addEventListener('htmx:beforeRequest', function() {
+	document.querySelector('#tibillet-spinner').style.display = 'flex'
 })
 
 // efface  le spinner
-document.body.addEventListener('htmx:afterRequest', function () {
-  document.querySelector('#tibillet-spinner').style.display = 'none'
+document.body.addEventListener('htmx:afterRequest', function() {
+	document.querySelector('#tibillet-spinner').style.display = 'none'
 })
 
 // gestion des inputs
 document.addEventListener('keyup', (event) => {
-  testInput(event)
+	testInput(event)
 })
 
 /**
@@ -318,28 +325,31 @@ document.addEventListener('keyup', (event) => {
  * Corrige material kit 2 "is-filled"
  */
 document.addEventListener('DOMContentLoaded', () => {
-  // toasts
-  document.querySelectorAll('.toast').forEach(toast => {
-    toast.classList.add('show')
-  })
+	// toasts
+	document.querySelectorAll('.toast').forEach(toast => {
+		toast.classList.add('show')
+	})
 
-  // reset input checkbox
-  document.querySelectorAll('input[type="checkbox"]').forEach(input => {
-    input.checked = false
-  })
+	// reset input checkbox
+	document.querySelectorAll('input[type="checkbox"]').forEach(input => {
+		input.checked = false
+	})
 
-  // reset input radio
-  document.querySelectorAll('input[type="radio"]').forEach(input => {
-    input.checked = false
-  })
+	// reset input radio
+	document.querySelectorAll('input[type="radio"]').forEach(input => {
+		input.checked = false
+	})
 
-  // corrige material kit 2 "is-filled"
-  setAllInputFilled()
+	// corrige material kit 2 "is-filled"
+	setAllInputFilled()
 })
 
 document.addEventListener('submit', (event) => {
-  event.preventDefault()
-  event.stopPropagation()
-  console.log('-> écoute submit, id=', event.target.id)
-  blockSubmitFormIsNoValidate(event, event.target.id)
+	event.preventDefault()
+	event.stopPropagation()
+	const id = event.target.id
+	console.log('-> écoute submit, id=', id)
+	if (id !== '') {
+		blockSubmitFormIsNoValidate(event, event.target.id)
+	}
 })

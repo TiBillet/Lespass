@@ -430,6 +430,7 @@ def create_event(request):
         "tenant": config.organisation,
         "configuration": config,
         "header": None,
+        "event_image": "/media/images/image_non_disponible.jpg",
         "options_list": options_list,
         "categorie_list": categorie_list
     }
@@ -438,15 +439,18 @@ def create_event(request):
 def event_date(request: HttpRequest) -> HttpResponse:
     context = {}
     if request.method == 'POST':
-        print(f"requête : {request}")
-        var = request.POST['ranges']
-        print(f"var : {var}")
-        # retour modal de sucess ou erreur
-
+        # range-start-index - range-end-index, date-index 
+        data = dict(request.POST.lists())
+        print(f"data = {data}")
+        # - si ok - sauvegarde partielle(uuid event + dates) dans db et retourner le template  "event_presentation.html" (nom, image, descriptions).
+        # - si erreur = retourner les bons ranges et dates dans l'ordre adéquate et les erreurs (rester sur template)
+      
     return render(request, "htmx/parts/event_date.html", context=context)
 
 def event_presentation(request: HttpRequest) -> HttpResponse:
-    context = {}
+    context = {
+        "event_image": "/media/images/image_non_disponible.jpg",
+    }
     if request.method == 'POST':
         print(f"requête : {request}")
         # retour modal de sucess ou erreur

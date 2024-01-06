@@ -104,7 +104,10 @@
           "/tenant/informations/": 1,
           "/tenant/summary/": 2
         }
-        nav(convIndexRequest[evt.detail.pathInfo.requestPath])
+        if (["/create_tenant/", "/tenant/areas/", "/tenant/informations/", "/tenant/summary/"].includes(evt.detail.pathInfo.requestPath)) {
+    		nav(convIndexRequest[evt.detail.pathInfo.requestPath])	
+    	}
+        
       })
 
     </script>

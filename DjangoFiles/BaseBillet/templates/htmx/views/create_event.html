@@ -44,6 +44,7 @@
 </div>
 
 <script>
+  let wizarEventShortDescription, wizarEventName
   function initCreateEvent () {
     const ul = document.querySelector('ul[class="nav tibillet-nav-bgc"]')
     const lis = ul.querySelectorAll('li')
@@ -96,13 +97,16 @@
 
   // une fois le swap fini, actualise le bouton de navigation
   document.body.addEventListener('htmx:afterSettle', (evt) => {
+	  console.log('-> create_eevnt.html, evt =', evt.detail.pathInfo.requestPath)
     const convIndexRequest = {
       '/create_event/': 0,
       '/wiz_event/date/': 0,
       '/wiz_event/presentation/': 1,
       '/wiz_event/products/': 2
     }
-    nav(convIndexRequest[evt.detail.pathInfo.requestPath])
+	if (['/create_event/', '/wiz_event/date/', '/wiz_event/presentation/', '/wiz_event/products/'].includes(evt.detail.pathInfo.requestPath)) {
+		nav(convIndexRequest[evt.detail.pathInfo.requestPath])	
+	}
   })
 </script>
 {% endblock main %}

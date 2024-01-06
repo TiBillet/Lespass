@@ -167,3 +167,9 @@ tempo/
 node_modules/
 .idea/
 .prettierrc
+.project
+.pydevproject
+.settings/
+
+
+

@@ -23,11 +23,12 @@
 
         <p class="text-dark">
             {% if event.categorie == 'CARDE_CREATE' %}
-                Maintenant
+                Pour l'éditer
             {% else %}
                 {{ event.datetime|date:"j/m/Y - H:i:s" }}
             {% endif %}
-
+			
+			{% if event.categorie != 'CARDE_CREATE' %}
             <span class="text-primary text-uppercase text-sm font-weight-bold tibillet-text-primary">
                 {% for product in event.products.all %}
                     <span>
@@ -44,6 +45,7 @@
                     <span> - ENTRÉE LIBRE</span>
                 {% endfor %}
             </span>
+             {% endif %}
         </p>
 
         {% if event.short_description != None %}
