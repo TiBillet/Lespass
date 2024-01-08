@@ -19,7 +19,7 @@ from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
 
-from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Event
+from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Price, Event
 
 from django.contrib.auth import logout, login
 from django.contrib import messages
@@ -461,7 +461,8 @@ def event_presentation(request: HttpRequest) -> HttpResponse:
 def event_products(request: HttpRequest) -> HttpResponse:
     context = {}
     if request.method == 'POST':
-        print(f"requête : {request}")
+        data = dict(request.POST.lists())
+        print(f"data = {data}")
         # retour modal de sucess ou erreur
 
     return render(request, "htmx/parts/event_products.html", context=context)

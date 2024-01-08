@@ -52,31 +52,6 @@
 <!-- spinner -->
 {% include "htmx/components/loading.html" %}
 
-<!-- template for create event && use of htmx rendering -->
-<template id="event-date-range-template">
-	<div id="event-date-range-content" class="d-flex flex-row flex-wrap justify-content-center border rounded">
-		<div class="input-group input-group-static my-3" style="width: 166px !important;">
-			<label>Début</label> <input type="datetime-local" class="form-control">
-		</div>
-		<div class="input-group input-group-static my-3 ms-4" style="width: 166px !important;">
-			<label>Fin</label> <input type="datetime-local" class="form-control">
-		</div>
-		<div class="d-flex flex-column-reverse ms-4 mb-4">
-			<i class="fa fa-trash" role="button" aria-hidden="true" onclick="deleteRange(this)"></i>
-		</div>
-	</div>
-</template>
-<template id="event-date-template">
-	<div id="event-date-content" class="d-flex flex-row justify-content-center  border rounded">
-		<div class="input-group input-group-static my-3" style="width: 166px !important;">
-			<label>Date</label> <input type="datetime-local" class="form-control">
-		</div>
-		<div class="d-flex flex-column-reverse ms-4 mb-4">
-			<i class="fa fa-trash" role="button" aria-hidden="true" onclick="deleteDate(this)"></i>
-		</div>
-	</div>
-</template>
-
 </body>
 
 </html>
