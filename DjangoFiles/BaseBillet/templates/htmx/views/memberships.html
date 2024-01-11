@@ -43,4 +43,35 @@
     {% for membership in memberships %}
         {% include 'htmx/forms/membership_form.html' %}
     {% endfor %}
+    <script>
+        function validateFormMembership(evt, modalMembershipId) {
+            const form = evt.target
+            // console.log("-> stopPropagation, modalMembershipId =", modalMembershipId)
+            // console.log("-> evt.target.checkValidity() =", form.checkValidity())
+            if (form.checkValidity() === false) {
+                // efface le spinner
+                document.querySelector('#tibillet-spinner').style.display = 'none'
+                evt.preventDefault()
+                evt.stopPropagation()
+                // élément invalid
+                const invalidElement = form.querySelector('input:invalid')
+                // éffacer les anciens/autres éléments invalident
+                form.querySelectorAll('input').forEach(ele => {
+                    ele.parentNode.querySelector('label').classList.remove('track')
+                })
+                invalidElement.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'center' })
+                invalidElement.focus()
+
+                if (invalidElement.type === 'radio') {
+                    const multi = document.querySelectorAll(`input[name=${invalidElement.getAttribute('name')}]`)
+                    multi.forEach(mele => {
+                        mele.parentNode.querySelector('label').classList.add('track')
+                    })
+                } else {
+                    const label = invalidElement.parentNode.querySelector('label')
+                    label.classList.add('track')
+                }
+            }
+        }
+    </script>
 {% endblock main %}

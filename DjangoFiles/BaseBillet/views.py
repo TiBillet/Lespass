@@ -231,7 +231,7 @@ def event(request: HttpRequest, slug) -> HttpResponse:
 
     return render(request, "htmx/views/event.html", context=context)
 
-
+'''
 class membership_form(APIView):
     permission_classes = [AllowAny]
 
@@ -249,6 +249,7 @@ class membership_form(APIView):
         }
 
         return render(request, "htmx/forms/membership_form.html", context=context)
+'''
 
 
 @require_GET
@@ -283,6 +284,38 @@ def memberships(request: HttpRequest) -> HttpResponse:
     # import ipdb; ipdb.set_trace()
     return render(request, "htmx/views/memberships.html", context=context)
 
+def validate_membership(request):
+    if request.method == 'POST':
+        print("-> validate_membership, méthode POST !")
+        # range-start-index - range-end-index, date-index 
+        data = dict(request.POST.lists())
+        print(f"data = {data}")
+        
+        # validé / pas validé retourner un message
+        dev_validation = True
+        context = {}
+
+        if dev_validation == False:
+            context = {
+                "modal_message": {
+                    "type": "warning",
+                    "title": "Information",
+                    "content": "Le message d'erreur !"
+                }
+            }
+
+        if dev_validation == True:
+            context = {
+                "modal_message": {
+                    "type": "success",
+                    "title": "Information",
+                    "content": "Adhésion validée !"
+                }
+            }
+
+        return render(request, "htmx/components/modal_message.html", context=context)
+    
+    return redirect('home')
 
 class Espaces:
     def __init__(self, name, description, svg_src, svg_size, colorText, disable, categorie):
@@ -321,7 +354,7 @@ def tenant_areas(request: HttpRequest) -> HttpResponse:
             "clientInput": clientInput
         }
 
-    return render(request, "htmx/parts/tenant_areas.html", context=context)
+    return render(request, "htmx/forms/tenant_areas.html", context=context)
 
 
 def tenant_informations(request: HttpRequest) -> HttpResponse:
@@ -338,7 +371,7 @@ def tenant_informations(request: HttpRequest) -> HttpResponse:
             "clientInput": clientInput
         }
 
-    return render(request, "htmx/parts/tenant_informations.html", context=context)
+    return render(request, "htmx/forms/tenant_informations.html", context=context)
 
 
 def tenant_summary(request: HttpRequest) -> HttpResponse:
@@ -347,7 +380,7 @@ def tenant_summary(request: HttpRequest) -> HttpResponse:
         print(f"requête : {request}")
         # retour modal de sucess ou erreur
 
-    return render(request, "htmx/parts/tenant_summary.html", context=context)
+    return render(request, "htmx/forms/tenant_summary.html", context=context)
 
 
 @require_GET
@@ -445,7 +478,7 @@ def event_date(request: HttpRequest) -> HttpResponse:
         # - si ok - sauvegarde partielle(uuid event + dates) dans db et retourner le template  "event_presentation.html" (nom, image, descriptions).
         # - si erreur = retourner les bons ranges et dates dans l'ordre adéquate et les erreurs (rester sur template)
       
-    return render(request, "htmx/parts/event_date.html", context=context)
+    return render(request, "htmx/forms/event_date.html", context=context)
 
 def event_presentation(request: HttpRequest) -> HttpResponse:
     context = {
@@ -456,7 +489,7 @@ def event_presentation(request: HttpRequest) -> HttpResponse:
         print(f"data = {data}")
         # retour modal de sucess ou erreur
 
-    return render(request, "htmx/parts/event_presentation.html", context=context)
+    return render(request, "htmx/forms/event_presentation.html", context=context)
 
 def event_products(request: HttpRequest) -> HttpResponse:
     context = {}
@@ -465,4 +498,4 @@ def event_products(request: HttpRequest) -> HttpResponse:
         print(f"data = {data}")
         # retour modal de sucess ou erreur
 
-    return render(request, "htmx/parts/event_products.html", context=context)
+    return render(request, "htmx/forms/event_products.html", context=context)

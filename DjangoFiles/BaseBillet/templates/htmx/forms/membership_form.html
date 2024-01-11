@@ -1,6 +1,5 @@
 <div class="maj-theme modal fade" id="tibillet-membership-modal-{{ membership.uuid }}" tabindex="-1"
-     aria-labelledby="exampleModalLabel"
-     aria-hidden="true">
+    aria-labelledby="exampleModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header d-flex flex-column justify-content-between align-items-center">
@@ -11,7 +10,11 @@
             </div>
             <div class="modal-body">
 
-                <form id="membership-form-{{ membership.uuid }}" method="post" action="/api/membership/" novalidate>
+                <!--  <form id="membership-form-{{ membership.uuid }}" method="post" action="/validate_membership/" novalidate> -->
+                <form hx-post="/validate_membership/" hx-target="#tibillet-modal-message" hx-swap="outerHTML" novalidate 
+                    hx-on:htmx:before-request="validateFormMembership(event, 'tibillet-membership-modal-{{ membership.uuid }}')" 
+                    hx-on:htmx:after-request="testEndSwap('tibillet-membership-modal-{{ membership.uuid }}')">
+                    {% csrf_token %}
                     <!-- conditions -->
                     <div class="input-group mb-4 has-validation" style="position:relative">
 
@@ -104,10 +107,10 @@
                             <div class="form-check me-3" style="padding-left: 0;">
                                 <input class="form-check-input" type="radio"
                                        name="tibillet-membership-option-radio-{{ membership.uuid }}"
-                                       id="tibillet-membership-radio-{{ option.uuid }}"
+                                       id="tibillet-membership-radio-{{ forloop.counter0 }}"
                                        value="{{ option.uuid }}">
                                 <label class="custom-control-label text-darkms-0"
-                                       for="tibillet-membership-radio-{{ option.uuid }}">
+                                       for="tibillet-membership-radio-{{ forloop.counter0 }}">
                                     {{ option.name }}
                                 </label>
                             </div>
@@ -142,8 +145,14 @@
     </div>
 </div>
 <script>
-  // du fait d'un rendu partiel
-  document.addEventListener('submit', (event) => {
-    blockSubmitFormIsNoValidate(event, 'membership-form-{{ membership.uuid }}')
-  })
+    function testEndSwap(modalMembershipIdid) {
+        console.log("--> fin de swap, modalMembershipIdid =", modalMembershipIdid)
+        // effacer le modal d'ahdésion une fois la requête finie
+        hideModal('#' + modalMembershipIdid)
+        // afficher le modal de retour de requête
+        window.setTimeout(() => {
+            // wait swap finish
+            showModal('#tibillet-modal-message')
+        }, 400)
+    }
 </script>

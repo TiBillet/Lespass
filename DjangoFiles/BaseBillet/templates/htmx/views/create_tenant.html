@@ -3,7 +3,7 @@
 {% block main %}
     {% include "htmx/header_groupe.html" %}
 
-    <div class="container-fluid vw-100 d-flex flex-column align-items-center"
+    <div class="container-fluid vw-100 vh-100  d-flex flex-column align-items-center"
          style="background-image: url({{ MEDIA_URL }}'/media/images/create_tenant.jpeg');background-position:50% 50%;background-size:cover">
         <div class="container mt-7">
             <div class="card creation-card">
@@ -39,7 +39,7 @@
 
                 <!-- contenu -->
                 <div id="creation-content-parts" class="creation-tabs-content ps-3 pe-3">
-                    {% include 'htmx/parts/tenant_areas.html' %}
+                    {% include 'htmx/forms/tenant_areas.html' %}
                 </div> <!-- fin contenu -->
             </div> <!-- fin card -->
         </div>

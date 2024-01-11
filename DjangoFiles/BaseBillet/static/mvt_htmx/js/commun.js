@@ -1,3 +1,5 @@
+// window.xxxx est utilisé pour rendre acessible les variables et fonctions à htmx en rendu partiel.
+
 // Le code commun à plusieurs éléments est mis si-dessous
 const listInputsToFilled = ['number', 'email', 'text', 'tel']
 const listNumber = ['number', 'tel']
@@ -8,12 +10,15 @@ let stepEvalRange, currentRangeStart
 // create tenant
 let etape
 
-function showModal(id) {
+window.showModal = function (id) {
 	bootstrap.Modal.getOrCreateInstance(document.querySelector(id)).show()
 }
 
-function hideModal(id) {
+window.hideModal = function (id) {
 	bootstrap.Modal.getOrCreateInstance(document.querySelector(id)).hide()
+	window.setTimeout(() => {
+		document.querySelector('.modal-backdrop').remove()
+	}, 400)
 }
 
 window['htmlEntities'] = function(str) {
@@ -289,9 +294,10 @@ document.body.addEventListener('click', (evt) => {
 })
 
 // --- mise en place des écoutes(lancement de codes en fonctions d'un message du DOM ---
+/*
 // codes ou méthodes lancées une fois un élément remplacé par le contenu d'une requête
 document.body.addEventListener('htmx:afterSettle', (evt) => {
-	// console.log('-> htmx:afterSwap evt.target.id =', evt.target.id);
+	console.log('-> htmx:afterSwap evt.target.id =', evt.target.id);
 
 	if (evt.target.id === 'tibillet-membership-modal') {
 		showModal('#tibillet-membership-modal')
@@ -302,6 +308,7 @@ document.body.addEventListener('htmx:afterSettle', (evt) => {
 		showModal('#tibillet-modal-message')
 	}
 })
+*/
 
 // affiche le spinner
 document.body.addEventListener('htmx:beforeRequest', function() {
@@ -343,7 +350,7 @@ document.addEventListener('DOMContentLoaded', () => {
 	// corrige material kit 2 "is-filled"
 	setAllInputFilled()
 })
-
+/*
 document.addEventListener('submit', (event) => {
 	event.preventDefault()
 	event.stopPropagation()
@@ -353,3 +360,4 @@ document.addEventListener('submit', (event) => {
 		blockSubmitFormIsNoValidate(event, event.target.id)
 	}
 })
+*/
