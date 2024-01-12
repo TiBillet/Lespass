@@ -259,27 +259,12 @@ def validate_event(request):
 
         # validé / pas validé retourner un message
         dev_validation = True
-        context = {}
 
         if dev_validation == False:
-            context = {
-                "modal_message": {
-                    "type": "warning",
-                    "title": "Information",
-                    "content": "Le message d'erreur !"
-                }
-            }
+            messages.add_message(request, messages.WARNING, "Le message d'erreur !")
 
         if dev_validation == True:
-            context = {
-                "modal_message": {
-                    "type": "success",
-                    "title": "Information",
-                    "content": "Réservation validée !"
-                }
-            }
-
-        return render(request, "htmx/components/modal_message.html", context=context)
+            messages.add_message(request, messages.SUCCESS, "Réservation validée !")
 
     return redirect('home')
 

@@ -14,8 +14,7 @@
         {% endif %}
 
         {% if event.products.all.count > 0 %}
-                <form id="event-form" hx-post="/validate_event/" hx-target="#tibillet-modal-message" hx-swap="outerHTML" novalidate
-                    hx-on:htmx:before-request="validateForm(event); validateConfirmEmail()" hx-on:htmx:after-request="eventActionAfterSwap()">
+            <form id="event-form" action="/validate_event/" method="POST" novalidate>
                 {% csrf_token %}
 
                 <!-- slug -->
@@ -37,8 +36,8 @@
                 {% include "htmx/components/cardGifts.html" %}
 
                 <div class="d-flex flex-row">
-                    <button type="submit" class="btn bg-gradient-info btn-lg mt-4 mb-2 w-75 mx-auto" role="button"
-                            aria-label="Valider la réservation">
+                    <button type="button" class="btn bg-gradient-info btn-lg mt-4 mb-2 w-75 mx-auto" role="button"
+                            aria-label="Valider la réservation" onclick="validateEventForm()">
                         Valider la réservation
                     </button>
                 </div>
@@ -46,12 +45,13 @@
         {% endif %}
     </div>
     <script>
-        function eventActionAfterSwap() {
-            // afficher le modal de retour de requête
-            window.setTimeout(() => {
-                // wait swap finish
-                showModal('#tibillet-modal-message')
-            }, 400)
+        function validateEventForm() {
+            const form = document.querySelector('#event-form')
+            validateConfirmEmail()
+            validateForm(null, form)
+            if (form.checkValidity() !== false) {
+                form.submit()
+            }
         }
 
         function validateConfirmEmail() {
@@ -67,10 +67,12 @@
                     // scroll et focus le input confirme email
                     confirmEmail.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'center' })
                     confirmEmail.focus()
+                    confirmEmail.setCustomValidity('Email non identique.')
                 } else {
                     // met le input confirme email en mode valide
                     confirmEmail.parentNode.classList.remove('is-invalid')
                     confirmEmail.parentNode.classList.add('is-valid')
+                    confirmEmail.setCustomValidity('')
                 }
             }
         }

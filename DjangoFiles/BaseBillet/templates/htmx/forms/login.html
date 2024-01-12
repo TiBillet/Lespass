@@ -51,12 +51,10 @@
 </div>
 <script>
     function validateLoginEmail(evt) {
-        console.log('-> validateLoginEmail !')
         // const error = 0
         const input = document.querySelector('#login-email')
         let value = input.value
         const re = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$/
-        console.log('test =', value.match(re))
         if (value.match(re) === null) {
             evt.preventDefault()
 		    evt.stopPropagation()

@@ -4,7 +4,7 @@
             <h3 class="font-weight-bolder text-info text-gradient align-self-start" role="heading"
                 aria-label="Titre de l'adhésion - {{ adhesion.name }}">{{ adhesion.name }}</h3>
             <button class="btn btn-primary mb-0 test-card-billet-bt-add" type="button"
-                    onclick="unsubscribeAdhesionRequired('{{ price.uuid }}')"
+                    onclick="unsubscribeAdhesionRequired('{{ price.uuid }}', '{{ product_nominative }}')"
                     role="button" aria-label="Supprimer adhésion associative">
                 <i class="fa fa-trash" aria-hidden="true"></i>
                 <span class="ms-1">Supprimer</span>
@@ -52,11 +52,8 @@
     <div class="input-group mb-2 has-validation">
         {% for price in adhesion.prices.all %}
             <div class="col form-check mb-2">
-                <input v-trigger="{index,nbPrices: product.prices.length}"
-                       name="tibillet-adhesion-required-terms-{{ adhesion.uuid }}"
-                       id="uuidcardmembershippriceradio{{ forloop.counter0 }}" type="radio"
-                       value="{{ price.uuid }}" class="form-check-input input-adesion-modal-price"
-                       role="radio" aria-label="Pris abonnement - {{ price.name }}" required>
+                <input name="tibillet-adhesion-required-price-{{ adhesion.uuid }}" id="uuidcardmembershippriceradio{{ forloop.counter0 }}" type="radio"
+                    value="{{ price.uuid }}" class="form-check-input input-adesion-modal-price" role="radio" aria-label="Pris abonnement - {{ price.name }}" required>
                 <label class="form-check-label text-dark" for="uuidcardmembershippriceradio{{ forloop.counter0 }}">
                     {{ price.name }} - {{ price.prix }}€
                 </label>
@@ -73,15 +70,16 @@
     <div class="tibillet-group-customer position-relative d-flex flex-row justify-content-between align-items-center mt-5">
         <div class="input-group input-group-dynamic mb-4 is-filled" style="width: 44%;">
             <label class="form-label">Nom ou Structure</label>
-            <input name="tibillet-adhesion-required-first-name-{{ adhesion.uuid }}" type="text" class="form-control">
+            <input name="tibillet-adhesion-required-first-name-{{ adhesion.uuid }}" type="text" class="form-control" required>
         </div>
         <div class="input-group input-group-dynamic mb-4 is-filled" style="width: 44%;">
             <label class="form-label">Prénom</label>
-            <input name="tibillet-adhesion-required-last-name-{{ adhesion.uuid }}" type="text" class="form-control">
+            <input name="tibillet-adhesion-required-last-name-{{ adhesion.uuid }}" type="text" class="form-control" required>
         </div>
+        <!--
         <div class="invalid-feedback position-absolute bottom-0" role="heading" aria-label="nom / prénom manquant(s)">
             Donnée(s) manquante(s).
-        </div>
+        </div> -->
     </div>
 
     <!-- code postal / téléphone -->
@@ -89,16 +87,17 @@
         <div class="input-group input-group-dynamic mb-4 is-filled" style="width: 44%;">
             <label class="form-label">Code postal</label>
             <input name="tibillet-adhesion-required-postal-code-{{ adhesion.uuid }}" type="number" class="form-control"
-                   onkeyup="formatNumberParentNode2(event, 5)">
+                   onkeyup="formatNumberParentNode2(event, 5)" required>
         </div>
         <div class="input-group input-group-dynamic mb-4 is-filled" style="width: 44%;">
             <label class="form-label">Fixe ou mobile</label>
             <input name="tibillet-adhesion-required-phone-{{ adhesion.uuid }}" type="tel" class="form-control"
-                   onkeyup="formatNumberParentNode2(event, 10)">
+                   onkeyup="formatNumberParentNode2(event, 10)" required>
         </div>
+        <!--
         <div class="invalid-feedback position-absolute bottom-0" role="heading"
              aria-label="code postal / numéro de téléphone manquant(s)">Donnée(s) manquante(s).
-        </div>
+        </div> -->
     </div>
 
     <!-- options radio -->
@@ -151,17 +150,21 @@
     {% endif %}
 </fieldset>
 <script>
-  /**
-   * Enlève l'ahésion obligatoire et retourne au block d'affichage du prix initial,
-   * nom du prix et tarif en noir + le bouton "je m'abonne"
-   * @param {string} priceUuid - Uuid du prix
-   */
-  function unsubscribeAdhesionRequired(priceUuid) {
-  // enlever l'adhésion obligatoire
-  document.querySelector(`#tibillet-adhesion-required-${priceUuid}`).remove()
-  // enlever le "block prix+ ajouter une réservation"
-  document.querySelector(`#tibillet-price-with-adhesion-required-${priceUuid}`).remove()
-  // réafficher le "block prix + je m'abonne"
-  document.querySelector(`#tibillet-activation-price-${priceUuid}`).style.setProperty('display', 'flex', 'important')
-}
+    /**
+    * Enlève l'ahésion obligatoire et retourne au block d'affichage du prix initial,
+    * nom du prix et tarif en noir + le bouton "je m'abonne"
+    * @param {string} priceUuid - Uuid du prix
+    */
+    function unsubscribeAdhesionRequired(priceUuid, productNominative) {
+        // enlever l'adhésion obligatoire
+        document.querySelector(`#tibillet-adhesion-required-${priceUuid}`).remove()
+        // enlever le "block prix+ ajouter une réservation"
+        document.querySelector(`#tibillet-price-with-adhesion-required-${priceUuid}`).remove()
+        // enlever les réservation noinative ajouter
+        if (productNominative !== 'False') {
+            document.querySelector(`#tibillet-container-customers-${priceUuid}`).remove()
+        }
+        // réafficher le "block prix + je m'abonne"
+        document.querySelector(`#tibillet-activation-price-${priceUuid}`).style.setProperty('display', 'flex', 'important')
+    }
 </script>

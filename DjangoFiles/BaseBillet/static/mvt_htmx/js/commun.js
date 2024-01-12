@@ -80,7 +80,7 @@ window.getMin = function(value1, value2) {
  * @param {number} value1 - Pour action=plus: Nombre maxi de produit, Pour action=moins: nombre minimum
  * @param {number} value2 - Nombre maxi de produit par utilisateur
  */
-function inputNumberNomNominatif(id, action, value1, value2) {
+window.inputNumberNomNominatif = function(id, action, value1, value2) {
 	const element = document.querySelector('#' + id)
 	let number = parseInt(element.value)
 	if (action === 'over') {
@@ -141,16 +141,18 @@ window.inputNumberGroup = function(action, inputId) {
 	input.value = valueInput
 }
 
-function formatNumberParentNode2(event, limit) {
+window.formatNumberParentNode2 = function (event, limit) {
 	const element = event.target
 	// obligation de changer le type pour ce code, si non "replace" ne fait pas "correctement" son travail
 	element.setAttribute('type', 'text')
 	let initValue = element.value
 	element.value = initValue.replace(/[^\d+]/g, '').substring(0, limit)
 	if (element.value.length < limit) {
-		element.parentNode.parentNode.querySelector('.invalid-feedback').style.display = 'block'
+		element.parentNode.classList.remove('is-valid')
+		element.parentNode.classList.add('is-invalid')
 	} else {
-		element.parentNode.parentNode.querySelector('.invalid-feedback').style.display = 'none'
+		element.parentNode.classList.remove('is-invalid')
+		element.parentNode.classList.add('is-valid')
 	}
 }
 
@@ -244,14 +246,22 @@ function testInput(event) {
 }
 
 
-window.validateForm = function (evt) {
-	const form = evt.target
+window.validateForm = function (evt, elementForm) {
+	let form 
+	if (elementForm !== undefined) {
+		form = elementForm
+	} else {
+		form = evt.target
+	}
+	
 	// console.log("-> evt.target.checkValidity() =", form.checkValidity())
 	if (form.checkValidity() === false) {
 		// efface le spinner
 		document.querySelector('#tibillet-spinner').style.display = 'none'
-		evt.preventDefault()
-		evt.stopPropagation()
+		if (evt !== undefined && evt !== null) {
+			evt.preventDefault()
+			evt.stopPropagation()
+		}
 		// élément invalid
 		const invalidElement = form.querySelector('input:invalid')
 		// éffacer les anciens/autres éléments invalident

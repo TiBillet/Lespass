@@ -15,27 +15,29 @@
         </button>
     </div>
 </template>
-<template id="tibillet-non-nominative-price">
-    <div class="d-flex flex-row justify-content-center align-items-center" style="min-width: 200px;max-width: 200px;">
-        <button class="btn btn-icon btn-2 btn-primary btn-sm mb-0 me-2" type="button"
-        onclick="inputNumberNomNominatif('tibillet-price-non-nominatif-{{ price.uuid }}','under',{{ min }})">
-            <span class="btn-inner--icon">
-                <i class="fa fa-minus" aria-hidden="true"></i>
-            </span>
-        </button>
+<template id="tibillet-non-nominative-template">
+    <div class="d-flex flex-row justify-content-between align-items-center w-100 mb-3" role="group" aria-label="groupe interaction tarif xxxxx">
+        <!-- nom tarif -->
+        <h4 class="d-flex flex-row  align-items-center mb-0 font-weight-bolder text-info text-gradient" role="heading" aria-label="{{ price.name }}"></h4>
+        <!-- produit non nominatif -->
+        <div class="d-flex flex-row justify-content-center align-items-center" style="min-width: 200px;max-width: 200px;">
+            <button class="btn btn-icon btn-2 btn-primary btn-sm mb-0 me-2" type="button">
+                <span class="btn-inner--icon">
+                    <i class="fa fa-minus" aria-hidden="true"></i>
+                </span>
+            </button>
 
-        <div class="input-group input-group-dynamic my-3">
-            <label class="form-label" for="tibillet-price-non-nominatif-{{ price.uuid }}">Quantité</label>
-            <input type="number" class="form-control" id="tibillet-price-non-nominatif-{{ price.uuid }}" value="0" name="tibillet-price-non-nominatif-{{ price.uuid }}"
-                   style="min-width: 50px;" required>
+            <div class="input-group input-group-dynamic my-3 is-filled">
+                <label class="form-label">Quantité</label>
+                <input type="number" class="form-control" value="0" style="min-width: 50px;" required>
+            </div>
+
+            <button class="btn btn-icon btn-2 btn-primary btn-sm mb-0 ms-2" type="button">
+                <span class="btn-inner--icon">
+                    <i class="fa fa-plus" aria-hidden="true"></i>
+                </span>
+            </button>
         </div>
-
-        <button class="btn btn-icon btn-2 btn-primary btn-sm mb-0 ms-2" type="button"
-        onclick="inputNumberNomNominatif('tibillet-price-non-nominatif-{{ price.uuid }}','over',{{ price.stock }},{{ price.max_per_user }})">
-            <span class="btn-inner--icon">
-                <i class="fa fa-plus" aria-hidden="true"></i>
-            </span>
-        </button>
     </div>
 </template>
 
@@ -83,7 +85,7 @@
                             {% if  profile.membership|is_membership:price.adhesion_obligatoire == False %}
                                 <!-- je ne suis pas adhérant -->
                                 <div id="tibillet-activation-price-{{ price.uuid }}"
-                                     class="d-flex flex-row justify-content-between align-items-center mb-3"
+                                     class="d-flex flex-row justify-content-between align-items-center  w-100 mb-3"
                                      role="group" aria-label="groupe interaction tarif {{ price.name }}">
                                     <!-- nom tarif -->
                                     <h4 class="font-weight-bolder text-dark text-gradient" role="heading"
@@ -97,7 +99,7 @@
                                         <span class="ms-1">Je m'abonne</span>
                                     </button>
                                     <template id="tibillet-template-adhesion-required-{{ price.uuid }}">
-                                        {% include 'htmx/components/cardMembership.html' with adhesion=price.adhesion_obligatoire %}
+                                        {% include 'htmx/components/cardMembership.html' with adhesion=price.adhesion_obligatoire product_nominative=product.nominative %}
                                     </template>
                                 </div>
                             {% endif %}
@@ -106,7 +108,7 @@
                     {#                        {% if price.adhesion_obligatoire == None or price.adhesion_obligatoire in valid_memberships %}#}
                     {% if price.adhesion_obligatoire == None or profile.membership|is_membership:price.adhesion_obligatoire == True %}
                         <!-- pas d'adhésion obligatoire ou utilisateur possède l'adhésion -->
-                        <div class="d-flex flex-row justify-content-between align-items-center mb-3" role="group"
+                        <div class="d-flex flex-row justify-content-between align-items-center w-100 mb-3" role="group"
                              aria-label="groupe interaction tarif {{ price.name }}">
                             <!-- nom tarif -->
                             <h4 class="d-flex flex-row  align-items-center mb-0 font-weight-bolder text-info text-gradient"
@@ -214,16 +216,15 @@
    * @param {number} priceMaxPerUser - Nombre maxi de prix pouvant être réservé par client
    */
   function join(nominative, priceUuid, priceName, pricePrix, priceStock, priceMaxPerUser) {
-    console.log('nominative =',nominative, '  --  priceUuid =', priceUuid, '  --  priceName =', priceName, '  -- pricePrix =', pricePrix, '  --  priceStock =', priceStock, '  --  priceMaxPerUser =', priceMaxPerUser)
+    // console.log('nominative =',nominative, '  --  priceUuid =', priceUuid, '  --  priceName =', priceName, '  -- pricePrix =', pricePrix, '  --  priceStock =', priceStock, '  --  priceMaxPerUser =', priceMaxPerUser)
     // le navigateur gère <template>
     if ("content" in document.createElement("template")) {
         const cible = document.querySelector('#tibillet-activation-price-' + priceUuid)
-
         // la réservation est nominative
         if (nominative !== 'False') {
             // 1- remplacer "block je m'abonne" par "block price, ajouter une réservation"
             const templatePrice = document.querySelector('#tibillet-nominative-price')
-            let clone = document.importNode(templatePrice.content, true);
+            let clone = document.importNode(templatePrice.content, true)
             // adapter le template
             let parent = clone.querySelector('div[role="group"]')
             let button = parent.querySelector('button')
@@ -237,23 +238,44 @@
             button.setAttribute('data-index', 0)
             button.setAttribute('onclick', `addReservation(this,'tibillet-customer','${priceUuid}','${priceName}',${priceStock},${priceMaxPerUser})`)
 
-            
-            // effacer le bloc "nom:prix + bouton je m'abonne"
-            cible.style.setProperty('display', 'none', 'important')
             // ajouter un "block prix"
             cible.before(clone)
             // ajout du container customers
             cible.insertAdjacentHTML('afterend', `<div id="tibillet-container-customers-${priceUuid}" class="d-flex flex-column">`)
-
-            cibleAdhesion.append(cloneAdhesion)
         } else {  // réservation non nominative
-            console.log('-> réservation non nominative !')
+            // console.log('-> réservation non nominative !')
+            const templateNonNominativePrice = document.querySelector('#tibillet-non-nominative-template')
+            let cloneNonNominativeblockPrice = document.importNode(templateNonNominativePrice.content, true)
+            // adapter le template
+            let parent = cloneNonNominativeblockPrice.querySelector('div[role="group"]')
+            let buttonUnder = parent.querySelectorAll('button')[0]
+            let buttonOver = parent.querySelectorAll('button')[1]
+            let input = parent.querySelector('input')
+            let label = parent.querySelector('label')
+            parent.setAttribute('id', `tibillet-price-with-adhesion-required-${priceUuid}`)
+            let h4 = parent.querySelector('h4')
+            h4.setAttribute('aria-label', priceName)
+            h4.innerText = `${priceName.toLowerCase()} : ${pricePrix} €`
+            // action - 
+            buttonUnder.setAttribute('onclick', `inputNumberNomNominatif('tibillet-price-non-nominatif-${priceUuid}','under', 0)`)
+            // action +
+            buttonOver.setAttribute('onclick', `inputNumberNomNominatif('tibillet-price-non-nominatif-${priceUuid}','over',${priceStock},${priceMaxPerUser})`)
+            // modif input
+            input.setAttribute('id', 'tibillet-price-non-nominatif-' + priceUuid)
+            input.setAttribute('name', 'tibillet-price-non-nominatif-' + priceUuid)
+            // modif label
+            label.setAttribute('for', 'tibillet-price-non-nominatif-' + priceUuid)
+            cible.before(cloneNonNominativeblockPrice)
         }
-        
+
+        // effacer le bloc "nom:prix + bouton je m'abonne"
+        cible.style.setProperty('display', 'none', 'important')
+
         // 2 - ajouter l'adhésion
         const templateAdhesion = document.querySelector(`#tibillet-template-adhesion-required-${priceUuid}`)
         let cloneAdhesion = document.importNode(templateAdhesion.content, true);
         const cibleAdhesion = document.querySelector(`#tibillet-adhesion-container-${priceUuid}`)
+        cibleAdhesion.append(cloneAdhesion)
     } else {
       // le navigateur ne gère pas <template>
       console.log('Le navigateur ne gère pas le tag "<template>" !')
