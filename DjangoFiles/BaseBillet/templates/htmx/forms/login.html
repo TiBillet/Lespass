@@ -12,7 +12,9 @@
                 <div>
                     <h4 class="font-weight-bolder text-info text-center">Avec votre e-mail</h4>
                 </div>
-                <form id="login-form" action="/connexion/" method="POST" class="text-left mb-7" novalidate>
+                <!-- <form id="login-form" action="/connexion/" method="POST" class="text-left mb-7" novalidate> -->
+                    <form id="event-form" hx-post="/connexion/" hx-target="#tibillet-modal-message" hx-swap="outerHTML" novalidate 
+                        hx-on:htmx:before-request="validateLoginEmail(event)" hx-on:htmx:after-request="loginActionAfterSwap('tibillet-login-modal')">
                     {% csrf_token %}
                     <!-- email -->
                     <div class="input-group input-group-dynamic mb-4">
@@ -47,3 +49,39 @@
         </div>
     </div>
 </div>
+<script>
+    function validateLoginEmail(evt) {
+        console.log('-> validateLoginEmail !')
+        // const error = 0
+        const input = document.querySelector('#login-email')
+        let value = input.value
+        const re = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$/
+        console.log('test =', value.match(re))
+        if (value.match(re) === null) {
+            evt.preventDefault()
+		    evt.stopPropagation()
+            // efface le spinner
+		    document.querySelector('#tibillet-spinner').style.display = 'none'
+            // input en mode invalid
+            input.parentNode.classList.remove('is-valid')
+            input.parentNode.classList.add('is-invalid')
+            // scroll et focus le input confirme email
+            input.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'center' })
+            input.focus()
+        } else {
+            input.parentNode.classList.remove('is-invalid')
+            input.parentNode.classList.add('is-valid')
+        }
+    }
+
+    function loginActionAfterSwap(modalLoginId) {
+         // effacer le modal login une fois la requête finie
+         hideModal('#' + modalLoginId)
+        // afficher le modal de retour de requête
+        window.setTimeout(() => {
+            // wait swap finish
+            showModal('#tibillet-modal-message')
+        }, 400)
+    }
+
+</script>

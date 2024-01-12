@@ -15,6 +15,29 @@
         </button>
     </div>
 </template>
+<template id="tibillet-non-nominative-price">
+    <div class="d-flex flex-row justify-content-center align-items-center" style="min-width: 200px;max-width: 200px;">
+        <button class="btn btn-icon btn-2 btn-primary btn-sm mb-0 me-2" type="button"
+        onclick="inputNumberNomNominatif('tibillet-price-non-nominatif-{{ price.uuid }}','under',{{ min }})">
+            <span class="btn-inner--icon">
+                <i class="fa fa-minus" aria-hidden="true"></i>
+            </span>
+        </button>
+
+        <div class="input-group input-group-dynamic my-3">
+            <label class="form-label" for="tibillet-price-non-nominatif-{{ price.uuid }}">Quantité</label>
+            <input type="number" class="form-control" id="tibillet-price-non-nominatif-{{ price.uuid }}" value="0" name="tibillet-price-non-nominatif-{{ price.uuid }}"
+                   style="min-width: 50px;" required>
+        </div>
+
+        <button class="btn btn-icon btn-2 btn-primary btn-sm mb-0 ms-2" type="button"
+        onclick="inputNumberNomNominatif('tibillet-price-non-nominatif-{{ price.uuid }}','over',{{ price.stock }},{{ price.max_per_user }})">
+            <span class="btn-inner--icon">
+                <i class="fa fa-plus" aria-hidden="true"></i>
+            </span>
+        </button>
+    </div>
+</template>
 
 <div class="container">
     {% for product in products.all %}
@@ -69,7 +92,7 @@
                                     </h4>
                                     <button class="btn btn-primary mb-0" type="button" role="button"
                                             aria-label="Ajouter 'TODO: nom adhésion'"
-                                            onclick="join('{{ price.uuid }}', '{{ price.name }}', '{{ price.prix }}',{{ price.stock }},{{ price.max_per_user }})">
+                                            onclick="join('{{ product.nominative }}', '{{ price.uuid }}', '{{ price.name }}', '{{ price.prix }}',{{ price.stock }},{{ price.max_per_user }})">
                                         <i class="fa fa-plus" aria-hidden="true"></i>
                                         <span class="ms-1">Je m'abonne</span>
                                     </button>
@@ -190,40 +213,47 @@
    * @param {number} priceStock - Nombre maxi de prix pouvant être réservé
    * @param {number} priceMaxPerUser - Nombre maxi de prix pouvant être réservé par client
    */
-  function join(priceUuid, priceName, pricePrix, priceStock, priceMaxPerUser) {
-    {#console.log('priceUuid =', priceUuid, '  --  priceName =', priceName, '  -- pricePrix =', pricePrix, '  --  priceStock =', priceStock, '  --  priceMaxPerUser =', priceMaxPerUser)#}
+  function join(nominative, priceUuid, priceName, pricePrix, priceStock, priceMaxPerUser) {
+    console.log('nominative =',nominative, '  --  priceUuid =', priceUuid, '  --  priceName =', priceName, '  -- pricePrix =', pricePrix, '  --  priceStock =', priceStock, '  --  priceMaxPerUser =', priceMaxPerUser)
+    // le navigateur gère <template>
     if ("content" in document.createElement("template")) {
-      // le navigateur gère <template>
-      // 1- remplacer "block je m'abonne" par "block price, ajouter une réservation"
-      const templatePrice = document.querySelector('#tibillet-nominative-price')
-      let clone = document.importNode(templatePrice.content, true);
-      // adapter le template
-      let parent = clone.querySelector('div[role="group"]')
-      let button = parent.querySelector('button')
-      let h4 = parent.querySelector('h4')
-      parent.setAttribute('id', `tibillet-price-with-adhesion-required-${priceUuid}`)
-      parent.setAttribute('aria-label', `groupe interaction tarif ${priceName}`)
-      h4.setAttribute('aria-label', priceName)
-      h4.innerText = `${priceName.toLowerCase()} : ${pricePrix} €`
-      button.setAttribute('id', `tibillet-add-reservation-${priceUuid}`)
-      button.setAttribute('aria-label', `Ajouter une réservation - ${priceName}`)
-      button.setAttribute('data-index', 0)
-      button.setAttribute('onclick', `addReservation(this,'tibillet-customer','${priceUuid}','${priceName}',${priceStock},${priceMaxPerUser})`)
+        const cible = document.querySelector('#tibillet-activation-price-' + priceUuid)
 
-      const cible = document.querySelector('#tibillet-activation-price-' + priceUuid)
-      // effacer le bloc "nom:prix + bouton je m'abonne"
-      cible.style.setProperty('display', 'none', 'important')
-      // ajouter un "block prix"
-      cible.before(clone)
-      // ajout du container customers
-      cible.insertAdjacentHTML('afterend', `<div id="tibillet-container-customers-${priceUuid}" class="d-flex flex-column">`)
+        // la réservation est nominative
+        if (nominative !== 'False') {
+            // 1- remplacer "block je m'abonne" par "block price, ajouter une réservation"
+            const templatePrice = document.querySelector('#tibillet-nominative-price')
+            let clone = document.importNode(templatePrice.content, true);
+            // adapter le template
+            let parent = clone.querySelector('div[role="group"]')
+            let button = parent.querySelector('button')
+            let h4 = parent.querySelector('h4')
+            parent.setAttribute('id', `tibillet-price-with-adhesion-required-${priceUuid}`)
+            parent.setAttribute('aria-label', `groupe interaction tarif ${priceName}`)
+            h4.setAttribute('aria-label', priceName)
+            h4.innerText = `${priceName.toLowerCase()} : ${pricePrix} €`
+            button.setAttribute('id', `tibillet-add-reservation-${priceUuid}`)
+            button.setAttribute('aria-label', `Ajouter une réservation - ${priceName}`)
+            button.setAttribute('data-index', 0)
+            button.setAttribute('onclick', `addReservation(this,'tibillet-customer','${priceUuid}','${priceName}',${priceStock},${priceMaxPerUser})`)
 
-      // 2 - ajouter l'adhésion
-      const templateAdhesion = document.querySelector(`#tibillet-template-adhesion-required-${priceUuid}`)
-      let cloneAdhesion = document.importNode(templateAdhesion.content, true);
-      const cibleAdhesion = document.querySelector(`#tibillet-adhesion-container-${priceUuid}`)
+            
+            // effacer le bloc "nom:prix + bouton je m'abonne"
+            cible.style.setProperty('display', 'none', 'important')
+            // ajouter un "block prix"
+            cible.before(clone)
+            // ajout du container customers
+            cible.insertAdjacentHTML('afterend', `<div id="tibillet-container-customers-${priceUuid}" class="d-flex flex-column">`)
 
-      cibleAdhesion.append(cloneAdhesion)
+            cibleAdhesion.append(cloneAdhesion)
+        } else {  // réservation non nominative
+            console.log('-> réservation non nominative !')
+        }
+        
+        // 2 - ajouter l'adhésion
+        const templateAdhesion = document.querySelector(`#tibillet-template-adhesion-required-${priceUuid}`)
+        let cloneAdhesion = document.importNode(templateAdhesion.content, true);
+        const cibleAdhesion = document.querySelector(`#tibillet-adhesion-container-${priceUuid}`)
     } else {
       // le navigateur ne gère pas <template>
       console.log('Le navigateur ne gère pas le tag "<template>" !')

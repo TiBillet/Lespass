@@ -18,7 +18,7 @@ window.hideModal = function (id) {
 	bootstrap.Modal.getOrCreateInstance(document.querySelector(id)).hide()
 	window.setTimeout(() => {
 		document.querySelector('.modal-backdrop').remove()
-	}, 400)
+	}, 700)
 }
 
 window['htmlEntities'] = function(str) {
@@ -58,7 +58,7 @@ function setAllInputFilled() {
  * @param {number} value2 - Valeur 2
  * @returns {number}
  */
-function getMin(value1, value2) {
+window.getMin = function(value1, value2) {
 	let min = 0
 	if (value1 === value2) {
 		min = value1
@@ -103,7 +103,7 @@ function inputNumberNomNominatif(id, action, value1, value2) {
  * @param {string} action - under=moins ou over=plus
  * @param {string} inputId - Dom, id (sans le #) de l'input contenant le nombre
  */
-function inputNumberGroup(action, inputId) {
+window.inputNumberGroup = function(action, inputId) {
 	const input = document.querySelector('#' + inputId)
 	let min = input.getAttribute('min')
 	if (min !== null) {
@@ -154,7 +154,7 @@ function formatNumberParentNode2(event, limit) {
 	}
 }
 
-function validateEmail(evt) {
+window.validateEmail = function(evt) {
 	let value = evt.target.value
 	const re = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$/
 	if (value.match(re) === null) {
@@ -173,7 +173,7 @@ function validateEmail(evt) {
  * Attribut DOM/variable js - max = gère la valeur maxi
  * @param {object} event - èvènement du input
  */
-function formatNumber(event) {
+window.formatNumber = function(event) {
 	// console.log('-> formatNumber !')
 	const element = event.target
 	// limite le nombre de chiffre
@@ -243,13 +243,15 @@ function testInput(event) {
 	}
 }
 
-// manage validation form, Block le "Post" si non valide
-function blockSubmitFormIsNoValidate(event, id) {
-	// console.log('blockSubmitFormIsNoValidate, id=', id)
-	const form = document.querySelector('#' + id)
 
-	// console.log('-> blockSubmitFormIsNoValidate')
+window.validateForm = function (evt) {
+	const form = evt.target
+	// console.log("-> evt.target.checkValidity() =", form.checkValidity())
 	if (form.checkValidity() === false) {
+		// efface le spinner
+		document.querySelector('#tibillet-spinner').style.display = 'none'
+		evt.preventDefault()
+		evt.stopPropagation()
 		// élément invalid
 		const invalidElement = form.querySelector('input:invalid')
 		// éffacer les anciens/autres éléments invalident
@@ -268,8 +270,6 @@ function blockSubmitFormIsNoValidate(event, id) {
 			const label = invalidElement.parentNode.querySelector('label')
 			label.classList.add('track')
 		}
-	} else {
-		form.submit()
 	}
 }
 
@@ -292,23 +292,6 @@ document.body.addEventListener('click', (evt) => {
 		}
 	}
 })
-
-// --- mise en place des écoutes(lancement de codes en fonctions d'un message du DOM ---
-/*
-// codes ou méthodes lancées une fois un élément remplacé par le contenu d'une requête
-document.body.addEventListener('htmx:afterSettle', (evt) => {
-	console.log('-> htmx:afterSwap evt.target.id =', evt.target.id);
-
-	if (evt.target.id === 'tibillet-membership-modal') {
-		showModal('#tibillet-membership-modal')
-	}
-
-	if (evt.target.id === 'tibillet-modal-message') {
-		hideModal('#tibillet-login-modal')
-		showModal('#tibillet-modal-message')
-	}
-})
-*/
 
 // affiche le spinner
 document.body.addEventListener('htmx:beforeRequest', function() {
@@ -350,14 +333,3 @@ document.addEventListener('DOMContentLoaded', () => {
 	// corrige material kit 2 "is-filled"
 	setAllInputFilled()
 })
-/*
-document.addEventListener('submit', (event) => {
-	event.preventDefault()
-	event.stopPropagation()
-	const id = event.target.id
-	console.log('-> écoute submit, id=', id)
-	if (id !== '') {
-		blockSubmitFormIsNoValidate(event, event.target.id)
-	}
-})
-*/

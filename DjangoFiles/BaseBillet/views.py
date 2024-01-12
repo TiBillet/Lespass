@@ -126,8 +126,9 @@ def test_jinja(request):
     }
     return TemplateResponse(request, "htmx/views/test_jinja.html", context=context)
 
-
+# TODO: passer cette méthode en rendu partiel et la requete en htmx
 def deconnexion(request):
+    # un logout peut-il mal se passer ?
     logout(request)
     messages.add_message(request, messages.SUCCESS, "Déconnexion")
     return redirect('home')
@@ -140,15 +141,33 @@ def connexion(request):
             email = request.POST.get('login-email')
             # Création de l'user et envoie du mail de validation
             user = get_or_create_user(email=email, send_mail=True)
+            # context = {}
 
+            '''
             if settings.DEBUG:
                 login(request, user)
-                messages.add_message(request, messages.DEBUG, "Debug : login auto, Connexion ok.")
-                return redirect('home')
+                #messages.add_message(request, messages.DEBUG, "Debug : login auto, Connexion ok.")
+                #return redirect('home')
+                context = {
+                    "modal_message": {
+                        "type": "warning",
+                        "title": "Information",
+                        "content": "Le message d'erreur !"
+                    }
+                }
+                return render(request, "htmx/components/modal_message.html", context=context)
+            '''
 
             # Le mail a été ernvoyé par le get__or_create, on redirige vers la page d'accueil et on leur demande de valider leur email
-            messages.add_message(request, messages.SUCCESS,
-                                 "Pour acceder à votre espace et réservations, merci de valider\n votre adresse email. Pensez à regarder dans les spams !")
+            #messages.add_message(request, messages.SUCCESS, "Pour acceder à votre espace et réservations, merci de valider\n votre adresse email. Pensez à regarder dans les spams !")
+            context = {
+                "modal_message": {
+                    "type": "success",
+                    "title": "Information",
+                    "content": "Pour acceder à votre espace et réservations, merci de valider\n votre adresse email. Pensez à regarder dans les spams !"
+                }
+            }
+            return render(request, "htmx/components/modal_message.html", context=context)
 
         # Exception WIDE = C'EST LE MAL.
         # Une exception large doit retourner une erreur serveur, pas un message client
@@ -230,6 +249,39 @@ def event(request: HttpRequest, slug) -> HttpResponse:
     }
 
     return render(request, "htmx/views/event.html", context=context)
+
+def validate_event(request):
+    if request.method == 'POST':
+        print("-> validate_event, méthode POST !")
+        # range-start-index - range-end-index, date-index 
+        data = dict(request.POST.lists())
+        print(f"data = {data}")
+
+        # validé / pas validé retourner un message
+        dev_validation = True
+        context = {}
+
+        if dev_validation == False:
+            context = {
+                "modal_message": {
+                    "type": "warning",
+                    "title": "Information",
+                    "content": "Le message d'erreur !"
+                }
+            }
+
+        if dev_validation == True:
+            context = {
+                "modal_message": {
+                    "type": "success",
+                    "title": "Information",
+                    "content": "Réservation validée !"
+                }
+            }
+
+        return render(request, "htmx/components/modal_message.html", context=context)
+
+    return redirect('home')
 
 '''
 class membership_form(APIView):

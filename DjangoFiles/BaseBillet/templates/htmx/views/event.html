@@ -14,7 +14,13 @@
         {% endif %}
 
         {% if event.products.all.count > 0 %}
-            <form id="event-form" method="post" action="/api/reservations/" novalidate>
+                <form id="event-form" hx-post="/validate_event/" hx-target="#tibillet-modal-message" hx-swap="outerHTML" novalidate
+                    hx-on:htmx:before-request="validateForm(event); validateConfirmEmail()" hx-on:htmx:after-request="eventActionAfterSwap()">
+                {% csrf_token %}
+
+                <!-- slug -->
+                <input type="text" name="slug" value="{{slug}}" style="display: none;"/>
+
                 <!-- email-->
                 {% include "htmx/components/cardEmail.html" with email=event.email %}
 
@@ -39,4 +45,34 @@
             </form>
         {% endif %}
     </div>
+    <script>
+        function eventActionAfterSwap() {
+            // afficher le modal de retour de requête
+            window.setTimeout(() => {
+                // wait swap finish
+                showModal('#tibillet-modal-message')
+            }, 400)
+        }
+
+        function validateConfirmEmail() {
+            // console.log('-> fonc validateConfirmEmail !')
+            const emailValue = document.querySelector('#card-email-email').value
+            const confirmEmail = document.querySelector('#card-email-confirm-email')
+            if (confirmEmail !== null) {
+                const confirmEmailValue = confirmEmail.value
+                if (confirmEmailValue !== emailValue) {
+                    // met le input confirme email en mode invalide
+                    confirmEmail.parentNode.classList.remove('is-valid')
+                    confirmEmail.parentNode.classList.add('is-invalid')
+                    // scroll et focus le input confirme email
+                    confirmEmail.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'center' })
+                    confirmEmail.focus()
+                } else {
+                    // met le input confirme email en mode valide
+                    confirmEmail.parentNode.classList.remove('is-invalid')
+                    confirmEmail.parentNode.classList.add('is-valid')
+                }
+            }
+        }
+    </script>
 {% endblock main %}

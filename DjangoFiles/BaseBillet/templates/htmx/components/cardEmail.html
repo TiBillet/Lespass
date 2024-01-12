@@ -8,6 +8,10 @@
         <h4 role="heading" aria-label="Email de l'utilisateur connecté.">
             {{ profile.email }}
         </h4>
+        <div class="input-group input-group-dynamic mb-4" style="display: none;">
+          <label class="form-label">Email</label>
+          <input id="card-email-email" name="card-email-email" type="email" value="{{ profile.email }}" class="form-control" required>
+      </div>
     {% else %}
         <div>
             <!-- email -->

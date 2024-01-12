@@ -10,10 +10,9 @@
             </div>
             <div class="modal-body">
 
-                <!--  <form id="membership-form-{{ membership.uuid }}" method="post" action="/validate_membership/" novalidate> -->
                 <form hx-post="/validate_membership/" hx-target="#tibillet-modal-message" hx-swap="outerHTML" novalidate 
-                    hx-on:htmx:before-request="validateFormMembership(event, 'tibillet-membership-modal-{{ membership.uuid }}')" 
-                    hx-on:htmx:after-request="testEndSwap('tibillet-membership-modal-{{ membership.uuid }}')">
+                    hx-on:htmx:before-request="validateForm(event)" 
+                    hx-on:htmx:after-request="membershipActionsAfterSwap('tibillet-membership-modal-{{ membership.uuid }}')">
                     {% csrf_token %}
                     <!-- conditions -->
                     <div class="input-group mb-4 has-validation" style="position:relative">
@@ -144,15 +143,3 @@
         </div>
     </div>
 </div>
-<script>
-    function testEndSwap(modalMembershipIdid) {
-        console.log("--> fin de swap, modalMembershipIdid =", modalMembershipIdid)
-        // effacer le modal d'ahdésion une fois la requête finie
-        hideModal('#' + modalMembershipIdid)
-        // afficher le modal de retour de requête
-        window.setTimeout(() => {
-            // wait swap finish
-            showModal('#tibillet-modal-message')
-        }, 400)
-    }
-</script>
