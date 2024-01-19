@@ -33,5 +33,5 @@ trap 'handle_error $LINENO' ERR
 # poetry run python /DjangoFiles/manage.py migrate
 # echo "Run rsp pour lancer le serveur web tout neuf"
 
-#sleep infinity
-python /DjangoFiles/manage.py runserver 0.0.0.0:8002
+sleep infinity
+#python /DjangoFiles/manage.py runserver 0.0.0.0:8002
