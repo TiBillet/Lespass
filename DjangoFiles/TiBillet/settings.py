@@ -32,6 +32,9 @@ CSRF_TRUSTED_ORIGINS = [
     "https://tibillet.localhost",
     "https://demo.filaos.re",
     "https://agenda.filaos.re",
+    "https://www.betabillet.tech",
+    "https://demo.betabillet.tech",
+    "https://agenda.betabillet.tech",
     f'https://{os.environ.get("DOMAIN")}',
 ] if DEBUG else [f'https://{os.environ.get("DOMAIN")}', ]
 
