@@ -48,8 +48,8 @@ services:
     image: nginx:latest
     restart: always
     volumes:
-      - ../../Front/dist:/usr/share/nginx/html
-      - ../../Front/Landing:/usr/share/nginx/landing
+#      - ../../Front/dist:/usr/share/nginx/html
+#      - ../../Front/Landing:/usr/share/nginx/landing
       - ../../DjangoFiles/www:/DjangoFiles/www
       - ../../DjangoFiles/logs:/DjangoFiles/logs
 
