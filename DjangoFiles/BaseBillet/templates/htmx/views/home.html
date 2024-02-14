@@ -2,7 +2,7 @@
 
 {% block main %}
     {% include "htmx/header_groupe.html" %}
-    <pre>dev_user_is_staff = {{ dev_user_is_staff }}</pre>
+{#    <pre>dev_user_is_staff = {{ dev_user_is_staff }}</pre>#}
     <div class="container mt-7">
         <div class="row">
          {% if dev_user_is_staff == True and configuration.categorie != 'M' %}
