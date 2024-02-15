@@ -24,6 +24,15 @@ class RootConfiguration(SingletonModel):
 
     stripe_mode_test = models.BooleanField(default=True)
 
+
+    """
+    FEDOW
+    """
+
+    fedow_domain = models.URLField(blank=True, null=True, editable=False)
+    fedow_ip = models.GenericIPAddressField(blank=True, null=True, editable=False)
+
+
     def get_stripe_api(self):
         if self.stripe_mode_test:
             return self.stripe_test_api_key

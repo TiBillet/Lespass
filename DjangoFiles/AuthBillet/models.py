@@ -1,16 +1,18 @@
-import random
-
-from django.contrib.auth.base_user import BaseUserManager, AbstractBaseUser
+import uuid
+from uuid import uuid4
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from django.conf import settings
+from django.contrib.auth.base_user import BaseUserManager
+from django.contrib.auth.models import AbstractUser, Group
+from django.db import connection
 from django.db import models
-from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-import uuid
-from django.contrib.auth.models import AbstractUser, Group, Permission
+from rest_framework import permissions
 
 from Customers.models import Client
-from django.db import connection
-from rest_framework import permissions
 
 
 class RootPermission(permissions.BasePermission):
@@ -20,6 +22,7 @@ class RootPermission(permissions.BasePermission):
         if request.user.client_source.categorie == Client.ROOT:
             return request.user.is_superuser
         return False
+
 
 # Mis à l'extérieur pour pouvoir être utilisé
 # tout seul dans les class view de Django sans RESTframework
@@ -111,16 +114,52 @@ class TibilletManager(BaseUserManager):
         user.groups.add(staff_group)
 
 
-class TibilletUser(AbstractUser):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
+# class Wallet(models.Model):
+#     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, db_index=True)
 
-    # USERNAME_FIELD = 'email'
-    # REQUIRED_FIELDS = []  # removes email from REQUIRED_FIELDS
+class RsaKey(models.Model):
+    private_pem = models.CharField(max_length=2048, editable=False)
+    public_pem = models.CharField(max_length=512, editable=False)
+    date_creation = models.DateTimeField(auto_now_add=True, editable=False)
+
+    @classmethod
+    def generate(cls):
+        # Génération d'une paire de clés RSA chiffré avec la SECRET_KEY de Django
+        private_key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=2048
+        )
+
+        # Extraction de la clé publique associée à partir de la clé privée
+        public_key = private_key.public_key()
+
+        # Sérialisation et chiffrement de la clés au format PEM
+        private_pem = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.BestAvailableEncryption(settings.SECRET_KEY.encode('utf-8'))
+        )
+
+        public_pem = public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+
+        return cls.objects.create(
+            private_pem=private_pem.decode('utf-8'),
+            public_pem=public_pem.decode('utf-8'),
+        )
+
+
+class TibilletUser(AbstractUser):
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
 
     email = models.EmailField(_('email'), unique=True)  # changes email to unique and blank to false
     email_error = models.BooleanField(default=False)
 
     username = models.CharField(max_length=200, unique=True)
+    rsa_key = models.OneToOneField(RsaKey, on_delete=models.SET_NULL, null=True, related_name='user')
+    # wallet = models.OneToOneField(Wallet, on_delete=models.SET_NULL, null=True, related_name='user')
 
     first_name = models.CharField(max_length=200, null=True, blank=True)
     last_name = models.CharField(max_length=200, null=True, blank=True)
@@ -176,15 +215,6 @@ class TibilletUser(AbstractUser):
     client_admin = models.ManyToManyField(Client,
                                           related_name="user_admin", blank=True)
 
-    # is_active = models.BooleanField(
-    #     _('active'),
-    #     default=False,
-    #     help_text=_(
-    #         'Designates whether this user should be treated as active. '
-    #         'Unselect this instead of deleting accounts.'
-    #     ),
-    # )
-
     ##### Pour les user terminaux ####
 
     user_parent_pk = models.UUIDField(
@@ -218,26 +248,6 @@ class TibilletUser(AbstractUser):
     def administre(self):
         return " ".join([admin["schema_name"] for admin in self.client_admin.values("schema_name")])
 
-    # def new_tenant_authorised(self):
-    #
-    #     # si l'user est déja staff ou root, c'est qu'il a déja une billetterie.
-    #     if self.offre in [self.PUBLIC, self.FREE, self.PREMIUM]:
-    #         if len(self.client_admin.all()) > 0:
-    #             # superuser peut toujours.
-    #             return self.is_superuser
-    #         else:
-    #             return True
-    #
-    #     elif self.offre == self.ENTREPRISE:
-    #         if len(self.client_admin.all()) > 4:
-    #             # superuser peut toujours.
-    #             return self.is_superuser
-    #         else:
-    #             return True
-    #
-    #     elif self.offre == self.CUSTOM:
-    #         return True
-
     def as_p(self):
         return bool(self.password)
 
@@ -246,6 +256,31 @@ class TibilletUser(AbstractUser):
         self.is_staff = True
         self.groups.add(Group.objects.get(name="staff"))
         self.save()
+
+    def get_private_key(self):
+        if not self.rsa_key:
+            self.rsa_key = RsaKey.generate()
+            self.save()
+
+        private_key = serialization.load_pem_private_key(
+            self.rsa_key.private_pem.encode('utf-8'),
+            password=settings.SECRET_KEY.encode('utf-8'),
+        )
+        return private_key
+
+    def get_public_pem(self):
+        if not self.rsa_key:
+            self.rsa_key = RsaKey.generate()
+            self.save()
+        return self.rsa_key.public_pem
+
+    def get_public_key(self):
+        # Charger la clé publique au format PEM
+        public_key = serialization.load_pem_public_key(
+            self.get_public_pem().encode('utf-8'),
+            backend=default_backend()
+        )
+        return public_key
 
     def __str__(self):
         return self.email

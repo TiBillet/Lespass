@@ -1,21 +1,15 @@
-import requests
 from django.db import connection
-from django.db.models import Q
-from django.db.models.signals import post_save, pre_save
-from django.dispatch import receiver
-# from django.utils import timezone
-
-# from ApiBillet.thread_mailer import ThreadMaileur
-from AuthBillet.models import TibilletUser
-from BaseBillet.models import Reservation, LigneArticle, Ticket, Product, Configuration, Paiement_stripe
-from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation, get_fedinstance_and_launch_request
-
-# from TiBillet import settings
-from BaseBillet.triggers import ActionArticlePaidByCategorie
-
 import logging
 
-from QrcodeCashless.models import Wallet
+from django.db import connection
+from django.db.models import Q
+from django.db.models.signals import pre_save
+from django.dispatch import receiver
+
+from AuthBillet.models import TibilletUser
+from BaseBillet.models import Reservation, LigneArticle, Ticket, Paiement_stripe
+from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation
+from BaseBillet.triggers import ActionArticlePaidByCategorie
 
 logger = logging.getLogger(__name__)
 

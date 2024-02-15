@@ -1,34 +1,26 @@
 import datetime
+import logging
 import uuid
 from decimal import Decimal
-from urllib.parse import urlparse
+
 import requests
 import stripe
 from PIL import Image
 from django.db import connection
-from io import BytesIO
-from django.core import files
-
 from django.utils.text import slugify
-from rest_framework import serializers
-import json
 from django.utils.translation import gettext_lazy as _
+from django_tenants.utils import tenant_context
+from rest_framework import serializers
 from rest_framework.generics import get_object_or_404
-from django_tenants.utils import schema_context, tenant_context
 
-from AuthBillet.models import TibilletUser, HumanUser
+from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
-
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, Paiement_stripe, \
     PriceSold, ProductSold, Artist_on_event, OptionGenerale, Membership, Tag, Weekday
-
 from Customers.models import Client
 from MetaBillet.models import WaitingConfiguration
 from PaiementStripe.views import CreationPaiementStripe
-
-import logging
-
-from QrcodeCashless.models import CarteCashless, Detail, Asset, SyncFederatedLog
+from QrcodeCashless.models import CarteCashless, Detail
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
@@ -1039,90 +1031,12 @@ class CashlessCardsValidator(serializers.Serializer):
 
         return value
 
-    # def to_representation(self, data):
-    # data contiendra la liste d'objets à représenter
-    # representation = super().to_representation(data)
-
-    # for obj in representation:
-    #     obj['uuid_qrcode'] = self.uuid_qrcode
-    #     obj['detail'] = self.detail
-    # return representation
-
     def validate(self, attrs):
         if not attrs.get('detail') and self.detail_from_db:
             attrs['detail'] = self.detail_from_db.uuid
         validation = super().validate(attrs)
         return validation
 
-
-class UpdateFederatedAssetFromCashlessValidator(serializers.Serializer):
-    uuid_commande = serializers.UUIDField()
-    old_qty = serializers.DecimalField(max_digits=10, decimal_places=2)
-    new_qty = serializers.DecimalField(max_digits=10, decimal_places=2)
-    domain = serializers.URLField()
-    card_uuid_qrcode = serializers.UUIDField()
-
-    def validate_domain(self, value):
-        serveur_cashless = Configuration.get_solo().server_cashless
-        parse_config = urlparse(serveur_cashless)
-        parse_value = urlparse(value)
-
-        # on utilise urlparse pour vérifier les url et retirer les / si besoin
-        if parse_config.scheme != parse_value.scheme or parse_config.netloc != parse_value.netloc:
-            raise serializers.ValidationError(
-                _(f'ERREUR DOMAIN domaine envoyé : {parse_value.netloc} =! config : {parse_config.netloc}'))
-
-        # TODO: lier categorie et source
-        self.categorie = SyncFederatedLog.VENTE_CASHLESS_FED
-
-        return value
-
-    def validate_card_uuid_qrcode(self, value):
-        self.card = get_object_or_404(CarteCashless, uuid=f"{value}")
-        return self.card.uuid
-
-    def validate(self, attrs):
-        self.need_update = False
-
-        wallet_stripe = self.card.wallet_set.get(asset__categorie=Asset.STRIPE_FED)
-        self.wallet_stripe = wallet_stripe
-
-        if wallet_stripe.qty == attrs.get('old_qty') and wallet_stripe.qty != attrs.get('new_qty'):
-            self.need_update = True
-
-        return super().validate(attrs)
-
-    def get_syncLog(self, instance):
-        try:
-            syncLog = SyncFederatedLog.objects.get(uuid=instance.get('uuid_commande'))
-        except SyncFederatedLog.DoesNotExist:
-            syncLog = SyncFederatedLog.objects.create(
-                uuid=instance.get('uuid_commande'),
-                old_qty=instance.get('old_qty'),
-                new_qty=instance.get('new_qty'),
-                card=self.card,
-                wallet=self.wallet_stripe,
-                client_source=connection.tenant,
-                categorie=self.categorie,
-                etat_client_sync={'status': 'created by validator'},
-            )
-        return syncLog
-
-    def to_representation(self, instance):
-        representation = super().to_representation(instance)
-        representation['card'] = self.card
-        representation['wallet_stripe'] = self.wallet_stripe
-
-        # On va chercher ou on crée les logs
-        representation['syncLog'] = self.get_syncLog(instance)
-
-        # Pour le log, uuid == uuid_commande
-        representation['uuid'] = instance['uuid_commande']
-
-        # Correction d'un bug qui rend les Decimal en string coté controller avec validator.data
-        representation['old_qty'] = instance['old_qty']
-        representation['new_qty'] = instance['new_qty']
-        return representation
 
 
 class ChargeCashlessValidator(serializers.Serializer):

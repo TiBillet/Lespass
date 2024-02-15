@@ -1,64 +1,45 @@
 # Create your views here.
-import re
 
 import decimal
-
-import csv
 import json
+import logging
 import uuid
-from decimal import Decimal
-
 from datetime import datetime, timedelta
+
 import dateutil.parser
 import pytz
 import requests
 import stripe
 from django.contrib import messages
-from django.contrib.auth.models import Group
-from django.core.exceptions import ValidationError
-from django.core import management
-
-from django.core.validators import URLValidator
+from django.db import connection
 from django.http import HttpResponseRedirect, Http404, HttpResponse
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 from django.views import View
-from django.views.generic import TemplateView
 from django_tenants.utils import schema_context, tenant_context
-from rest_framework import serializers
+from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import permission_classes
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-
-from django.utils.translation import gettext_lazy as _
-from django.utils.text import slugify
 from rest_framework.views import APIView
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
     ReservationValidator, MembreValidator, ConfigurationSerializer, WaitingConfigSerializer, \
     EventCreateSerializer, TicketSerializer, OptionsSerializer, ChargeCashlessValidator, NewAdhesionValidator, \
     DetailCashlessCardsValidator, DetailCashlessCardsSerializer, CashlessCardsValidator, \
-    UpdateFederatedAssetFromCashlessValidator, ProductCreateSerializer, create_account_link_for_onboard, \
-    CheckMailSerializer
+    ProductCreateSerializer, create_account_link_for_onboard
 from AuthBillet.models import TenantAdminPermission, TibilletUser, RootPermission, TenantAdminPermissionWithRequest
-from AuthBillet.utils import user_apikey_valid, get_or_create_user
-from BaseBillet.tasks import create_ticket_pdf, report_to_pdf, report_celery_mailer, create_tenant
-from Customers.models import Client, Domain
+from AuthBillet.utils import user_apikey_valid
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe, \
     OptionGenerale, Membership
-from rest_framework import viewsets, permissions, status
-from django.db import connection, IntegrityError
-from TiBillet import settings
-
-import os
-
+from BaseBillet.tasks import create_ticket_pdf, report_to_pdf, report_celery_mailer
+from Customers.models import Client
 from MetaBillet.models import EventDirectory, ProductDirectory, WaitingConfiguration
 from PaiementStripe.views import new_entry_from_stripe_invoice
-from QrcodeCashless.models import Detail, CarteCashless, Wallet, Asset, SyncFederatedLog
-from QrcodeCashless.views import WalletValidator
+from QrcodeCashless.models import Detail, CarteCashless
+from TiBillet import settings
 from root_billet.models import RootConfiguration
-
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -151,13 +132,12 @@ class ProductViewSet(viewsets.ViewSet):
         return get_permission_Api_LR_Any(self)
 
 
-
 class TenantViewSet(viewsets.ViewSet):
     def create(self, request):
         serializer = WaitingConfigSerializer(data=request.data, context={'request': request})
 
         if serializer.is_valid():
-            waiting_config : WaitingConfiguration = serializer.save()
+            waiting_config: WaitingConfiguration = serializer.save()
 
             data = {
                 "uuid": f"{waiting_config.uuid}",
@@ -171,8 +151,6 @@ class TenantViewSet(viewsets.ViewSet):
 
         logger.error(f"serializer.errors : {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
 
     # def update(self, request, pk=None):
     #     tenant = get_object_or_404(Client, pk=pk)
@@ -1068,118 +1046,10 @@ def paiment_stripe_validator(request, paiement_stripe):
     raise Http404(f'{paiement_stripe.status}')
 
 
-# Si on a l'uuid, on considère qu'on a la carte.
-# A réfléchir sur la suite en terme de vie privée ; AllowAny ?
-@permission_classes([permissions.AllowAny])
-class GetFederatedAssetFromCashless(APIView):
-    def get(self, request, pk_uuid):
-
-        # on informe de la quantité de l'asset fédéré sur la carte.
-        card = get_object_or_404(CarteCashless, uuid=pk_uuid)
-        data = {"stripe_wallet": 0}
-        try:
-            wallet_stripe = card.wallet_set.get(asset__categorie=Asset.STRIPE_FED)
-            data['stripe_wallet'] = wallet_stripe.qty
-            return Response(data, status=status.HTTP_200_OK)
-        except Exception as e:
-            logger.error(f"GetFederatedAssetFromCashless : {e}")
-            return Response(data, status=status.HTTP_404_NOT_FOUND)
-
-
-@permission_classes([permissions.AllowAny])
-class UpdateFederatedAssetFromCashless(APIView):
-    def post(self, request):
-        """
-        Reception d'une demande d'update d'un portefeuille fédéré d'une carte cashless depuis un serveur cashless.
-        On vérifie vers le serveur cashless ou vient la requete que la valeur est bonne (NTUI!)
-        Ce qui nous permet de mettre ce point d'API en allowAny, de toute façon, on va vérifier !
-
-        On met à jour la valeur en base de donnée sur la billetterie.
-        Ensuite, on met à jour dans tous les serveurs cashless fédéré
-        """
-
-        validator = UpdateFederatedAssetFromCashlessValidator(data=request.data)
-        if not validator.is_valid():
-            logger.error(
-                f"UpdateFederatedAssetFromCashless ERREUR validator.errors : {validator.errors} : request.data {request.data}")
-            return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        validated_data = validator.data
-        wallet_stripe: Wallet = validated_data['wallet_stripe']
-        carte: CarteCashless = validated_data['card']
-
-        old_qty = validated_data['old_qty']
-        new_qty = validated_data['new_qty']
-        domain = validated_data['domain']
-        uuid_log = validated_data['uuid_commande']
-
-        # On log l'action
-        logger.info(f"UpdateFederatedAssetFromCashless validated_data : {validated_data}")
-        syncLog: SyncFederatedLog = validated_data['syncLog']
-
-        # Une nouvelle vente a été faites sur un cashless avec la monnaie fédérée.
-        # On va vérifier coté cashless si la valeur reçue est bonne (NTUI!)
-        if wallet_stripe.qty == old_qty and wallet_stripe.qty != new_qty:
-            logger.info(f"UpdateFederatedAssetFromCashless NEED MAJ : {carte} - {wallet_stripe.qty} == {old_qty}")
-
-            # On utilise la class qui va vérifier si tout existe et qui récupère les assets dans le serveur cashless
-            validated_wallet = WalletValidator(uuid=carte.uuid)
-            dict_carte_from_cashless = validated_wallet.carte_serveur_cashless
-
-            new_qty_verified = None
-            for asset in dict_carte_from_cashless.get('assets'):
-                if asset['categorie_mp'] == 'SF':
-                    new_qty_verified = Decimal(asset['qty'])
-
-            # La valeur reçue par l'api allowAny correspond
-            # à la valeur du serveur cashless
-            # vérifié grâce à une API avec clé d'authentification
-            if new_qty_verified == new_qty:
-
-                wallet_stripe.qty = new_qty
-                wallet_stripe.save()
-                # TODO: logger
-                logger.info(
-                    f"UpdateFederatedAssetFromCashless MAJ : {carte} - {wallet_stripe.qty} == {new_qty} - {domain}")
-                return Response(f"log {syncLog.uuid}", status=status.HTTP_202_ACCEPTED)
-
-            # La valeur reçue est différente de celle du serveur cashless
-            # NTUI ???
-            else:
-                logger.error(f"UpdateFederatedAssetFromCashless ERREUR : {carte} - {new_qty_verified} != {new_qty}")
-                return Response(
-                    f"UpdateFederatedAssetFromCashless ERROR new_qty_verified : {carte} - wallet {wallet_stripe.qty}, old {old_qty}, new {new_qty}, new_verified {new_qty_verified}",
-                    status=status.HTTP_406_NOT_ACCEPTABLE)
-
-
-        # Pas besoin de mise à jour.
-        elif wallet_stripe.qty == new_qty:
-            logger.info(f"UpdateFederatedAssetFromCashless NO MAJ : {carte} - {wallet_stripe.qty} == {new_qty}")
-            tenant_uuid = str(connection.tenant.uuid)
-            syncLog.etat_client_sync[tenant_uuid]['return'] = True
-            syncLog.etat_client_sync[tenant_uuid]['return_value'] = f"{new_qty}"
-            syncLog.save()
-            return Response(f"NO NEED TO UPDATE - log {syncLog.uuid} already reported",
-                            status=status.HTTP_208_ALREADY_REPORTED)
-
-        # La valeur old est différente de celle du serveur cashless
-        erreur = f"UpdateFederatedAssetFromCashless ERROR : " \
-                 f"log {syncLog.uuid} - carte {carte} - " \
-                 f"billetterie wallet {wallet_stripe.qty} != cashless old {old_qty} ou new {new_qty}"
-        syncLog.etat_client_sync = erreur
-        syncLog.save()
-
-        logger.error(erreur)
-
-        return Response(erreur, status=status.HTTP_409_CONFLICT)
-
-
 def info_connected_account_stripe(id_acc_connect):
     stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
     info_stripe = stripe.Account.retrieve(id_acc_connect)
     return info_stripe
-
-
 
 
 @permission_classes([permissions.AllowAny])

@@ -1,39 +1,36 @@
 # import base64
-import json, os, random, smtplib, datetime, jwt
-from django.utils.text import slugify
-
+import datetime
+import json
+import jwt
+import logging
+import os
+import random
+import smtplib
 from io import BytesIO
 
-import requests
-from django_tenants.utils import tenant_context, schema_context
-from requests.exceptions import ConnectionError
-
-import segno
 import barcode
+import requests
+import segno
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
-from django.db import connection, IntegrityError
-
-from django.utils.encoding import force_bytes, force_str
-from django.utils.http import urlsafe_base64_encode
-
-from weasyprint import HTML, CSS
-from weasyprint.text.fonts import FontConfiguration
 from django.core.mail import EmailMultiAlternatives
+from django.db import connection, IntegrityError
 from django.template.loader import render_to_string, get_template
 from django.utils import timezone
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_encode
+from django.utils.text import slugify
+from django_tenants.utils import tenant_context, schema_context
+from requests.exceptions import ConnectionError
+from weasyprint import HTML, CSS
+from weasyprint.text.fonts import FontConfiguration
 
-from ApiBillet.utils import b64decode
 from AuthBillet.models import TibilletUser, TerminalPairingToken
-from BaseBillet.models import Reservation, Ticket, Configuration, Membership, LigneArticle, Webhook, Paiement_stripe
+from BaseBillet.models import Reservation, Ticket, Configuration, Membership, LigneArticle, Webhook
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
-from QrcodeCashless.models import Wallet, SyncFederatedLog
 from TiBillet import settings
 from TiBillet.celery import app
-
-import logging
-
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
@@ -605,156 +602,6 @@ def webhook_reservation(reservation_pk):
                 webhook.last_response = f"{timezone.now()} - {e}"
             webhook.save()
 
-
-# TODO: checker les retry sur les bonnes exceptions
-@app.task(
-    bind=True,
-    default_retry_delay=2,
-    retry_backoff=True,
-    max_retries=10)
-def request_server_cashless_updateFed(self,
-                                      fed_client: dict = None,
-                                      data: dict = None,
-                                      sync_log_pk: str = None,
-                                      ) -> requests.status_codes:
-    logger.info(f"request_server_cashless_updateFed {fed_client} - {connection.tenant} - {timezone.now()}")
-    sync_log = SyncFederatedLog.objects.get(pk=sync_log_pk)
-    uuid = fed_client['tenant_uuid']
-
-    try:
-        url = fed_client['url']
-        key = fed_client['key']
-
-        sess = requests.Session()
-        r = sess.post(
-            f'{url}/api/updatefedwallet',
-            data=data,
-            headers={
-                'Authorization': f'Api-Key {key}'
-            },
-            verify=bool(not settings.DEBUG),
-
-        )
-
-        sess.close()
-
-        msg = f"REPONSE DE {fed_client} DEPUIS CELERY fed_client {uuid} request_server_cashless_updateFed {r.status_code} {r.text[:100]}"
-        logger.info(f"    {msg}")
-        if r.status_code not in [200, 208]:
-            erreur = f"ERREUR {msg}"
-            logger.error(erreur)
-            sync_log.etat_client_sync[uuid]['status'] = erreur
-            sync_log.save()
-
-            # TODO : mettre le paiement en NOTSYNC
-            # paiement_stripe = Paiement_stripe.objects.filter(uuid=sync_log.uuid)
-            # paiement_stripe.update(status=Paiement_stripe.NOTSYNC)
-            # logger.error(f"paiement_stripe status NOTSYNC : {paiement_stripe}")
-
-            raise Exception(erreur)
-            # raise self.retry(exc=Exception(f"request_server_cashless_updateFed {r.status_code} {r.text}"))
-
-        sync_log.refresh_from_db()
-        sync_log.etat_client_sync[uuid]['status'] = r.status_code
-        sync_log.save()
-        logger.info(f'    sync_log.etat_client_sync : {sync_log.etat_client_sync}')
-
-    except Exception as e:
-        logger.error(
-            f"request_server_cashless_updateFed {e}")
-        sync_log.etat_client_sync[uuid]['status'] = f"{e}"
-        sync_log.save()
-
-        # raise self.retry(exc=e)
-        raise Exception(f"request_server_cashless_updateFed {e}")
-
-    return f"{url} - {r.status_code}"
-
-
-@app.task
-def get_fedinstance_and_launch_request(wallet_pk):
-    logger.info("get_fedinstance_and_launch_request")
-    wallet = Wallet.objects.get(pk=wallet_pk)
-
-    # TODO: GET OR CREATE SYNC LOG
-    # On récupère l'instance de log :
-    sync_log = SyncFederatedLog.objects.filter(wallet=wallet, new_qty=wallet.qty).last()
-    logger.info(f"get_fedinstance_and_launch_request : {timezone.now()} synclog : {sync_log}")
-
-    dict_syncLog = getattr(sync_log, 'etat_client_sync', {})
-
-    # On récupère toute les url des serveurs cashless fédérés
-    public_tenant_categorie = [Client.META, Client.ROOT]
-    fed_clients = []
-
-    for tenant in Client.objects.exclude(categorie__in=public_tenant_categorie):
-        with tenant_context(tenant):
-            tenant_configuration = Configuration.get_solo()
-
-            if tenant_configuration.federated_cashless and \
-                    tenant_configuration.server_cashless and \
-                    tenant_configuration.key_cashless:
-                logger.info(f"    SCHEMA NAME ADDED to syncLog : {tenant.schema_name}")
-
-                dict_syncLog[f"{tenant.uuid}"] = {
-                    'shema_name': tenant.schema_name,
-                    'status': 'pending',
-                }
-
-                fed_clients.append({
-                    'shema_name': tenant.schema_name,
-                    'tenant_uuid': tenant.uuid,
-                    'url': tenant_configuration.server_cashless,
-                    'key': tenant_configuration.key_cashless,
-                })
-
-    logger.info(f"    dict_syncLog : {dict_syncLog}")
-    sync_log.refresh_from_db()
-    sync_log.etat_client_sync = dict_syncLog
-    sync_log.save()
-
-    # On retourne sur le meta tenant
-    meta_tenant = Client.objects.filter(categorie=Client.META).first()
-    with tenant_context(meta_tenant):
-
-        data = {
-            "email": wallet.user.email,
-            "old_qty": sync_log.old_qty,
-            "new_qty": wallet.qty,
-            "uuid_sync_log": sync_log.uuid,
-            "card_uuid": wallet.card.uuid
-        }
-
-        for fed_client in fed_clients:
-            request_server_cashless_updateFed.delay(
-                fed_client=fed_client,
-                data=data,
-                sync_log_pk=sync_log.pk,
-            )
-
-
-@app.task
-def send_info_to_fedow_serveur(data):
-    logger.info(f"TRIGGER RECHARGE FEDOW")
-    config = Configuration.get_solo()
-    if not config.server_fedow or not config.key_fedow:
-        logger.error(f"triggers/increment_to_fedow_serveur - No FEDOW config for {connection.tenant}")
-        raise Exception(f'triggers/increment_to_fedow_serveur - No FEDOW config for {connection.tenant}')
-
-    ligne_article = LigneArticle.objects.get(uuid=data['ligne_article_uuid'])
-
-    request_fedow = requests.request("POST",
-                                     f"https://{config.server_fedow}/stripe_federated_charge/",
-                                     data=data,
-                                     headers={"Authorization": f"Api-Key {config.fedow_key}"},
-                                     verify=bool(not settings.DEBUG),
-                                     )
-
-    if request_fedow.status_code == 202:
-        ligne_article.status = LigneArticle.VALID
-        ligne_article.save()
-
-    # on envoie l'id du paiement stripe et le serveur FEDOW ira vérifier de lui même.
 
 
 @app.task

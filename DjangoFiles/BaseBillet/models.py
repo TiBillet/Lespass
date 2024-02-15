@@ -1,42 +1,36 @@
 # import os
 
+import logging
 import uuid
 from datetime import timedelta, datetime
-from dateutil.relativedelta import relativedelta
 from decimal import Decimal
 
 import requests
+import stripe
+from dateutil.relativedelta import relativedelta
+from django.db import connection
 from django.db import models
-
+from django.db.models import JSONField
 # Create your models here.
 from django.db.models import Q
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.urls import reverse
-
-from django.db.models import JSONField
 from django.utils import timezone
-
 from django.utils.text import slugify
+from django.utils.translation import gettext_lazy as _
 from django_tenants.utils import tenant_context, schema_context
 from rest_framework_api_key.models import APIKey
 from solo.models import SingletonModel
-from django.utils.translation import gettext_lazy as _
 from stdimage import StdImageField
 from stdimage.validators import MaxSizeValidator, MinSizeValidator
-from django.db import connection
 from stripe.error import InvalidRequestError
-from typing import List, Optional
 
 import AuthBillet.models
 from Customers.models import Client
 from MetaBillet.models import EventDirectory, ProductDirectory
-from QrcodeCashless.models import CarteCashless, FederatedCashless, Asset
+from QrcodeCashless.models import CarteCashless
 from TiBillet import settings
-import stripe
-
-import logging
-
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
@@ -271,41 +265,6 @@ class Configuration(SingletonModel):
         sess.close()
         logger.info(f"    check_serveur_cashless : {r.status_code} {r.text}")
         if r.status_code == 200:
-
-          if r.json().get('bill'):
-            # On récupère l'asset fédéré Stripe
-            asset, created = Asset.objects.get_or_create(
-              origin=Client.objects.get(categorie=Client.ROOT),
-              name="Stripe",
-              categorie=Asset.STRIPE_FED,
-              is_federated=True,
-            )
-            logger.info(f"    check_serveur_cashless - Stripe - Created {created}")
-
-            # on l'enregistre dans une table tenant public
-            fed_cash_conf, created = FederatedCashless.objects.get_or_create(
-              client=connection.tenant,
-              asset=asset,
-            )
-
-            # product, created = Product.objects.get_or_create(
-            #     name=f"Recharge Carte {carte.detail.origine.name} v{carte.detail.generation}",
-            #     categorie_article=Product.RECHARGE_FEDERATED,
-            #     img=carte.detail.img,
-            # )
-            #
-            # price, created = Price.objects.get_or_create(
-            #     product=product,
-            #     name=f"{montant_recharge}€",
-            #     prix=int(montant_recharge),
-            # )
-
-            if self.key_cashless != fed_cash_conf.key_cashless \
-                or self.server_cashless != fed_cash_conf.server_cashless:
-              fed_cash_conf.key_cashless = self.key_cashless
-              fed_cash_conf.server_cashless = self.server_cashless
-              fed_cash_conf.save()
-
             return True
 
       except Exception as e:

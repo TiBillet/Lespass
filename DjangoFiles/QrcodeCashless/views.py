@@ -1,26 +1,23 @@
-import decimal
+import logging
 from datetime import datetime
+from decimal import Decimal
 
 import dateutil.parser
-import requests, json
+import json
+import requests
 from django.contrib import messages
 from django.db import connection
 from django.http import HttpResponseRedirect, HttpResponse, Http404
 from django.shortcuts import render
 from django.utils import timezone
-from rest_framework.generics import get_object_or_404
 from django.views import View
 from rest_framework import status
-from decimal import Decimal
+from rest_framework.generics import get_object_or_404
 
-from ApiBillet.serializers import get_or_create_user, get_or_create_price_sold, get_near_event_by_date
-from BaseBillet.models import Configuration, Product, LigneArticle, Price, Paiement_stripe, ProductSold, Event, \
-    Membership
+from ApiBillet.serializers import get_or_create_user, get_or_create_price_sold
+from BaseBillet.models import Configuration, Product, LigneArticle, Price, Paiement_stripe, Membership
 from PaiementStripe.views import CreationPaiementStripe
-from QrcodeCashless.models import CarteCashless, SyncFederatedLog
-
-import logging
-
+from QrcodeCashless.models import CarteCashless
 from TiBillet import settings
 
 logger = logging.getLogger(__name__)
@@ -61,9 +58,6 @@ START Deux fonctions pour gérer la dette technique des premières générations
 '''
 
 
-
-
-
 class gen_one_bisik(View):
     # Vue déclenchée lorsqu'on scanne un qrcode de la première génération Bisik avec m.tibllet et qsdf
     def get(self, request, numero_carte):
@@ -80,39 +74,6 @@ class gen_one_bisik(View):
 END Dette technique ...
 '''
 
-
-#
-# def check_adhesion_state(config: Configuration, data: dict) -> requests.Response:
-#     """
-#     Requete vers cashless pour savoir quel niveau d'information possède le serveur.
-#     Suivant le code de statut de la réponse HTTP, on peut réclamer les informations manquantes
-#     :param config:
-#     :param data:
-#     :return:
-#     """
-#     sess = requests.Session()
-#
-#     response = sess.post(
-#         f'{config.server_cashless}/api/billetterie_qrcode_adhesion',
-#         headers={
-#             'Authorization': f'Api-Key {config.key_cashless}'
-#         },
-#         data={
-#             'prenom': data.get('prenom'),
-#             'name': data.get('name'),
-#             'email': data.get('email'),
-#             'tel': data.get('tel'),
-#             'uuid_carte': data.get('uuid_carte'),
-#         })
-#
-#     sess.close()
-#
-#     return response
-
-
-class SyncWallet():
-    def __init__(self):
-        self.config = Configuration.get_solo()
 
 
 def check_carte_local(uuid):
@@ -529,31 +490,6 @@ class WalletValidator:
 '''
 END NFC
 '''
-
-
-class getSyncLog():
-    def __init__(self,
-                 uuid=None,
-                 old_qty=None,
-                 new_qty=None,
-                 card=None,
-                 asset=None,
-                 client_source=None,
-                 categorie=None,
-                 ):
-        self.uuid = uuid
-        self.old_qty = old_qty
-        self.new_qty = new_qty
-        self.card = card
-        self.asset = asset
-        self.client_source = client_source
-        self.categorie = categorie
-
-    def syncLogDb(self):
-        if self.uuid:
-            return SyncFederatedLog.objects.get(uuid=self.uuid)
-        return None
-
 
 class index_scan(View):
     """

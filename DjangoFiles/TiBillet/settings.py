@@ -30,6 +30,7 @@ ALLOWED_HOSTS = ['*'] if DEBUG else [f'{os.environ.get("DOMAIN")}', ]
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost",
     "https://tibillet.localhost",
+    "https://demo.tibillet.localhost",
     "https://demo.filaos.re",
     "https://agenda.filaos.re",
     "https://www.betabillet.tech",
@@ -95,6 +96,7 @@ TENANT_APPS = (
     'PaiementStripe',
     'wsocket',
     'tibrss',
+    'fedow_connect',
 )
 
 INSTALLED_APPS = list(SHARED_APPS) + [app for app in TENANT_APPS if app not in SHARED_APPS]
@@ -104,6 +106,13 @@ ROOT_URLCONF = 'TiBillet.urls_tenants'
 PUBLIC_SCHEMA_URLCONF = 'TiBillet.urls_public'
 SITE_ID = 1
 AUTH_USER_MODEL = 'AuthBillet.TibilletUser'
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.memcached.PyMemcacheCache',
+        'LOCATION': 'memcached:11211',
+    }
+}
 
 MIDDLEWARE = [
     'django_tenants.middleware.main.TenantMainMiddleware',

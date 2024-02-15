@@ -15,7 +15,7 @@ services:
     hostname: redis
 
   billetterie_django:
-    image: tibillet/tibillet:alpha1
+    image: tibillet/tibillet:alpha2
     container_name: billetterie_django
     build: ../Dockerfile/
     restart: always

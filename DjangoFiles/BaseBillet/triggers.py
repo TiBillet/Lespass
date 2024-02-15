@@ -1,138 +1,11 @@
-import datetime
-
-import requests
-from django.db import connection
-from django.utils import timezone
-
-import TiBillet.settings
-from ApiBillet.utils import b64encode
-from BaseBillet.models import LigneArticle, Product, Configuration, Membership, Price
-from BaseBillet.tasks import send_membership_to_cashless, get_fedinstance_and_launch_request, send_to_ghost, \
-    send_info_to_fedow_serveur
-
 import logging
 
-from Customers.models import Client
-from QrcodeCashless.models import Asset, Wallet, SyncFederatedLog, CarteCashless
+from django.utils import timezone
 
-# Pour SendToGhost
-import jwt
-
-# from datetime import datetime as date
-
+from BaseBillet.models import LigneArticle, Product, Membership, Price
+from BaseBillet.tasks import send_membership_to_cashless, send_to_ghost
 
 logger = logging.getLogger(__name__)
-
-
-
-def increment_to_cashless_serveur(vente):
-    logger.info(f"TRIGGER RECHARGE_CASHLESS")
-    configuration = Configuration.get_solo()
-    if not configuration.server_cashless or not configuration.key_cashless:
-        logger.error(f"triggers/increment_to_cashless_serveur - No cashless config for {connection.tenant}")
-        raise Exception(f'triggers/increment_to_cashless_serveur - No cashless config for {connection.tenant}')
-
-    vente.data_for_cashless['card_uuid'] = vente.ligne_article.carte.uuid
-    vente.data_for_cashless['qty'] = vente.ligne_article.pricesold.prix
-
-    data = vente.data_for_cashless
-
-    sess = requests.Session()
-    r = sess.post(
-        f'{configuration.server_cashless}/api/chargecard',
-        headers={
-            'Authorization': f'Api-Key {configuration.key_cashless}'
-        },
-        data=data,
-        verify=bool(not TiBillet.settings.DEBUG),
-    )
-
-    sess.close()
-
-    if r.status_code == 202:
-        vente.ligne_article.status = LigneArticle.VALID
-        logger.info(f"rechargement cashless ok {r.status_code} {r.text}")
-        # set_paiement_and_reservation_valid(None, self.ligne_article)
-    else:
-        logger.error(f"erreur réponse serveur cashless {r.status_code} {r.text}")
-    return r.status_code, r.text
-
-
-def get_federated_wallet(cashless_card: CarteCashless = None,
-                         user: TiBillet.settings.AUTH_USER_MODEL = None, ) -> Wallet:
-    """
-        Récupère le wallet en fonction des informations : email, carte ou les deux.
-
-    Exemples :
-        Lors d'un rechargement cashless via le QRCode, nous avons l'email et la carte
-        Lors d'un achat de billet en ligne d'un utilisateur anonyme, nous n'avons que l'email,
-        aucune carde ne lui encore a été donnée.
-        Lors d'une distribution de carte cashless a l'entrée d'un lieu sans adhésion,
-        nous n'avons que la carte, et il est possible qu'une recharge se fasse en liquide ou en carte bancaire
-        sans connaitre le mail de l'utilisateur.
-
-    :param cashless_card:
-    :param user:
-    :return:
-    """
-    wallet = None
-
-    # La monnaie fédérée vient toujours du tenant public.
-    tenant_root = Client.objects.get(categorie=Client.ROOT)
-    asset, created = Asset.objects.get_or_create(
-        origin=tenant_root,
-        name="Stripe",
-        categorie=Asset.STRIPE_FED,
-        is_federated=True,
-    )
-
-    # asset = Asset.objects.get(
-    #     origin=tenant_root,
-    #     categorie=Asset.STRIPE_FED,
-    # )
-
-    if cashless_card:
-        # Si la carte à un utilisateur
-        if cashless_card.user:
-            if user:
-                if user != cashless_card.user:
-                    logger.error(f"get_federated_wallet - carte {cashless_card} et user {user} ne correspondent pas")
-                    raise OverflowError(f"get_federated_wallet : user != cashless_card.user")
-            else:
-                cashless_card.user = user
-                cashless_card.save()
-
-        # Si la carte n'a pas d'utilisateur,
-        else:
-            if user:
-                logger.info(f"get_federated_wallet - carte {cashless_card} sans user, on lui affecte {user}")
-                cashless_card.user = user
-                cashless_card.save()
-
-    try:
-        #   Lors d'un rechargement cashless via le QRCode, nous avons l'email et la carte
-        if user and cashless_card:
-            wallet, created = Wallet.objects.get_or_create(asset=asset, user=user, card=cashless_card)
-
-        #   Lors d'un achat de billet en ligne d'un utilisateur anonyme, nous n'avons que l'email,
-        #   aucune carte ne lui encore a été donnée.
-        elif user:
-            wallet = Wallet.objects.get(asset=asset, user=user)
-
-        #   Lors d'une distribution de carte cashless a l'entrée d'un lieu sans adhésion
-        #   nous n'avons que la carte, et il est possible qu'une recharge se fasse en liquide ou en carte bancaire
-        #   sans connaitre le mail de l'utilisateur
-        elif cashless_card:
-            wallet = Wallet.objects.get(asset=asset, card=cashless_card)
-
-    except Wallet.DoesNotExist:
-        logger.error(f"get_federated_wallet - Wallet does not exist for")
-        raise Wallet.DoesNotExist(f"get_federated_wallet - Wallet does not exist for")
-    except Exception as e:
-        logger.error(f"get_federated_wallet - {e}")
-        raise ValueError(f"get_federated_wallet - {e}")
-
-    return wallet
 
 
 def update_membership_state(trigger):
@@ -171,6 +44,9 @@ def update_membership_state(trigger):
 
     membership.save()
 
+    # TODO: On a débranché le cashless.
+    # Envoyer à fedow
+    # Envoyer les mails de confirmation et facture ici
 
     # C'est le cashless qui gère l'adhésion et l'envoi de mail
     if product.send_to_cashless:
@@ -189,47 +65,6 @@ def update_membership_state(trigger):
 
     return membership
 
-def increment_federated_wallet(vente):
-    # Un paiement stripe a été fait.
-    # Une ligne article a été mis en validé
-    # Le trigger_S correspondant à la ligne article est lancé
-
-    # vente: ActionArticlePaidByCategorie
-    ligne_article: LigneArticle = vente.ligne_article
-    # On incrémente la valeur du wallet Stripe de la carte.
-    # Cela déclenche un post save qui lance une requete celery
-    # pour alerter tous les cashless fédérés
-
-    user = ligne_article.paiement_stripe.user
-    cashless_card = ligne_article.carte
-    wallet = get_federated_wallet(cashless_card=cashless_card, user=user)
-    old_qty = wallet.qty
-    new_qty = old_qty + ligne_article.total()
-
-    # On log l'action
-    log = SyncFederatedLog.objects.create(
-        uuid=vente.ligne_article.paiement_stripe.uuid,
-        old_qty=old_qty,
-        new_qty=new_qty,
-        card=cashless_card,
-        wallet=wallet,
-        client_source=connection.tenant,
-        categorie=SyncFederatedLog.RECHARGE_STRIPE_FED,
-        etat_client_sync={},
-    )
-
-    logger.debug(f"    triggers.increment_federated_wallet - WALLET : {wallet.qty} + {ligne_article.total()}")
-
-    wallet.qty = new_qty
-    wallet.save()
-
-    # Informer tous les serveurs cashless qu'une recharge fédéré est lancée.
-    get_fedinstance_and_launch_request.delay(wallet.pk)
-
-    # On valide pour avoir un retour positif coté front :
-    vente.ligne_article.status = LigneArticle.VALID
-    logger.info(f"rechargement cashless fédéré ok")
-
 
 class ActionArticlePaidByCategorie:
     """
@@ -240,7 +75,7 @@ class ActionArticlePaidByCategorie:
         self.ligne_article = ligne_article
         self.categorie = self.ligne_article.pricesold.productsold.categorie_article
 
-        if self.categorie == Product.NONE :
+        if self.categorie == Product.NONE:
             self.categorie = self.ligne_article.pricesold.productsold.product.categorie_article
 
         self.data_for_cashless = {}
@@ -276,31 +111,13 @@ class ActionArticlePaidByCategorie:
     def trigger_F(self):
         logger.info(f"TRIGGER FREE RESERVATION")
 
-    # TODO: Pouvoir basculer du normal au federated
     # Category RECHARGE_CASHLESS
     def trigger_R(self):
-        reponse_cashless_serveur = increment_to_cashless_serveur(self)
-        logger.info(f"TRIGGER RECHARGE_CASHLESS : {reponse_cashless_serveur}")
+        logger.info(f"TRIGGER RECHARGE_CASHLESS")
 
-    # TODO: Pouvoir basculer du federated au normal
     # Category RECHARGE_FEDERATED
     def trigger_S(self):
         logger.info(f"TRIGGER RECHARGE_FEDERATED")
-        # Le serveur FEDOW est censé être au courant, car
-        # il est dans les webhook de Stripe.
-        # On envoie tout de même pour être sûr de la bonne reception.
-        data = {
-            'email': f"{self.ligne_article.paiement_stripe.user.email}",
-            'paiement_stripe_uuid' : f"{self.ligne_article.paiement_stripe.uuid}",
-            'ligne_article_uuid': f"{self.ligne_article.uuid}",
-            "checkout_session_id_stripe": f"{self.ligne_article.paiement_stripe.checkout_session_id_stripe}",
-            'card_uuid' : f"{self.ligne_article.carte.uuid}",
-            'qty': f"{self.ligne_article.pricesold.prix}",
-        }
-        send_info_to_fedow_serveur.delay(data)
-
-
-        # increment_federated_wallet(self)
 
     # Categorie ADHESION
     def trigger_A(self):

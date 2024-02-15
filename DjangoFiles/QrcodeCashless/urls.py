@@ -1,4 +1,4 @@
-from django.urls import include, path, re_path
+from django.urls import path
 
 from .views import index_scan, gen_one_bisik
 
