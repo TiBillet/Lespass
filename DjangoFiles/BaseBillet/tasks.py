@@ -246,9 +246,6 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
 
     uid = encode_uid(user.pk)
     token = default_token_generator.make_token(user)
-    # TODO: "base_url" doit être égal à ptotocol + domain + port
-    base_url = 'http://demo.filaos.re:8002'
-    print(f"-> dev, base_url hard codé = {base_url}")
     connexion_url = f"{base_url}/emailconfirmation/{uid}/{token}"
 
     if connection.tenant.schema_name != "public":

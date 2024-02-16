@@ -6,8 +6,6 @@ from uuid import uuid4
 from root_billet.models import RootConfiguration
 
 
-
-
 class FedowConfig(SingletonModel):
     # rsa_key = models.OneToOneField(RsaKey, on_delete=models.CASCADE, null=True, blank=True)
 
@@ -24,7 +22,7 @@ class FedowConfig(SingletonModel):
 
         with schema_context('public'):
             conf_root = RootConfiguration.get_solo()
-            cache.set("conf_root", conf_root, 3600*24*30)
+            cache.set("conf_root", conf_root, 3600 * 24 * 30)
             return conf_root.fedow_domain
 
     def fedow_ip(self):
@@ -36,5 +34,3 @@ class FedowConfig(SingletonModel):
             conf_root = RootConfiguration.get_solo()
             cache.set("conf_root", conf_root, 3600 * 24 * 30)
             return conf_root.fedow_ip
-
-

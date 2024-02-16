@@ -163,11 +163,6 @@ def activate(request, uid, token):
         logger.error(e)
         raise e
 
-    messages.add_message(request, messages.ERROR, "Token non valide")
-
-
-
-
 
 class create_user(APIView):
     permission_classes = [AllowAny]

@@ -151,6 +151,9 @@ class RsaKey(models.Model):
         )
 
 
+class Wallet(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, db_index=True)
+
 class TibilletUser(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
 
@@ -159,7 +162,7 @@ class TibilletUser(AbstractUser):
 
     username = models.CharField(max_length=200, unique=True)
     rsa_key = models.OneToOneField(RsaKey, on_delete=models.SET_NULL, null=True, related_name='user')
-    # wallet = models.OneToOneField(Wallet, on_delete=models.SET_NULL, null=True, related_name='user')
+    wallet = models.OneToOneField(Wallet, on_delete=models.SET_NULL, null=True, related_name='user')
 
     first_name = models.CharField(max_length=200, null=True, blank=True)
     last_name = models.CharField(max_length=200, null=True, blank=True)

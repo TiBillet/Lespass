@@ -1,34 +1,25 @@
 import logging
+import uuid
+from io import BytesIO
 
-from django.conf import settings
+import barcode
+import segno
+from django.contrib import messages
+from django.contrib.auth import logout
 from django.http import HttpResponse, HttpRequest
 from django.shortcuts import render, redirect, get_object_or_404
-
 from django.template.response import TemplateResponse
-
-from django.views.decorators.http import require_GET
-
 from django.utils.encoding import force_str, force_bytes
 from django.utils.http import urlsafe_base64_encode
-
+from django.views.decorators.http import require_GET
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 
-from ApiBillet.views import request_for_data_cashless
 from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
-
-from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Price, Event
-
-from django.contrib.auth import logout, login
-from django.contrib import messages
-
-import segno
-import barcode
-import uuid
-
-from io import BytesIO
+from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Event
+from BaseBillet.validators import LoginEmailValidator
 
 logger = logging.getLogger(__name__)
 
@@ -72,13 +63,6 @@ def get_context(request):
         }
     }
     return context
-
-
-# class index(APIView):
-#   permission_classes = [AllowAny]
-#
-#   def get(self, request):
-#     return HttpResponseRedirect("https://tibillet.org")
 
 
 class Ticket_html_view(APIView):
@@ -137,49 +121,43 @@ def deconnexion(request):
 def connexion(request):
     print("-> connexion:")
     if request.method == 'POST':
-        try:
-            email = request.POST.get('login-email')
+        validator = LoginEmailValidator(data=request.POST)
+        if validator.is_valid():
             # Création de l'user et envoie du mail de validation
+            email = validator.validated_data['email']
             user = get_or_create_user(email=email, send_mail=True)
-            # context = {}
 
-            '''
-            if settings.DEBUG:
-                login(request, user)
-                #messages.add_message(request, messages.DEBUG, "Debug : login auto, Connexion ok.")
-                #return redirect('home')
-                context = {
-                    "modal_message": {
-                        "type": "warning",
-                        "title": "Information",
-                        "content": "Le message d'erreur !"
-                    }
-                }
-                return render(request, "htmx/components/modal_message.html", context=context)
-            '''
-
-            # Le mail a été ernvoyé par le get__or_create, on redirige vers la page d'accueil et on leur demande de valider leur email
-            #messages.add_message(request, messages.SUCCESS, "Pour acceder à votre espace et réservations, merci de valider\n votre adresse email. Pensez à regarder dans les spams !")
+            # Le mail a été ernvoyé par le get_or_create_user,
+            # on redirige vers la page d'accueil et on leur demande de valider leur email
             context = {
                 "modal_message": {
                     "type": "success",
                     "title": "Information",
-                    "content": "Pour acceder à votre espace et réservations, merci de valider\n votre adresse email. Pensez à regarder dans les spams !"
+                    "content": "Pour acceder à votre espace, merci de valider\n"
+                               "votre adresse email. Pensez à regarder dans les spams !"
                 }
             }
             return render(request, "htmx/components/modal_message.html", context=context)
 
-        # Exception WIDE = C'EST LE MAL.
-        # Une exception large doit retourner une erreur serveur, pas un message client
-        except Exception as error:
-            logger.error(f"Erreur lors de la connexion : {error}")
-            raise error
-            # messages.add_message(request, messages.WARNING, str(error))
+        '''
+        if settings.DEBUG:
+            login(request, user)
+            #messages.add_message(request, messages.DEBUG, "Debug : login auto, Connexion ok.")
+            #return redirect('home')
+            context = {
+                "modal_message": {
+                    "type": "warning",
+                    "title": "Information",
+                    "content": "Le message d'erreur !"
+                }
+            }
+            return render(request, "htmx/components/modal_message.html", context=context)
+        '''
 
+    messages.add_message(request, messages.WARNING, "Erreur de validation de l'email")
     return redirect('home')
 
 
-# TODO: authentifier le user/email (si-dessous, ne fonctionne pas)
 def emailconfirmation(request, uuid, token):
     activate(request, uuid, token)
     return redirect('home')
@@ -225,7 +203,7 @@ def event(request: HttpRequest, slug) -> HttpResponse:
     #     memberships = request.user.membership.all()
     #     for membership in memberships:
     #         if membership.is_valid():
-    # TODO: membership.product => l'attribut "product" peut ne pas existé !
+    # TODO: membership.product => l'attribut "product" peut ne pas exister !
     #             valid_memberships.append(membership.product)
 
     # import ipdb; ipdb.set_trace()
