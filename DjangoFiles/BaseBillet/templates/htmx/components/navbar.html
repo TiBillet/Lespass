@@ -68,7 +68,7 @@
                     </li>
                 {% endif %}
                 <!-- Créer son espace -->
-                {% if configuration.categorie|in_list:'M' %}
+{#                {% if configuration.categorie|in_list:'M' %}#}
                     <li>
                         <a href="#" class="nav-item text-white mx-2" hx-get="/create_tenant/" hx-target="#main"
                            hx-swap="outerHTML"
@@ -77,7 +77,7 @@
                             Créer son espace
                         </a>
                     </li>
-                {% endif %}
+{#                {% endif %}#}
                 <!-- dark / light theme -->
                 <li>
                     <a href="#" class="nav-item text-white mx-2" role="button" aria-label="Thème sombre"

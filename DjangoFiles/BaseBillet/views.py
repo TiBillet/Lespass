@@ -4,8 +4,9 @@ from io import BytesIO
 
 import barcode
 import segno
+from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import logout
+from django.contrib.auth import logout, login
 from django.http import HttpResponse, HttpRequest
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.response import TemplateResponse
@@ -126,6 +127,9 @@ def connexion(request):
             # Création de l'user et envoie du mail de validation
             email = validator.validated_data['email']
             user = get_or_create_user(email=email, send_mail=True)
+            if settings.DEBUG:
+                login(request, user)
+                messages.add_message(request, messages.WARNING, "Debug : login auto, Connexion ok.")
 
             # Le mail a été ernvoyé par le get_or_create_user,
             # on redirige vers la page d'accueil et on leur demande de valider leur email
@@ -139,20 +143,6 @@ def connexion(request):
             }
             return render(request, "htmx/components/modal_message.html", context=context)
 
-        '''
-        if settings.DEBUG:
-            login(request, user)
-            #messages.add_message(request, messages.DEBUG, "Debug : login auto, Connexion ok.")
-            #return redirect('home')
-            context = {
-                "modal_message": {
-                    "type": "warning",
-                    "title": "Information",
-                    "content": "Le message d'erreur !"
-                }
-            }
-            return render(request, "htmx/components/modal_message.html", context=context)
-        '''
 
     messages.add_message(request, messages.WARNING, "Erreur de validation de l'email")
     return redirect('home')
