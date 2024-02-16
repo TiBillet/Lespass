@@ -90,7 +90,17 @@ class WalletFedow():
     def get_or_create(self, user: TibilletUser):
         email = user.email
         pub_key = user.get_public_key()
+        response_link = _post(self.config, 'wallet', {"email": email})
 
+
+class PlaceFedow():
+    def __init__(self, config):
+        config: FedowConfig = config
+        if not config:
+            config = FedowConfig.get_solo()
+
+    def create(self, user: TibilletUser):
+        pass
 
 class FedowAPI():
     def __init__(self, config: FedowConfig = None):
@@ -99,3 +109,7 @@ class FedowAPI():
             self.config = FedowConfig.get_solo()
 
         self.wallet = WalletFedow(self.config)
+        self.place = PlaceFedow(self.config)
+
+    def handshake(self):
+        domain = self.config.fedow_domain
