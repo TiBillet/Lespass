@@ -176,15 +176,15 @@ def home(request):
 
 def my_account_wallet(request: HttpRequest) -> HttpResponse:
     context = {}
-    return render(request, "htmx/parts/my_account_wallet.html", context=context)
+    return render(request, "htmx/fragments/my_account_wallet.html", context=context)
 
 def my_account_membership(request: HttpRequest) -> HttpResponse:
     context = {}
-    return render(request, "htmx/parts/my_account_membership.html", context=context)
+    return render(request, "htmx/fragments/my_account_membership.html", context=context)
 
 def my_account_profile(request: HttpRequest) -> HttpResponse:
     context = {}
-    return render(request, "htmx/parts/my_account_profile.html", context=context)
+    return render(request, "htmx/fragments/my_account_profile.html", context=context)
 
 @require_GET
 def my_account(request: HttpRequest) -> HttpResponse:
