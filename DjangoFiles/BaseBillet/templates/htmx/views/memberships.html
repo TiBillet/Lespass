@@ -1,8 +1,10 @@
 {% extends base_template %}
 
 {% block main %}
+    {% comment %} manages the "embed" mode {% endcomment %}
     {% include "htmx/header_groupe.html" %}
 
+    {% comment %} content of the partial rendering {% endcomment %}
     <div class="container pt-7 pb-5">
         {% for membership in memberships %}
             <div class="row justify-space-between py-2">
@@ -39,14 +41,15 @@
         {% endfor %}
     </div>
 
-    <!-- modals membership -->
+    <!-- création d'un modal par adhésion -->
     {% for membership in memberships %}
         {% include 'htmx/forms/membership_form.html' %}
     {% endfor %}
 
     <script>
+        // function utilisée par chaque modal après la fin d'une requête htmx
         function membershipActionsAfterSwap(modalMembershipIdid) {
-            console.log("--> fin de swap, modalMembershipIdid =", modalMembershipIdid)
+            // console.log("--> fin de swap, modalMembershipIdid =", modalMembershipIdid)
             // effacer le modal d'ahdésion une fois la requête finie
             hideModal('#' + modalMembershipIdid)
             // afficher le modal de retour de requête
