@@ -121,9 +121,6 @@ class Configuration(SingletonModel):
   facebook = models.URLField(blank=True, null=True)
   instagram = models.URLField(blank=True, null=True)
 
-  # adhesion_obligatoire = models.BooleanField(default=False, verbose_name="Proposer l'adhésion lors d'un scan de QRCode de carte NFC")
-  # button_adhesion = models.BooleanField(default=False)
-
   map_img = StdImageField(upload_to='images/',
                           null=True, blank=True,
                           validators=[MaxSizeValidator(1920, 1920)],

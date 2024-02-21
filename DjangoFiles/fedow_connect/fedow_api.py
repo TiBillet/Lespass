@@ -13,9 +13,10 @@ logger = logging.getLogger(__name__)
 
 
 ### GENERIC GET AND POST ###
-def _post(config, path, data):
+def _post(config, path, data, apikey=None):
     fedow_domain = config.fedow_domain
-    fedow_place_admin_apikey = config.fedow_place_admin_apikey
+    if apikey is None :
+        apikey = config.fedow_place_admin_apikey
 
     # Signature de la requete
     private_key = config.get_private_key()
@@ -36,7 +37,7 @@ def _post(config, path, data):
     request_fedow = session.post(
         f"https://{fedow_domain}/{path}/",
         headers={
-            "Authorization": f"Api-Key {fedow_place_admin_apikey}",
+            "Authorization": f"Api-Key {apikey}",
             "Signature": f"{signature}",
             "Content-type": "application/json",
         },
@@ -48,30 +49,31 @@ def _post(config, path, data):
     return request_fedow
 
 
-def _get(config: FedowConfig, user: TibilletUser, path: str):
+def _get(config: FedowConfig, user: TibilletUser, path: str, apikey=None):
     fedow_domain = config.fedow_domain
-    fedow_place_admin_apikey = config.fedow_place_admin_apikey
+    if apikey is None :
+        apikey = config.fedow_place_admin_apikey
 
     # Signature de la requete : on signe le path
     private_key = user.get_private_key()
     # Signature de la requete : on signe la clé
 
     signature = sign_message(
-        fedow_place_admin_apikey.encode('utf8'),
+        apikey.encode('utf8'),
         private_key,
     ).decode('utf-8')
 
     # Ici, on s'autovérifie :
     # Assert volontaire. Si non effectué en prod, ce n'est pas grave.
     assert verify_signature(user.get_public_key(),
-                            fedow_place_admin_apikey.encode('utf8'),
+                            apikey.encode('utf8'),
                             signature)
 
     session = requests.Session()
     request_fedow = session.get(
         f"https://{fedow_domain}/{path}/",
         headers={
-            'Authorization': f'Api-Key {fedow_place_admin_apikey}',
+            'Authorization': f'Api-Key {apikey}',
             "Signature": f"{signature}",
         },
         verify=bool(not settings.DEBUG),
@@ -83,24 +85,33 @@ def _get(config: FedowConfig, user: TibilletUser, path: str):
 
 class WalletFedow():
     def __init__(self, config):
-        config: FedowConfig = config
+        self.config: FedowConfig = config
         if not config:
-            config = FedowConfig.get_solo()
+            self.config = FedowConfig.get_solo()
 
     def get_or_create(self, user: TibilletUser):
-        email = user.email
-        pub_key = user.get_public_key()
-        response_link = _post(self.config, 'wallet', {"email": email})
+        # email = user.email
+        # pub_key = user.get_public_key()
+        # response_link = _post(self.config, 'wallet', {"email": email})
+        pass
 
 
 class PlaceFedow():
     def __init__(self, config):
-        config: FedowConfig = config
+        self.config: FedowConfig = config
         if not config:
-            config = FedowConfig.get_solo()
+            self.config = FedowConfig.get_solo()
 
-    def create(self, user: TibilletUser):
-        pass
+    def create(self, admin: TibilletUser=None, place_name=None):
+        apikey = self.config.get_fedow_create_place_apikey()
+        data = {
+            'place_name': place_name,
+            'admin_email': admin.email,
+            'admin_pub_pem': admin.rsa_key.public_pem,
+        }
+
+
+
 
 class FedowAPI():
     def __init__(self, config: FedowConfig = None):
@@ -112,4 +123,4 @@ class FedowAPI():
         self.place = PlaceFedow(self.config)
 
     def handshake(self):
-        domain = self.config.fedow_domain
+        pass

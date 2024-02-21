@@ -1,6 +1,9 @@
+import requests
+from django.conf import settings
 from django.core.cache import cache
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+import socket
 
 # Create your models here.
 from solo.models import SingletonModel
@@ -34,7 +37,8 @@ class RootConfiguration(SingletonModel):
 
     fedow_domain = models.URLField(blank=True, null=True, editable=False)
     fedow_ip = models.GenericIPAddressField(blank=True, null=True, editable=False)
-    fedow_create_place_apikey = models.CharField(max_length=110, blank=True, null=True, editable=False)
+    fedow_create_place_apikey = models.CharField(max_length=200, blank=True, null=True, editable=False)
+    fedow_primary_pub_pem = models.CharField(max_length=500, blank=True, null=True, editable=False)
 
     def get_stripe_api(self):
         if self.stripe_mode_test:
@@ -56,4 +60,16 @@ class RootConfiguration(SingletonModel):
 
     def get_fedow_create_place_apikey(self):
         return fernet_decrypt(self.fedow_create_place_apikey)
+
+    def root_fedow_handshake(self, fedow_domain):
+        handshake = requests.get(f"https://{fedow_domain}/root_tibillet_handshake/", verify=(not settings.DEBUG))
+        if handshake.status_code == 200:
+            data = handshake.json()
+            self.fedow_domain = fedow_domain
+            self.fedow_ip = socket.gethostbyname(f"{fedow_domain}")
+            self.set_fedow_create_place_apikey(data['api_key'])
+            self.fedow_primary_pub_pem = data['fedow_pub_pem']
+            self.save()
+        else :
+            raise Exception(f"Error while root handshake with FEDOW")
 

@@ -289,10 +289,13 @@ def memberships(request: HttpRequest) -> HttpResponse:
     # import ipdb; ipdb.set_trace()
     return render(request, "htmx/views/memberships.html", context=context)
 
+
 def validate_membership(request):
     if request.method == 'POST':
         print("-> validate_membership, méthode POST !")
-        # range-start-index - range-end-index, date-index 
+        #TODO: Construire serializer JONAS
+
+        # range-start-index - range-end-index, date-index
         data = dict(request.POST.lists())
         print(f"data = {data}")
         
