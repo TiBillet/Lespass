@@ -174,6 +174,46 @@ def home(request):
     context['dev_user_is_staff'] = True
     return render(request, "htmx/views/home.html", context=context)
 
+def my_account_wallet(request: HttpRequest) -> HttpResponse:
+    context = {}
+    return render(request, "htmx/fragments/my_account_wallet.html", context=context)
+
+def my_account_membership(request: HttpRequest) -> HttpResponse:
+    context = {}
+    return render(request, "htmx/fragments/my_account_membership.html", context=context)
+
+def my_account_profile(request: HttpRequest) -> HttpResponse:
+    context = {}
+    return render(request, "htmx/fragments/my_account_profile.html", context=context)
+
+@require_GET
+def my_account(request: HttpRequest) -> HttpResponse:
+    serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
+    config = Configuration.get_solo()
+    base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
+
+    host = "http://" + request.get_host()
+    if request.is_secure():
+        host = "https://" + request.get_host()
+
+    # image par défaut
+    if hasattr(config.img, 'fhd'):
+        header_img = config.img.fhd.url
+    else:
+        header_img = "/media/images/image_non_disponible.jpg"
+
+    context = {
+        "base_template": base_template,
+        "host": host,
+        "url_name": request.resolver_match.url_name,
+        "tenant": config.organisation,
+        "profile": serialized_user,
+        "header": None,
+        "user": request.user,
+    }
+
+    return render(request, "htmx/views/my_account.html", context=context)
+
 
 @require_GET
 def event(request: HttpRequest, slug) -> HttpResponse:

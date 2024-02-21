@@ -1,4 +1,4 @@
-// window.xxxx est utilisé pour rendre acessible les variables et fonctions à htmx en rendu partiel.
+// window.xxxx (scope global) est utilisé pour rendre acessible les variables et fonctions à htmx en rendu partiel.
 
 // Le code commun à plusieurs éléments est mis si-dessous
 const listInputsToFilled = ['number', 'email', 'text', 'tel']
@@ -21,36 +21,17 @@ window.hideModal = function (id) {
 	}, 700)
 }
 
-window['htmlEntities'] = function(str) {
+window['htmlEntities'] = function (str) {
 	return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 // TODO: à modifier fonctionne partiellement
-function updateTheme() {
+window.updateTheme = function () {
 	document.querySelectorAll('.maj-theme').forEach(ele => {
 		ele.classList.toggle('dark-version')
 	})
 }
 
-/**
- * Ajoute la class "is-filled" si le input n'est pas vide
- * @param {object} input - Elément DOM
- */
-function setInputFilled(input) {
-	const inputType = input.getAttribute('type')
-	if (listInputsToFilled.includes(inputType) && input.value !== '') {
-		input.parentNode.classList.add('is-filled')
-	}
-}
-
-function setAllInputFilled() {
-	document.querySelectorAll('input').forEach(input => {
-		const inputType = input.getAttribute('type')
-		if (listInputsToFilled.includes(inputType) && input.value !== '') {
-			input.parentNode.classList.add('is-filled')
-		}
-	})
-}
 
 /**
  * Donne la valeur mini
@@ -58,7 +39,7 @@ function setAllInputFilled() {
  * @param {number} value2 - Valeur 2
  * @returns {number}
  */
-window.getMin = function(value1, value2) {
+window.getMin = function (value1, value2) {
 	let min = 0
 	if (value1 === value2) {
 		min = value1
@@ -80,7 +61,7 @@ window.getMin = function(value1, value2) {
  * @param {number} value1 - Pour action=plus: Nombre maxi de produit, Pour action=moins: nombre minimum
  * @param {number} value2 - Nombre maxi de produit par utilisateur
  */
-window.inputNumberNomNominatif = function(id, action, value1, value2) {
+window.inputNumberNomNominatif = function (id, action, value1, value2) {
 	const element = document.querySelector('#' + id)
 	let number = parseInt(element.value)
 	if (action === 'over') {
@@ -103,7 +84,7 @@ window.inputNumberNomNominatif = function(id, action, value1, value2) {
  * @param {string} action - under=moins ou over=plus
  * @param {string} inputId - Dom, id (sans le #) de l'input contenant le nombre
  */
-window.inputNumberGroup = function(action, inputId) {
+window.inputNumberGroup = function (action, inputId) {
 	const input = document.querySelector('#' + inputId)
 	let min = input.getAttribute('min')
 	if (min !== null) {
@@ -156,7 +137,7 @@ window.formatNumberParentNode2 = function (event, limit) {
 	}
 }
 
-window.validateEmail = function(evt) {
+window.validateEmail = function (evt) {
 	let value = evt.target.value
 	const re = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$/
 	if (value.match(re) === null) {
@@ -175,7 +156,7 @@ window.validateEmail = function(evt) {
  * Attribut DOM/variable js - max = gère la valeur maxi
  * @param {object} event - èvènement du input
  */
-window.formatNumber = function(event) {
+window.formatNumber = function (event) {
 	// console.log('-> formatNumber !')
 	const element = event.target
 	// limite le nombre de chiffre
@@ -224,14 +205,12 @@ window.formatNumber = function(event) {
 	}
 }
 
+// check input type number, tel and email
 function testInput(event) {
 	const input = event.target
 	let inputType = input.getAttribute('type')
 
 	if (inputType !== null) {
-		// is-filled
-		setInputFilled(input)
-
 		// gestion number
 		const listNumber = ['number', 'tel']
 		if (listNumber.includes(inputType)) {
@@ -246,14 +225,15 @@ function testInput(event) {
 }
 
 
+// bypass submit / check form / scroll to error
 window.validateForm = function (evt, elementForm) {
-	let form 
+	let form
 	if (elementForm !== undefined) {
 		form = elementForm
 	} else {
 		form = evt.target
 	}
-	
+
 	// console.log("-> evt.target.checkValidity() =", form.checkValidity())
 	if (form.checkValidity() === false) {
 		// efface le spinner
@@ -284,11 +264,9 @@ window.validateForm = function (evt, elementForm) {
 }
 
 // manage validation form, stop track after click for inputs
-// Vérifie is-filled
 document.body.addEventListener('click', (evt) => {
 	const element = evt.target
 	if (element.tagName === 'INPUT' && element.style.display !== 'none') {
-		setInputFilled(element)
 
 		if (element.type === 'radio') {
 			const multi = document.querySelectorAll(`input[name=${element.getAttribute('name')}]`)
@@ -303,17 +281,8 @@ document.body.addEventListener('click', (evt) => {
 	}
 })
 
-// affiche le spinner
-document.body.addEventListener('htmx:beforeRequest', function() {
-	document.querySelector('#tibillet-spinner').style.display = 'flex'
-})
 
-// efface  le spinner
-document.body.addEventListener('htmx:afterRequest', function() {
-	document.querySelector('#tibillet-spinner').style.display = 'none'
-})
-
-// gestion des inputs
+// gestion des inputs (number, email)
 document.addEventListener('keyup', (event) => {
 	testInput(event)
 })
@@ -322,7 +291,6 @@ document.addEventListener('keyup', (event) => {
  * Initialise, une fois le contenu du DOM Chargé :
  * L'affichage des "toasts" présent dans le document
  * Reset des inputs radio et checkbox
- * Corrige material kit 2 "is-filled"
  */
 document.addEventListener('DOMContentLoaded', () => {
 	// toasts
@@ -339,7 +307,32 @@ document.addEventListener('DOMContentLoaded', () => {
 	document.querySelectorAll('input[type="radio"]').forEach(input => {
 		input.checked = false
 	})
+})
 
-	// corrige material kit 2 "is-filled"
-	setAllInputFilled()
+// material kit 2: restart the initialization of part of code on dynamics elements (htmx partial render)
+// onLoad = when dom content loaded and htmx element add(swap)
+htmx.onLoad(function (content) {
+	// Material Design Input function
+	var inputs = content.querySelectorAll('input');
+
+	for (var i = 0; i < inputs.length; i++) {
+		inputs[i].addEventListener('focus', function (e) {
+			this.parentElement.classList.add('is-focused');
+		}, false);
+
+		inputs[i].onkeyup = function (e) {
+			if (this.value != "") {
+				this.parentElement.classList.add('is-filled');
+			} else {
+				this.parentElement.classList.remove('is-filled');
+			}
+		};
+
+		inputs[i].addEventListener('focusout', function (e) {
+			if (this.value != "") {
+				this.parentElement.classList.add('is-filled');
+			}
+			this.parentElement.classList.remove('is-focused');
+		}, false);
+	}
 })

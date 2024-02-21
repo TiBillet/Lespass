@@ -22,7 +22,7 @@
     {% endblock head %}
 </head>
 
-<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' class="maj-theme">
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' class="maj-theme" hx-indicator="#tibillet-spinner">
 <main id="main">
     {% block main %}{% endblock main %}
 </main>

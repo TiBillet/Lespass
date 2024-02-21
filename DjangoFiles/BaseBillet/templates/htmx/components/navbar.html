@@ -33,15 +33,24 @@
                         </a>
                     </li>
                 {% else %}
+                    <li>
+                        <a href="#" class="nav-item text-white mx-2" hx-get="/my_account/" hx-target="#main"
+                            hx-swap="outerHTML"
+                            hx-push-url="true" role="button" aria-label="Gérer mon compte">
+                            <i class="fa fa-user" aria-hidden="true"></i>
+                            Mon compte
+                        </a>
+                    </li>
+                    <!--
                     <li class="nav-item dropdown mx-2">
                         <a href="#" class="dropdown-toggle text-white" id="menuUser" data-bs-toggle="dropdown">
                             <i class="fa fa-user" aria-hidden="true"></i>
                             Mon compte
                         </a>
-                        <!-- sous menu user-->
+                        //-- sous menu user--//
                         <ul class="menu-conection dropdown-menu dropdown-menu-animation me-1 bg-white"
                             aria-labelledby="menuUser">
-                            <!-- info email user connecté -->
+                            //-- info email user connecté --//
                             <li>
                                 <a class="dropdown-item" href="#">
                                     {{ profile.email }}
@@ -55,6 +64,7 @@
                             </li>
                         </ul>
                     </li>
+                -->
                 {% endif %}
                 <!-- Adhésion -->
                 {% if configuration.categorie|not_in_list:'M' and url_name != 'memberships' %}
