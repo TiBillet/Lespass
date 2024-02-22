@@ -1,3 +1,5 @@
+import os
+
 from django.core.management.base import BaseCommand
 
 import logging
@@ -15,7 +17,8 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         with schema_context('public'):
+            fedow_domain = os.environ['FEDOW_DOMAIN']
             root_config = RootConfiguration.get_solo()
-            root_config.root_fedow_handshake('fedow.tibillet.localhost')
+            root_config.root_fedow_handshake(fedow_domain)
 
 

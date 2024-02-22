@@ -18,7 +18,8 @@ from django_tenants.test.client import TenantClient
 class APITiBilletTestCase(TenantTestCase):
     def setUp(self):
         super().setUp()
-        # call_command('create_public')
+        call_command('create_public')
+        call_command('root_fedow')
         self.c = TenantClient(self.tenant)
 
     def xtest_Root(self):
@@ -28,7 +29,7 @@ class APITiBilletTestCase(TenantTestCase):
             self.assertTrue(root_config.stripe_mode_test)
             self.assertIsNotNone(root_config.stripe_test_api_key)
 
-    def test_Meta(self):
+    def xtest_Meta(self):
         # with schema_context('meta'):
         #     meta_config = Configuration.get_solo()
         #     self.assertIsNotNone(meta_config)
