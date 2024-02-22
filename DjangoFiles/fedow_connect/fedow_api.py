@@ -13,17 +13,17 @@ logger = logging.getLogger(__name__)
 
 
 ### GENERIC GET AND POST ###
-def _post(config: FedowConfig = None,
+def _post(fedow_config: FedowConfig = None,
           user: TibilletUser = None,
           data: dict = None,
           path: str = None,
           apikey: str = None):
-    fedow_domain = config.fedow_domain()
+    fedow_domain = fedow_config.fedow_domain()
 
     # Pour la création, on prend la clé api de Root. On rempli apikey
     # Si vide, on prend la clé du lieu du tenant
     if apikey is None:
-        apikey = config.fedow_place_admin_apikey
+        apikey = fedow_config.fedow_place_admin_apikey
 
     # Signature de la requete
     private_key = user.get_private_key()
@@ -57,15 +57,15 @@ def _post(config: FedowConfig = None,
     return request_fedow
 
 
-def _get(config: FedowConfig = None,
+def _get(fedow_config: FedowConfig = None,
          user: TibilletUser = None,
          path: str = None, apikey=None):
-    fedow_domain = config.fedow_domain()
+    fedow_domain = fedow_config.fedow_domain()
 
     # Pour la création, on prend la clé api de Root. On rempli apikey
     # Si vide, on prend la clé du lieu du tenant
     if apikey is None:
-        apikey = config.fedow_place_admin_apikey
+        apikey = fedow_config.fedow_place_admin_apikey
 
     # Signature de la requete : on signe le path
     private_key = user.get_private_key()
@@ -97,10 +97,10 @@ def _get(config: FedowConfig = None,
 
 
 class WalletFedow():
-    def __init__(self, config):
-        self.config: FedowConfig = config
-        if not config:
-            self.config = FedowConfig.get_solo()
+    def __init__(self, fedow_config):
+        self.fedow_config: FedowConfig = fedow_config
+        if not fedow_config:
+            self.fedow_config = FedowConfig.get_solo()
 
     def get_or_create(self, user: TibilletUser):
         # email = user.email
@@ -110,36 +110,51 @@ class WalletFedow():
 
 
 class PlaceFedow():
-    def __init__(self, config):
-        self.config: FedowConfig = config
-        if not config:
-            self.config = FedowConfig.get_solo()
+    def __init__(self, fedow_config):
+        self.fedow_config: FedowConfig = fedow_config
+        if not fedow_config:
+            self.fedow_config = FedowConfig.get_solo()
 
     def create(self, admin: TibilletUser = None, place_name=None):
+        if any([
+            self.fedow_config.fedow_place_uuid,
+            self.fedow_config.fedow_place_wallet_uuid,
+            self.fedow_config.fedow_place_admin_apikey,
+        ]):
+            raise Exception("Place already created")
+
+        if place_name is None:
+            tenant_config = Configuration.get_solo()
+            place_name = tenant_config.organisation
+
         # Pour la création, on prend la clé api de Root
-        apikey = self.config.get_fedow_create_place_apikey()
+        apikey = self.fedow_config.get_fedow_create_place_apikey()
         data = {
             'place_name': place_name,
             'admin_email': admin.email,
             'admin_pub_pem': admin.get_public_pem(),
         }
 
-        import ipdb; ipdb.set_trace()
-        new_place = _post(config=self.config,
+        new_place = _post(fedow_config=self.fedow_config,
                           user=admin,
                           path='place',
                           data=data, apikey=apikey)
+        new_place_data = new_place.json()
+        self.fedow_config.fedow_place_uuid = new_place_data['uuid']
+        self.fedow_config.fedow_place_wallet_uuid = new_place_data['wallet']
+        self.fedow_config.fedow_place_admin_apikey = new_place_data['key']
+        self.fedow_config.save()
 
 
 # from fedow_connect.fedow_api import FedowAPI
 class FedowAPI():
-    def __init__(self, config: FedowConfig = None):
-        self.config = config
-        if config is None:
-            self.config = FedowConfig.get_solo()
+    def __init__(self, fedow_config: FedowConfig = None):
+        self.fedow_config = fedow_config
+        if fedow_config is None:
+            self.fedow_config = FedowConfig.get_solo()
 
-        self.wallet = WalletFedow(self.config)
-        self.place = PlaceFedow(self.config)
+        self.wallet = WalletFedow(self.fedow_config)
+        self.place = PlaceFedow(self.fedow_config)
 
     def handshake(self):
         pass

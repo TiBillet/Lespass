@@ -7,13 +7,9 @@ from root_billet.models import RootConfiguration
 
 
 class FedowConfig(SingletonModel):
-    # rsa_key = models.OneToOneField(RsaKey, on_delete=models.CASCADE, null=True, blank=True)
-
     fedow_place_uuid = models.UUIDField(blank=True, null=True, editable=False)
     fedow_place_wallet_uuid = models.UUIDField(blank=True, null=True, editable=False)
-
     fedow_place_admin_apikey = models.CharField(max_length=41, blank=True, null=True, editable=False)
-    fedow_place_wallet_public_pem = models.CharField(max_length=500, blank=True, null=True, editable=False)
 
     def get_conf_root(self):
         if cache.get('conf_root'):
