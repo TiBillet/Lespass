@@ -810,21 +810,20 @@ class NewAdhesionValidator(serializers.Serializer):
 
 
 class MembreValidator(serializers.Serializer):
-    adhesion = serializers.PrimaryKeyRelatedField(
+    price = serializers.PrimaryKeyRelatedField(
         queryset=Price.objects.filter(product__categorie_article=Product.ADHESION)
     )
-
     email = serializers.EmailField()
-
-    options = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(), many=True, allow_null=True,
-                                                 required=False)
-
     first_name = serializers.CharField(max_length=200, required=False)
     last_name = serializers.CharField(max_length=200, required=False)
+
+    options = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(),
+                                                 many=True, allow_null=True, required=False)
 
     phone = serializers.CharField(max_length=20, required=False)
     postal_code = serializers.IntegerField(required=False)
     birth_date = serializers.DateField(required=False)
+
     newsletter = serializers.BooleanField(required=False)
 
     def validate_adhesion(self, value):

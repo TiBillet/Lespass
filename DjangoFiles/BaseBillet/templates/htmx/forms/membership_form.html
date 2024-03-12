@@ -1,5 +1,5 @@
 <div class="maj-theme modal fade" id="tibillet-membership-modal-{{ membership.uuid }}" tabindex="-1"
-    aria-labelledby="exampleModalLabel" aria-hidden="true">
+     aria-labelledby="exampleModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header d-flex flex-column justify-content-between align-items-center">
@@ -10,18 +10,18 @@
             </div>
             <div class="modal-body">
 
-                <form hx-post="/validate_membership/" hx-target="#tibillet-modal-message" hx-swap="outerHTML" novalidate 
-                    hx-on:htmx:before-request="validateForm(event)" 
-                    hx-on:htmx:after-request="membershipActionsAfterSwap('tibillet-membership-modal-{{ membership.uuid }}')">
+                <form hx-post="/validate_membership/" hx-target="#tibillet-modal-message" hx-swap="outerHTML" novalidate
+                      hx-on:htmx:before-request="validateForm(event)"
+                      hx-on:htmx:after-request="membershipActionsAfterSwap('tibillet-membership-modal-{{ membership.uuid }}')">
                     {% csrf_token %}
                     <!-- conditions -->
                     <div class="input-group mb-4 has-validation" style="position:relative">
 
                         <div class="form-check form-switch d-flex flex-row" style="padding-left: 0;">
-                            <input name="tibillet-membership-read-conditions"
+                            <input name="acknowledge"
                                    class="form-check-input ms-auto mt-1 tibillet-input-checkbox" type="checkbox"
-                                   id="tibillet-membership-read-conditions-id" required>
-                            <label class="form-check-label ms-3" for="tibillet-membership-read-conditions-id">
+                                   id="acknowledge" required>
+                            <label class="form-check-label ms-3" for="acknowledge">
                                 <span>j'ai pris connaissance des </span>
                                 {% if membership.categorie_article == 'A' %}
                                     <span>
@@ -51,61 +51,62 @@
                         {% for price in membership.prices.all %}
                             <div class="form-check me-3" style="padding-left: 0;">
                                 <input class="form-check-input" type="radio"
-                                       name="tibillet-membership-price-{{ membership.uuid }}"
-                                       id="tibillet-membership-radio-{{ price.uuid }}"
+                                       name="price"
+                                       id="price-{{ price.uuid }}"
                                        value="{{ price.uuid }}" required>
                                 <label class="custom-control-label text-darkms-0"
-                                       for="tibillet-membership-radio-{{ price.uuid }}">
+                                       for="price-{{ price.uuid }}">
                                     {{ price.name }}
                                 </label>
                             </div>
                         {% endfor %}
                     </div>
 
+                    <!-- email -->
+                    <div class="input-group input-group-dynamic mb-4">
+                        <label class="form-label">Email</label>
+                        <input name="email" type="email" class="form-control"
+                               role="textbox" aria-label="Email pour l'adhésion." required>
+                    </div>
+
                     <!-- nom -->
-                    <div class="input-group input-group-dynamic mb-4" >
+                    <div class="input-group input-group-dynamic mb-4">
                         <label class="form-label">Nom</label>
-                        <input name="membership-first-name" type="text" class="form-control"
+                        <input name="first_name" type="text" class="form-control"
                                role="textbox" aria-label="Nom pour l'adhésion." required>
                     </div>
 
                     <!-- prénom -->
                     <div class="input-group input-group-dynamic mb-4">
                         <label class="form-label">Prénom</label>
-                        <input name="membership-last-name" type="text" class="form-control"
+                        <input name="last_name" type="text" class="form-control"
                                role="textbox" aria-label="Prénom pour l'adhésion." required>
                     </div>
 
-                    <!-- email -->
-                    <div class="input-group input-group-dynamic mb-4">
-                        <label class="form-label">Email</label>
-                        <input name="membership-email" type="email" class="form-control"
-                               role="textbox" aria-label="Email pour l'adhésion." required>
-                    </div>
 
                     <!-- code postal -->
-                    <div class="input-group input-group-dynamic mb-4">
-                        <label class="form-label">Code postal</label>
-                        <!-- l'attribut "limit" permet le control/formatage du nombre -->
-                        <input name="membership-postal-code" type="number" limit="5"
-                               class="form-control"
-                               role="textbox" aria-label="Code postal pour l'adhésion." required>
-                    </div>
+                    {#                    <div class="input-group input-group-dynamic mb-4">#}
+                    {#                        <label class="form-label">Code postal</label>#}
+                    {#                        <!-- l'attribut "limit" permet le control/formatage du nombre -->#}
+                    {#                        <input name="postal_code" type="tel" limit="5"#}
+                    {#                               class="form-control"#}
+                    {#                               role="textbox" aria-label="Code postal pour l'adhésion." required>#}
+                    {#                    </div>#}
 
                     <!-- téléphone -->
-                    <div class="input-group input-group-dynamic mb-4">
-                        <label class="form-label">Fixe ou Mobile</label>
-                        <input name="membership-tel" type="tel" limit="10"
-                               class="form-control tibillet-number-control" role="textbox"
-                               aria-label="Fixe ou Mobile pour l'adhésion." required>
-                    </div>
+                    {#                    <div class="input-group input-group-dynamic mb-4">#}
+                    {#                        <label class="form-label">Fixe ou Mobile</label>#}
+                    {#                        <input name="membership-tel" type="tel" limit="13"#}
+                    {#                               class="form-control tibillet-number-control" role="textbox"#}
+                    {#                               aria-label="Fixe ou Mobile pour l'adhésion." required>#}
+                    {#                    </div>#}
 
                     <!-- options radio -->
                     <div class="input-group mb-4 has-validation" style="position:relative">
                         {% for option in membership.option_generale_radio.all %}
                             <div class="form-check me-3" style="padding-left: 0;">
                                 <input class="form-check-input" type="radio"
-                                       name="tibillet-membership-option-radio-{{ membership.uuid }}"
+                                       name="option_radio"
                                        id="tibillet-membership-radio-{{ forloop.counter0 }}"
                                        value="{{ option.uuid }}">
                                 <label class="custom-control-label text-darkms-0"
@@ -118,17 +119,33 @@
 
                     <!-- options checkbox -->
                     <div class="input-group mb-4 has-validation" style="position:relative">
-                        {% for option in membership.option_generale_checkbox.all %}
-                            <div class="form-check form-switch d-flex flex-row me-3" style="padding-left: 0;">
-                                <input name="tibillet-membership-option-checkbox-{{ option.uuid }}"
-                                       class="form-check-input ms-auto mt-1" type="checkbox"
-                                       id="tibillet-membership-checkbox-{{ option.uuid }}">
-                                <label class="form-check-label ms-3"
-                                       for="tibillet-membership-checkbox-{{ option.uuid }}">
-                                    {{ option.name }}
-                                </label>
-                            </div>
-                        {% endfor %}
+                        <fieldset>
+                            {% for option in membership.option_generale_checkbox.all %}
+                                <div class="form-check form-switch d-flex flex-row me-3" style="padding-left: 0;">
+                                    <input name="options_checkbox"
+                                           class="form-check-input ms-auto mt-1" type="checkbox"
+                                           id="checkbox-{{ option.uuid }}"
+                                           value="{{ option.uuid }}">
+                                    <label class="form-check-label ms-3"
+                                           for="checkbox-{{ option.uuid }}">
+                                        {{ option.name }}
+                                    </label>
+                                </div>
+                            {% endfor %}
+                        </fieldset>
+                    </div>
+
+                    <div class="input-group mb-4 has-validation" style="position:relative">
+                        <div class="form-check form-switch d-flex flex-row me-3" style="padding-left: 0;">
+                            <input name="newsletter"
+                                   class="form-check-input ms-auto mt-1" type="checkbox"
+                                   id="newsletter"
+                                   aria-label="Consentement pour l'adhésion">
+                            <label class="form-check-label ms-3"
+                                   for="newsletter">
+                                Je ne souhaite pas recevoir d'email de la part de l'association.
+                            </label>
+                        </div>
                     </div>
 
                     <div class="d-flex flex-row">

@@ -492,76 +492,6 @@ def borne_temps_4h():
         return debut_jour, lendemain_quatre_heure
 
 
-'''
-@permission_classes([permissions.IsAuthenticated])
-class LoadCardsFromCsv(APIView):
-
-    def is_string_an_url(self, url_string):
-        validate_url = URLValidator()
-
-        try:
-            validate_url(url_string)
-        except ValidationError as e:
-            return False
-        return True
-
-    def post(self, request):
-        try :
-            gen = request.data['generation']
-            content_csv_file = request.data['csv'].read().decode()
-            file = StringIO(content_csv_file)
-            csv_data = csv.reader(file, delimiter=",")
-        except:
-            return Response('Mauvais fichiers', status=status.HTTP_406_NOT_ACCEPTABLE)
-
-        list_csv = []
-        for line in csv_data:
-            list_csv.append(line)
-
-        # on saucissonne l'url d'une ligne au pif :
-        part = list_csv[1][0].partition('/qr/')
-        base_url = f"{part[0]}{part[1]}"
-
-        if self.is_string_an_url(base_url) and uuid.UUID(part[2]) :
-            detail_carte, created = Detail.objects.get_or_create(
-                base_url=base_url,
-                origine=connection.tenant,
-                generation=int(gen),
-            )
-
-            numline = 1
-            for line in list_csv:
-                print(numline)
-                part = line[0].partition('/qr/')
-                try:
-                    uuid_url = uuid.UUID(part[2])
-                    print(f"base_url : {base_url}")
-                    print(f"uuid_url : {uuid_url}")
-                    print(f"number : {line[1]}")
-                    print(f"tag_id : {line[2]}")
-
-                    # if str(uuid_url).partition('-')[0].upper() != line[1]:
-                    #     print('ERROR PRINT != uuid')
-                    #     break
-
-                    carte, created = CarteCashless.objects.get_or_create(
-                        tag_id=line[2],
-                        uuid=uuid_url,
-                        number=line[1],
-                        detail=detail_carte,
-                    )
-
-                    numline += 1
-                except:
-                    pass
-
-            return Response('Cartes chargées', status=status.HTTP_200_OK)
-
-        return Response('Mauvais formatage de fichier.', status=status.HTTP_406_NOT_ACCEPTABLE)
-        # import ipdb; ipdb.set_trace()
-'''
-
-
 @permission_classes([permissions.IsAuthenticated])
 class CancelSubscription(APIView):
     def post(self, request):
@@ -1099,7 +1029,14 @@ class Webhook_stripe(APIView):
 
             # On utilise les metadata du paiement stripe pour savoir de quel tenant cela vient.
             if f"{connection.tenant.uuid}" != tenant_uuid_in_metadata:
-                tenant = get_object_or_404(Client, uuid=tenant_uuid_in_metadata)
+                try :
+                    tenant = Client.objects.get(uuid=tenant_uuid_in_metadata)
+                except Client.DoesNotExist:
+                    logger.warning(
+                        f"Webhook_stripe checkout.session.completed - id : {payload.get('id')} - tenant {tenant_uuid_in_metadata} not found")
+                    return Response("tenant not found",
+                                    status=status.HTTP_204_NO_CONTENT)
+
                 with tenant_context(tenant):
                     paiement_stripe = get_object_or_404(Paiement_stripe,
                                                         checkout_session_id_stripe=payload['data']['object']['id'])

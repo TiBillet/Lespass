@@ -1,10 +1,13 @@
 import logging
+
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from django.contrib.auth.tokens import default_token_generator
 from django.http import HttpResponseRedirect
-from django.shortcuts import redirect
-
+from django.utils.encoding import force_str, force_bytes
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from django.utils.translation import gettext_lazy as _
 # Create your views here.
 from rest_framework import status, permissions, viewsets
 from rest_framework.exceptions import AuthenticationFailed
@@ -12,22 +15,15 @@ from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.utils.translation import gettext_lazy as _
 from rest_framework_api_key.models import APIKey
 from rest_framework_api_key.permissions import HasAPIKey
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from ApiBillet.views import request_for_data_cashless
 from AuthBillet.models import TibilletUser
-from rest_framework_simplejwt.tokens import RefreshToken
-
 from AuthBillet.serializers import MeSerializer, CreateUserValidator, CreateTerminalValidator, TokenTerminalValidator
 from AuthBillet.utils import get_or_create_user, sender_mail_connect, get_client_ip
 from BaseBillet.models import Configuration, ExternalApiKey
-
-from django.utils.encoding import force_str, force_bytes
-from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
-from django.contrib.auth.tokens import default_token_generator
 from TiBillet import settings
 
 User = get_user_model()
@@ -112,7 +108,6 @@ class create_api_key(APIView):
 '''
 
 
-
 class test_api_key(APIView):
     '''
     exemple :
@@ -126,7 +121,6 @@ class test_api_key(APIView):
         tenant_apikey = get_object_or_404(ExternalApiKey, key=api_key)
         ip = get_client_ip(request)
 
-
         data = {
             "auth": tenant_apikey.api_permissions(),
             "ip_request": ip,
@@ -137,7 +131,6 @@ class test_api_key(APIView):
             data,
             status=status.HTTP_200_OK,
         )
-
 
 
 def activate(request, uid, token):
@@ -234,6 +227,7 @@ class MeViewset(viewsets.ViewSet):
             permission_classes = [permissions.AllowAny]
         return [permission() for permission in permission_classes]
 
+
 '''
 class SetPassword(viewsets.ViewSet):
     def create(self, request):
@@ -246,25 +240,28 @@ class SetPassword(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 '''
 
+
 class SetPasswordIfEmpty(APIView):
     permission_classes = [permissions.IsAuthenticated]
+
     def post(self, request):
         user: TibilletUser = request.user
-        if not user.password :
-            if request.data.get('password') :
-                if len(request.data.get('password')) >= 8 :
+        if not user.password:
+            if request.data.get('password'):
+                if len(request.data.get('password')) >= 8:
                     user.set_password(request.data.get('password'))
                     user.save()
 
                     return Response('Password set',
                                     status=status.HTTP_200_OK)
-                else :
+                else:
                     logger.error(f"Password too short")
                     return Response('Password trop court',
                                     status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
         return Response('Not allowed',
                         status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
 
 class OAauthApi(APIView):
     permission_classes = [AllowAny]

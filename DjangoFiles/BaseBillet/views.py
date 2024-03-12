@@ -12,15 +12,16 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.template.response import TemplateResponse
 from django.utils.encoding import force_str, force_bytes
 from django.utils.http import urlsafe_base64_encode
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_POST
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 
+from ApiBillet.serializers import MembreValidator
 from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Event
-from BaseBillet.validators import LoginEmailValidator
+from BaseBillet.validators import LoginEmailValidator, MembershipValidator
 
 logger = logging.getLogger(__name__)
 
@@ -329,38 +330,30 @@ def memberships(request: HttpRequest) -> HttpResponse:
     # import ipdb; ipdb.set_trace()
     return render(request, "htmx/views/memberships.html", context=context)
 
-
 def validate_membership(request):
     if request.method == 'POST':
-        print("-> validate_membership, méthode POST !")
-        #TODO: Construire serializer JONAS
+        membership_validator = MembershipValidator(data=request.POST, context={'request': request})
+        if not membership_validator.is_valid():
+            errors = membership_validator.errors
+            for error in errors :
+                messages.add_message(request, messages.WARNING, f"Erreur : {error}")
 
-        # range-start-index - range-end-index, date-index
-        data = dict(request.POST.lists())
-        print(f"data = {data}")
-        
-        # validé / pas validé retourner un message
-        dev_validation = True
-        context = {}
-
-        if dev_validation == False:
             context = {
                 "modal_message": {
                     "type": "warning",
                     "title": "Information",
-                    "content": "Le message d'erreur !"
+                    "content": f"{errors}"
                 }
             }
+            return render(request, "htmx/components/modal_message.html", context=context)
 
-        if dev_validation == True:
-            context = {
-                "modal_message": {
-                    "type": "success",
-                    "title": "Information",
-                    "content": "Adhésion validée !"
-                }
+        context = {
+            "modal_message": {
+                "type": "success",
+                "title": "Information",
+                "content": "Adhésion validée !"
             }
-
+        }
         return render(request, "htmx/components/modal_message.html", context=context)
     
     return redirect('home')
