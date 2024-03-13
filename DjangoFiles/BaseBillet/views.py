@@ -16,7 +16,8 @@ from django.views.decorators.http import require_GET, require_POST
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 from django_htmx.http import HttpResponseClientRedirect
-from ApiBillet.serializers import MembreValidator
+from rest_framework import viewsets, permissions, status
+
 from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
@@ -297,38 +298,45 @@ class membership_form(APIView):
         return render(request, "htmx/forms/membership_form.html", context=context)
 '''
 
+class MembershipMVT(viewsets.ViewSet):
+    def list(self, request: HttpRequest):
+        config = Configuration.get_solo()
+        base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
 
-@require_GET
-def memberships(request: HttpRequest) -> HttpResponse:
-    config = Configuration.get_solo()
-    base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
+        host = "http://" + request.get_host()
+        if request.is_secure():
+            host = "https://" + request.get_host()
 
-    host = "http://" + request.get_host()
-    if request.is_secure():
-        host = "https://" + request.get_host()
+        # image par défaut
+        if hasattr(config.img, 'fhd'):
+            header_img = config.img.fhd.url
+        else:
+            header_img = "/media/images/image_non_disponible.jpg"
 
-    # image par défaut
-    if hasattr(config.img, 'fhd'):
-        header_img = config.img.fhd.url
-    else:
-        header_img = "/media/images/image_non_disponible.jpg"
+        context = {
+            "base_template": base_template,
+            "host": host,
+            "url_name": request.resolver_match.url_name,
+            "tenant": config.organisation,
+            "configuration": config,
+            "header": {
+                "img": header_img,
+                "title": config.organisation,
+                "short_description": config.short_description,
+                "long_description": config.long_description
+            },
+            "memberships": Product.objects.filter(categorie_article="A"),
+        }
+        # import ipdb; ipdb.set_trace()
+        return render(request, "htmx/views/memberships.html", context=context)
 
-    context = {
-        "base_template": base_template,
-        "host": host,
-        "url_name": request.resolver_match.url_name,
-        "tenant": config.organisation,
-        "configuration": config,
-        "header": {
-            "img": header_img,
-            "title": config.organisation,
-            "short_description": config.short_description,
-            "long_description": config.long_description
-        },
-        "memberships": Product.objects.filter(categorie_article="A"),
-    }
-    # import ipdb; ipdb.set_trace()
-    return render(request, "htmx/views/memberships.html", context=context)
+    def get_permissions(self):
+        # if self.action in ['create', 'retrieve']:
+        #     permission_classes = [permissions.AllowAny]
+        # else:
+        #     permission_classes = [TenantAdminPermission]
+        permission_classes = [permissions.AllowAny]
+        return [permission() for permission in permission_classes]
 
 def validate_membership(request):
     if request.method == 'POST':

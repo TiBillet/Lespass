@@ -27,7 +27,6 @@ class MembershipValidator(serializers.Serializer):
 
     newsletter = serializers.BooleanField()
 
-
     def validate_email(self, value):
         user: TibilletUser = get_or_create_user(value)
         self.user = user
