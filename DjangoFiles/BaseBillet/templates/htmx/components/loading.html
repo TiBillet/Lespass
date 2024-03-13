@@ -1,0 +1,29 @@
+<!-- spinner -->
+<div id="tibillet-spinner" class="fixed-top bg-dark vw-100 vh-100">
+  <div class="d-flex justify-content-center align-items-center vw-100 vh-100">
+    <div
+      class="spinner-border text-info"
+      role="status"
+      style="
+        width: var(--tibillet-spinner-width);
+        height: var(--tibillet-spinner-height);
+        border-width: var(--tibillet-spinner-borderWidth);
+      "
+    ></div>
+  </div>
+</div>
+
+<style>
+  #tibillet-spinner {
+    display: none;
+    background-color: #cc33ff;
+    opacity: 0.4;
+    z-index: 9999;
+  }
+  .htmx-request #tibillet-spinner {
+    display: flex;
+  }
+  .htmx-request#tibillet-spinner {
+    display: flex;
+  }
+</style>

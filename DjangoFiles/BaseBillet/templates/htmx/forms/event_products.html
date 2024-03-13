@@ -1,0 +1,72 @@
+<form hx-post="/wiz_event/products/" novalidate class="creation-tabs-content">
+    <div class="espace-content d-flex flex-column">
+        <!-- Nom --> 
+        <div class="event-product-name-content d-flex flex-column justify-content-end">
+            <div class="input-group input-group-dynamic">
+                <label class="form-label">Nom</label> <input id="event-product-name" name="event-product-name" type="text" class="form-control">
+            </div>
+        </div>
+        <div class="event-product-prices-content">
+            <div class="position-relative border rounded w-100 mt-4" style="height: 94% !important;">
+                <div id="event-bt-add-price" class="position-absolute top-0 start-2 bg-info text-white translate-middle-y border rounded ps-2 pe-2 d-flex flex-row justify-content-start"
+                role="button" data-index="0" onclick="addPrice(this)">
+                    <span class="unselectable">Ajouter un prix<span>
+                    <span class="unselectable btn-inner--icon ms-2"> <i class="fa fa-plus" aria-hidden="true"></i></span>
+                </div>
+                <div id="event-prices-container"></div>
+            </div>
+        </div>
+    </div>
+    <!-- footer -->
+    <div class="d-flex flex-row-reverse w-100 creation-footer">
+        <button type="evt" class="btn btnbutton = evt.target-creation bg-primary text-white" role="button" aria-label="go products">Suivant</button>
+    </div>
+</form>
+<script>
+    function addPrice(element) {
+		const templatePrice = document.querySelector('#event-price-template')
+		let clone = document.importNode(templatePrice.content, true);
+		let parent = clone.querySelector('#event-price-content')
+		let index = parseInt(element.getAttribute('data-index'))
+        console.log('index =', element.getAttribute('data-index'))
+		// modifier le id en fonction de l'index
+		parent.id = "event-price-content" + index
+		// incrémenter l'index por le prochain ajout
+		element.setAttribute('data-index', index + 1)
+		// ajouter l'attribut name aux inputs
+		parent.querySelector('input[data-ref="input-name"]').setAttribute('name',
+				`price-name-${index}`)
+		parent.querySelector('input[data-ref="input-prix"').setAttribute('name',
+				`price-prix-${index}`)
+        parent.querySelector('input[data-ref="input-stock"').setAttribute('name',
+				`price-stock-${index}`)
+		// donner l'index des inputs à l'icon 'poubelle'
+		parent.querySelector('i[role="button"]').setAttribute('data-index',
+				index)
+		document.querySelector('#event-prices-container').appendChild(clone)
+	}
+
+    function deletePrice(element) {
+        const index = parseInt(element.getAttribute('data-index'))
+        document.querySelector('#event-price-content' + index).remove()
+    }
+</script>
+
+<style>
+    .event-product-name-content {
+        height: 12% !important;
+       
+    }
+    .event-product-prices-content {
+        height: 85% !important;
+        margin-top: 6px  !important;
+        overflow: hidden !important;
+    }
+    #event-prices-container {
+        width: 100% !important;
+        height: 100% !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        margin-top: 14px;
+    }
+</style>

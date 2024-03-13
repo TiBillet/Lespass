@@ -1,0 +1,94 @@
+
+<form hx-post="/wiz_event/presentation/" hx-encoding='multipart/form-data' novalidate class="creation-tabs-content">
+	<input type="file" id="event-image" name="event-image" style="display: none">
+	<div class="espace-content d-flex flex-column justify-content-around">
+
+		<div class="input-group input-group-dynamic mt-3">
+			<label class="form-label">Nom</label> <input id="event-name" name="event-name" type="text" class="form-control">
+		</div>
+		<div class="input-group input-group-dynamic mt-3">
+			<label class="form-label">Courte description</label> <input id="event-short-description" name="event-short-description" type="text"
+				class="form-control">
+		</div>
+
+		<div class="d-flex flex-column mt-1">
+			<label class="form-label align-self-start">Image</label>
+			<div id="event-image-show" class="d-flex flex-column justify-content-center align-items-center"
+				style="background-image: url({{ MEDIA_URL }}{{ event_image }}); background-position: 50% 50%; background-size: 800px; height: 200px;"
+				data-bs-toggle="tooltip" data-bs-placement="top" title="Cliquer pour ajouter, modifier une image."
+				onclick="fakeClick('#event-image')">
+				<!-- name -->
+				<h2 id="event-name-show" class="text-white"></h2>
+				<!-- short_description -->
+				<p id="event-short-description-show" class="text-white h3"></p>
+			</div>
+		</div>
+		<div class="input-group mb-4 input-group-static">
+			<label>Longue description</label>
+			<textarea name="event-long-description" class="form-control" id="message" rows="3" resize="none"></textarea>
+		</div>
+	</div>
+	<!-- footer -->
+	<div class="d-flex flex-row-reverse w-100 creation-footer">
+		<button type="submit" class="btn btn-creation bg-primary text-white" role="button" aria-label="go products">Suivant</button>
+	</div>
+</form>
+<script>
+	/**
+	 * Simule un clique sur un élément donné
+	 * @param {String} selector - sélecteur css 
+	 */
+	function fakeClick(selector) {
+		document.querySelector(selector).click()
+	}
+
+	function changeSrcImage(evt) {
+		evt.stopPropagation()
+		const file = evt.target.files[0]
+		const reader = new FileReader();
+		reader.onloadend = function() {
+			const div = document.querySelector('#event-image-show')
+			div.style.setProperty('background-image', `url('${reader.result}')`)
+			div.style.setProperty('background-size', '100% auto')
+		}
+		if (file) {
+			reader.readAsDataURL(file);
+		}
+	}
+ 
+	document.querySelector('#event-image').addEventListener('change', changeSrcImage)
+	wizarEventName = document.querySelector('#event-name')
+	wizarEventName.addEventListener('click', () => {
+		document.querySelector('#event-name-show').innerText = wizarEventName.value 
+	})
+	wizarEventName.addEventListener('change', () => {
+		document.querySelector('#event-name-show').innerText = wizarEventName.value 
+	})
+	wizarEventShortDescription = document.querySelector('#event-short-description')
+	wizarEventShortDescription.addEventListener('click', (evt) => {
+		evt.stopPropagation()
+	})
+	wizarEventShortDescription.addEventListener('change', () => {
+		document.querySelector('#event-short-description-show').innerText = wizarEventShortDescription.value 
+	})
+	
+	document.querySelectorAll('form[hx-post="/wiz_event/presentation/"] input').forEach(element => {
+		element.addEventListener("keydown", (event) => {
+			 if(event.keyCode == 13) {
+				 event.preventDefault();
+				 return false;
+		     }
+		})
+	})
+</script>
+
+<style>
+#event-image-show {
+		border: 2px solid var(--bs-secondary);
+		cursor: pointer;
+}
+
+textarea[name="event-long-description"] {
+		resize: none;
+}
+</style>

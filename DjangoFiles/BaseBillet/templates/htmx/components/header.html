@@ -1,0 +1,29 @@
+<header>
+  <div class="page-header min-vh-50"
+    style="background-image: url('{{ host }}{{ header.img }}');max-height: 365px">
+    <span class="mask bg-dark opacity-8"></span>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 mx-auto text-white text-center">
+          <h2 class="text-white" role="heading" aria-label="Titre de l'évènement : {{ header.organisation }}">
+            {{ header.title }}
+          </h2>
+          {% if header.short_description != None%}
+          <p class="lead" style="white-space: pre-line">{{ header.short_description }}</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- search -->
+  {% if page_name == 'Accueil' %}
+  <div class="container">
+    {% include "htmx/components/search.html" %}
+  </div>
+  {% endif %}
+  {% if header.long_description != None%}
+  <div class="container mt-5 mb-5" style="white-space: pre-line">
+    {{ header.long_description }}
+  </div>
+  {% endif %}
+</header>

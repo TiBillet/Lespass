@@ -1,0 +1,66 @@
+{% if event.options_checkbox.count > 0 or event.options_radio.count > 1 %}
+    <fieldset class="shadow-sm p-3 mb-5 bg-body rounded" id="tibillet-event-options">
+        <legend>
+            <div class="d-flex flex-row align-items-center justify-content-between">
+                <h3 class="font-weight-bolder text-info text-gradient align-self-start">Options</h3>
+                <button class="btn bg-primary ms-3 text-white" type="button" title="Annuler les options !"
+                        onclick="resetEventOptions()">
+                    <i class="fa fa-trash ms-1" aria-hidden="true"></i>
+                    <span class="btn-inner--icon ms-1">Annuler</span>
+                </button>
+            </div>
+        </legend>
+
+        <!-- options radio -->
+        {% if event.options_radio.count > 1 %}
+            <div>Choix unique:</div>
+            <div class="input-group mb-2  has-validations">
+                {% for option in event.options_radio.all %}
+                    <div class="d-flex flex-row justify-content-start align-items-start me-2"
+                         style="position:relative">
+                        <div class="form-check" style="padding-left: 0;">
+                            <!-- TODO: attention, msg-role "Option évènement choix unique" à mettre si besoin pour les tests -->
+                            <input class="form-check-input" type="radio"
+                                   name="tibillet-option-radio-{{ event.uuid }}"
+                                   id="tibillet-option-radio-{{ option.uuid }}"
+                                   value="{{ option.uuid }}">
+                            <label class="custom-control-label text-dark "
+                                   for="tibillet-option-radio-{{ option.uuid }}">{{ option.name }}</label>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <!-- options checkbox -->
+        {% if event.options_checkbox.count > 0 %}
+            <div>Choix multiples:</div>
+            <div class="input-group has-validation">
+                {% for option in event.options_checkbox.all %}
+                    <div class="form-check form-switch me-3 d-flex flex-row justify-content-start align-items-start">
+                        <input class="form-check-input" type="checkbox" id="tibillet-switch-{{ option.uuid }}"
+                               role="checkbox" aria-label="Option évènement choix multiples - {{ option.name }}"
+                               name="tibillet-option-checkbox-{{ option.uuid }}">
+                        <label class="form-check-label text-dark ms-1" for="tibillet-switch-{{ option.uuid }}">
+                            {{ option.name }}
+                        </label>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+    </fieldset>
+{% endif %}
+
+<script>
+  function resetEventOptions() {
+    // reset input checkbox
+    document.querySelectorAll('#tibillet-event-options input[type="checkbox"]').forEach(input => {
+      input.checked = false
+    })
+    // reset input radio
+    document.querySelectorAll('#tibillet-event-options input[type="radio"]').forEach(input => {
+      input.checked = false
+    })
+  }
+</script>

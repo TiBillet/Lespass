@@ -1,0 +1,12 @@
+<div class="input-group input-group-dynamic mb-4 is-filled">
+    <label class="form-label">{{ label }}</label>
+    <input name="{{ name }}" type="{{ type }}" class="form-control"
+    {% if type == 'email' %} onkeyup="validateEmail(event)"{% endif %}>
+
+    {% for error in errors %}
+        {% if error.id == id %}
+            <div class="invalid-feedback" role="heading" aria-label="{{ error.msg }}"
+                 style="display: block">{{ error.msg }}</div>
+        {% endif %}
+    {% endfor %}
+</div>
