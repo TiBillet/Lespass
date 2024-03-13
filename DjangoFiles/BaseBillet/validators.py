@@ -1,6 +1,8 @@
 from rest_framework import serializers
 
-from BaseBillet.models import Price, Product, OptionGenerale
+from AuthBillet.models import TibilletUser
+from AuthBillet.utils import get_or_create_user
+from BaseBillet.models import Price, Product, OptionGenerale, Membership
 
 
 class LoginEmailValidator(serializers.Serializer):
@@ -21,8 +23,16 @@ class MembershipValidator(serializers.Serializer):
                                                           allow_null=True, required=False)
 
     option_radio = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(),
-                                                      allow_null=True, required=True)
+                                                      allow_null=True, required=False)
 
     newsletter = serializers.BooleanField()
 
-    #TODO: Validate option verifie si ok dans price
+
+    def validate_email(self, value):
+        user: TibilletUser = get_or_create_user(value)
+        self.user = user
+
+        self.fiche_membre, created = Membership.objects.get_or_create(
+            user=user,
+            price=self.price,
+        )

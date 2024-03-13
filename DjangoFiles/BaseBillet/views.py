@@ -15,7 +15,7 @@ from django.utils.http import urlsafe_base64_encode
 from django.views.decorators.http import require_GET, require_POST
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
-
+from django_htmx.http import HttpResponseClientRedirect
 from ApiBillet.serializers import MembreValidator
 from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
@@ -354,7 +354,8 @@ def validate_membership(request):
                 "content": "Adhésion validée !"
             }
         }
-        return render(request, "htmx/components/modal_message.html", context=context)
+        return HttpResponseClientRedirect('home')
+        # return render(request, "htmx/components/modal_message.html", context=context)
     
     return redirect('home')
 

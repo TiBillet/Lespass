@@ -810,7 +810,7 @@ class NewAdhesionValidator(serializers.Serializer):
 
 
 class MembreValidator(serializers.Serializer):
-    price = serializers.PrimaryKeyRelatedField(
+    adhesion = serializers.PrimaryKeyRelatedField(
         queryset=Price.objects.filter(product__categorie_article=Product.ADHESION)
     )
     email = serializers.EmailField()
