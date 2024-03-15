@@ -10,7 +10,7 @@
             </div>
             <div class="modal-body">
 
-                <form hx-post="/validate_membership/" hx-target="#tibillet-modal-message" hx-swap="outerHTML" novalidate
+                <form hx-post="/memberships/" hx-target="#tibillet-modal-message" hx-swap="outerHTML" novalidate
                       hx-on:htmx:before-request="validateForm(event)"
                       hx-on:htmx:after-request="membershipActionsAfterSwap('tibillet-membership-modal-{{ membership.uuid }}')">
                     {% csrf_token %}
@@ -119,20 +119,18 @@
 
                     <!-- options checkbox -->
                     <div class="input-group mb-4 has-validation" style="position:relative">
-                        <fieldset>
-                            {% for option in membership.option_generale_checkbox.all %}
-                                <div class="form-check form-switch d-flex flex-row me-3" style="padding-left: 0;">
-                                    <input name="options_checkbox"
-                                           class="form-check-input ms-auto mt-1" type="checkbox"
-                                           id="checkbox-{{ option.uuid }}"
-                                           value="{{ option.uuid }}">
-                                    <label class="form-check-label ms-3"
-                                           for="checkbox-{{ option.uuid }}">
-                                        {{ option.name }}
-                                    </label>
-                                </div>
-                            {% endfor %}
-                        </fieldset>
+                        {% for option in membership.option_generale_checkbox.all %}
+                            <div class="form-check form-switch d-flex flex-row me-3" style="padding-left: 0;">
+                                <input name="options_checkbox"
+                                       class="form-check-input ms-auto mt-1" type="checkbox"
+                                       id="checkbox-{{ option.uuid }}"
+                                       value="{{ option.uuid }}">
+                                <label class="form-check-label ms-3"
+                                       for="checkbox-{{ option.uuid }}">
+                                    {{ option.name }}
+                                </label>
+                            </div>
+                        {% endfor %}
                     </div>
 
                     <div class="input-group mb-4 has-validation" style="position:relative">
@@ -143,7 +141,7 @@
                                    aria-label="Consentement pour l'adhésion">
                             <label class="form-check-label ms-3"
                                    for="newsletter">
-                                Je ne souhaite pas recevoir d'email de la part de l'association.
+                                Je ne souhaite pas recevoir de nouvelles par email de la part de l'association.
                             </label>
                         </div>
                     </div>

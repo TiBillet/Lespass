@@ -18,22 +18,28 @@
                         </div>
                         <div class="col-md-7 my-auto ms-md-3 mt-md-auto mt-4">
                             <h3>{{ membership.name }}</h3>
-                            {% if membership.short_description != None %}
+                            {% if membership.short_description %}
                                 <p style="white-space: pre-line">
                                     {{ membership.short_description }}
                                 </p>
                             {% endif %}
-                            {% if membership.long_description != None %}
+                            {% if membership.long_description %}
                                 <p style="white-space: pre-line">
                                     {{ membership.long_description }}
                                 </p>
                             {% endif %}
-                            <button class="btn btn-outline-secondary btn-sm"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#tibillet-membership-modal-{{ membership.uuid }}"
-                                    role="button" aria-label="Adhérez {{ membership.name }}">
-                                Adhérez
-                            </button>
+                            {% if membership.uuid in user.get_active_membership %}
+                                <button class="btn btn-outline-secondary btn-sm btn-success">
+                                    Adhésion valide.
+                                </button>
+                            {% else %}
+                                <button class="btn btn-outline-secondary btn-sm"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#tibillet-membership-modal-{{ membership.uuid }}"
+                                        role="button" aria-label="Adhérez {{ membership.name }}">
+                                    Adhérez
+                                </button>
+                            {% endif %}
                         </div>
                     </div>
                 </div>

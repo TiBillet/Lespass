@@ -154,6 +154,8 @@ class RsaKey(models.Model):
 class Wallet(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, db_index=True)
 
+
+
 class TibilletUser(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
 
@@ -244,6 +246,8 @@ class TibilletUser(AbstractUser):
     ##### Pour les user humain ####
 
     ##### END user humain ####
+    def get_active_membership(self):
+        return [mem.price.product.uuid for mem in self.membership.all() if mem.is_valid()]
 
     def achat(self):
         return " ".join([achat["schema_name"] for achat in self.client_achat.values("schema_name")])
@@ -251,7 +255,7 @@ class TibilletUser(AbstractUser):
     def administre(self):
         return " ".join([admin["schema_name"] for admin in self.client_admin.values("schema_name")])
 
-    def as_p(self):
+    def as_password(self):
         return bool(self.password)
 
     def set_staff(self, tenant):

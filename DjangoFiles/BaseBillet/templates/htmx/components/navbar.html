@@ -41,30 +41,30 @@
                             Mon compte
                         </a>
                     </li>
-                    <!--
-                    <li class="nav-item dropdown mx-2">
-                        <a href="#" class="dropdown-toggle text-white" id="menuUser" data-bs-toggle="dropdown">
-                            <i class="fa fa-user" aria-hidden="true"></i>
-                            Mon compte
-                        </a>
-                        //-- sous menu user--//
-                        <ul class="menu-conection dropdown-menu dropdown-menu-animation me-1 bg-white"
-                            aria-labelledby="menuUser">
-                            //-- info email user connecté --//
-                            <li>
-                                <a class="dropdown-item" href="#">
-                                    {{ profile.email }}
-                                </a>
-                            </li>
-                            <li>
-                                <a href="/deconnexion/" class="ps-1">
-                                    <i class="fa fa-sign-out" aria-hidden="true"></i>
-                                    Deconnexion
-                                </a>
-                            </li>
-                        </ul>
-                    </li>
-                -->
+
+{#                    <li class="nav-item dropdown mx-2">#}
+{#                        <a href="#" class="dropdown-toggle text-white" id="menuUser" data-bs-toggle="dropdown">#}
+{#                            <i class="fa fa-user" aria-hidden="true"></i>#}
+{#                            Mon compte#}
+{#                        </a>#}
+{#                        //-- sous menu user--//#}
+{#                        <ul class="menu-conection dropdown-menu dropdown-menu-animation me-1 bg-white"#}
+{#                            aria-labelledby="menuUser">#}
+{#                            //-- info email user connecté --//#}
+{#                            <li>#}
+{#                                <a class="dropdown-item" href="#">#}
+{#                                    {{ profile.email }}#}
+{#                                </a>#}
+{#                            </li>#}
+{#                            <li>#}
+{#                                <a href="/deconnexion/" class="ps-1">#}
+{#                                    <i class="fa fa-sign-out" aria-hidden="true"></i>#}
+{#                                    Deconnexion#}
+{#                                </a>#}
+{#                            </li>#}
+{#                        </ul>#}
+{#                    </li>#}
+
                 {% endif %}
                 <!-- Adhésion -->
                 {% if configuration.categorie|not_in_list:'M' and url_name != 'memberships' %}

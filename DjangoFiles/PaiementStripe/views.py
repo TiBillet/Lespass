@@ -31,8 +31,10 @@ class CreationPaiementStripe():
                  liste_ligne_article: list,
                  metadata: dict,
                  reservation: (Reservation, None),
-                 source: str,
-                 absolute_domain: (str, None),
+                 source: str = None,
+                 absolute_domain: (str, None) = None,
+                 success_url: (str, None) = None,
+                 cancel_url: (str, None) = None,
                  invoice=None,
                  ) -> None:
 
@@ -45,15 +47,19 @@ class CreationPaiementStripe():
         self.configuration = Configuration.get_solo()
         self.user = user
         self.email_paiement = user.email
-        self.absolute_domain = absolute_domain
         self.invoice = invoice
         self.liste_ligne_article = liste_ligne_article
         self.reservation = reservation
         self.source = source
-        self.return_url = self._return_url()
+
         self.metadata = metadata
         self.metadata_json = json.dumps(self.metadata)
         self.total = self._total()
+
+        # Construction du retour :
+        self.absolute_domain = absolute_domain
+        self.success_url = success_url
+        self.cancel_url = cancel_url
 
         # On instancie Stripe et entre en db le paiement en state Pending
         self.stripe_api_key = self._stripe_api_key()
@@ -69,18 +75,6 @@ class CreationPaiementStripe():
         self.checkout_session = None
         if not self.invoice:
             self.checkout_session = self._checkout_session()
-
-    def _return_url(self):
-        '''
-        Si la source est le QRCode, alors c'est encore le model MVT de django qui gère ça.
-        Sinon, c'est un paiement via la billetterie vue.js
-        :return:
-        '''
-
-        if self.source == Paiement_stripe.QRCODE:
-            return "/api/webhook_stripe/"
-        else:
-            return "/stripe/return/"
 
     def _total(self):
         total = 0
@@ -161,10 +155,12 @@ class CreationPaiementStripe():
         https://stripe.com/docs/api/checkout/sessions/create
         :return: dict
         """
+        success_url = f"{self.absolute_domain}{self.paiement_stripe_db.uuid}/{self.success_url}"
+        cancel_url = f"{self.absolute_domain}{self.paiement_stripe_db.uuid}/{self.cancel_url}"
 
         data_checkout = {
-            'success_url': f'{self.absolute_domain}{self.return_url}{self.paiement_stripe_db.uuid}',
-            'cancel_url': f'{self.absolute_domain}{self.return_url}{self.paiement_stripe_db.uuid}',
+            'success_url': f'{success_url}',
+            'cancel_url': f'{cancel_url}',
             'payment_method_types': ["card"],
             'customer_email': f'{self.user.email}',
             'line_items': self.line_items,
@@ -257,6 +253,9 @@ def new_entry_from_stripe_invoice(user, id_invoice):
         paiement_stripe.lignearticle_set.all().update(status=LigneArticle.UNPAID)
 
         return paiement_stripe
+
+
+
 
 #
 # def get_fee_in_subscription(subscription_id, priceSold_id):

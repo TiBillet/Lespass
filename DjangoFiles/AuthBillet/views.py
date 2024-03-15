@@ -134,11 +134,10 @@ class test_api_key(APIView):
 
 
 def activate(request, uid, token):
-    print("-> def activate !")
     try:
         user = User.objects.get(pk=decode_uid(uid))
         if user.email_error:
-            messages.add_message(request, messages.ERROR, "Mail non valide")
+            messages.add_message(request, messages.ERROR, _("Mail non valide"))
 
         # On utilise le même algo que pour le reset password
         PR = PasswordResetTokenGenerator()
@@ -147,11 +146,11 @@ def activate(request, uid, token):
         if is_token_valid:
             user.is_active = True
             user.save()
-            messages.add_message(request, messages.SUCCESS, "Welcome User")
+            messages.add_message(request, messages.SUCCESS, _("Vous êtes bien connecté. Bienvenue !"))
             login(request, user)
 
     except User.DoesNotExist:
-        messages.add_message(request, messages.ERROR, "Token non valide")
+        messages.add_message(request, messages.ERROR, _("Token non valide"))
     except Exception as e:
         logger.error(e)
         raise e

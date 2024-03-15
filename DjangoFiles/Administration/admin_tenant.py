@@ -2,9 +2,11 @@ import datetime
 import uuid
 
 from django import forms
+from django.conf import settings
 from django.contrib import admin, messages
 from django.contrib.admin import AdminSite, SimpleListFilter
 from django.contrib.admin.views.main import ChangeList
+from django.contrib.auth import get_user_model, login
 from django.contrib.auth.models import Group
 from django.http import HttpResponseRedirect
 from django.template.response import TemplateResponse
@@ -55,17 +57,6 @@ class StaffAdminSite(AdminSite):
 
         logger.info("")
         app_dict = self._build_app_dict(request)
-        # logger.info(f"user perm : {len(request.user.get_all_permissions())}")
-        # logger.info(f"_registry : {len(self._registry.items())}")
-        # logger.info(app_dict)
-        # import ipdb; ipdb.set_trace()
-
-        # models = self._registry
-        # for model, model_admin in models.items():
-        #     app_label = model._meta.app_label
-        #     has_module_perms = model_admin.has_module_permission(request)
-        #     perms = model_admin.get_model_perms(request)
-        #     import ipdb; ipdb.set_trace()
         logger.info("")
 
         # a.sort(key=lambda x: b.index(x[0]))
@@ -84,17 +75,24 @@ class StaffAdminSite(AdminSite):
         """
         Removed check for is_staff.
         Ensure that the tenant is in client_admin for the current user.
-        Return SuperUser : Bug in contentype permission with tenant ... BIG TODO !
+        Return SuperUser :
         """
-        logger.warning(f"Tenant AdminSite.has_permission : {request.user} - {request.user.client_source if request.user.is_authenticated else 'No client'} - ip : {get_client_ip(request)}")
 
+        # Dans le cas ou on debug, on se log auto en root :
+        # if settings.DEBUG:
+        #     User = get_user_model()
+        #     root = User.objects.filter(is_superuser=True).first()
+        #     login(request, root)
+        #     return True
+
+        logger.warning(f"Tenant AdminSite.has_permission : {request.user} - {request.user.client_source if request.user.is_authenticated else 'No client'} - ip : {get_client_ip(request)}")
         try:
             if request.tenant in request.user.client_admin.all():
                 return request.user.is_superuser
             if request.user.client_source.categorie == Client.ROOT:
                 return request.user.is_superuser
         except AttributeError as e:
-            logger.error(f"{e} : AnonymousUser for admin ?")
+            logger.warning(f"{e} : AnonymousUser for admin ?")
             return False
         except Exception as e:
             raise e

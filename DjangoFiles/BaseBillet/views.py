@@ -7,22 +7,33 @@ import segno
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import logout, login
+from django.db import connection
 from django.http import HttpResponse, HttpRequest
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.response import TemplateResponse
 from django.utils.encoding import force_str, force_bytes
 from django.utils.http import urlsafe_base64_encode
 from django.views.decorators.http import require_GET, require_POST
+
+from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
-from django_htmx.http import HttpResponseClientRedirect
 from rest_framework import viewsets, permissions, status
+from rest_framework.authentication import SessionAuthentication, BasicAuthentication
+from rest_framework.permissions import IsAuthenticated
 
+from django_htmx.http import HttpResponseClientRedirect
+
+
+from ApiBillet.serializers import get_or_create_price_sold
+from AuthBillet.models import TibilletUser
 from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
-from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Event
+from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Event, Price, LigneArticle, \
+    Paiement_stripe
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator
+from PaiementStripe.views import CreationPaiementStripe
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +124,7 @@ def test_jinja(request):
     }
     return TemplateResponse(request, "htmx/views/test_jinja.html", context=context)
 
+
 # TODO: passer cette méthode en rendu partiel et la requete en htmx
 def deconnexion(request):
     # un logout peut-il mal se passer ?
@@ -145,7 +157,6 @@ def connexion(request):
             }
             return render(request, "htmx/components/modal_message.html", context=context)
 
-
     messages.add_message(request, messages.WARNING, "Erreur de validation de l'email")
     return redirect('home')
 
@@ -176,17 +187,21 @@ def home(request):
     context['dev_user_is_staff'] = True
     return render(request, "htmx/views/home.html", context=context)
 
+
 def my_account_wallet(request: HttpRequest) -> HttpResponse:
     context = {}
     return render(request, "htmx/fragments/my_account_wallet.html", context=context)
+
 
 def my_account_membership(request: HttpRequest) -> HttpResponse:
     context = {}
     return render(request, "htmx/fragments/my_account_membership.html", context=context)
 
+
 def my_account_profile(request: HttpRequest) -> HttpResponse:
     context = {}
     return render(request, "htmx/fragments/my_account_profile.html", context=context)
+
 
 @require_GET
 def my_account(request: HttpRequest) -> HttpResponse:
@@ -260,6 +275,7 @@ def event(request: HttpRequest, slug) -> HttpResponse:
 
     return render(request, "htmx/views/event.html", context=context)
 
+
 def validate_event(request):
     if request.method == 'POST':
         print("-> validate_event, méthode POST !")
@@ -277,6 +293,7 @@ def validate_event(request):
             messages.add_message(request, messages.SUCCESS, "Réservation validée !")
 
     return redirect('home')
+
 
 '''
 class membership_form(APIView):
@@ -298,7 +315,21 @@ class membership_form(APIView):
         return render(request, "htmx/forms/membership_form.html", context=context)
 '''
 
+
+def modal(request, level="info", title='Information', content: str = None):
+    context = {
+        "modal_message": {
+            "type": level,
+            "title": title,
+            "content": content,
+        }
+    }
+    return render(request, "htmx/components/modal_message.html", context=context)
+
+
 class MembershipMVT(viewsets.ViewSet):
+    authentication_classes = [SessionAuthentication,]
+
     def list(self, request: HttpRequest):
         config = Configuration.get_solo()
         base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
@@ -314,6 +345,7 @@ class MembershipMVT(viewsets.ViewSet):
             header_img = "/media/images/image_non_disponible.jpg"
 
         context = {
+            "user": request.user,
             "base_template": base_template,
             "host": host,
             "url_name": request.resolver_match.url_name,
@@ -327,45 +359,75 @@ class MembershipMVT(viewsets.ViewSet):
             },
             "memberships": Product.objects.filter(categorie_article="A"),
         }
-        # import ipdb; ipdb.set_trace()
         return render(request, "htmx/views/memberships.html", context=context)
 
+
+    def create(self, request):
+        membership_validator = MembershipValidator(data=request.data, context={'request': request})
+        if not membership_validator.is_valid():
+            error_messages = [str(item) for sublist in membership_validator.errors.values() for item in sublist]
+            return modal(request, level="warning", content=', '.join(error_messages))
+
+        # Fiche membre créée, si price payant, on crée le checkout stripe :
+        membership = membership_validator.membership
+        price: Price = membership.price
+        user: TibilletUser = membership.user
+
+        metadata = {
+            'tenant': f'{connection.tenant.uuid}',
+            'pk_adhesion': f"{price.pk}",
+            'pk_membership': f"{membership.pk}",
+            'pk_user': f"{user.pk}",
+        }
+
+        ligne_article_adhesion = LigneArticle.objects.create(
+            pricesold=get_or_create_price_sold(price, None),
+            qty=1,
+        )
+
+        # Création de l'objet paiement stripe en base de donnée
+        new_paiement_stripe = CreationPaiementStripe(
+            user=user,
+            liste_ligne_article=[ligne_article_adhesion, ],
+            metadata=metadata,
+            reservation=None,
+            source=Paiement_stripe.API_BILLETTERIE,
+            success_url=f"stripe_return/",
+            cancel_url=f"stripe_return/",
+            absolute_domain=request.build_absolute_uri(),
+        )
+
+        # Passage du status en UNPAID
+        if new_paiement_stripe.is_valid():
+            paiement_stripe: Paiement_stripe = new_paiement_stripe.paiement_stripe_db
+            paiement_stripe.lignearticle_set.all().update(status=LigneArticle.UNPAID)
+            checkout_stripe_url = new_paiement_stripe.checkout_session.url
+            return HttpResponseClientRedirect(checkout_stripe_url)
+
+        return modal(request, level="error",
+                     content="Erreur lors de la création du paiement, contactez l'administrateur.")
+
+    @action(detail=True, methods=['GET'])
+    def stripe_return(self, request, pk, *args, **kwargs):
+        paiement_stripe = get_object_or_404(Paiement_stripe, uuid=pk)
+        paiement_stripe.update_checkout_status()
+        paiement_stripe.refresh_from_db()
+        email = paiement_stripe.user.email
+        if paiement_stripe.status == Paiement_stripe.VALID:
+            messages.add_message(request, messages.WARNING, f"Votre abonnement a été validé. Vous allez recevoir un mail de confirmation à l'adresse {email}. Merci !")
+        else :
+            messages.add_message(request, messages.WARNING, f"Votre abonnement a été validé. Vous allez recevoir un mail de confirmation à l'adresse Merci !")
+
+        return redirect('/memberships/')
+
+
     def get_permissions(self):
-        # if self.action in ['create', 'retrieve']:
-        #     permission_classes = [permissions.AllowAny]
-        # else:
-        #     permission_classes = [TenantAdminPermission]
-        permission_classes = [permissions.AllowAny]
+        if self.action in ['retrieve']:
+            permission_classes = [permissions.IsAuthenticated]
+        else:
+            permission_classes = [permissions.AllowAny]
         return [permission() for permission in permission_classes]
 
-def validate_membership(request):
-    if request.method == 'POST':
-        membership_validator = MembershipValidator(data=request.POST, context={'request': request})
-        if not membership_validator.is_valid():
-            errors = membership_validator.errors
-            for error in errors :
-                messages.add_message(request, messages.WARNING, f"Erreur : {error}")
-
-            context = {
-                "modal_message": {
-                    "type": "warning",
-                    "title": "Information",
-                    "content": f"{errors}"
-                }
-            }
-            return render(request, "htmx/components/modal_message.html", context=context)
-
-        context = {
-            "modal_message": {
-                "type": "success",
-                "title": "Information",
-                "content": "Adhésion validée !"
-            }
-        }
-        return HttpResponseClientRedirect('home')
-        # return render(request, "htmx/components/modal_message.html", context=context)
-    
-    return redirect('home')
 
 class Espaces:
     def __init__(self, name, description, svg_src, svg_size, colorText, disable, categorie):
@@ -473,6 +535,7 @@ def create_tenant(request: HttpRequest) -> HttpResponse:
     }
     return render(request, "htmx/views/create_tenant.html", context=context)
 
+
 @require_GET
 def create_event(request):
     config = Configuration.get_solo()
@@ -519,6 +582,7 @@ def create_event(request):
     }
     return render(request, "htmx/views/create_event.html", context=context)
 
+
 def event_date(request: HttpRequest) -> HttpResponse:
     context = {}
     if request.method == 'POST':
@@ -527,8 +591,9 @@ def event_date(request: HttpRequest) -> HttpResponse:
         print(f"data = {data}")
         # - si ok - sauvegarde partielle(uuid event + dates) dans db et retourner le template  "event_presentation.html" (nom, image, descriptions).
         # - si erreur = retourner les bons ranges et dates dans l'ordre adéquate et les erreurs (rester sur template)
-      
+
     return render(request, "htmx/forms/event_date.html", context=context)
+
 
 def event_presentation(request: HttpRequest) -> HttpResponse:
     context = {
@@ -540,6 +605,7 @@ def event_presentation(request: HttpRequest) -> HttpResponse:
         # retour modal de sucess ou erreur
 
     return render(request, "htmx/forms/event_presentation.html", context=context)
+
 
 def event_products(request: HttpRequest) -> HttpResponse:
     context = {}
