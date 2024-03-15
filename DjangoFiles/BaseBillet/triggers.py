@@ -49,6 +49,11 @@ def update_membership_state(trigger):
     # Envoyer à fedow
     # Envoyer les mails de confirmation
     # Envoyer les facture ici
+    # Envoyer les contrats à signer ici
+
+    # Envoyer à ghost :
+    send_to_ghost.delay(membership.pk)
+
     trigger.ligne_article.status = LigneArticle.VALID
 
 
@@ -112,4 +117,4 @@ class ActionArticlePaidByCategorie:
     def trigger_A(self):
         logger.info(f"TRIGGER ADHESION")
         membership = update_membership_state(self)
-        send_to_ghost.delay(membership.pk)
+

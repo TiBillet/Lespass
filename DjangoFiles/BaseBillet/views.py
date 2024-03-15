@@ -414,9 +414,9 @@ class MembershipMVT(viewsets.ViewSet):
         paiement_stripe.refresh_from_db()
         email = paiement_stripe.user.email
         if paiement_stripe.status == Paiement_stripe.VALID:
-            messages.add_message(request, messages.WARNING, f"Votre abonnement a été validé. Vous allez recevoir un mail de confirmation à l'adresse {email}. Merci !")
+            messages.add_message(request, messages.SUCCESS, f"Votre abonnement a été validé. Vous allez recevoir un mail de confirmation à l'adresse {email}. Merci !")
         else :
-            messages.add_message(request, messages.WARNING, f"Votre abonnement a été validé. Vous allez recevoir un mail de confirmation à l'adresse Merci !")
+            messages.add_message(request, messages.WARNING, f"Une erreur est survenue, merci de contacter l'administrateur.")
 
         return redirect('/memberships/')
 
