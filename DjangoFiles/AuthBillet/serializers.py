@@ -263,7 +263,7 @@ class MeSerializer(serializers.ModelSerializer):
             'can_create_tenant',
             'espece',
             'is_staff',
-            'as_p',
+            'as_password',
             'reservations',
             'membership'
 

@@ -45,23 +45,12 @@ def update_membership_state(trigger):
     membership.save()
 
     # TODO: On a débranché le cashless.
+    import ipdb; ipdb.set_trace()
     # Envoyer à fedow
-    # Envoyer les mails de confirmation et facture ici
-
-    # C'est le cashless qui gère l'adhésion et l'envoi de mail
-    if product.send_to_cashless:
-        logger.info(f"    Envoie celery task.send_membership_to_cashless")
-        data = {
-            "ligne_article_pk": trigger.ligne_article.pk,
-        }
-        send_membership_to_cashless.delay(data)
-
-    # TODO: C'est un abonnement autre que l'adhésion cashless, on gère l'envoi du contrat.
-    else:
-        logger.info(f"    TODO Envoie mail abonnement")
-        pass
-
+    # Envoyer les mails de confirmation
+    # Envoyer les facture ici
     trigger.ligne_article.status = LigneArticle.VALID
+
 
     return membership
 
