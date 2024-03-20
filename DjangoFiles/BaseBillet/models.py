@@ -1319,13 +1319,18 @@ class Membership(models.Model):
     def email(self):
         return self.user.email
 
+    def member_name(self):
+        if self.pseudo:
+            return self.pseudo
+        return f"{self.last_name} {self.first_name}"
+
     def deadline(self):
         if self.last_contribution and self.price:
             if self.price.subscription_type == Price.YEAR:
                 return self.last_contribution + timedelta(days=365)
-            if self.price.subscription_type == Price.MONTH:
+            elif self.price.subscription_type == Price.MONTH:
                 return self.last_contribution + timedelta(days=31)
-            if self.price.subscription_type == Price.CIVIL:
+            elif self.price.subscription_type == Price.CIVIL:
                 return datetime.strptime(f'{self.last_contribution.year}-12-31', '%Y-%m-%d').date()
 
         return None
@@ -1356,10 +1361,7 @@ class Membership(models.Model):
         return None
 
     def options(self):
-        names = ""
-        for option in self.option_generale.all():
-            names += f"{option.name} "
-        return names
+        return ", ".join([option.name for option in self.option_generale.all()])
 
     def __str__(self):
         if self.pseudo:

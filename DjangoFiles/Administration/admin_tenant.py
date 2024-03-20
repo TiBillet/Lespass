@@ -79,6 +79,7 @@ class StaffAdminSite(AdminSite):
         """
 
         # Dans le cas ou on debug, on se log auto en root :
+        # BUG CSRF ????
         # if settings.DEBUG:
         #     User = get_user_model()
         #     root = User.objects.filter(is_superuser=True).first()

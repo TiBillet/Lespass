@@ -303,6 +303,7 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
         raise Exception
 
 
+"""
 @app.task
 def create_tenant(waiting_configuration_uuid):
     futur_conf = WaitingConfiguration.objects.get(pk=waiting_configuration_uuid)
@@ -375,6 +376,8 @@ def create_tenant(waiting_configuration_uuid):
         place_serialized_with_uuid.update(place_serialized.data)
 
     return Response(place_serialized_with_uuid, status=status.HTTP_201_CREATED)
+
+"""
 
 
 @app.task
@@ -453,6 +456,54 @@ def report_celery_mailer(data_report_list: list):
         except smtplib.SMTPRecipientsRefused as e:
             logger.error(
                 f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour report_celery_mailer : {e}")
+
+
+@app.task
+def send_email_generique(context: dict = None, email:str = None):
+    template_name = "mails/email_generique.html"
+    try:
+        if not context :
+            context = {
+                'username': 'UserTest',
+                'now': timezone.now(),
+                'title': 'Titre',
+                'objet': "Objet",
+                'sub_title': "sub titre",
+                'main_text': "Ceci est le texte principal du mail.",
+                'main_text_2': "Si vous pensez que cette demande est main_text_2, vous n'avez rien a faire de plus :)",
+                'main_text_3': "Dans le cas contraire, vous pouvez main_text_3. Merci de contacter l'équipe d'administration via : contact@tibillet.re au moindre doute.",
+                'table_info': {
+                    'ligne 1': 'ligne 1',
+                    'ligne 2': 'ligne 2',
+                    'ligne 3': 'ligne 3',
+                    'ligne 4': 'ligne 4',
+                },
+                'button_color': "#E8423FFF",
+                'button': {
+                    'text': 'UN BOUTON',
+                    'url': f'https://perdu.com'
+                },
+                'next_text_1': "Si vous recevez cet email par erreur, merci de contacter l'équipe de TiBillet",
+                'next_text_2': "next_text_2",
+                'end_text': 'A bientôt, et bon voyage',
+                'signature': "Marvin, le robot de TiBillet",
+            }
+
+
+        mail = CeleryMailerClass(
+            email,
+            f"{context.get('title')}",
+            template=template_name,
+            context=context,
+            attached_files=None,
+        )
+        mail.send()
+        logger.info(f"    send_email_generique : mail.sended : {mail.sended}")
+
+    except smtplib.SMTPRecipientsRefused as e:
+        logger.error(
+            f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour report_celery_mailer : {e}")
+
 
 
 @app.task

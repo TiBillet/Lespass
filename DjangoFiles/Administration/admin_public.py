@@ -25,7 +25,6 @@ class PublicAdminSite(AdminSite):
     def has_permission(self, request):
         logger.warning(f"Tenant AdminSite.has_permission : {request.user} - {request.user.client_source if request.user.is_authenticated else 'No client source'} - ip : {get_client_ip(request)}")
 
-        # import ipdb; ipdb.set_trace()
         try:
             if request.user.client_source.categorie == Client.ROOT:
                 return request.user.is_superuser

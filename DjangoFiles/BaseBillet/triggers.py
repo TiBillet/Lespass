@@ -2,13 +2,49 @@ import logging
 
 from django.utils import timezone
 
-from BaseBillet.models import LigneArticle, Product, Membership, Price
-from BaseBillet.tasks import send_membership_to_cashless, send_to_ghost
+from BaseBillet.models import LigneArticle, Product, Membership, Price, Configuration
+from BaseBillet.tasks import send_membership_to_cashless, send_to_ghost, send_email_generique
+from django.utils.translation import gettext_lazy as _
 
 logger = logging.getLogger(__name__)
 
 
-def update_membership_state(trigger):
+def context_for_membership_email(membership: Membership):
+    config = Configuration.get_solo()
+    context = {
+        'username': membership.member_name(),
+        'now': timezone.now(),
+        'title': f"{config.organisation} : {membership.price.product.name}",
+        'objet': _("Email de confirmation"),
+        'sub_title': _("Bienvenue à bord !"),
+        'main_text': _(
+            f"Votre paiement pour {membership.price.product.name} à bien été pris en compte. Si vous souhaitez une facture, vous pouvez la récupérer en cliquant sur le bouton ci-dessous."),
+        # 'main_text_2': _("Si vous pensez que cette demande est main_text_2, vous n'avez rien a faire de plus :)"),
+        # 'main_text_3': _("Dans le cas contraire, vous pouvez main_text_3. Merci de contacter l'équipe d'administration via : contact@tibillet.re au moindre doute."),
+        'table_info': {
+            'Reçu pour': f'{membership.member_name()}',
+            'Article': f'{membership.price.product.name}',
+            'Tarif': f'{membership.price.name} {membership.price.prix} €',
+            'Dernière contribution': f'{membership.last_contribution}',
+            'Valable jusque': f'{membership.deadline()}',
+        },
+        'button_color': "#009058",
+        'button': {
+            'text': 'RECUPERER UNE FACTURE',
+            'url': f'https://perdu.com'
+        },
+        'next_text_1': "Si vous recevez cet email par erreur, merci de contacter l'équipe de TiBillet",
+        # 'next_text_2': "next_text_2",
+        'end_text': 'A bientôt, et bon voyage',
+        'signature': "Marvin, le robot de TiBillet",
+    }
+    # Ajout des options str si il y en a :
+    if membership.option_generale.count() > 0:
+        context['table_info']['Options'] = f"{membership.options()}"
+    return context
+
+
+def update_membership_state_after_paiement(trigger):
     paiement_stripe = trigger.ligne_article.paiement_stripe
     user = paiement_stripe.user
     price: Price = trigger.ligne_article.pricesold.price
@@ -45,17 +81,19 @@ def update_membership_state(trigger):
     membership.save()
 
     # TODO: On a débranché le cashless.
-    import ipdb; ipdb.set_trace()
     # Envoyer à fedow
     # Envoyer les mails de confirmation
+    logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation par email")
+    send_email_generique(context=context_for_membership_email(membership), email=f"{user.email}")
     # Envoyer les facture ici
     # Envoyer les contrats à signer ici
 
     # Envoyer à ghost :
-    send_to_ghost.delay(membership.pk)
+    if membership.newsletter:
+        logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation à Ghost")
+        send_to_ghost.delay(membership.pk)
 
     trigger.ligne_article.status = LigneArticle.VALID
-
 
     return membership
 
@@ -116,5 +154,4 @@ class ActionArticlePaidByCategorie:
     # Categorie ADHESION
     def trigger_A(self):
         logger.info(f"TRIGGER ADHESION")
-        membership = update_membership_state(self)
-
+        membership = update_membership_state_after_paiement(self)

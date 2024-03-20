@@ -88,7 +88,7 @@ def set_paiement_stripe_valid(old_instance: LigneArticle, new_instance: LigneArt
 
 
 
-def check_paid(old_instance: LigneArticle, new_instance: LigneArticle):
+def action_x_to_paid(old_instance: LigneArticle, new_instance: LigneArticle):
     # Fonction qui passe les artcle de payé en validé, en fonction de sa catégorie
     ActionArticlePaidByCategorie(new_instance)
 
@@ -96,7 +96,7 @@ def check_paid(old_instance: LigneArticle, new_instance: LigneArticle):
     #     f"    SIGNAL LIGNE ARTICLE check_paid {old_instance.pricesold} new_instance status : {new_instance.status}")
 
     logger.info(
-        f"    SIGNAL LIGNE ARTICLE check_paid {old_instance.pricesold} new_instance status : {new_instance.status}")
+        f"    SIGNAL LIGNE ARTICLE action_x_to_paid {old_instance.pricesold} new_instance status : {new_instance.status}")
     set_paiement_stripe_valid(old_instance, new_instance)
 
 
@@ -209,13 +209,13 @@ PRE_SAVE_TRANSITIONS = {
 
     'LIGNEARTICLE': {
         LigneArticle.CREATED: {
-            LigneArticle.PAID: check_paid,
+            LigneArticle.PAID: action_x_to_paid,
         },
         LigneArticle.UNPAID: {
-            LigneArticle.PAID: check_paid,
+            LigneArticle.PAID: action_x_to_paid,
         },
         LigneArticle.PAID: {
-            LigneArticle.PAID: check_paid,
+            LigneArticle.PAID: action_x_to_paid,
             LigneArticle.VALID: set_paiement_stripe_valid,
             '_else_': error_regression,
         },
