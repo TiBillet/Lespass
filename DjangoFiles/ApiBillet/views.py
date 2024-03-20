@@ -738,6 +738,9 @@ class TicketPdf(APIView):
         return response
 
 
+
+
+
 # On vérifie que les métatada soient les meme dans la DB et chez Stripe.
 def metatadata_valid(paiement_stripe_db: Paiement_stripe, checkout_session):
     metadata_stripe_json = checkout_session.metadata

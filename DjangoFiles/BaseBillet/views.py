@@ -10,6 +10,7 @@ from django.contrib.auth import logout, login
 from django.db import connection
 from django.http import HttpResponse, HttpRequest
 from django.shortcuts import render, redirect, get_object_or_404
+from django.template.loader import get_template
 from django.template.response import TemplateResponse
 from django.utils.encoding import force_str, force_bytes
 from django.utils.http import urlsafe_base64_encode
@@ -23,7 +24,8 @@ from rest_framework.authentication import SessionAuthentication, BasicAuthentica
 from rest_framework.permissions import IsAuthenticated
 
 from django_htmx.http import HttpResponseClientRedirect
-
+from weasyprint import HTML
+from weasyprint.text.fonts import FontConfiguration
 
 from ApiBillet.serializers import get_or_create_price_sold
 from AuthBillet.models import TibilletUser
@@ -31,7 +33,8 @@ from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Event, Price, LigneArticle, \
-    Paiement_stripe
+    Paiement_stripe, Membership
+from BaseBillet.tasks import create_ticket_pdf, create_invoice_pdf
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator
 from PaiementStripe.views import CreationPaiementStripe
 
@@ -420,6 +423,13 @@ class MembershipMVT(viewsets.ViewSet):
 
         return redirect('/memberships/')
 
+    @action(detail=True, methods=['GET'])
+    def invoice(self, request, pk):
+        paiement_stripe = get_object_or_404(Paiement_stripe, uuid=pk)
+        pdf_binary = create_invoice_pdf(paiement_stripe)
+        response = HttpResponse(pdf_binary, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="facture.pdf"'
+        return response
 
     def get_permissions(self):
         if self.action in ['retrieve']:

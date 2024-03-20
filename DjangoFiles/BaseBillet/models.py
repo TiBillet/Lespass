@@ -110,6 +110,8 @@ class Configuration(SingletonModel):
     adress = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Adresse"))
     postal_code = models.IntegerField(blank=True, null=True, verbose_name=_("Code postal"))
     city = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Ville"))
+    tva_number = models.CharField(max_length=20, blank=True, null=True, verbose_name=_("Numéro de TVA"))
+    siren = models.CharField(max_length=20, blank=True, null=True, verbose_name=_("Numéro de SIREN"))
 
     phone = models.CharField(max_length=20, verbose_name=_("Téléphone"))
     email = models.EmailField()

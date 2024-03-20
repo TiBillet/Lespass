@@ -25,8 +25,10 @@ from requests.exceptions import ConnectionError
 from weasyprint import HTML, CSS
 from weasyprint.text.fonts import FontConfiguration
 
+
 from AuthBillet.models import TibilletUser, TerminalPairingToken
-from BaseBillet.models import Reservation, Ticket, Configuration, Membership, LigneArticle, Webhook
+from BaseBillet.models import Reservation, Ticket, Configuration, Membership, LigneArticle, Webhook, Paiement_stripe, \
+    Product
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from TiBillet import settings
@@ -142,6 +144,56 @@ def report_to_pdf(report):
         font_config=font_config,
     )
     logger.info(f"  WORKER CELERY : report_to_pdf - {report.get('organisation')} {report.get('date')} bytes")
+    return pdf_binary
+
+
+def create_invoice_pdf(paiement_stripe: Paiement_stripe):
+    config = Configuration.get_solo()
+    template_name = 'invoice/invoice.html'
+    font_config = FontConfiguration()
+    template = get_template(template_name)
+
+    # get membership with the email
+    import ipdb; ipdb.set_trace()
+
+    context = {
+        'config': config,
+        'paiement': paiement_stripe,
+    }
+    html = template.render(context)
+
+    css = CSS(string=
+              '''
+                @font-face {
+                  font-family: BeStrong;
+                  src: url(file:///DjangoFiles/ApiBillet/templates/invoice/BeStrongRegular.otf);
+                }
+                @font-face {
+                  font-family: Libre Barcode;
+                  src: url(file:///DjangoFiles/ApiBillet/templates/ticket/librebarcode128-regular.ttf);
+                }
+                @font-face {
+                  font-family: Barlow Condensed;
+                  src: url(file:///DjangoFiles/ApiBillet/templates/ticket/barlowcondensed-regular.otf)
+                }
+                @font-face {
+                  font-family: Barlow Condensed;
+                  font-weight: 300;
+                  src: url(file:///DjangoFiles/ApiBillet/templates/ticket/barlowcondensed-light.otf);
+                }
+                @font-face {
+                  font-family: Barlow Condensed;
+                  font-weight: 700;
+                  src: url(file:///DjangoFiles/ApiBillet/templates/ticket/barlowcondensed-bold.otf);
+                }
+              ''',
+              font_config=font_config)
+
+    pdf_binary = HTML(string=html).write_pdf(
+        stylesheets=[css],
+        font_config=font_config,
+    )
+
     return pdf_binary
 
 
@@ -270,7 +322,7 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
     # Internal SMTP and html template
     if title is None:
         title = f"{organisation} : Confirmez votre email et connectez vous !"
-    if template is None :
+    if template is None:
         template = 'mails/connexion.html'
 
     logger.info(f'    title : {title}')
@@ -459,10 +511,10 @@ def report_celery_mailer(data_report_list: list):
 
 
 @app.task
-def send_email_generique(context: dict = None, email:str = None):
+def send_email_generique(context: dict = None, email: str = None):
     template_name = "mails/email_generique.html"
     try:
-        if not context :
+        if not context:
             context = {
                 'username': 'UserTest',
                 'now': timezone.now(),
@@ -489,7 +541,6 @@ def send_email_generique(context: dict = None, email:str = None):
                 'signature': "Marvin, le robot de TiBillet",
             }
 
-
         mail = CeleryMailerClass(
             email,
             f"{context.get('title')}",
@@ -503,7 +554,6 @@ def send_email_generique(context: dict = None, email:str = None):
     except smtplib.SMTPRecipientsRefused as e:
         logger.error(
             f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour report_celery_mailer : {e}")
-
 
 
 @app.task
@@ -649,7 +699,6 @@ def webhook_reservation(reservation_pk):
                 logger.error(f"webhook_reservation ERROR : {reservation_pk} {timezone.now()} {e}")
                 webhook.last_response = f"{timezone.now()} - {e}"
             webhook.save()
-
 
 
 @app.task
