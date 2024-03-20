@@ -250,7 +250,7 @@ def new_entry_from_stripe_invoice(user, id_invoice):
 
     if new_paiement_stripe.is_valid():
         paiement_stripe: Paiement_stripe = new_paiement_stripe.paiement_stripe_db
-        paiement_stripe.lignearticle_set.all().update(status=LigneArticle.UNPAID)
+        paiement_stripe.lignearticles.all().update(status=LigneArticle.UNPAID)
 
         return paiement_stripe
 

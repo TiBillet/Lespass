@@ -1,5 +1,6 @@
 import logging
 
+from django.db import connection
 from django.utils import timezone
 
 from BaseBillet.models import LigneArticle, Product, Membership, Price, Configuration
@@ -9,8 +10,10 @@ from django.utils.translation import gettext_lazy as _
 logger = logging.getLogger(__name__)
 
 
-def context_for_membership_email(membership: Membership):
+def context_for_membership_email(membership: Membership = None, paiement_stripe = None):
     config = Configuration.get_solo()
+    domain = connection.tenant.get_primary_domain().domain
+
     context = {
         'username': membership.member_name(),
         'now': timezone.now(),
@@ -31,7 +34,7 @@ def context_for_membership_email(membership: Membership):
         'button_color': "#009058",
         'button': {
             'text': 'RECUPERER UNE FACTURE',
-            'url': f'https://perdu.com'
+            'url': f'https://{domain}/memberships/{paiement_stripe.pk}/invoice/',
         },
         'next_text_1': "Si vous recevez cet email par erreur, merci de contacter l'équipe de TiBillet",
         # 'next_text_2': "next_text_2",
@@ -84,7 +87,9 @@ def update_membership_state_after_paiement(trigger):
     # Envoyer à fedow
     # Envoyer les mails de confirmation
     logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation par email")
-    send_email_generique(context=context_for_membership_email(membership), email=f"{user.email}")
+    #TODO: facture en attached file
+
+    send_email_generique(context=context_for_membership_email(paiement_stripe=paiement_stripe, membership=membership), email=f"{user.email}")
     # Envoyer les facture ici
     # Envoyer les contrats à signer ici
 

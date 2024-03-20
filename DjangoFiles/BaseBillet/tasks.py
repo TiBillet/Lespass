@@ -155,8 +155,6 @@ def create_invoice_pdf(paiement_stripe: Paiement_stripe):
     user = paiement_stripe.user
     membership = user.membership.first()
 
-    # import ipdb; ipdb.set_trace()
-
     context = {
         'config': config,
         'paiement': paiement_stripe,
@@ -514,7 +512,7 @@ def report_celery_mailer(data_report_list: list):
 
 
 @app.task
-def send_email_generique(context: dict = None, email: str = None):
+def send_email_generique(context: dict = None, email: str = None, attached_files=None):
     template_name = "mails/email_generique.html"
     try:
         if not context:
@@ -549,7 +547,7 @@ def send_email_generique(context: dict = None, email: str = None):
             f"{context.get('title')}",
             template=template_name,
             context=context,
-            attached_files=None,
+            attached_files=attached_files,
         )
         mail.send()
         logger.info(f"    send_email_generique : mail.sended : {mail.sended}")

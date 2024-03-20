@@ -30,7 +30,7 @@ def set_ligne_article_paid(old_instance, new_instance):
     logger.info(f"    SIGNAL PAIEMENT STRIPE set_ligne_article_paid {new_instance}.")
     logger.info(f"        On passe toutes les lignes d'article non validées en payées !")
 
-    lignes_article = new_instance.lignearticle_set.exclude(status=LigneArticle.VALID)
+    lignes_article = new_instance.lignearticles.exclude(status=LigneArticle.VALID)
     for ligne_article in lignes_article:
         logger.info(f"            {ligne_article.pricesold} {ligne_article.status} to P")
         ligne_article.status = LigneArticle.PAID
@@ -68,7 +68,7 @@ def set_paiement_stripe_valid(old_instance: LigneArticle, new_instance: LigneArt
 
             # On exclut l'instance en cours, car elle n'est pas encore validée en DB : on est sur du signal pre_save
             # on teste ici : Si toutes les autres lignes sont valides et que celle ci l'est aussi.
-            lignes_meme_panier = new_instance.paiement_stripe.lignearticle_set.all().exclude(
+            lignes_meme_panier = new_instance.paiement_stripe.lignearticles.all().exclude(
                 uuid=new_instance.uuid)
             lignes_meme_panier_valide = lignes_meme_panier.filter(status=LigneArticle.VALID).exclude(
                 uuid=new_instance.uuid)

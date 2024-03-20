@@ -650,7 +650,7 @@ class index_scan(View):
 
                 if new_paiement_stripe.is_valid():
                     paiement_stripe: Paiement_stripe = new_paiement_stripe.paiement_stripe_db
-                    paiement_stripe.lignearticle_set.all().update(status=LigneArticle.UNPAID)
+                    paiement_stripe.lignearticles.all().update(status=LigneArticle.UNPAID)
                     return new_paiement_stripe.redirect_to_stripe()
 
         # Ce n'est pas une demande de paiement

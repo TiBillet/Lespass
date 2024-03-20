@@ -904,7 +904,7 @@ def paiment_stripe_validator(request, paiement_stripe):
         # Si le paiement est valide, c'est que les presave et postsave
         # ont validé la réponse du serveur cashless pour les recharges
         if paiement_stripe.status == Paiement_stripe.VALID:
-            lignes_articles = paiement_stripe.lignearticle_set.all()
+            lignes_articles = paiement_stripe.lignearticles.all()
             # on boucle ici pour récuperer l'uuid de la carte.
             for ligne_article in lignes_articles:
                 carte = ligne_article.carte
@@ -922,7 +922,7 @@ def paiment_stripe_validator(request, paiement_stripe):
                         return Response(f'VALID', status=status.HTTP_200_OK)
 
         elif paiement_stripe.status == Paiement_stripe.PAID:
-            for ligne_article in paiement_stripe.lignearticle_set.all():
+            for ligne_article in paiement_stripe.lignearticles.all():
                 if ligne_article.carte:
                     messages.error(request,
                                    f"Le paiement à bien été validé "
@@ -932,7 +932,7 @@ def paiment_stripe_validator(request, paiement_stripe):
 
         else:
             # on boucle ici pour récuperer l'uuid de la carte.
-            for ligne_article in paiement_stripe.lignearticle_set.all():
+            for ligne_article in paiement_stripe.lignearticles.all():
                 if ligne_article.carte:
                     messages.error(request,
                                    f"Un problème de validation de paiement a été detecté. "

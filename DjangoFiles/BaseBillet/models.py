@@ -997,7 +997,7 @@ class Reservation(models.Model):
     def articles_paid(self):
         articles_paid = []
         for paiement in self.paiements.all():
-            for ligne in paiement.lignearticle_set.filter(
+            for ligne in paiement.lignearticles.filter(
                     Q(status=LigneArticle.PAID) | Q(status=LigneArticle.VALID)
             ):
                 articles_paid.append(ligne)
@@ -1178,7 +1178,7 @@ class Paiement_stripe(models.Model):
         return " - ".join(
             [
                 f"{ligne.pricesold.productsold.product.name} {ligne.pricesold.price.name} {ligne.qty * ligne.pricesold.price.prix}€"
-                for ligne in self.lignearticle_set.all()])
+                for ligne in self.lignearticles.all()])
 
     def update_checkout_status(self) -> str:
         if self.status == Paiement_stripe.VALID:
