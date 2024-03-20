@@ -373,6 +373,10 @@ class Configuration(SingletonModel):
     activate_mailjet = models.BooleanField(default=False)
     email_confirm_template = models.IntegerField(default=3898061)
 
+    ### TVA ###
+
+    vat_taxe = models.DecimalField(max_digits=4, decimal_places=2, default=0)
+
     ### Tenant fields :
 
     def domain(self):
@@ -1159,8 +1163,13 @@ class Paiement_stripe(models.Model):
 
     total = models.FloatField(default=0)
 
+
     def uuid_8(self):
         return f"{self.uuid}".partition('-')[0]
+
+    def invoice_number(self):
+        date = self.order_date.strftime('%y%m%d')
+        return f"{date}-{self.uuid_8()}"
 
     def __str__(self):
         return self.uuid_8()
@@ -1224,10 +1233,11 @@ class LigneArticle(models.Model):
     pricesold = models.ForeignKey(PriceSold, on_delete=models.CASCADE)
 
     qty = models.SmallIntegerField()
+    vat = models.DecimalField(max_digits=4, decimal_places=2, default=0)
 
     carte = models.ForeignKey(CarteCashless, on_delete=models.PROTECT, blank=True, null=True)
 
-    paiement_stripe = models.ForeignKey(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True)
+    paiement_stripe = models.ForeignKey(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True, related_name="lignearticles")
 
     CANCELED, CREATED, UNPAID, PAID, FREERES, VALID, = 'C', 'O', 'U', 'P', 'F', 'V'
     TYPE_CHOICES = [

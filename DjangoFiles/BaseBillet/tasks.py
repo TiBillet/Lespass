@@ -152,13 +152,16 @@ def create_invoice_pdf(paiement_stripe: Paiement_stripe):
     template_name = 'invoice/invoice.html'
     font_config = FontConfiguration()
     template = get_template(template_name)
+    user = paiement_stripe.user
+    membership = user.membership.first()
 
-    # get membership with the email
-    import ipdb; ipdb.set_trace()
+    # import ipdb; ipdb.set_trace()
 
     context = {
         'config': config,
         'paiement': paiement_stripe,
+        'membership': membership,
+        'email': user.email,
     }
     html = template.render(context)
 
