@@ -86,7 +86,8 @@ def update_membership_state_after_paiement(trigger):
 
     # TODO: On a débranché le cashless.
     # Envoyer à fedow
-    # Envoyer les mails de confirmation
+
+    # Mails de confirmation et facture en PJ :
     logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation par email")
     send_email_generique.delay(
         context=context_for_membership_email(paiement_stripe=paiement_stripe, membership=membership),
@@ -101,6 +102,7 @@ def update_membership_state_after_paiement(trigger):
         logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation à Ghost")
         send_to_ghost.delay(membership.pk)
 
+    # La ligne qui fait tout passer en VALID :
     trigger.ligne_article.status = LigneArticle.VALID
 
     return membership

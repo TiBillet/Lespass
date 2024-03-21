@@ -35,7 +35,6 @@ class StaffAdminSite(AdminSite):
     site_title = "TiBillet Staff Admin"
     site_url = '/'
 
-
     def get_app_list(self, request):
         # app_dict = self._build_app_dict(request)
 
@@ -86,7 +85,8 @@ class StaffAdminSite(AdminSite):
         #     login(request, root)
         #     return True
 
-        logger.warning(f"Tenant AdminSite.has_permission : {request.user} - {request.user.client_source if request.user.is_authenticated else 'No client'} - ip : {get_client_ip(request)}")
+        logger.warning(
+            f"Tenant AdminSite.has_permission : {request.user} - {request.user.client_source if request.user.is_authenticated else 'No client'} - ip : {get_client_ip(request)}")
         try:
             if request.tenant in request.user.client_admin.all():
                 return request.user.is_superuser
@@ -123,7 +123,7 @@ class UserAdminTibillet(UserAdmin):
         (None, {
             'classes': ('wide',),
             'fields': ('email',)}
-            # 'fields': ('email', 'password1', 'password2', 'is_active')}
+         # 'fields': ('email', 'password1', 'password2', 'is_active')}
          ),
     )
 
@@ -146,8 +146,11 @@ class UserAdminTibillet(UserAdmin):
 
     def has_change_permission(self, request, obj=None):
         return False
+
+
 class HumanUserAdmin(UserAdminTibillet):
     pass
+
 
 staff_admin_site.register(HumanUser, HumanUserAdmin)
 
@@ -260,9 +263,9 @@ class WebhookAdmin(admin.ModelAdmin):
 
 staff_admin_site.register(Webhook, WebhookAdmin)
 
+
 ########################################################################
 class ConfigurationAdmin(SingletonModelAdmin):
-
     fieldsets = (
         (None, {
             'fields': (
@@ -275,42 +278,29 @@ class ConfigurationAdmin(SingletonModelAdmin):
                 'phone',
                 'email',
                 'site_web',
+                'fuseau_horaire',
                 # 'map_img',
             )
         }),
-        # ('Restaurant', {
-        #     'fields': (
-        #         'carte_restaurant',
-        #     ),
-        # }),
-        # ('Social', {
-        #     'fields': (
-        #         'twitter',
-        #         'facebook',
-        #         'instagram',
-        #     ),
-        # }),
-        # ('Adhésions', {
-        #     'fields': (
-        #         'adhesion_obligatoire',
-                # 'button_adhesion',
-            # ),
-        # }),
         ('Paiements', {
             'fields': (
                 # 'stripe_api_key',
                 # 'stripe_test_api_key',
+                'vat_taxe',
                 'stripe_mode_test',
             ),
         }),
         ('Billetterie options générales', {
             'fields': (
-                # 'activer_billetterie',
-                # 'template_billetterie',
-                # 'template_meta',
                 'jauge_max',
-                # 'option_generale_radio',
-                # 'option_generale_checkbox',
+                'option_generale_radio',
+                'option_generale_checkbox',
+            ),
+        }),
+        ('Fedow', {
+            'fields': (
+                'federated_cashless',
+                'server_fedow',
             ),
         }),
         ('Cashless', {
@@ -326,14 +316,9 @@ class ConfigurationAdmin(SingletonModelAdmin):
                 'ghost_last_log',
             ),
         }),
-        # ('Mailing', {
-        #     'fields': (
-        #         'activate_mailjet',
-        #         'email_confirm_template',
-        #     ),
-        # }),
+
     )
-    readonly_fields = ['ghost_last_log',]
+    readonly_fields = ['ghost_last_log', ]
 
     def save_model(self, request, obj, form, change):
         obj: Configuration
@@ -356,6 +341,7 @@ class TagAdmin(admin.ModelAdmin):
     ]
     fields = list_display
     readonly_fields = ['uuid', ]
+
 
 staff_admin_site.register(Tag, TagAdmin)
 
@@ -420,7 +406,6 @@ class EventAdmin(admin.ModelAdmin):
 
     # pour selectionner uniquement les articles ventes et retour consigne
     def formfield_for_manytomany(self, db_field, request, **kwargs):
-
         produits_non_affichables = [Product.RECHARGE_CASHLESS, Product.DON, Product.ADHESION]
         if db_field.name == "products":
             kwargs["queryset"] = Product.objects \
@@ -734,6 +719,7 @@ class PaiementStripeAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None):
         return False
 
+
 staff_admin_site.register(Paiement_stripe, PaiementStripeAdmin)
 
 
@@ -775,7 +761,8 @@ class MembershipAdmin(admin.ModelAdmin):
         # 'commentaire',
     )
     ordering = ('-date_added',)
-    search_fields = ('user__email','user__first_name', 'user__last_name')
+    search_fields = ('user__email', 'user__first_name', 'user__last_name')
+
 
 staff_admin_site.register(Membership, MembershipAdmin)
 
