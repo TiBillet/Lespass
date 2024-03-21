@@ -512,7 +512,7 @@ def report_celery_mailer(data_report_list: list):
 
 
 @app.task
-def send_email_generique(context: dict = None, email: str = None, attached_files=None):
+def send_email_generique(context: dict = None, email: str = None, attached_files: dict=None):
     template_name = "mails/email_generique.html"
     try:
         if not context:

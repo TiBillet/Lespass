@@ -52,19 +52,21 @@
 
                         </td>
                     </tr>
-                    <tr>
-                        <td style="padding: 0 0 24px 0;">
-                            <table style="width:100%;border-spacing: 0px;padding: 0px;">
-                                <tr>
-                                    <td class="active-t btn" align="center"
-                                        style="background:{{ button_color }};font:13px/16px Arial, Helvetica, sans-serif;border-radius:3px;height:48px;">
-                                        <a style="color:#ffffff; text-decoration:none; display:block; padding:16px 10px;"
-                                           target="_blank"
-                                           href="{{ button.url }}">{{ button.text }}</a></td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
+                    {% if button %}
+                        <tr>
+                            <td style="padding: 0 0 24px 0;">
+                                <table style="width:100%;border-spacing: 0px;padding: 0px;">
+                                    <tr>
+                                        <td class="active-t btn" align="center"
+                                            style="background:{{ button_color }};font:13px/16px Arial, Helvetica, sans-serif;border-radius:3px;height:48px;">
+                                            <a style="color:#ffffff; text-decoration:none; display:block; padding:16px 10px;"
+                                               target="_blank"
+                                               href="{{ button.url }}">{{ button.text }}</a></td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    {% endif %}
                     <tr>
                         {% if next_text_1 %}
                             <td>

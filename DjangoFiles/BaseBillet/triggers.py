@@ -2,17 +2,18 @@ import logging
 
 from django.db import connection
 from django.utils import timezone
+from django.utils.text import slugify
 
 from BaseBillet.models import LigneArticle, Product, Membership, Price, Configuration
-from BaseBillet.tasks import send_membership_to_cashless, send_to_ghost, send_email_generique
+from BaseBillet.tasks import send_membership_to_cashless, send_to_ghost, send_email_generique, create_invoice_pdf
 from django.utils.translation import gettext_lazy as _
 
 logger = logging.getLogger(__name__)
 
 
-def context_for_membership_email(membership: Membership = None, paiement_stripe = None):
+def context_for_membership_email(membership: Membership = None, paiement_stripe=None):
     config = Configuration.get_solo()
-    domain = connection.tenant.get_primary_domain().domain
+    # domain = connection.tenant.get_primary_domain().domain
 
     context = {
         'username': membership.member_name(),
@@ -21,7 +22,7 @@ def context_for_membership_email(membership: Membership = None, paiement_stripe 
         'objet': _("Email de confirmation"),
         'sub_title': _("Bienvenue à bord !"),
         'main_text': _(
-            f"Votre paiement pour {membership.price.product.name} à bien été pris en compte. Si vous souhaitez une facture, vous pouvez la récupérer en cliquant sur le bouton ci-dessous."),
+            f"Votre paiement pour {membership.price.product.name} à bien été pris en compte. Vous trouverez la facture en pièce jointe."),
         # 'main_text_2': _("Si vous pensez que cette demande est main_text_2, vous n'avez rien a faire de plus :)"),
         # 'main_text_3': _("Dans le cas contraire, vous pouvez main_text_3. Merci de contacter l'équipe d'administration via : contact@tibillet.re au moindre doute."),
         'table_info': {
@@ -32,10 +33,10 @@ def context_for_membership_email(membership: Membership = None, paiement_stripe 
             'Valable jusque': f'{membership.deadline()}',
         },
         'button_color': "#009058",
-        'button': {
-            'text': 'RECUPERER UNE FACTURE',
-            'url': f'https://{domain}/memberships/{paiement_stripe.pk}/invoice/',
-        },
+        # 'button': {
+        #     'text': 'RECUPERER UNE FACTURE',
+        #     'url': f'https://{domain}/memberships/{paiement_stripe.pk}/invoice/',
+        # },
         'next_text_1': "Si vous recevez cet email par erreur, merci de contacter l'équipe de TiBillet",
         # 'next_text_2': "next_text_2",
         'end_text': 'A bientôt, et bon voyage',
@@ -87,11 +88,13 @@ def update_membership_state_after_paiement(trigger):
     # Envoyer à fedow
     # Envoyer les mails de confirmation
     logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation par email")
-    #TODO: facture en attached file
-
-    send_email_generique(context=context_for_membership_email(paiement_stripe=paiement_stripe, membership=membership), email=f"{user.email}")
-    # Envoyer les facture ici
-    # Envoyer les contrats à signer ici
+    send_email_generique.delay(
+        context=context_for_membership_email(paiement_stripe=paiement_stripe, membership=membership),
+        email=f"{user.email}",
+        attached_files={
+            f'{slugify(membership.member_name())}_{slugify(paiement_stripe.invoice_number())}_tibillet_invoice.pdf' :
+                create_invoice_pdf(paiement_stripe)},
+    )
 
     # Envoyer à ghost :
     if membership.newsletter:

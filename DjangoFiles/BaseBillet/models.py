@@ -1329,7 +1329,9 @@ class Membership(models.Model):
         verbose_name_plural = _('Adhésions')
 
     def email(self):
-        return self.user.email
+        if self.user:
+            return self.user.email
+        return None
 
     def member_name(self):
         if self.pseudo:
