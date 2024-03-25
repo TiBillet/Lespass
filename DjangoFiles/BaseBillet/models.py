@@ -117,7 +117,7 @@ class Configuration(SingletonModel):
     email = models.EmailField()
 
     site_web = models.URLField(blank=True, null=True)
-    legal_documents = models.URLField(blank=True, null=True, verbose_name='Statuts associatif')
+    legal_documents = models.URLField(blank=True, null=True, verbose_name=_('Statuts associatif'))
 
     twitter = models.URLField(blank=True, null=True)
     facebook = models.URLField(blank=True, null=True)
@@ -161,7 +161,7 @@ class Configuration(SingletonModel):
                             'crop': (480, 270, True),
                         },
                         delete_orphans=True,
-                        verbose_name='Background',
+                        verbose_name='Background image',
                         )
 
     TZ_REUNION, TZ_PARIS = "Indian/Reunion", "Europe/Paris"

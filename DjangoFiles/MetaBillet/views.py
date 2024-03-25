@@ -1,3 +1,4 @@
+from django.http import HttpResponseRedirect
 from django.shortcuts import render
 
 # Create your views here.
@@ -9,7 +10,8 @@ class index(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        return render(request, 'html5up-story/index.html')
+        return HttpResponseRedirect('https://tibillet.org/')
+        # return render(request, 'html5up-story/index.html')
 
 
 

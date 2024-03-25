@@ -19,13 +19,11 @@ logger = logging.getLogger(__name__)
 class Command(BaseCommand):
 
     def handle(self, *args, **options):
-
-
         def create_public():
             stripe_api_key = os.environ.get('STRIPE_KEY')
             stripe_test_api_key = os.environ.get('STRIPE_KEY_TEST')
 
-            # Au moins une des deux cléf.
+            # Au moins une des deux clés.
             if not any([stripe_api_key, stripe_test_api_key]):
                 raise Exception("Need Stripe Api Key in .env file")
 
@@ -34,7 +32,7 @@ class Command(BaseCommand):
                 raise Exception("Need META in .env file")
 
             stripe_mode_test = True
-            if os.environ.get('STRIPE_TEST') == "False":
+            if os.environ.get('STRIPE_TEST') == "False" or os.environ.get('STRIPE_TEST') == 0:
                 stripe_mode_test = False
                 stripe.api_key = stripe_api_key
                 # Test de la cléf

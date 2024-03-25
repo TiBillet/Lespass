@@ -41,12 +41,12 @@ urlpatterns = [
     # pour carte GEN1 Bisik
     re_path(r'(?P<numero_carte>^[qsdf974]{5}$)', include('QrcodeCashless.urls')),
 
-    path("__reload__/", include("django_browser_reload.urls")),
     path('', include('BaseBillet.urls')),
 
     # path('admin/', admin.site.urls, name="public_admin_url"),
 ]
 
-if settings.DEBUG is True:
+if settings.DEBUG:
+    urlpatterns += [path("__reload__/", include("django_browser_reload.urls")),]
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

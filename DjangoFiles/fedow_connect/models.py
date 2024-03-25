@@ -30,10 +30,8 @@ class FedowConfig(SingletonModel):
         return conf_root.fedow_ip
 
     def get_fedow_create_place_apikey(self):
-        # Si existe pas, doit être créé avec : set_fedow_create_place_apikey
+        # La clé unique pour création de place. Il ne peut en exister qu'une seule par FEDOW
+        # Si existe pas, doit être créé avec à la main : ./manage.py root_fedow
         conf_root = self.get_conf_root()
         return conf_root.get_fedow_create_place_apikey()
 
-    # def fedow_place_create(self):
-    #     fedowAPI = FedowAPI(self)
-    #     fedowAPI.place.create()

@@ -19,8 +19,8 @@ urlpatterns = [
     path('wiz_event/presentation/', base_view.event_presentation, name='event_presentation'),
     path('wiz_event/products/', base_view.event_products, name='event_products'),
     path('home/', base_view.home, name='home'),
-    # path("memberships/", base_view.memberships, name='memberships'),
-    # path("validate_membership/", base_view.validate_membership, name='validate_membership'),
+
+
     path("my_account/", base_view.my_account, name='my_account'),
     path("my_account/wallet/", base_view.my_account_wallet, name='my_account_wallet'),
     path("my_account/membership/", base_view.my_account_membership, name='my_account_membership'),
@@ -33,6 +33,8 @@ urlpatterns = [
     path('connexion/', base_view.connexion, name='connexion'),
     path('deconnexion/', base_view.deconnexion, name='deconnexion'),
     path('emailconfirmation/<str:uuid>/<str:token>/', base_view.emailconfirmation, name='emailconfirmation'),
+
     path('', base_view.home, name="index"),
-    path('', include(router.urls)),
 ]
+
+urlpatterns += router.urls
