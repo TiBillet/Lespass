@@ -109,14 +109,16 @@ class WalletFedow():
             "email": email,
             "public_pem": user.get_public_pem(),
         })
-        if response_link.status_code == 200:
+        if response_link.status_code in [200,201]:
             # Création du wallet dans la base de donnée
             if not user.wallet:
                 user.wallet, created = Wallet.objects.get_or_create(uuid=UUID(response_link.json()))
                 user.save()
             elif user.wallet.uuid != UUID(response_link.json()):
                 raise Exception("Wallet and member mismatch")
-            return user.wallet
+
+            created = False if response_link.status_code == 200 else True
+            return user.wallet, created
 
         raise Exception(f"Wallet FedowAPI create_from_email response : {response_link.status_code}")
 

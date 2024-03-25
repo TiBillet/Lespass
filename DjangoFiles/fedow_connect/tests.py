@@ -1,4 +1,5 @@
 import os
+from uuid import UUID
 
 from django.conf import settings
 from django.core.management import call_command
@@ -10,6 +11,7 @@ from faker import Faker
 from django.test import TestCase
 from django_tenants.utils import get_tenant_model, tenant_context, schema_context, get_public_schema_name
 
+from AuthBillet.models import Wallet
 
 
 class TenantSchemaTestCase(TestCase):
@@ -42,15 +44,21 @@ class TenantSchemaTestCase(TestCase):
 
         fedowAPI = FedowAPI(FedowConfig.get_solo())
 
-        wallet = fedowAPI.wallet.get_or_create(user)
+        wallet, created = fedowAPI.wallet.get_or_create(user)
         wallet_uuid = wallet.uuid
 
-        import ipdb; ipdb.set_trace()
-
+        self.assertTrue(created)
         self.assertIsInstance(wallet, Wallet)
         self.assertIsInstance(wallet_uuid, UUID)
-        membre.refresh_from_db()
-        self.assertEqual(membre.wallet.uuid, wallet_uuid)
+        user.refresh_from_db()
+        self.assertEqual(user.wallet.uuid, wallet_uuid)
+
+        # on retest pour retrouver l'user, mais avec un 200 -> created = False
+        wallet, created = fedowAPI.wallet.get_or_create(user)
+        self.assertFalse(created)
+        self.assertIsInstance(wallet, Wallet)
+        self.assertIsInstance(wallet_uuid, UUID)
+        self.assertEqual(user.wallet.uuid, wallet_uuid)
 
         return user
 
