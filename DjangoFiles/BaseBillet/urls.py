@@ -11,8 +11,6 @@ urlpatterns = [
     path('ticket/<uuid:pk_uuid>/', base_view.Ticket_html_view.as_view()),
     path('event/<slug:slug>/', base_view.event, name='event'),
 
-    # path('membership_form/<uuid:uuid>/', base_view.membership_form.as_view(), name='membership_form'),
-
     path("validate_event/", base_view.validate_event, name='validate_event'),
     path('create_event/', base_view.create_event, name='create_event'),
     path('wiz_event/date/', base_view.event_date, name='event_date'),

@@ -1,10 +1,11 @@
 import json
 import logging
+from uuid import UUID
 
 import requests
 from django.conf import settings
 
-from AuthBillet.models import RsaKey, TibilletUser
+from AuthBillet.models import RsaKey, TibilletUser, Wallet
 from BaseBillet.models import Configuration
 from fedow_connect.models import FedowConfig
 from fedow_connect.utils import sign_message, data_to_b64, verify_signature
@@ -103,10 +104,21 @@ class WalletFedow():
             self.fedow_config = FedowConfig.get_solo()
 
     def get_or_create(self, user: TibilletUser):
-        # email = user.email
-        # pub_key = user.get_public_key()
-        # response_link = _post(self.config, 'wallet', {"email": email})
-        pass
+        email = user.email
+        response_link = _post(self.fedow_config, user=user, path='wallet/get_or_create', data={
+            "email": email,
+            "public_pem": user.get_public_pem(),
+        })
+        if response_link.status_code == 200:
+            # Création du wallet dans la base de donnée
+            if not user.wallet:
+                user.wallet, created = Wallet.objects.get_or_create(uuid=UUID(response_link.json()))
+                user.save()
+            elif user.wallet.uuid != UUID(response_link.json()):
+                raise Exception("Wallet and member mismatch")
+            return user.wallet
+
+        raise Exception(f"Wallet FedowAPI create_from_email response : {response_link.status_code}")
 
 
 class PlaceFedow():

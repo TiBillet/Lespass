@@ -75,7 +75,7 @@ def get_or_create_user(email,
                        password=None,
                        set_active=False,
                        send_mail=True,
-                       force_mail=False
+                       force_mail=False,
                        ) -> TibilletUser or None:
     """
     If user not created, set it inactive.

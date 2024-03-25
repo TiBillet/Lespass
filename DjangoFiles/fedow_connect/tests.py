@@ -25,6 +25,35 @@ class TenantSchemaTestCase(TestCase):
             self.assertTrue('public' in tenant_names)
             self.assertTrue('meta' in tenant_names)
 
+    def add_new_user_to_fedow(self):
+        from AuthBillet.utils import get_or_create_user
+        from fedow_connect.fedow_api import FedowAPI
+        from fedow_connect.models import FedowConfig
+
+        fake = Faker()
+        email = fake.email()
+
+        User = get_user_model()
+        user, created = User.objects.get_or_create(
+            email=email,
+            username=email,
+            espece='HU'
+        )
+
+        fedowAPI = FedowAPI(FedowConfig.get_solo())
+
+        wallet = fedowAPI.wallet.get_or_create(user)
+        wallet_uuid = wallet.uuid
+
+        import ipdb; ipdb.set_trace()
+
+        self.assertIsInstance(wallet, Wallet)
+        self.assertIsInstance(wallet_uuid, UUID)
+        membre.refresh_from_db()
+        self.assertEqual(membre.wallet.uuid, wallet_uuid)
+
+        return user
+
     def test_connect_place_to_fedow(self, schema_name=None):
         if schema_name is None:
             schema_name = 'meta'
@@ -53,8 +82,10 @@ class TenantSchemaTestCase(TestCase):
             self.assertTrue(root_config.fedow_primary_pub_pem)
 
             fedowAPI = FedowAPI(fedow_config)
-            # Création de la place
             fake = Faker()
+
+            # création de l'admin de la place
+            # Lors de la requete vers Fedow, un get_public_key va créer le couple rsa
             email = fake.email()
             admin, created = User.objects.get_or_create(
                 email=email,
@@ -62,9 +93,13 @@ class TenantSchemaTestCase(TestCase):
                 espece=TibilletUser.TYPE_HUM
             )
 
+            # Création de la place
             fedowAPI.place.create(admin, fake.company())
             fedow_config.refresh_from_db()
             self.assertTrue(fedow_config.fedow_place_uuid)
             self.assertTrue(fedow_config.fedow_place_wallet_uuid)
             self.assertTrue(fedow_config.fedow_place_admin_apikey)
+
+            # Création d'un nouvel user avec son email seul
+            user = self.add_new_user_to_fedow()
 
