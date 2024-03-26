@@ -243,9 +243,6 @@ class TibilletUser(AbstractUser):
 
     ##### END user terminaux ####
 
-    ##### Pour les user humain ####
-
-    ##### END user humain ####
     def get_active_membership(self):
         return [mem.price.product.uuid for mem in self.membership.all() if mem.is_valid()]
 

@@ -12,6 +12,7 @@ from django.test import TestCase
 from django_tenants.utils import get_tenant_model, tenant_context, schema_context, get_public_schema_name
 
 from AuthBillet.models import Wallet
+from fedow_connect.validators import WalletValidator
 
 
 class TenantSchemaTestCase(TestCase):
@@ -28,7 +29,6 @@ class TenantSchemaTestCase(TestCase):
             self.assertTrue('meta' in tenant_names)
 
     def add_new_user_to_fedow(self):
-        from AuthBillet.utils import get_or_create_user
         from fedow_connect.fedow_api import FedowAPI
         from fedow_connect.models import FedowConfig
 
@@ -53,7 +53,7 @@ class TenantSchemaTestCase(TestCase):
         user.refresh_from_db()
         self.assertEqual(user.wallet.uuid, wallet_uuid)
 
-        # on retest pour retrouver l'user, mais avec un 200 -> created = False
+        # on lance de nouveau pour retrouver l'user, mais avec un 200 -> created = False
         wallet, created = fedowAPI.wallet.get_or_create(user)
         self.assertFalse(created)
         self.assertIsInstance(wallet, Wallet)
@@ -61,6 +61,40 @@ class TenantSchemaTestCase(TestCase):
         self.assertEqual(user.wallet.uuid, wallet_uuid)
 
         return user
+
+    def get_serialized_wallet(self, user):
+        from fedow_connect.fedow_api import FedowAPI
+        fedowAPI = FedowAPI()
+        serialized_wallet = fedowAPI.wallet.retrieve_by_signature(user)
+        self.assertIsInstance(serialized_wallet, WalletValidator)
+        wallet = serialized_wallet.wallet
+        self.assertIsInstance(wallet, Wallet)
+        self.assertEqual(wallet.uuid, user.wallet.uuid)
+        return serialized_wallet
+
+
+    def get_checkout(self, user):
+        from fedow_connect.fedow_api import FedowAPI
+        fedowAPI = FedowAPI()
+        stripe_checkout_url = fedowAPI.wallet.get_federated_token_refill_checkout(user)
+
+        self.assertIn('https://checkout.stripe.com/c/pay/cs_test', stripe_checkout_url)
+        print('')
+        print('Test du paiement. Lancez stripe cli avec :')
+        print('stripe listen --forward-to http://127.0.0.1:8442/webhook_stripe/')
+        print('')
+        print('lancez le paiement avec 42€ et la carte 4242 :')
+        print(f"{stripe_checkout_url}")
+        print('')
+        check_stripe = input("Une fois le paiement validé, 'entrée' pour tester le paiement réussi. NO pour passer :\n")
+
+        if check_stripe != "NO":
+            serialized_card = self.get_serialized_wallet(user)
+            data = serialized_card.data
+            self.assertEqual(data.get('tokens')[0].get('value'), 4200)
+            self.assertEqual(data.get('tokens')[0]['asset'].get('is_stripe_primary'), True)
+
+        return stripe_checkout_url
 
     def test_connect_place_to_fedow(self, schema_name=None):
         if schema_name is None:
@@ -110,4 +144,11 @@ class TenantSchemaTestCase(TestCase):
 
             # Création d'un nouvel user avec son email seul
             user = self.add_new_user_to_fedow()
+
+            # récupération des informations détaillé du wallet
+            serialized_wallet = self.get_serialized_wallet(user)
+            wallet = serialized_wallet.wallet
+
+            # Récupération d'un lien de recharge cashless Fedow
+            stripe_checkout_url = self.get_checkout(user)
 

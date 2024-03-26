@@ -2,6 +2,8 @@ from rest_framework import serializers
 from django.core.cache import cache
 from django.utils.translation import gettext_lazy as _
 
+from AuthBillet.models import Wallet
+
 
 class PlaceValidator(serializers.Serializer):
     uuid = serializers.UUIDField()
@@ -70,6 +72,9 @@ class WalletValidator(serializers.Serializer):
     uuid = serializers.UUIDField()
     tokens = TokenValidator(many=True)
 
+    def validate(self, attrs):
+        self.wallet, created = Wallet.objects.get_or_create(uuid=attrs['uuid'])
+        return attrs
 
 class CardValidator(serializers.Serializer):
     wallet = WalletValidator(many=False)
