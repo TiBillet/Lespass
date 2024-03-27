@@ -49,7 +49,9 @@ class MembershipValidator(serializers.Serializer):
 
         membership.first_name = attrs['first_name']
         membership.last_name = attrs['last_name']
-        membership.newsletter = attrs['newsletter']
+
+        # Sur le form, on coche pour NE PAS recevoir la news
+        membership.newsletter = not attrs['newsletter']
 
         # Set remplace les options existantes, accepte les listes
         if 'options_checkbox' in attrs:

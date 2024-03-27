@@ -19,6 +19,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
+from django_tenants.postgresql_backend.base import FakeTenant
 from django_tenants.utils import tenant_context, schema_context
 from rest_framework_api_key.models import APIKey
 from solo.models import SingletonModel
@@ -334,7 +335,6 @@ class Configuration(SingletonModel):
             self.save()
 
         return self.stripe_payouts_enabled
-
 
     """
     ### TVA ###
@@ -837,7 +837,12 @@ class ProductSold(models.Model):
         # config = Configuration.get_solo()
 
         client = connection.tenant
-        domain_url = client.domains.all()[0].domain
+        # On est en mode test :
+        if type(client) == FakeTenant:
+            domain_url = "demo.tibillet.localhost"
+        else:
+            domain_url = client.get_primary_domain()
+
         # noinspection PyUnresolvedReferences
         images = []
         if self.img():
@@ -851,11 +856,14 @@ class ProductSold(models.Model):
         logger.info(f"product {product.name} created : {product.id}")
         self.id_product_stripe = product.id
 
-        with schema_context('public'):
-            product_directory, created = ProductDirectory.objects.get_or_create(
-                place=client,
-                product_sold_stripe_id=product.id,
-            )
+        # On répertorie tout les produit pour savoir lequel incrémenter en cas de stripe webhook
+        # Non utile en test
+        if type(connection.tenant) != FakeTenant:
+            with schema_context('public'):
+                product_directory, created = ProductDirectory.objects.get_or_create(
+                    place=client,
+                    product_sold_stripe_id=product.id,
+                )
 
         self.save()
 
@@ -1167,7 +1175,6 @@ class Paiement_stripe(models.Model):
 
     total = models.FloatField(default=0)
 
-
     def uuid_8(self):
         return f"{self.uuid}".partition('-')[0]
 
@@ -1193,7 +1200,7 @@ class Paiement_stripe(models.Model):
         checkout_session = stripe.checkout.Session.retrieve(
             self.checkout_session_id_stripe,
             # stripe_account=config.get_stripe_connect_account()
-            )
+        )
 
         # Pas payé, on le met en attente
         if checkout_session.payment_status == "unpaid":
@@ -1224,7 +1231,6 @@ class Paiement_stripe(models.Model):
         self.save()
         return self.status
 
-
     class Meta:
         verbose_name = _('Paiement Stripe')
         verbose_name_plural = _('Paiements Stripe')
@@ -1241,7 +1247,8 @@ class LigneArticle(models.Model):
 
     carte = models.ForeignKey(CarteCashless, on_delete=models.PROTECT, blank=True, null=True)
 
-    paiement_stripe = models.ForeignKey(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True, related_name="lignearticles")
+    paiement_stripe = models.ForeignKey(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True,
+                                        related_name="lignearticles")
 
     CANCELED, CREATED, UNPAID, PAID, FREERES, VALID, = 'C', 'O', 'U', 'P', 'F', 'V'
     TYPE_CHOICES = [

@@ -1,3 +1,5 @@
+import os
+
 import requests
 from django.conf import settings
 from django.core.cache import cache
@@ -42,7 +44,7 @@ class RootConfiguration(SingletonModel):
 
     def get_stripe_api(self):
         if self.stripe_mode_test:
-            return self.stripe_test_api_key
+            return os.environ.get('STRIPE_KEY_TEST')
         else:
             return fernet_decrypt(self.stripe_api_key)
 
