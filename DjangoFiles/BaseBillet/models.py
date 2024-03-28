@@ -415,7 +415,6 @@ class Product(models.Model):
     short_description = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Description courte"))
     long_description = models.TextField(blank=True, null=True, verbose_name=_("Description longue"))
 
-    terms_and_conditions_document = models.URLField(blank=True, null=True)
 
     publish = models.BooleanField(default=True)
     poids = models.PositiveSmallIntegerField(default=0, verbose_name=_("Poids"),
@@ -431,6 +430,8 @@ class Product(models.Model):
                                                       blank=True,
                                                       related_name="produits_checkbox")
 
+    #TODO: doublon ?
+    terms_and_conditions_document = models.URLField(blank=True, null=True)
     legal_link = models.URLField(blank=True, null=True, verbose_name=_("Mentions légales"))
 
     img = StdImageField(upload_to='images/',
@@ -479,6 +480,17 @@ class Product(models.Model):
 
     # id_product_stripe = models.CharField(max_length=30, null=True, blank=True)
 
+    # Dans le cas d'un abonnement fédéré :
+    fedow_asset = models.UUIDField(blank=True, null=True)
+    def fedow_category(self):
+        self_category_map = {
+            self.ADHESION: 'SUB',
+            self.RECHARGE_CASHLESS: 'FED',
+        }
+        return self_category_map.get(self.categorie_article, None)
+
+
+
     def __str__(self):
         return f"{self.name}"
 
@@ -490,13 +502,13 @@ class Product(models.Model):
 
 
 @receiver(post_save, sender=Product)
-def poids_Product(sender, instance: Product, created, **kwargs):
+def post_save_Product(sender, instance: Product, created, **kwargs):
     if created:
         # poids d'apparition
         if instance.poids == 0:
             instance.poids = len(Product.objects.all()) + 1
-
         instance.save()
+
 
 
 class Price(models.Model):
@@ -1294,8 +1306,6 @@ class Membership(models.Model):
     date_added = models.DateTimeField(auto_now_add=True)
     first_contribution = models.DateField(null=True, blank=True)
     last_contribution = models.DateField(null=True, blank=True)
-
-    contribution_value = models.FloatField(null=True, blank=True)
     last_action = models.DateTimeField(auto_now=True, verbose_name="Présence")
 
     first_name = models.CharField(
@@ -1333,6 +1343,12 @@ class Membership(models.Model):
     option_generale = models.ManyToManyField(OptionGenerale,
                                              blank=True,
                                              related_name="membership_options")
+
+    stripe_paiement = models.ManyToManyField(Paiement_stripe, blank=True, related_name="membership")
+    contribution_value = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+
+    # def last_contribution_value(self):
+    #     last
 
     class Meta:
         unique_together = ('user', 'price')

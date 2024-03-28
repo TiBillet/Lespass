@@ -1,16 +1,18 @@
 import json
 import logging
 from datetime import datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import requests
 from django.conf import settings
+from django.utils import timezone
+from django.utils.timezone import localtime
 
 from AuthBillet.models import RsaKey, TibilletUser, Wallet
-from BaseBillet.models import Configuration
+from BaseBillet.models import Configuration, Membership, Product
 from fedow_connect.models import FedowConfig
 from fedow_connect.utils import sign_message, data_to_b64, verify_signature
-from fedow_connect.validators import WalletValidator
+from fedow_connect.validators import WalletValidator, AssetValidator, TransactionValidator
 
 logger = logging.getLogger(__name__)
 
@@ -22,37 +24,45 @@ def _post(fedow_config: FedowConfig = None,
           path: str = None,
           apikey: str = None):
     fedow_domain = fedow_config.fedow_domain()
-    wallet_uuid: str = f"{user.wallet.uuid}" if user.wallet else ""
+    now = f"{datetime.now().isoformat()}"
 
     # Pour la création, on prend la clé api de Root. On rempli apikey
     # Si vide, on prend la clé du lieu du tenant
     if apikey is None:
+        # Pour la création, on prend la clé api de Root. apikey est donné en arguement.
+        # Si vide, on prend la clé du lieu du tenant
         apikey = fedow_config.fedow_place_admin_apikey
+    headers = {
+        "Date": f"{now}",
+        'Authorization': f'Api-Key {apikey}',
+        "Content-type": "application/json",
+    }
 
-    # Signature de la requete
-    private_key = user.get_private_key()
-    signature = sign_message(
-        data_to_b64(data),
-        private_key,
-    ).decode('utf-8')
+    # Si un user est donné, on indique son wallet dans le header et on le signe avec now
+    if user:
+        # Signature de la requete
+        signature = sign_message(
+            data_to_b64(data),
+            user.get_private_key(),
+        ).decode('utf-8')
 
-    # Ici, on s'autovérifie :
-    # Assert volontaire. Si non effectué en prod, ce n'est pas grave.
-    # logger.debug("_post verify_signature start")
-    assert verify_signature(user.get_public_key(),
-                            data_to_b64(data),
-                            signature)
+        # Ici, on s'autovérifie :
+        # Assert volontaire. Si non effectué en prod, ce n'est pas grave.
+        # logger.debug("_post verify_signature start")
+        if not verify_signature(user.get_public_key(),
+                                data_to_b64(data),
+                                signature):
+            raise Exception("Signature auto verification failed")
+
+        headers.update({
+            "Wallet": f"{user.wallet.uuid}" if user.wallet else "",
+            "Signature": f"{signature}",
+        })
 
     session = requests.Session()
     request_fedow = session.post(
         f"https://{fedow_domain}/{path}/",
-        headers={
-            "Wallet": f"{wallet_uuid}",
-            "Date": f"{datetime.now().isoformat()}",
-            "Authorization": f"Api-Key {apikey}",
-            "Signature": f"{signature}",
-            "Content-type": "application/json",
-        },
+        headers=headers,
         data=json.dumps(data),
         verify=bool(not settings.DEBUG),
     )
@@ -67,46 +77,163 @@ def _get(fedow_config: FedowConfig = None,
          user: TibilletUser = None,
          path: str = None,
          apikey: str = None):
-
     fedow_domain = fedow_config.fedow_domain()
-
-    # Pour la création, on prend la clé api de Root. On rempli apikey
-    # Si vide, on prend la clé du lieu du tenant
-    if apikey is None:
-        apikey = fedow_config.fedow_place_admin_apikey
-
-    # Signature de la requete : on signe le path
-    private_key = user.get_private_key()
-    # Signature de la requete : on signe la clé
-
-    # On signe le message
     now = f"{datetime.now().isoformat()}"
-    message = f"{user.wallet.uuid}:{now}"
-    signature = sign_message(
-        message.encode('utf8'),
-        private_key,
-    ).decode('utf-8')
 
-    # Ici, on s'autovérifie :
-    # Assert volontaire. Si non effectué en prod, ce n'est pas grave.
-    assert verify_signature(user.get_public_key(),
-                            message.encode('utf8'),
-                            signature)
+    if apikey is None:
+        # Pour la création, on prend la clé api de Root. apikey est donné en arguement.
+        # Si vide, on prend la clé du lieu du tenant
+        apikey = fedow_config.fedow_place_admin_apikey
+    headers = {
+        "Date": f"{now}",
+        'Authorization': f'Api-Key {apikey}',
+    }
+
+    # Si un user est donné, on indique son wallet dans le header et on le signe avec now
+    if user:
+        # On signe le message
+        message = f"{user.wallet.uuid}:{now}"
+        signature = sign_message(
+            message.encode('utf8'),
+            user.get_private_key(),
+        ).decode('utf-8')
+
+        # Ici, on s'autovérifie :
+        if not verify_signature(user.get_public_key(),
+                                message.encode('utf8'),
+                                signature):
+            raise Exception("Signature auto verification failed")
+
+        headers.update({
+            "Wallet": f"{user.wallet.uuid}",
+            "Signature": f"{signature}",
+        })
 
     session = requests.Session()
     request_fedow = session.get(
         f"https://{fedow_domain}/{path}/",
-        headers={
-            "Date": f"{now}",
-            'Authorization': f'Api-Key {apikey}',
-            "Wallet": f"{user.wallet.uuid}",
-            "Signature": f"{signature}",
-        },
+        headers=headers,
         verify=bool(not settings.DEBUG),
     )
     session.close()
-    # TODO: Vérifier la signature de FEDOW
+
+    # TODO: Vérifier la signature de réponse FEDOW
     return request_fedow
+
+
+class AssetFedow():
+    def __init__(self, fedow_config: FedowConfig or None = None):
+        self.fedow_config: FedowConfig = fedow_config
+        if fedow_config is None:
+            self.fedow_config = FedowConfig.get_solo()
+
+    # def list(self):
+    #     response_asset = _get(self.config, ['asset', ])
+    #     if response_asset.status_code == 200:
+    #         serialized_assets = AssetValidator(data=response_asset.json(), many=True)
+    #         if serialized_assets.is_valid():
+    #             return serialized_assets.validated_data
+    #         logger.error(serialized_assets.errors)
+    #         raise Exception(f"{serialized_assets.errors}")
+
+    def retrieve(self, uuid: uuid4 = None):
+        response_asset = _get(self.fedow_config, path=f'asset/{UUID(uuid)}/retrieve_membership_asset')
+
+        if response_asset.status_code == 200:
+            serialized_assets = AssetValidator(data=response_asset.json(), many=False)
+            if serialized_assets.is_valid():
+                return serialized_assets.validated_data
+            logger.error(serialized_assets.errors)
+            raise Exception(f"{serialized_assets.errors}")
+        logger.error(response_asset)
+        raise Exception(f"{response_asset.status_code}")
+
+    def get_or_create_asset(self, product: Product = None):
+        try:
+            asset_serialized = self.retrieve(uuid=f"{product.uuid}")
+            return asset_serialized, False
+
+        except Exception as e:
+            config = Configuration.get_solo()
+            asset = {
+                "uuid": f"{product.pk}",
+                "name": f"{product.name} {config.organisation}",
+                "currency_code": f"{product.name[:2]}{product.categorie_article[1:]}".upper(),
+                "category": f"{product.fedow_category()}",
+                "created_at": timezone.now().isoformat()
+            }
+            response_asset = _post(self.fedow_config, path='asset/create_membership_asset', data=asset)
+            if response_asset.status_code == 201:
+                serialized_assets = AssetValidator(data=response_asset.json(), many=False)
+                if serialized_assets.is_valid():
+                    return serialized_assets.validated_data, True
+                logger.error(serialized_assets.errors)
+                raise Exception(f"{serialized_assets.errors}")
+            logger.error(response_asset)
+            raise Exception(f"{response_asset.status_code}")
+
+
+class MembershipFedow():
+    def __init__(self, fedow_config: FedowConfig or None = None):
+        self.fedow_config: FedowConfig = fedow_config
+        if not fedow_config:
+            self.fedow_config = FedowConfig.get_solo()
+
+    def create(self, membership: Membership = None):
+        # Si Wallet est None, alors nous en créons ou allons chercher un wallet avec l'email
+        if not membership.user.wallet:
+            import ipdb;
+            ipdb.set_trace()
+
+        # Vérification de l'uuid membership présent coté Fedow
+        fedow_asset = AssetFedow(fedow_config=self.fedow_config)
+        serialized_asset, created = fedow_asset.get_or_create_asset(membership.price.product)
+
+        user = membership.user
+        amount = membership.contribution_value
+        sender = self.fedow_config.fedow_place_wallet_uuid
+        receiver = user.wallet.uuid
+        subscription_start_datetime = membership.last_contribution
+
+        subscription_data = {
+            "amount": int(amount * 100),
+            "sender": f"{sender}",
+            "receiver": f"{receiver}",
+            "asset": f"{serialized_asset['uuid']}",
+            "subscription_start_datetime": subscription_start_datetime.isoformat(),
+        }
+
+        # TODO: Tester lorsqu'on a l'info de la carte
+        # if user_card_firstTagId:
+        #     subscription['user_card_firstTagId'] = f"{user_card_firstTagId}"
+        # if primary_card_fisrtTagId:
+        #     subscription['primary_card_fisrtTagId'] = f"{primary_card_fisrtTagId}"
+
+        response_subscription = _post(
+            fedow_config=self.fedow_config,
+            user=user,
+            data=subscription_data,
+            path='transaction/create_membership',
+        )
+
+        if response_subscription.status_code == 201:
+            serialized_transaction = TransactionValidator(data=response_subscription.json())
+            if serialized_transaction.is_valid():
+                return serialized_transaction.validated_data
+
+            logger.error(serialized_transaction.errors)
+            return serialized_transaction.errors
+
+        else:
+            logger.error(response_subscription.json())
+            return response_subscription.status_code
+
+    # def retrieve(self, wallet: uuid4 = None):
+    #     response_sub = _get(self.config, ['subscription', f"{UUID(wallet)}"])
+    #     if response_sub.status_code == 200:
+    #         return response_sub
+    #
+    #     raise Exception(f"{response_sub.status_code}")
 
 
 class WalletFedow():
@@ -133,7 +260,6 @@ class WalletFedow():
             logger.error(f"retrieve_by_signature wallet_serialized ERRORS : {wallet_serialized.errors}")
             raise Exception(f"retrieve_by_signature wallet_serialized ERRORS : {wallet_serialized.errors}")
 
-
     def get_or_create(self, user: TibilletUser):
         email = user.email
         response_link = _post(self.fedow_config, user=user, path='wallet/get_or_create', data={
@@ -152,7 +278,6 @@ class WalletFedow():
             return user.wallet, created
 
         raise Exception(f"Wallet FedowAPI create_from_email response : {response_link.status_code}")
-
 
     def get_federated_token_refill_checkout(self, user: TibilletUser):
         response_checkout = _get(
@@ -213,8 +338,10 @@ class FedowAPI():
         if fedow_config is None:
             self.fedow_config = FedowConfig.get_solo()
 
-        self.wallet = WalletFedow(self.fedow_config)
-        self.place = PlaceFedow(self.fedow_config)
+        self.wallet = WalletFedow(fedow_config=self.fedow_config)
+        self.place = PlaceFedow(fedow_config=self.fedow_config)
+        self.membership = MembershipFedow(fedow_config=self.fedow_config)
+        self.asset = AssetFedow(fedow_config=self.fedow_config)
 
     def handshake(self):
         pass

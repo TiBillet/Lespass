@@ -4,12 +4,14 @@ from django.db import connection
 from django.utils import timezone
 from django.utils.text import slugify
 
-from BaseBillet.models import LigneArticle, Product, Membership, Price, Configuration
+from BaseBillet.models import LigneArticle, Product, Membership, Price, Configuration, Paiement_stripe
 from BaseBillet.tasks import send_membership_to_cashless, send_to_ghost, send_email_generique, create_invoice_pdf
 from django.utils.translation import gettext_lazy as _
 
 logger = logging.getLogger(__name__)
 
+
+### MEMBERSHIP TRIGGER : Lors qu'une vente article adhésion est PAID ####
 
 def context_for_membership_email(membership: Membership = None, paiement_stripe=None):
     config = Configuration.get_solo()
@@ -48,8 +50,8 @@ def context_for_membership_email(membership: Membership = None, paiement_stripe=
     return context
 
 
-def update_membership_state_after_paiement(trigger):
-    paiement_stripe = trigger.ligne_article.paiement_stripe
+def get_membership_after_paiement(trigger):
+    paiement_stripe : Paiement_stripe = trigger.ligne_article.paiement_stripe
     user = paiement_stripe.user
     price: Price = trigger.ligne_article.pricesold.price
     product: Product = trigger.ligne_article.pricesold.productsold.product
@@ -62,18 +64,21 @@ def update_membership_state_after_paiement(trigger):
     logger.info(f"    membership trouvé : {membership}")
 
     if not membership:
-        membership, created = Membership.objects.get_or_create(
+        membership = Membership.objects.create(
             user=user,
+            price=price,
+            first_contribution = timezone.now().date(),
         )
-        membership.price = price
 
-    # Si Membership a été créé juste avant ce paiement,
-    # la first contribution est vide.
-    if not membership.first_contribution:
-        membership.first_contribution = timezone.now().date()
+    return membership
+
+
+def update_membership_state_after_paiement(trigger, membership: Membership):
+    paiement_stripe = trigger.ligne_article.paiement_stripe
 
     membership.last_contribution = timezone.now().date()
     membership.contribution_value = trigger.ligne_article.pricesold.prix
+    membership.stripe_paiement.add(paiement_stripe)
 
     if paiement_stripe.invoice_stripe:
         membership.last_stripe_invoice = paiement_stripe.invoice_stripe
@@ -83,9 +88,12 @@ def update_membership_state_after_paiement(trigger):
         membership.status = Membership.AUTO
 
     membership.save()
+    return membership
 
-    # TODO: On a débranché le cashless.
-    # Envoyer à fedow
+
+def send_membership_invoice_email_after_paiement(trigger, membership: Membership):
+    paiement_stripe = trigger.ligne_article.paiement_stripe
+    user = paiement_stripe.user
 
     # Mails de confirmation et facture en PJ :
     logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation par email")
@@ -97,15 +105,19 @@ def update_membership_state_after_paiement(trigger):
                 create_invoice_pdf(paiement_stripe)},
     )
 
+    return True
+
+def send_membership_to_ghost(membership: Membership):
+
     # Envoyer à ghost :
     if membership.newsletter:
         logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation à Ghost")
         send_to_ghost.delay(membership.pk)
 
-    # La ligne qui fait tout passer en VALID :
-    trigger.ligne_article.status = LigneArticle.VALID
+    return True
 
-    return membership
+
+### END MEMBERSHIP TRIGGER ####
 
 
 class ActionArticlePaidByCategorie:
@@ -164,4 +176,14 @@ class ActionArticlePaidByCategorie:
     # Categorie ADHESION
     def trigger_A(self):
         logger.info(f"TRIGGER ADHESION")
-        membership = update_membership_state_after_paiement(self)
+        membership : Membership = get_membership_after_paiement(self)
+        updated_membership : Membership = update_membership_state_after_paiement(self, membership)
+        email_sended = send_membership_invoice_email_after_paiement(self, updated_membership)
+        ghost_sended = send_membership_to_ghost(updated_membership)
+
+        # TODO: On a débranché le cashless.
+        # Envoyer à fedow
+
+        # Si tout est passé plus haut, on VALID La ligne :
+        # Tout ceci se déroule dans un pre_save signal.pre_save_signal_status()
+        self.ligne_article.status = LigneArticle.VALID

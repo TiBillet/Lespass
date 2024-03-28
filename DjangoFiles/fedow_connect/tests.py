@@ -16,7 +16,6 @@ from django.test import TestCase
 from django_tenants.utils import get_tenant_model, tenant_context, schema_context, get_public_schema_name
 
 from AuthBillet.models import Wallet
-from BaseBillet.validators import MembershipValidator
 from fedow_connect.validators import WalletValidator
 from rest_framework.test import APIRequestFactory, force_authenticate
 
@@ -104,7 +103,7 @@ class InstallCreationTest(TestCase):
 
         return stripe_checkout_url
 
-    def adhesion_and_fedow(self, user):
+    def create_and_pay_membership(self, user):
         print(f"adhesion_and_fedow : {connection.tenant.schema_name}")
         with schema_context('meta'):
             print(f"adhesion_and_fedow : {connection.tenant.schema_name}")
@@ -155,18 +154,19 @@ class InstallCreationTest(TestCase):
             from BaseBillet.views import MembershipMVT
             view = MembershipMVT.as_view({'post': 'create'})
 
-            import ipdb; ipdb.set_trace()
-
+            # Lancement de la requete, comme si c'etait un front
             response = view(request)
             self.assertEqual(response.status_code, 200)
             self.assertIn('https://checkout.stripe.com/c/pay/cs_test', response.url)
 
+            # Vérification de l'objet membership en DB
             membership = Membership.objects.get(
                 user=user,
                 price=price
             )
             # Non payée encore :
             self.assertIsNone(membership.last_contribution)
+            self.assertFalse(membership.is_valid())
 
             # TODO: Trouver comment tester une validation de paiement stripe checkout ?
             # Le retour de stripe va sur -> paiment_stripe_validator(request, paiement_stripe)
@@ -185,12 +185,43 @@ class InstallCreationTest(TestCase):
             # CASCADE DE TASK
             paiement_stripe.save()
             # -> génération de PDF ( a tester )
-            import ipdb; ipdb.set_trace()
             # -> envoie vers Fedow ( a tester )
+
+            # Vérification de membership et paiement a jour :
             paiement_stripe.refresh_from_db()
             self.assertFalse(paiement_stripe.traitement_en_cours)
             self.assertEqual(paiement_stripe.status, Paiement_stripe.VALID)
+            membership.refresh_from_db()
+            self.assertTrue(membership.is_valid())
+            self.assertIsNotNone(membership.last_contribution)
 
+            self.assertIn(paiement_stripe, membership.stripe_paiement.all())
+
+            print('membership paid!')
+            return membership
+
+
+    def send_membership_to_fedow(self, membership):
+        print(f"send_membership_to_fedow : {connection.tenant.schema_name}")
+        from fedow_connect.fedow_api import FedowAPI
+        from fedow_connect.models import FedowConfig
+        config_fedow = FedowConfig.get_solo()
+        fedowAPI = FedowAPI()
+        serialized_transaction = fedowAPI.membership.create(membership=membership)
+
+        self.assertEqual(config_fedow.fedow_place_wallet_uuid, serialized_transaction['sender'])
+        self.assertEqual(membership.user.wallet.uuid, serialized_transaction['receiver'])
+        self.assertEqual(membership.price.product.uuid, serialized_transaction['asset'])
+        self.assertEqual(membership.price.product.fedow_category(), serialized_transaction['action'])
+        self.assertEqual('SUB', serialized_transaction['action'])
+        self.assertTrue(serialized_transaction['verify_hash'])
+
+        serialized_wallet = self.get_serialized_wallet(membership.user).data
+        tokens = serialized_wallet['tokens']
+        tokens_uuid = [(token['asset']['uuid'], token['value']) for token in tokens]
+        self.assertIn((str(membership.price.product.uuid), int(membership.contribution_value*100)), tokens_uuid)
+
+        print('membership dans fedow OK !')
 
 
     def test_connect_place_to_fedow(self, schema_name=None):
@@ -233,8 +264,15 @@ class InstallCreationTest(TestCase):
                 espece=TibilletUser.TYPE_HUM
             )
 
+            # Donner un nom à la config de test
+            fake_company = f"{fake.company()} {str(uuid4())[:3]}"
+            from BaseBillet.models import Configuration
+            config = Configuration.get_solo()
+            config.organisation = fake_company
+            config.save()
+
             # Création de la place
-            fedowAPI.place.create(admin, fake.company())
+            fedowAPI.place.create(admin, fake_company)
             fedow_config.refresh_from_db()
             self.assertTrue(fedow_config.fedow_place_uuid)
             self.assertTrue(fedow_config.fedow_place_wallet_uuid)
@@ -251,5 +289,9 @@ class InstallCreationTest(TestCase):
             # Effectue et test un paiement pour 42€
             # stripe_checkout_url = self.get_checkout(user)
 
-            # Création d'un abonnement et envoi sur Fedow
-            self.adhesion_and_fedow(user)
+            # Création d'un abonnement
+            membership = self.create_and_pay_membership(user)
+            # envoi sur Fedow avec wallet déja existant :
+            self.send_membership_to_fedow(membership)
+            # TODO: test avec user tout neuf, sans wallet
+            # TODO: tester avec une place qui n'est pas l'origine du membership
