@@ -3,6 +3,7 @@ from django.core.cache import cache
 from django.utils.translation import gettext_lazy as _
 
 from AuthBillet.models import Wallet
+from BaseBillet.models import FedowTransaction
 
 
 class PlaceValidator(serializers.Serializer):
@@ -118,3 +119,10 @@ class TransactionValidator(serializers.Serializer):
     comment = serializers.CharField(required=False, allow_null=True)
     metadata = serializers.JSONField(required=False, allow_null=True)
     verify_hash = serializers.BooleanField()
+
+    def validate(self, attrs):
+        uuid = attrs['uuid']
+        hash = attrs['hash']
+        datetime = attrs['datetime']
+        self.fedow_transaction, created = FedowTransaction.objects.get_or_create(uuid=uuid, hash=hash, datetime=datetime)
+        return attrs

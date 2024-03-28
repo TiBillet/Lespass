@@ -8,6 +8,9 @@ from BaseBillet.models import LigneArticle, Product, Membership, Price, Configur
 from BaseBillet.tasks import send_membership_to_cashless, send_to_ghost, send_email_generique, create_invoice_pdf
 from django.utils.translation import gettext_lazy as _
 
+from fedow_connect.fedow_api import FedowAPI
+from fedow_connect.models import FedowConfig
+
 logger = logging.getLogger(__name__)
 
 
@@ -180,6 +183,10 @@ class ActionArticlePaidByCategorie:
         updated_membership : Membership = update_membership_state_after_paiement(self, membership)
         email_sended = send_membership_invoice_email_after_paiement(self, updated_membership)
         ghost_sended = send_membership_to_ghost(updated_membership)
+        fedow_config = FedowConfig.get_solo()
+        if fedow_config.fedow_place_admin_apikey :
+            fedowAPI = FedowAPI(fedow_config=fedow_config)
+            serialized_transaction = fedowAPI.membership.create(membership=membership)
 
         # TODO: On a débranché le cashless.
         # Envoyer à fedow

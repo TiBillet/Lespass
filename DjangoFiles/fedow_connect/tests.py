@@ -201,13 +201,25 @@ class InstallCreationTest(TestCase):
             return membership
 
 
-    def send_membership_to_fedow(self, membership):
+    def check_membership_sended_to_fedow(self, membership):
         print(f"send_membership_to_fedow : {connection.tenant.schema_name}")
+
+        serialized_wallet = self.get_serialized_wallet(membership.user).data
+        tokens = serialized_wallet['tokens']
+        tokens_uuid = [(token['asset']['uuid'], token['value']) for token in tokens]
+        self.assertIn((str(membership.price.product.uuid), int(membership.contribution_value*100)), tokens_uuid)
+
+        print('membership dans fedow OK !')
+
+
         from fedow_connect.fedow_api import FedowAPI
         from fedow_connect.models import FedowConfig
         config_fedow = FedowConfig.get_solo()
+
+        fedow_transaction = membership.fedow_transactions.latest('datetime')
+
         fedowAPI = FedowAPI()
-        serialized_transaction = fedowAPI.membership.create(membership=membership)
+        serialized_transaction = fedowAPI.transaction.get_from_hash(fedow_transaction.hash)
 
         self.assertEqual(config_fedow.fedow_place_wallet_uuid, serialized_transaction['sender'])
         self.assertEqual(membership.user.wallet.uuid, serialized_transaction['receiver'])
@@ -216,12 +228,6 @@ class InstallCreationTest(TestCase):
         self.assertEqual('SUB', serialized_transaction['action'])
         self.assertTrue(serialized_transaction['verify_hash'])
 
-        serialized_wallet = self.get_serialized_wallet(membership.user).data
-        tokens = serialized_wallet['tokens']
-        tokens_uuid = [(token['asset']['uuid'], token['value']) for token in tokens]
-        self.assertIn((str(membership.price.product.uuid), int(membership.contribution_value*100)), tokens_uuid)
-
-        print('membership dans fedow OK !')
 
 
     def test_connect_place_to_fedow(self, schema_name=None):
@@ -292,6 +298,6 @@ class InstallCreationTest(TestCase):
             # Création d'un abonnement
             membership = self.create_and_pay_membership(user)
             # envoi sur Fedow avec wallet déja existant :
-            self.send_membership_to_fedow(membership)
+            self.check_membership_sended_to_fedow(membership)
             # TODO: test avec user tout neuf, sans wallet
             # TODO: tester avec une place qui n'est pas l'origine du membership

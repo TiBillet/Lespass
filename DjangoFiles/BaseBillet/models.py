@@ -2,6 +2,7 @@
 
 import logging
 import uuid
+from uuid import uuid4
 from datetime import timedelta, datetime
 from decimal import Decimal
 
@@ -54,7 +55,7 @@ class Weekday(models.Model):
 
 
 class Tag(models.Model):
-    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    uuid = models.UUIDField(primary_key=True, default=uuid4)
     name = models.CharField(max_length=50, verbose_name=_("Nom du tag"), db_index=True)
     color = models.CharField(max_length=7, verbose_name=_("Couleur du tag"), default="#000000")
 
@@ -67,7 +68,7 @@ class Tag(models.Model):
 
 
 class OptionGenerale(models.Model):
-    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
+    uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
     name = models.CharField(max_length=30, unique=True)
     description = models.CharField(max_length=250, blank=True, null=True)
     poids = models.PositiveSmallIntegerField(default=0, verbose_name=_("Poids"))
@@ -408,13 +409,12 @@ class Configuration(SingletonModel):
 
 
 class Product(models.Model):
-    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
+    uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
 
     name = models.CharField(max_length=500, verbose_name=_("Nom"))
 
     short_description = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Description courte"))
     long_description = models.TextField(blank=True, null=True, verbose_name=_("Description longue"))
-
 
     publish = models.BooleanField(default=True)
     poids = models.PositiveSmallIntegerField(default=0, verbose_name=_("Poids"),
@@ -430,7 +430,7 @@ class Product(models.Model):
                                                       blank=True,
                                                       related_name="produits_checkbox")
 
-    #TODO: doublon ?
+    # TODO: doublon ?
     terms_and_conditions_document = models.URLField(blank=True, null=True)
     legal_link = models.URLField(blank=True, null=True, verbose_name=_("Mentions légales"))
 
@@ -480,16 +480,12 @@ class Product(models.Model):
 
     # id_product_stripe = models.CharField(max_length=30, null=True, blank=True)
 
-    # Dans le cas d'un abonnement fédéré :
-    fedow_asset = models.UUIDField(blank=True, null=True)
     def fedow_category(self):
         self_category_map = {
             self.ADHESION: 'SUB',
             self.RECHARGE_CASHLESS: 'FED',
         }
         return self_category_map.get(self.categorie_article, None)
-
-
 
     def __str__(self):
         return f"{self.name}"
@@ -508,7 +504,6 @@ def post_save_Product(sender, instance: Product, created, **kwargs):
         if instance.poids == 0:
             instance.poids = len(Product.objects.all()) + 1
         instance.save()
-
 
 
 class Price(models.Model):
@@ -802,7 +797,7 @@ def add_to_public_event_directory(sender, instance: Artist_on_event, created, **
 
 
 class ProductSold(models.Model):
-    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    uuid = models.UUIDField(primary_key=True, default=uuid4)
 
     id_product_stripe = models.CharField(max_length=30, null=True, blank=True)
     event = models.ForeignKey(Event, on_delete=models.PROTECT, null=True, blank=True)
@@ -887,7 +882,7 @@ class ProductSold(models.Model):
 
 
 class PriceSold(models.Model):
-    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    uuid = models.UUIDField(primary_key=True, default=uuid4)
 
     id_price_stripe = models.CharField(max_length=30, null=True, blank=True)
 
@@ -1127,11 +1122,17 @@ class Ticket(models.Model):
         verbose_name_plural = _('Réservations')
 
 
+class FedowTransaction(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, db_index=False)
+    hash = models.CharField(max_length=64, unique=True, editable=False)
+    datetime = models.DateTimeField()
+
+
 class Paiement_stripe(models.Model):
     """
     La commande
     """
-    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
+    uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
     detail = models.CharField(max_length=50, blank=True, null=True)
     datetime = models.DateTimeField(auto_now=True)
 
@@ -1186,6 +1187,8 @@ class Paiement_stripe(models.Model):
                               verbose_name="Source de la commande")
 
     total = models.FloatField(default=0)
+
+    fedow_transactions = models.ManyToManyField(FedowTransaction, blank=True, related_name="paiement_stripe")
 
     def uuid_8(self):
         return f"{self.uuid}".partition('-')[0]
@@ -1345,6 +1348,7 @@ class Membership(models.Model):
                                              related_name="membership_options")
 
     stripe_paiement = models.ManyToManyField(Paiement_stripe, blank=True, related_name="membership")
+    fedow_transactions = models.ManyToManyField(FedowTransaction, blank=True, related_name="membership")
     contribution_value = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
 
     # def last_contribution_value(self):

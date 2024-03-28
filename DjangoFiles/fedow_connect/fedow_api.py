@@ -195,6 +195,7 @@ class MembershipFedow():
         receiver = user.wallet.uuid
         subscription_start_datetime = membership.last_contribution
 
+
         subscription_data = {
             "amount": int(amount * 100),
             "sender": f"{sender}",
@@ -202,6 +203,9 @@ class MembershipFedow():
             "asset": f"{serialized_asset['uuid']}",
             "subscription_start_datetime": subscription_start_datetime.isoformat(),
         }
+
+        if membership.stripe_paiement.exists():
+            subscription_data["metadata"] = {'checkout_session_id_stripe': membership.stripe_paiement.latest('last_action').checkout_session_id_stripe }
 
         # TODO: Tester lorsqu'on a l'info de la carte
         # if user_card_firstTagId:
@@ -219,6 +223,9 @@ class MembershipFedow():
         if response_subscription.status_code == 201:
             serialized_transaction = TransactionValidator(data=response_subscription.json())
             if serialized_transaction.is_valid():
+                fedow_transaction = serialized_transaction.fedow_transaction
+                membership.fedow_transactions.add(fedow_transaction)
+                membership.stripe_paiement.latest('last_action').fedow_transactions.add(fedow_transaction)
                 return serialized_transaction.validated_data
 
             logger.error(serialized_transaction.errors)
@@ -331,6 +338,26 @@ class PlaceFedow():
         self.fedow_config.save()
 
 
+class TransactionFedow():
+    def __init__(self, fedow_config: FedowConfig or None = None):
+        self.fedow_config: FedowConfig = fedow_config
+        if fedow_config is None:
+            self.config = FedowConfig.get_solo()
+
+    def get_from_hash(self, hash_fedow: str = None):
+        response_hash = _get(self.fedow_config, path=f'transaction/{hash_fedow}')
+        if response_hash.status_code == 200:
+            serialized_transaction = TransactionValidator(data=response_hash.json())
+            if serialized_transaction.is_valid():
+                validated_data = serialized_transaction.validated_data
+                return validated_data
+            logger.error(serialized_transaction.errors)
+            return serialized_transaction.errors
+
+        else:
+            logger.error(response_hash.json())
+            return response_hash.status_code
+
 # from fedow_connect.fedow_api import FedowAPI
 class FedowAPI():
     def __init__(self, fedow_config: FedowConfig = None):
@@ -342,6 +369,7 @@ class FedowAPI():
         self.place = PlaceFedow(fedow_config=self.fedow_config)
         self.membership = MembershipFedow(fedow_config=self.fedow_config)
         self.asset = AssetFedow(fedow_config=self.fedow_config)
+        self.transaction = TransactionFedow(fedow_config=self.fedow_config)
 
     def handshake(self):
         pass
