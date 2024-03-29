@@ -1,21 +1,18 @@
 import os
-
 import requests
 from django.conf import settings
 from django.core.cache import cache
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 import socket
-
-# Create your models here.
 from solo.models import SingletonModel
-
 from root_billet.utils import fernet_encrypt, fernet_decrypt
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class RootConfiguration(SingletonModel):
-
-
     TZ_REUNION, TZ_PARIS = "Indian/Reunion", "Europe/Paris"
     TZ_CHOICES = [
         (TZ_REUNION, _('Indian/Reunion')),
@@ -31,7 +28,6 @@ class RootConfiguration(SingletonModel):
     stripe_test_api_key = models.CharField(max_length=110, blank=True, null=True)
 
     stripe_mode_test = models.BooleanField(default=True)
-
 
     """
     FEDOW
@@ -65,13 +61,18 @@ class RootConfiguration(SingletonModel):
 
     def root_fedow_handshake(self, fedow_domain):
         handshake = requests.get(f"https://{fedow_domain}/root_tibillet_handshake/", verify=(not settings.DEBUG))
-        if handshake.status_code == 200:
+        if handshake.status_code == 201:
             data = handshake.json()
             self.fedow_domain = fedow_domain
             self.fedow_ip = socket.gethostbyname(f"{fedow_domain}")
             self.set_fedow_create_place_apikey(data['api_key'])
             self.fedow_primary_pub_pem = data['fedow_pub_pem']
             self.save()
-        else :
-            raise Exception(f"Error while root handshake with FEDOW")
+            logger.info(f"TiBillet/Lespass registered in Fedow Instance")
+            return True
+        elif handshake.status_code == 208:
+            logger.warning(f"A TiBillet/Lespass is already registered in this fedow Instance")
+            return True
 
+        logger.error(f"Error while root handshake with FEDOW")
+        raise Exception(f"Error while root handshake with FEDOW")

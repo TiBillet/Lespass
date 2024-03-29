@@ -176,16 +176,14 @@ class InstallCreationTest(TestCase):
             self.assertEqual(paiement_stripe.status, Paiement_stripe.PENDING)
             self.assertEqual(json.loads(paiement_stripe.metadata_stripe)['tenant'], f"{connection.tenant.uuid}")
 
-            # On valide le paiement, ça va mettre les signas et tasks en branle
-
-            paiement_stripe.status = Paiement_stripe.PAID
+            # On valide le paiement, ça va mettre les signaux et tasks en branle
             paiement_stripe.last_action = timezone.now()
             paiement_stripe.traitement_en_cours = True
 
             # CASCADE DE TASK
+            paiement_stripe.status = Paiement_stripe.PAID
             paiement_stripe.save()
-            # -> génération de PDF ( a tester )
-            # -> envoie vers Fedow ( a tester )
+            #TODO -> génération de PDF a tester
 
             # Vérification de membership et paiement a jour :
             paiement_stripe.refresh_from_db()
