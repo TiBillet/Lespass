@@ -351,38 +351,9 @@ class Configuration(SingletonModel):
     ghost_key = models.CharField(max_length=200, blank=True, null=True)
     ghost_last_log = models.TextField(blank=True, null=True)
 
-    # ARNAUD, MASSIVELY, BLK_MVC = 'arnaud_mvc', 'html5up-masseively', 'blk-pro-mvc'
-    # CHOICE_TEMPLATE = [
-    #     (ARNAUD, _('arnaud_mvc')),
-    #     (MASSIVELY, _("html5up-masseively")),
-    #     (BLK_MVC, _("blk-pro-mvc")),
-    # ]
-    # choices=[(folder, folder) for folder in os.listdir(f"{settings.BASE_DIR}/BaseBillet/templates")],
-
-    # template_billetterie = models.CharField(
-    #     choices=CHOICE_TEMPLATE,
-    #     default=ARNAUD,
-    #     max_length=250,
-    #     blank=True,
-    #     null=True,
-    #     verbose_name=_("Template Billetterie")
-    # )
-    #
-    # template_meta = models.CharField(
-    #     choices=CHOICE_TEMPLATE,
-    #     default=MASSIVELY,
-    #     max_length=250,
-    #     blank=True,
-    #     null=True,
-    #     verbose_name=_("Template Meta")
-    # )
-
-    ### MailJet ###
-
-    # activate_mailjet = models.BooleanField(default=False)
-    # email_confirm_template = models.IntegerField(default=3898061)
-
-    ### Tenant fields :
+    """
+    ### Tenant fields ###
+    """
 
     def domain(self):
         return connection.tenant.get_primary_domain().domain

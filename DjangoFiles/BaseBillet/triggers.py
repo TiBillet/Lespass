@@ -91,6 +91,7 @@ def update_membership_state_after_paiement(trigger, membership: Membership):
         membership.status = Membership.AUTO
 
     membership.save()
+    logger.info(f"    update_membership_state_after_paiement : Mise à jour de la fiche membre OK")
     return membership
 
 
@@ -107,21 +108,25 @@ def send_membership_invoice_email_after_paiement(trigger, membership: Membership
             f'{slugify(membership.member_name())}_{slugify(paiement_stripe.invoice_number())}_tibillet_invoice.pdf' :
                 create_invoice_pdf(paiement_stripe)},
     )
-
+    logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation par email DELAY")
     return True
 
 def send_membership_to_ghost(membership: Membership):
-
     # Envoyer à ghost :
     if membership.newsletter:
-        logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation à Ghost")
         send_to_ghost.delay(membership.pk)
-
+        logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation à Ghost DELAY")
     return True
 
 
 ### END MEMBERSHIP TRIGGER ####
 
+### SEND TO LABOUTIK for comptabilité ###
+
+def send_sale_to_laboutik(membership: Membership):
+    return True
+
+### END SEND TO LABOUTIK
 
 class ActionArticlePaidByCategorie:
     """
@@ -183,13 +188,14 @@ class ActionArticlePaidByCategorie:
         updated_membership : Membership = update_membership_state_after_paiement(self, membership)
         email_sended = send_membership_invoice_email_after_paiement(self, updated_membership)
         ghost_sended = send_membership_to_ghost(updated_membership)
+
+        # Envoyer à fedow
         fedow_config = FedowConfig.get_solo()
-        if fedow_config.fedow_place_admin_apikey :
-            fedowAPI = FedowAPI(fedow_config=fedow_config)
-            serialized_transaction = fedowAPI.membership.create(membership=membership)
+        fedowAPI = FedowAPI(fedow_config=fedow_config)
+        serialized_transaction = fedowAPI.membership.create(membership=membership)
 
         # TODO: On a débranché le cashless.
-        # Envoyer à fedow
+        laboutik_sended = send_sale_to_laboutik(updated_membership)
 
         # Si tout est passé plus haut, on VALID La ligne :
         # Tout ceci se déroule dans un pre_save signal.pre_save_signal_status()

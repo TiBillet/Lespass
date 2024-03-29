@@ -315,7 +315,7 @@ def pre_save_signal_status(sender, instance, **kwargs):
 def send_product_to_fedow_if_subscription(sender, instance: Product, created, **kwargs):
     # Est ici pour éviter les double imports
     fedow_config = FedowConfig.get_solo()
-    if fedow_config.fedow_place_admin_apikey :
+    if fedow_config.can_fedow() :
         fedow_asset = AssetFedow(fedow_config=fedow_config)
         asset, created = fedow_asset.get_or_create_asset(instance)
 

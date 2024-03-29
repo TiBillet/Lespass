@@ -7,6 +7,7 @@ import segno
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import logout, login
+from django.contrib.messages import MessageFailure
 from django.db import connection
 from django.http import HttpResponse, HttpRequest
 from django.shortcuts import render, redirect, get_object_or_404
@@ -416,10 +417,19 @@ class MembershipMVT(viewsets.ViewSet):
         paiement_stripe.update_checkout_status()
         paiement_stripe.refresh_from_db()
         email = paiement_stripe.user.email
-        if paiement_stripe.status == Paiement_stripe.VALID:
-            messages.add_message(request, messages.SUCCESS, f"Votre abonnement a été validé. Vous allez recevoir un mail de confirmation à l'adresse {email}. Merci !")
-        else :
-            messages.add_message(request, messages.WARNING, f"Une erreur est survenue, merci de contacter l'administrateur.")
+
+        try :
+            if paiement_stripe.status == Paiement_stripe.VALID:
+                messages.add_message(request, messages.SUCCESS, f"Votre abonnement a été validé. Vous allez recevoir un mail de confirmation à l'adresse {email}. Merci !")
+            elif paiement_stripe.status == Paiement_stripe.PENDING:
+                messages.add_message(request, messages.WARNING, f"Votre paiement est en attente de validation.")
+            else :
+                messages.add_message(request, messages.WARNING, f"Une erreur est survenue, merci de contacter l'administrateur.")
+        except MessageFailure as e :
+            pass
+            # Surement un test unitaire, les messages plantent a travers la Factory Request
+        except Exception as e :
+            raise e
 
         return redirect('/memberships/')
 
