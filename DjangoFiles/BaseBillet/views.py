@@ -38,6 +38,7 @@ from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Ev
 from BaseBillet.tasks import create_ticket_pdf, create_invoice_pdf
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator
 from PaiementStripe.views import CreationPaiementStripe
+from fedow_connect.fedow_api import FedowAPI
 
 logger = logging.getLogger(__name__)
 
@@ -192,48 +193,91 @@ def home(request):
     return render(request, "htmx/views/home.html", context=context)
 
 
-def my_account_wallet(request: HttpRequest) -> HttpResponse:
-    context = {}
-    return render(request, "htmx/fragments/my_account_wallet.html", context=context)
+
+class MyAccount(viewsets.ViewSet):
+    authentication_classes = [SessionAuthentication,]
+    permission_classes = [permissions.IsAuthenticated, ]
+
+    def list(self, request: HttpRequest):
+        if not request.user.is_authenticated:
+            return redirect('home')
+
+        # La premiere requete GET /my_account/
+        serialized_user = MeSerializer(request.user).data
+        config = Configuration.get_solo()
+        base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
+
+        host = "http://" + request.get_host()
+        if request.is_secure():
+            host = "https://" + request.get_host()
+
+        # image par défaut
+        if hasattr(config.img, 'fhd'):
+            header_img = config.img.fhd.url
+        else:
+            header_img = "/media/images/image_non_disponible.jpg"
+
+        context = {
+            "base_template": base_template,
+            "host": host,
+            "url_name": request.resolver_match.url_name,
+            "tenant": config.organisation,
+            "profile": serialized_user,
+            "header": None,
+            "user": request.user,
+        }
+
+        return render(request, "htmx/views/my_account.html", context=context)
 
 
-def my_account_membership(request: HttpRequest) -> HttpResponse:
-    context = {}
-    return render(request, "htmx/fragments/my_account_membership.html", context=context)
+    @action(detail=False, methods=['GET'])
+    def wallet(self, request: HttpRequest) -> HttpResponse:
+        context = {}
+        return render(request, "htmx/fragments/my_account_wallet.html", context=context)
+
+    @action(detail=False, methods=['GET'])
+    def membership(self, request: HttpRequest) -> HttpResponse:
+        context = {}
+        return render(request, "htmx/fragments/my_account_membership.html", context=context)
+
+    @action(detail=False, methods=['GET'])
+    def profile(self, request: HttpRequest) -> HttpResponse:
+        context = {}
+        return render(request, "htmx/fragments/my_account_profile.html", context=context)
+
+    #### REFILL STRIPE PRIMARY ####
+
+    @action(detail=False, methods=['GET'])
+    def refill_wallet(self, request):
+        user = request.user
+        fedowAPI = FedowAPI()
+        stripe_checkout_url = fedowAPI.wallet.get_federated_token_refill_checkout(user)
+        return HttpResponseClientRedirect(stripe_checkout_url)
 
 
-def my_account_profile(request: HttpRequest) -> HttpResponse:
-    context = {}
-    return render(request, "htmx/fragments/my_account_profile.html", context=context)
+    @action(detail=True, methods=['GET'])
+    def return_refill_wallet(self, request, pk=None):
+        # Le paiemetn stripe a été effectué. Stripe redirige ici.
+        # On check referer stripe
+        if request.headers.get('Referer') != 'https://checkout.stripe.com/':
+            logger.error(f"Refill wallet return : Not from stripe")
+            messages.add_message(request, messages.ERROR, "Erreur retour stripe")
+            return redirect('/memberships/wallet')
 
+        # On demande confirmation à Fedow qui a du recevoir la validation en webhook POST
+        user = request.user
+        fedowAPI = FedowAPI()
 
-@require_GET
-def my_account(request: HttpRequest) -> HttpResponse:
-    serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
-    config = Configuration.get_solo()
-    base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
+        # pk = checkout_stripe_db_fedow_uuid
+        try :
+            #TODO; checker la signature du paiement
+            wallet = fedowAPI.wallet.retrieve_from_refill_checkout(user, pk)
+            messages.add_message(request, messages.SUCCESS, "Wallet rechargé")
+        except Exception as e:
+            messages.add_message(request, messages.ERROR, "Erreur dans la vérification du paiement.")
+        return redirect('/my_account/')
 
-    host = "http://" + request.get_host()
-    if request.is_secure():
-        host = "https://" + request.get_host()
-
-    # image par défaut
-    if hasattr(config.img, 'fhd'):
-        header_img = config.img.fhd.url
-    else:
-        header_img = "/media/images/image_non_disponible.jpg"
-
-    context = {
-        "base_template": base_template,
-        "host": host,
-        "url_name": request.resolver_match.url_name,
-        "tenant": config.organisation,
-        "profile": serialized_user,
-        "header": None,
-        "user": request.user,
-    }
-
-    return render(request, "htmx/views/my_account.html", context=context)
+    #### END REFILL STRIPE PRIMARY ####
 
 
 @require_GET

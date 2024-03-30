@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 import requests
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.signing import Signer, TimestampSigner
 from django.db import connection
 from django.utils import timezone
 from django.utils.timezone import localtime
@@ -186,15 +187,14 @@ class MembershipFedow():
         # Si Wallet est None, alors nous en créons ou allons chercher un wallet avec l'email
         user = membership.user
 
-        #TODO: le faire dans le get_or_create user et ajouter dans les test
-        if user.wallet :
+        # TODO: le faire dans le get_or_create user et ajouter dans les test
+        if user.wallet:
             receiver = user.wallet.uuid
-        else :
+        else:
             logger.info(f"Wallet not found for {user.email}")
             wallet_fedow = WalletFedow(self.fedow_config)
             wallet, created = wallet_fedow.get_or_create_wallet(membership.user)
             receiver = wallet.uuid
-
 
         # Vérification de l'uuid membership présent coté Fedow
         fedow_asset = AssetFedow(fedow_config=self.fedow_config)
@@ -203,7 +203,6 @@ class MembershipFedow():
         amount = membership.contribution_value
         sender = self.fedow_config.fedow_place_wallet_uuid
         subscription_start_datetime = membership.last_contribution
-
 
         subscription_data = {
             "amount": int(amount * 100),
@@ -214,7 +213,8 @@ class MembershipFedow():
         }
 
         if membership.stripe_paiement.exists():
-            subscription_data["metadata"] = {'checkout_session_id_stripe': membership.stripe_paiement.latest('last_action').checkout_session_id_stripe }
+            subscription_data["metadata"] = {'checkout_session_id_stripe': membership.stripe_paiement.latest(
+                'last_action').checkout_session_id_stripe}
 
         # TODO: Tester lorsqu'on a l'info de la carte
         # if user_card_firstTagId:
@@ -296,10 +296,16 @@ class WalletFedow():
         raise Exception(f"Wallet FedowAPI create_from_email response : {response_link.status_code}")
 
     def get_federated_token_refill_checkout(self, user: TibilletUser):
-        response_checkout = _get(
+        # Pour que le retour Fedow soit vérifié par un élément de signature créé lors de la demande
+        signer = TimestampSigner()
+        signed_data = signer.sign({
+            "origin_request_wallet": f"{user.wallet.uuid}"
+        })
+        response_checkout = _post(
             self.fedow_config,
             user=user,
-            path=f'wallet/get_federated_token_refill_checkout'
+            path=f'wallet/get_federated_token_refill_checkout',
+            data={"lespass_signed_data": signed_data},
         )
 
         if response_checkout.status_code != 202:
@@ -309,6 +315,23 @@ class WalletFedow():
         stripe_checkout_url = response_checkout.json()
         return stripe_checkout_url
 
+    def retrieve_from_refill_checkout(self, user: TibilletUser, pk:uuid4):
+        response_checkout = _get(
+            self.fedow_config,
+            user=user,
+            path=f'wallet/{pk}/retrieve_from_refill_checkout'
+        )
+
+        if not response_checkout.status_code == 200:
+            logger.error(f"retrieve_from_refill_checkout ERRORS : {response_checkout.status_code}")
+            raise Exception(f"retrieve_from_refill_checkout ERRORS : {response_checkout.status_code}")
+
+        wallet_serialized = WalletValidator(data=response_checkout.json())
+        if wallet_serialized.is_valid():
+            return wallet_serialized
+        else:
+            logger.error(f"retrieve_by_signature wallet_serialized ERRORS : {wallet_serialized.errors}")
+            raise Exception(f"retrieve_by_signature wallet_serialized ERRORS : {wallet_serialized.errors}")
 
 
 class PlaceFedow():
@@ -331,27 +354,28 @@ class PlaceFedow():
         ]):
             raise Exception("Place already created")
 
+        tenant = connection.tenant
+        tenant_config = Configuration.get_solo()
+        # Si on est en mode test/debug :
+        if type(tenant) == FakeTenant and settings.DEBUG:
+            logger.warning("FakeTenant in DEBUG mode")
+            from Customers.models import Client
+            tenant = Client.objects.get(schema_name='meta')
+            tenant_domain = "test.tibillet.localhost"
+        else:
+            tenant_domain = tenant_config.domain()
+
         if place_name is None:
-            tenant_config = Configuration.get_solo()
             place_name = tenant_config.organisation
-
-        if admin is None :
-            tenant = connection.tenant
-
-            # Si on est en mode test/debug :
-            if type(tenant) == FakeTenant and settings.DEBUG:
-                logger.warning("FakeTenant in DEBUG mode")
-                from Customers.models import Client
-                tenant = Client.objects.get(schema_name='meta')
-
+        if admin is None:
             User = get_user_model()
             admin = User.objects.get(client_admin=tenant)
-
 
         # Pour la création, on prend la clé api de Root
         apikey = self.fedow_config.get_fedow_create_place_apikey()
         data = {
             'place_name': place_name,
+            'place_domain': tenant_domain,
             'admin_email': admin.email,
             'admin_pub_pem': admin.get_public_pem(),
         }
@@ -387,13 +411,13 @@ class TransactionFedow():
             logger.error(response_hash.json())
             return response_hash.status_code
 
+
 # from fedow_connect.fedow_api import FedowAPI
 class FedowAPI():
     def __init__(self, fedow_config: FedowConfig = None):
         self.fedow_config = fedow_config
         if fedow_config is None:
             self.fedow_config = FedowConfig.get_solo()
-
 
         self.wallet = WalletFedow(fedow_config=self.fedow_config)
         self.place = PlaceFedow(fedow_config=self.fedow_config)

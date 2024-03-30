@@ -5,6 +5,7 @@ from BaseBillet import views as base_view
 
 router = routers.DefaultRouter()
 router.register(r'memberships', base_view.MembershipMVT, basename='membership_mvt')
+router.register(r'my_account', base_view.MyAccount, basename='my_account')
 
 urlpatterns = [
 
@@ -18,11 +19,11 @@ urlpatterns = [
     path('wiz_event/products/', base_view.event_products, name='event_products'),
     path('home/', base_view.home, name='home'),
 
+    # path("my_account/", base_view.my_account, name='my_account'),
+    # path("my_account/wallet/", base_view.my_account_wallet, name='my_account_wallet'),
+    # path("my_account/membership/", base_view.my_account_membership, name='my_account_membership'),
+    # path("my_account/profile/", base_view.my_account_profile, name='my_account_profile'),
 
-    path("my_account/", base_view.my_account, name='my_account'),
-    path("my_account/wallet/", base_view.my_account_wallet, name='my_account_wallet'),
-    path("my_account/membership/", base_view.my_account_membership, name='my_account_membership'),
-    path("my_account/profile/", base_view.my_account_profile, name='my_account_profile'),
     path("create_tenant/", base_view.create_tenant, name='create_tenant'),
     path("tenant/areas/", base_view.tenant_areas, name='tenant_areas'),
     path("tenant/informations/", base_view.tenant_informations, name='tenant_informations'),

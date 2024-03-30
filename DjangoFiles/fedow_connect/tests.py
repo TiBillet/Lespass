@@ -218,9 +218,7 @@ class InstallCreationTest(TestCase):
                 view = MembershipMVT.as_view({'get': 'stripe_return'})
                 # On lance la requete comme si elle venait de Stripe
                 response = view(request, pk=paiement_stripe.uuid)
-                self.assertEqual(response.status_code, 200)
-                # 302 ou 200 ?
-                import ipdb; ipdb.set_trace()
+                self.assertEqual(response.status_code, 302)
 
 
             # Vérification de membership et paiement a jour :
@@ -336,7 +334,7 @@ class InstallCreationTest(TestCase):
 
             # Récupération d'un lien de recharge cashless Fedow
             # Effectue et test un paiement pour 42€
-            # stripe_checkout_url = self.get_refill_checkout(user)
+            stripe_checkout_url = self.get_refill_checkout(user)
 
             # Création d'un abonnement avec l'user créé plus haut
             membership = self.create_and_pay_membership(user)

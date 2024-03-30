@@ -156,6 +156,7 @@ def activate(request, uid, token):
         raise e
 
 
+
 class create_user(APIView):
     permission_classes = [AllowAny]
 
