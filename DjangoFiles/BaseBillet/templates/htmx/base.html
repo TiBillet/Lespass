@@ -9,8 +9,8 @@
     <title>TiBillet-mvt-htmx</title>
 
     <!-- Font Roboto -->
-    <link rel="stylesheet" type="text/css"
-          href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700|Roboto+Slab:400,700|Material+Icons"/>
+{#    <link rel="stylesheet" type="text/css"#}
+{#          href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700|Roboto+Slab:400,700|Material+Icons"/>#}
     <!-- Font Awesome 4.7.0 -->
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/latest/css/font-awesome.min.css">
     <!-- Material Kit - v3.0.4 (Bootstrap  v5.2.3) -->
@@ -22,7 +22,9 @@
     {% endblock head %}
 </head>
 
-<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' class="maj-theme" hx-indicator="#tibillet-spinner">
+
+{#hx-indicator="#tibillet-spinner" -> a rajouter si on veut le spinner partout#}
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' class="maj-theme">
 <main id="main">
     {% block main %}{% endblock main %}
 </main>

@@ -1,4 +1,5 @@
 import logging
+import time
 import uuid
 from io import BytesIO
 
@@ -234,6 +235,17 @@ class MyAccount(viewsets.ViewSet):
     def wallet(self, request: HttpRequest) -> HttpResponse:
         context = {}
         return render(request, "htmx/fragments/my_account_wallet.html", context=context)
+
+    @action(detail=False, methods=['GET'])
+    def tokens_table(self, request):
+        config = Configuration.get_solo()
+        # fedowAPI = FedowAPI()
+        # wallet = fedowAPI.wallet.retrieve_by_signature(request.user).data
+        context = {
+            'config':config,
+            # 'wallet':wallet,
+        }
+        return render(request, "htmx/fragments/tokens_table.html", context=context)
 
     @action(detail=False, methods=['GET'])
     def membership(self, request: HttpRequest) -> HttpResponse:
