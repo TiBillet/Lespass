@@ -40,6 +40,7 @@ from BaseBillet.tasks import create_ticket_pdf, create_invoice_pdf
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator
 from PaiementStripe.views import CreationPaiementStripe
 from fedow_connect.fedow_api import FedowAPI
+from fedow_connect.validators import WalletValidator
 
 logger = logging.getLogger(__name__)
 
@@ -239,13 +240,40 @@ class MyAccount(viewsets.ViewSet):
     @action(detail=False, methods=['GET'])
     def tokens_table(self, request):
         config = Configuration.get_solo()
-        # fedowAPI = FedowAPI()
-        # wallet = fedowAPI.wallet.retrieve_by_signature(request.user).data
+        fedowAPI = FedowAPI()
+        wallet = fedowAPI.wallet.retrieve_by_signature(request.user).validated_data
+
+        # On retire les adhésions, on les affiche dans l'autre table
+        tokens = [token for token in wallet.get('tokens') if token.get('asset_category') != 'SUB']
         context = {
             'config':config,
-            # 'wallet':wallet,
+            'tokens':tokens,
         }
         return render(request, "htmx/fragments/tokens_table.html", context=context)
+
+
+    @action(detail=False, methods=['GET'])
+    def transactions_table(self, request):
+        config = Configuration.get_solo()
+        fedowAPI = FedowAPI()
+        # On utilise ici .data plutot que validated_data pour executer les to_representation (celui du WalletSerializer)
+        # et les serializer.methodtruc
+        paginated_list_by_wallet_signature = fedowAPI.transaction.paginated_list_by_wallet_signature(request.user).data
+
+        transactions = paginated_list_by_wallet_signature.get('results')
+        next_url = paginated_list_by_wallet_signature.get('next')
+        previous_url = paginated_list_by_wallet_signature.get('previous')
+
+        # On retire les adhésions, on les affiche dans l'autre table
+        # tokens = [token for token in wallet.get('tokens') if token.get('asset_category') != 'SUB']
+        context = {
+            'config':config,
+            'transactions':transactions,
+            'next_url':next_url,
+            'previous_url':previous_url,
+        }
+        return render(request, "htmx/fragments/transactions_table.html", context=context)
+
 
     @action(detail=False, methods=['GET'])
     def membership(self, request: HttpRequest) -> HttpResponse:

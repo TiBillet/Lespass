@@ -152,6 +152,7 @@ class RsaKey(models.Model):
 
 
 class Wallet(models.Model):
+    display_name = models.CharField(max_length=200, null=True, blank=True)
     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, db_index=True)
 
 

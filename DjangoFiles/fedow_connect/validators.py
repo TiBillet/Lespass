@@ -31,20 +31,22 @@ class AssetValidator(serializers.Serializer):
     TOKEN_LOCAL_FIAT = 'TLF'
     TOKEN_LOCAL_NOT_FIAT = 'TNF'
     TIME = 'TIM'
+    FIDELITY = 'FID'
     BADGE = 'BDG'
     SUBSCRIPTION = 'SUB'
-    FIDELITY = 'FID'
 
     CATEGORIES = [
-        (TOKEN_LOCAL_FIAT, _('Token équivalent euro')),
-        (TOKEN_LOCAL_NOT_FIAT, _('Non fiduciaire')),
-        (STRIPE_FED_FIAT, _('Stripe Connect')),
-        (TIME, _("Monnaie temps, decompte d'utilisation")),
+        (TOKEN_LOCAL_FIAT, _('Fiduciaire')),
+        (TOKEN_LOCAL_NOT_FIAT, _('Cadeau')),
+        (STRIPE_FED_FIAT, _('Fiduciaire fédérée')),
+        (TIME, _("Monnaie temps")),
+        (FIDELITY, _("Points de fidélité")),
         (BADGE, _("Badgeuse/Pointeuse")),
         (SUBSCRIPTION, _('Adhésion ou abonnement')),
-        (FIDELITY, _('Points de fidélités')),
     ]
+
     category = serializers.ChoiceField(choices=CATEGORIES)
+    get_category_display = serializers.CharField()
 
     created_at = serializers.DateTimeField()
     last_update = serializers.DateTimeField()
@@ -77,6 +79,23 @@ class WalletValidator(serializers.Serializer):
         self.wallet, created = Wallet.objects.get_or_create(uuid=attrs['uuid'])
         return attrs
 
+    # Ne s'execute que si on va chercher .data
+    # et non pas validated_data
+    def to_representation(self, instance):
+        # Add apikey user to representation
+        rep = super().to_representation(instance)
+        rep['custom_representation'] = {}
+        #TODO: aller voir dans toute les config de lieux pour trouver le nom
+
+        if hasattr(self.wallet, 'user'):
+            rep['custom_representation']['display_name'] = self.wallet.user.email
+        elif self.wallet.display_name:
+            rep['custom_representation']['display_name'] = self.wallet.display_name
+        else :
+            rep['custom_representation']['display_name'] = f"{str(self.wallet.uuid)[:8]}"
+
+        return rep
+
 class CardValidator(serializers.Serializer):
     wallet = WalletValidator(many=False)
     origin = OriginValidator()
@@ -87,6 +106,7 @@ class CardValidator(serializers.Serializer):
     is_wallet_ephemere = serializers.BooleanField()
 
 
+
 class TransactionValidator(serializers.Serializer):
     uuid = serializers.UUIDField()
     hash = serializers.CharField(min_length=64, max_length=64)
@@ -95,7 +115,12 @@ class TransactionValidator(serializers.Serializer):
     subscription_start_datetime = serializers.DateTimeField(required=False, allow_null=True)
     sender = serializers.UUIDField()
     receiver = serializers.UUIDField()
+
     asset = serializers.UUIDField()
+    serialized_asset = AssetValidator(required=False, allow_null=True)
+    serialized_sender = WalletValidator(required=False, allow_null=True)
+    serialized_receiver = WalletValidator(required=False, allow_null=True)
+
     amount = serializers.IntegerField()
     card = CardValidator(required=False, many=False, allow_null=True)
     primary_card = serializers.UUIDField(required=False, allow_null=True)
@@ -115,6 +140,7 @@ class TransactionValidator(serializers.Serializer):
         (VOID, 'Dissocciation de la carte et du wallet user'),
     )
     action = serializers.ChoiceField(choices=TYPE_ACTION)
+    get_action_display = serializers.CharField()
 
     comment = serializers.CharField(required=False, allow_null=True)
     metadata = serializers.JSONField(required=False, allow_null=True)
@@ -124,5 +150,12 @@ class TransactionValidator(serializers.Serializer):
         uuid = attrs['uuid']
         hash = attrs['hash']
         datetime = attrs['datetime']
-        self.fedow_transaction, created = FedowTransaction.objects.get_or_create(uuid=uuid, hash=hash, datetime=datetime)
+        self.fedow_transaction, created = FedowTransaction.objects.get_or_create(uuid=uuid, hash=hash,
+                                                                                 datetime=datetime)
         return attrs
+
+
+class PaginatedTransactionValidator(serializers.Serializer):
+    next = serializers.URLField(required=False, allow_null=True)
+    previous = serializers.URLField(required=False, allow_null=True)
+    results = TransactionValidator(many=True)

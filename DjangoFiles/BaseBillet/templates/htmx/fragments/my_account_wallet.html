@@ -9,7 +9,6 @@
         </button>
     </div>
 
-
     <div hx-get="/my_account/tokens_table/" hx-trigger="revealed" class="mt-4">
         <span>Chargement des tokens</span>
         <div class="d-flex justify-content-center align-items-center ">
@@ -19,13 +18,17 @@
         </div>
     </div>
 
-    <div class="d-flex flex-row">
-        <button type="submit" class="btn bg-gradient-dark-blue btn-lg mt-4 p-4 mb-2 w-75 mx-auto"
-                role="button"
-                aria-label="valider formulaire adhésion"
-                hx-get="/my_account/transactions_table">
-            Afficher les dernières transactions
-        </button>
+    <div class="mt-4 mb-2">
+        <div class="d-flex flex-row" id="transactions_table" hx-indicator="#tibillet-spinner">
+            <button type="submit" class="btn bg-gradient-dark-blue btn-lg p-4  w-75 mx-auto"
+                    role="button"
+                    aria-label="valider formulaire adhésion"
+                    hx-get="/my_account/transactions_table/"
+                    hx-target="#transactions_table"
+                    hx-swap="outerHTML">
+                Afficher vos dernières transactions
+            </button>
+        </div>
     </div>
 
 </div>

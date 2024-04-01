@@ -1,4 +1,7 @@
+from datetime import datetime
+
 from django import template
+from fedow_connect.utils import dround as utils_dround
 
 register = template.Library()
 
@@ -48,3 +51,16 @@ def is_membership(membership, product_name) -> bool:
                 retour = True
                 break
     return retour
+
+@register.filter
+def dround(value):
+    return utils_dround(value)
+
+@register.filter
+def from_iso_to_date(value):
+    return datetime.fromisoformat(value)
+
+
+# @register.filter
+# def wallet_name(wallet):
+#     return wallet.uuid

@@ -378,3 +378,22 @@ LOGGING = {
         'handlers': ['console']
     },
 }
+
+
+if DEBUG:
+    SHELL_PLUS = "ipython"
+
+    SHELL_PLUS_POST_IMPORTS = [  # extra things to import in notebook
+        ("django.template.loader", ("get_template", "render_to_string")),
+        ("datetime", ("datetime", "timedelta")),
+        ("json"),
+        ("requests"),
+        ("fedow_connect.fedow_api", ("FedowAPI",)),
+        ("fedow_connect.utils", ("rsa_generator", "sign_message", "verify_signature",
+                                 "sign_utf8_string", "get_public_key", "get_private_key",
+                                 "hash_hexdigest", "rsa_encrypt_string", "rsa_decrypt_string")),
+        (("cryptography.hazmat.primitives"), ("serialization",)),
+        #     ("module2.submodule", ("func1", "func2", "class1", "etc"))
+        #
+    ]
+    os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"  # only use in development

@@ -16,7 +16,8 @@ from AuthBillet.models import RsaKey, TibilletUser, Wallet
 from BaseBillet.models import Configuration, Membership, Product
 from fedow_connect.models import FedowConfig
 from fedow_connect.utils import sign_message, data_to_b64, verify_signature
-from fedow_connect.validators import WalletValidator, AssetValidator, TransactionValidator
+from fedow_connect.validators import WalletValidator, AssetValidator, TransactionValidator, \
+    PaginatedTransactionValidator
 
 logger = logging.getLogger(__name__)
 
@@ -385,6 +386,12 @@ class PlaceFedow():
                           path='place',
                           data=data, apikey=apikey)
         new_place_data = new_place.json()
+
+        wallet = Wallet.objects.create(
+            display_name=tenant_config.organisation,
+            uuid=new_place_data['wallet']
+        )
+        self.fedow_config.wallet = wallet
         self.fedow_config.fedow_place_uuid = new_place_data['uuid']
         self.fedow_config.fedow_place_wallet_uuid = new_place_data['wallet']
         self.fedow_config.set_fedow_place_admin_apikey(new_place_data['key'])
@@ -410,6 +417,25 @@ class TransactionFedow():
         else:
             logger.error(response_hash.json())
             return response_hash.status_code
+
+    def paginated_list_by_wallet_signature(self, user):
+        response_link = _get(
+            self.fedow_config,
+            user=user,
+            path=f'transaction/paginated_list_by_wallet_signature'
+        )
+
+        if not response_link.status_code == 200:
+            logger.error(f"retrieve_by_signature ERRORS : {response_link.status_code}")
+            raise Exception(f"retrieve_by_signature ERRORS : {response_link.status_code}")
+
+        paginated_transactions_serialized = PaginatedTransactionValidator(data=response_link.json())
+
+        if paginated_transactions_serialized.is_valid():
+            return paginated_transactions_serialized
+        else:
+            logger.error(f"retrieve_by_signature wallet_serialized ERRORS : {paginated_transactions_serialized.errors}")
+            raise Exception(f"retrieve_by_signature wallet_serialized ERRORS : {paginated_transactions_serialized.errors}")
 
 
 # from fedow_connect.fedow_api import FedowAPI

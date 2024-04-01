@@ -348,3 +348,5 @@ class InstallCreationTest(TestCase):
             # TODO: test avec user tout neuf, sans wallet
             # TODO: tester avec une place qui n'est pas l'origine du membership
             # TODO: tester avec un paiement stripe
+            # TODO: test avec user connu du cashless
+            # TODO: tester le display_name des wallet avec des tenant différents

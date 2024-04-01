@@ -1,5 +1,6 @@
 import base64, json
 import hashlib
+from decimal import Decimal
 
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
@@ -10,6 +11,15 @@ from cryptography.exceptions import InvalidSignature
 from django.conf import settings
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend
+
+
+def dround(value):
+    # Si c'est un entier, on divise par 100
+    if type(value) == int:
+        return Decimal(value / 100).quantize(Decimal('1.00'))
+    return value.quantize(Decimal('1.00'))
+
+
 
 def data_to_b64(data: dict or list) -> bytes:
     data_to_json = json.dumps(data)
