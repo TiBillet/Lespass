@@ -152,7 +152,6 @@ class RsaKey(models.Model):
 
 
 class Wallet(models.Model):
-    display_name = models.CharField(max_length=200, null=True, blank=True)
     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, db_index=True)
 
 
@@ -219,6 +218,9 @@ class TibilletUser(AbstractUser):
     # sur quelle interface d'admin peut-il aller ?
     client_admin = models.ManyToManyField(Client,
                                           related_name="user_admin", blank=True)
+
+    last_know_ip = models.GenericIPAddressField(blank=True, null=True)
+    last_know_user_agent = models.CharField(max_length=500, blank=True, null=True)
 
     ##### Pour les user terminaux ####
 

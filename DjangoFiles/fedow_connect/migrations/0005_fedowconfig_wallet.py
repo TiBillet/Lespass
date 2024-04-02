@@ -7,7 +7,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('AuthBillet', '0014_wallet_display_name'),
+        ('AuthBillet', '0013_wallet_tibilletuser_wallet'),
         ('fedow_connect', '0004_alter_fedowconfig_fedow_place_admin_apikey'),
     ]
 
