@@ -1,3 +1,12 @@
-<div class="creation-tabs-content">
-    <h1>Membership</h1>
+<div class="container pt-5">
+
+    <div hx-get="/my_account/membership_table/" hx-trigger="revealed" class="mt-4">
+        <span>Chargement des tokens</span>
+        <div class="d-flex justify-content-center align-items-center ">
+            <div class="spinner-border text-info"
+                 role="status"
+            ></div>
+        </div>
+    </div>
+
 </div>

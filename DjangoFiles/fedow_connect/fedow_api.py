@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 import requests
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core.signing import Signer, TimestampSigner
 from django.db import connection
 from django.utils import timezone
@@ -258,6 +259,11 @@ class WalletFedow():
         self.fedow_config: FedowConfig = fedow_config
         if not fedow_config:
             self.fedow_config = FedowConfig.get_solo()
+
+    def cached_retrieve_by_signature(self, user):
+        # get_or_set va toujours faire la fonction callable avant de vérifier le cache.
+        # Solution : soit retirer les () dans le callable, soit utiliser cache.lambda
+        return cache.get_or_set(f"wallet_{user.wallet.uuid}", lambda : self.retrieve_by_signature(user), 10)
 
     def retrieve_by_signature(self, user):
         response_link = _get(

@@ -42,8 +42,7 @@
                     </span>
                 {% endif %}
             </label>
-            <div class="invalid-feedback" role="heading" aria-label="Conditions non acceptées.">Conditions non
-                acceptées.
+            <div class="invalid-feedback" role="heading" aria-label="Conditions non acceptées.">Merci de valider les conditions.
             </div>
         </div>
     </div>
@@ -59,7 +58,7 @@
                 </label>
                 {% if forloop.counter0 == 0 %}
                     <div class="invalid-feedback w-100">
-                        Tarif SVP
+                        Merci de choisir un tarif
                     </div>
                 {% endif %}
             </div>
@@ -143,7 +142,7 @@
                     {% if option.description != None %}
                         <div class="ms-5">{{ option.description }}</div>
                     {% endif %}
-                    <div class="invalid-feedback">Choisisser une options !</div>
+                    <div class="invalid-feedback">Merci de choisir une option</div>
                 </div>
             {% endfor %}
         </div>

@@ -231,6 +231,7 @@ class MyAccount(viewsets.ViewSet):
 
         return render(request, "htmx/views/my_account.html", context=context)
 
+    ### ONGLET WALLET
 
     @action(detail=False, methods=['GET'])
     def wallet(self, request: HttpRequest) -> HttpResponse:
@@ -241,7 +242,7 @@ class MyAccount(viewsets.ViewSet):
     def tokens_table(self, request):
         config = Configuration.get_solo()
         fedowAPI = FedowAPI()
-        wallet = fedowAPI.wallet.retrieve_by_signature(request.user).validated_data
+        wallet = fedowAPI.wallet.cached_retrieve_by_signature(request.user).validated_data
 
         # On retire les adhésions, on les affiche dans l'autre table
         tokens = [token for token in wallet.get('tokens') if token.get('asset_category') != 'SUB']
@@ -249,6 +250,7 @@ class MyAccount(viewsets.ViewSet):
             'config':config,
             'tokens':tokens,
         }
+
         return render(request, "htmx/fragments/tokens_table.html", context=context)
 
 
@@ -274,6 +276,7 @@ class MyAccount(viewsets.ViewSet):
         }
         return render(request, "htmx/fragments/transactions_table.html", context=context)
 
+    ### ONGLET ADHESION
 
     @action(detail=False, methods=['GET'])
     def membership(self, request: HttpRequest) -> HttpResponse:
@@ -281,9 +284,25 @@ class MyAccount(viewsets.ViewSet):
         return render(request, "htmx/fragments/my_account_membership.html", context=context)
 
     @action(detail=False, methods=['GET'])
+    def membership_table(self, request):
+        config = Configuration.get_solo()
+        fedowAPI = FedowAPI()
+        wallet = fedowAPI.wallet.cached_retrieve_by_signature(request.user).validated_data
+
+        # On ne garde que les adhésions
+        tokens = [token for token in wallet.get('tokens') if token.get('asset_category') == 'SUB']
+
+        context = {
+            'config':config,
+            'tokens':tokens,
+        }
+        return render(request, "htmx/fragments/tokens_membership_table.html", context=context)
+
+
+    @action(detail=False, methods=['GET'])
     def profile(self, request: HttpRequest) -> HttpResponse:
         context = {}
-        return render(request, "htmx/fragments/my_account_profile.html", context=context)
+        return render(request, "htmx/fragments/my_account_profil.html", context=context)
 
     #### REFILL STRIPE PRIMARY ####
 

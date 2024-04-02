@@ -6,7 +6,7 @@
             <thead>
             <tr>
                 <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Asset / Lieu</th>
-                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Quantité / Type</th>
+                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Type / Tarif</th>
                 <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Fédérée avec</th>
                 <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Dernière
                     action
@@ -36,8 +36,8 @@
                         </div>
                     </td>
                     <td>
-                        <p class="text-xs font-weight-bold mb-0">{{ token.value | dround }}</p>
-                        <p class="text-xs text-secondary mb-0">{{ token.asset.get_category_display }}</p>
+                        <p class="text-xs font-weight-bold mb-0">{{ token.asset.get_category_display }}</p>
+                        <p class="text-xs text-secondary mb-0">{{ token.value | dround }}</p>
                     </td>
                     <td class="align-middle text-center text-sm">
                         <div class="container">

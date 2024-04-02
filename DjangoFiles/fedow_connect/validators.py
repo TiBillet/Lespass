@@ -52,9 +52,15 @@ class AssetValidator(serializers.Serializer):
     last_update = serializers.DateTimeField()
     is_stripe_primary = serializers.BooleanField()
 
+    place_uuid_federated_with = serializers.ListField(child=serializers.UUIDField(), required=False, allow_null=True)
+
     total_token_value = serializers.IntegerField(required=False, allow_null=True)
     total_in_place = serializers.IntegerField(required=False, allow_null=True)
     total_in_wallet_not_place = serializers.IntegerField(required=False, allow_null=True)
+
+    def validate_place_uuid_federated_with(self, value):
+        #TODO: aller chercher les infos des tenant rattachés aux uuid place
+        return value
 
 
 class TokenValidator(serializers.Serializer):
