@@ -74,6 +74,7 @@ class TokenValidator(serializers.Serializer):
 class WalletValidator(serializers.Serializer):
     uuid = serializers.UUIDField()
     tokens = TokenValidator(many=True)
+    get_name = serializers.CharField()
 
     def validate(self, attrs):
         self.wallet, created = Wallet.objects.get_or_create(uuid=attrs['uuid'])
@@ -81,20 +82,20 @@ class WalletValidator(serializers.Serializer):
 
     # Ne s'execute que si on va chercher .data
     # et non pas validated_data
-    def to_representation(self, instance):
-        # Add apikey user to representation
-        rep = super().to_representation(instance)
-        rep['custom_representation'] = {}
-        #TODO: aller voir dans toute les config de lieux pour trouver le nom
-
-        if hasattr(self.wallet, 'user'):
-            rep['custom_representation']['display_name'] = self.wallet.user.email
-        elif self.wallet.display_name:
-            rep['custom_representation']['display_name'] = self.wallet.display_name
-        else :
-            rep['custom_representation']['display_name'] = f"{str(self.wallet.uuid)[:8]}"
-
-        return rep
+    # def to_representation(self, instance):
+    #     # Add apikey user to representation
+    #     rep = super().to_representation(instance)
+    #     rep['custom_representation'] = {}
+    #     #TODO: aller voir dans toute les config de lieux pour trouver le nom
+    #
+    #     if hasattr(self.wallet, 'user'):
+    #         rep['custom_representation']['display_name'] = self.wallet.user.email
+    #     elif self.wallet.display_name:
+    #         rep['custom_representation']['display_name'] = self.wallet.display_name
+    #     else :
+    #         rep['custom_representation']['display_name'] = f"{str(self.wallet.uuid)[:8]}"
+    #
+    #     return rep
 
 class CardValidator(serializers.Serializer):
     wallet = WalletValidator(many=False)

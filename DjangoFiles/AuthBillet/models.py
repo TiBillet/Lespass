@@ -156,7 +156,6 @@ class Wallet(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, db_index=True)
 
 
-
 class TibilletUser(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
 

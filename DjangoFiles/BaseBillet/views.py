@@ -258,7 +258,7 @@ class MyAccount(viewsets.ViewSet):
         fedowAPI = FedowAPI()
         # On utilise ici .data plutot que validated_data pour executer les to_representation (celui du WalletSerializer)
         # et les serializer.methodtruc
-        paginated_list_by_wallet_signature = fedowAPI.transaction.paginated_list_by_wallet_signature(request.user).data
+        paginated_list_by_wallet_signature = fedowAPI.transaction.paginated_list_by_wallet_signature(request.user).validated_data
 
         transactions = paginated_list_by_wallet_signature.get('results')
         next_url = paginated_list_by_wallet_signature.get('next')

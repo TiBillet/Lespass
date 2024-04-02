@@ -20,8 +20,17 @@
                                 {#                                TODO mettre les logo des tenant #}
                                 {#                                <img src="{{ config.logo.thumbnail.url }}" class="avatar avatar-sm">#}
                                 {#                                <img src="{{ config.logo.thumbnail.url }}" class="avatar avatar-sm">#}
-                                <h6 class="mb-0 text-xs">{{ tr.serialized_sender.custom_representation.display_name }}</h6>
-                                <h6 class="mb-0 text-xs">{{ tr.serialized_receiver.custom_representation.display_name }}</h6>
+                                {% if tr.serialized_sender.uuid == user.wallet.uuid %}
+                                    <h6 class="mb-0 text-xs">Myself</h6>
+                                {% else %}
+                                    <h6 class="mb-0 text-xs">{{ tr.serialized_sender.get_name }}</h6>
+                                {% endif %}
+
+                                {% if tr.serialized_receiver.uuid == user.wallet.uuid %}
+                                    <h6 class="mb-0 text-xs">Myself</h6>
+                                {% else %}
+                                    <h6 class="mb-0 text-xs">{{ tr.serialized_receiver.get_name }}</h6>
+                                {% endif %}
                             </div>
                             <div class="d-flex flex-column justify-content-center">
                                 {#                                Si token primaire : #}
@@ -49,7 +58,7 @@
                         {% endif %}
                     </td>
                     <td class="align-middle text-center">
-                        <span class="text-secondary text-xs font-weight-normal">{{ tr.datetime | from_iso_to_date }}</span>
+                        <span class="text-secondary text-xs font-weight-normal">{{ tr.datetime }}</span>
                     </td>
                 </tr>
             {% endfor %}

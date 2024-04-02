@@ -53,6 +53,10 @@ def is_membership(membership, product_name) -> bool:
     return retour
 
 @register.filter
+def first_eight(value):
+    return str(value)[:8]
+
+@register.filter
 def dround(value):
     return utils_dround(value)
 

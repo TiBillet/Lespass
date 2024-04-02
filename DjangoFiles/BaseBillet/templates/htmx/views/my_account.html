@@ -1,4 +1,5 @@
 {% extends base_template %}
+{% load tibitags %}
 
 {% block main %}
     {% comment %} manages the "embed" mode {% endcomment %}
@@ -9,6 +10,7 @@
        <div class="w-95 card creation-card">
            <div class="creation-header">
                <h3 class="creation-title">{{ user.email}}</h3>
+               <h4 class="creation-title">Wallet : {{ user.wallet.uuid  | first_eight }}</h4>
            </div>
 
            <!-- navigation -->
