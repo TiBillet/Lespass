@@ -1,11 +1,14 @@
 # TiBillet - Federated tools for cooperative networks
 
-> [!IMPORTANT]  
+> [!NOTE]  
 > TLDR; A suite of free applications for managing your social and solidarity venue : Cash register, membership,
 > ticketing,
 > cashless, time currency, order taking and room management.
 > The current git repository is one of the building blocks of the TiBillet ecosystem: Lespass
-> Go talk with us : https://tibillet.org
+> To read more and talk with us : https://tibillet.org
+
+![](Presentation/ticketing_demo.jpg)
+
 
 ### EN : Introduction
 
@@ -49,12 +52,14 @@ solidaire, décentralisée et non spéculative à l'échelle d'un territoire.
 TiBillet est en période de BETA et en expérimentation sur plusieurs lieux sur l'ile de la Réunion. Venez nous voir au
 Bisik, à la Raffinerie, et au Manapany Festival !
 
-## TiBillet / Lespass
+# TiBillet / Lespass
 
 The current git repository is one of the building blocks of the TiBillet ecosystem: Lespass
 It contains the ticketing, membership and landing page engines.
 
-The other engines are :
+The engines are :
+
+- [Lespass](https://github.com/TiBillet/Lespass): ticketing, membership and landing page engines.
 
 - [LaBoutik](https://github.com/TiBillet/LaBoutik): Cash register, cashless system with RFID / NFC chip and order-taking system.
 
@@ -66,18 +71,15 @@ The other engines are :
 EN : [https://tibillet.org]
 FR : [https://tibillet.org/fr]
 
-## Talk with us !
 
-- [Discord](https://discord.gg/7FJvtYx)
-- [contact@tibillet.re](contact@tibillet.re)
-- [Rocket Chat Communecter](https://chat.communecter.org/channel/Tibillet)
-- [Rocket Chat tiers-lieux.org](https://chat.tiers-lieux.org/channel/TiBillet)
+## Made by, with and for :
 
-![](Presentation/Design_Front_Cashless_APP.svg)
-
-## Crédits and développement :
-
-[AUTHORS.md](https://github.com/TiBillet/TiBillet/blob/main/AUTHORS.md)
+- [Coopérative Code Commun](https://codecommun.coop)
+- [la Réunion des Tiers-lieux](https://www.communecter.org/costum/co/index/slug/LaReunionDesTiersLieux/#welcome)
+- [La Raffinerie](https://www.laraffinerie.re/)
+- [Communecter](https://www.communecter.org/)
+- Le Manapany Festival
+- Le Demeter
 
 ## THANKS & SPONSORS
 
@@ -85,7 +87,10 @@ FR : [https://tibillet.org/fr]
 
 ![logo JetBrain](https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.svg)
 
-- [La Raffinerie](https://www.laraffinerie.re)
-- [Communnecter.org](https://www.communecter.org)
-- [La Réunion des Tiers lieux](https://www.communecter.org/costum/co/index/slug/LaReunionDesTiersLieux/)
 
+## Contact :
+
+- [Discord](https://discord.gg/ecb5jtP7vY)
+- [Rocket Chat Tiers Lieux.org](https://chat.tiers-lieux.org/channel/TiBillet)
+- [Rocket Chat Communecter](https://chat.communecter.org/channel/Tibillet)
+- [e-mail](mailto:contact@tibillet.re)
