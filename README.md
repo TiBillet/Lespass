@@ -1,10 +1,11 @@
 # TiBillet - Federated tools for cooperative networks
 
-> [!INFO]  
-> TLDR; A suite of free applications for managing your social and solidarity venue : Cash register, membership, ticketing,
-cashless, time currency, order taking and room management.
+> [!IMPORTANT]  
+> TLDR; A suite of free applications for managing your social and solidarity venue : Cash register, membership,
+> ticketing,
+> cashless, time currency, order taking and room management.
+> The current git repository is one of the building blocks of the TiBillet ecosystem: Lespass
 > Go talk with us : https://tibillet.org
-
 
 ### EN : Introduction
 
@@ -21,13 +22,12 @@ Users have access to an NFC card valid throughout the TiBillet network, with no 
 them to manage and associate memberships, subscriptions, time currencies, local and/or free and federated to several
 venues.
 
-Last but not least, TiBillet is an open-source software package developed by Code Commun, a SCIC (community interest
-company).
+Last but not least, TiBillet is an open-source software package developed by Code Commun
+Cooperative (https://codecommun.coop).
 
 When you use TiBillet, you become part of a social economy network that supports you from A to Z.
 
-TiBillet is made by the Code Commun Cooperative (https://codecommun.coop)
-
+TiBillet is made by the Code Commun Cooperative
 
 ### FR : Introduction
 
@@ -49,10 +49,22 @@ solidaire, décentralisée et non spéculative à l'échelle d'un territoire.
 TiBillet est en période de BETA et en expérimentation sur plusieurs lieux sur l'ile de la Réunion. Venez nous voir au
 Bisik, à la Raffinerie, et au Manapany Festival !
 
-TiBillet est porté par la coopérative (SCIC) Code Commun (https://codecommun.coop)
-
 ## TiBillet / Lespass
 
+The current git repository is one of the building blocks of the TiBillet ecosystem: Lespass
+It contains the ticketing, membership and landing page engines.
+
+The other engines are :
+
+- [LaBoutik](https://github.com/TiBillet/LaBoutik): Cash register, cashless system with RFID / NFC chip and order-taking system.
+
+- [Fedow](https://github.com/TiBillet/Fedow) : Federated and open wallet, the federation engine. A blockchain to share membership assets, local currencies and
+  time for several Lespass and LaBoutik instances.
+
+### Documentation :
+
+EN : [https://tibillet.org]
+FR : [https://tibillet.org/fr]
 
 ## Talk with us !
 
@@ -60,18 +72,6 @@ TiBillet est porté par la coopérative (SCIC) Code Commun (https://codecommun.c
 - [contact@tibillet.re](contact@tibillet.re)
 - [Rocket Chat Communecter](https://chat.communecter.org/channel/Tibillet)
 - [Rocket Chat tiers-lieux.org](https://chat.tiers-lieux.org/channel/TiBillet)
-
-## Ticketing original design.
-
-Open [Front Billetterie.excalidraw](https://github.com/TiBillet/TiBillet/blob/main/Presentation/Front%20Billetterie.excalidraw)
-on https://excalidraw.com/
-
-![](Presentation/Design_Front_Ticket.svg)
-
-## Cashless frontend design.
-
-Open [Front Cashless.excalidraw](https://github.com/TiBillet/TiBillet/blob/main/Presentation/Front%20Cashless.excalidraw)
-on https://excalidraw.com/
 
 ![](Presentation/Design_Front_Cashless_APP.svg)
 
