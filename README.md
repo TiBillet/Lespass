@@ -1,6 +1,35 @@
-# TiBillet
+# TiBillet - Federated tools for cooperative networks
 
-## Cashless, ticketing, membership and federated network
+> [!INFO]  
+> TLDR; A suite of free applications for managing your social and solidarity venue : Cash register, membership, ticketing,
+cashless, time currency, order taking and room management.
+> Go talk with us : https://tibillet.org
+
+
+### EN : Introduction
+
+TiBillet is a FLOSS solution for payment, associative membership, online booking and ticketing, time and local currency
+management, festival cashless and order management for refreshment stands and catering facilities.
+
+The general idea is to broaden the scope of a membership and/or cashless card already in circulation at many venues and
+festivals, to create a cooperative network.
+
+The platform aims to encourage the circulation of audiences and cooperation between the various players in an area, such
+as third-party venues, associations, festivals, artists, craftsmen and open-source software developers.
+
+Users have access to an NFC card valid throughout the TiBillet network, with no subscription or top-up fees, enabling
+them to manage and associate memberships, subscriptions, time currencies, local and/or free and federated to several
+venues.
+
+Last but not least, TiBillet is an open-source software package developed by Code Commun, a SCIC (community interest
+company).
+
+When you use TiBillet, you become part of a social economy network that supports you from A to Z.
+
+TiBillet is made by the Code Commun Cooperative (https://codecommun.coop)
+
+
+### FR : Introduction
 
 Réseau événementiel et coopératif.
 
@@ -22,11 +51,10 @@ Bisik, à la Raffinerie, et au Manapany Festival !
 
 TiBillet est porté par la coopérative (SCIC) Code Commun (https://codecommun.coop)
 
-## Présentation, documentation et démonstration :
+## TiBillet / Lespass
 
-- https://tibillet.org
 
-## Venez discuter avec nous !
+## Talk with us !
 
 - [Discord](https://discord.gg/7FJvtYx)
 - [contact@tibillet.re](contact@tibillet.re)
