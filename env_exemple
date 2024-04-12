@@ -1,0 +1,41 @@
+# Secret
+DJANGO_SECRET=''
+FERNET_KEY=''
+STRIPE_KEY=''
+
+# Database
+POSTGRES_HOST='lespass_postgres'
+POSTGRES_USER='lespass_postgres_user'
+POSTGRES_PASSWORD=''
+POSTGRES_DB='lespass'
+
+TIME_ZONE='Europe/Paris'
+
+FEDOW_DOMAIN=''
+
+PUBLIC='TiBillet Coop.'
+DOMAIN=''
+SUB=''
+META='agenda'
+
+EMAIL_HOST=""
+EMAIL_PORT=""
+EMAIL_HOST_USER=""
+EMAIL_HOST_PASSWORD=""
+
+### BACKUP
+
+BORG_PASSPHRASE=''
+
+### FOR TEST AND DEV
+
+DEBUG=0
+SENTRY_DNS=""
+STRIPE_TEST=False
+STRIPE_KEY_TEST=""
+
+
+# Stripe Tibillet
+
+COMMUNECTER_SSO_CLIENTID=""
+COMMUNECTER_SSO_SECRET=""

@@ -1,8 +1,8 @@
 [tool.poetry]
 name = "tibillet"
-version = "0.9.0"
-description = "Cashless ticketing and federated network"
-authors = ["Jonas Legion <jturbeaux@pm.me>"]
+version = "0.9.1"
+description = "ticketing and membership for federated and cooperative network"
+authors = ["Cooperative Code Commun <jturbeaux@pm.me>"]
 license = "AGPLv3"
 readme = "README.md"
 
@@ -52,5 +52,3 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 
-#  docker build -t tibillet/tibillet .
-#  docker image tag tibillet/tibillet tibillet/tibillet:alpha2

@@ -1,6 +1,9 @@
 .env
+.git
 Backup
 Docker
+DjangoFiles/www
 DjangoFiles/logs/gunicorn.logs
+DjangoFiles/logs/Djangologfile
 DjangoFiles/logs/nginxAccess.log
 DjangoFiles/logs/nginxError.log

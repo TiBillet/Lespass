@@ -174,8 +174,8 @@ DATABASES = {
         'NAME': os.environ.get('POSTGRES_DB'),
         'USER': os.environ.get('POSTGRES_USER'),
         'PASSWORD': os.environ.get('POSTGRES_PASSWORD'),
-        'HOST': os.environ.get('POSTGRES_HOST'),
-        'PORT': os.environ.get('POSTGRES_PORT', '5432'),
+        'HOST': 'postgres',
+        'PORT': '5432',
     }
 }
 
@@ -283,9 +283,9 @@ EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', True)
 CELERY_TIMEZONE = os.environ.get('TIME_ZONE', 'UTC')
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60
-BROKER_URL = os.environ.get('CELERY_BROKER', 'redis://redis:6379/0')
-CELERY_BROKER_URL = os.environ.get('CELERY_BROKER', 'redis://redis:6379/0')
-CELERY_RESULT_BACKEND = os.environ.get('CELERY_BACKEND', 'redis://redis:6379/0')
+BROKER_URL = os.environ.get('redis://redis:6379/0')
+CELERY_BROKER_URL = os.environ.get('redis://redis:6379/0')
+CELERY_RESULT_BACKEND = os.environ.get('redis://redis:6379/0')
 # DJANGO_CELERY_BEAT_TZ_AWARE=False
 
 # CHANNELS

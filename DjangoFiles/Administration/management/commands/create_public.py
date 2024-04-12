@@ -20,6 +20,13 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         def create_public():
+
+            # Si l'installation a déja été faite
+            if RootConfiguration.objects.exists():
+                logger.info("Public root configuration exist")
+                return True
+
+
             stripe_api_key = os.environ.get('STRIPE_KEY')
             stripe_test_api_key = os.environ.get('STRIPE_KEY_TEST')
 
@@ -40,6 +47,8 @@ class Command(BaseCommand):
             else:
                 stripe.api_key = stripe_test_api_key
                 stripe.Product.list()
+
+
 
 
             tenant_public, created = Client.objects.get_or_create(
