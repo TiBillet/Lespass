@@ -71,6 +71,7 @@ services:
       - traefik.http.routers.billetterie.rule=Host(`$DOMAIN`) || Host(`www.$DOMAIN`) || Host(`$META.$DOMAIN`) || Host(`$SUB.$DOMAIN`)
     networks:
       - frontend
+      - lespass_backend
 
 
 
@@ -79,5 +80,3 @@ networks:
     external: true
   lespass_backend:
 
-volumes:
-  bill_dev_dbdata:

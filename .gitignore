@@ -149,7 +149,10 @@ node_modules/
 .pydevproject
 .settings/
 
-
+www/
+logs/
+backup/
+database/
 Backup
 DjangoFiles/logs/gunicorn.logs
 DjangoFiles/logs/Djangologfile
