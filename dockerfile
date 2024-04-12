@@ -10,7 +10,6 @@ RUN apt-get install -y --no-install-recommends postgresql-client
 
 RUN apt-get install -y nano iputils-ping curl borgbackup cron
 
-
 RUN useradd -ms /bin/bash tibillet
 USER tibillet
 
@@ -22,7 +21,12 @@ ENV PATH="/home/tibillet/.local/bin:$PATH"
 
 COPY --chown=tibillet:tibillet ./ /DjangoFiles
 WORKDIR /DjangoFiles
+
 RUN poetry install
 
-# docker build -t tibillet/tibillet:2023-11-25 .
-# docker push tibillet/tibillet:2023-11-25
+# docker build -t lespass .
+# docker tag lespass tibillet/lespass:alpha1
+# docker push lespass
+
+# If nightly
+#

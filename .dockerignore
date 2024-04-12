@@ -1,0 +1,6 @@
+.env
+Backup
+Docker
+DjangoFiles/logs/gunicorn.logs
+DjangoFiles/logs/nginxAccess.log
+DjangoFiles/logs/nginxError.log
