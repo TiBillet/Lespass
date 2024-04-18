@@ -46,7 +46,7 @@ class RootConfiguration(SingletonModel):
 
     def set_stripe_api(self, string):
         self.stripe_api_key = fernet_encrypt(string)
-        # cache.clear()
+        cache.clear()
         self.save()
         return True
 

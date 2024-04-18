@@ -68,8 +68,8 @@ services:
       - lespas_memcached:memcached
     networks:
       - lespass_backend
-    command: "sleep infinity"
-#    command: "poetry run celery -A TiBillet worker -l INFO"
+#    command: "sleep infinity"
+    command: "poetry run celery -A TiBillet worker -l INFO"
 
 
   lespass_nginx:
