@@ -4,8 +4,9 @@
 > TLDR; A suite of free applications for managing your social and solidarity venue : Cash register, membership,
 > ticketing,
 > cashless, time currency, order taking and room management.
-> The current git repository is one of the building blocks of the TiBillet ecosystem: Lespass
-> To read more and talk with us : https://tibillet.org
+> The current git repository is one of the building blocks of the TiBillet ecosystem: Lespass.
+> 
+> https://tibillet.org
 
 ![](Presentation/ticketing_demo.jpg)
 

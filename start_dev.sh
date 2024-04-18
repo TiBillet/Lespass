@@ -33,5 +33,19 @@ trap 'handle_error $LINENO' ERR
 # poetry run python /DjangoFiles/manage.py migrate
 # echo "Run rsp pour lancer le serveur web tout neuf"
 
+
+##curl -sSL https://install.python-poetry.org | python3
+#export PATH="/home/tibillet/.local/bin:$PATH"
+#poetry install
+#echo "Poetry install ok"
+#
+#poetry run python /DjangoFiles/manage.py collectstatic --no-input
+#poetry run python /DjangoFiles/manage.py migrate
+#
+## Création des tenant publics et agenda
+#poetry run python /DjangoFiles/manage.py install
+## Création d'un user test
+#poetry run python /DjangoFiles/manage.py test_user
+
 sleep infinity
 #poetry run python /DjangoFiles/manage.py runserver 0.0.0.0:8002

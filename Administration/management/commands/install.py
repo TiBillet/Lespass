@@ -38,8 +38,8 @@ class Command(BaseCommand):
         hello_fedow = requests.get(f'https://{fedow_domain}/helloworld/',
                                    verify=bool(not settings.DEBUG))
         # Returns True if :attr:`status_code` is less than 400, False if not
-        if hello_fedow.status_code != 200:
-            raise Exception("Bad FEDOW_DOMAIN in .env file")
+        if not hello_fedow.ok:
+            raise Exception(f"Bad reponse FEDOW_DOMAIN in .env file {hello_fedow.status_code}")
 
         meta = os.getenv("META")
         if not meta:
