@@ -10,7 +10,8 @@ poetry run python /DjangoFiles/manage.py collectstatic --no-input
 poetry run python /DjangoFiles/manage.py migrate
 
 # Création des tenant publics et agenda
-poetry run python /DjangoFiles/manage.py create_public
+poetry run python /DjangoFiles/manage.py install
+
 # Handshake fedow
 poetry run python /DjangoFiles/manage.py root_fedow
 

@@ -23,9 +23,9 @@ BASE_DIR = Path(__file__).resolve(strict=True).parent.parent
 SECRET_KEY = os.environ.get('DJANGO_SECRET')
 FERNET_KEY = os.environ.get('FERNET_KEY')
 
-FEDOW = os.environ.get('FEDOW') == 'True' or os.environ.get('FEDOW') == '1'
+FEDOW = True
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG') == 'True' or os.environ.get('DEBUG') == '1'
+DEBUG = os.environ.get('DEBUG') == '1'
 
 # Sentry
 if not DEBUG and os.environ.get('SENTRY_DNS'):
@@ -85,7 +85,6 @@ SHARED_APPS = (
     'Administration',
     'MetaBillet',
     'root_billet',
-    'llmTB',
     'wsocket',
 
     'django_extensions',

@@ -1,7 +1,11 @@
 # Secret
 DJANGO_SECRET=''
 FERNET_KEY=''
+
 STRIPE_KEY=''
+# or
+STRIPE_KEY_TEST=''
+STRIPE_TEST=0
 
 # Database
 POSTGRES_HOST='lespass_postgres'

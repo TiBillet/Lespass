@@ -1,4 +1,3 @@
-version: '3'
 services:
   lespass_postgres:
     image: postgres:13-bookworm
@@ -6,8 +5,17 @@ services:
     container_name: lespass_postgres
     hostname: lespass_postgres
     volumes:
-      - ./database:/var/lib/postgresql/data
+#      - ./database:/var/lib/postgresql/data
+      - lespass_dev_db:/var/lib/postgresql/data
     env_file: .env
+    networks:
+      - lespass_backend
+
+  lespas_memcached:
+    image : memcached:1.6
+    container_name: lespas_memcached
+    hostname: lespas_memcached
+    restart: always
     networks:
       - lespass_backend
 
@@ -20,38 +28,48 @@ services:
       - lespass_backend
 
   lespass_django:
-    image: tibillet/lespass:latest
+    build: .
     restart: unless-stopped
     container_name: lespass_django
     hostname: lespass_django
     volumes:
-      - ./www:/DjangoFiles/www
-      - ./logs:/DjangoFiles/logs
+      - ./:/DjangoFiles
       - ./backup:/Backup
     env_file: .env
     depends_on:
       - lespass_postgres
       - lespas_redis
+      - lespas_memcached
     links:
       - lespass_postgres:postgres
       - lespas_redis:redis
+      - lespas_memcached:memcached
     networks:
       - lespass_backend
+    extra_hosts:
+      - "fedow.tibillet.localhost:172.17.0.1"
+      - "cashless.tibillet.localhost:172.17.0.1"
+      - "cashless2.tibillet.localhost:172.17.0.1"
+    command: "sleep infinity"
 
   lespass_celery:
-    image: tibillet/lespass:latest
+    build: .
     container_name: lespass_celery
     hostname: lespass_celery
     env_file: .env
+    volumes:
+      - ./:/DjangoFiles
     depends_on:
       - lespass_postgres
       - lespas_redis
     links:
       - lespass_postgres:postgres
       - lespas_redis:redis
-    command: "poetry run celery -A TiBillet worker -l INFO"
+      - lespas_memcached:memcached
     networks:
       - lespass_backend
+    command: "sleep infinity"
+#    command: "poetry run celery -A TiBillet worker -l INFO"
 
 
   lespass_nginx:
@@ -67,8 +85,9 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=frontend
-      - traefik.http.routers.billetterie.tls.certresolver=myresolver
-      - traefik.http.routers.billetterie.rule=Host(`$DOMAIN`) || Host(`www.$DOMAIN`) || Host(`$META.$DOMAIN`) || Host(`$SUB.$DOMAIN`)
+      - traefik.http.routers.lespass_nginx.tls.certresolver=myresolver
+      - traefik.http.routers.lespass_nginx.rule=Host(`$DOMAIN`) || Host(`www.$DOMAIN`) || Host(`$META.$DOMAIN`) || Host(`$SUB.$DOMAIN`)
+      - traefik.http.services.lespass_nginx.loadbalancer.server.port=80
     networks:
       - frontend
       - lespass_backend
@@ -80,3 +99,5 @@ networks:
     external: true
   lespass_backend:
 
+volumes:
+  lespass_dev_db:

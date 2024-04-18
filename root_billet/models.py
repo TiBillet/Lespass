@@ -46,7 +46,7 @@ class RootConfiguration(SingletonModel):
 
     def set_stripe_api(self, string):
         self.stripe_api_key = fernet_encrypt(string)
-        cache.clear()
+        # cache.clear()
         self.save()
         return True
 
@@ -71,8 +71,7 @@ class RootConfiguration(SingletonModel):
             logger.info(f"TiBillet/Lespass registered in Fedow Instance")
             return True
         elif handshake.status_code == 208:
-            logger.warning(f"A TiBillet/Lespass is already registered in this fedow Instance")
-            return True
+            logger.error(f"A TiBillet/Lespass is already registered in this fedow Instance")
 
         logger.error(f"Error while root handshake with FEDOW")
         raise Exception(f"Error while root handshake with FEDOW")

@@ -11,7 +11,6 @@ class index(APIView):
 
     def get(self, request):
         return HttpResponseRedirect('https://tibillet.org/')
-        # return render(request, 'html5up-story/index.html')
 
 
 
