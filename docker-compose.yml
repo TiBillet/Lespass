@@ -50,7 +50,6 @@ services:
       - "fedow.tibillet.localhost:172.17.0.1"
       - "cashless.tibillet.localhost:172.17.0.1"
       - "cashless2.tibillet.localhost:172.17.0.1"
-    command: "sleep infinity"
 
   lespass_celery:
     build: .
@@ -68,7 +67,6 @@ services:
       - lespas_memcached:memcached
     networks:
       - lespass_backend
-#    command: "sleep infinity"
     command: "poetry run celery -A TiBillet worker -l INFO"
 
 

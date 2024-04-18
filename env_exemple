@@ -1,45 +1,33 @@
 # Secret
-DJANGO_SECRET=''
-FERNET_KEY=''
+DJANGO_SECRET='' # see upper to create one
+FERNET_KEY='' # see upper to create one
 
-STRIPE_KEY=''
+STRIPE_KEY='' # from your stripe account
 # or
 STRIPE_KEY_TEST=''
-STRIPE_TEST=0
+STRIPE_TEST=0 # set to 1 for use stripe test env
 
 # Database
 POSTGRES_HOST='lespass_postgres'
 POSTGRES_USER='lespass_postgres_user'
-POSTGRES_PASSWORD=''
+POSTGRES_PASSWORD='' # strong ! generate a new fernet for exemple.
 POSTGRES_DB='lespass'
 
-TIME_ZONE='Europe/Paris'
+TIME_ZONE='Europe/Paris' # or where you are
+PUBLIC='TiBillet Coop.' # The name of the root instance
 
-FEDOW_DOMAIN=''
+FEDOW_DOMAIN='' # the same as Fedow
 
-PUBLIC='TiBillet Coop.'
-DOMAIN=''
-SUB=''
-META='agenda'
+DOMAIN='' # for the wildcard : without subdomain ! ex : tibillet.coop, not lespass.tibillet.coop
+SUB='' # the sub domain of your first place ex : if 'festival', it will be accessible on https://festival.tibillet.coop
+META='' # the federated agenda for all events on all tenants. If 'agenda', it will be accessible, for exemple, on https://agenda.tibillet.coop
 
-EMAIL_HOST=""
-EMAIL_PORT=""
-EMAIL_HOST_USER=""
-EMAIL_HOST_PASSWORD=""
+# For transactionnal email :
+EMAIL_HOST=''
+EMAIL_PORT=''
+EMAIL_HOST_USER=''
+EMAIL_HOST_PASSWORD=''
 
-### BACKUP
-
-BORG_PASSPHRASE=''
-
-### FOR TEST AND DEV
-
-DEBUG=0
-SENTRY_DNS=""
-STRIPE_TEST=False
-STRIPE_KEY_TEST=""
-
-
-# Stripe Tibillet
-
-COMMUNECTER_SSO_CLIENTID=""
-COMMUNECTER_SSO_SECRET=""
+# Change only if needed :
+CELERY_BROKER='redis://redis:6379/0'
+CELERY_BACKEND='redis://redis:6379/0'
