@@ -191,7 +191,7 @@ class ActionArticlePaidByCategorie:
         email_sended = send_membership_invoice_email_after_paiement(self, updated_membership)
         ghost_sended = send_membership_to_ghost(updated_membership)
 
-        # Envoyer à fedow
+        # Envoyer l'adhésion à fedow
         logger.info(f"TRIGGER ADHESION -> envoi à Fedow")
         fedow_config = FedowConfig.get_solo()
         fedowAPI = FedowAPI(fedow_config=fedow_config)
