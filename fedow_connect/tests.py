@@ -25,7 +25,8 @@ class InstallCreationTest(TestCase):
             # Création des tenant public et meta
             Customers = get_tenant_model()
             self.assertEqual(Customers.objects.count(), 0)
-            call_command('create_public')
+            settings.DEBUG = True
+            call_command('install')
             self.assertEqual(get_public_schema_name(), 'public')
             self.assertEqual(Customers.objects.count(), 2)
             customers = Customers.objects.all()

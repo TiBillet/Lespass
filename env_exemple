@@ -1,11 +1,8 @@
 # Secret
 DJANGO_SECRET='' # see upper to create one
 FERNET_KEY='' # see upper to create one
-
 STRIPE_KEY='' # from your stripe account
-# or
-STRIPE_KEY_TEST=''
-STRIPE_TEST=0 # set to 1 for use stripe test env
+
 
 # Database
 POSTGRES_HOST='lespass_postgres'
@@ -31,3 +28,11 @@ EMAIL_HOST_PASSWORD=''
 # Change only if needed :
 CELERY_BROKER='redis://redis:6379/0'
 CELERY_BACKEND='redis://redis:6379/0'
+
+
+# Dev and debug
+
+DEBUG=0
+STRIPE_TEST=0 # set to 1 for use stripe test env
+STRIPE_KEY_TEST=''
+
