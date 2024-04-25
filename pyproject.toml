@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "tibillet"
+name = "lespass"
 version = "0.9.1"
 description = "ticketing and membership for federated and cooperative network"
 authors = ["Cooperative Code Commun <jturbeaux@pm.me>"]
