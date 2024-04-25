@@ -529,8 +529,8 @@ class MembershipMVT(viewsets.ViewSet):
             else :
                 messages.add_message(request, messages.WARNING, f"Une erreur est survenue, merci de contacter l'administrateur.")
         except MessageFailure as e :
-            pass
             # Surement un test unitaire, les messages plantent a travers la Factory Request
+            pass
         except Exception as e :
             raise e
 

@@ -394,7 +394,7 @@ class PlaceFedow():
         new_place_data = new_place.json()
 
         wallet = Wallet.objects.create(
-            display_name=tenant_config.organisation,
+            # display_name=tenant_config.organisation,
             uuid=new_place_data['wallet']
         )
         self.fedow_config.wallet = wallet

@@ -8,7 +8,7 @@ from django.conf import settings
 from tenant_schemas_celery.app import CeleryApp as TenantAwareCeleryApp
 
 app = TenantAwareCeleryApp()
-app.config_from_object('django.conf:settings')
+app.config_from_object('django.conf:settings', namespace='CELERY')
 app.autodiscover_tasks(lambda: settings.INSTALLED_APPS)
 
 @setup_logging.connect

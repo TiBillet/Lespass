@@ -21,6 +21,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 class InstallCreationTest(TestCase):
     def setUp(self):
+
         with schema_context('public'):
             # Création des tenant public et meta
             Customers = get_tenant_model()

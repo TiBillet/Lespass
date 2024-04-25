@@ -282,9 +282,9 @@ EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', True)
 CELERY_TIMEZONE = os.environ.get('TIME_ZONE', 'UTC')
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60
-BROKER_URL = os.environ.get('redis://redis:6379/0')
-CELERY_BROKER_URL = os.environ.get('redis://redis:6379/0')
-CELERY_RESULT_BACKEND = os.environ.get('redis://redis:6379/0')
+BROKER_URL = os.environ.get('CELERY_BROKER', 'redis://redis:6379/0')
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER', 'redis://redis:6379/0')
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_BACKEND', 'redis://redis:6379/0')
 # DJANGO_CELERY_BEAT_TZ_AWARE=False
 
 # CHANNELS
@@ -392,6 +392,7 @@ if DEBUG:
                                  "sign_utf8_string", "get_public_key", "get_private_key",
                                  "hash_hexdigest", "rsa_encrypt_string", "rsa_decrypt_string")),
         (("cryptography.hazmat.primitives"), ("serialization",)),
+        (("BaseBillet.tasks"), ("test_logger",)),
         #     ("module2.submodule", ("func1", "func2", "class1", "etc"))
         #
     ]

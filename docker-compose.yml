@@ -9,7 +9,7 @@ services:
       - lespass_dev_db:/var/lib/postgresql/data
     env_file: .env
     networks:
-      - lespass_backend
+      - frontend
 
   lespas_memcached:
     image : memcached:1.6
@@ -17,7 +17,7 @@ services:
     hostname: lespas_memcached
     restart: always
     networks:
-      - lespass_backend
+      - frontend
 
   lespas_redis:
     container_name: lespas_redis
@@ -25,7 +25,7 @@ services:
     image: redis:7.2.3-bookworm
     restart: unless-stopped
     networks:
-      - lespass_backend
+      - frontend
 
   lespass_django:
     build: .
@@ -45,7 +45,7 @@ services:
       - lespas_redis:redis
       - lespas_memcached:memcached
     networks:
-      - lespass_backend
+      - frontend
     extra_hosts:
       - "fedow.tibillet.localhost:172.17.0.1"
       - "cashless.tibillet.localhost:172.17.0.1"
@@ -66,13 +66,13 @@ services:
       - lespas_redis:redis
       - lespas_memcached:memcached
     networks:
-      - lespass_backend
+      - frontend
     extra_hosts:
       - "fedow.tibillet.localhost:172.17.0.1"
       - "cashless.tibillet.localhost:172.17.0.1"
       - "cashless2.tibillet.localhost:172.17.0.1"
-
     command: "poetry run celery -A TiBillet worker -l INFO"
+
 
 
   lespass_nginx:
@@ -93,14 +93,13 @@ services:
       - traefik.http.services.lespass_nginx.loadbalancer.server.port=80
     networks:
       - frontend
-      - lespass_backend
 
 
 
 networks:
   frontend:
     external: true
-  lespass_backend:
+#  lespass_backend:
 
 volumes:
   lespass_dev_db:

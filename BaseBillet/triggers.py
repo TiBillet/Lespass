@@ -157,7 +157,7 @@ class ActionArticlePaidByCategorie:
         except AttributeError:
             logger.info(f"Pas de trigger pour la categorie {self.categorie}")
         except Exception as exc:
-            logger.error(f"category_trigger ERROR : {exc} - {type(exc)}")
+            logger.error(f"category_trigger {self.categorie.upper()} ERROR : {exc} - {type(exc)}")
 
     # Category DON
     def trigger_D(self):
@@ -184,18 +184,21 @@ class ActionArticlePaidByCategorie:
     # Categorie ADHESION
     def trigger_A(self):
         logger.info(f"TRIGGER ADHESION")
+
         membership : Membership = get_membership_after_paiement(self)
         updated_membership : Membership = update_membership_state_after_paiement(self, membership)
+
         email_sended = send_membership_invoice_email_after_paiement(self, updated_membership)
         ghost_sended = send_membership_to_ghost(updated_membership)
 
         # Envoyer à fedow
+        logger.info(f"TRIGGER ADHESION -> envoi à Fedow")
         fedow_config = FedowConfig.get_solo()
         fedowAPI = FedowAPI(fedow_config=fedow_config)
         serialized_transaction = fedowAPI.membership.create(membership=membership)
 
-        # TODO: On a débranché le cashless.
-        laboutik_sended = send_sale_to_laboutik(updated_membership)
+        # TODO: On a débranché le cashless, il ira chercher ses tokens tout seul comme un grand
+        # laboutik_sended = send_sale_to_laboutik(updated_membership)
 
         # Si tout est passé plus haut, on VALID La ligne :
         # Tout ceci se déroule dans un pre_save signal.pre_save_signal_status()
