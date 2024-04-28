@@ -1,9 +1,11 @@
 # only for convenient :)
 
 alias mm="poetry run python /DjangoFiles/manage.py migrate"
-
 alias sp="poetry run python manage.py tenant_command shell_plus"
+
 alias rsp="poetry run python /DjangoFiles/manage.py runserver 0.0.0.0:8002"
+
+alias test="poetry run python /DjangoFiles/manage.py test"
 
 tibinstall() {
     poetry run python /DjangoFiles/manage.py collectstatic

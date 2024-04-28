@@ -19,12 +19,22 @@ logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
+    def add_arguments(self, parser):
+
+        # Named (optional) arguments
+        parser.add_argument(
+            '--tdd',
+            action='store_true',
+            help='Demo data for Test drived dev',
+        )
 
     def handle(self, *args, **options):
+
         # noinspection PyTestUnpassedFixture
         if Domain.objects.count() > 0:
             logger.warning("Public domain already installed")
             return "Public domain already installed -> continue"
+
 
         stripe_api_key = os.environ.get('STRIPE_KEY')
         stripe_test_api_key = os.environ.get('STRIPE_KEY_TEST')
@@ -41,9 +51,6 @@ class Command(BaseCommand):
         if not hello_fedow.ok:
             raise Exception(f"Bad reponse FEDOW_DOMAIN in .env file {hello_fedow.status_code}")
 
-        meta = os.getenv("META")
-        if not meta:
-            raise Exception("Need META in .env file")
 
         # crash if bad api stripe key
         try:
@@ -77,6 +84,8 @@ class Command(BaseCommand):
         )
         domain_public.save()
 
+        ### Tenant générique : créer son espace !
+
         domain_public, created = Domain.objects.get_or_create(
             domain=f'www.{os.getenv("DOMAIN")}',
             tenant=tenant_public,
@@ -84,6 +93,9 @@ class Command(BaseCommand):
         )
         domain_public.save()
 
+        ## Tenant META : tous les évènements de l'instance
+
+        meta = os.getenv("META", 'agenda')
         tenant_meta, created = Client.objects.get_or_create(
             schema_name='meta',
             name=slugify(meta),
@@ -93,18 +105,21 @@ class Command(BaseCommand):
         tenant_meta.save()
 
         domain_public, created = Domain.objects.get_or_create(
+            domain=f'{slugify(meta)}.{os.getenv("DOMAIN")}',
+            tenant=tenant_meta,
+            is_primary=True
+        )
+        domain_public.save()
+
+        ## m pour les scans de cartes,
+        domain_public, created = Domain.objects.get_or_create(
             domain=f'm.{os.getenv("DOMAIN")}',
             tenant=tenant_meta,
             is_primary=False
         )
         domain_public.save()
 
-        domain_public, created = Domain.objects.get_or_create(
-            domain=f'{slugify(meta)}.{os.getenv("DOMAIN")}',
-            tenant=tenant_meta,
-            is_primary=True
-        )
-        domain_public.save()
+
 
         with tenant_context(tenant_public):
             rootConfig = RootConfiguration.get_solo()
