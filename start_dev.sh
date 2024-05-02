@@ -5,7 +5,6 @@ touch /DjangoFiles/logs/nginxError.log
 touch /DjangoFiles/logs/gunicorn.logs
 touch /DjangoFiles/logs/Djangologfile
 
-
 echo "dev mode : sleep infinity"
 echo "To start the server : rsp"
 sleep infinity

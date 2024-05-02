@@ -52,32 +52,20 @@ def encode_uid(pk):
 def get_context(request):
     config = Configuration.get_solo()
     base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
-    host = f"https://{request.get_host()}" if request.is_secure() else f"http://{request.get_host()}"
+    # host = f"https://{request.get_host()}" if request.is_secure() else f"http://{request.get_host()}"
     serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
 
-    # TODO: le faire dans le serializer et renvoyer en async via wsocket (requete trop lente)
-    # if config.server_cashless and config.key_cashless and request.user.is_authenticated:
-    #     serialized_user['cashless'] = request_for_data_cashless(request.user)
-    # import ipdb; ipdb.set_trace()
-    header_img = ""
-
-    # image par défaut
-    if hasattr(config.img, 'fhd'):
-        header_img = config.img.fhd.url
-    else:
-        header_img = "/media/images/image_non_disponible.jpg"
-
+    # "uuid": uuid,
+    # "host": host,
     context = {
-        "uuid": uuid,
         "base_template": base_template,
-        "host": host,
         "url_name": request.resolver_match.url_name,
         "configuration": config,
         "user": request.user,
         "profile": serialized_user,
         "tenant": config.organisation,
         "header": {
-            "img": header_img,
+            "img": config.img.fhd.url if hasattr(config.img, 'fhd') else "/static/images/image_non_disponible.jpg",
             "title": config.organisation,
             "short_description": config.short_description,
             "long_description": config.long_description
@@ -177,21 +165,6 @@ def emailconfirmation(request, uuid, token):
 def home(request):
     context = get_context(request)
     context['events'] = Event.objects.all()
-    context['fake_event'] = {
-        "uuid": "fakeEven-ece7-4b30-aa15-b4ec444a6a73",
-        "name": "Nom de l'évènement",
-        "short_description": "Cliquer sur le bouton si-dessous.",
-        "long_description": None,
-        "categorie": "CARDE_CREATE",
-        "tag": [],
-        "products": [],
-        "options_radio": [],
-        "options_checkbox": [],
-        "img_variations": {"crop": "/media/images/1080_v39ZV53.crop"},
-        "artists": [],
-    }
-    # dev
-    context['dev_user_is_staff'] = True
     return render(request, "htmx/views/home.html", context=context)
 
 

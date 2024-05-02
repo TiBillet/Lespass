@@ -32,6 +32,7 @@ CELERY_BACKEND='redis://redis:6379/0'
 
 # Dev and debug
 
+TEST=0
 DEBUG=0
 STRIPE_TEST=0 # set to 1 for use stripe test env
 STRIPE_KEY_TEST=''

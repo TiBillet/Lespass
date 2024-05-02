@@ -119,7 +119,23 @@ class Command(BaseCommand):
         )
         domain_public.save()
 
+        ### Installation du premier tenant :
+        first_sub = os.getenv('SUB')
+        if first_sub:
+            tenant_first_sub, created = Client.objects.get_or_create(
+                schema_name=first_sub,
+                name=slugify(first_sub),
+                on_trial=False,
+                categorie=Client.SALLE_SPECTACLE,
+            )
+            tenant_first_sub.save()
 
+            tenant_first_sub_domain = Domain.objects.create(
+                domain=f'{first_sub}.{os.getenv("DOMAIN")}',
+                tenant=tenant_first_sub,
+                is_primary=True
+            )
+            tenant_first_sub_domain.save()
 
         with tenant_context(tenant_public):
             rootConfig = RootConfiguration.get_solo()
