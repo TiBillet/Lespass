@@ -2,6 +2,7 @@ import logging
 import time
 import uuid
 from io import BytesIO
+from random import randint
 
 import barcode
 import segno
@@ -65,7 +66,7 @@ def get_context(request):
         "profile": serialized_user,
         "tenant": config.organisation,
         "header": {
-            "img": config.img.fhd.url if hasattr(config.img, 'fhd') else "/static/images/image_non_disponible.jpg",
+            "img": config.img.fhd.url if hasattr(config.img, 'fhd') else f"/static/images/404-{randint(1,9)}.jpg",
             "title": config.organisation,
             "short_description": config.short_description,
             "long_description": config.long_description
@@ -411,34 +412,8 @@ class MembershipMVT(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication,]
 
     def list(self, request: HttpRequest):
-        config = Configuration.get_solo()
-        base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
-
-        host = "http://" + request.get_host()
-        if request.is_secure():
-            host = "https://" + request.get_host()
-
-        # image par défaut
-        if hasattr(config.img, 'fhd'):
-            header_img = config.img.fhd.url
-        else:
-            header_img = "/media/images/image_non_disponible.jpg"
-
-        context = {
-            "user": request.user,
-            "base_template": base_template,
-            "host": host,
-            "url_name": request.resolver_match.url_name,
-            "tenant": config.organisation,
-            "configuration": config,
-            "header": {
-                "img": header_img,
-                "title": config.organisation,
-                "short_description": config.short_description,
-                "long_description": config.long_description
-            },
-            "memberships": Product.objects.filter(categorie_article="A"),
-        }
+        context = get_context(request)
+        context["memberships"]= Product.objects.filter(categorie_article="A"),
         return render(request, "htmx/views/memberships.html", context=context)
 
 

@@ -17,6 +17,7 @@ FEDOW_DOMAIN='' # the same as Fedow
 
 DOMAIN='' # for the wildcard : without subdomain ! ex : tibillet.coop, not lespass.tibillet.coop
 SUB='' # the sub domain of your first place ex : if 'festival', it will be accessible on https://festival.tibillet.coop
+ADMIN_EMAIL='' # email for the admin invitation
 META='' # the federated agenda for all events on all tenants. If 'agenda', it will be accessible, for exemple, on https://agenda.tibillet.coop
 
 # For transactionnal email :
