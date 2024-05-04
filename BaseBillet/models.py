@@ -487,11 +487,13 @@ class Price(models.Model):
     name = models.CharField(max_length=50, verbose_name=_("Précisez le nom du Tarif"))
     prix = models.DecimalField(max_digits=6, decimal_places=2)
 
-    NA, DIX, VINGT = 'NA', 'DX', 'VG'
+    NA, DIX, VINGT, HUITCINQ, DEUXDEUX = 'NA', 'DX', 'VG', 'HC', 'DD'
     TVA_CHOICES = [
         (NA, _('Non applicable')),
         (DIX, _("10 %")),
         (VINGT, _('20 %')),
+        (HUITCINQ, _('8.5 %')),
+        (DEUXDEUX, _('2.2 %')),
     ]
 
     vat = models.CharField(max_length=2,

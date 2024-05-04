@@ -1,17 +1,22 @@
+from datetime import timedelta
 from os.path import exists
+from random import randint
 
 import requests
 import stripe
 from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
+from django.utils import timezone
 from django.utils.text import slugify
 from django_tenants.utils import tenant_context
 
-from BaseBillet.models import Membership, Product, OptionGenerale, Price, Configuration
+from BaseBillet.models import Membership, Product, OptionGenerale, Price, Configuration, Event, Tag
 from Customers.models import Client, Domain
 import os
 
+from fedow_connect.fedow_api import FedowAPI
+from fedow_connect.models import FedowConfig
 from root_billet.models import RootConfiguration
 
 import logging
@@ -33,12 +38,16 @@ class Command(BaseCommand):
         sub = os.environ['SUB']
         tenant = Client.objects.get(name=sub)
         with tenant_context(tenant):
+
+            ### CONFIGURATION VARIABLE ####
+
             config = Configuration.get_solo()
             config.organisation = "TiBilletistan"
             config.short_description = "Les scènes oniriques du TiBilletistan"
-            config.long_description = ("Vous trouverez ici un exemple de plusieurs types d'évènements, d'adhésions et d'abonnements."
-                                       "\nGratuit, payant, avec prix préférenciel."
-                                       "\nAbonnement mensuels récurents ou ahdésion annuelle".)
+            config.long_description = (
+                "Vous trouverez ici un exemple de plusieurs types d'évènements, d'adhésions et d'abonnements."
+                "\nGratuit, payant, avec prix préférenciel."
+                "\nAbonnement mensuels récurents ou ahdésion annuelle.")
             config.adress = "42 Rue Douglas Adams"
             config.postal_code = "97480"
             config.city = "Saint Jospeh"
@@ -52,6 +61,14 @@ class Command(BaseCommand):
             config.facebook = "https://facebook.com/tibillet"
             config.instagram = "https://instagram.com/tibillet"
             config.save()
+
+            ### LINK TO FEDOW
+
+
+            ## Liaison tenant avec Fedow
+            fedowAPI = FedowAPI()
+            assert FedowConfig.get_solo().can_fedow()
+
 
             ### PRODUCT ###
             option_membre_actif, created = OptionGenerale.objects.get_or_create(
@@ -90,7 +107,6 @@ class Command(BaseCommand):
                 name="Terrasse",
                 description="Une table en terasse",
             )
-
 
             ### MEMBERSHIP ###
 
@@ -148,6 +164,89 @@ class Command(BaseCommand):
                 subscription_type=Price.MONTH,
             )
 
-
             ### EVENTS ###
+            rock, created = Tag.objects.get_or_create(name='Rock')
+            jazz, created = Tag.objects.get_or_create(name='Jazz')
+            prix_libre, created = Tag.objects.get_or_create(name='Prix libre')
+
+            event_entree_libre, created = Event.objects.get_or_create(
+                name="Entrée libre",
+                datetime=timezone.now() + timedelta(days=10),
+                short_description="Scène ouverte Rock !",
+                long_description="Un évènement gratuit, ouvert à tous.tes sans réservation."
+                                 "\nSeul les artistes annoncés et les descriptions sont affichés.",
+                categorie=Event.CONCERT,
+            )
+            event_entree_libre.tag.add(prix_libre)
+            event_entree_libre.tag.add(rock)
+
+
+            ### GRATUIT MAIS AVEC RESERVATION OBLIGATOIRE ###
+
+            free_resa, created = Product.objects.get_or_create(
+                name="Reservation gratuite",
+                short_description="Reservation gratuite",
+                categorie_article=Product.FREERES,
+                nominative=False,
+            )
+
+            free_resa_price, created = Price.objects.get_or_create(
+                name="Tarif gratuit",
+                prix=0,
+                short_description="Tarif gratuit",
+                product=free_resa,
+            )
+
+            event_gratuit_avec_free_resa, created = Event.objects.get_or_create(
+                name="Gratuit avec reservation",
+                datetime=timezone.now() + timedelta(days=12),
+                jauge_max=200,
+                max_per_user=4,
+                short_description="Attention, places limités, pensez à réserver !",
+                long_description="Un évènement gratuit, avec une jauge maximale de 200 personnes et un nombre de billet limités à 4 par reservation."
+                                 "\nBillets non nominatifs.",
+                categorie=Event.CONCERT,
+            )
+            event_gratuit_avec_free_resa.products.add(free_resa)
+            event_gratuit_avec_free_resa.tag.add(prix_libre)
+            event_gratuit_avec_free_resa.tag.add(jazz)
+
+            ### PAYANT AVEC BILLET NOMINATIFS ET TARIF PREFERENTIEL ###
+
+            billet, created = Product.objects.get_or_create(
+                name="Billet",
+                short_description="Billet",
+                categorie_article=Product.BILLET,
+                nominative=True,
+            )
+
+            plein_tarif, created = Price.objects.get_or_create(
+                name="Plein tarif",
+                short_description="Plein tarif",
+                prix=20,
+                product=billet,
+            )
+
+            tarif_adherant, created = Price.objects.get_or_create(
+                name="Tarif Adhérant",
+                short_description="Plein tarif",
+                prix=10,
+                product=billet,
+                adhesion_obligatoire=adhesion_asso,
+            )
+
+            event_payant_nominatif_tarif_asso, created = Event.objects.get_or_create(
+                name="Spectacle payant",
+                datetime=timezone.now() + timedelta(days=13),
+                jauge_max=600,
+                max_per_user=10,
+                short_description="Spectacle payant avec tarif préférentiel pour les adhérants à l'association",
+                long_description="Jauge maximale de 600 personnes et un nombre de billet limités à 10 par reservation."
+                                 "\nBillets nominatifs.",
+                categorie=Event.CONCERT,
+            )
+            event_payant_nominatif_tarif_asso.products.add(billet)
+
+            #TODO: Gratuit mais avec recharge cashless obligatoire
+            #TODO: Multi artiste
 

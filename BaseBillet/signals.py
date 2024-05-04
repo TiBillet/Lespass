@@ -88,8 +88,6 @@ def set_paiement_stripe_valid(old_instance: LigneArticle, new_instance: LigneArt
                     f"         len(lignes_meme_panier) {len(lignes_meme_panier)} != len(lignes_meme_panier_valide) {len(lignes_meme_panier_valide)} ")
 
 
-
-
 def action_x_to_paid(old_instance: LigneArticle, new_instance: LigneArticle):
     # Fonction qui passe les artcle de payé en validé, en fonction de sa catégorie
     ActionArticlePaidByCategorie(new_instance)
@@ -100,8 +98,6 @@ def action_x_to_paid(old_instance: LigneArticle, new_instance: LigneArticle):
     logger.info(
         f"    SIGNAL LIGNE ARTICLE action_x_to_paid {old_instance.pricesold} new_instance status : {new_instance.status}")
     set_paiement_stripe_valid(old_instance, new_instance)
-
-
 
 
 ######################## SIGNAL RESERVATION ########################
@@ -306,16 +302,14 @@ def pre_save_signal_status(sender, instance, **kwargs):
 #
 #             if old_instance.qty != new_instance.qty:
 #                 logger.info(f"wallet_update_celery : need update cashless serveur ????")
-                # update all cashless serveur
-                # get_fedinstance_and_launch_request.delay(instance.pk)
-
+# update all cashless serveur
+# get_fedinstance_and_launch_request.delay(instance.pk)
 
 
 @receiver(post_save, sender=Product)
-def send_product_to_fedow_if_subscription(sender, instance: Product, created, **kwargs):
+def send_membership_product_to_fedow(sender, instance: Product, created, **kwargs):
     # Est ici pour éviter les double imports
-    fedow_config = FedowConfig.get_solo()
-    if fedow_config.can_fedow() :
+    if instance.categorie_article in [Product.ADHESION, ]:
+        fedow_config = FedowConfig.get_solo()
         fedow_asset = AssetFedow(fedow_config=fedow_config)
         asset, created = fedow_asset.get_or_create_asset(instance)
-

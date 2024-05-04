@@ -159,7 +159,9 @@ class AssetFedow():
             asset_serialized = self.retrieve(uuid=f"{product.uuid}")
             return asset_serialized, False
 
+        # Asset n'existe pas, on l'envoie
         except Exception as e:
+            logger.info(f"Création de l'asset pour le produit {product.name}")
             config = Configuration.get_solo()
             asset = {
                 "uuid": f"{product.pk}",
@@ -176,7 +178,7 @@ class AssetFedow():
                 logger.error(serialized_assets.errors)
                 raise Exception(f"{serialized_assets.errors}")
             logger.error(response_asset)
-            raise Exception(f"{response_asset.status_code}")
+            raise Exception(f"{response_asset.status_code} {response_asset.content}")
 
 
 class MembershipFedow():
@@ -263,13 +265,15 @@ class WalletFedow():
     def cached_retrieve_by_signature(self, user):
         # get_or_set va toujours faire la fonction callable avant de vérifier le cache.
         # Solution : soit retirer les () dans le callable, soit utiliser cache.lambda
-        return cache.get_or_set(f"wallet_{user.wallet.uuid}", lambda : self.retrieve_by_signature(user), 10)
+        if not user.wallet:
+            wallet = self.get_or_create_wallet(user)
+        return cache.get_or_set(f"wallet_user_{user.wallet.uuid}", lambda : self.retrieve_by_signature(user), 10)
 
     def retrieve_by_signature(self, user):
         response_link = _get(
             self.fedow_config,
             user=user,
-            path=f'wallet/retrieve_by_signature'
+            path=f'wallet/retrieve_by_signature',
         )
 
         if not response_link.status_code == 200:
@@ -363,6 +367,7 @@ class PlaceFedow():
 
         tenant = connection.tenant
         tenant_config = Configuration.get_solo()
+
         # Si on est en mode test/debug :
         if type(tenant) == FakeTenant and settings.DEBUG:
             logger.warning("FakeTenant in DEBUG mode")
@@ -387,11 +392,15 @@ class PlaceFedow():
             'admin_pub_pem': admin.get_public_pem(),
         }
 
-        new_place = _post(fedow_config=self.fedow_config,
+        request_for_new_place = _post(fedow_config=self.fedow_config,
                           user=admin,
                           path='place',
                           data=data, apikey=apikey)
-        new_place_data = new_place.json()
+
+        if request_for_new_place.status_code != 201:
+            raise Exception(f"PlaceFedow Create : {request_for_new_place.status_code} : {request_for_new_place.content}")
+
+        new_place_data = request_for_new_place.json()
 
         wallet = Wallet.objects.create(
             # display_name=tenant_config.organisation,

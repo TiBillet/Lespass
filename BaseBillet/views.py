@@ -155,53 +155,30 @@ def emailconfirmation(request, uuid, token):
 
 @require_GET
 def home(request):
-    context = get_context(request)
-    context['events'] = Event.objects.all()
-    return render(request, "htmx/views/home.html", context=context)
-
+    template_context = get_context(request)
+    template_context['events'] = Event.objects.all()
+    return render(request, "htmx/views/home.html", context=template_context)
 
 
 class MyAccount(viewsets.ViewSet):
-    authentication_classes = [SessionAuthentication,]
+    authentication_classes = [SessionAuthentication, ]
     permission_classes = [permissions.IsAuthenticated, ]
 
     def list(self, request: HttpRequest):
-        if not request.user.is_authenticated:
-            return redirect('home')
-
-        # La premiere requete GET /my_account/
-        serialized_user = MeSerializer(request.user).data
-        config = Configuration.get_solo()
-        base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
-
-        host = "http://" + request.get_host()
-        if request.is_secure():
-            host = "https://" + request.get_host()
-
-        # image par défaut
-        if hasattr(config.img, 'fhd'):
-            header_img = config.img.fhd.url
-        else:
-            header_img = "/media/images/image_non_disponible.jpg"
-
-        context = {
-            "base_template": base_template,
-            "host": host,
-            "url_name": request.resolver_match.url_name,
-            "tenant": config.organisation,
-            "profile": serialized_user,
-            "header": None,
-            "user": request.user,
-        }
-
-        return render(request, "htmx/views/my_account.html", context=context)
+        template_context = get_context(request)
+        # Pas de header sur cette page
+        template_context['header'] = False
+        return render(request, "htmx/views/my_account.html", context=template_context)
 
     ### ONGLET WALLET
 
     @action(detail=False, methods=['GET'])
     def wallet(self, request: HttpRequest) -> HttpResponse:
-        context = {}
-        return render(request, "htmx/fragments/my_account_wallet.html", context=context)
+        template_context = get_context(request)
+        # Pas de header sur cette page
+        template_context['header'] = False
+        return render(request, "htmx/fragments/my_account_wallet.html", context=template_context)
+
 
     @action(detail=False, methods=['GET'])
     def tokens_table(self, request):
@@ -212,12 +189,11 @@ class MyAccount(viewsets.ViewSet):
         # On retire les adhésions, on les affiche dans l'autre table
         tokens = [token for token in wallet.get('tokens') if token.get('asset_category') != 'SUB']
         context = {
-            'config':config,
-            'tokens':tokens,
+            'config': config,
+            'tokens': tokens,
         }
 
         return render(request, "htmx/fragments/tokens_table.html", context=context)
-
 
     @action(detail=False, methods=['GET'])
     def transactions_table(self, request):
@@ -225,7 +201,8 @@ class MyAccount(viewsets.ViewSet):
         fedowAPI = FedowAPI()
         # On utilise ici .data plutot que validated_data pour executer les to_representation (celui du WalletSerializer)
         # et les serializer.methodtruc
-        paginated_list_by_wallet_signature = fedowAPI.transaction.paginated_list_by_wallet_signature(request.user).validated_data
+        paginated_list_by_wallet_signature = fedowAPI.transaction.paginated_list_by_wallet_signature(
+            request.user).validated_data
 
         transactions = paginated_list_by_wallet_signature.get('results')
         next_url = paginated_list_by_wallet_signature.get('next')
@@ -234,10 +211,10 @@ class MyAccount(viewsets.ViewSet):
         # On retire les adhésions, on les affiche dans l'autre table
         # tokens = [token for token in wallet.get('tokens') if token.get('asset_category') != 'SUB']
         context = {
-            'config':config,
-            'transactions':transactions,
-            'next_url':next_url,
-            'previous_url':previous_url,
+            'config': config,
+            'transactions': transactions,
+            'next_url': next_url,
+            'previous_url': previous_url,
         }
         return render(request, "htmx/fragments/transactions_table.html", context=context)
 
@@ -258,11 +235,10 @@ class MyAccount(viewsets.ViewSet):
         tokens = [token for token in wallet.get('tokens') if token.get('asset_category') == 'SUB']
 
         context = {
-            'config':config,
-            'tokens':tokens,
+            'config': config,
+            'tokens': tokens,
         }
         return render(request, "htmx/fragments/tokens_membership_table.html", context=context)
-
 
     @action(detail=False, methods=['GET'])
     def profile(self, request: HttpRequest) -> HttpResponse:
@@ -278,7 +254,6 @@ class MyAccount(viewsets.ViewSet):
         stripe_checkout_url = fedowAPI.wallet.get_federated_token_refill_checkout(user)
         return HttpResponseClientRedirect(stripe_checkout_url)
 
-
     @action(detail=True, methods=['GET'])
     def return_refill_wallet(self, request, pk=None):
         # Le paiemetn stripe a été effectué. Stripe redirige ici.
@@ -293,8 +268,8 @@ class MyAccount(viewsets.ViewSet):
         fedowAPI = FedowAPI()
 
         # pk = checkout_stripe_db_fedow_uuid
-        try :
-            #TODO; checker la signature du paiement
+        try:
+            # TODO; checker la signature du paiement
             wallet = fedowAPI.wallet.retrieve_from_refill_checkout(user, pk)
             messages.add_message(request, messages.SUCCESS, "Wallet rechargé")
         except Exception as e:
@@ -306,46 +281,10 @@ class MyAccount(viewsets.ViewSet):
 
 @require_GET
 def event(request: HttpRequest, slug) -> HttpResponse:
-    serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
-    config = Configuration.get_solo()
-    base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
-
-    host = "http://" + request.get_host()
-    if request.is_secure():
-        host = "https://" + request.get_host()
-
-    event = Event.objects.get(slug=slug)
-    # print(f"serialized_user = {serialized_user['membership']}")
-
-    # valid_memberships = list()
-    # if request.user.is_authenticated :
-    #     memberships = request.user.membership.all()
-    #     for membership in memberships:
-    #         if membership.is_valid():
-    # TODO: membership.product => l'attribut "product" peut ne pas exister !
-    #             valid_memberships.append(membership.product)
-
-    # import ipdb; ipdb.set_trace()
-    context = {
-        "base_template": base_template,
-        "host": host,
-        "url_name": request.resolver_match.url_name,
-        "tenant": config.organisation,
-        "profile": serialized_user,
-        "header": {
-            "img": event.img_variations()['fhd'],
-            "title": event.name,
-            "short_description": event.short_description,
-            "long_description": event.long_description
-        },
-        "slug": slug,
-        "event": event,
-        "user": request.user,
-        # "valid_memberships":valid_memberships,
-        "uuid": uuid,
-    }
-
-    return render(request, "htmx/views/event.html", context=context)
+    event = get_object_or_404(Event, slug=slug)
+    template_context = get_context(request)
+    template_context['event'] = event
+    return render(request, "htmx/views/event.html", context=template_context)
 
 
 def validate_event(request):
@@ -367,26 +306,6 @@ def validate_event(request):
     return redirect('home')
 
 
-'''
-class membership_form(APIView):
-    permission_classes = [AllowAny]
-
-    def get(self, request, uuid):
-        print(f"uuid = {uuid}")
-
-        host = "http://" + request.get_host()
-        if request.is_secure():
-            host = "https://" + request.get_host()
-
-        context = {
-            "host": host,
-            "url_name": request.resolver_match.url_name,
-            "membership": Product.objects.get(uuid=uuid)
-        }
-
-        return render(request, "htmx/forms/membership_form.html", context=context)
-'''
-
 
 def modal(request, level="info", title='Information', content: str = None):
     context = {
@@ -400,13 +319,12 @@ def modal(request, level="info", title='Information', content: str = None):
 
 
 class MembershipMVT(viewsets.ViewSet):
-    authentication_classes = [SessionAuthentication,]
+    authentication_classes = [SessionAuthentication, ]
 
     def list(self, request: HttpRequest):
-        context = get_context(request)
-        context["memberships"]= Product.objects.filter(categorie_article=Product.ADHESION)
-        return render(request, "htmx/views/memberships.html", context=context)
-
+        template_context = get_context(request)
+        template_context["memberships"] = Product.objects.filter(categorie_article=Product.ADHESION)
+        return render(request, "htmx/views/memberships.html", context=template_context)
 
     def create(self, request):
         membership_validator = MembershipValidator(data=request.data, context={'request': request})
@@ -460,17 +378,19 @@ class MembershipMVT(viewsets.ViewSet):
         paiement_stripe.refresh_from_db()
         email = paiement_stripe.user.email
 
-        try :
+        try:
             if paiement_stripe.status == Paiement_stripe.VALID:
-                messages.add_message(request, messages.SUCCESS, f"Votre abonnement a été validé. Vous allez recevoir un mail de confirmation à l'adresse {email}. Merci !")
+                messages.add_message(request, messages.SUCCESS,
+                                     f"Votre abonnement a été validé. Vous allez recevoir un mail de confirmation à l'adresse {email}. Merci !")
             elif paiement_stripe.status == Paiement_stripe.PENDING:
                 messages.add_message(request, messages.WARNING, f"Votre paiement est en attente de validation.")
-            else :
-                messages.add_message(request, messages.WARNING, f"Une erreur est survenue, merci de contacter l'administrateur.")
-        except MessageFailure as e :
+            else:
+                messages.add_message(request, messages.WARNING,
+                                     f"Une erreur est survenue, merci de contacter l'administrateur.")
+        except MessageFailure as e:
             # Surement un test unitaire, les messages plantent a travers la Factory Request
             pass
-        except Exception as e :
+        except Exception as e:
             raise e
 
         return redirect('/memberships/')

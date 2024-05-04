@@ -8,9 +8,13 @@ from django.core.management.base import BaseCommand
 from django.utils.text import slugify
 from django_tenants.utils import tenant_context
 
+from AuthBillet.models import TibilletUser
+from AuthBillet.utils import get_or_create_user
 from Customers.models import Client, Domain
 import os
 
+from fedow_connect.fedow_api import FedowAPI
+from fedow_connect.models import FedowConfig
 from root_billet.models import RootConfiguration
 
 import logging
@@ -35,6 +39,8 @@ class Command(BaseCommand):
             logger.warning("Public domain already installed")
             return "Public domain already installed -> continue"
 
+        first_sub = os.environ['SUB']
+        admin_email = os.environ['ADMIN_EMAIL']
 
         stripe_api_key = os.environ.get('STRIPE_KEY')
         stripe_test_api_key = os.environ.get('STRIPE_KEY_TEST')
@@ -45,6 +51,8 @@ class Command(BaseCommand):
         fedow_domain = os.getenv("FEDOW_DOMAIN")
         if not fedow_domain:
             raise Exception("Bad FEDOW_DOMAIN in .env file")
+
+
         hello_fedow = requests.get(f'https://{fedow_domain}/helloworld/',
                                    verify=bool(not settings.DEBUG))
         # Returns True if :attr:`status_code` is less than 400, False if not
@@ -120,22 +128,22 @@ class Command(BaseCommand):
         domain_public.save()
 
         ### Installation du premier tenant :
-        first_sub = os.getenv('SUB')
-        if first_sub:
-            tenant_first_sub, created = Client.objects.get_or_create(
-                schema_name=first_sub,
-                name=slugify(first_sub),
-                on_trial=False,
-                categorie=Client.SALLE_SPECTACLE,
-            )
-            tenant_first_sub.save()
 
-            tenant_first_sub_domain = Domain.objects.create(
-                domain=f'{first_sub}.{os.getenv("DOMAIN")}',
-                tenant=tenant_first_sub,
-                is_primary=True
-            )
-            tenant_first_sub_domain.save()
+        tenant_first_sub, created = Client.objects.get_or_create(
+            schema_name=first_sub,
+            name=slugify(first_sub),
+            on_trial=False,
+            categorie=Client.SALLE_SPECTACLE,
+        )
+        tenant_first_sub.save()
+
+        tenant_first_sub_domain = Domain.objects.create(
+            domain=f'{first_sub}.{os.getenv("DOMAIN")}',
+            tenant=tenant_first_sub,
+            is_primary=True
+        )
+        tenant_first_sub_domain.save()
+
 
         with tenant_context(tenant_public):
             rootConfig = RootConfiguration.get_solo()
@@ -146,6 +154,11 @@ class Command(BaseCommand):
 
             logger.info("Fedow handshake")
             rootConfig.root_fedow_handshake(fedow_domain)
+
+        with tenant_context(tenant_first_sub):
+            ## Création du premier admin:
+            user: TibilletUser = get_or_create_user(admin_email)
+            user.client_admin.add(tenant_first_sub)
 
 
         call_command('check_permissions')
