@@ -53,24 +53,15 @@ def encode_uid(pk):
 def get_context(request):
     config = Configuration.get_solo()
     base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
-    # host = f"https://{request.get_host()}" if request.is_secure() else f"http://{request.get_host()}"
     serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
 
-    # "uuid": uuid,
-    # "host": host,
     context = {
         "base_template": base_template,
         "url_name": request.resolver_match.url_name,
-        "configuration": config,
         "user": request.user,
         "profile": serialized_user,
-        "tenant": config.organisation,
-        "header": {
-            "img": config.img.fhd.url if hasattr(config.img, 'fhd') else f"/static/images/404-{randint(1,9)}.jpg",
-            "title": config.organisation,
-            "short_description": config.short_description,
-            "long_description": config.long_description
-        }
+        "config": config,
+        "header": True,
     }
     return context
 
@@ -413,7 +404,7 @@ class MembershipMVT(viewsets.ViewSet):
 
     def list(self, request: HttpRequest):
         context = get_context(request)
-        context["memberships"]= Product.objects.filter(categorie_article="A"),
+        context["memberships"]= Product.objects.filter(categorie_article=Product.ADHESION)
         return render(request, "htmx/views/memberships.html", context=context)
 
 

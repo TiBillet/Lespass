@@ -1,4 +1,5 @@
 from datetime import datetime
+from random import randint
 
 from django import template
 from fedow_connect.utils import dround as utils_dround
@@ -64,6 +65,11 @@ def dround(value):
 def from_iso_to_date(value):
     return datetime.fromisoformat(value)
 
+@register.filter
+def randImg(value):
+    if not value :
+        return f"/static/images/404-{randint(1,9)}.jpg"
+    return value
 
 # @register.filter
 # def wallet_name(wallet):

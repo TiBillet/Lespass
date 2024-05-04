@@ -5,10 +5,10 @@
         <a class="navbar-brand text-white cursor-pointer " rel="tooltip" title="Designed and Coded by Creative Tim"
            data-placement="bottom" target="_blank" hx-get="/home/" hx-target="#main" hx-swap="outerHTML"
            hx-push-url="true">
-            {% if configuration.categorie|in_list:'M' %}
+            {% if config.categorie|in_list:'M' %}
                 Agenda
             {% else %}
-                {{ tenant }}
+                {{ config.organisation }}
             {% endif %}
         </a>
         <button class="navbar-toggler shadow-none ms-2" type="button" data-bs-toggle="collapse"
@@ -67,7 +67,7 @@
 
                 {% endif %}
                 <!-- Adhésion -->
-                {% if configuration.categorie|not_in_list:'M' and url_name != 'memberships' %}
+                {% if config.categorie|not_in_list:'M' and url_name != 'memberships' %}
                     <li>
                         <a href="#" class="nav-item text-white mx-2" hx-get="/memberships/" hx-target="#main"
                            hx-swap="outerHTML"
@@ -78,7 +78,7 @@
                     </li>
                 {% endif %}
                 <!-- Créer son espace -->
-{#                {% if configuration.categorie|in_list:'M' %}#}
+{#                {% if config.categorie|in_list:'M' %}#}
                     <li>
                         <a href="#" class="nav-item text-white mx-2" hx-get="/create_tenant/" hx-target="#main"
                            hx-swap="outerHTML"

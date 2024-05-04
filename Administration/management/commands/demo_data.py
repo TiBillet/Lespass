@@ -36,7 +36,9 @@ class Command(BaseCommand):
             config = Configuration.get_solo()
             config.organisation = "TiBilletistan"
             config.short_description = "Les scènes oniriques du TiBilletistan"
-            config.long_description = "Un nouveau lieux, le votre, le notre."
+            config.long_description = ("Vous trouverez ici un exemple de plusieurs types d'évènements, d'adhésions et d'abonnements."
+                                       "\nGratuit, payant, avec prix préférenciel."
+                                       "\nAbonnement mensuels récurents ou ahdésion annuelle".)
             config.adress = "42 Rue Douglas Adams"
             config.postal_code = "97480"
             config.city = "Saint Jospeh"
@@ -74,12 +76,10 @@ class Command(BaseCommand):
                 name="Livraison à la maison"
             )
 
-
             terasse, created = OptionGenerale.objects.get_or_create(
                 name="Terrasse",
                 description="Une table en terasse",
             )
-
 
             interieur, created = OptionGenerale.objects.get_or_create(
                 name="Salle",
@@ -90,6 +90,7 @@ class Command(BaseCommand):
                 name="Terrasse",
                 description="Une table en terasse",
             )
+
 
             ### MEMBERSHIP ###
 
@@ -146,3 +147,7 @@ class Command(BaseCommand):
                 recurring_payment=True,
                 subscription_type=Price.MONTH,
             )
+
+
+            ### EVENTS ###
+
