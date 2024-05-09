@@ -11,7 +11,7 @@ from django.contrib import messages
 from django.contrib.auth import logout, login
 from django.contrib.messages import MessageFailure
 from django.db import connection
-from django.http import HttpResponse, HttpRequest
+from django.http import HttpResponse, HttpRequest, Http404
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.loader import get_template
 from django.template.response import TemplateResponse
@@ -38,7 +38,7 @@ from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Event, Price, LigneArticle, \
     Paiement_stripe, Membership
 from BaseBillet.tasks import create_ticket_pdf, create_invoice_pdf
-from BaseBillet.validators import LoginEmailValidator, MembershipValidator
+from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator
 from PaiementStripe.views import CreationPaiementStripe
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.validators import WalletValidator
@@ -160,6 +160,57 @@ def home(request):
     return render(request, "htmx/views/home.html", context=template_context)
 
 
+class ScanQrCode(viewsets.ViewSet):
+    authentication_classes = [SessionAuthentication, ]
+
+    def retrieve(self, request, pk=None):
+        try:
+            qrcode_uuid: uuid.uuid4 = uuid.UUID(pk)
+        except ValueError:
+            logger.warning("ValueError, not an uuid")
+            raise Http404()
+        except Exception as e:
+            logger.error(e)
+            raise e
+
+        fedowAPI = FedowAPI()
+        serialized_qrcode_card = fedowAPI.NFCcard.qr_retrieve(qrcode_uuid)
+        if not serialized_qrcode_card:
+            raise Http404()
+
+        if serialized_qrcode_card['is_wallet_ephemere']:
+            logger.info("Wallet ephemere, on demande le mail")
+            template_context = get_context(request)
+            template_context['qrcode_uuid'] = qrcode_uuid
+            return render(request, "htmx/views/inscription.html", context=template_context)
+        else :
+            return HttpResponse('déja un wallet')
+
+    @action(detail=False, methods=['POST'])
+    def link(self, request):
+        # data=request.POST.dict() in the controler for boolean
+        # logger.info(request.POST.dict())
+        validator = LinkQrCodeValidator(data=request.POST.dict())
+        if not validator.is_valid():
+            for error in validator.errors:
+                messages.add_message(request, messages.ERROR, f"{error} : {validator.errors[error][0]}")
+            return HttpResponseClientRedirect(request.headers['Referer'])
+
+        email = validator.validated_data['email']
+        qrcode_uuid = validator.validated_data['qrcode_uuid']
+        user = get_or_create_user(email)
+
+        fedowAPI = FedowAPI()
+        wallet, created = fedowAPI.wallet.get_or_create_wallet(user)
+        linked_wallet = fedowAPI.NFCcard.link_user(user=user, qrcode_uuid=qrcode_uuid
+                                                   )
+        import ipdb; ipdb.set_trace()
+
+    def get_permissions(self):
+        permission_classes = [permissions.AllowAny]
+        return [permission() for permission in permission_classes]
+
+
 class MyAccount(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
     permission_classes = [permissions.IsAuthenticated, ]
@@ -178,7 +229,6 @@ class MyAccount(viewsets.ViewSet):
         # Pas de header sur cette page
         template_context['header'] = False
         return render(request, "htmx/fragments/my_account_wallet.html", context=template_context)
-
 
     @action(detail=False, methods=['GET'])
     def tokens_table(self, request):
@@ -304,7 +354,6 @@ def validate_event(request):
             messages.add_message(request, messages.SUCCESS, "Réservation validée !")
 
     return redirect('home')
-
 
 
 def modal(request, level="info", title='Information', content: str = None):

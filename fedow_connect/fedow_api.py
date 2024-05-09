@@ -1,5 +1,6 @@
 import json
 import logging
+import uuid
 from datetime import datetime
 from uuid import UUID, uuid4
 
@@ -18,7 +19,7 @@ from BaseBillet.models import Configuration, Membership, Product
 from fedow_connect.models import FedowConfig
 from fedow_connect.utils import sign_message, data_to_b64, verify_signature
 from fedow_connect.validators import WalletValidator, AssetValidator, TransactionValidator, \
-    PaginatedTransactionValidator
+    PaginatedTransactionValidator, CardValidator, QrCardValidator
 
 logger = logging.getLogger(__name__)
 
@@ -267,7 +268,7 @@ class WalletFedow():
         # Solution : soit retirer les () dans le callable, soit utiliser cache.lambda
         if not user.wallet:
             wallet = self.get_or_create_wallet(user)
-        return cache.get_or_set(f"wallet_user_{user.wallet.uuid}", lambda : self.retrieve_by_signature(user), 10)
+        return cache.get_or_set(f"wallet_user_{user.wallet.uuid}", lambda: self.retrieve_by_signature(user), 10)
 
     def retrieve_by_signature(self, user):
         response_link = _get(
@@ -326,7 +327,7 @@ class WalletFedow():
         stripe_checkout_url = response_checkout.json()
         return stripe_checkout_url
 
-    def retrieve_from_refill_checkout(self, user: TibilletUser, pk:uuid4):
+    def retrieve_from_refill_checkout(self, user: TibilletUser, pk: uuid4):
         response_checkout = _get(
             self.fedow_config,
             user=user,
@@ -393,12 +394,13 @@ class PlaceFedow():
         }
 
         request_for_new_place = _post(fedow_config=self.fedow_config,
-                          user=admin,
-                          path='place',
-                          data=data, apikey=apikey)
+                                      user=admin,
+                                      path='place',
+                                      data=data, apikey=apikey)
 
         if request_for_new_place.status_code != 201:
-            raise Exception(f"PlaceFedow Create : {request_for_new_place.status_code} : {request_for_new_place.content}")
+            raise Exception(
+                f"PlaceFedow Create : {request_for_new_place.status_code} : {request_for_new_place.content}")
 
         new_place_data = request_for_new_place.json()
 
@@ -411,6 +413,53 @@ class PlaceFedow():
         self.fedow_config.fedow_place_wallet_uuid = new_place_data['wallet']
         self.fedow_config.set_fedow_place_admin_apikey(new_place_data['key'])
         self.fedow_config.save()
+
+
+class NFCcardFedow():
+    def __init__(self, fedow_config: FedowConfig or None = None):
+        self.fedow_config: FedowConfig = fedow_config
+        if fedow_config is None:
+            self.config = FedowConfig.get_solo()
+
+    def qr_retrieve(self, qrcode_uuid: uuid4):
+        # On vérifie que l'uuid soit bien un uuid :
+        checked_uuid = uuid.UUID(str(qrcode_uuid))
+        response_qr = _get(self.fedow_config, path=f'card/{checked_uuid}/qr_retrieve')
+        if not response_qr.status_code == 200:
+            return None
+
+        serialized_card = QrCardValidator(data=response_qr.json())
+        if not serialized_card.is_valid():
+            logger.error(serialized_card.errors)
+            raise Exception(serialized_card.errors)
+
+        return serialized_card.validated_data
+
+    def link_user(self, user: TibilletUser = None, qrcode_uuid: uuid4 = None):
+        checked_uuid = uuid.UUID(str(qrcode_uuid))
+        import ipdb; ipdb.set_trace()
+
+        response_link = _post(
+            fedow_config=self.fedow_config,
+            user=user,
+            data={
+                "email": user.email,
+                "card_qrcode_uuid": f"{checked_uuid}",
+            },
+            path='wallet',
+        )
+
+        if response_link.status_code == 201:
+            wallet, created = WalletDb.objects.get_or_create(uuid=UUID(response_link.json()))
+            membre.wallet = wallet
+            membre.save()
+            card.wallet = wallet
+
+            card.save()
+            return card.wallet
+
+        logger.error(response_link.json())
+        raise Exception(response_link.json())
 
 
 class TransactionFedow():
@@ -450,7 +499,8 @@ class TransactionFedow():
             return paginated_transactions_serialized
         else:
             logger.error(f"retrieve_by_signature wallet_serialized ERRORS : {paginated_transactions_serialized.errors}")
-            raise Exception(f"retrieve_by_signature wallet_serialized ERRORS : {paginated_transactions_serialized.errors}")
+            raise Exception(
+                f"retrieve_by_signature wallet_serialized ERRORS : {paginated_transactions_serialized.errors}")
 
 
 # from fedow_connect.fedow_api import FedowAPI
@@ -465,6 +515,7 @@ class FedowAPI():
         self.membership = MembershipFedow(fedow_config=self.fedow_config)
         self.asset = AssetFedow(fedow_config=self.fedow_config)
         self.transaction = TransactionFedow(fedow_config=self.fedow_config)
+        self.NFCcard = NFCcardFedow(fedow_config=self.fedow_config)
 
     def handshake(self):
         pass

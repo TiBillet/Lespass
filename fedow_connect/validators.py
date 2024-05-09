@@ -103,6 +103,10 @@ class WalletValidator(serializers.Serializer):
     #
     #     return rep
 
+class QrCardValidator(serializers.Serializer):
+    wallet_uuid = serializers.UUIDField()
+    is_wallet_ephemere = serializers.BooleanField()
+
 class CardValidator(serializers.Serializer):
     wallet = WalletValidator(many=False)
     origin = OriginValidator()

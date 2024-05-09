@@ -1,12 +1,16 @@
-from django.db import connection
+from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
-from ApiBillet.serializers import NewAdhesionValidator, get_or_create_price_sold
 from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
-from BaseBillet.models import Price, Product, OptionGenerale, Membership, LigneArticle, Paiement_stripe
-from PaiementStripe.views import CreationPaiementStripe
+from BaseBillet.models import Price, Product, OptionGenerale, Membership
 
+
+class LinkQrCodeValidator(serializers.Serializer):
+    email = serializers.EmailField(required=True, allow_null=False)
+    # data=request.POST.dict() in the controler for boolean
+    cgu = serializers.BooleanField(required=True, allow_null=False)
+    qrcode_uuid = serializers.UUIDField()
 
 class LoginEmailValidator(serializers.Serializer):
     email = serializers.EmailField()

@@ -6,6 +6,7 @@ from BaseBillet import views as base_view
 router = routers.DefaultRouter()
 router.register(r'memberships', base_view.MembershipMVT, basename='membership_mvt')
 router.register(r'my_account', base_view.MyAccount, basename='my_account')
+router.register(r'qr', base_view.ScanQrCode, basename='scan_qrcode')
 
 urlpatterns = [
 
@@ -32,6 +33,7 @@ urlpatterns = [
     path('connexion/', base_view.connexion, name='connexion'),
     path('deconnexion/', base_view.deconnexion, name='deconnexion'),
     path('emailconfirmation/<str:uuid>/<str:token>/', base_view.emailconfirmation, name='emailconfirmation'),
+
 
     path('', base_view.home, name="index"),
 ]
