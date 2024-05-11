@@ -214,8 +214,16 @@ class ScanQrCode(viewsets.ViewSet):
 
         fedowAPI = FedowAPI()
         wallet, created = fedowAPI.wallet.get_or_create_wallet(user)
-        linked_serialized_card = fedowAPI.NFCcard.linkwallet_cardqrcode(user=user, qrcode_uuid=qrcode_uuid)
 
+        # Si l'user possède déja un wallet et n'a pas validé son email,
+        # il ne peut pas avoir de deuxième carte :
+        if not created :
+            retrieve_wallet = fedowAPI.wallet.retrieve_by_signature(user)
+            if retrieve_wallet.validated_data['has_user_card']:
+                messages.add_message(request, messages.ERROR, _("Vous semblez déja posséder une carte TiBillet en lien avec votre portefeuille. Merci de la révoquer d'abord dans votre espace profil."))
+                return HttpResponseClientRedirect(request.headers['Referer'])
+
+        linked_serialized_card = fedowAPI.NFCcard.linkwallet_cardqrcode(user=user, qrcode_uuid=qrcode_uuid)
         if not linked_serialized_card:
             messages.add_message(request, messages.ERROR, _("Not valid"))
 

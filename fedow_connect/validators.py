@@ -81,6 +81,7 @@ class WalletValidator(serializers.Serializer):
     uuid = serializers.UUIDField()
     tokens = TokenValidator(many=True)
     get_name = serializers.CharField()
+    has_user_card = serializers.BooleanField()
 
     def validate(self, attrs):
         self.wallet, created = Wallet.objects.get_or_create(uuid=attrs['uuid'])
