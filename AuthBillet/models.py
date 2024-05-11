@@ -158,8 +158,9 @@ class Wallet(models.Model):
 class TibilletUser(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
 
-    email = models.EmailField(_('email'), unique=True)  # changes email to unique and blank to false
+    email = models.EmailField(unique=True)  # changes email to unique and blank to false
     email_error = models.BooleanField(default=False)
+    email_valid = models.BooleanField(default=False)
 
     username = models.CharField(max_length=200, unique=True)
     rsa_key = models.OneToOneField(RsaKey, on_delete=models.SET_NULL, null=True, related_name='user')

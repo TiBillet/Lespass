@@ -8,7 +8,7 @@ import barcode
 import segno
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import logout, login
+from django.contrib.auth import logout, login, authenticate
 from django.contrib.messages import MessageFailure
 from django.db import connection
 from django.http import HttpResponse, HttpRequest, Http404
@@ -31,7 +31,7 @@ from weasyprint import HTML
 from weasyprint.text.fonts import FontConfiguration
 
 from ApiBillet.serializers import get_or_create_price_sold
-from AuthBillet.models import TibilletUser
+from AuthBillet.models import TibilletUser, Wallet
 from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
@@ -42,6 +42,7 @@ from BaseBillet.validators import LoginEmailValidator, MembershipValidator, Link
 from PaiementStripe.views import CreationPaiementStripe
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.validators import WalletValidator
+from django.utils.translation import gettext_lazy as _
 
 logger = logging.getLogger(__name__)
 
@@ -178,13 +179,24 @@ class ScanQrCode(viewsets.ViewSet):
         if not serialized_qrcode_card:
             raise Http404()
 
+        # La carte n'a pas d'user, on redirige vers la page de renseignement d'user
         if serialized_qrcode_card['is_wallet_ephemere']:
             logger.info("Wallet ephemere, on demande le mail")
             template_context = get_context(request)
             template_context['qrcode_uuid'] = qrcode_uuid
             return render(request, "htmx/views/inscription.html", context=template_context)
-        else :
-            return HttpResponse('déja un wallet')
+
+        wallet = Wallet.objects.get(uuid=serialized_qrcode_card['wallet_uuid'])
+        user: TibilletUser = wallet.user
+        user.is_active = True
+        user.save()
+        login(request, user)
+        # authenticate(request=request, user=user)
+        if not user.email_valid:
+            logger.warning("User email not active")
+            messages.add_message(request, messages.WARNING, _("Merci de valider votre email pour acceder à toute les fonctionnalitées de votre espace profil."))
+
+        return redirect("/my_account")
 
     @action(detail=False, methods=['POST'])
     def link(self, request):
@@ -202,9 +214,14 @@ class ScanQrCode(viewsets.ViewSet):
 
         fedowAPI = FedowAPI()
         wallet, created = fedowAPI.wallet.get_or_create_wallet(user)
-        linked_wallet = fedowAPI.NFCcard.link_user(user=user, qrcode_uuid=qrcode_uuid
-                                                   )
-        import ipdb; ipdb.set_trace()
+        linked_serialized_card = fedowAPI.NFCcard.linkwallet_cardqrcode(user=user, qrcode_uuid=qrcode_uuid)
+
+        if not linked_serialized_card:
+            messages.add_message(request, messages.ERROR, _("Not valid"))
+
+        # On retourne sur la page GET /qr/
+        # Qui redirigera si besoin, ou afficera l'erreur
+        return HttpResponseClientRedirect(request.headers['Referer'])
 
     def get_permissions(self):
         permission_classes = [permissions.AllowAny]
@@ -219,6 +236,11 @@ class MyAccount(viewsets.ViewSet):
         template_context = get_context(request)
         # Pas de header sur cette page
         template_context['header'] = False
+
+        if not request.user.email_valid:
+            logger.warning("User email not active")
+            messages.add_message(request, messages.WARNING, _("Merci de valider votre email pour acceder à toute les fonctionnalitées de votre espace profil."))
+
         return render(request, "htmx/views/my_account.html", context=template_context)
 
     ### ONGLET WALLET

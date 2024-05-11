@@ -435,31 +435,29 @@ class NFCcardFedow():
 
         return serialized_card.validated_data
 
-    def link_user(self, user: TibilletUser = None, qrcode_uuid: uuid4 = None):
+    def linkwallet_cardqrcode(self, user: TibilletUser = None, qrcode_uuid: uuid4 = None):
         checked_uuid = uuid.UUID(str(qrcode_uuid))
-        import ipdb; ipdb.set_trace()
 
         response_link = _post(
             fedow_config=self.fedow_config,
             user=user,
             data={
-                "email": user.email,
+                "wallet": f"{user.wallet.uuid}",
                 "card_qrcode_uuid": f"{checked_uuid}",
             },
-            path='wallet',
+            path='wallet/linkwallet_cardqrcode',
         )
 
-        if response_link.status_code == 201:
-            wallet, created = WalletDb.objects.get_or_create(uuid=UUID(response_link.json()))
-            membre.wallet = wallet
-            membre.save()
-            card.wallet = wallet
+        if response_link.status_code != 200:
+            logger.error(response_link.status_code, response_link.content)
+            return False
 
-            card.save()
-            return card.wallet
+        validated_card = CardValidator(data=response_link.json())
+        if not validated_card.is_valid():
+            logger.error(validated_card.errors)
+            return False
 
-        logger.error(response_link.json())
-        raise Exception(response_link.json())
+        return validated_card.validated_data
 
 
 class TransactionFedow():

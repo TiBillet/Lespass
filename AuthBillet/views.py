@@ -135,7 +135,7 @@ class test_api_key(APIView):
 
 def activate(request, uid, token):
     try:
-        user = User.objects.get(pk=decode_uid(uid))
+        user: TibilletUser = User.objects.get(pk=decode_uid(uid))
         if user.email_error:
             messages.add_message(request, messages.ERROR, _("Mail non valide"))
 
@@ -145,6 +145,7 @@ def activate(request, uid, token):
         # print(user)
         if is_token_valid:
             user.is_active = True
+            user.email_valid = True
             user.save()
             messages.add_message(request, messages.SUCCESS, _("Vous êtes bien connecté. Bienvenue !"))
             login(request, user)
