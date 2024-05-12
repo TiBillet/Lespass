@@ -17,8 +17,11 @@ urlpatterns = [
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshViewCustom.as_view(), name='token_refresh'),
 
+
     path('keytest/', test_api_key.as_view(), name='test_api_key'),
     path('SetPasswordIfEmpty/', SetPasswordIfEmpty.as_view(), name='setpassword'),
+
+
 
     path('token/verify/', TokenVerifyView.as_view(), name='token_verify'),
     path('create/', create_user.as_view(), name='create_user'),

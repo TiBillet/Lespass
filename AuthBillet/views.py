@@ -136,8 +136,14 @@ class test_api_key(APIView):
 def activate(request, uid, token):
     try:
         user: TibilletUser = User.objects.get(pk=decode_uid(uid))
+        if request.user:
+            if user != request.user and request.user.is_authenticated:
+                messages.add_message(request, messages.ERROR, _("Mail non valide"))
+                return None
+
         if user.email_error:
             messages.add_message(request, messages.ERROR, _("Mail non valide"))
+            return None
 
         # On utilise le même algo que pour le reset password
         PR = PasswordResetTokenGenerator()
@@ -149,12 +155,16 @@ def activate(request, uid, token):
             user.save()
             messages.add_message(request, messages.SUCCESS, _("Vous êtes bien connecté. Bienvenue !"))
             login(request, user)
+            return True
+        import ipdb; ipdb.set_trace()
 
     except User.DoesNotExist:
-        messages.add_message(request, messages.ERROR, _("Token non valide"))
+        messages.add_message(request, messages.ERROR, _("Erreur, user non valide."))
     except Exception as e:
         logger.error(e)
         raise e
+
+    messages.add_message(request, messages.ERROR, _("Token expiré ou non valide."))
 
 
 

@@ -66,6 +66,7 @@ def sender_mail_connect(email, subject_mail=None):
     try:
         logger.info(f"sender_mail_connect : {email} - {base_url}")
         connexion_celery_mailer.delay(email, f"https://{base_url}", subject_mail)
+        # connexion_celery_mailer(email, f"https://{base_url}", subject_mail)
 
     except Exception as e:
         logger.error(f"validate_email_and_return_user erreur pour récuperer config : {email} - {base_url} : {e}")
@@ -98,12 +99,12 @@ def get_or_create_user(email,
             user.set_password(password)
 
         user.is_active = bool(set_active)
-
         user.client_achat.add(connection.tenant)
         user.client_source = connection.tenant
         user.save()
 
         if bool(send_mail):
+            logger.info(f"created & bool(send_mail) == {send_mail}, -> sender_mail_connect({user.email})")
             sender_mail_connect(user.email)
 
 
@@ -114,9 +115,9 @@ def get_or_create_user(email,
 
         if force_mail:
             sender_mail_connect(user.email)
-        elif user.is_active == False:
-            # Si l'utilisateur est inactif, il n'a pas encore validé son mail
-            # Si la demande vient après la création, on relance le mail de validation.
+        elif user.email_valid == False:
+            # L'utilisateur n'a pas encore validé son email
+            # On relance le mail de validation.
             if bool(send_mail):
                 logger.info("utilisateur est inactif, il n'a pas encore validé son mail, on lance le mail de validation")
                 sender_mail_connect(user.email)

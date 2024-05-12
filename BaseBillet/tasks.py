@@ -71,18 +71,18 @@ class CeleryMailerClass():
         EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
         EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
 
-        # Try except un peu degueulasse causé par l'envoie de task
-        # depuis le tenant public pour l'envoi du mail d'appairage
+        # Si email envoyé par le tenant public (ex : première install), Configuration n'est pas disponible
+        self.return_email = os.environ['EMAIL_HOST_USER']
         try:
-            self.return_email = Configuration.get_solo().email
-            assert self.return_email
-
-            # si email retour n'est pas le même nom de domain que le moteur, mail non envoyé.
-            assert self.return_email.partition("@")[2] == EMAIL_HOST_USER.partition("@")[2]
-
+            config = Configuration.get_solo()
+            self.return_email = config.email if config.email else os.environ['EMAIL_HOST_USER']
         except Exception as e:
-            logger.warning(f'  WORKDER CELERY : self.return_email {e}')
-            self.return_email = "contact@tibillet.re"
+            logger.warning(f'  WORKDER CELERY : self.return_email -> Configuration.get_solo().email ERROR -> {e}')
+
+        # TODO: si email retour n'est pas le même nom de domain que le moteur > moteur a spam ?
+        # if self.return_email.partition("@")[2] != EMAIL_HOST_USER.partition("@")[2]:
+        #     logger.error(f'{self.return_email.partition("@")[2]} != {EMAIL_HOST_USER.partition("@")[2]}')
+        #     raise Exception('erreur de domaine email : return_email != HOST_USER')
 
         if all([
             EMAIL_HOST,
@@ -300,10 +300,14 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
     uid = encode_uid(user.pk)
     token = default_token_generator.make_token(user)
     connexion_url = f"{base_url}/emailconfirmation/{uid}/{token}"
-
+    logger.info("connexion_celery_mailer -> connection.tenant.schema_name : {connection.tenant.schema_name}")
     if connection.tenant.schema_name != "public":
         config = Configuration.get_solo()
         organisation = config.organisation
+
+        # Premier mail ou config non renseignée, on mets TiBIllet
+        if not organisation:
+            organisation = "TiBillet"
 
         img_orga = ""
         if config.img:

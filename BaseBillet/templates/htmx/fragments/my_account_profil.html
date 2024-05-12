@@ -1,4 +1,9 @@
 <div class="container pt-5">
-    <h1>Mes cartes :</h1>
-    -1,2,3,4
+    <h1>Mon profil</h1>
+    {%  if not user.email_valid  %}
+        Merci de valider votre email pour activer votre espace.
+        <button>Renvoyer le mail de validation</button>
+    {% else %}
+        Mes cartes :
+    {% endif  %}
 </div>

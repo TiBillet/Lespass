@@ -122,16 +122,16 @@ def deconnexion(request):
 
 
 def connexion(request):
-    print("-> connexion:")
     if request.method == 'POST':
         validator = LoginEmailValidator(data=request.POST)
         if validator.is_valid():
             # Création de l'user et envoie du mail de validation
             email = validator.validated_data['email']
             user = get_or_create_user(email=email, send_mail=True)
-            if settings.DEBUG:
-                login(request, user)
-                messages.add_message(request, messages.WARNING, "Debug : login auto, Connexion ok.")
+
+            # if settings.DEBUG:
+            #     login(request, user)
+            #     messages.add_message(request, messages.WARNING, "Debug : login auto, Connexion ok.")
 
             # Le mail a été ernvoyé par le get_or_create_user,
             # on redirige vers la page d'accueil et on leur demande de valider leur email

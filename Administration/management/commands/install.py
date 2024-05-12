@@ -1,4 +1,5 @@
 from os.path import exists
+from time import sleep
 
 import requests
 import stripe
@@ -48,16 +49,29 @@ class Command(BaseCommand):
         if not any([stripe_api_key, stripe_test_api_key]):
             raise Exception("Need Stripe Api Key in .env file")
 
+
+
         fedow_domain = os.getenv("FEDOW_DOMAIN")
         if not fedow_domain:
             raise Exception("Bad FEDOW_DOMAIN in .env file")
 
-
-        hello_fedow = requests.get(f'https://{fedow_domain}/helloworld/',
-                                   verify=bool(not settings.DEBUG))
-        # Returns True if :attr:`status_code` is less than 400, False if not
-        if not hello_fedow.ok:
-            raise Exception(f"Bad reponse FEDOW_DOMAIN in .env file {hello_fedow.status_code}")
+        fedow_state = None
+        ping_count = 0
+        while not fedow_state:
+            hello_fedow = requests.get(f'https://{fedow_domain}/helloworld/',
+                                       verify=bool(not settings.DEBUG))
+            # Returns True if :attr:`status_code` is less than 400, False if not
+            if hello_fedow.ok:
+                fedow_state = hello_fedow.status_code
+                self.stdout.write(
+                    self.style.SUCCESS(f'ping fedow at {fedow_domain} OK'),
+                    ending='\n')
+            else :
+                ping_count += 1
+                self.stdout.write(
+                    self.style.ERROR(f'ping fedow at https://{fedow_domain}/helloworld/ without succes. sleep(1) : count {ping_count}'),
+                    ending='\n')
+                sleep(1)
 
 
         # crash if bad api stripe key
