@@ -10,7 +10,9 @@ import dateutil.parser
 import pytz
 import requests
 import stripe
+from cryptography.fernet import Fernet
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.db import connection
 from django.http import HttpResponseRedirect, Http404, HttpResponse
 from django.utils import timezone
@@ -39,6 +41,8 @@ from MetaBillet.models import EventDirectory, ProductDirectory, WaitingConfigura
 from PaiementStripe.views import new_entry_from_stripe_invoice
 from QrcodeCashless.models import Detail, CarteCashless
 from TiBillet import settings
+from fedow_connect.models import FedowConfig
+from fedow_connect.utils import rsa_decrypt_string, rsa_encrypt_string, get_public_key, fernet_encrypt
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
@@ -1000,6 +1004,67 @@ class Onboard_stripe_return(APIView):
         else:
             # Si les infos stripe ne sont pas complète, on renvoie l'url onboard pour les completer
             return Response(f"{create_account_link_for_onboard()}", status=status.HTTP_206_PARTIAL_CONTENT)
+
+@permission_classes([permissions.AllowAny])
+class Get_user_pub_pem(APIView):
+    def post(self, request):
+        # Si laboutik est déja configuré sur ce tenant, on envoie bouler
+        config = Configuration.get_solo()
+        if config.server_cashless or config.key_cashless :
+            if not settings.DEBUG:
+                return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+        # un simple return de pub key
+        # Utile pour pinger et faire la première co du cahsless laboutik
+        # Il faut que l'admin dans le cashless soit le même que l'admin de ce tenant
+        User = get_user_model()
+        user: TibilletUser = get_object_or_404(User, email=f"{request.data['email']}")
+        if connection.tenant not in user.client_admin.all():
+            return Response(status=status.HTTP_401_UNAUTHORIZED)
+
+        data = {
+            'public_pem': f"{user.get_public_pem()}",
+        }
+        return Response(data=data, status=status.HTTP_200_OK)
+
+
+@permission_classes([permissions.AllowAny])
+class Onboard_laboutik(APIView):
+    def post(self, request):
+        # Si laboutik est déja configuré sur ce tenant, on envoi bouler
+        config = Configuration.get_solo()
+        if config.server_cashless or config.key_cashless:
+            if not settings.DEBUG:
+                return Response(status=status.HTTP_409_CONFLICT)
+
+        # Onboard du cashless, première connection à l'install !
+        config.server_cashless = f"{request.data['server_cashless']}"
+        config.laboutik_public_pem = f"{request.data['pum_pem_cashless']}"
+
+        # On tente de déchiffrer la clé api avec la clé privée de l'admin
+        user_admin: TibilletUser = connection.tenant.user_admin.first()
+        cypher_key_cashless = f"{request.data['key_cashless']}"
+        config.key_cashless = rsa_decrypt_string(utf8_enc_string=cypher_key_cashless, private_key=user_admin.get_private_key())
+
+        logger.info("Serveur cashless onboarded !")
+
+        # Chiffrement du json qui contien la clé fedow pour le cashless :
+        fedowConfig = FedowConfig.get_solo()
+        json_key_to_cashless = fedowConfig.get_json_key_to_cashless()
+
+        # La clé rsa ne peux chiffrer que des petites clé, on chiffre alors avec fernet ET rsa (on fait comme TLS!)
+        rand_key = Fernet.generate_key()
+        cypher_rand_key = rsa_encrypt_string(utf8_string=rand_key.decode('utf8'), public_key=get_public_key(config.laboutik_public_pem))
+        message = cypher_rand_key.encode('utf-8')
+        encryptor = Fernet(rand_key)
+        cypher_json_key_to_cashless = encryptor.encrypt(message).decode('utf-8')
+        data={
+            'cypher_rand_key':cypher_rand_key,
+            'cypher_json_key_to_cashless':cypher_json_key_to_cashless,
+        }
+        # Tout s'est bien passé, on sauvegarde la configuration
+        config.save()
+        return Response(data=data, status=status.HTTP_200_OK)
 
 
 @permission_classes([permissions.AllowAny])

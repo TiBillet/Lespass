@@ -248,6 +248,8 @@ class Configuration(SingletonModel):
         verbose_name=_("Clé d'API du serveur cashless")
     )
 
+    laboutik_public_pem = models.CharField(max_length=512, editable=False, null=True, blank=True)
+
     def check_serveur_cashless(self):
         logger.info(f"On check le serveur cashless. Adresse : {self.server_cashless}")
         if self.server_cashless and self.key_cashless:
@@ -266,6 +268,7 @@ class Configuration(SingletonModel):
                 sess.close()
                 logger.info(f"    check_serveur_cashless : {r.status_code} {r.text}")
                 if r.status_code == 200:
+                    #TODO: Check cashless signature avec laboutik_public_pem
                     return True
 
             except Exception as e:

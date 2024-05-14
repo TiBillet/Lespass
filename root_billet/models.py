@@ -65,7 +65,9 @@ class RootConfiguration(SingletonModel):
             data = handshake.json()
             self.fedow_domain = fedow_domain
             self.fedow_ip = socket.gethostbyname(f"{fedow_domain}")
+            # fernet encryption :
             self.set_fedow_create_place_apikey(data['api_key'])
+            # Pub key of fedow primary wallet (stripe)
             self.fedow_primary_pub_pem = data['fedow_pub_pem']
             self.save()
             logger.info(f"TiBillet/Lespass registered in Fedow Instance")

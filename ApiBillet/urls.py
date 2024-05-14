@@ -2,7 +2,7 @@ from django.urls import include, path, re_path
 from ApiBillet import views as api_view
 from rest_framework import routers
 from ApiBillet.views import TicketPdf, Webhook_stripe, Gauge, CancelSubscription, Onboard_stripe_return, Onboard, \
-    ZReportPDF
+    ZReportPDF, Onboard_laboutik, Get_user_pub_pem
 
 router = routers.DefaultRouter()
 router.register(r'place', api_view.TenantViewSet, basename='place')
@@ -28,6 +28,10 @@ urlpatterns = [
 
     path('onboard/', Onboard.as_view()),
     path('onboard_stripe_return/<str:id_acc_connect>/', Onboard_stripe_return.as_view()),
+
+    path('onboard_laboutik/', Onboard_laboutik.as_view()),
+    path('get_user_pub_pem/', Get_user_pub_pem.as_view()),
+
     path('webhook_stripe/', Webhook_stripe.as_view()),
     path('webhook_stripe/<uuid:uuid_paiement>/', Webhook_stripe.as_view()),
     path('gauge/', Gauge.as_view()),

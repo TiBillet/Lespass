@@ -67,6 +67,8 @@ class Command(BaseCommand):
 
             ## Liaison tenant avec Fedow
             fedowAPI = FedowAPI()
+            # La première création de l'instance FedowAPI génère un nouveau lieu coté Fedow s'il n'existe pas.
+            # avec la fonction : fedowAPI.place.create()
             assert FedowConfig.get_solo().can_fedow()
 
 

@@ -361,6 +361,7 @@ class PlaceFedow():
     def create(self, admin: TibilletUser = None, place_name=None):
         # Premier contact entre une nouvelle place (nouveau tenant) et Fedow
         # Se lance automatiquement si can_fedow() is false
+
         if any([
             self.fedow_config.fedow_place_uuid,
             self.fedow_config.fedow_place_wallet_uuid,
@@ -384,9 +385,10 @@ class PlaceFedow():
             place_name = tenant_config.organisation
         if admin is None:
             User = get_user_model()
+            # Un seul admin lors de la création du lieu est présent.
             admin = User.objects.get(client_admin=tenant)
 
-        # Pour la création, on prend la clé api de Root
+        # Pour la création, on prend la clé "create_place_apikey" de Root
         apikey = self.fedow_config.get_fedow_create_place_apikey()
         data = {
             'place_name': place_name,
@@ -410,10 +412,14 @@ class PlaceFedow():
             # display_name=tenant_config.organisation,
             uuid=new_place_data['wallet']
         )
+
         self.fedow_config.wallet = wallet
         self.fedow_config.fedow_place_uuid = new_place_data['uuid']
         self.fedow_config.fedow_place_wallet_uuid = new_place_data['wallet']
         self.fedow_config.set_fedow_place_admin_apikey(new_place_data['key'])
+        # Clé à envoyer au cashless
+        #TODO: Vérifier la validité du compte stripe avant d'envoyer au cashless
+        self.fedow_config.set_json_key_to_cashless(new_place_data['json_key_to_cashless'])
         self.fedow_config.save()
 
 
