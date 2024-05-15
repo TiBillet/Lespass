@@ -1052,12 +1052,14 @@ class Onboard_laboutik(APIView):
         fedowConfig = FedowConfig.get_solo()
         json_key_to_cashless = fedowConfig.get_json_key_to_cashless()
 
-        # La clé rsa ne peux chiffrer que des petites clé, on chiffre alors avec fernet ET rsa (on fait comme TLS!)
+        # La clé rsa ne peux chiffrer que des petites clés,
+        # on chiffre alors avec fernet ET rsa (on fait comme TLS!)
         rand_key = Fernet.generate_key()
         cypher_rand_key = rsa_encrypt_string(utf8_string=rand_key.decode('utf8'), public_key=get_public_key(config.laboutik_public_pem))
-        message = cypher_rand_key.encode('utf-8')
+
         encryptor = Fernet(rand_key)
-        cypher_json_key_to_cashless = encryptor.encrypt(message).decode('utf-8')
+        cypher_json_key_to_cashless = encryptor.encrypt(json_key_to_cashless.encode(('utf8'))).decode('utf8')
+
         data={
             'cypher_rand_key':cypher_rand_key,
             'cypher_json_key_to_cashless':cypher_json_key_to_cashless,
