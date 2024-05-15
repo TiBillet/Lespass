@@ -1046,7 +1046,7 @@ class Onboard_laboutik(APIView):
         cypher_key_cashless = f"{request.data['key_cashless']}"
         config.key_cashless = rsa_decrypt_string(utf8_enc_string=cypher_key_cashless, private_key=user_admin.get_private_key())
 
-        logger.info("Serveur cashless onboarded !")
+        logger.info("Serveur LaBoutik onboarded !")
 
         # Chiffrement du json qui contien la clé fedow pour le cashless :
         fedowConfig = FedowConfig.get_solo()
