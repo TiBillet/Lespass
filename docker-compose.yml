@@ -106,4 +106,4 @@ volumes:
   lespass_dev_db:
 
 
-# docker build -t lespass . && docker tag lespass tibillet/lespass:latest && docker tag lespass tibillet/lespass:0.9.1 && docker push tibillet/lespass:latest && docker push tibillet/lespass:0.9.1
+# docker build -t lespass . && docker tag lespass tibillet/lespass:latest && docker tag lespass tibillet/lespass:0.9.2 && docker push tibillet/lespass:latest && docker push tibillet/lespass:0.9.2
