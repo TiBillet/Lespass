@@ -3,6 +3,7 @@
 import decimal
 import json
 import logging
+import os
 import uuid
 from datetime import datetime, timedelta
 
@@ -41,8 +42,9 @@ from MetaBillet.models import EventDirectory, ProductDirectory, WaitingConfigura
 from PaiementStripe.views import new_entry_from_stripe_invoice
 from QrcodeCashless.models import Detail, CarteCashless
 from TiBillet import settings
+from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
-from fedow_connect.utils import rsa_decrypt_string, rsa_encrypt_string, get_public_key, fernet_encrypt
+from fedow_connect.utils import rsa_decrypt_string, rsa_encrypt_string, get_public_key, fernet_encrypt, data_to_b64
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
@@ -1031,26 +1033,41 @@ class Get_user_pub_pem(APIView):
 @permission_classes([permissions.AllowAny])
 class Onboard_laboutik(APIView):
     def post(self, request):
+        # TODO: Vérifier la validité du compte stripe avant d'envoyer au cashless
         # Si laboutik est déja configuré sur ce tenant, on envoi bouler
         config = Configuration.get_solo()
         if config.server_cashless or config.key_cashless:
             if not settings.DEBUG:
                 return Response(status=status.HTTP_409_CONFLICT)
 
+        # On va demander un liaison cashless <-> place a Fedow :
+        #TODO: A tester
+        fedowAPI = FedowAPI()
+        user_admin: TibilletUser = connection.tenant.user_admin.first()
+
+        # Ensure wallet exist for fedow api call
+        wallet_user_admin = fedowAPI.wallet.get_or_create_wallet(user_admin)
+
+        # Get the temp key for the laboutik onboard
+        temp_key = fedowAPI.place.link_cashless_to_place(admin=user_admin)
+        fconfig = fedowAPI.fedow_config
+        json_key_to_cashless = {
+            "domain": fconfig.fedow_domain(),
+            "uuid": f"{fconfig.fedow_place_uuid}",
+            "temp_key": temp_key,
+        }
+
         # Onboard du cashless, première connection à l'install !
         config.server_cashless = f"{request.data['server_cashless']}"
         config.laboutik_public_pem = f"{request.data['pum_pem_cashless']}"
+        logger.info(f'Onboard Laboutik depuis : {config.server_cashless} pour le tenant : {connection.tenant}')
 
+        # Un premier hello world a été fait précédemment pour envoyer la clé publique du premier admin de ce tenant
         # On tente de déchiffrer la clé api avec la clé privée de l'admin
-        user_admin: TibilletUser = connection.tenant.user_admin.first()
         cypher_key_cashless = f"{request.data['key_cashless']}"
         config.key_cashless = rsa_decrypt_string(utf8_enc_string=cypher_key_cashless, private_key=user_admin.get_private_key())
 
         logger.info("Serveur LaBoutik onboarded !")
-
-        # Chiffrement du json qui contien la clé fedow pour le cashless :
-        fedowConfig = FedowConfig.get_solo()
-        json_key_to_cashless = fedowConfig.get_json_key_to_cashless()
 
         # La clé rsa ne peux chiffrer que des petites clés,
         # on chiffre alors avec fernet ET rsa (on fait comme TLS!)
@@ -1058,7 +1075,7 @@ class Onboard_laboutik(APIView):
         cypher_rand_key = rsa_encrypt_string(utf8_string=rand_key.decode('utf8'), public_key=get_public_key(config.laboutik_public_pem))
 
         encryptor = Fernet(rand_key)
-        cypher_json_key_to_cashless = encryptor.encrypt(json_key_to_cashless.encode(('utf8'))).decode('utf8')
+        cypher_json_key_to_cashless = encryptor.encrypt(data_to_b64(json_key_to_cashless)).decode('utf8')
 
         data={
             'cypher_rand_key':cypher_rand_key,

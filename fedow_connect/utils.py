@@ -27,6 +27,13 @@ def data_to_b64(data: dict or list) -> bytes:
     bytes_to_b64 = base64.urlsafe_b64encode(json_to_bytes)
     return bytes_to_b64
 
+def b64_to_data(b64: bytes) -> dict or list:
+    b64_to_bytes = base64.urlsafe_b64decode(b64)
+    bytes_to_json = b64_to_bytes.decode('utf-8')
+    json_to_data = json.loads(bytes_to_json)
+    return json_to_data
+
+
 def rsa_generator():
     # Génération d'une paire de clés RSA chiffré avec la SECRET_KEY de Django
     private_key = rsa.generate_private_key(

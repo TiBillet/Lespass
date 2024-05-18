@@ -70,10 +70,10 @@ class RootConfiguration(SingletonModel):
             # Pub key of fedow primary wallet (stripe)
             self.fedow_primary_pub_pem = data['fedow_pub_pem']
             self.save()
-            logger.info(f"TiBillet/Lespass registered in Fedow Instance")
+            logger.info(f"root_fedow_handshake OK : TiBillet/Lespass registered in Fedow Instance : {fedow_domain}")
             return True
         elif handshake.status_code == 208:
-            logger.error(f"A TiBillet/Lespass is already registered in this fedow Instance")
+            logger.error(f"A TiBillet/Lespass is already registered in this fedow Instance : {fedow_domain}")
 
         logger.error(f"Error while root handshake with FEDOW")
         raise Exception(f"Error while root handshake with FEDOW")

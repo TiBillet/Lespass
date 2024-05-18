@@ -17,7 +17,7 @@ from django_tenants.postgresql_backend.base import FakeTenant
 from AuthBillet.models import RsaKey, TibilletUser, Wallet
 from BaseBillet.models import Configuration, Membership, Product
 from fedow_connect.models import FedowConfig
-from fedow_connect.utils import sign_message, data_to_b64, verify_signature
+from fedow_connect.utils import sign_message, data_to_b64, verify_signature, rsa_decrypt_string
 from fedow_connect.validators import WalletValidator, AssetValidator, TransactionValidator, \
     PaginatedTransactionValidator, CardValidator, QrCardValidator
 
@@ -358,6 +358,20 @@ class PlaceFedow():
             # Premier contact entre une nouvelle place (nouveau tenant) et Fedow
             self.create()
 
+    def link_cashless_to_place(self, admin):
+        link_response = _get(fedow_config=self.fedow_config,
+                                      user=admin,
+                                      path='place/link_cashless_to_place')
+        if not link_response.status_code == 201:
+            logger.error(f"link_cashless_to_place ERRORS : {link_response.status_code}")
+            raise Exception(f"link_cashless_to_place ERRORS : {link_response.status_code}")
+
+        rsa_cypher_message = link_response.json()['rsa_cypher_message']
+        temp_key = rsa_decrypt_string(utf8_enc_string=rsa_cypher_message, private_key=admin.get_private_key())
+        return temp_key
+
+
+
     def create(self, admin: TibilletUser = None, place_name=None):
         # Premier contact entre une nouvelle place (nouveau tenant) et Fedow
         # Se lance automatiquement si can_fedow() is false
@@ -417,10 +431,12 @@ class PlaceFedow():
         self.fedow_config.fedow_place_uuid = new_place_data['uuid']
         self.fedow_config.fedow_place_wallet_uuid = new_place_data['wallet']
         self.fedow_config.set_fedow_place_admin_apikey(new_place_data['key'])
-        # Clé à envoyer au cashless
-        #TODO: Vérifier la validité du compte stripe avant d'envoyer au cashless
-        self.fedow_config.set_json_key_to_cashless(new_place_data['json_key_to_cashless'])
         self.fedow_config.save()
+
+        logger.info(f"Place and Fedow linked : wallet {new_place_data['wallet']}")
+
+
+
 
 
 class NFCcardFedow():

@@ -38,23 +38,24 @@ class Command(BaseCommand):
         sub = os.environ['SUB']
         tenant = Client.objects.get(name=sub)
         with tenant_context(tenant):
+            logger.info(f"Start demo_data. Sub : {sub}, tenant : {tenant}")
 
             ### CONFIGURATION VARIABLE ####
 
             config = Configuration.get_solo()
             config.organisation = "TiBilletistan"
-            config.short_description = "Les scènes oniriques du TiBilletistan"
+            config.short_description = "Les scènes oniriques du TiBilletistan : un espace de démonstration."
             config.long_description = (
                 "Vous trouverez ici un exemple de plusieurs types d'évènements, d'adhésions et d'abonnements."
                 "\nGratuit, payant, avec prix préférenciel."
                 "\nAbonnement mensuels récurents ou ahdésion annuelle.")
             config.adress = "42 Rue Douglas Adams"
             config.postal_code = "97480"
-            config.city = "Saint Jospeh"
+            config.city = "Saint Joseph"
             config.tva_number = "4242424242424242"
             config.siren = "424242424242"
             config.phone = "06 42 42 42 42"
-            config.email = "contact@tibillet.re"
+            config.email = os.environ['ADMIN_EMAIL']
             config.site_web = "https://tibillet.org"
             config.legal_documents = "https://tibillet.org/cgucgv"
             config.twitter = "https://twitter.com/tibillet"
@@ -64,7 +65,7 @@ class Command(BaseCommand):
 
             ### LINK TO FEDOW
 
-
+            #TODO: a faire dans la création de nouveau tenant, connection fedow obligatoire et check admin wallet
             ## Liaison tenant avec Fedow
             fedowAPI = FedowAPI()
             # La première création de l'instance FedowAPI génère un nouveau lieu coté Fedow s'il n'existe pas.
