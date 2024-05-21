@@ -1080,6 +1080,14 @@ class Onboard_laboutik(APIView):
         data={
             'cypher_rand_key':cypher_rand_key,
             'cypher_json_key_to_cashless':cypher_json_key_to_cashless,
+            "organisation_name": config.organisation,
+            "adress": config.adress,
+            "postal_code": config.postal_code,
+            "city": config.city,
+            "tva_number": config.tva_number,
+            "siren": config.siren,
+            "phone": config.phone,
+            "site_web": config.site_web,
         }
         # Tout s'est bien passé, on sauvegarde la configuration
         config.save()
