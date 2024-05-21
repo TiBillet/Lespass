@@ -313,3 +313,13 @@ def send_membership_product_to_fedow(sender, instance: Product, created, **kwarg
         fedow_config = FedowConfig.get_solo()
         fedow_asset = AssetFedow(fedow_config=fedow_config)
         asset, created = fedow_asset.get_or_create_asset(instance)
+
+
+
+@receiver(post_save, sender=Product)
+def send_badgeuse_product_to_fedow(sender, instance: Product, created, **kwargs):
+    # Est ici pour éviter les double imports
+    if instance.categorie_article in [Product.BADGE, ]:
+        fedow_config = FedowConfig.get_solo()
+        fedow_asset = AssetFedow(fedow_config=fedow_config)
+        asset, created = fedow_asset.get_or_create_asset(instance)

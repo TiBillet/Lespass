@@ -110,6 +110,11 @@ class TarifBilletViewSet(viewsets.ViewSet):
 
 class ProductViewSet(viewsets.ViewSet):
 
+    def retrieve(self, request, pk):
+        product = get_object_or_404(Product, pk=pk)
+        serializer = ProductSerializer(product, context={'request': request})
+        return Response(serializer.data)
+
     def list(self, request):
         serializer = ProductSerializer(
             Product.objects.filter(

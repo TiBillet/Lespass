@@ -424,7 +424,7 @@ class Product(models.Model):
                         )
 
     NONE, BILLET, PACK, RECHARGE_CASHLESS = 'N', 'B', 'P', 'R'
-    RECHARGE_FEDERATED, VETEMENT, MERCH, ADHESION = 'S', 'T', 'M', 'A'
+    RECHARGE_FEDERATED, VETEMENT, MERCH, ADHESION, BADGE = 'S', 'T', 'M', 'A', 'G'
     DON, FREERES, NEED_VALIDATION = 'D', 'F', 'V'
 
     CATEGORIE_ARTICLE_CHOICES = [
@@ -436,6 +436,7 @@ class Product(models.Model):
         (VETEMENT, _('Vetement')),
         (MERCH, _('Merchandasing')),
         (ADHESION, _('Abonnement et/ou adhésion associative')),
+        (BADGE, _('Badgeuse')),
         (DON, _('Don')),
         (FREERES, _('Reservation gratuite')),
         (NEED_VALIDATION, _('Nécessite une validation manuelle'))
@@ -458,6 +459,7 @@ class Product(models.Model):
         self_category_map = {
             self.ADHESION: 'SUB',
             self.RECHARGE_CASHLESS: 'FED',
+            self.BADGE: 'BDG',
         }
         return self_category_map.get(self.categorie_article, None)
 

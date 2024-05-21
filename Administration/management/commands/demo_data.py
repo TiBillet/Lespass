@@ -167,6 +167,31 @@ class Command(BaseCommand):
                 subscription_type=Price.MONTH,
             )
 
+            ### BADGEUSE ###
+
+            badgeuse_cowork, created = Product.objects.get_or_create(
+                name="Badgeuse Co-Working",
+                short_description="Badger l'acces au co working",
+                long_description="Venez pointer votre présence.",
+                categorie_article=Product.BADGE,
+            )
+
+            badge_jour, created = Price.objects.get_or_create(
+                product=badgeuse_cowork,
+                name="Jour",
+                short_description="Pointage pour la journée",
+                prix='5',
+                recurring_payment=False,
+            )
+
+            badge_hour, created = Price.objects.get_or_create(
+                product=badgeuse_cowork,
+                name="Heure",
+                short_description="Pointage à l'heure",
+                prix='1',
+                recurring_payment=False,
+            )
+
             ### EVENTS ###
             rock, created = Tag.objects.get_or_create(name='Rock')
             jazz, created = Tag.objects.get_or_create(name='Jazz')
