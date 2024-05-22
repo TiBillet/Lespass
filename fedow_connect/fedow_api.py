@@ -362,6 +362,7 @@ class PlaceFedow():
         link_response = _get(fedow_config=self.fedow_config,
                                       user=admin,
                                       path='place/link_cashless_to_place')
+
         if not link_response.status_code == 201:
             logger.error(f"link_cashless_to_place ERRORS : {link_response.status_code}")
             raise Exception(f"link_cashless_to_place ERRORS : {link_response.status_code}")
