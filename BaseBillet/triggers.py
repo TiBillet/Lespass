@@ -1,9 +1,12 @@
 import logging
 
+import requests
+from django.conf import settings
 from django.db import connection
 from django.utils import timezone
 from django.utils.text import slugify
 
+from ApiBillet.serializers import LigneArticleSerializer
 from BaseBillet.models import LigneArticle, Product, Membership, Price, Configuration, Paiement_stripe
 from BaseBillet.tasks import send_membership_to_cashless, send_to_ghost, send_email_generique, create_invoice_pdf
 from django.utils.translation import gettext_lazy as _
@@ -54,7 +57,7 @@ def context_for_membership_email(membership: Membership = None, paiement_stripe=
 
 
 def get_membership_after_paiement(trigger):
-    paiement_stripe : Paiement_stripe = trigger.ligne_article.paiement_stripe
+    paiement_stripe: Paiement_stripe = trigger.ligne_article.paiement_stripe
     user = paiement_stripe.user
     price: Price = trigger.ligne_article.pricesold.price
     product: Product = trigger.ligne_article.pricesold.productsold.product
@@ -70,7 +73,7 @@ def get_membership_after_paiement(trigger):
         membership = Membership.objects.create(
             user=user,
             price=price,
-            first_contribution = timezone.now().date(),
+            first_contribution=timezone.now().date(),
         )
 
     return membership
@@ -105,11 +108,12 @@ def send_membership_invoice_email_after_paiement(trigger, membership: Membership
         context=context_for_membership_email(paiement_stripe=paiement_stripe, membership=membership),
         email=f"{user.email}",
         attached_files={
-            f'{slugify(membership.member_name())}_{slugify(paiement_stripe.invoice_number())}_tibillet_invoice.pdf' :
+            f'{slugify(membership.member_name())}_{slugify(paiement_stripe.invoice_number())}_tibillet_invoice.pdf':
                 create_invoice_pdf(paiement_stripe)},
     )
     logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation par email DELAY")
     return True
+
 
 def send_membership_to_ghost(membership: Membership):
     # Envoyer à ghost :
@@ -123,8 +127,20 @@ def send_membership_to_ghost(membership: Membership):
 
 ### SEND TO LABOUTIK for comptabilité ###
 
-def send_sale_to_laboutik(membership: Membership):
-    return True
+# TODO: Lancer ça dans un celery avec retry au cazou perte de co depuis le cashless
+def send_sale_to_laboutik(ligne_article: LigneArticle):
+    config = Configuration.get_solo()
+    if config.check_serveur_cashless():
+        import ipdb; ipdb.set_trace()
+        serialized_ligne_article = LigneArticleSerializer(ligne_article).data
+        send_to_laboutik = requests.post(
+            f'{config.server_cashless}/api/salefromlespass',
+            headers={'Authorization': f'Api-Key {config.key_cashless}'},
+            data=serialized_ligne_article,
+            verify=bool(not settings.DEBUG),
+            timeout=2,
+        )
+
 
 ### END SEND TO LABOUTIK
 
@@ -185,8 +201,8 @@ class ActionArticlePaidByCategorie:
     def trigger_A(self):
         logger.info(f"TRIGGER ADHESION")
 
-        membership : Membership = get_membership_after_paiement(self)
-        updated_membership : Membership = update_membership_state_after_paiement(self, membership)
+        membership: Membership = get_membership_after_paiement(self)
+        updated_membership: Membership = update_membership_state_after_paiement(self, membership)
 
         email_sended = send_membership_invoice_email_after_paiement(self, updated_membership)
         ghost_sended = send_membership_to_ghost(updated_membership)
@@ -197,8 +213,7 @@ class ActionArticlePaidByCategorie:
         fedowAPI = FedowAPI(fedow_config=fedow_config)
         serialized_transaction = fedowAPI.membership.create(membership=membership)
 
-        # TODO: On a débranché le cashless, il ira chercher ses tokens tout seul comme un grand
-        # laboutik_sended = send_sale_to_laboutik(updated_membership)
+        laboutik_sended = send_sale_to_laboutik(self.ligne_article)
 
         # Si tout est passé plus haut, on VALID La ligne :
         # Tout ceci se déroule dans un pre_save signal.pre_save_signal_status()

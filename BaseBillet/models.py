@@ -519,11 +519,13 @@ class Price(models.Model):
                                              related_name="adhesion_obligatoire",
                                              blank=True, null=True)
 
-    NA, YEAR, MONTH, CIVIL = 'N', 'Y', 'M', 'C'
+    NA, YEAR, MONTH, DAY, HOUR, CIVIL = 'N', 'Y', 'M', 'D', 'H', 'C'
     SUB_CHOICES = [
         (NA, _('Non applicable')),
         (YEAR, _("365 Jours")),
         (MONTH, _('30 Jours')),
+        (DAY, _('1 Jour')),
+        (HOUR, _('1 Heure')),
         (CIVIL, _('Civile')),
     ]
 
@@ -1268,6 +1270,12 @@ class LigneArticle(models.Model):
         else:
             return _('no stripe send')
 
+    def user_wallet(self):
+        if self.paiement_stripe.user :
+            user = self.paiement_stripe.user
+            user.refresh_from_db()
+            return user.wallet
+        return None
 
 class Membership(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='membership')
