@@ -1364,7 +1364,6 @@ class PriceSoldSerializer(serializers.ModelSerializer):
         fields = [
             'price',
             'prix',
-            'vat',
         ]
 
 class LigneArticleSerializer(serializers.ModelSerializer):
@@ -1372,7 +1371,9 @@ class LigneArticleSerializer(serializers.ModelSerializer):
     class Meta:
         model = LigneArticle
         fields = [
+            'uuid',
             'pricesold',
             'qty',
-            'user_wallet'
+            'vat',
+            'user_uuid_wallet'
         ]

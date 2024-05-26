@@ -1270,11 +1270,11 @@ class LigneArticle(models.Model):
         else:
             return _('no stripe send')
 
-    def user_wallet(self):
+    def user_uuid_wallet(self):
         if self.paiement_stripe.user :
             user = self.paiement_stripe.user
             user.refresh_from_db()
-            return user.wallet
+            return user.wallet.uuid
         return None
 
 class Membership(models.Model):

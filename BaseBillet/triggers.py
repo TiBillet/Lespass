@@ -1,4 +1,6 @@
+import json
 import logging
+from django.core.serializers.json import DjangoJSONEncoder
 
 import requests
 from django.conf import settings
@@ -131,15 +133,23 @@ def send_membership_to_ghost(membership: Membership):
 def send_sale_to_laboutik(ligne_article: LigneArticle):
     config = Configuration.get_solo()
     if config.check_serveur_cashless():
-        import ipdb; ipdb.set_trace()
         serialized_ligne_article = LigneArticleSerializer(ligne_article).data
+        json_data = json.dumps(serialized_ligne_article, cls=DjangoJSONEncoder)
         send_to_laboutik = requests.post(
             f'{config.server_cashless}/api/salefromlespass',
-            headers={'Authorization': f'Api-Key {config.key_cashless}'},
-            data=serialized_ligne_article,
+            headers={
+                "Authorization": f"Api-Key {config.key_cashless}",
+                "Content-type": "application/json",
+            },
+            data=json_data,
             verify=bool(not settings.DEBUG),
             timeout=2,
         )
+        if send_to_laboutik.status_code != 200:
+            raise Exception(f"send_sale_to_laboutik send_to_laboutik.status_code = {send_to_laboutik.status_code}")
+
+    else:
+        raise Exception(f"send_sale_to_laboutik config.check_serveur_cashless() = {config.check_serveur_cashless()}")
 
 
 ### END SEND TO LABOUTIK
