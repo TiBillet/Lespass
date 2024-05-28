@@ -7,7 +7,7 @@ from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
 
 from AuthBillet.models import TibilletUser
-from BaseBillet.models import Reservation, LigneArticle, Ticket, Paiement_stripe, Product
+from BaseBillet.models import Reservation, LigneArticle, Ticket, Paiement_stripe, Product, PriceSold
 from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation
 from BaseBillet.triggers import ActionArticlePaidByCategorie
 from fedow_connect.fedow_api import AssetFedow
@@ -86,6 +86,7 @@ def set_paiement_stripe_valid(old_instance: LigneArticle, new_instance: LigneArt
             else:
                 logger.info(
                     f"         len(lignes_meme_panier) {len(lignes_meme_panier)} != len(lignes_meme_panier_valide) {len(lignes_meme_panier_valide)} ")
+
 
 
 def action_x_to_paid(old_instance: LigneArticle, new_instance: LigneArticle):
@@ -323,3 +324,10 @@ def send_badgeuse_product_to_fedow(sender, instance: Product, created, **kwargs)
         fedow_config = FedowConfig.get_solo()
         fedow_asset = AssetFedow(fedow_config=fedow_config)
         asset, created = fedow_asset.get_or_create_asset(instance)
+
+
+# @receiver(post_save, sender=PriceSold)
+# def send_price_solded_to_laboutik(sender, instance: PriceSold, created, **kwargs):
+    # Pour la comptabilité, on envoie toute les vente à l'instance LaBoutik
+    # import ipdb; ipdb.set_trace()
+    # pass

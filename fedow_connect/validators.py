@@ -87,22 +87,6 @@ class WalletValidator(serializers.Serializer):
         self.wallet, created = Wallet.objects.get_or_create(uuid=attrs['uuid'])
         return attrs
 
-    # Ne s'execute que si on va chercher .data
-    # et non pas validated_data
-    # def to_representation(self, instance):
-    #     # Add apikey user to representation
-    #     rep = super().to_representation(instance)
-    #     rep['custom_representation'] = {}
-    #     #TODO: aller voir dans toute les config de lieux pour trouver le nom
-    #
-    #     if hasattr(self.wallet, 'user'):
-    #         rep['custom_representation']['display_name'] = self.wallet.user.email
-    #     elif self.wallet.display_name:
-    #         rep['custom_representation']['display_name'] = self.wallet.display_name
-    #     else :
-    #         rep['custom_representation']['display_name'] = f"{str(self.wallet.uuid)[:8]}"
-    #
-    #     return rep
 
 class QrCardValidator(serializers.Serializer):
     wallet_uuid = serializers.UUIDField()

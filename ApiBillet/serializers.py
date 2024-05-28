@@ -1348,3 +1348,32 @@ class ReservationValidator(serializers.Serializer):
             representation['paiement_stripe_uuid'] = self.paiement_stripe_uuid
         # import ipdb;ipdb.set_trace()
         return representation
+
+
+# class PaiementStripeSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = Paiement_stripe
+#         fields = [
+#             'price',
+#         ]
+
+class PriceSoldSerializer(serializers.ModelSerializer):
+    price = PriceSerializer(many=False)
+    class Meta:
+        model = PriceSold
+        fields = [
+            'price',
+            'prix',
+        ]
+
+class LigneArticleSerializer(serializers.ModelSerializer):
+    pricesold = PriceSoldSerializer(many=False)
+    class Meta:
+        model = LigneArticle
+        fields = [
+            'uuid',
+            'pricesold',
+            'qty',
+            'vat',
+            'user_uuid_wallet'
+        ]

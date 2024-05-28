@@ -176,21 +176,29 @@ class Command(BaseCommand):
                 categorie_article=Product.BADGE,
             )
 
-            badge_jour, created = Price.objects.get_or_create(
+            badge_zero, created = Price.objects.get_or_create(
                 product=badgeuse_cowork,
-                name="Jour",
-                short_description="Pointage pour la journée",
-                prix='5',
+                name="Passage",
+                short_description="Pointage d'un passage",
+                prix=0,
                 recurring_payment=False,
             )
 
-            badge_hour, created = Price.objects.get_or_create(
-                product=badgeuse_cowork,
-                name="Heure",
-                short_description="Pointage à l'heure",
-                prix='1',
-                recurring_payment=False,
-            )
+            # badge_jour, created = Price.objects.get_or_create(
+            #     product=badgeuse_cowork,
+            #     name="Jour",
+            #     short_description="Pointage payant pour la journée",
+            #     prix=5,
+            #     recurring_payment=False,
+            # )
+            #
+            # badge_hour, created = Price.objects.get_or_create(
+            #     product=badgeuse_cowork,
+            #     name="Heure",
+            #     short_description="Pointage à l'heure",
+            #     prix=1,
+            #     recurring_payment=False,
+            # )
 
             ### EVENTS ###
             rock, created = Tag.objects.get_or_create(name='Rock')

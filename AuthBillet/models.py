@@ -114,8 +114,6 @@ class TibilletManager(BaseUserManager):
         user.groups.add(staff_group)
 
 
-# class Wallet(models.Model):
-#     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, db_index=True)
 
 class RsaKey(models.Model):
     private_pem = models.CharField(max_length=2048, editable=False)
