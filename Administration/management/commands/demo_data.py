@@ -151,16 +151,16 @@ class Command(BaseCommand):
 
             amap_annuelle, created = Price.objects.get_or_create(
                 product=amap,
-                name="Annuelle",
-                short_description="Adhésion annuelle",
+                name="Annuel",
+                short_description="Adhésion annuel",
                 prix='400',
                 recurring_payment=False,
                 subscription_type=Price.YEAR,
             )
 
-            adhesion_asso_mensuelle_recurente, created = Price.objects.get_or_create(
+            amap_mensuelle_recurente, created = Price.objects.get_or_create(
                 product=amap,
-                name="Mensuelle",
+                name="Mensuel",
                 short_description="Adhésion récurente",
                 prix='40',
                 recurring_payment=True,

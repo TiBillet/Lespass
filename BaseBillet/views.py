@@ -156,9 +156,12 @@ def emailconfirmation(request, uuid, token):
 
 @require_GET
 def home(request):
-    template_context = get_context(request)
-    template_context['events'] = Event.objects.all()
-    return render(request, "htmx/views/home.html", context=template_context)
+    # On redirige vers la page d'adhésion en attendant que les events soient disponible
+    return redirect('/memberships')
+
+    # template_context = get_context(request)
+    # template_context['events'] = Event.objects.all()
+    # return render(request, "htmx/views/home.html", context=template_context)
 
 
 class ScanQrCode(viewsets.ViewSet):
