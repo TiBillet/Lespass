@@ -54,7 +54,7 @@
                             <p class="text-xs text-secondary mb-0">TiBillet</p>
                         {% else %}
                             <h6 class="mb-0 text-xs">{{ tr.amount | dround }}</h6>
-                            <p class="text-xs text-secondary mb-0">{{ tr.serialized_asset.name }}</p>
+                            <p class="text-xs text-secondary mb-0 test-return-asset-name">{{ tr.serialized_asset.name }}</p>
                         {% endif %}
                     </td>
                     <td class="align-middle text-center">
