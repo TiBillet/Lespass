@@ -14,7 +14,7 @@
                     <div class="card z-index-0">
                         <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
                             <div class="bg-gradient-success shadow-success border-radius-lg py-3 pe-1">
-                                <h4 class="text-white font-weight-bolder text-center mt-2 mb-0">
+                                <h4 class="text-white font-weight-bolder text-center mt-2 mb-0 test-return-titre-popup">
                                     Link your card to you
                                 </h4>
                                 {#                                <div class="row mt-3">#}
@@ -51,7 +51,7 @@
                                 {#                                </div>#}
                                 <div class="input-group input-group-dynamic mb-3">
                                     <label class="form-label">Email</label>
-                                    <input name="email" type="email" class="form-control" aria-label="Email"
+                                    <input name="email" type="email" class="form-control test-return-email-link-card" aria-label="Email"
                                            value="{{ user.email }}">
                                 </div>
                                 {#                                <div class="input-group input-group-dynamic mb-3">#}
@@ -59,7 +59,7 @@
                                 {#                                    <input type="password" class="form-control" aria-label="Password">#}
                                 {#                                </div>#}
                                 <div class="form-check text-start ps-0">
-                                    <input class="form-check-input bg-dark border-dark"
+                                    <input class="form-check-input bg-dark border-dark test-return-agree-link-card"
                                            type="checkbox"
                                            name="cgu">
                                     <label class="form-check-label" for="flexCheckDefault">
@@ -72,7 +72,7 @@
                                 <div class="text-center">
                                     <input type="hidden" name="qrcode_uuid" value="{{ qrcode_uuid }}">
                                     <button type="button"
-                                            class="btn bg-gradient-dark w-100 my-4 mb-2"
+                                            class="btn bg-gradient-dark w-100 my-4 mb-2 test-return-validate-link-card"
                                             hx-post="/qr/link/"
                                     >Sign up
                                     </button>
