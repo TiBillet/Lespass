@@ -77,7 +77,7 @@ class Command(BaseCommand):
         # crash if bad api stripe key
         try:
             stripe_mode_test = True
-            if os.environ.get('STRIPE_TEST') == "False" or os.environ.get('STRIPE_TEST') == 0:
+            if os.environ.get('STRIPE_TEST') != '1':
                 stripe_mode_test = False
                 stripe.api_key = stripe_api_key
                 # Test de la cléf
