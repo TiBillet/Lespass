@@ -48,12 +48,12 @@
                     <td class="align-middle text-center">
                         <span class="text-secondary text-xs font-weight-normal">{{ tr.get_action_display }}</span>
                     </td>
-                    <td>
+                    <td class="test-return-{{ tr.serialized_asset.name | slugify }}-{{ tr.amount | dround | slugify }}">
                         {% if tr.serialized_asset.is_stripe_primary %}
-                            <h6 class="mb-0 text-xs">{{ tr.amount | dround }}</h6>
-                            <p class="text-xs text-secondary mb-0">TiBillet</p>
+                            <h6 class="mb-0 text-xs test-return-asset-value">{{ tr.amount | dround }}</h6>
+                            <p class="text-xs text-secondary mb-0 test-return-asset-name">TiBillet</p>
                         {% else %}
-                            <h6 class="mb-0 text-xs">{{ tr.amount | dround }}</h6>
+                            <h6 class="mb-0 text-xs test-return-asset-value">{{ tr.amount | dround }}</h6>
                             <p class="text-xs text-secondary mb-0 test-return-asset-name">{{ tr.serialized_asset.name }}</p>
                         {% endif %}
                     </td>
