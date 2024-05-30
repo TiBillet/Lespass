@@ -11,17 +11,17 @@ services:
     networks:
       - frontend
 
-  lespas_memcached:
+  lespass_memcached:
     image : memcached:1.6
-    container_name: lespas_memcached
-    hostname: lespas_memcached
+    container_name: lespass_memcached
+    hostname: lespass_memcached
     restart: always
     networks:
       - frontend
 
-  lespas_redis:
-    container_name: lespas_redis
-    hostname: lespas_redis
+  lespass_redis:
+    container_name: lespass_redis
+    hostname: lespass_redis
     image: redis:7.2.3-bookworm
     restart: unless-stopped
     networks:
@@ -38,12 +38,12 @@ services:
     env_file: .env
     depends_on:
       - lespass_postgres
-      - lespas_redis
-      - lespas_memcached
+      - lespass_redis
+      - lespass_memcached
     links:
       - lespass_postgres:postgres
-      - lespas_redis:redis
-      - lespas_memcached:memcached
+      - lespass_redis:redis
+      - lespass_memcached:memcached
     networks:
       - frontend
     extra_hosts:
@@ -60,11 +60,12 @@ services:
       - ./:/DjangoFiles
     depends_on:
       - lespass_postgres
-      - lespas_redis
+      - lespass_redis
+      - lespass_memcached
     links:
       - lespass_postgres:postgres
-      - lespas_redis:redis
-      - lespas_memcached:memcached
+      - lespass_redis:redis
+      - lespass_memcached:memcached
     networks:
       - frontend
     extra_hosts:

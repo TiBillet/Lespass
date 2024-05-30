@@ -24,8 +24,8 @@ class RootConfiguration(SingletonModel):
                                       choices=TZ_CHOICES,
                                       )
 
-    stripe_api_key = models.CharField(max_length=110, blank=True, null=True)
-    stripe_test_api_key = models.CharField(max_length=110, blank=True, null=True)
+    stripe_api_key = models.CharField(max_length=250, blank=True, null=True)
+    stripe_test_api_key = models.CharField(max_length=250, blank=True, null=True)
 
     stripe_mode_test = models.BooleanField(default=True)
 
