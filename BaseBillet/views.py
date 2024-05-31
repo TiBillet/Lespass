@@ -336,7 +336,12 @@ class MyAccount(viewsets.ViewSet):
         user = request.user
         fedowAPI = FedowAPI()
         stripe_checkout_url = fedowAPI.wallet.get_federated_token_refill_checkout(user)
-        return HttpResponseClientRedirect(stripe_checkout_url)
+        if stripe_checkout_url:
+            return HttpResponseClientRedirect(stripe_checkout_url)
+        else :
+            messages.add_message(request, messages.ERROR, "No available. Contact an admin.")
+            return redirect('/memberships/wallet')
+
 
     @action(detail=True, methods=['GET'])
     def return_refill_wallet(self, request, pk=None):

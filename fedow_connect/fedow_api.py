@@ -322,6 +322,10 @@ class WalletFedow():
             data={"lespass_signed_data": signed_data},
         )
 
+        if response_checkout.status_code == 417:
+            logger.warning("get_federated_token_refill_checkout. RETURN FEDOW : No stripe key provided on .env -> 417")
+            return None
+
         if response_checkout.status_code != 202:
             logger.error(response_checkout.json())
             raise Exception(response_checkout.json())
