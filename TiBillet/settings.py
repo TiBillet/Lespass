@@ -42,18 +42,19 @@ if not DEBUG and os.environ.get('SENTRY_DNS'):
         profiles_sample_rate=0.5,
     )
 
-ALLOWED_HOSTS = ['*'] if DEBUG else [f'{os.environ.get("DOMAIN")}', ]
+ALLOWED_HOSTS = [
+    f'{os.environ["DOMAIN"]}',
+    f'www.{os.environ["DOMAIN"]}',
+    f'{os.environ["SUB"]}.{os.environ["DOMAIN"]}',
+    f'{os.environ["META"]}.{os.environ["DOMAIN"]}',
+]
+
 CSRF_TRUSTED_ORIGINS = [
-    "http://localhost",
-    "https://tibillet.localhost",
-    "https://demo.tibillet.localhost",
-    "https://demo.filaos.re",
-    "https://agenda.filaos.re",
-    "https://www.betabillet.tech",
-    "https://demo.betabillet.tech",
-    "https://agenda.betabillet.tech",
     f'https://{os.environ.get("DOMAIN")}',
-] if DEBUG else [f'https://{os.environ.get("DOMAIN")}', ]
+    f'https://www.{os.environ["DOMAIN"]}',
+    f'https://{os.environ["SUB"]}.{os.environ["DOMAIN"]}',
+    f'https://{os.environ["META"]}.{os.environ["DOMAIN"]}',
+]
 
 CORS_ORIGIN_WHITELIST = CSRF_TRUSTED_ORIGINS
 

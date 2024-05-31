@@ -156,6 +156,7 @@ def emailconfirmation(request, uuid, token):
 
 @require_GET
 def home(request):
+    # import ipdb; ipdb.set_trace()
     # On redirige vers la page d'adhésion en attendant que les events soient disponible
     return redirect('/memberships')
 
