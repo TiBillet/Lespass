@@ -11,6 +11,7 @@ from django_tenants.utils import tenant_context
 
 from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
+from BaseBillet.models import Configuration
 from Customers.models import Client, Domain
 import os
 
@@ -173,6 +174,8 @@ class Command(BaseCommand):
             ## Création du premier admin:
             user: TibilletUser = get_or_create_user(admin_email)
             user.client_admin.add(tenant_first_sub)
-
+            config = Configuration.get_solo()
+            config.organisation = first_sub.capitalize()
+            config.save()
 
         call_command('check_permissions')

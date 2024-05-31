@@ -74,6 +74,7 @@ class RootConfiguration(SingletonModel):
             return True
         elif handshake.status_code == 208:
             logger.error(f"A TiBillet/Lespass is already registered in this fedow Instance : {fedow_domain}")
+            raise Exception(f"A TiBillet/Lespass is already registered in this fedow Instance : {fedow_domain}")
 
         logger.error(f"Error while root handshake with FEDOW")
         raise Exception(f"Error while root handshake with FEDOW")
