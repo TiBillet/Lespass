@@ -177,5 +177,7 @@ class Command(BaseCommand):
             config = Configuration.get_solo()
             config.organisation = first_sub.capitalize()
             config.save()
+            fedowAPI = FedowAPI()
+            assert FedowConfig.get_solo().can_fedow()
 
         call_command('check_permissions')

@@ -43,7 +43,7 @@ class Command(BaseCommand):
             ### CONFIGURATION VARIABLE ####
 
             config = Configuration.get_solo()
-            config.organisation = "TiBilletistan"
+            config.organisation = sub.capitalize()
             config.short_description = "Les scènes oniriques du TiBilletistan : un espace de démonstration."
             config.long_description = (
                 "Vous trouverez ici un exemple de plusieurs types d'évènements, d'adhésions et d'abonnements."
