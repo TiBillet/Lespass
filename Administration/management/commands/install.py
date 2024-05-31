@@ -178,6 +178,7 @@ class Command(BaseCommand):
             config.organisation = first_sub.capitalize()
             config.save()
             fedowAPI = FedowAPI()
-            assert FedowConfig.get_solo().can_fedow()
+            if not FedowConfig.get_solo().can_fedow():
+                raise Exception('Erreur on install : can_fedow = False')
 
         call_command('check_permissions')

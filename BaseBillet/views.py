@@ -340,7 +340,7 @@ class MyAccount(viewsets.ViewSet):
             return HttpResponseClientRedirect(stripe_checkout_url)
         else :
             messages.add_message(request, messages.ERROR, "No available. Contact an admin.")
-            return redirect('/memberships/wallet')
+            return HttpResponseClientRedirect('/my_account/')
 
 
     @action(detail=True, methods=['GET'])
