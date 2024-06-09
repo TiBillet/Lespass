@@ -8,7 +8,7 @@ RUN mkdir -p /usr/share/man/man1
 RUN mkdir -p /usr/share/man/man7
 RUN apt-get install -y --no-install-recommends postgresql-client
 
-RUN apt-get install -y nano iputils-ping curl borgbackup cron
+RUN apt-get install -y nano iputils-ping curl borgbackup cron gettext
 
 RUN useradd -ms /bin/bash tibillet
 USER tibillet

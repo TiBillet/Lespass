@@ -5,13 +5,12 @@
         <table class="table align-items-center mb-0">
             <thead>
             <tr>
-                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Asset / Lieu</th>
-                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Type / Tarif</th>
-                <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Fédérée avec</th>
-                <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Dernière
-                    action
+                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">{% translate "Asset / Place" %}</th>
+                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">{% translate "Type / Price" %}</th>
+                <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">{% translate "Federated with" %}</th>
+                <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">{% translate "Last action" %}
                 </th>
-{#                <th class="text-secondary opacity-7"></th>#}
+                {#                <th class="text-secondary opacity-7"></th>#}
             </tr>
             </thead>
             <tbody>
@@ -60,13 +59,13 @@
                     <td class="align-middle text-center">
                         <span class="text-secondary text-xs font-weight-normal">{{ token.last_transaction_datetime }}</span>
                     </td>
-{#                    TODO: Afficher un modal avec les details de l'asset#}
-{#                    <td class="align-middle">#}
-{#                        <a href="#" class="text-secondary font-weight-normal text-xs" data-toggle="tooltip"#}
-{#                           data-original-title="Edit user">#}
-{#                            detail#}
-{#                        </a>#}
-{#                    </td>#}
+                    {#                    TODO: Afficher un modal avec les details de l'asset#}
+                    {#                    <td class="align-middle">#}
+                    {#                        <a href="#" class="text-secondary font-weight-normal text-xs" data-toggle="tooltip"#}
+                    {#                           data-original-title="Edit user">#}
+                    {#                            detail#}
+                    {#                        </a>#}
+                    {#                    </td>#}
                 </tr>
             {% endfor %}
             </tbody>

@@ -1,5 +1,6 @@
 {% extends base_template %}
 {% load tibitags %}
+{% load i18n %}
 
 {% block main %}
     {% comment %} manages the "embed" mode {% endcomment %}
@@ -31,14 +32,14 @@
                             {% endif %}
                             {% if membership.uuid in user.get_active_membership %}
                                 <button class="btn btn-outline-secondary btn-sm btn-success">
-                                    Adhésion valide
+                                    {% translate "Adhésion valide" %}
                                 </button>
                             {% else %}
                                 <button class="btn btn-outline-secondary btn-sm"
                                         data-bs-toggle="modal"
                                         data-bs-target="#tibillet-membership-modal-{{ membership.uuid }}"
                                         role="button" aria-label="Adhérez {{ membership.name }}">
-                                    Adhérez
+                                    {% translate "Adhérez" %}
                                 </button>
                             {% endif %}
                         </div>

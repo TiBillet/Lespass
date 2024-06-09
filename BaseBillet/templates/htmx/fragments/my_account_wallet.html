@@ -1,3 +1,4 @@
+{% load i18n %}
 <div class="container pt-5">
 
     <div class="d-flex flex-row" hx-indicator="#tibillet-spinner">
@@ -5,12 +6,12 @@
                 role="button"
                 aria-label="valider formulaire adhésion"
                 hx-get="/my_account/refill_wallet">
-            Recharger mon portefeuille
+            {% translate "Refill my wallet" %}
         </button>
     </div>
 
     <div hx-get="/my_account/tokens_table/" hx-trigger="revealed" class="mt-4">
-        <span>Chargement des tokens</span>
+        <span>{% translate "Loading tokens" %}</span>
         <div class="d-flex justify-content-center align-items-center ">
             <div class="spinner-border text-info"
                  role="status"
@@ -26,7 +27,7 @@
                     hx-get="/my_account/transactions_table/"
                     hx-target="#transactions_table"
                     hx-swap="outerHTML">
-                Afficher vos dernières transactions
+                {% translate "Show the last transactions" %}
             </button>
         </div>
     </div>

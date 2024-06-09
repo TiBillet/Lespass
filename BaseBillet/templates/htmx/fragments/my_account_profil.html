@@ -1,9 +1,18 @@
+{% load i18n %}
 <div class="container pt-5">
-    <h1>Mon profil</h1>
-    {%  if not user.email_valid  %}
-        Merci de valider votre email pour activer votre espace.
-        <button>Renvoyer le mail de validation</button>
+    <h1>{% translate "My profil" %}</h1>
+    {% if not user.email_valid %}
+        {% translate "Thanks to valid your email for activate your accont" %}
+
+        <button type="submit" class="btn bg-gradient-dark-blue btn-lg p-4  w-75 mx-auto test-return-show-transactions"
+                role="button"
+                aria-label="resend validation email"
+                hx-get="/my_account/resend_activation_email/">
+            {% translate "Resend validation email" %}
+        </button>
+
+        <button></button>
     {% else %}
-        Mes cartes :
-    {% endif  %}
+        {% translate "My card" %} :
+    {% endif %}
 </div>

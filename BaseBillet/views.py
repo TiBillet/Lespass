@@ -411,6 +411,7 @@ class MembershipMVT(viewsets.ViewSet):
 
     def list(self, request: HttpRequest):
         template_context = get_context(request)
+        # import ipdb; ipdb.set_trace()
         template_context["memberships"] = Product.objects.filter(categorie_article=Product.ADHESION)
         return render(request, "htmx/views/memberships.html", context=template_context)
 

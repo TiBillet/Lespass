@@ -11,6 +11,7 @@ POSTGRES_PASSWORD='' # strong ! generate a new fernet for exemple.
 POSTGRES_DB='lespass'
 
 TIME_ZONE='Europe/Paris' # or where you are
+LANGUAGE_CODE='fr-fr'
 PUBLIC='TiBillet Coop.' # The name of the root instance
 
 FEDOW_DOMAIN='' # the same as Fedow

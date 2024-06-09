@@ -1,7 +1,7 @@
+{% load i18n %}
 <div class="container pt-5">
-
     <div hx-get="/my_account/membership_table/" hx-trigger="revealed" class="mt-4">
-        <span>Chargement des tokens</span>
+        <span>{% translate "Loading tokens" %}</span>
         <div class="d-flex justify-content-center align-items-center ">
             <div class="spinner-border text-info"
                  role="status"

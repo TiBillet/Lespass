@@ -1,6 +1,6 @@
 {% extends base_template %}
+{% load i18n %}
 {% load tibitags %}
-
 {% block main %}
 
     {% include "htmx/components/django_messages_toast.html" %}
@@ -15,7 +15,7 @@
                         <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
                             <div class="bg-gradient-success shadow-success border-radius-lg py-3 pe-1">
                                 <h4 class="text-white font-weight-bolder text-center mt-2 mb-0 test-return-titre-popup">
-                                    Link your card to you
+                                    {% translate "Link your card to you" %}
                                 </h4>
                                 {#                                <div class="row mt-3">#}
                                 {#                                    <div class="col-2 text-center ms-auto">#}
@@ -63,9 +63,9 @@
                                            type="checkbox"
                                            name="cgu">
                                     <label class="form-check-label" for="flexCheckDefault">
-                                        I agree the <a href="https://tibillet.org/cgucgv/"
+                                        {% translate "I agree the" %} <a href="https://tibillet.org/cgucgv/"
                                                        class="text-dark font-weight-bolder">
-                                        Terms and Conditions</a>
+                                        {% translate "Terms and Conditions" %}</a>
                                     </label>
                                 </div>
 
@@ -74,14 +74,13 @@
                                     <button type="button"
                                             class="btn bg-gradient-dark w-100 my-4 mb-2 test-return-validate-link-card"
                                             hx-post="/qr/link/"
-                                    >Sign up
+                                    >{% translate "Sign up" %}
                                     </button>
 
                                 </div>
                                 <div class="text-center">
                                     <p class="text-sm mt-3">
-                                        Learn more about TiBillet, a free and privacy-friendly software for cooperatives
-                                        networks :
+                                        {% translate "Learn more about TiBillet, a free and privacy-friendly software for cooperatives networks :" %}
                                         <a href="https://tibillet.org/" target="_blank"
                                            class="text-dark font-weight-bolder">https://tibillet.org/</a>
                                     </p>

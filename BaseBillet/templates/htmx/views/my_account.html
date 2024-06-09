@@ -1,5 +1,6 @@
 {% extends base_template %}
 {% load tibitags %}
+{% load i18n %}
 
 {% block main %}
     {% comment %} manages the "embed" mode {% endcomment %}
@@ -19,20 +20,20 @@
                    <li data-cible="wallet">
                        <a href="#" class="nav-link text-dark" hx-get="/my_account/wallet/" hx-trigger="click"
                           hx-target="#creation-content-parts" hx-swap="innerHTML">
-                          Portefeuille
+                          {% translate "Wallet" %}
                        </a>
                    </li>
                    <li data-cible="membership">
                        <a href="#" class="nav-link text-dark" hx-get="/my_account/membership/" hx-trigger="click"
                           hx-target="#creation-content-parts" hx-swap="innerHTML">
-                           Adhésions
+                           {% translate "Memberships" %}
                        </a>
                    </li>
                    <li data-cible="profile">
                        <a href="#" class="nav-link  text-dark" hx-get="/my_account/profile/" hx-trigger="click"
                           hx-target="#creation-content-parts" hx-swap="innerHTML"
                           hx-trigger-after-settle="nav(1)">
-                           Profil
+                           {% translate "Profil" %}
                        </a>
                    </li>
                </ul>

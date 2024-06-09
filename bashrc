@@ -8,6 +8,9 @@ alias cel="poetry run celery -A TiBillet worker -l INFO"
 
 alias test="poetry run python /DjangoFiles/manage.py test"
 
+alias mmes="django-admin makemessages -l en && django-admin makemessages -l fr"
+alias cmes="django-admin compilemessages"
+
 tibinstall() {
     poetry run python /DjangoFiles/manage.py collectstatic
     poetry run python /DjangoFiles/manage.py migrate
