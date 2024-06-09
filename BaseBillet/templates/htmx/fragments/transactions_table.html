@@ -21,13 +21,13 @@
                                 {#                                <img src="{{ config.logo.thumbnail.url }}" class="avatar avatar-sm">#}
                                 {#                                <img src="{{ config.logo.thumbnail.url }}" class="avatar avatar-sm">#}
                                 {% if tr.serialized_sender.uuid == user.wallet.uuid %}
-                                    <h6 class="mb-0 text-xs">Myself</h6>
+                                    <h6 class="mb-0 text-xs">{% translate "Myself" %}</h6>
                                 {% else %}
                                     <h6 class="mb-0 text-xs">{{ tr.serialized_sender.get_name }}</h6>
                                 {% endif %}
 
                                 {% if tr.serialized_receiver.uuid == user.wallet.uuid %}
-                                    <h6 class="mb-0 text-xs">Myself</h6>
+                                    <h6 class="mb-0 text-xs">{% translate "Myself" %}</h6>
                                 {% else %}
                                     <h6 class="mb-0 text-xs">{{ tr.serialized_receiver.get_name }}</h6>
                                 {% endif %}

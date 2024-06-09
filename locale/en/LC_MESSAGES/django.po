@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-06-09 20:11+0000\n"
+"POT-Creation-Date: 2024-06-09 20:13+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -927,6 +927,11 @@ msgstr ""
 
 #: BaseBillet/templates/htmx/fragments/transactions_table.html:11
 msgid "Date"
+msgstr ""
+
+#: BaseBillet/templates/htmx/fragments/transactions_table.html:24
+#: BaseBillet/templates/htmx/fragments/transactions_table.html:30
+msgid "Myself"
 msgstr ""
 
 #: BaseBillet/templates/htmx/views/inscription.html:18
