@@ -254,8 +254,30 @@ class MyAccount(viewsets.ViewSet):
         template_context['header'] = False
         return render(request, "htmx/fragments/my_account_wallet.html", context=template_context)
 
-    # @action(detail=False, methods=['GET'])
-    # def my_card(self, request):
+    @action(detail=False, methods=['GET'])
+    def my_cards(self, request):
+        if request.user.email_valid:
+            fedowAPI = FedowAPI()
+            cards = fedowAPI.NFCcard.retrieve_card_by_signature(request.user)
+            context = {
+                'cards': cards
+            }
+            return render(request, "htmx/fragments/cards.html", context=context)
+        else :
+            logger.warning("User email not active")
+
+    @action(detail=True, methods=['GET'])
+    def lost_my_card(self, request, pk):
+        if request.user.email_valid:
+            fedowAPI = FedowAPI()
+            lost_card_report = fedowAPI.NFCcard.lost_my_card_by_signature(request.user, number_printed=pk)
+            if lost_card_report :
+                messages.add_message(request, messages.SUCCESS, _("Your wallet has been detached from this card. You can scan a new one to link it again."))
+            else :
+                messages.add_message(request, messages.ERROR, _("Error when detaching your card. Contact an administrator."))
+            return HttpResponseClientRedirect('/my_account/')
+        else :
+            logger.warning("User email not active")
 
     @action(detail=False, methods=['GET'])
     def tokens_table(self, request):

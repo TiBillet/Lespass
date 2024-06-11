@@ -450,6 +450,37 @@ class NFCcardFedow():
         if fedow_config is None:
             self.config = FedowConfig.get_solo()
 
+    def retrieve_card_by_signature(self, user: TibilletUser):
+        response_get_card = _get(
+            self.fedow_config,
+            user=user,
+            path=f'card/retrieve_card_by_signature',
+        )
+
+        if not response_get_card.status_code == 200:
+            logger.error(f"retrieve_by_signature ERRORS : {response_get_card.status_code}")
+            raise Exception(f"retrieve_by_signature ERRORS : {response_get_card.status_code}")
+
+        card_serialized = CardValidator(data=response_get_card.json(), many=True)
+        if card_serialized.is_valid():
+            return card_serialized.validated_data
+        else:
+            logger.error(f"retrieve_by_signature card_serialized ERRORS : {card_serialized.errors}")
+            raise Exception(f"retrieve_by_signature card_serialized ERRORS : {card_serialized.errors}")
+
+    def lost_my_card_by_signature(self, user, number_printed):
+        response_lost_my_card = _post(
+            self.fedow_config,
+            user=user,
+            path=f'card/lost_my_card_by_signature',
+            data={'number_printed': number_printed}
+        )
+
+        if not response_lost_my_card.status_code == 200:
+            logger.error(f"retrieve_by_signature ERRORS : {response_lost_my_card.status_code}")
+            raise Exception(f"retrieve_by_signature ERRORS : {response_lost_my_card.status_code}")
+        return True
+
     def qr_retrieve(self, qrcode_uuid: uuid4):
         # On vérifie que l'uuid soit bien un uuid :
         checked_uuid = uuid.UUID(str(qrcode_uuid))

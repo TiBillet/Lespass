@@ -71,6 +71,11 @@ def randImg(value):
         return f"/static/images/404-{randint(1,9)}.jpg"
     return value
 
+@register.filter
+def randCardImg(value):
+    if not value :
+        return f"/static/images/404-Card-1.jpg"
+    return value
 # @register.filter
 # def wallet_name(wallet):
 #     return wallet.uuid

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-06-09 20:13+0000\n"
+"POT-Creation-Date: 2024-06-11 13:03+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -865,12 +865,12 @@ msgid "Réservation validée"
 msgstr ""
 
 #: BaseBillet/templates/htmx/fragments/my_account_membership.html:4
-#: BaseBillet/templates/htmx/fragments/my_account_wallet.html:14
+#: BaseBillet/templates/htmx/fragments/my_account_wallet.html:18
 msgid "Loading tokens"
 msgstr ""
 
 #: BaseBillet/templates/htmx/fragments/my_account_profil.html:3
-msgid "My profil"
+msgid "My account"
 msgstr ""
 
 #: BaseBillet/templates/htmx/fragments/my_account_profil.html:5
@@ -881,15 +881,19 @@ msgstr ""
 msgid "Resend validation email"
 msgstr ""
 
-#: BaseBillet/templates/htmx/fragments/my_account_profil.html:16
-msgid "My card"
+#: BaseBillet/templates/htmx/fragments/my_account_profil.html:14
+msgid "email verified"
 msgstr ""
 
-#: BaseBillet/templates/htmx/fragments/my_account_wallet.html:9
+#: BaseBillet/templates/htmx/fragments/my_account_profil.html:17
+msgid "Loading NFC Card info"
+msgstr ""
+
+#: BaseBillet/templates/htmx/fragments/my_account_wallet.html:12
 msgid "Refill my wallet"
 msgstr ""
 
-#: BaseBillet/templates/htmx/fragments/my_account_wallet.html:30
+#: BaseBillet/templates/htmx/fragments/my_account_wallet.html:35
 msgid "Show the last transactions"
 msgstr ""
 
@@ -946,11 +950,11 @@ msgstr "J'accepte les"
 msgid "Terms and Conditions"
 msgstr "CGU/CGV"
 
-#: BaseBillet/templates/htmx/views/inscription.html:77
+#: BaseBillet/templates/htmx/views/inscription.html:78
 msgid "Sign up"
 msgstr "S'enregistrer"
 
-#: BaseBillet/templates/htmx/views/inscription.html:83
+#: BaseBillet/templates/htmx/views/inscription.html:84
 msgid ""
 "Learn more about TiBillet, a free and privacy-friendly software for "
 "cooperatives networks :"
@@ -993,20 +997,48 @@ msgid ""
 "compte. Vous trouverez la facture en pièce jointe."
 msgstr ""
 
-#: BaseBillet/views.py:201 BaseBillet/views.py:254
+#: BaseBillet/views.py:132
 msgid ""
-"Merci de valider votre email pour acceder à toute les fonctionnalitées de "
-"votre espace profil."
+"To access your space, please validate\n"
+"your email address. Don't forget to check your spam!"
 msgstr ""
 
-#: BaseBillet/views.py:227
+#: BaseBillet/views.py:191 BaseBillet/views.py:244
 msgid ""
-"Vous semblez déja posséder une carte TiBillet en lien avec votre "
-"portefeuille. Merci de la révoquer d'abord dans votre espace profil."
+"Please validate your email to access all the features of your profile area."
 msgstr ""
 
-#: BaseBillet/views.py:232
+#: BaseBillet/views.py:217
+msgid ""
+"You seem to already have a TiBillet card linked to your wallet. Please "
+"revoke it first in your profile area to link a new one."
+msgstr ""
+
+#: BaseBillet/views.py:222
 msgid "Not valid"
+msgstr ""
+
+#: BaseBillet/views.py:363
+msgid "Refilled wallet"
+msgstr ""
+
+#: BaseBillet/views.py:365
+msgid "Payment verification error"
+msgstr ""
+
+#: BaseBillet/views.py:473
+#, python-brace-format
+msgid ""
+"Your subscription has been validated. You will receive a confirmation email "
+"at {email}. Thank you very much!"
+msgstr ""
+
+#: BaseBillet/views.py:475
+msgid "Your payment is awaiting validation."
+msgstr ""
+
+#: BaseBillet/views.py:478
+msgid "An error has occurred, please contact the administrator."
 msgstr ""
 
 #: Customers/models.py:18 MetaBillet/models.py:165
