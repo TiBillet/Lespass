@@ -254,6 +254,9 @@ class MyAccount(viewsets.ViewSet):
         template_context['header'] = False
         return render(request, "htmx/fragments/my_account_wallet.html", context=template_context)
 
+    # @action(detail=False, methods=['GET'])
+    # def my_card(self, request):
+
     @action(detail=False, methods=['GET'])
     def tokens_table(self, request):
         config = Configuration.get_solo()

@@ -28,8 +28,8 @@ services:
       - frontend
 
   lespass_django:
-#    build: .
-    image: tibillet/lespass:latest
+    build: .
+#    image: tibillet/lespass:latest
     restart: unless-stopped
     container_name: lespass_django
     hostname: lespass_django
@@ -53,8 +53,8 @@ services:
       - "cashless2.tibillet.localhost:172.17.0.1"
 
   lespass_celery:
-#    build: .
-    image: tibillet/lespass:latest
+    build: .
+#    image: tibillet/lespass:latest
     container_name: lespass_celery
     hostname: lespass_celery
     env_file: .env
