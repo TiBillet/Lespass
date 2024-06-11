@@ -1,34 +1,26 @@
 import logging
-import time
 import uuid
 from io import BytesIO
-from random import randint
 
 import barcode
 import segno
-from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import logout, login, authenticate
+from django.contrib.auth import logout, login
 from django.contrib.messages import MessageFailure
 from django.db import connection
 from django.http import HttpResponse, HttpRequest, Http404
 from django.shortcuts import render, redirect, get_object_or_404
-from django.template.loader import get_template
 from django.template.response import TemplateResponse
 from django.utils.encoding import force_str, force_bytes
 from django.utils.http import urlsafe_base64_encode
-from django.views.decorators.http import require_GET, require_POST
-
+from django.utils.translation import gettext_lazy as _
+from django.views.decorators.http import require_GET
+from django_htmx.http import HttpResponseClientRedirect
+from rest_framework import viewsets, permissions
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
-from rest_framework import viewsets, permissions, status
-from rest_framework.authentication import SessionAuthentication, BasicAuthentication
-from rest_framework.permissions import IsAuthenticated
-
-from django_htmx.http import HttpResponseClientRedirect
-from weasyprint import HTML
-from weasyprint.text.fonts import FontConfiguration
 
 from ApiBillet.serializers import get_or_create_price_sold
 from AuthBillet.models import TibilletUser, Wallet
@@ -36,13 +28,11 @@ from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Event, Price, LigneArticle, \
-    Paiement_stripe, Membership
-from BaseBillet.tasks import create_ticket_pdf, create_invoice_pdf
+    Paiement_stripe
+from BaseBillet.tasks import create_invoice_pdf
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator
 from PaiementStripe.views import CreationPaiementStripe
 from fedow_connect.fedow_api import FedowAPI
-from fedow_connect.validators import WalletValidator
-from django.utils.translation import gettext_lazy as _
 
 logger = logging.getLogger(__name__)
 
@@ -139,8 +129,8 @@ def connexion(request):
                 "modal_message": {
                     "type": "success",
                     "title": "Information",
-                    "content": "Pour acceder à votre espace, merci de valider\n"
-                               "votre adresse email. Pensez à regarder dans les spams !"
+                    "content": _("To access your space, please validate\n"
+                               "your email address. Don't forget to check your spam!")
                 }
             }
             return render(request, "htmx/components/modal_message.html", context=context)
@@ -198,7 +188,7 @@ class ScanQrCode(viewsets.ViewSet):
         # authenticate(request=request, user=user)
         if not user.email_valid:
             logger.warning("User email not active")
-            messages.add_message(request, messages.WARNING, _("Merci de valider votre email pour acceder à toute les fonctionnalitées de votre espace profil."))
+            messages.add_message(request, messages.WARNING, _("Please validate your email to access all the features of your profile area."))
 
         return redirect("/my_account")
 
@@ -224,7 +214,7 @@ class ScanQrCode(viewsets.ViewSet):
         if not created :
             retrieve_wallet = fedowAPI.wallet.retrieve_by_signature(user)
             if retrieve_wallet.validated_data['has_user_card']:
-                messages.add_message(request, messages.ERROR, _("Vous semblez déja posséder une carte TiBillet en lien avec votre portefeuille. Merci de la révoquer d'abord dans votre espace profil."))
+                messages.add_message(request, messages.ERROR, _("You seem to already have a TiBillet card linked to your wallet. Please revoke it first in your profile area to link a new one."))
                 return HttpResponseClientRedirect(request.headers['Referer'])
 
         linked_serialized_card = fedowAPI.NFCcard.linkwallet_cardqrcode(user=user, qrcode_uuid=qrcode_uuid)
@@ -251,7 +241,7 @@ class MyAccount(viewsets.ViewSet):
 
         if not request.user.email_valid:
             logger.warning("User email not active")
-            messages.add_message(request, messages.WARNING, _("Merci de valider votre email pour acceder à toute les fonctionnalitées de votre espace profil."))
+            messages.add_message(request, messages.WARNING, _("Please validate your email to access all the features of your profile area."))
 
         return render(request, "htmx/views/my_account.html", context=template_context)
 
@@ -360,9 +350,9 @@ class MyAccount(viewsets.ViewSet):
         try:
             # TODO; checker la signature du paiement
             wallet = fedowAPI.wallet.retrieve_from_refill_checkout(user, pk)
-            messages.add_message(request, messages.SUCCESS, "Wallet rechargé")
+            messages.add_message(request, messages.SUCCESS, _("Refilled wallet"))
         except Exception as e:
-            messages.add_message(request, messages.ERROR, "Erreur dans la vérification du paiement.")
+            messages.add_message(request, messages.ERROR, _("Payment verification error"))
         return redirect('/my_account/')
 
     #### END REFILL STRIPE PRIMARY ####
@@ -470,12 +460,12 @@ class MembershipMVT(viewsets.ViewSet):
         try:
             if paiement_stripe.status == Paiement_stripe.VALID:
                 messages.add_message(request, messages.SUCCESS,
-                                     f"Votre abonnement a été validé. Vous allez recevoir un mail de confirmation à l'adresse {email}. Merci !")
+                                     _(f"Your subscription has been validated. You will receive a confirmation email at {email}. Thank you very much!"))
             elif paiement_stripe.status == Paiement_stripe.PENDING:
-                messages.add_message(request, messages.WARNING, f"Votre paiement est en attente de validation.")
+                messages.add_message(request, messages.WARNING, _(f"Your payment is awaiting validation."))
             else:
                 messages.add_message(request, messages.WARNING,
-                                     f"Une erreur est survenue, merci de contacter l'administrateur.")
+                                     _(f"An error has occurred, please contact the administrator."))
         except MessageFailure as e:
             # Surement un test unitaire, les messages plantent a travers la Factory Request
             pass

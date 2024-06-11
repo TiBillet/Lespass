@@ -1,6 +1,6 @@
 {% load i18n %}
 <div class="container pt-5">
-    <h1>{% translate "My profil" %}</h1>
+    <h1>{% translate "My account" %}</h1>
     {% if not user.email_valid %}
         {% translate "Thanks to valid your email for activate your accont" %}
 
@@ -10,9 +10,7 @@
                 hx-get="/my_account/resend_activation_email/">
             {% translate "Resend validation email" %}
         </button>
-
-        <button></button>
     {% else %}
-        {% translate "My card" %} :
+        {% translate "email verified" %}
     {% endif %}
 </div>

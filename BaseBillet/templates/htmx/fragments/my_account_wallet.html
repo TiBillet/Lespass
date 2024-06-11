@@ -1,35 +1,40 @@
 {% load i18n %}
+       
 <div class="container pt-5">
 
-    <div class="d-flex flex-row" hx-indicator="#tibillet-spinner">
-        <button type="submit" class="btn bg-gradient-info btn-lg mt-2 p-4 mb-2 w-75 mx-auto"
-                role="button"
-                aria-label="valider formulaire adhésion"
-                hx-get="/my_account/refill_wallet">
-            {% translate "Refill my wallet" %}
-        </button>
-    </div>
 
-    <div hx-get="/my_account/tokens_table/" hx-trigger="revealed" class="mt-4">
-        <span>{% translate "Loading tokens" %}</span>
-        <div class="d-flex justify-content-center align-items-center ">
-            <div class="spinner-border text-info"
-                 role="status"
-            ></div>
-        </div>
-    </div>
-
-    <div class="mt-4 mb-2">
-        <div class="d-flex flex-row" id="transactions_table" hx-indicator="#tibillet-spinner">
-            <button type="submit" class="btn bg-gradient-dark-blue btn-lg p-4  w-75 mx-auto test-return-show-transactions"
+        <div class="d-flex flex-row" hx-indicator="#tibillet-spinner">
+            <button type="submit" class="btn bg-gradient-info btn-lg mt-2 p-4 mb-2 w-75 mx-auto"
                     role="button"
                     aria-label="valider formulaire adhésion"
-                    hx-get="/my_account/transactions_table/"
-                    hx-target="#transactions_table"
-                    hx-swap="outerHTML">
-                {% translate "Show the last transactions" %}
+                    hx-get="/my_account/refill_wallet">
+                {% translate "Refill my wallet" %}
             </button>
         </div>
-    </div>
 
-</div>
+    
+    
+        <div hx-get="/my_account/tokens_table/" hx-trigger="revealed" class="mt-4">
+            <span>{% translate "Loading tokens" %}</span>
+            <div class="d-flex justify-content-center align-items-center ">
+                <div class="spinner-border text-info"
+                     role="status"
+                ></div>
+            </div>
+        </div>
+
+        <div class="mt-4 mb-2">
+            <div class="d-flex flex-row" id="transactions_table" hx-indicator="#tibillet-spinner">
+                <button type="submit"
+                        class="btn bg-gradient-dark-blue btn-lg p-4  w-75 mx-auto test-return-show-transactions"
+                        role="button"
+                        aria-label="valider formulaire adhésion"
+                        hx-get="/my_account/transactions_table/"
+                        hx-target="#transactions_table"
+                        hx-swap="outerHTML">
+                    {% translate "Show the last transactions" %}
+                </button>
+            </div>
+        </div>
+
+    </div>
