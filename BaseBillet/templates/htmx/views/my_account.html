@@ -7,45 +7,61 @@
     {% include "htmx/header_groupe.html" %}
 
     {% comment %} content of the partial rendering {% endcomment %}
-   <div class="d-flex flex-column justify-content-center align-items-center mt-6">
-       <div class="w-95 card creation-card">
-           <div class="creation-header">
-               <h3 class="creation-title">{{ user.email}}</h3>
-{#               <h4 class="creation-title">Wallet : {{ user.wallet.uuid  | first_eight }}</h4>#}
-           </div>
+    <div class="d-flex flex-column justify-content-center align-items-center mt-6">
+        <div class="w-95 card creation-card" id="myaccount">
+            <div class="creation-header" id="header-myaccount">
+                <h3 class="creation-title">{{ user.email }}</h3>
 
-           <!-- navigation -->
-           <div class="creation-navigation position-relative">
-               <ul class="nav tibillet-nav-bgc">
-                   <li data-cible="wallet">
-                       <a href="#" class="nav-link text-dark" hx-get="/my_account/wallet/" hx-trigger="click"
-                          hx-target="#creation-content-parts" hx-swap="innerHTML">
-                          {% translate "Wallet" %}
-                       </a>
-                   </li>
-                   <li data-cible="membership">
-                       <a href="#" class="nav-link text-dark" hx-get="/my_account/membership/" hx-trigger="click"
-                          hx-target="#creation-content-parts" hx-swap="innerHTML">
-                           {% translate "Memberships" %}
-                       </a>
-                   </li>
-                   <li data-cible="profile">
-                       <a href="#" class="nav-link  text-dark" hx-get="/my_account/profile/" hx-trigger="click"
-                          hx-target="#creation-content-parts" hx-swap="innerHTML"
-                          hx-trigger-after-settle="nav(1)">
-                           {% translate "Profil" %}
-                       </a>
-                   </li>
-               </ul>
-           </div> <!-- fin navigation -->
+                {% if not user.email_valid %}
+                    <p>{% translate "Please validate your email" %}</p>
+                {% elif profile.admin_this_tenant %}
+                    {% if profile.as_password %}
+                        <a href="/admin">{% translate "Administration" %}</a>
+                    {% else %}
+                        <a href="#" hx-get="/my_account/reset_password/"
+                           hx-target="#myaccount" hx-swap="innerHTML"
+                           hx-indicator="#tibillet-spinner">
+                            {% translate "Please create a password to access administration" %}
+                        </a>
+                    {% endif %}
+                {% endif %}
+                {#                admin_this_tenant : {{ profile.admin_this_tenant }}#}
+                {#               {% if  %}#}
+                {#               <h4 class="creation-title">Wallet : {{ user.wallet.uuid  | first_eight }}</h4>#}
+            </div>
 
-           <!-- contenu -->
-           <div id="creation-content-parts" class="creation-tabs-content ps-3 pe-3">
-               {% include 'htmx/fragments/my_account_wallet.html' %}
-           </div> <!-- fin contenu -->
-       </div> <!-- fin card -->
+            <!-- navigation -->
+            <div class="creation-navigation position-relative" id="nav-myaccount">
+                <ul class="nav tibillet-nav-bgc">
+                    <li data-cible="wallet">
+                        <a href="#" class="nav-link text-dark" hx-get="/my_account/wallet/" hx-trigger="click"
+                           hx-target="#creation-content-parts" hx-swap="innerHTML">
+                            {% translate "Wallet" %}
+                        </a>
+                    </li>
+                    <li data-cible="membership">
+                        <a href="#" class="nav-link text-dark" hx-get="/my_account/membership/" hx-trigger="click"
+                           hx-target="#creation-content-parts" hx-swap="innerHTML">
+                            {% translate "Memberships" %}
+                        </a>
+                    </li>
+                    <li data-cible="profile">
+                        <a href="#" class="nav-link  text-dark" hx-get="/my_account/profile/" hx-trigger="click"
+                           hx-target="#creation-content-parts" hx-swap="innerHTML"
+                           hx-trigger-after-settle="nav(1)">
+                            {% translate "Profil" %}
+                        </a>
+                    </li>
+                </ul>
+            </div> <!-- fin navigation -->
+
+            <!-- contenu -->
+            <div id="creation-content-parts" class="creation-tabs-content ps-3 pe-3">
+                {% include 'htmx/fragments/my_account_wallet.html' %}
+            </div> <!-- fin contenu -->
+        </div> <!-- fin card -->
     </div>
-    
+
     <script>
         // init wizard
         function initMyAccountWizard() {
@@ -68,7 +84,7 @@
         }
 
         // maj de la position du bouton de navigation
-        function updateMyAccountWizard (index) {
+        function updateMyAccountWizard(index) {
             const ul = document.querySelector('ul[class="nav tibillet-nav-bgc"]')
             const lis = ul.querySelectorAll('li')
             const nbLi = lis.length
@@ -100,15 +116,15 @@
 
         // une fois le swap fini, actualise le bouton de navigation
         document.body.addEventListener("htmx:afterSettle", (evt) => {
-	        const convIndexRequest = {
-		        "/my_account/": 0,
-		        "/my_account/wallet/": 0,
-		        "/my_account/membership/": 1,
-		        "/my_account/profile/": 2
-	        }
-	        if (["/my_account/", "/my_account/wallet/", "/my_account/membership/", "/my_account/profile/"].includes(evt.detail.pathInfo.requestPath)) {
+            const convIndexRequest = {
+                "/my_account/": 0,
+                "/my_account/wallet/": 0,
+                "/my_account/membership/": 1,
+                "/my_account/profile/": 2
+            }
+            if (["/my_account/", "/my_account/wallet/", "/my_account/membership/", "/my_account/profile/"].includes(evt.detail.pathInfo.requestPath)) {
                 moveNavBtMyAccountWizard(convIndexRequest[evt.detail.pathInfo.requestPath])
-	        }
+            }
         })
     </script>
 {% endblock main %}

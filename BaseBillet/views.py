@@ -130,7 +130,7 @@ def connexion(request):
                     "type": "success",
                     "title": "Information",
                     "content": _("To access your space, please validate\n"
-                               "your email address. Don't forget to check your spam!")
+                                 "your email address. Don't forget to check your spam!")
                 }
             }
             return render(request, "htmx/components/modal_message.html", context=context)
@@ -188,7 +188,8 @@ class ScanQrCode(viewsets.ViewSet):
         # authenticate(request=request, user=user)
         if not user.email_valid:
             logger.warning("User email not active")
-            messages.add_message(request, messages.WARNING, _("Please validate your email to access all the features of your profile area."))
+            messages.add_message(request, messages.WARNING,
+                                 _("Please validate your email to access all the features of your profile area."))
 
         return redirect("/my_account")
 
@@ -211,10 +212,11 @@ class ScanQrCode(viewsets.ViewSet):
 
         # Si l'user possède déja un wallet et n'a pas validé son email,
         # il ne peut pas avoir de deuxième carte :
-        if not created :
+        if not created:
             retrieve_wallet = fedowAPI.wallet.retrieve_by_signature(user)
             if retrieve_wallet.validated_data['has_user_card']:
-                messages.add_message(request, messages.ERROR, _("You seem to already have a TiBillet card linked to your wallet. Please revoke it first in your profile area to link a new one."))
+                messages.add_message(request, messages.ERROR,
+                                     _("You seem to already have a TiBillet card linked to your wallet. Please revoke it first in your profile area to link a new one."))
                 return HttpResponseClientRedirect(request.headers['Referer'])
 
         linked_serialized_card = fedowAPI.NFCcard.linkwallet_cardqrcode(user=user, qrcode_uuid=qrcode_uuid)
@@ -241,11 +243,16 @@ class MyAccount(viewsets.ViewSet):
 
         if not request.user.email_valid:
             logger.warning("User email not active")
-            messages.add_message(request, messages.WARNING, _("Please validate your email to access all the features of your profile area."))
+            messages.add_message(request, messages.WARNING,
+                                 _("Please validate your email to access all the features of your profile area."))
 
         return render(request, "htmx/views/my_account.html", context=template_context)
 
     ### ONGLET WALLET
+    @action(detail=False, methods=['GET', 'POST'])
+    def reset_password(self, request):
+        template_context = get_context(request)
+        return render(request, "admin/password_reset.html", context=template_context)
 
     @action(detail=False, methods=['GET'])
     def wallet(self, request: HttpRequest) -> HttpResponse:
@@ -263,7 +270,7 @@ class MyAccount(viewsets.ViewSet):
                 'cards': cards
             }
             return render(request, "htmx/fragments/cards.html", context=context)
-        else :
+        else:
             logger.warning("User email not active")
 
     @action(detail=True, methods=['GET'])
@@ -271,12 +278,14 @@ class MyAccount(viewsets.ViewSet):
         if request.user.email_valid:
             fedowAPI = FedowAPI()
             lost_card_report = fedowAPI.NFCcard.lost_my_card_by_signature(request.user, number_printed=pk)
-            if lost_card_report :
-                messages.add_message(request, messages.SUCCESS, _("Your wallet has been detached from this card. You can scan a new one to link it again."))
-            else :
-                messages.add_message(request, messages.ERROR, _("Error when detaching your card. Contact an administrator."))
+            if lost_card_report:
+                messages.add_message(request, messages.SUCCESS,
+                                     _("Your wallet has been detached from this card. You can scan a new one to link it again."))
+            else:
+                messages.add_message(request, messages.ERROR,
+                                     _("Error when detaching your card. Contact an administrator."))
             return HttpResponseClientRedirect('/my_account/')
-        else :
+        else:
             logger.warning("User email not active")
 
     @action(detail=False, methods=['GET'])
@@ -353,10 +362,9 @@ class MyAccount(viewsets.ViewSet):
         stripe_checkout_url = fedowAPI.wallet.get_federated_token_refill_checkout(user)
         if stripe_checkout_url:
             return HttpResponseClientRedirect(stripe_checkout_url)
-        else :
+        else:
             messages.add_message(request, messages.ERROR, "No available. Contact an admin.")
             return HttpResponseClientRedirect('/my_account/')
-
 
     @action(detail=True, methods=['GET'])
     def return_refill_wallet(self, request, pk=None):

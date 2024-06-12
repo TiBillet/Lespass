@@ -1,9 +1,14 @@
 {% load i18n %}
 
 <div class="container pt-5">
+    {% if profile.admin_this_tenant %}
+        <h1>{% translate "Administration" %}</h1>
+    {% endif %}
+
+
     <h1>{% translate "My cards" %}</h1>
     {% if not user.email_valid %}
-        {% translate "Thanks to valid your email for activate your accont" %}
+        {% translate "Please validate your email for activate your accont" %}
 
         <button type="submit" class="btn bg-gradient-dark-blue btn-lg p-4  w-75 mx-auto test-return-show-transactions"
                 role="button"
@@ -12,7 +17,7 @@
             {% translate "Resend validation email" %}
         </button>
     {% else %}
-{#        {% translate "email verified" %}#}
+        {#        {% translate "email verified" %}#}
         <div hx-get="/my_account/my_cards/" hx-trigger="revealed" class="mt-4">
             <span>{% translate "Loading NFC Card info" %}</span>
             <div class="d-flex justify-content-center align-items-center ">
