@@ -251,8 +251,11 @@ class MyAccount(viewsets.ViewSet):
     ### ONGLET WALLET
     @action(detail=False, methods=['GET', 'POST'])
     def reset_password(self, request):
-        template_context = get_context(request)
-        return render(request, "admin/password_reset.html", context=template_context)
+        if request.method == "GET":
+            template_context = get_context(request)
+            return render(request, "admin/password_reset.html", context=template_context)
+
+        import ipdb; ipdb.set_trace()
 
     @action(detail=False, methods=['GET'])
     def wallet(self, request: HttpRequest) -> HttpResponse:
