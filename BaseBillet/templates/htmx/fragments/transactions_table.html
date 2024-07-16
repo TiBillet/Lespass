@@ -13,7 +13,7 @@
             </thead>
             <tbody>
             {% for tr in transactions %}
-                <tr>
+                <tr class="test-return-{{ tr.serialized_asset.name | slugify }}-{{ tr.amount | dround | slugify }}-content">
                     <td>
                         <div class="d-flex px-2 py-1">
                             <div>
@@ -46,15 +46,15 @@
                         </div>
                     </td>
                     <td class="align-middle text-center">
-                        <span class="text-secondary text-xs font-weight-normal">{{ tr.get_action_display }}</span>
+                        <span class="text-secondary text-xs font-weight-normal test-return-token-action">{{ tr.get_action_display }}</span>
                     </td>
-                    <td class="test-return-{{ tr.serialized_asset.name | slugify }}-{{ tr.amount | dround | slugify }}">
+                    <td>
                         {% if tr.serialized_asset.is_stripe_primary %}
-                            <h6 class="mb-0 text-xs test-return-asset-value">{{ tr.amount | dround }}</h6>
-                            <p class="text-xs text-secondary mb-0 test-return-asset-name">TiBillet</p>
+                            <h6 class="mb-0 text-xs test-return-asset-value test-return-token-price">{{ tr.amount | dround }}</h6>
+                            <p class="text-xs text-secondary mb-0 test-return-token-name">TiBillet</p>
                         {% else %}
-                            <h6 class="mb-0 text-xs test-return-asset-value">{{ tr.amount | dround }}</h6>
-                            <p class="text-xs text-secondary mb-0 test-return-asset-name">{{ tr.serialized_asset.name }}</p>
+                            <h6 class="mb-0 text-xs test-return-token-price">{{ tr.amount | dround }}</h6>
+                            <p class="text-xs text-secondary mb-0 test-return-token-name">{{ tr.serialized_asset.name }}</p>
                         {% endif %}
                     </td>
                     <td class="align-middle text-center">
