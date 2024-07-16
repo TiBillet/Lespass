@@ -51,7 +51,6 @@ class Command(BaseCommand):
             raise Exception("Need Stripe Api Key in .env file")
 
 
-
         fedow_domain = os.getenv("FEDOW_DOMAIN")
         if not fedow_domain:
             raise Exception("Bad FEDOW_DOMAIN in .env file")
@@ -145,7 +144,7 @@ class Command(BaseCommand):
         ### Installation du premier tenant :
 
         tenant_first_sub, created = Client.objects.get_or_create(
-            schema_name=first_sub,
+            schema_name=slugify(first_sub),
             name=slugify(first_sub),
             on_trial=False,
             categorie=Client.SALLE_SPECTACLE,
@@ -153,7 +152,7 @@ class Command(BaseCommand):
         tenant_first_sub.save()
 
         tenant_first_sub_domain = Domain.objects.create(
-            domain=f'{first_sub}.{os.getenv("DOMAIN")}',
+            domain=f'{slugify(first_sub)}.{os.getenv("DOMAIN")}',
             tenant=tenant_first_sub,
             is_primary=True
         )

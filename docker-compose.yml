@@ -1,9 +1,11 @@
 services:
   lespass_postgres:
     image: postgres:13-bookworm
-    restart: unless-stopped
+    restart: always
     container_name: lespass_postgres
     hostname: lespass_postgres
+    ports:
+      - 5432:5432
     volumes:
 #      - ./database:/var/lib/postgresql/data
       - lespass_dev_db:/var/lib/postgresql/data
@@ -23,14 +25,14 @@ services:
     container_name: lespass_redis
     hostname: lespass_redis
     image: redis:7.2.3-bookworm
-    restart: unless-stopped
+    restart: always
     networks:
       - frontend
 
   lespass_django:
     build: .
 #    image: tibillet/lespass:latest
-    restart: unless-stopped
+    restart: always
     container_name: lespass_django
     hostname: lespass_django
     volumes:
@@ -56,6 +58,7 @@ services:
     build: .
 #    image: tibillet/lespass:latest
     container_name: lespass_celery
+    restart: always
     hostname: lespass_celery
     env_file: .env
     volumes:
@@ -82,6 +85,7 @@ services:
   lespass_nginx:
     image: nginx:latest
     container_name: lespass_nginx
+    restart: always
     hostname: lespass_nginx
     links:
       - lespass_django:lespass_django
@@ -109,4 +113,4 @@ volumes:
   lespass_dev_db:
 
 
-# docker build -t lespass . && docker tag lespass tibillet/lespass:latest && docker tag lespass tibillet/lespass:0.9.5 && docker push tibillet/lespass:latest && docker push tibillet/lespass:0.9.5
+# docker build -t lespass . && docker tag lespass tibillet/lespass:latest && docker tag lespass tibillet/lespass:0.9.6 && docker push tibillet/lespass:latest && docker push tibillet/lespass:0.9.6

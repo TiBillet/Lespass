@@ -13,6 +13,7 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve(strict=True).parent.parent
 
@@ -44,6 +45,7 @@ if not DEBUG and os.environ.get('SENTRY_DNS'):
 
 ALLOWED_HOSTS = [
     f'{os.environ["DOMAIN"]}',
+    f'.{os.environ["DOMAIN"]}',
     f'www.{os.environ["DOMAIN"]}',
     f'{os.environ["SUB"]}.{os.environ["DOMAIN"]}',
     f'{os.environ["META"]}.{os.environ["DOMAIN"]}',
@@ -51,10 +53,12 @@ ALLOWED_HOSTS = [
 
 CSRF_TRUSTED_ORIGINS = [
     f'https://{os.environ.get("DOMAIN")}',
+    f'https://.{os.environ.get("DOMAIN")}',
     f'https://www.{os.environ["DOMAIN"]}',
     f'https://{os.environ["SUB"]}.{os.environ["DOMAIN"]}',
     f'https://{os.environ["META"]}.{os.environ["DOMAIN"]}',
 ]
+
 
 CORS_ORIGIN_WHITELIST = CSRF_TRUSTED_ORIGINS
 

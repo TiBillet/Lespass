@@ -180,6 +180,7 @@ class ScanQrCode(viewsets.ViewSet):
             template_context['qrcode_uuid'] = qrcode_uuid
             return render(request, "htmx/views/inscription.html", context=template_context)
 
+
         wallet = Wallet.objects.get(uuid=serialized_qrcode_card['wallet_uuid'])
         user: TibilletUser = wallet.user
         user.is_active = True
@@ -187,9 +188,11 @@ class ScanQrCode(viewsets.ViewSet):
         login(request, user)
         # authenticate(request=request, user=user)
         if not user.email_valid:
-            logger.warning("User email not active")
-            messages.add_message(request, messages.WARNING,
-                                 _("Please validate your email to access all the features of your profile area."))
+            pass
+            # Ça fait doublon avec /MyAccount
+            # logger.warning("User email not active")
+            # messages.add_message(request, messages.WARNING,
+            #                      _("Please validate your email to access all the features of your profile area."))
 
         return redirect("/my_account")
 
@@ -210,15 +213,18 @@ class ScanQrCode(viewsets.ViewSet):
         fedowAPI = FedowAPI()
         wallet, created = fedowAPI.wallet.get_or_create_wallet(user)
 
-        # Si l'user possède déja un wallet et n'a pas validé son email,
-        # il ne peut pas avoir de deuxième carte :
+        # Si l'user possède déja un wallet et une carte référencée dans Fedow,
+        # il ne peut pas avoir de deuxième carte
+        # Evite le vol de carte : si je connais l'email d'une personne, je peux alors avoir son wallet juste en mettant son email sur une nouvelle carte ...
         if not created:
             retrieve_wallet = fedowAPI.wallet.retrieve_by_signature(user)
             if retrieve_wallet.validated_data['has_user_card']:
                 messages.add_message(request, messages.ERROR,
-                                     _("You seem to already have a TiBillet card linked to your wallet. Please revoke it first in your profile area to link a new one."))
+                                     _("You seem to already have a TiBillet card linked to your wallet. "
+                                       "Please revoke it first in your profile area to link a new one."))
                 return HttpResponseClientRedirect(request.headers['Referer'])
 
+        # Opération de fusion entre la carte lié au qrcode et le wallet de l'user :
         linked_serialized_card = fedowAPI.NFCcard.linkwallet_cardqrcode(user=user, qrcode_uuid=qrcode_uuid)
         if not linked_serialized_card:
             messages.add_message(request, messages.ERROR, _("Not valid"))
@@ -255,7 +261,6 @@ class MyAccount(viewsets.ViewSet):
             template_context = get_context(request)
             return render(request, "admin/password_reset.html", context=template_context)
 
-        import ipdb; ipdb.set_trace()
 
     @action(detail=False, methods=['GET'])
     def wallet(self, request: HttpRequest) -> HttpResponse:
@@ -275,6 +280,15 @@ class MyAccount(viewsets.ViewSet):
             return render(request, "htmx/fragments/cards.html", context=context)
         else:
             logger.warning("User email not active")
+
+    @action(detail=False, methods=['GET'])
+    def resend_activation_email(self, request):
+        user = request.user
+        email = request.user.email
+        user = get_or_create_user(email, force_mail=True)
+        messages.add_message(request, messages.SUCCESS,
+                             _("Mail sended, please check spam too !"))
+        return HttpResponseClientRedirect('/my_account/')
 
     @action(detail=True, methods=['GET'])
     def lost_my_card(self, request, pk):

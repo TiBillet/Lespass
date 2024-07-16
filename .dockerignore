@@ -1,6 +1,8 @@
 .env
+env*
 .git
 Backup
+backup
 Docker
 DjangoFiles/www
 DjangoFiles/logs/gunicorn.logs

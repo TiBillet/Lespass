@@ -156,7 +156,6 @@ def activate(request, uid, token):
             messages.add_message(request, messages.SUCCESS, _("Vous êtes bien connecté. Bienvenue !"))
             login(request, user)
             return True
-        import ipdb; ipdb.set_trace()
 
     except User.DoesNotExist:
         messages.add_message(request, messages.ERROR, _("Erreur, user non valide."))

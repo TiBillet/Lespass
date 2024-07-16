@@ -294,6 +294,7 @@ class WalletFedow():
             "email": email,
             "public_pem": user.get_public_pem(),
         })
+
         if response_link.status_code in [200, 201]:
             # Création du wallet dans la base de donnée s'il n'existe pas
             if not user.wallet:

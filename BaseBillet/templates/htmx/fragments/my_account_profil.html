@@ -1,6 +1,6 @@
 {% load i18n %}
 
-<div class="container pt-5">
+<p class="container pt-5">
     {% if profile.admin_this_tenant %}
         <h1>{% translate "Administration" %}</h1>
     {% endif %}
@@ -8,14 +8,12 @@
 
     <h1>{% translate "My cards" %}</h1>
     {% if not user.email_valid %}
-        {% translate "Please validate your email for activate your accont" %}
-
-        <button type="submit" class="btn bg-gradient-dark-blue btn-lg p-4  w-75 mx-auto test-return-show-transactions"
-                role="button"
-                aria-label="resend validation email"
-                hx-get="/my_account/resend_activation_email/">
+        <p>{% translate "Please validate your email for activate your account." %}</p>
+        <a aria-label="{% translate "Resend validation email" %}"
+           href=""
+           hx-get="/my_account/resend_activation_email/">
             {% translate "Resend validation email" %}
-        </button>
+        </a>
     {% else %}
         {#        {% translate "email verified" %}#}
         <div hx-get="/my_account/my_cards/" hx-trigger="revealed" class="mt-4">
