@@ -1470,3 +1470,17 @@ class Webhook(models.Model):
     event = models.CharField(max_length=2, choices=EVENT_CHOICES, default=RESERVATION_V,
                              verbose_name=_("Évènement"))
     last_response = models.TextField(null=True, blank=True)
+
+
+class History(models.Model):
+    """
+    Track change on user profile, event or membership
+    """
+    user = models.ManyToManyField(settings.AUTH_USER_MODEL,
+                                blank=True, null=True)
+    event = models.ForeignKey(Event, on_delete=models.SET_NULL, blank=True, null=True)
+    product = models.ForeignKey(Product, on_delete=models.SET_NULL, blank=True, null=True)
+    datetime = models.DateTimeField(auto_now_add=True)
+    description = models.TextField(null=True, blank=True)
+    link = models.URLField(null=True, blank=True)
+

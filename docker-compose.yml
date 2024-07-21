@@ -37,7 +37,7 @@ services:
     hostname: lespass_django
     volumes:
       - ./:/DjangoFiles
-      - ./backup:/Backup
+      - ./backup:/Backup/dumps/
     env_file: .env
     depends_on:
       - lespass_postgres
