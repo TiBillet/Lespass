@@ -268,7 +268,7 @@ class Configuration(SingletonModel):
                 sess.close()
                 logger.info(f"    check_serveur_cashless : {r.status_code} {r.text}")
                 if r.status_code == 200:
-                    #TODO: Check cashless signature avec laboutik_public_pem
+                    # TODO: Check cashless signature avec laboutik_public_pem
                     return True
 
             except Exception as e:
@@ -1271,11 +1271,12 @@ class LigneArticle(models.Model):
             return _('no stripe send')
 
     def user_uuid_wallet(self):
-        if self.paiement_stripe.user :
+        if self.paiement_stripe.user:
             user = self.paiement_stripe.user
             user.refresh_from_db()
             return user.wallet.uuid
         return None
+
 
 class Membership(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='membership')
@@ -1476,11 +1477,10 @@ class History(models.Model):
     """
     Track change on user profile, event or membership
     """
-    user = models.ManyToManyField(settings.AUTH_USER_MODEL,
-                                blank=True, null=True)
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True)
     event = models.ForeignKey(Event, on_delete=models.SET_NULL, blank=True, null=True)
     product = models.ForeignKey(Product, on_delete=models.SET_NULL, blank=True, null=True)
     datetime = models.DateTimeField(auto_now_add=True)
     description = models.TextField(null=True, blank=True)
     link = models.URLField(null=True, blank=True)
-
