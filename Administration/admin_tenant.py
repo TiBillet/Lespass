@@ -89,7 +89,7 @@ class StaffAdminSite(AdminSite):
             f"Tenant AdminSite.has_permission : {request.user} - {request.user.client_source if request.user.is_authenticated else 'No client'} - ip : {get_client_ip(request)}")
         try:
             if request.tenant in request.user.client_admin.all():
-                return request.user.is_superuser
+                return request.user.is_staff
             if request.user.client_source.categorie == Client.ROOT:
                 return request.user.is_superuser
         except AttributeError as e:

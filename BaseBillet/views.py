@@ -258,8 +258,29 @@ class MyAccount(viewsets.ViewSet):
     @action(detail=False, methods=['GET', 'POST'])
     def reset_password(self, request):
         if request.method == "GET":
+            if request.user.as_password():
+                messages.add_message(request, messages.WARNING,
+                                     _("User already has a password."))
+                return HttpResponseClientRedirect(request.headers['Referer'])
+
             template_context = get_context(request)
             return render(request, "admin/password_reset.html", context=template_context)
+        if request.method == "POST":
+            user = request.user
+            if user.as_password():
+                messages.add_message(request, messages.WARNING,
+                                     _("User already has a password."))
+                return HttpResponseClientRedirect(request.headers['Referer'])
+
+            # TODO: Utiliser un serialiazer
+            if request.POST['password']  and request.POST['password'] == request.POST['confirm_password']:
+                user.set_password(request.POST['password'])
+                user.save()
+                return HttpResponseClientRedirect("/my_account/")
+            else :
+                messages.add_message(request, messages.WARNING,
+                                     _("Error, wrong password."))
+                return HttpResponseClientRedirect(request.headers['Referer'])
 
 
     @action(detail=False, methods=['GET'])
