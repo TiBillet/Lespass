@@ -15,8 +15,6 @@ export PGHOST=$POSTGRES_HOST
 # borg init --encryption=repokey-blake2 /Backup/borg
 
 
-
-
 touch /Backup/logs/backup_cron.log
 touch /Backup/logs/error_backup_cron.log
 DATE_NOW=`date +%Y-%m-%d-%H-%M`

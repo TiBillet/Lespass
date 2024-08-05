@@ -739,6 +739,14 @@ staff_admin_site.register(Paiement_stripe, PaiementStripeAdmin)
 # staff_admin_site.register(LigneArticle, LigneArticleAdmin)
 
 
+def send_invoice(modeladmin, request, queryset):
+    pass
+    # import ipdb; ipdb.set_trace()
+
+def send_to_ghost(modeladmin, request, queryset):
+    pass
+    import ipdb; ipdb.set_trace()
+
 class MembershipAdmin(admin.ModelAdmin):
     list_display = (
         # 'last_name',
@@ -760,6 +768,8 @@ class MembershipAdmin(admin.ModelAdmin):
         # 'phone',
         # 'commentaire',
     )
+
+    actions = [send_invoice, send_to_ghost ]
     ordering = ('-date_added',)
     search_fields = ('user__email', 'user__first_name', 'user__last_name')
 

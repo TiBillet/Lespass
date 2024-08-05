@@ -1,4 +1,0 @@
-
-# sauvegarde de la billetterie TiBillet 2x par jour.
-1 4 * * * /usr/bin/docker exec billetterie_django /Backup/saveDb.sh && rsync -avs /home/ubuntu/TiBillet-Ticket/Backup/borg /home/syncthing/data/billetterie_borg/ --delete
-1 18 * * * /usr/bin/docker exec billetterie_django /Backup/saveDb.sh && rsync -avs /home/ubuntu/TiBillet-Ticket/Backup/borg /home/syncthing/data/billetterie_borg/ --delete
