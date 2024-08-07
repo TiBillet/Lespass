@@ -354,14 +354,14 @@ class WalletFedow():
 
 
 class PlaceFedow():
-    def __init__(self, fedow_config):
+    def __init__(self, fedow_config, admin=None):
         self.fedow_config: FedowConfig = fedow_config
         if not fedow_config:
             self.fedow_config = FedowConfig.get_solo()
 
         if not fedow_config.can_fedow():
             # Premier contact entre une nouvelle place (nouveau tenant) et Fedow
-            self.create()
+            self.create(admin=admin)
 
     def link_cashless_to_place(self, admin):
         link_response = _get(fedow_config=self.fedow_config,
@@ -403,10 +403,15 @@ class PlaceFedow():
 
         if place_name is None:
             place_name = tenant_config.organisation
+
         if admin is None:
-            User = get_user_model()
             # Un seul admin lors de la création du lieu est présent.
-            admin = User.objects.get(client_admin=tenant)
+            User = get_user_model()
+            try :
+                admin = User.objects.get(client_admin=tenant)
+            except Exception as e:
+                import ipdb; ipdb.set_trace()
+                # raise e
 
         # Pour la création, on prend la clé "create_place_apikey" de Root
         apikey = self.fedow_config.get_fedow_create_place_apikey()
@@ -564,13 +569,13 @@ class TransactionFedow():
 
 # from fedow_connect.fedow_api import FedowAPI
 class FedowAPI():
-    def __init__(self, fedow_config: FedowConfig = None):
+    def __init__(self, fedow_config: FedowConfig = None, admin=None):
         self.fedow_config = fedow_config
         if fedow_config is None:
             self.fedow_config = FedowConfig.get_solo()
 
         self.wallet = WalletFedow(fedow_config=self.fedow_config)
-        self.place = PlaceFedow(fedow_config=self.fedow_config)
+        self.place = PlaceFedow(fedow_config=self.fedow_config, admin=admin)
         self.membership = MembershipFedow(fedow_config=self.fedow_config)
         self.asset = AssetFedow(fedow_config=self.fedow_config)
         self.transaction = TransactionFedow(fedow_config=self.fedow_config)

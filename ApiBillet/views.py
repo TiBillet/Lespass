@@ -1019,6 +1019,7 @@ class Get_user_pub_pem(APIView):
         config = Configuration.get_solo()
         if config.server_cashless or config.key_cashless :
             if not settings.DEBUG:
+                logger.error("cashless already config for this tenant")
                 return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
         # un simple return de pub key
@@ -1027,7 +1028,11 @@ class Get_user_pub_pem(APIView):
         User = get_user_model()
         user: TibilletUser = get_object_or_404(User, email=f"{request.data['email']}")
         if connection.tenant not in user.client_admin.all():
-            return Response(status=status.HTTP_401_UNAUTHORIZED)
+            # Pour les ancienne instances, a virer apres les grandes migrations :
+            if settings.DEBUG:
+                user.client_admin.add(connection.tenant)
+            else :
+                return Response(status=status.HTTP_401_UNAUTHORIZED)
 
         data = {
             'public_pem': f"{user.get_public_pem()}",
@@ -1045,10 +1050,12 @@ class Onboard_laboutik(APIView):
             if not settings.DEBUG:
                 return Response(status=status.HTTP_409_CONFLICT)
 
-        # On va demander un liaison cashless <-> place a Fedow :
+        # On va demander une liaison cashless <-> place a Fedow :
         #TODO: A tester
-        fedowAPI = FedowAPI()
-        user_admin: TibilletUser = connection.tenant.user_admin.first()
+        email_admin = f"{request.data['email']}"
+        user_admin: TibilletUser = connection.tenant.user_admin.get(email=email_admin)
+        logger.info(f"Création de la place Fedow avec admin : {user_admin}")
+        fedowAPI = FedowAPI(admin=user_admin)
 
         # Ensure wallet exist for fedow api call
         wallet_user_admin = fedowAPI.wallet.get_or_create_wallet(user_admin)
