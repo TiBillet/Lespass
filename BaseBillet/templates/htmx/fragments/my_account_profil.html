@@ -4,27 +4,5 @@
     {% if profile.admin_this_tenant %}
         <h1>{% translate "Administration" %}</h1>
     {% endif %}
+</p>
 
-
-    <h1>{% translate "My cards" %}</h1>
-    {% if not user.email_valid %}
-        <p>{% translate "Please validate your email for activate your account." %}</p>
-        <a aria-label="{% translate "Resend validation email" %}"
-           href=""
-           hx-get="/my_account/resend_activation_email/">
-            {% translate "Resend validation email" %}
-        </a>
-    {% else %}
-        {#        {% translate "email verified" %}#}
-        <div hx-get="/my_account/my_cards/" hx-trigger="revealed" class="mt-4">
-            <span>{% translate "Loading NFC Card info" %}</span>
-            <div class="d-flex justify-content-center align-items-center ">
-                <div class="spinner-border text-info"
-                     role="status"
-                ></div>
-            </div>
-        </div>
-
-
-    {% endif %}
-</div>

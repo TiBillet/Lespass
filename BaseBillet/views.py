@@ -292,15 +292,12 @@ class MyAccount(viewsets.ViewSet):
 
     @action(detail=False, methods=['GET'])
     def my_cards(self, request):
-        if request.user.email_valid:
-            fedowAPI = FedowAPI()
-            cards = fedowAPI.NFCcard.retrieve_card_by_signature(request.user)
-            context = {
-                'cards': cards
-            }
-            return render(request, "htmx/fragments/cards.html", context=context)
-        else:
-            logger.warning("User email not active")
+        fedowAPI = FedowAPI()
+        cards = fedowAPI.NFCcard.retrieve_card_by_signature(request.user)
+        context = {
+            'cards': cards
+        }
+        return render(request, "htmx/fragments/cards.html", context=context)
 
     @action(detail=False, methods=['GET'])
     def resend_activation_email(self, request):

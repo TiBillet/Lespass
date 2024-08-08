@@ -1342,7 +1342,7 @@ class Membership(models.Model):
     #     last
 
     class Meta:
-        unique_together = ('user', 'price')
+        # unique_together = ('user', 'price')
         verbose_name = _('Adhésion')
         verbose_name_plural = _('Adhésions')
 

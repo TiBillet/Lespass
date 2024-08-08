@@ -239,7 +239,8 @@ class MembershipFedow():
             if serialized_transaction.is_valid():
                 fedow_transaction = serialized_transaction.fedow_transaction
                 membership.fedow_transactions.add(fedow_transaction)
-                membership.stripe_paiement.latest('last_action').fedow_transactions.add(fedow_transaction)
+                if membership.stripe_paiement.exists():
+                    membership.stripe_paiement.latest('last_action').fedow_transactions.add(fedow_transaction)
                 return serialized_transaction.validated_data
 
             logger.error(serialized_transaction.errors)
