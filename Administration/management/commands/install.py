@@ -171,6 +171,7 @@ class Command(BaseCommand):
 
         with tenant_context(tenant_first_sub):
             ## Création du premier admin:
+            from django.contrib.auth.models import Group
             staff_group, created = Group.objects.get_or_create(name="staff")
             user: TibilletUser = get_or_create_user(admin_email)
             user.client_admin.add(tenant_first_sub)

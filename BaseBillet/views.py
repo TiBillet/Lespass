@@ -373,10 +373,8 @@ class MyAccount(viewsets.ViewSet):
         config = Configuration.get_solo()
         fedowAPI = FedowAPI()
         wallet = fedowAPI.wallet.cached_retrieve_by_signature(request.user).validated_data
-
         # On ne garde que les adhésions
         tokens = [token for token in wallet.get('tokens') if token.get('asset_category') == 'SUB']
-
         context = {
             'config': config,
             'tokens': tokens,
