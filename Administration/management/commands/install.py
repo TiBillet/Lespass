@@ -164,10 +164,12 @@ class Command(BaseCommand):
             rootConfig.stripe_test_api_key = stripe_test_api_key
             rootConfig.stripe_mode_test = stripe_mode_test
             rootConfig.save()
-            rootConfig.set_stripe_api(stripe_api_key)
+            if stripe_api_key:
+                rootConfig.set_stripe_api(stripe_api_key)
 
             logger.info("Fedow handshake")
             rootConfig.root_fedow_handshake(fedow_domain)
+
 
         with tenant_context(tenant_first_sub):
             ## Création du premier admin:
