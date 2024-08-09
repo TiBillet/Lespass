@@ -75,6 +75,7 @@ class TokenValidator(serializers.Serializer):
 
     is_primary_stripe_token = serializers.BooleanField()
     last_transaction_datetime = serializers.DateTimeField(allow_null=True, required=False)
+    start_membership_date = serializers.DateTimeField(allow_null=True, required=False)
 
 
 class WalletValidator(serializers.Serializer):

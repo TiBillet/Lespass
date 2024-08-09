@@ -614,7 +614,7 @@ def ticket_celery_mailer(reservation_uuid: str, base_url):
             logger.error(f"{timezone.now()} Erreur envoie de mail pour reservation {reservation} : {e}")
             raise Exception
 
-
+"""
 @app.task
 def send_membership_to_cashless(data):
     configuration = Configuration.get_solo()
@@ -681,6 +681,7 @@ def send_membership_to_cashless(data):
 
     except Exception as e:
         raise Exception(f'Exception request send_membership_to_cashless {type(e)} : {e} ')
+"""
 
 
 @app.task

@@ -114,7 +114,6 @@ class TibilletManager(BaseUserManager):
         user.groups.add(staff_group)
 
 
-
 class RsaKey(models.Model):
     private_pem = models.CharField(max_length=2048, editable=False)
     public_pem = models.CharField(max_length=512, editable=False)
@@ -245,6 +244,7 @@ class TibilletUser(AbstractUser):
     ##### END user terminaux ####
 
     def get_active_membership(self):
+        # TODO: Vérifier sur Fedow. Si l'adhésion a été faite sur le point de vente LaBoutik, le membership n'est que sur le wallet Fedow
         return [mem.price.product.uuid for mem in self.membership.all() if mem.is_valid()]
 
     def achat(self):

@@ -1,4 +1,6 @@
 import json
+from datetime import datetime
+
 from django.core.management.base import BaseCommand
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Product, Price, Membership

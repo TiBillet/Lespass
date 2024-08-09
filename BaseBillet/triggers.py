@@ -10,7 +10,7 @@ from django.utils.text import slugify
 
 from ApiBillet.serializers import LigneArticleSerializer
 from BaseBillet.models import LigneArticle, Product, Membership, Price, Configuration, Paiement_stripe
-from BaseBillet.tasks import send_membership_to_cashless, send_to_ghost, send_email_generique, create_invoice_pdf
+from BaseBillet.tasks import send_to_ghost, send_email_generique, create_invoice_pdf
 from django.utils.translation import gettext_lazy as _
 
 from fedow_connect.fedow_api import FedowAPI

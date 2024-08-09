@@ -7,8 +7,8 @@
             <tr>
                 <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">{% translate "Asset / Place" %}</th>
                 <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">{% translate "Type / Price" %}</th>
+                <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">{% translate "Start membership" %}
                 <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">{% translate "Federated with" %}</th>
-                <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">{% translate "Last contribution" %}
                 </th>
                 {#                <th class="text-secondary opacity-7"></th>#}
             </tr>
@@ -38,6 +38,11 @@
                         <p class="text-xs font-weight-bold mb-0">{{ token.asset.get_category_display }}</p>
                         <p class="text-xs text-secondary mb-0">{{ token.value | dround }}</p>
                     </td>
+
+                    <td class="align-middle text-center">
+                        <span class="text-secondary text-xs font-weight-normal">{{ token.start_membership_date }} </span>
+                    </td>
+
                     <td class="align-middle text-center text-sm">
                         <div class="container">
                             <div class="row text-center">
@@ -55,9 +60,6 @@
                                 </div>
                             </div>
                         </div>
-                    </td>
-                    <td class="align-middle text-center">
-                        <span class="text-secondary text-xs font-weight-normal">{{ token.last_transaction_datetime }} </span>
                     </td>
                     {#                    TODO: Afficher un modal avec les details de l'asset#}
                     {#                    <td class="align-middle">#}
