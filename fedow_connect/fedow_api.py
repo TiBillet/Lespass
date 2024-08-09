@@ -269,7 +269,19 @@ class WalletFedow():
         # Solution : soit retirer les () dans le callable, soit utiliser cache.lambda
         if not user.wallet:
             wallet = self.get_or_create_wallet(user)
-        return cache.get_or_set(f"wallet_user_{user.wallet.uuid}", lambda: self.retrieve_by_signature(user), 10)
+        try :
+            serialized_wallet = cache.get_or_set(f"wallet_user_{user.wallet.uuid}", lambda: self.retrieve_by_signature(user), 10)
+        except KeyError as e :
+            # Exception soulevé parfois : AttributeError: 'NoneType' object has no attribute 'recv'
+            # A investiguer, peut être que l'écriture du cache est en concurence avec une autre écriture
+            # réalisée en même temps, avec les requetes async
+            logger.warning(f"cached_retrieve_by_signature : {e} - fetch from fedow without cache.")
+            serialized_wallet = self.retrieve_by_signature(user)
+        except Exception as e :
+            logger.error(f"cached_retrieve_by_signature : {e}")
+            raise e
+
+        return serialized_wallet
 
     def retrieve_by_signature(self, user):
         response_link = _get(

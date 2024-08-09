@@ -40,13 +40,8 @@ class FedowConfig(SingletonModel):
         return fernet_decrypt(self.fedow_place_admin_apikey)
 
     def get_conf_root(self):
-        if cache.get('conf_root'):
-            conf_root = cache.get('conf_root')
-            return conf_root
-
         with schema_context('public'):
             conf_root = RootConfiguration.get_solo()
-            cache.set("conf_root", conf_root, 3600 * 24 * 30)
             return conf_root
 
     def fedow_domain(self):
