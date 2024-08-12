@@ -19,6 +19,7 @@ urlpatterns = [
     path('wiz_event/presentation/', base_view.event_presentation, name='event_presentation'),
     path('wiz_event/products/', base_view.event_products, name='event_products'),
     path('home/', base_view.home, name='home'),
+    path('agenda/', base_view.agenda, name='agenda'),
 
     # path("my_account/", base_view.my_account, name='my_account'),
     # path("my_account/wallet/", base_view.my_account_wallet, name='my_account_wallet'),

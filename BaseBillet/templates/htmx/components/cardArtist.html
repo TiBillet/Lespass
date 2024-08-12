@@ -1,16 +1,17 @@
 <div class="card card-background mb-5">
     {% if artist.img_variations.fhd == None %}
-    <div class="full-background"  style="background-image: url('{{ host }}/media/images/image_non_disponible.svg');"></div>
+        <div class="full-background"
+             style="background-image: url('{{ host }}/media/images/image_non_disponible.svg');"></div>
     {% else %}
-    <div class="full-background"  style="background-image: url('{{ host }}{{ artist.img_variations.fhd }}');"></div>
+        <div class="full-background" style="background-image: url('{{ host }}{{ artist.img_variations.fhd }}');"></div>
     {% endif %}
     <div class="card-body pt-12">
         <h4 class="text-white" role="heading" :aria-label="artist.organisation">{{ artist.organisation }}</h4>
         {% if artist.long_description != None %}
-        <p> {{ artist.long_description }}</p>
+            <p> {{ artist.long_description }}</p>
         {% endif %}
         {% if artist.long_description == None and artist.short_description != None %}
-        <p>{{ artist.short_description }}</p>
-        {% endif %}     
+            <p>{{ artist.short_description }}</p>
+        {% endif %}
     </div>
 </div>

@@ -144,15 +144,6 @@ def emailconfirmation(request, uuid, token):
     return redirect('home')
 
 
-@require_GET
-def home(request):
-    # import ipdb; ipdb.set_trace()
-    # On redirige vers la page d'adhésion en attendant que les events soient disponible
-    return redirect('/memberships')
-
-    # template_context = get_context(request)
-    # template_context['events'] = Event.objects.all()
-    # return render(request, "htmx/views/home.html", context=template_context)
 
 
 class ScanQrCode(viewsets.ViewSet):
@@ -423,6 +414,18 @@ class MyAccount(viewsets.ViewSet):
 
     #### END REFILL STRIPE PRIMARY ####
 
+
+@require_GET
+def home(request):
+    # import ipdb; ipdb.set_trace()
+    # On redirige vers la page d'adhésion en attendant que les events soient disponible
+    return redirect('/memberships')
+
+@require_GET
+def agenda(request):
+    template_context = get_context(request)
+    template_context['events'] = Event.objects.all()
+    return render(request, "htmx/views/home.html", context=template_context)
 
 @require_GET
 def event(request: HttpRequest, slug) -> HttpResponse:
