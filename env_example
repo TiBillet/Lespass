@@ -1,5 +1,5 @@
 # Secret
-SECRET_KEY='' # see upper to create one
+DJANGO_SECRET='' # see upper to create one
 FERNET_KEY='' # see upper to create one
 
 STRIPE_KEY='' # from your stripe account
