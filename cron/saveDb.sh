@@ -40,6 +40,12 @@ echo $DATE_NOW" on cree l'archive borg "
   $BORG_REPO::$PREFIX-$DATE_NOW \
   $DUMPS_DIRECTORY
 
-#echo $DATE_NOW" on prune les vieux borg :"
-#/usr/bin/borg prune -v $BORG_DIRECTORY --prefix $PREFIX --list \
-#    --keep-within 2d --keep-daily=10 --keep-weekly=4 --keep-monthly=12
+### BORG WWW FOLDER : media and logs
+echo $DATE_NOW" on cree l'archive pour www (media et logs) "
+/usr/bin/borg create -vs --compression lz4 \
+  $BORG_REPO::$PREFIX-"MEDIA"-$DATE_NOW \
+  /DjangoFiles/www
+
+
+echo $DATE_NOW" on prune les vieux borg :"
+/usr/bin/borg prune -v --list --keep-within=7d --keep-daily=30 --keep-weekly=12 --keep-monthly=-1 --keep-yearly=-1 $BORG_REPO
