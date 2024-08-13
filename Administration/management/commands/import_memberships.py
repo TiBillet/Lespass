@@ -1,72 +1,121 @@
 import json
 from datetime import datetime
 
-from django.core.management.base import BaseCommand
+from django.contrib.auth import get_user_model
+
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Product, Price, Membership
 from fedow_connect.fedow_api import FedowAPI
 from decimal import Decimal
 
+### Set all email to lower :
+# a faire pour chaque tenant
+"""
+User = get_user_model()
+for user in User.objects.all():
+    email = user.email
+    search = User.objects.filter(email__icontains=email.lower())
+    if search.count() > 1:
+        userlower = User.objects.get(email=email.lower())
+        for result in search :
+            if result != userlower:
+                print(userlower.email, result.pk, result.email, result.wallet, result.membership.all(), result.paiement_stripe_set.all())
+                
+                for paiement in result.paiement_stripe_set.all():
+                    paiement.user = userlower
+                    paiement.save()
+                for membership in result.membership.all():
+                    membership.user = userlower
+                    membership.save()
+                try :
+                    result.delete()
+                except Exception as e :
+                    print(f"erreur delete {e}")
 
-class Command(BaseCommand):
-    def handle(self, *args, **options):
-        fedowAPI = FedowAPI()
-        adhesion = Product.objects.get(categorie_article=Product.ADHESION)
+for user in User.objects.all():
+    user.email=user.email.lower()
+    user.username=user.username.lower()
+    user.save()
+    
+re=User.objects.get(email='réseau976974@gmail.com')
+re.email='reseau976974@gmail.com'
+re.username='reseau976974@gmail.com'
+re.save()
+"""
 
-        with open('memberships.json', 'r', encoding='utf-8') as readf:
-            loaded_data = json.load(readf)
+## Doit être lancé dans un terminal django
 
-        """
-        test :
-        for member in loaded_data:
-            if member['card_qrcode_uuid']:
-                if len(member['card_qrcode_uuid']) > 1:
-                    break
-        """
+fedowAPI = FedowAPI()
+adhesion = Product.objects.get(categorie_article=Product.ADHESION)
+serialized_asset, created = fedowAPI.asset.get_or_create_asset(adhesion)
+asset_fedow = f"{serialized_asset['uuid']}"
 
-        for member in loaded_data:
-            # Création de l'user
-            email = member['email']
-            user = get_or_create_user(email, send_mail=False)
-            # Création du wallet Fedow
-            wallet, created = fedowAPI.wallet.get_or_create_wallet(user)
+with open('memberships.json', 'r', encoding='utf-8') as readf:
+    loaded_data = json.load(readf)
 
-            membership = None
-            if user.membership.exists():
-                # Contribution la plus récente :
-                membership = user.membership.all().order_by('-last_contribution').first()
+for member in loaded_data:
+    # Création de l'user
+    email = member['email'].lower()
+    print(email)
+    user = get_or_create_user(email, send_mail=False)
+    if not user :
+        # Email non valide
+        continue
 
-            # Vérification de l'adhésion
-            if member.get('last_contribution'):
-                # On compare l'adhésion en base de donnée et celle sur le cashless
-                # Si elle a une date ultérieure, on la fabrique en db
-                last_contribution = datetime.strptime(member['last_contribution'], '%Y-%m-%d').date()
-                if membership.last_contribution < last_contribution:
-                    price = None
-                    cotisation = Decimal(member['cotisation'])
-                    if cotisation > 0:
-                        try:
-                            price = adhesion.prices.get(prix=cotisation)
-                        except Price.DoesNotExist:
-                            price = None
+    # Création du wallet Fedow
+    wallet, created = fedowAPI.wallet.get_or_create_wallet(user)
 
-                    # Création du Membership
-                    membership = Membership.objects.create(
-                        user=user,
-                        price=price,
-                        date_added=datetime.fromisoformat(member['date_added']) if member['date_added'] else None,
-                        last_contribution=datetime.strptime(member['last_contribution'], '%Y-%m-%d').date(),
-                        contribution_value=cotisation,
-                        first_name=member['first_name'] if member['first_name'] else None,
-                        last_name=member['last_name'] if member['last_name'] else None,
-                        postal_code=member['postal_code'] if member['postal_code'] else None,
-                    )
+    # Vérification de l'adhésion
+    # Contribution déja enregistré sur Lespass.
+    membership = None
+    if user.membership.exists():
+        membership = user.membership.all().order_by('-last_contribution').first()
 
-            if membership:
-                if not membership.fedow_transactions.exists():
-                    serialized_transaction = fedowAPI.membership.create(membership=membership)
+    if member.get('last_contribution'):
+        # date :
+        last_contribution = datetime.strptime(member['last_contribution'], '%Y-%m-%d').date()
+        # cotisation :
+        price = None
+        cotisation = Decimal(member['cotisation'])
+        if cotisation > 0:
+            try:
+                price = adhesion.prices.get(prix=cotisation)
+            except Price.DoesNotExist:
+                price = None
 
-            # Liaison avec la carte
-            if member['card_qrcode_uuid']:
-                for qrcode_uuid in member['card_qrcode_uuid']:
-                    linked_serialized_card = fedowAPI.NFCcard.linkwallet_cardqrcode(user=user, qrcode_uuid=qrcode_uuid)
+
+        # Contribution déja enregistré sur Lespass.
+        if membership:
+            # On compare l'adhésion en base de donnée et celle sur le cashless
+            # Si elle a une date ultérieure, on la fabrique en db
+            if not membership.last_contribution :
+                membership = None
+            elif membership.last_contribution < last_contribution:
+                membership = None
+
+        if not membership :
+            # Création du Membership
+            membership = Membership.objects.create(
+                user=user,
+                price=price,
+                asset_fedow=asset_fedow,
+                date_added=datetime.fromisoformat(member['date_added']) if member['date_added'] else None,
+                last_contribution=last_contribution,
+                contribution_value=cotisation,
+                first_name=member['first_name'] if member['first_name'] else None,
+                last_name=member['last_name'] if member['last_name'] else None,
+                postal_code=member['postal_code'] if member['postal_code'] else None,
+            )
+
+    # Vérifie que l'adhésion a bien été envoyé a Fedow
+    if membership:
+        print(email, membership.last_contribution, membership.contribution_value, membership.price)
+        if not membership.asset_fedow:
+            membership.asset_fedow = asset_fedow
+            membership.save()
+        if not membership.fedow_transactions.exists() and membership.contribution_value :
+            serialized_transaction = fedowAPI.membership.create(membership=membership)
+    # Liaison avec la carte
+    if member['card_qrcode_uuid']:
+        for qrcode_uuid in member['card_qrcode_uuid']:
+            linked_serialized_card = fedowAPI.NFCcard.linkwallet_cardqrcode(user=user, qrcode_uuid=qrcode_uuid)

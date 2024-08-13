@@ -1282,6 +1282,7 @@ class Membership(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='membership')
     price = models.ForeignKey(Price, on_delete=models.PROTECT, related_name='user',
                               null=True, blank=True)
+    asset_fedow = models.UUIDField(null=True, blank=True)
 
     stripe_id_subscription = models.CharField(
         max_length=28,

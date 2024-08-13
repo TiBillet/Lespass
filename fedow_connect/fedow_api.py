@@ -202,8 +202,13 @@ class MembershipFedow():
             receiver = wallet.uuid
 
         # Vérification de l'uuid membership présent coté Fedow
-        fedow_asset = AssetFedow(fedow_config=self.fedow_config)
-        serialized_asset, created = fedow_asset.get_or_create_asset(membership.price.product)
+        if not membership.asset_fedow and membership.price :
+            fedow_asset = AssetFedow(fedow_config=self.fedow_config)
+            serialized_asset, created = fedow_asset.get_or_create_asset(membership.price.product)
+            asset_fedow = f"{serialized_asset['uuid']}"
+            membership.asset_fedow = asset_fedow
+        if not membership.asset_fedow :
+            raise Exception("no asset_fedow nor price provided on membership")
 
         amount = membership.contribution_value
         sender = self.fedow_config.fedow_place_wallet_uuid
@@ -213,7 +218,7 @@ class MembershipFedow():
             "amount": int(amount * 100),
             "sender": f"{sender}",
             "receiver": f"{receiver}",
-            "asset": f"{serialized_asset['uuid']}",
+            "asset": membership.asset_fedow,
             "subscription_start_datetime": subscription_start_datetime.isoformat(),
         }
 
@@ -239,6 +244,7 @@ class MembershipFedow():
             if serialized_transaction.is_valid():
                 fedow_transaction = serialized_transaction.fedow_transaction
                 membership.fedow_transactions.add(fedow_transaction)
+                membership.save() # sauvegarde au cas ou membership.asset_fedow
                 if membership.stripe_paiement.exists():
                     membership.stripe_paiement.latest('last_action').fedow_transactions.add(fedow_transaction)
                 return serialized_transaction.validated_data
@@ -302,7 +308,7 @@ class WalletFedow():
             raise Exception(f"retrieve_by_signature wallet_serialized ERRORS : {wallet_serialized.errors}")
 
     def get_or_create_wallet(self, user: TibilletUser):
-        email = user.email
+        email = user.email.lower()
         response_link = _post(self.fedow_config, user=user, path='wallet/get_or_create', data={
             "email": email,
             "public_pem": user.get_public_pem(),
@@ -528,7 +534,7 @@ class NFCcardFedow():
         )
 
         if response_link.status_code != 200:
-            logger.error(response_link.status_code, response_link.content)
+            logger.error(f"linkwallet_cardqrcode : {response_link.status_code} {response_link.json()}")
             return False
 
         validated_card = CardValidator(data=response_link.json())

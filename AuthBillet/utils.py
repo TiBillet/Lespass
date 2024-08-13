@@ -72,7 +72,7 @@ def sender_mail_connect(email, subject_mail=None):
         logger.error(f"validate_email_and_return_user erreur pour récuperer config : {email} - {base_url} : {e}")
 
 
-def get_or_create_user(email,
+def get_or_create_user(email: str,
                        password=None,
                        set_active=False,
                        send_mail=True,
@@ -88,6 +88,7 @@ def get_or_create_user(email,
     """
 
     User: TibilletUser = get_user_model()
+    email = email.lower()
     user, created = User.objects.get_or_create(
         email=email,
         username=email,
