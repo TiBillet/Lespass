@@ -1,0 +1,26 @@
+{% load tibitags %}
+
+<header>
+    <div class="page-header min-vh-50"
+         style="background-image: url('{{ config.img.fhd.url | randImg }}');max-height: 365px">
+        <span class="mask bg-dark opacity-8"></span>
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto text-white text-center">
+                    <h2 class="text-white" role="heading" aria-label="Nom de l'évènement : {{ event.name }}">
+                        {{ event.name }}
+                    </h2>
+                    {% if config.short_description != None %}
+                        <p class="lead" style="white-space: pre-line">{{ event.short_description }}</p>
+                        <p class="lead" style="white-space: pre-line">{{ event.datetime }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% if event.long_description %}
+        <div class="container mt-5" style="white-space: pre-line">
+            {{ event.long_description }}
+        </div>
+    {% endif %}
+</header>

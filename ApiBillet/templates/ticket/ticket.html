@@ -1,0 +1,37 @@
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <title>Ticket</title>
+    <meta name="description" content="{{ ticket.reservation.event.name }}">
+</head>
+
+<body>
+<section id="informations">
+
+    <h1>{{ ticket.reservation.event.name }}</h1>
+    <h2>Lieux : {{ config.organisation }}</h2>
+    <h2>{{ ticket.reservation.event.datetime }}</h2>
+    <h3>{{ ticket.first_name }} {{ ticket.last_name }}</h3>
+    <h4>Prix : {{ ticket.pricesold }} €</h4>
+    {% if ticket.seat == "L" %}
+        <h4>Placement libre</h4>
+    {% else %}
+        <h4>Siège : {{ ticket.seat }}</h4>
+    {% endif %}
+
+    <h4>Numéro de billet : {{ ticket.status }}-{{ ticket.numero_uuid }}-{{ ticket.seat }}</h4>
+
+    {% if ticket.reservation.options.all|length > 0 %}
+        <h3>Options :</h3>
+        {% for option in ticket.reservation.options.all %}
+            <h4>- {{ option.name }}</h4>
+        {% endfor %}
+    {% endif %}
+
+    <div>{{ img_svg | safe }}</div>
+    {#    <div>{{ bar_svg | safe }}</div>#}
+    <h4>Email de réservation : {{ ticket.reservation.user_commande.email }}</h4>
+
+</section>
+</body>
+</html>

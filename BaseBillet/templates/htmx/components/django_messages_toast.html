@@ -1,0 +1,34 @@
+{% if messages %}
+    <!-- gestion des messages django -->
+    <div aria-live="polite" aria-atomic="true" class="position-relative mt-5">
+        <div class="toast-container top-0 end-0 p-3">
+            {% for message in messages %}
+
+                <!-- toast -->
+                <div class="toast fade"
+                     {% if message.tags == 'error' %} role="alert" aria-live="assertive" {% else %} role="status" aria-live="polite"  {% endif %}
+                     id="tibillet-toast-{{ uuid.uuid4 }}" aria-atomic="true">
+
+                    <div class="d-flex flex-row justify-content-between toast-header rounded-top ani
+                    {% if message.tags == 'success' or  message.tags == 'info' or  message.tags == 'warning' %}  bg-{{ message.tags }} {% endif %}
+                    {% if message.tags == 'error' %}  bg-danger {% endif %} {% if message.tags == 'debug' %}  bg-info {% endif %}"
+                     style="">
+                        {% if message.tags == 'success' %} Validation {% endif %}
+                        {% if message.tags == 'info' %} Information(s) {% endif %}
+                        {% if message.tags == 'warning' %} Attention {% endif %}
+                        {% if message.tags == 'error' %} Erreur(s) {% endif %}
+                        {% if message.tags == 'debug' %} Debug {% endif %}
+                        <i class="fa fa-times text-md ms-3 cursor-pointer" data-bs-dismiss="toast" aria-label="Close"
+                           aria-hidden="true"></i>
+                    </div>
+                    <hr class="horizontal dark m-0">
+                    <div class="toast-body">
+                        <pe>{{ message }}</pe>
+                    </div>
+                </div>
+
+
+            {% endfor %}
+        </div>
+    </div>
+{% endif %}

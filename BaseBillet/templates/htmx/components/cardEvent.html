@@ -1,0 +1,57 @@
+{% load static %}
+{% load tibitags %}
+
+<div class="card maj-theme" data-animation="true">
+    <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
+        <a class="d-block">
+            <img class="img-fluid shadow border-radius-lg" src="{{ event.img.crop_hdr.url | randImg }}"
+                 loading="lazy"
+                 alt="Image de l'évènement"/>
+        </a>
+    </div>
+    <div class="card-body">
+        <span class="card-title mt-3 h5 d-block text-dark">
+            {{ event.name }}
+        </span>
+
+        <p class="text-dark">
+            {{ event.datetime|date:"j/m/Y - H:i:s" }}
+
+            <span class="text-primary text-uppercase text-sm font-weight-bold tibillet-text-primary">
+            {% for product in event.products.all %}
+                <span>
+                {% if product.categorie_article == 'B' %}
+                    {% for price in product.prices.all %}
+                        <span> - {{ price.prix }}€</span>
+                    {% endfor %}
+                {% endif %}
+            </span>
+                {% if product.categorie_article == 'F' %}
+                    <span> - ENTRÉE LIBRE</span>
+                {% endif %}
+            {% empty %}
+                <span> - ENTRÉE LIBRE</span>
+            {% endfor %}
+        </span>
+        </p>
+
+        {% if event.short_description %}
+            <p class="card-description mb-4">{{ event.short_description }}</p>
+        {% elif event.artists.first %}
+            <p class="card-description mb-4">
+                {{ event.artists.first.configuration.short_description }}
+            </p>
+        {% endif %}
+
+        <a href="{% url 'event' event.slug %}">
+            <div class="btn btn-outline-primary tibillet-outline-primary btn-sm" role="button"
+                 aria-label="Réserver {{ event.slug }}">
+                {% if event.products.first == None %}
+                    Informations
+                {% else %}
+                    Réserver
+                {% endif %}
+            </div>
+        </a>
+    </div>
+</div>

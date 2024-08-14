@@ -1,5 +1,0 @@
-# Petit soucis de licence qui empêche
-# certains assets d'être up sur gituhb.
-# On s'en occupe bientôt, promis !
-from node:16-bullseye
-ADD ./nonfree/assets /nonfree/

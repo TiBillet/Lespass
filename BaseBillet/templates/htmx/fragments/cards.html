@@ -1,0 +1,24 @@
+{% load tibitags %}
+{% load i18n %}
+{% load static %}
+
+{% for card in cards %}
+    <div class="card card-background card-background-mask-dark align-items-start mt-4 w-75 mx-auto">
+        <div class="full-background cursor-pointer"
+             style="background-image: url({{ card.origin.img | randCardImg }})"></div>
+        <div class="card-body">
+            <h6 class="text-white mb-0">Number : {{ card.number_printed }}</h6>
+            <p class="text-white">Origin : {{ card.origin.place.name }}</p>
+            <p class="text-white">Génération : {{ card.origin.generation }}</p>
+        </div>
+    </div>
+    <h5 class="mx-auto mt-2">{% translate "If you've lost your card, please report it. Your account will not be deleted, and you will keep your tokens and memberships. You can request and scan a new blank card at the front desk of your favorite venue :)" %}</h5>
+    <button type="submit" class="btn bg-gradient-danger btn-lg mt-2 p-4 mb-2 w-75 mx-auto"
+            role="button"
+            aria-label="valider formulaire adhésion"
+            hx-get="/my_account/{{ card.number_printed }}/lost_my_card/"
+            hx-indicator="#tibillet-spinner">
+        {% translate "I LOST MY CARD NUMBER" %} {{ card.number_printed }}
+    </button>
+{% endfor %}
+

@@ -1,0 +1,13 @@
+.env
+env*
+.git
+Backup/dumps
+Backup/logs
+Docker
+DjangoFiles/www
+DjangoFiles/logs/gunicorn.logs
+DjangoFiles/logs/Djangologfile
+DjangoFiles/logs/nginxAccess.log
+DjangoFiles/logs/nginxError.log
+database/*
+backup/*

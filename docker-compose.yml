@@ -1,0 +1,116 @@
+services:
+  lespass_postgres:
+    image: postgres:13-bookworm
+    restart: always
+    container_name: lespass_postgres
+    hostname: lespass_postgres
+    ports:
+      - 5432:5432
+    volumes:
+#      - ./database:/var/lib/postgresql/data
+      - lespass_dev_db:/var/lib/postgresql/data
+    env_file: .env
+    networks:
+      - frontend
+
+  lespass_memcached:
+    image : memcached:1.6
+    container_name: lespass_memcached
+    hostname: lespass_memcached
+    restart: always
+    networks:
+      - frontend
+
+  lespass_redis:
+    container_name: lespass_redis
+    hostname: lespass_redis
+    image: redis:7.2.3-bookworm
+    restart: always
+    networks:
+      - frontend
+
+  lespass_django:
+    build: .
+#    image: tibillet/lespass:latest
+    restart: always
+    container_name: lespass_django
+    hostname: lespass_django
+    volumes:
+      - ./:/DjangoFiles
+      - ./backup:/Backup/dumps/
+    env_file: .env
+    depends_on:
+      - lespass_postgres
+      - lespass_redis
+      - lespass_memcached
+    links:
+      - lespass_postgres:postgres
+      - lespass_redis:redis
+      - lespass_memcached:memcached
+    networks:
+      - frontend
+    extra_hosts:
+      - "fedow.tibillet.localhost:172.17.0.1"
+      - "cashless.tibillet.localhost:172.17.0.1"
+      - "cashless2.tibillet.localhost:172.17.0.1"
+
+  lespass_celery:
+    build: .
+#    image: tibillet/lespass:latest
+    container_name: lespass_celery
+    restart: always
+    hostname: lespass_celery
+    env_file: .env
+    volumes:
+      - ./:/DjangoFiles
+    depends_on:
+      - lespass_postgres
+      - lespass_redis
+      - lespass_memcached
+    links:
+      - lespass_postgres:postgres
+      - lespass_redis:redis
+      - lespass_memcached:memcached
+    networks:
+      - frontend
+    extra_hosts:
+      - "fedow.tibillet.localhost:172.17.0.1"
+      - "demo.tibillet.localhost:172.17.0.1"
+      - "billetistan.tibillet.localhost:172.17.0.1"
+      - "cashless.tibillet.localhost:172.17.0.1"
+    command: "poetry run celery -A TiBillet worker -l INFO"
+
+
+
+  lespass_nginx:
+    image: nginx:latest
+    container_name: lespass_nginx
+    restart: always
+    hostname: lespass_nginx
+    links:
+      - lespass_django:lespass_django
+    volumes:
+      - ./www:/www
+      - ./logs:/logs
+      - ./nginx:/etc/nginx/conf.d
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=frontend
+      - traefik.http.routers.lespass_nginx.tls.certresolver=myresolver
+      - traefik.http.routers.lespass_nginx.rule=Host(`$DOMAIN`) || Host(`www.$DOMAIN`) || Host(`$META.$DOMAIN`) || Host(`$SUB.$DOMAIN`)
+      - traefik.http.services.lespass_nginx.loadbalancer.server.port=80
+    networks:
+      - frontend
+
+
+
+networks:
+  frontend:
+    external: true
+#  lespass_backend:
+
+volumes:
+  lespass_dev_db:
+
+
+# docker build -t lespass . && docker tag lespass tibillet/lespass:latest && docker tag lespass tibillet/lespass:0.9.6 && docker push tibillet/lespass:latest && docker push tibillet/lespass:0.9.6

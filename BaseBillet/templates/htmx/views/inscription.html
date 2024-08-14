@@ -1,0 +1,98 @@
+{% extends base_template %}
+{% load i18n %}
+{% load tibitags %}
+{% block main %}
+
+    {% include "htmx/components/django_messages_toast.html" %}
+    <div class="page-header align-items-start min-vh-100"
+         style="background-image: url('{{ config.img.fhd.url | randImg }}')"
+         loading="lazy">
+        <span class="mask bg-gradient-dark opacity-6"></span>
+        <div class="container my-auto">
+            <div class="row">
+                <div class="col-lg-4 col-md-8 mx-auto">
+                    <div class="card z-index-0">
+                        <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
+                            <div class="bg-gradient-success shadow-success border-radius-lg py-3 pe-1">
+                                <h4 class="text-white font-weight-bolder text-center mt-2 mb-0 test-return-titre-popup">
+                                    {% translate "Link your card to you" %}
+                                </h4>
+                                {#                                <div class="row mt-3">#}
+                                {#                                    <div class="col-2 text-center ms-auto">#}
+                                {#                                        <a class="btn btn-link px-3" href="javascript:;">#}
+                                {#                                            <i class="fa fa-facebook text-white text-lg"></i>#}
+                                {#                                        </a>#}
+                                {#                                    </div>#}
+                                {#                                    <div class="col-2 text-center px-1">#}
+                                {#                                        <a class="btn btn-link px-3" href="javascript:;">#}
+                                {#                                            <i class="fa fa-github text-white text-lg"></i>#}
+                                {#                                        </a>#}
+                                {#                                    </div>#}
+                                {#                                    <div class="col-2 text-center me-auto">#}
+                                {#                                        <a class="btn btn-link px-3" href="javascript:;">#}
+                                {#                                            <i class="fa fa-google text-white text-lg"></i>#}
+                                {#                                        </a>#}
+                                {#                                    </div>#}
+                                {#                                </div>#}
+                            </div>
+                        </div>
+                        <div class="row px-xl-5 px-sm-4 px-3">
+                            {#                            <div class="mt-2 position-relative text-center">#}
+                            {#                                <p class="text-sm font-weight-bold mb-2 text-secondary text-border d-inline z-index-2 bg-white px-3">#}
+                            {#                                    or#}
+                            {#                                </p>#}
+                            {#                            </div>#}
+                        </div>
+                        <div class="card-body">
+                            <form id="linkform" role="form">
+                                {#                                <div class="input-group input-group-dynamic mb-3">#}
+                                {#                                    <label class="form-label">Name</label>#}
+                                {#                                    <input type="text" class="form-control" aria-label="Name">#}
+                                {#                                </div>#}
+                                <div class="input-group input-group-dynamic mb-3">
+                                    <label class="form-label">Email</label>
+                                    <input name="email" type="email" class="form-control test-return-email-link-card" aria-label="Email"
+                                           value="{{ user.email }}">
+                                </div>
+                                {#                                <div class="input-group input-group-dynamic mb-3">#}
+                                {#                                    <label class="form-label">Password</label>#}
+                                {#                                    <input type="password" class="form-control" aria-label="Password">#}
+                                {#                                </div>#}
+                                <div class="form-check text-start ps-0">
+                                    <input class="form-check-input bg-dark border-dark test-return-agree-link-card"
+                                           type="checkbox"
+                                           name="cgu">
+                                    <label class="form-check-label" for="flexCheckDefault">
+                                        {% translate "I agree the" %} <a href="https://tibillet.org/cgucgv/"
+                                                       class="text-dark font-weight-bolder">
+                                        {% translate "Terms and Conditions" %}</a>
+                                    </label>
+                                </div>
+
+                                <div class="text-center">
+                                    <input type="hidden" name="qrcode_uuid" value="{{ qrcode_uuid }}">
+                                    <button type="button"
+                                            class="btn bg-gradient-dark w-100 my-4 mb-2 test-return-validate-link-card"
+                                            hx-post="/qr/link/"
+                                            hx-indicator="#tibillet-spinner"
+                                    >{% translate "Sign up" %}
+                                    </button>
+
+                                </div>
+                                <div class="text-center">
+                                    <p class="text-sm mt-3">
+                                        {% translate "Learn more about TiBillet, a free and privacy-friendly software for cooperatives networks :" %}
+                                        <a href="https://tibillet.org/" target="_blank"
+                                           class="text-dark font-weight-bolder">https://tibillet.org/</a>
+                                    </p>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+{% endblock %}

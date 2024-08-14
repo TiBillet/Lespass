@@ -1,0 +1,82 @@
+{% load tibitags %}
+{% load humanize i18n %}
+<div class="card">
+    <div class="table-responsive">
+        <table class="table align-items-center mb-0">
+            <thead>
+            <tr>
+                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">{% translate "Asset / Place" %}</th>
+                <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">{% translate "Type / Price" %}</th>
+                <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">{% translate "Federated with" %}</th>
+                <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">{% translate "Last action" %}
+                </th>
+{#                <th class="text-secondary opacity-7"></th>#}
+            </tr>
+            </thead>
+            <tbody>
+            {% for token in tokens %}
+                <tr>
+                    <td>
+                        <div class="d-flex px-2 py-1">
+                            <div>
+                                <img src="{{ config.logo.thumbnail.url }}" class="avatar avatar-sm me-3">
+                            </div>
+                            <div class="d-flex flex-column justify-content-center">
+                                {#                                Si token primaire : #}
+                                {% if token.asset.is_stripe_primary %}
+                                    <h6 class="mb-0 text-xs">TiBillet</h6>
+                                    <p class="text-xs text-secondary mb-0">Fédération</p>
+                                    {#                                Si token de lieu :#}
+                                {% else %}
+                                    <h6 class="mb-0 text-xs">{{ token.name }}</h6>
+                                    <p class="text-xs text-secondary mb-0">{{ token.asset.place_origin.name }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <p class="text-xs font-weight-bold mb-0">{{ token.value | dround }}</p>
+                        <p class="text-xs text-secondary mb-0">{{ token.asset.get_category_display }}</p>
+                    </td>
+                    <td class="align-middle text-center text-sm">
+                        <div class="container">
+                            <div class="row text-center">
+                                <div class="col-12">
+                                    <div class="avatar-group">
+                                        <a href="#" class="avatar avatar-sm rounded-circle"
+                                           data-bs-toggle="tooltip" data-bs-placement="bottom" title="Ryan Tompson">
+                                            <img alt="Image placeholder" src="{{ config.logo.thumbnail.url }}">
+                                        </a>
+                                        <a href="#" class="avatar avatar-sm rounded-circle"
+                                           data-bs-toggle="tooltip" data-bs-placement="bottom" title="Romina Hadid">
+                                            <img alt="Image placeholder" src="{{ config.logo.thumbnail.url }}">
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="align-middle text-center">
+                        <span class="text-secondary text-xs font-weight-normal">{{ token.last_transaction_datetime }}</span>
+                    </td>
+{#                    TODO: Afficher un modal avec les details de l'asset#}
+{#                    <td class="align-middle">#}
+{#                        <a href="#" class="text-secondary font-weight-normal text-xs" data-toggle="tooltip"#}
+{#                           data-original-title="Edit user">#}
+{#                            detail#}
+{#                        </a>#}
+{#                    </td>#}
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- initialization script for tooltips -->
+<script>
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl)
+    })
+</script>

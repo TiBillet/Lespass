@@ -1,0 +1,34 @@
+# Secret
+DJANGO_SECRET='' # see upper to create one
+FERNET_KEY='' # see upper to create one
+
+STRIPE_KEY='' # from your stripe account
+# or 
+STRIPE_KEY_TEST=''
+STRIPE_TEST=1 # set to 1 for use stripe test env
+
+# Database
+POSTGRES_HOST=''
+POSTGRES_USER=''
+POSTGRES_PASSWORD='' # strong ! generate a new fernet for exemple.
+POSTGRES_DB='lespass'
+
+TIME_ZONE='Europe/Paris' # or where you are
+PUBLIC='TiBillet Coop.' # The name of the root instance
+
+FEDOW_DOMAIN='fedow.tibillet.localhost' # the same as Fedow
+
+DOMAIN='tibillet.localhost' # for the wildcard : without subdomain ! ex : tibillet.coop, not lespass.tibillet.coop
+SUB='demo' # the sub domain of your first place ex : if 'festival', it will be accessible on https://festival.tibillet.coop
+META='agenda' # the federated agenda for all events on all tenants. If 'agenda', it will be accessible, for exemple, on https://agenda.tibillet.coop
+ADMIN_EMAIL=''
+
+# For transactionnal email : 
+EMAIL_HOST=''
+EMAIL_PORT=''
+EMAIL_HOST_USER=''
+EMAIL_HOST_PASSWORD=''
+
+# Change only if needed :
+CELERY_BROKER='redis://redis:6379/0'
+CELERY_BACKEND='redis://redis:6379/0'

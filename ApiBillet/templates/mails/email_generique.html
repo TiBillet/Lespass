@@ -1,0 +1,90 @@
+{% extends 'mails/base.html' %}
+{% block content %}
+
+    <tr>
+        <td class="pt-28 td_content"
+            style="background:#fff; padding:44px 64px 57px; border:1px solid #dcdcd9; border-radius:8px;">
+            <table align="center" cellpadding="0" cellspacing="0" class="w-100p"
+                   style="max-width:472px; margin:0 auto;" width="472">
+                <table style="">
+                    <tr>
+                        <td>
+                            <table style="border-spacing: 0px;">
+                                <tr>
+                                    <td valign="middle"><span
+                                            style="font-weight:bold;color:#636360;font:10px Arial-Bold, Helvetica-Bold, sans-serif;text-transform:uppercase;">{{ sub_title }}</span><span
+                                            style="color:transparent;display:none;height:0;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;visibility:hidden;width:0;">&nbsp;|&nbsp;</span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <h1 style="font-weight:400;style:regular;color:#1d1d1b;font:24px/32px Arial, Helvetica, sans-serif;margin: 30px 0 30px;">
+                                {{ title }}</h1><span
+                                style="color:transparent;display:none;height:0;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;visibility:hidden;width:0;">&nbsp;|&nbsp;</span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 24px 0;">
+                                Bonjour {{ username }},
+                                <br/> <br/>
+                                {{ main_text }}
+                                {% if main_text_2 %}
+                                    <br/> <br/>
+                                    {{ main_text_2 }}
+                                {% endif %}
+                                {% if main_text_3 %}
+                                    <br/> <br/>
+                                    {{ main_text_3 }}
+                                {% endif %}
+                            </p>
+                            {% for k, v in table_info.items %}
+                                {% if forloop.last %}
+                                    <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 24px 0;">
+                                        {% else %}
+                                    <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;">
+                                {% endif %}
+                            {{ k }} : <span style="color: #1d1d1b">{{ v }}</span></p>
+                            {% endfor %}
+
+                        </td>
+                    </tr>
+                    {% if button %}
+                        <tr>
+                            <td style="padding: 0 0 24px 0;">
+                                <table style="width:100%;border-spacing: 0px;padding: 0px;">
+                                    <tr>
+                                        <td class="active-t btn" align="center"
+                                            style="background:{{ button_color }};font:13px/16px Arial, Helvetica, sans-serif;border-radius:3px;height:48px;">
+                                            <a style="color:#ffffff; text-decoration:none; display:block; padding:16px 10px;"
+                                               target="_blank"
+                                               href="{{ button.url }}">{{ button.text }}</a></td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    {% endif %}
+                    <tr>
+                        {% if next_text_1 %}
+                            <td>
+                            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;">
+                            <b>{{ next_text_1 }}</b> <br/>
+                        {% endif %}
+                        {% if next_text_2 %}
+                            {{ next_text_2 }} <br/>
+                        {% endif %}
+                    </tr>
+                    <tr>
+                        <td>
+                            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;padding-top:32px;">
+                                {{ end_text }},<br/>{{ signature }}</p></td>
+                    </tr>
+                </table>
+            </table>
+        </td>
+    </tr>
+
+{% endblock %}

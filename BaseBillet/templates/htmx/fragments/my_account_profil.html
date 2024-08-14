@@ -1,0 +1,8 @@
+{% load i18n %}
+
+<p class="container pt-5">
+    {% if profile.admin_this_tenant %}
+        <h1>{% translate "Administration" %}</h1>
+    {% endif %}
+</p>
+

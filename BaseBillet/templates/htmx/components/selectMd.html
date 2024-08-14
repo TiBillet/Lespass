@@ -1,0 +1,19 @@
+<div class="input-group input-group-static mb-4">
+    <label for="{{ id }}" class="ms-0">{{ label }}</label>
+        {% if multiple == "true" %}
+            <select class="form-control" id="{{ id }}" multiple>
+        {% else %}
+            <select class="form-control" id="{{ id }}">
+        {% endif %}
+
+        {% for item in list %}
+        <option value="{{ item.value }}">{{ item.name }}</option>'
+        {% endfor %}
+    </select>
+    <div class="invalid-feedback" role="heading" aria-label="{{ msg_error }}">{{ msg_error }}</div>
+</div>
+<style>
+input[type=file]::file-selector-button {
+  display: none;
+}
+</style>
