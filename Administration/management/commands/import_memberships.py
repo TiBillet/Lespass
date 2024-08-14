@@ -2,6 +2,7 @@ import json
 from datetime import datetime
 
 from django.contrib.auth import get_user_model
+from rest_framework import serializers
 
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Product, Price, Membership
@@ -50,8 +51,34 @@ adhesion = Product.objects.get(categorie_article=Product.ADHESION)
 serialized_asset, created = fedowAPI.asset.get_or_create_asset(adhesion)
 asset_fedow = f"{serialized_asset['uuid']}"
 
+
 with open('memberships.json', 'r', encoding='utf-8') as readf:
     loaded_data = json.load(readf)
+
+# Checker de mail
+class EmailSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+#Source depuis LaBoutik : todo, a integrer dans le serializer
+"""
+'email': membre.email.lower(),
+'first_name': membre.prenom,
+'last_name': membre.name,
+'postal_code': membre.code_postal,
+'date_added': membre.date_ajout,
+'last_contribution': membre.date_derniere_cotisation,
+'cotisation': membre.cotisation,
+'card_qrcode_uuid': [f"{carte.uuid_qrcode}" for carte in membre.CarteCashless_Membre.all()]
+"""
+
+for member in loaded_data:
+    check_mail = EmailSerializer(data=member)
+    if not check_mail.is_valid():
+        print(member['email'])
+
+check_mail = EmailSerializer(data=loaded_data, many=True)
+if not check_mail.is_valid():
+    raise Exception('check mail false')
 
 for member in loaded_data:
     # Création de l'user
