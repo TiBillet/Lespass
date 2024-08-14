@@ -9,9 +9,10 @@ from BaseBillet.models import Product, Price, Membership
 from fedow_connect.fedow_api import FedowAPI
 from decimal import Decimal
 
+"""
+
 ### Set all email to lower :
 # a faire pour chaque tenant
-"""
 User = get_user_model()
 for user in User.objects.all():
     email = user.email
@@ -33,15 +34,12 @@ for user in User.objects.all():
                 except Exception as e :
                     print(f"erreur delete {e}")
 
+
+
 for user in User.objects.all():
     user.email=user.email.lower()
     user.username=user.username.lower()
     user.save()
-    
-re=User.objects.get(email='réseau976974@gmail.com')
-re.email='reseau976974@gmail.com'
-re.username='reseau976974@gmail.com'
-re.save()
 """
 
 ## Doit être lancé dans un terminal django
@@ -134,7 +132,7 @@ for member in loaded_data:
                 postal_code=member['postal_code'] if member['postal_code'] else None,
             )
 
-    # Vérifie que l'adhésion a bien été envoyé a Fedow
+    # Vérifie que l'adhésion a bien été envoyéé a Fedow
     if membership:
         print(email, membership.last_contribution, membership.contribution_value, membership.price)
         if not membership.asset_fedow:
