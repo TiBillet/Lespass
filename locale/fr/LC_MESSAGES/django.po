@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-06-11 13:03+0000\n"
+"POT-Creation-Date: 2024-08-15 07:34+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -30,7 +30,7 @@ msgstr ""
 msgid "Important dates"
 msgstr ""
 
-#: Administration/admin_tenant.py:473 BaseBillet/models.py:1471
+#: Administration/admin_tenant.py:473 BaseBillet/models.py:1473
 msgid "Évènement"
 msgstr ""
 
@@ -286,19 +286,19 @@ msgstr ""
 msgid "email obligatoire"
 msgstr ""
 
-#: AuthBillet/models.py:174
+#: AuthBillet/models.py:173
 msgid "J'accepte de recevoir la newsletter"
 msgstr ""
 
-#: AuthBillet/models.py:178
+#: AuthBillet/models.py:177
 msgid "Peux créer des tenants"
 msgstr ""
 
-#: AuthBillet/models.py:209
+#: AuthBillet/models.py:208
 msgid "Inscription depuis"
 msgstr ""
 
-#: AuthBillet/models.py:229
+#: AuthBillet/models.py:228
 msgid "Utilisateur parent"
 msgstr ""
 
@@ -327,7 +327,7 @@ msgstr ""
 msgid "mac_adress not valid"
 msgstr ""
 
-#: AuthBillet/utils.py:140
+#: AuthBillet/utils.py:141
 msgid "Not a mac address"
 msgstr ""
 
@@ -339,21 +339,25 @@ msgstr ""
 msgid "Vous êtes bien connecté. Bienvenue !"
 msgstr ""
 
-#: AuthBillet/views.py:162
+#: AuthBillet/views.py:161
 msgid "Erreur, user non valide."
 msgstr ""
 
-#: AuthBillet/views.py:167
+#: AuthBillet/views.py:163
+msgid "Token non valide."
+msgstr ""
+
+#: AuthBillet/views.py:168
 msgid "Token expiré ou non valide."
 msgstr ""
 
-#: AuthBillet/views.py:186
+#: AuthBillet/views.py:187
 msgid ""
 "Pour acceder à votre espace et réservations, merci de valider votre adresse "
 "email. Pensez à regarder dans les spams !"
 msgstr ""
 
-#: AuthBillet/views.py:191
+#: AuthBillet/views.py:192
 msgid "Email soumis non valide. Merci de vérifier votre adresse."
 msgstr ""
 
@@ -494,7 +498,7 @@ msgstr ""
 msgid "Paramètres"
 msgstr ""
 
-#: BaseBillet/models.py:388 BaseBillet/models.py:1309
+#: BaseBillet/models.py:388 BaseBillet/models.py:1311
 msgid "Nom"
 msgstr ""
 
@@ -704,7 +708,7 @@ msgstr ""
 msgid "Evenements"
 msgstr ""
 
-#: BaseBillet/models.py:957 BaseBillet/models.py:1250 BaseBillet/models.py:1326
+#: BaseBillet/models.py:957 BaseBillet/models.py:1250 BaseBillet/models.py:1328
 msgid "Annulée"
 msgstr ""
 
@@ -824,77 +828,84 @@ msgstr ""
 msgid "no stripe send"
 msgstr ""
 
-#: BaseBillet/models.py:1303
+#: BaseBillet/models.py:1305
 msgid "Prénom"
 msgstr ""
 
-#: BaseBillet/models.py:1316
+#: BaseBillet/models.py:1318
 msgid "J'accepte de recevoir la newsletter de l'association"
 msgstr ""
 
-#: BaseBillet/models.py:1324
+#: BaseBillet/models.py:1326
 msgid "Paiement unique"
 msgstr ""
 
-#: BaseBillet/models.py:1325
+#: BaseBillet/models.py:1327
 msgid "Renouvellement automatique"
 msgstr ""
 
-#: BaseBillet/models.py:1330
+#: BaseBillet/models.py:1332
 msgid "Status"
 msgstr ""
 
-#: BaseBillet/models.py:1345
+#: BaseBillet/models.py:1347
 msgid "Adhésion"
 msgstr ""
 
-#: BaseBillet/models.py:1346
+#: BaseBillet/models.py:1348
 msgid "Adhésions"
 msgstr ""
 
-#: BaseBillet/models.py:1457
+#: BaseBillet/models.py:1459
 msgid "Api key"
 msgstr ""
 
-#: BaseBillet/models.py:1458
+#: BaseBillet/models.py:1460
 msgid "Api keys"
 msgstr ""
 
-#: BaseBillet/models.py:1467
+#: BaseBillet/models.py:1469
 msgid "Réservation validée"
 msgstr ""
+
+#: BaseBillet/templates/admin/password_reset.html:50
+msgid "Create/Reset admin password"
+msgstr ""
+
+#: BaseBillet/templates/htmx/fragments/cards.html:15
+msgid ""
+"If you've lost your card, please report it. Your account will not be "
+"deleted, and you will keep your tokens and memberships. You can request and "
+"scan a new blank card at the front desk of your favorite venue :)"
+msgstr ""
+"Si vous avez perdu votre carte, veuillez le signaler. "
+"Votre compte ne sera pas supprimé et vous conserverez vos jetons et vos abonnements."
+"Vous pourez ensuite scanner une nouvelle carte vierge à la réception de votre lieu préféré :)"
+
+#: BaseBillet/templates/htmx/fragments/cards.html:21
+msgid "I LOST MY CARD NUMBER"
+msgstr "J'ai perdu ma carte numéro"
 
 #: BaseBillet/templates/htmx/fragments/my_account_membership.html:4
 #: BaseBillet/templates/htmx/fragments/my_account_wallet.html:18
 msgid "Loading tokens"
 msgstr ""
 
-#: BaseBillet/templates/htmx/fragments/my_account_profil.html:3
-msgid "My account"
-msgstr ""
-
 #: BaseBillet/templates/htmx/fragments/my_account_profil.html:5
-msgid "Thanks to valid your email for activate your accont"
-msgstr ""
-
-#: BaseBillet/templates/htmx/fragments/my_account_profil.html:11
-msgid "Resend validation email"
-msgstr ""
-
-#: BaseBillet/templates/htmx/fragments/my_account_profil.html:14
-msgid "email verified"
-msgstr ""
-
-#: BaseBillet/templates/htmx/fragments/my_account_profil.html:17
-msgid "Loading NFC Card info"
+#: BaseBillet/templates/htmx/views/my_account.html:26
+msgid "Administration"
 msgstr ""
 
 #: BaseBillet/templates/htmx/fragments/my_account_wallet.html:12
 msgid "Refill my wallet"
-msgstr ""
+msgstr "Je recharge mon portefeuille"
 
 #: BaseBillet/templates/htmx/fragments/my_account_wallet.html:35
 msgid "Show the last transactions"
+msgstr "Voir les dernieres transactions"
+
+#: BaseBillet/templates/htmx/fragments/my_account_wallet.html:43
+msgid "Loading NFC Card info"
 msgstr ""
 
 #: BaseBillet/templates/htmx/fragments/tokens_membership_table.html:8
@@ -908,11 +919,14 @@ msgid "Type / Price"
 msgstr ""
 
 #: BaseBillet/templates/htmx/fragments/tokens_membership_table.html:10
+msgid "Start membership"
+msgstr ""
+
+#: BaseBillet/templates/htmx/fragments/tokens_membership_table.html:11
 #: BaseBillet/templates/htmx/fragments/tokens_table.html:10
 msgid "Federated with"
 msgstr ""
 
-#: BaseBillet/templates/htmx/fragments/tokens_membership_table.html:11
 #: BaseBillet/templates/htmx/fragments/tokens_table.html:11
 msgid "Last action"
 msgstr ""
@@ -970,15 +984,28 @@ msgstr ""
 msgid "Adhérez"
 msgstr ""
 
-#: BaseBillet/templates/htmx/views/my_account.html:25
-msgid "Wallet"
+#: BaseBillet/templates/htmx/views/my_account.html:18
+msgid "Please validate your email for activate your account."
+msgstr ""
+
+#: BaseBillet/templates/htmx/views/my_account.html:19
+#: BaseBillet/templates/htmx/views/my_account.html:22
+msgid "Resend validation email"
 msgstr ""
 
 #: BaseBillet/templates/htmx/views/my_account.html:31
+msgid "Please create a password to access administration"
+msgstr ""
+
+#: BaseBillet/templates/htmx/views/my_account.html:45
+msgid "Wallet"
+msgstr ""
+
+#: BaseBillet/templates/htmx/views/my_account.html:51
 msgid "Memberships"
 msgstr ""
 
-#: BaseBillet/templates/htmx/views/my_account.html:38
+#: BaseBillet/templates/htmx/views/my_account.html:58
 msgid "Profil"
 msgstr ""
 
@@ -1003,41 +1030,63 @@ msgid ""
 "your email address. Don't forget to check your spam!"
 msgstr ""
 
-#: BaseBillet/views.py:191 BaseBillet/views.py:244
-msgid ""
-"Please validate your email to access all the features of your profile area."
-msgstr ""
-
-#: BaseBillet/views.py:217
+#: BaseBillet/views.py:214
 msgid ""
 "You seem to already have a TiBillet card linked to your wallet. Please "
 "revoke it first in your profile area to link a new one."
 msgstr ""
 
-#: BaseBillet/views.py:222
+#: BaseBillet/views.py:221
 msgid "Not valid"
 msgstr ""
 
-#: BaseBillet/views.py:363
+#: BaseBillet/views.py:244
+msgid ""
+"Please validate your email to access all the features of your profile area."
+msgstr ""
+
+#: BaseBillet/views.py:254 BaseBillet/views.py:263
+msgid "User already has a password."
+msgstr ""
+
+#: BaseBillet/views.py:273
+msgid "Error, wrong password."
+msgstr ""
+
+#: BaseBillet/views.py:299
+msgid "Mail sended, please check spam too !"
+msgstr ""
+
+#: BaseBillet/views.py:309
+msgid ""
+"Your wallet has been detached from this card. You can scan a new one to link "
+"it again."
+msgstr ""
+
+#: BaseBillet/views.py:312
+msgid "Error when detaching your card. Contact an administrator."
+msgstr ""
+
+#: BaseBillet/views.py:410
 msgid "Refilled wallet"
 msgstr ""
 
-#: BaseBillet/views.py:365
+#: BaseBillet/views.py:412
 msgid "Payment verification error"
 msgstr ""
 
-#: BaseBillet/views.py:473
+#: BaseBillet/views.py:532
 #, python-brace-format
 msgid ""
 "Your subscription has been validated. You will receive a confirmation email "
 "at {email}. Thank you very much!"
 msgstr ""
 
-#: BaseBillet/views.py:475
+#: BaseBillet/views.py:534
 msgid "Your payment is awaiting validation."
 msgstr ""
 
-#: BaseBillet/views.py:478
+#: BaseBillet/views.py:537
 msgid "An error has occurred, please contact the administrator."
 msgstr ""
 
