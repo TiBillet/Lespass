@@ -986,24 +986,24 @@ msgstr ""
 
 #: BaseBillet/templates/htmx/views/my_account.html:18
 msgid "Please validate your email for activate your account."
-msgstr ""
+msgstr "Pour accéder à toutes les fonctionnalités de votre compte, veuillez valider votre email."
 
 #: BaseBillet/templates/htmx/views/my_account.html:19
 #: BaseBillet/templates/htmx/views/my_account.html:22
 msgid "Resend validation email"
-msgstr ""
+msgstr "Renvoyez le mail de validation"
 
 #: BaseBillet/templates/htmx/views/my_account.html:31
 msgid "Please create a password to access administration"
-msgstr ""
+msgstr "Merci de créer un mot de passer pour accéder à l'administration"
 
 #: BaseBillet/templates/htmx/views/my_account.html:45
 msgid "Wallet"
-msgstr ""
+msgstr "Portefeuille"
 
 #: BaseBillet/templates/htmx/views/my_account.html:51
 msgid "Memberships"
-msgstr ""
+msgstr "Adhésion"
 
 #: BaseBillet/templates/htmx/views/my_account.html:58
 msgid "Profil"
