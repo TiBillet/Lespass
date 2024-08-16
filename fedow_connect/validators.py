@@ -1,7 +1,5 @@
-from rest_framework import serializers
-from django.core.cache import cache
 from django.utils.translation import gettext_lazy as _
-
+from rest_framework import serializers
 from AuthBillet.models import Wallet
 from BaseBillet.models import FedowTransaction
 
@@ -57,10 +55,6 @@ class AssetValidator(serializers.Serializer):
     total_token_value = serializers.IntegerField(required=False, allow_null=True)
     total_in_place = serializers.IntegerField(required=False, allow_null=True)
     total_in_wallet_not_place = serializers.IntegerField(required=False, allow_null=True)
-
-    def validate_place_uuid_federated_with(self, value):
-        #TODO: aller chercher les infos des tenant rattachés aux uuid place
-        return value
 
 
 class TokenValidator(serializers.Serializer):

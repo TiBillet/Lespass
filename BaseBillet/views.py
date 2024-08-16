@@ -7,6 +7,7 @@ import segno
 from django.contrib import messages
 from django.contrib.auth import logout, login
 from django.contrib.messages import MessageFailure
+from django.core.cache import cache
 from django.db import connection
 from django.http import HttpResponse, HttpRequest, Http404
 from django.shortcuts import render, redirect, get_object_or_404
@@ -16,6 +17,7 @@ from django.utils.http import urlsafe_base64_encode
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_GET
 from django_htmx.http import HttpResponseClientRedirect
+from django_tenants.utils import tenant_context
 from rest_framework import viewsets, permissions
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
@@ -31,8 +33,10 @@ from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Ev
     Paiement_stripe
 from BaseBillet.tasks import create_invoice_pdf
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator
+from Customers.models import Client
 from PaiementStripe.views import CreationPaiementStripe
 from fedow_connect.fedow_api import FedowAPI
+from fedow_connect.models import FedowConfig
 
 logger = logging.getLogger(__name__)
 
@@ -318,6 +322,23 @@ class MyAccount(viewsets.ViewSet):
         else:
             logger.warning("User email not active")
 
+    @staticmethod
+    def get_tenant_federated_info(list_place_uuid_federated_with):
+        places = {}
+        for tenant in Client.objects.filter(categorie=Client.SALLE_SPECTACLE):
+            try:
+                with tenant_context(tenant):
+                    fedow_config = FedowConfig.get_solo()
+                    if fedow_config.fedow_place_uuid in list_place_uuid_federated_with:
+                        config = Configuration.get_solo()
+                        places[fedow_config.fedow_place_uuid] = {
+                            'organisation': config.organisation,
+                            'logo': config.logo.thumbnail.url if config.logo else '',
+                        }
+            except Exception as e:
+                logger.warning(f'get_tenant_federated : {e}')
+        return places
+
     @action(detail=False, methods=['GET'])
     def tokens_table(self, request):
         config = Configuration.get_solo()
@@ -326,6 +347,18 @@ class MyAccount(viewsets.ViewSet):
 
         # On retire les adhésions, on les affiche dans l'autre table
         tokens = [token for token in wallet.get('tokens') if token.get('asset_category') != 'SUB']
+
+        for token in tokens :
+            list_place_uuid_federated_with = token['asset']['place_uuid_federated_with']
+            if len(list_place_uuid_federated_with) > 0:
+                federated_place_info = cache.get(f"{token['asset']['uuid']}_federated_with")
+                if not federated_place_info :
+                    federated_place_info = self.get_tenant_federated_info(list_place_uuid_federated_with)
+                    logger.info("federated_place_info SET")
+                    cache.set(f"{token['asset']['uuid']}_federated_with", federated_place_info, 3600)
+                token['federated_place_info'] = federated_place_info
+
+        # On fait la liste des lieux fédérés pour les pastilles dans le tableau html
         context = {
             'config': config,
             'tokens': tokens,
@@ -414,7 +447,6 @@ class MyAccount(viewsets.ViewSet):
             messages.add_message(request, messages.ERROR, _("Payment verification error"))
         return redirect('/my_account/')
 
-    #### END REFILL STRIPE PRIMARY ####
 
 
 @require_GET
