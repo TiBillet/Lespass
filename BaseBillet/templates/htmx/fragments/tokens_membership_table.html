@@ -48,14 +48,9 @@
                             <div class="row text-center">
                                 <div class="col-12">
                                     <div class="avatar-group">
-                                        <a href="#" class="avatar avatar-sm rounded-circle"
-                                           data-bs-toggle="tooltip" data-bs-placement="bottom" title="Ryan Tompson">
-                                            <img alt="Image placeholder" src="{{ config.logo.thumbnail.url }}">
-                                        </a>
-                                        <a href="#" class="avatar avatar-sm rounded-circle"
-                                           data-bs-toggle="tooltip" data-bs-placement="bottom" title="Romina Hadid">
-                                            <img alt="Image placeholder" src="{{ config.logo.thumbnail.url }}">
-                                        </a>
+                                        {% for place_uuid, place_info in token.federated_place_info.items %}
+                                            <p class="text-xs text-secondary mb-0">{{ place_info.organisation }}</p>
+                                        {% endfor %}
                                     </div>
                                 </div>
                             </div>

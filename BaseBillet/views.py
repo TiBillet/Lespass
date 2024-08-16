@@ -323,7 +323,7 @@ class MyAccount(viewsets.ViewSet):
             logger.warning("User email not active")
 
     @staticmethod
-    def get_tenant_federated_info(list_place_uuid_federated_with):
+    def get_tenant_federated_info(tokens):
         places = {}
         for tenant in Client.objects.filter(categorie=Client.SALLE_SPECTACLE):
             try:
@@ -348,6 +348,7 @@ class MyAccount(viewsets.ViewSet):
         # On retire les adhésions, on les affiche dans l'autre table
         tokens = [token for token in wallet.get('tokens') if token.get('asset_category') != 'SUB']
 
+        #TODO: Factoriser avec tokens_table / membership_table
         for token in tokens :
             list_place_uuid_federated_with = token['asset']['place_uuid_federated_with']
             if len(list_place_uuid_federated_with) > 0:
@@ -401,6 +402,18 @@ class MyAccount(viewsets.ViewSet):
         wallet = fedowAPI.wallet.cached_retrieve_by_signature(request.user).validated_data
         # On ne garde que les adhésions
         tokens = [token for token in wallet.get('tokens') if token.get('asset_category') == 'SUB']
+
+        #TODO: Factoriser avec tokens_table / membership_table
+        for token in tokens :
+            list_place_uuid_federated_with = token['asset']['place_uuid_federated_with']
+            if len(list_place_uuid_federated_with) > 0:
+                federated_place_info = cache.get(f"{token['asset']['uuid']}_federated_with")
+                if not federated_place_info :
+                    federated_place_info = self.get_tenant_federated_info(list_place_uuid_federated_with)
+                    logger.info("federated_place_info SET")
+                    cache.set(f"{token['asset']['uuid']}_federated_with", federated_place_info, 3600)
+                token['federated_place_info'] = federated_place_info
+
         context = {
             'config': config,
             'tokens': tokens,
