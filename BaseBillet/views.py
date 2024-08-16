@@ -323,7 +323,7 @@ class MyAccount(viewsets.ViewSet):
             logger.warning("User email not active")
 
     @staticmethod
-    def get_tenant_federated_info(tokens):
+    def get_tenant_federated_info(list_place_uuid_federated_with):
         places = {}
         for tenant in Client.objects.filter(categorie=Client.SALLE_SPECTACLE):
             try:
