@@ -8,6 +8,7 @@ from django.contrib.admin import AdminSite, SimpleListFilter
 from django.contrib.admin.views.main import ChangeList
 from django.contrib.auth import get_user_model, login
 from django.contrib.auth.models import Group
+from django.core.handlers.asgi import ASGIRequest
 from django.http import HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import reverse, NoReverseMatch, re_path
@@ -70,7 +71,7 @@ class StaffAdminSite(AdminSite):
 
         return app_list
 
-    def has_permission(self, request):
+    def has_permission(self, request: ASGIRequest) -> bool:
         """
         Removed check for is_staff.
         Ensure that the tenant is in client_admin for the current user.
@@ -84,9 +85,9 @@ class StaffAdminSite(AdminSite):
         #     root = User.objects.filter(is_superuser=True).first()
         #     login(request, root)
         #     return True
-
         logger.warning(
-            f"Tenant AdminSite.has_permission : {request.user} - {request.user.client_source if request.user.is_authenticated else 'No client'} - ip : {get_client_ip(request)}")
+            f"Tenant AdminSite.has_permission : l'user {request.user} from ip : {get_client_ip(request)} try to get admin on {request.build_absolute_uri()} - tenant : {request.tenant}")
+
         try:
             if request.tenant in request.user.client_admin.all():
                 return request.user.is_staff
@@ -98,6 +99,7 @@ class StaffAdminSite(AdminSite):
         except Exception as e:
             raise e
 
+        logger.warning(f"{request.user} has permission on {request.build_absolute_uri()} : False")
         return False
 
     # def get_app_list(self, request):

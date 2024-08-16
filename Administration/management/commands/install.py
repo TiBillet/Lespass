@@ -175,9 +175,13 @@ class Command(BaseCommand):
             ## Création du premier admin:
             from django.contrib.auth.models import Group
             staff_group, created = Group.objects.get_or_create(name="staff")
+
             user: TibilletUser = get_or_create_user(admin_email)
             user.client_admin.add(tenant_first_sub)
+            user.is_staff=True
             user.groups.add(staff_group)
+            user.save()
+
             config = Configuration.get_solo()
             config.organisation = first_sub.capitalize()
             config.save()

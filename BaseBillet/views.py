@@ -342,8 +342,6 @@ class MyAccount(viewsets.ViewSet):
         next_url = paginated_list_by_wallet_signature.get('next')
         previous_url = paginated_list_by_wallet_signature.get('previous')
 
-        # On retire les adhésions, on les affiche dans l'autre table
-        # tokens = [token for token in wallet.get('tokens') if token.get('asset_category') != 'SUB']
         context = {
             'config': config,
             'transactions': transactions,
