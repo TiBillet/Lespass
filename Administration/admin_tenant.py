@@ -89,7 +89,7 @@ class StaffAdminSite(AdminSite):
             f"Tenant AdminSite.has_permission : l'user {request.user} from ip : {get_client_ip(request)} try to get admin on {request.build_absolute_uri()} - tenant : {request.tenant}")
 
         try:
-            if request.tenant in request.user.client_admin.all():
+            if request.tenant in request.user.client_admin.all() and request.user.email_valid:
                 return request.user.is_staff
             if request.user.client_source.categorie == Client.ROOT:
                 return request.user.is_superuser
@@ -299,18 +299,18 @@ class ConfigurationAdmin(SingletonModelAdmin):
                 'option_generale_checkbox',
             ),
         }),
-        ('Fedow', {
-            'fields': (
-                'federated_cashless',
-                'server_fedow',
-            ),
-        }),
-        ('Cashless', {
-            'fields': (
-                'server_cashless',
-                'key_cashless',
-            ),
-        }),
+        # ('Fedow', {
+        #     'fields': (
+        #         'federated_cashless',
+        #         'server_fedow',
+        #     ),
+        # }),
+        # ('Cashless', {
+        #     'fields': (
+        #         'server_cashless',
+                # 'key_cashless',
+            # ),
+        # }),
         ('Ghost', {
             'fields': (
                 'ghost_url',

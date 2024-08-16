@@ -245,7 +245,10 @@ class MyAccount(viewsets.ViewSet):
 
         return render(request, "htmx/views/my_account.html", context=template_context)
 
+
     ### ONGLET WALLET
+    """
+    # TODO : Possible uniquement après un envoie token par email
     @action(detail=False, methods=['GET', 'POST'])
     def reset_password(self, request):
         if request.method == "GET":
@@ -272,6 +275,7 @@ class MyAccount(viewsets.ViewSet):
                 messages.add_message(request, messages.WARNING,
                                      _("Error, wrong password."))
                 return HttpResponseClientRedirect(request.headers['Referer'])
+    """
 
 
     @action(detail=False, methods=['GET'])

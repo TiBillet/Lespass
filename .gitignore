@@ -160,3 +160,4 @@ DjangoFiles/logs/nginxAccess.log
 DjangoFiles/logs/nginxError.log
 
 tempo/
+/www/
