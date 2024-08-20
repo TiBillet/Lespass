@@ -368,7 +368,7 @@ class MyAccount(viewsets.ViewSet):
                 names_of_place_federated.append(self.get_place_cached_info(place_federated).get('organisation'))
             token['asset']['names_of_place_federated'] = names_of_place_federated
 
-        print(tokens)
+        # print(tokens)
 
         # On fait la liste des lieux fédérés pour les pastilles dans le tableau html
         context = {
@@ -412,7 +412,6 @@ class MyAccount(viewsets.ViewSet):
         wallet = fedowAPI.wallet.cached_retrieve_by_signature(request.user).validated_data
         # On ne garde que les adhésions
         tokens = [token for token in wallet.get('tokens') if token.get('asset_category') == 'SUB']
-
 
         #TODO: Factoriser avec tokens_table / membership_table
         for token in tokens :
@@ -472,8 +471,8 @@ class MyAccount(viewsets.ViewSet):
             messages.add_message(request, messages.SUCCESS, _("Refilled wallet"))
         except Exception as e:
             messages.add_message(request, messages.ERROR, _("Payment verification error"))
-        return redirect('/my_account/')
 
+        return redirect('/my_account/')
 
 
 @require_GET
