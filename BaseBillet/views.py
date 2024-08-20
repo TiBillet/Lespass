@@ -358,8 +358,10 @@ class MyAccount(viewsets.ViewSet):
         #TODO: Factoriser avec tokens_table / membership_table
         for token in tokens :
             # Recherche du logo du lieu d'origin de l'asset
-            place_uuid_origin = token['asset']['place_origin']['uuid']
-            token['asset']['logo'] = self.get_place_cached_info(place_uuid_origin).get('logo')
+            if token['asset']['place_origin'] :
+                # L'asset fédéré n'a pas d'origin
+                place_uuid_origin = token['asset']['place_origin']['uuid']
+                token['asset']['logo'] = self.get_place_cached_info(place_uuid_origin).get('logo')
             # Recherche des noms des lieux fédérés
             names_of_place_federated = []
             for place_federated in token['asset']['place_uuid_federated_with']:
@@ -414,8 +416,10 @@ class MyAccount(viewsets.ViewSet):
         #TODO: Factoriser avec tokens_table / membership_table
         for token in tokens :
             # Recherche du logo du lieu d'origin de l'asset
-            place_uuid_origin = token['asset']['place_origin']['uuid']
-            token['asset']['logo'] = self.get_place_cached_info(place_uuid_origin).get('logo')
+            if token['asset']['place_origin'] :
+                # L'asset fédéré n'a pas d'origin
+                place_uuid_origin = token['asset']['place_origin']['uuid']
+                token['asset']['logo'] = self.get_place_cached_info(place_uuid_origin).get('logo')
             # Recherche des noms des lieux fédérés
             names_of_place_federated = []
             for place_federated in token['asset']['place_uuid_federated_with']:
