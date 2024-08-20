@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-08-19 07:42+0000\n"
+"POT-Creation-Date: 2024-08-20 11:38+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -30,11 +30,11 @@ msgstr ""
 msgid "Important dates"
 msgstr ""
 
-#: Administration/admin_tenant.py:475 BaseBillet/models.py:1473
+#: Administration/admin_tenant.py:479 BaseBillet/models.py:1473
 msgid "Évènement"
 msgstr ""
 
-#: Administration/admin_tenant.py:624
+#: Administration/admin_tenant.py:628
 msgid "Merci de renseigner une catégorie pour cet article."
 msgstr ""
 
@@ -892,9 +892,8 @@ msgstr "J'ai perdu ma carte numéro"
 msgid "Loading tokens"
 msgstr ""
 
-#: BaseBillet/templates/htmx/fragments/my_account_profil.html:5
-#: BaseBillet/templates/htmx/views/my_account.html:26
-msgid "Administration"
+#: BaseBillet/templates/htmx/fragments/my_account_profil.html:10
+msgid "Loading NFC Card info"
 msgstr ""
 
 #: BaseBillet/templates/htmx/fragments/my_account_wallet.html:12
@@ -904,10 +903,6 @@ msgstr "Je recharge mon portefeuille"
 #: BaseBillet/templates/htmx/fragments/my_account_wallet.html:35
 msgid "Show the last transactions"
 msgstr "Voir les dernieres transactions"
-
-#: BaseBillet/templates/htmx/fragments/my_account_wallet.html:43
-msgid "Loading NFC Card info"
-msgstr ""
 
 #: BaseBillet/templates/htmx/fragments/tokens_membership_table.html:8
 #: BaseBillet/templates/htmx/fragments/tokens_table.html:8
@@ -996,17 +991,21 @@ msgstr ""
 msgid "Resend validation email"
 msgstr "Renvoyez le mail de validation"
 
+#: BaseBillet/templates/htmx/views/my_account.html:26
+msgid "Administration"
+msgstr ""
+
 #: BaseBillet/templates/htmx/views/my_account.html:45
 msgid "Wallet"
 msgstr "Portefeuille"
 
 #: BaseBillet/templates/htmx/views/my_account.html:51
 msgid "Memberships"
-msgstr "Adhésion"
+msgstr "Adhésions"
 
 #: BaseBillet/templates/htmx/views/my_account.html:58
-msgid "Profil"
-msgstr ""
+msgid "Cards"
+msgstr "Cartes"
 
 #: BaseBillet/triggers.py:32
 msgid "Email de confirmation"
@@ -1058,26 +1057,26 @@ msgstr ""
 msgid "Error when detaching your card. Contact an administrator."
 msgstr ""
 
-#: BaseBillet/views.py:458
+#: BaseBillet/views.py:471
 msgid "Refilled wallet"
 msgstr ""
 
-#: BaseBillet/views.py:460
+#: BaseBillet/views.py:473
 msgid "Payment verification error"
 msgstr ""
 
-#: BaseBillet/views.py:579
+#: BaseBillet/views.py:592
 #, python-brace-format
 msgid ""
 "Your subscription has been validated. You will receive a confirmation email "
 "at {email}. Thank you very much!"
 msgstr ""
 
-#: BaseBillet/views.py:581
+#: BaseBillet/views.py:594
 msgid "Your payment is awaiting validation."
 msgstr ""
 
-#: BaseBillet/views.py:584
+#: BaseBillet/views.py:597
 msgid "An error has occurred, please contact the administrator."
 msgstr ""
 

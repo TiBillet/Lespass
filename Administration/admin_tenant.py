@@ -90,7 +90,8 @@ class StaffAdminSite(AdminSite):
 
         try:
             if request.tenant in request.user.client_admin.all() and request.user.email_valid:
-                return request.user.is_staff
+                # return request.user.is_staff
+                return True
             if request.user.client_source.categorie == Client.ROOT:
                 return request.user.is_superuser
         except AttributeError as e:

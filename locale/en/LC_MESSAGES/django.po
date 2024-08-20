@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-08-15 07:34+0000\n"
+"POT-Creation-Date: 2024-08-20 11:38+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -30,11 +30,11 @@ msgstr ""
 msgid "Important dates"
 msgstr ""
 
-#: Administration/admin_tenant.py:473 BaseBillet/models.py:1473
+#: Administration/admin_tenant.py:479 BaseBillet/models.py:1473
 msgid "Évènement"
 msgstr ""
 
-#: Administration/admin_tenant.py:622
+#: Administration/admin_tenant.py:628
 msgid "Merci de renseigner une catégorie pour cet article."
 msgstr ""
 
@@ -888,9 +888,8 @@ msgstr ""
 msgid "Loading tokens"
 msgstr ""
 
-#: BaseBillet/templates/htmx/fragments/my_account_profil.html:5
-#: BaseBillet/templates/htmx/views/my_account.html:26
-msgid "Administration"
+#: BaseBillet/templates/htmx/fragments/my_account_profil.html:10
+msgid "Loading NFC Card info"
 msgstr ""
 
 #: BaseBillet/templates/htmx/fragments/my_account_wallet.html:12
@@ -899,10 +898,6 @@ msgstr ""
 
 #: BaseBillet/templates/htmx/fragments/my_account_wallet.html:35
 msgid "Show the last transactions"
-msgstr ""
-
-#: BaseBillet/templates/htmx/fragments/my_account_wallet.html:43
-msgid "Loading NFC Card info"
 msgstr ""
 
 #: BaseBillet/templates/htmx/fragments/tokens_membership_table.html:8
@@ -988,8 +983,8 @@ msgstr ""
 msgid "Resend validation email"
 msgstr ""
 
-#: BaseBillet/templates/htmx/views/my_account.html:31
-msgid "Please create a password to access administration"
+#: BaseBillet/templates/htmx/views/my_account.html:26
+msgid "Administration"
 msgstr ""
 
 #: BaseBillet/templates/htmx/views/my_account.html:45
@@ -1001,7 +996,7 @@ msgid "Memberships"
 msgstr ""
 
 #: BaseBillet/templates/htmx/views/my_account.html:58
-msgid "Profil"
+msgid "Cards"
 msgstr ""
 
 #: BaseBillet/triggers.py:32
@@ -1019,69 +1014,61 @@ msgid ""
 "compte. Vous trouverez la facture en pièce jointe."
 msgstr ""
 
-#: BaseBillet/views.py:132
+#: BaseBillet/views.py:136
 msgid ""
 "To access your space, please validate\n"
 "your email address. Don't forget to check your spam!"
 msgstr ""
 
-#: BaseBillet/views.py:214
+#: BaseBillet/views.py:218
 msgid ""
 "You seem to already have a TiBillet card linked to your wallet. Please "
 "revoke it first in your profile area to link a new one."
 msgstr ""
 
-#: BaseBillet/views.py:221
+#: BaseBillet/views.py:225
 msgid "Not valid"
 msgstr ""
 
-#: BaseBillet/views.py:244
+#: BaseBillet/views.py:248
 msgid ""
 "Please validate your email to access all the features of your profile area."
 msgstr ""
 
-#: BaseBillet/views.py:254 BaseBillet/views.py:263
-msgid "User already has a password."
-msgstr ""
-
-#: BaseBillet/views.py:273
-msgid "Error, wrong password."
-msgstr ""
-
-#: BaseBillet/views.py:299
+#: BaseBillet/views.py:307
 msgid "Mail sended, please check spam too !"
 msgstr ""
 
-#: BaseBillet/views.py:309
+#: BaseBillet/views.py:317
 msgid ""
 "Your wallet has been detached from this card. You can scan a new one to link "
 "it again."
 msgstr ""
 
-#: BaseBillet/views.py:312
+#: BaseBillet/views.py:320
 msgid "Error when detaching your card. Contact an administrator."
 msgstr ""
 
-#: BaseBillet/views.py:410
+#: BaseBillet/views.py:471
 msgid "Refilled wallet"
 msgstr ""
 
-#: BaseBillet/views.py:412
+#: BaseBillet/views.py:473
 msgid "Payment verification error"
 msgstr ""
 
-#: BaseBillet/views.py:532
+#: BaseBillet/views.py:592
 #, python-brace-format
 msgid ""
 "Your subscription has been validated. You will receive a confirmation email "
 "at {email}. Thank you very much!"
 msgstr ""
 
-#: BaseBillet/views.py:534
+#: BaseBillet/views.py:594
 msgid "Your payment is awaiting validation."
 msgstr ""
 
-#: BaseBillet/views.py:537
+#: BaseBillet/views.py:597
 msgid "An error has occurred, please contact the administrator."
 msgstr ""
 
@@ -1117,30 +1104,30 @@ msgstr ""
 msgid "No Stripe Api Key in configuration"
 msgstr ""
 
-#: fedow_connect/validators.py:39
+#: fedow_connect/validators.py:37
 msgid "Fiduciaire"
 msgstr ""
 
-#: fedow_connect/validators.py:40
+#: fedow_connect/validators.py:38
 msgid "Cadeau"
 msgstr ""
 
-#: fedow_connect/validators.py:41
+#: fedow_connect/validators.py:39
 msgid "Fiduciaire fédérée"
 msgstr ""
 
-#: fedow_connect/validators.py:42
+#: fedow_connect/validators.py:40
 msgid "Monnaie temps"
 msgstr ""
 
-#: fedow_connect/validators.py:43
+#: fedow_connect/validators.py:41
 msgid "Points de fidélité"
 msgstr ""
 
-#: fedow_connect/validators.py:44
+#: fedow_connect/validators.py:42
 msgid "Badgeuse/Pointeuse"
 msgstr ""
 
-#: fedow_connect/validators.py:45
+#: fedow_connect/validators.py:43
 msgid "Adhésion ou abonnement"
 msgstr ""

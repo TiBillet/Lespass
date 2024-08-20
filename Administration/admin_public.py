@@ -169,26 +169,26 @@ class DetailAdmin(admin.ModelAdmin):
 public_admin_site.register(Detail, DetailAdmin)
 
 
-class CarteCashlessAdmin(admin.ModelAdmin):
-    list_display = (
-        'user',
-        'tag_id',
-        'wallets',
-        'number',
-        'uuid',
-        'get_origin',
-    )
+# class CarteCashlessAdmin(admin.ModelAdmin):
+#     list_display = (
+#         'user',
+#         'tag_id',
+#         'wallets',
+#         'number',
+#         'uuid',
+#         'get_origin',
+#     )
+#
+#     def get_origin(self, obj):
+#         return obj.detail.origine
+#
+#     get_origin.short_description = 'Origine'
+#
+#     search_fields = ('tag_id', 'uuid', 'number')
+#     list_filter = ('tag_id', 'uuid', 'number', 'detail__origine')
 
-    def get_origin(self, obj):
-        return obj.detail.origine
 
-    get_origin.short_description = 'Origine'
-
-    search_fields = ('tag_id', 'uuid', 'number')
-    list_filter = ('tag_id', 'uuid', 'number', 'detail__origine')
-
-
-public_admin_site.register(CarteCashless, CarteCashlessAdmin)
+# public_admin_site.register(CarteCashless, CarteCashlessAdmin)
 
 public_admin_site.register(ProductDirectory, admin.ModelAdmin)
 public_admin_site.register(EventDirectory, admin.ModelAdmin)
