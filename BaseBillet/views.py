@@ -368,6 +368,8 @@ class MyAccount(viewsets.ViewSet):
                 names_of_place_federated.append(self.get_place_cached_info(place_federated).get('organisation'))
             token['asset']['names_of_place_federated'] = names_of_place_federated
 
+        print(tokens)
+
         # On fait la liste des lieux fédérés pour les pastilles dans le tableau html
         context = {
             'config': config,
@@ -411,7 +413,6 @@ class MyAccount(viewsets.ViewSet):
         # On ne garde que les adhésions
         tokens = [token for token in wallet.get('tokens') if token.get('asset_category') == 'SUB']
 
-        print(tokens)
 
         #TODO: Factoriser avec tokens_table / membership_table
         for token in tokens :
@@ -425,6 +426,7 @@ class MyAccount(viewsets.ViewSet):
             for place_federated in token['asset']['place_uuid_federated_with']:
                 names_of_place_federated.append(self.get_place_cached_info(place_federated).get('organisation'))
             token['asset']['names_of_place_federated'] = names_of_place_federated
+
 
         context = {
             'config': config,
