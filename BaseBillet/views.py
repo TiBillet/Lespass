@@ -323,21 +323,28 @@ class MyAccount(viewsets.ViewSet):
             logger.warning("User email not active")
 
     @staticmethod
-    def get_tenant_federated_info(list_place_uuid_federated_with):
-        places = {}
-        for tenant in Client.objects.filter(categorie=Client.SALLE_SPECTACLE):
-            try:
+    def get_place_cached_info(place_uuid):
+        # Recherche des infos dans le cache :
+        place_info = cache.get(f"place_uuid")
+        if place_info:
+            logger.info("place info from cache GET")
+            return place_info.get(place_uuid)
+        else :
+            # Va chercher dans toute les configs de tous les tenants de l'instance
+            place_info = {}
+            for tenant in Client.objects.filter(categorie=Client.SALLE_SPECTACLE):
                 with tenant_context(tenant):
                     fedow_config = FedowConfig.get_solo()
-                    if fedow_config.fedow_place_uuid in list_place_uuid_federated_with:
-                        config = Configuration.get_solo()
-                        places[fedow_config.fedow_place_uuid] = {
-                            'organisation': config.organisation,
-                            'logo': config.logo.thumbnail.url if config.logo else '',
+                    this_place_uuid = fedow_config.fedow_place_uuid
+                    config = Configuration.get_solo()
+                    place_info[this_place_uuid] = {
+                        'organisation': config.organisation,
+                        'logo': config.logo,
                         }
-            except Exception as e:
-                logger.warning(f'get_tenant_federated : {e}')
-        return places
+
+            logger.info("place info to cache SET")
+            cache.set(f"place_uuid",place_info,3600 )
+        return place_info.get(place_uuid)
 
     @action(detail=False, methods=['GET'])
     def tokens_table(self, request):
@@ -350,14 +357,14 @@ class MyAccount(viewsets.ViewSet):
 
         #TODO: Factoriser avec tokens_table / membership_table
         for token in tokens :
-            list_place_uuid_federated_with = token['asset']['place_uuid_federated_with']
-            if len(list_place_uuid_federated_with) > 0:
-                federated_place_info = cache.get(f"{token['asset']['uuid']}_federated_with")
-                if not federated_place_info :
-                    federated_place_info = self.get_tenant_federated_info(list_place_uuid_federated_with)
-                    logger.info("federated_place_info SET")
-                    cache.set(f"{token['asset']['uuid']}_federated_with", federated_place_info, 3600)
-                token['federated_place_info'] = federated_place_info
+            # Recherche du logo du lieu d'origin de l'asset
+            place_uuid_origin = token['asset']['place_origin']['uuid']
+            token['asset']['logo'] = self.get_place_cached_info(place_uuid_origin).get('logo')
+            # Recherche des noms des lieux fédérés
+            names_of_place_federated = []
+            for place_federated in token['asset']['place_uuid_federated_with']:
+                names_of_place_federated.append(self.get_place_cached_info(place_federated).get('organisation'))
+            token['asset']['names_of_place_federated'] = names_of_place_federated
 
         # On fait la liste des lieux fédérés pour les pastilles dans le tableau html
         context = {
@@ -389,7 +396,6 @@ class MyAccount(viewsets.ViewSet):
         return render(request, "htmx/fragments/transactions_table.html", context=context)
 
     ### ONGLET ADHESION
-
     @action(detail=False, methods=['GET'])
     def membership(self, request: HttpRequest) -> HttpResponse:
         context = {}
@@ -403,16 +409,18 @@ class MyAccount(viewsets.ViewSet):
         # On ne garde que les adhésions
         tokens = [token for token in wallet.get('tokens') if token.get('asset_category') == 'SUB']
 
+        print(tokens)
+
         #TODO: Factoriser avec tokens_table / membership_table
         for token in tokens :
-            list_place_uuid_federated_with = token['asset']['place_uuid_federated_with']
-            if len(list_place_uuid_federated_with) > 0:
-                federated_place_info = cache.get(f"{token['asset']['uuid']}_federated_with")
-                if not federated_place_info :
-                    federated_place_info = self.get_tenant_federated_info(list_place_uuid_federated_with)
-                    logger.info("federated_place_info SET")
-                    cache.set(f"{token['asset']['uuid']}_federated_with", federated_place_info, 3600)
-                token['federated_place_info'] = federated_place_info
+            # Recherche du logo du lieu d'origin de l'asset
+            place_uuid_origin = token['asset']['place_origin']['uuid']
+            token['asset']['logo'] = self.get_place_cached_info(place_uuid_origin).get('logo')
+            # Recherche des noms des lieux fédérés
+            names_of_place_federated = []
+            for place_federated in token['asset']['place_uuid_federated_with']:
+                names_of_place_federated.append(self.get_place_cached_info(place_federated).get('organisation'))
+            token['asset']['names_of_place_federated'] = names_of_place_federated
 
         context = {
             'config': config,

@@ -79,3 +79,11 @@ def randCardImg(value):
 # @register.filter
 # def wallet_name(wallet):
 #     return wallet.uuid
+
+@register.filter(name='dict_key')
+def dict_key(d, k):
+    '''Returns the given key from a dictionary.'''
+    try :
+        return d[k]
+    except KeyError:
+        return ""
