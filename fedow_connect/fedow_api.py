@@ -424,7 +424,7 @@ class PlaceFedow():
 
         if admin is None:
             # Un seul admin lors de la création du lieu est présent.
-            User = get_user_model()
+            User: TibilletUser = get_user_model()
             admin = User.objects.get(client_admin=tenant)
 
         # Pour la création, on prend la clé "create_place_apikey" de Root

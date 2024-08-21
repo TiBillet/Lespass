@@ -403,6 +403,7 @@ if DEBUG:
         (("BaseBillet.tasks"), ("test_logger",)),
         (("BaseBillet.tests"), ("BaseBilletTest",)),
         (("fedow_connect.fedow_api"), ("FedowAPI",)),
+        (("django.db"), ("connection",)),
 
         #     ("module2.submodule", ("func1", "func2", "class1", "etc"))
         #
