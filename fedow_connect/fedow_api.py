@@ -8,13 +8,12 @@ import requests
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.core.signing import Signer, TimestampSigner
+from django.core.signing import TimestampSigner
 from django.db import connection
 from django.utils import timezone
-from django.utils.timezone import localtime
 from django_tenants.postgresql_backend.base import FakeTenant
 
-from AuthBillet.models import RsaKey, TibilletUser, Wallet
+from AuthBillet.models import TibilletUser, Wallet
 from BaseBillet.models import Configuration, Membership, Product
 from fedow_connect.models import FedowConfig
 from fedow_connect.utils import sign_message, data_to_b64, verify_signature, rsa_decrypt_string
@@ -380,7 +379,7 @@ class PlaceFedow():
 
         if not fedow_config.can_fedow():
             # Premier contact entre une nouvelle place (nouveau tenant) et Fedow
-            self.create(admin=admin)
+            self.create_place(admin=admin)
 
     def link_cashless_to_place(self, admin):
         link_response = _get(fedow_config=self.fedow_config,
@@ -397,7 +396,7 @@ class PlaceFedow():
 
 
 
-    def create(self, admin: TibilletUser = None, place_name=None):
+    def create_place(self, admin: TibilletUser = None, place_name=None):
         # Premier contact entre une nouvelle place (nouveau tenant) et Fedow
         # Se lance automatiquement si can_fedow() is false
 
@@ -426,11 +425,7 @@ class PlaceFedow():
         if admin is None:
             # Un seul admin lors de la création du lieu est présent.
             User = get_user_model()
-            try :
-                admin = User.objects.get(client_admin=tenant)
-            except Exception as e:
-                import ipdb; ipdb.set_trace()
-                # raise e
+            admin = User.objects.get(client_admin=tenant)
 
         # Pour la création, on prend la clé "create_place_apikey" de Root
         apikey = self.fedow_config.get_fedow_create_place_apikey()
@@ -464,7 +459,6 @@ class PlaceFedow():
         self.fedow_config.save()
 
         logger.info(f"Place and Fedow linked : wallet {new_place_data['wallet']}")
-
 
 
 

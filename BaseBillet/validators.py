@@ -1,9 +1,14 @@
+import os
+
+from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
+from django_tenants.utils import tenant_context, schema_context
 from rest_framework import serializers
 
 from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Price, Product, OptionGenerale, Membership
+from Customers.models import Client, Domain
 
 
 class LinkQrCodeValidator(serializers.Serializer):
@@ -68,3 +73,35 @@ class MembershipValidator(serializers.Serializer):
         self.membership = membership
 
         return attrs
+
+
+
+class NewSpaceValidator(serializers.Serializer):
+    email = serializers.EmailField()
+    name = serializers.CharField(max_length=200)
+
+    def validate_name(self, value):
+        try :
+            Client.objects.get(schema_name=slugify(value))
+            raise serializers.ValidationError(_('Tenant name exist'))
+        except Client.DoesNotExist:
+            return value
+
+    @staticmethod
+    def create_new_space(validated_data):
+        name = validated_data['name']
+        with schema_context('public'):
+            new_space, created = Client.objects.get_or_create(
+                schema_name=slugify(name),
+                name=slugify(name),
+                on_trial=False,
+                categorie=Client.SALLE_SPECTACLE,
+            )
+            new_space.save()
+
+            new_space_domain = Domain.objects.create(
+                domain=f'{slugify(name)}.{os.getenv("DOMAIN")}',
+                tenant=new_space,
+                is_primary=True
+            )
+            new_space_domain.save()

@@ -61,13 +61,17 @@ def user_apikey_valid(view):
 
 
 def sender_mail_connect(email, subject_mail=None):
-    # Si la billetterie est active, on envoie le mail de confirmation
-    base_url = connection.tenant.get_primary_domain().domain
+    # Mail de confirmation de création de compte
+    try :
+        base_url = connection.tenant.get_primary_domain().domain
+    except AttributeError :
+        # get_primary_domain plante lors des test
+        base_url = "lespass.tibillet.localhost"
+
     try:
         logger.info(f"sender_mail_connect : {email} - {base_url}")
         connexion_celery_mailer.delay(email, f"https://{base_url}", subject_mail)
         # connexion_celery_mailer(email, f"https://{base_url}", subject_mail)
-
     except Exception as e:
         logger.error(f"validate_email_and_return_user erreur pour récuperer config : {email} - {base_url} : {e}")
 

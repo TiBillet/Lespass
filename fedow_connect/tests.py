@@ -2,22 +2,18 @@ import json
 import os
 from uuid import UUID, uuid4
 
-from django.test import tag
 from django.conf import settings
-from django.core.management import call_command
-from django.utils import timezone
-from django_tenants.test.cases import TenantTestCase
-from django_tenants.test.client import TenantClient
-from django.db import connection
 from django.contrib.auth import get_user_model
-from django_tenants.urlresolvers import reverse
-from faker import Faker
+from django.core.management import call_command
+from django.db import connection
 from django.test import TestCase
-from django_tenants.utils import get_tenant_model, tenant_context, schema_context, get_public_schema_name
+from django.utils import timezone
+from django_tenants.utils import get_tenant_model, schema_context, get_public_schema_name
+from faker import Faker
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 from AuthBillet.models import Wallet
 from fedow_connect.validators import WalletValidator
-from rest_framework.test import APIRequestFactory, force_authenticate
 
 
 class InstallCreationTest(TestCase):
@@ -30,7 +26,8 @@ class InstallCreationTest(TestCase):
             settings.DEBUG = True
             call_command('install')
             self.assertEqual(get_public_schema_name(), 'public')
-            self.assertEqual(Customers.objects.count(), 2)
+            # Meta, Lespass, Public
+            self.assertEqual(Customers.objects.count(), 3)
             customers = Customers.objects.all()
             tenant_names = [t.schema_name for t in customers]
             self.assertTrue('public' in tenant_names)
@@ -94,6 +91,7 @@ class InstallCreationTest(TestCase):
         print('')
         print('Test du paiement. Lancez stripe cli avec :')
         print('stripe listen --forward-to http://127.0.0.1:8442/webhook_stripe/')
+        print("Cela simule les envois du webhook stripe vers Fedow")
         print('')
         print('lancez le paiement avec 42€ et la carte 4242 :')
         print(f"{stripe_checkout_url}")
@@ -180,6 +178,7 @@ class InstallCreationTest(TestCase):
 
             print('')
             print('Test du paiement. Lancez stripe cli avec :')
+            print('stripe login')
             print('stripe listen --forward-to http://127.0.0.1:8442/webhook_stripe/')
             print('')
             print('lancez le paiement :')

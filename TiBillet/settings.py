@@ -401,6 +401,7 @@ if DEBUG:
                                  "hash_hexdigest", "rsa_encrypt_string", "rsa_decrypt_string")),
         (("cryptography.hazmat.primitives"), ("serialization",)),
         (("BaseBillet.tasks"), ("test_logger",)),
+        (("BaseBillet.tests"), ("BaseBilletTest",)),
         #     ("module2.submodule", ("func1", "func2", "class1", "etc"))
         #
     ]

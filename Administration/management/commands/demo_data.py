@@ -25,13 +25,13 @@ logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    def add_arguments(self, parser):
-        # Named (optional) arguments
-        parser.add_argument(
-            '--tdd',
-            action='store_true',
-            help='Demo data for Test drived dev',
-        )
+    # def add_arguments(self, parser):
+    # Named (optional) arguments
+    # parser.add_argument(
+    #     '--tdd',
+    #     action='store_true',
+    #     help='Demo data for Test drived dev',
+    # )
 
     def handle(self, *args, **options):
         # START MIGRATE AND INSTALL BEFORE THIS SCRIPT
@@ -65,13 +65,12 @@ class Command(BaseCommand):
 
             ### LINK TO FEDOW
 
-            #TODO: a faire dans la création de nouveau tenant, connection fedow obligatoire et check admin wallet
+            # TODO: a faire dans la création de nouveau tenant, connection fedow obligatoire et check admin wallet
             ## Liaison tenant avec Fedow
             fedowAPI = FedowAPI()
             # La première création de l'instance FedowAPI génère un nouveau lieu coté Fedow s'il n'existe pas.
             # avec la fonction : fedowAPI.place.create()
             assert FedowConfig.get_solo().can_fedow()
-
 
             ### PRODUCT ###
             option_membre_actif, created = OptionGenerale.objects.get_or_create(
@@ -216,7 +215,6 @@ class Command(BaseCommand):
             event_entree_libre.tag.add(prix_libre)
             event_entree_libre.tag.add(rock)
 
-
             ### GRATUIT MAIS AVEC RESERVATION OBLIGATOIRE ###
 
             free_resa, created = Product.objects.get_or_create(
@@ -283,6 +281,5 @@ class Command(BaseCommand):
             )
             event_payant_nominatif_tarif_asso.products.add(billet)
 
-            #TODO: Gratuit mais avec recharge cashless obligatoire
-            #TODO: Multi artiste
-
+            # TODO: Gratuit mais avec recharge cashless obligatoire
+            # TODO: Multi artiste

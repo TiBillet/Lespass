@@ -149,7 +149,7 @@ def send_sale_to_laboutik(ligne_article: LigneArticle):
             raise Exception(f"send_sale_to_laboutik send_to_laboutik.status_code = {send_to_laboutik.status_code}")
 
     else:
-        raise Exception(f"send_sale_to_laboutik config.check_serveur_cashless() = {config.check_serveur_cashless()}")
+        logger.warning(f"No serveur cashless on config. Memberhsip not sended")
 
 
 ### END SEND TO LABOUTIK
@@ -223,6 +223,7 @@ class ActionArticlePaidByCategorie:
         fedowAPI = FedowAPI(fedow_config=fedow_config)
         serialized_transaction = fedowAPI.membership.create(membership=membership)
 
+        logger.info(f"TRIGGER ADHESION -> envoi à LaBoutik")
         laboutik_sended = send_sale_to_laboutik(self.ligne_article)
 
         # Si tout est passé plus haut, on VALID La ligne :

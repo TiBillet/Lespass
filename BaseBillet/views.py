@@ -18,6 +18,7 @@ from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_GET
 from django_htmx.http import HttpResponseClientRedirect
 from django_tenants.utils import tenant_context
+from faker import Faker
 from rest_framework import viewsets, permissions
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
@@ -32,7 +33,7 @@ from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Event, Price, LigneArticle, \
     Paiement_stripe
 from BaseBillet.tasks import create_invoice_pdf
-from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator
+from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, NewSpaceValidator
 from Customers.models import Client
 from PaiementStripe.views import CreationPaiementStripe
 from fedow_connect.fedow_api import FedowAPI
@@ -617,6 +618,41 @@ class MembershipMVT(viewsets.ViewSet):
         else:
             permission_classes = [permissions.AllowAny]
         return [permission() for permission in permission_classes]
+
+
+class Tenants(viewsets.ViewSet):
+    authentication_classes = [SessionAuthentication, ]
+    permission_classes = [permissions.IsAdminUser, ]
+
+    def list(self, request: HttpRequest):
+        pass
+
+    @action(detail=False, methods=['POST'])
+    def new_tenant(self, request):
+        new_space = NewSpaceValidator(data=request.data, context={'request': request})
+        if new_space.is_valid():
+            new_space.create_new_space(new_space.validated_data)
+
+    @staticmethod
+    def test():
+        from BaseBillet.validators import NewSpaceValidator
+
+        fake = Faker()
+        data = {
+            "email" : "jturbeaux@pm.me",
+            "name" : f"{fake.company()}"
+        }
+        new_space = NewSpaceValidator(data=data)
+        if new_space.is_valid():
+            new_space.create_new_space(new_space.validated_data)
+        # test temporaires a déplacer dans test
+        pass
+
+
+
+"""
+ATTENTION : ZONE DE TEST DE NICO :D 
+"""
 
 
 class Espaces:

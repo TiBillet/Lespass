@@ -3,7 +3,6 @@
 import decimal
 import json
 import logging
-import os
 import uuid
 from datetime import datetime, timedelta
 
@@ -43,8 +42,7 @@ from PaiementStripe.views import new_entry_from_stripe_invoice
 from QrcodeCashless.models import Detail, CarteCashless
 from TiBillet import settings
 from fedow_connect.fedow_api import FedowAPI
-from fedow_connect.models import FedowConfig
-from fedow_connect.utils import rsa_decrypt_string, rsa_encrypt_string, get_public_key, fernet_encrypt, data_to_b64
+from fedow_connect.utils import rsa_decrypt_string, rsa_encrypt_string, get_public_key, data_to_b64
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
