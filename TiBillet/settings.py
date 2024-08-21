@@ -402,6 +402,8 @@ if DEBUG:
         (("cryptography.hazmat.primitives"), ("serialization",)),
         (("BaseBillet.tasks"), ("test_logger",)),
         (("BaseBillet.tests"), ("BaseBilletTest",)),
+        (("fedow_connect.fedow_api"), ("FedowAPI",)),
+
         #     ("module2.submodule", ("func1", "func2", "class1", "etc"))
         #
     ]

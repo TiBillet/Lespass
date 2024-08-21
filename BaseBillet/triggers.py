@@ -209,7 +209,7 @@ class ActionArticlePaidByCategorie:
 
     # Categorie ADHESION
     def trigger_A(self):
-        logger.info(f"TRIGGER ADHESION")
+        logger.info(f"TRIGGER ADHESION PAID")
 
         membership: Membership = get_membership_after_paiement(self)
         updated_membership: Membership = update_membership_state_after_paiement(self, membership)
@@ -218,14 +218,15 @@ class ActionArticlePaidByCategorie:
         ghost_sended = send_membership_to_ghost(updated_membership)
 
         # Envoyer l'adhésion à fedow
-        logger.info(f"TRIGGER ADHESION -> envoi à Fedow")
+        logger.info(f"TRIGGER ADHESION PAID -> envoi à Fedow")
         fedow_config = FedowConfig.get_solo()
         fedowAPI = FedowAPI(fedow_config=fedow_config)
         serialized_transaction = fedowAPI.membership.create(membership=membership)
 
-        logger.info(f"TRIGGER ADHESION -> envoi à LaBoutik")
+        logger.info(f"TRIGGER ADHESION PAID -> envoi à LaBoutik")
         laboutik_sended = send_sale_to_laboutik(self.ligne_article)
 
         # Si tout est passé plus haut, on VALID La ligne :
         # Tout ceci se déroule dans un pre_save signal.pre_save_signal_status()
+        logger.info(f"TRIGGER ADHESION PAID -> set VALID")
         self.ligne_article.status = LigneArticle.VALID

@@ -217,7 +217,7 @@ class MembershipFedow():
             "amount": int(amount * 100),
             "sender": f"{sender}",
             "receiver": f"{receiver}",
-            "asset": membership.asset_fedow,
+            "asset": f"{membership.asset_fedow}",
             "subscription_start_datetime": subscription_start_datetime.isoformat(),
         }
 
