@@ -308,22 +308,15 @@ def pre_save_signal_status(sender, instance, **kwargs):
 
 
 @receiver(post_save, sender=Product)
-def send_membership_product_to_fedow(sender, instance: Product, created, **kwargs):
+def send_membership_and_badge_product_to_fedow(sender, instance: Product, created, **kwargs):
+    logger.info(f"send_membership_product_to_fedow")
     # Est ici pour éviter les double imports
-    if instance.categorie_article in [Product.ADHESION, ]:
+    # vérifie l'existante du produit Adhésion et Badge dans Fedow et le créé si besoin
+    if instance.categorie_article in [Product.ADHESION, Product.BADGE ]:
         fedow_config = FedowConfig.get_solo()
         fedow_asset = AssetFedow(fedow_config=fedow_config)
         asset, created = fedow_asset.get_or_create_asset(instance)
-
-
-
-@receiver(post_save, sender=Product)
-def send_badgeuse_product_to_fedow(sender, instance: Product, created, **kwargs):
-    # Est ici pour éviter les double imports
-    if instance.categorie_article in [Product.BADGE, ]:
-        fedow_config = FedowConfig.get_solo()
-        fedow_asset = AssetFedow(fedow_config=fedow_config)
-        asset, created = fedow_asset.get_or_create_asset(instance)
+        logger.info(f"send_membership_product_to_fedow : created : {created} - asset {asset}")
 
 
 # @receiver(post_save, sender=PriceSold)

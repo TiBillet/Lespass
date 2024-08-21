@@ -481,6 +481,12 @@ def post_save_Product(sender, instance: Product, created, **kwargs):
             instance.poids = len(Product.objects.all()) + 1
         instance.save()
 
+"""
+Un autre post save existe dans .signals.py : send_membership_and_badge_product_to_fedow
+Dans fichier signals pour éviter les doubles imports
+Il vérifie l'existante du produit Adhésion et Badge dans Fedow et le créé si besoin
+"""
+
 
 class Price(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)

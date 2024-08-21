@@ -144,3 +144,32 @@ for member in loaded_data:
     if member['card_qrcode_uuid']:
         for qrcode_uuid in member['card_qrcode_uuid']:
             linked_serialized_card = fedowAPI.NFCcard.linkwallet_cardqrcode(user=user, qrcode_uuid=qrcode_uuid)
+
+
+"""
+Pour les grandes migrations :
+
+# Migration !
+# S'il existe des produits adhésions, on les envois à Fedow via le signal send_membership_and_badge_product_to_fedow au save()
+# for adhe in Product.objects.filter(categorie_article__in=[Product.ADHESION, Product.BADGE ]):
+#     adhe.save()
+
+adhesions_pas_dans_fedow = Membership.objects.filter(
+    last_contribution__isnull=False,
+    contribution_value__gt=0, 
+    fedow_transactions__isnull=True,
+)
+
+for adhesion_pas_dans_fedow in adhesions_pas_dans_fedow:
+    if membership.last_contribution and membership.contribution_value :
+        if not membership.fedow_transactions:
+            serialized_transaction = fedowAPI.membership.create(membership=membership)
+
+# Envoyer l'adhésion à fedow
+logger.info(f"TRIGGER ADHESION PAID -> envoi à Fedow")
+fedow_config = FedowConfig.get_solo()
+fedowAPI = FedowAPI(fedow_config=fedow_config)
+serialized_transaction = fedowAPI.membership.create(membership=membership)
+
+
+"""

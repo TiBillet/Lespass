@@ -100,8 +100,8 @@ class StaffAdminSite(AdminSite):
         except Exception as e:
             raise e
 
-        # if settings.DEBUG:
-        #     return True
+        if settings.DEBUG:
+            return True
 
         logger.warning(f"{request.user} has permission on {request.build_absolute_uri()} : False")
         return False
