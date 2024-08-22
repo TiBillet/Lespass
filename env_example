@@ -1,3 +1,8 @@
+##########################
+# TiBillet / Lespass
+# All the env are needed
+##########################
+
 # Secret
 DJANGO_SECRET='' # see upper to create one
 FERNET_KEY='' # see upper to create one
@@ -5,29 +10,34 @@ FERNET_KEY='' # see upper to create one
 STRIPE_KEY='' # from your stripe account
 # or 
 STRIPE_KEY_TEST=''
-STRIPE_TEST=1 # set to 1 for use stripe test env
+STRIPE_TEST=0 # set to 1 for use stripe test env
 
 # Database
-POSTGRES_USER=''
-POSTGRES_PASSWORD='' # strong ! generate a new fernet for exemple.
+POSTGRES_PASSWORD='' # strong ! use a generated fernet key
+POSTGRES_USER='lespass_postgres' # you can change it on production
 POSTGRES_DB='lespass'
 
 TIME_ZONE='Europe/Paris' # or where you are
+
 PUBLIC='TiBillet Coop.' # The name of the root instance
+DOMAIN='tibillet.localhost' # for the wildcard : without subdomain ! ex : tibillet.coop, not lespass.tibillet.coop
+SUB='lespass' # the sub domain of your first place ex : if 'festival', it will be accessible on https://festival.tibillet.coop. Set lespass for dev/test.
+META='agenda' # the federated agenda for all events on all tenants. If 'agenda', it will be accessible, for exemple, on https://agenda.tibillet.coop
+
+ADMIN_EMAIL='' # needed for the first admin account
 
 FEDOW_DOMAIN='fedow.tibillet.localhost' # the same as Fedow
 
-DOMAIN='tibillet.localhost' # for the wildcard : without subdomain ! ex : tibillet.coop, not lespass.tibillet.coop
-SUB='demo' # the sub domain of your first place ex : if 'festival', it will be accessible on https://festival.tibillet.coop
-META='agenda' # the federated agenda for all events on all tenants. If 'agenda', it will be accessible, for exemple, on https://agenda.tibillet.coop
-ADMIN_EMAIL=''
-
-# For transactionnal email : 
+# For transactionnal email.
+# Required on prod or if you want to test... emails !
+# Not required on dev' env.
 EMAIL_HOST=''
 EMAIL_PORT=''
 EMAIL_HOST_USER=''
 EMAIL_HOST_PASSWORD=''
 
-# Change only if needed :
-CELERY_BROKER='redis://redis:6379/0'
-CELERY_BACKEND='redis://redis:6379/0'
+# Usefull for dev/test
+# Auto login for admin, no https cert' verification, demonstration data, auto database flush, etc ...
+# don't set 1 to production !
+TEST=0
+DEBUG=0
