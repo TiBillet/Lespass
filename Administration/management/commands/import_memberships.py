@@ -43,7 +43,7 @@ for user in User.objects.all():
 """
 
 ## Doit être lancé dans un terminal django
-
+from fedow_connect.fedow_api import FedowAPI
 fedowAPI = FedowAPI()
 adhesion = Product.objects.get(categorie_article=Product.ADHESION)
 serialized_asset, created = fedowAPI.asset.get_or_create_asset(adhesion)
@@ -151,6 +151,10 @@ Pour les grandes migrations :
 
 # Migration !
 # S'il existe des produits adhésions, on les envois à Fedow via le signal send_membership_and_badge_product_to_fedow au save()
+
+from fedow_connect.fedow_api import FedowAPI
+fedowAPI = FedowAPI()
+
 # for adhe in Product.objects.filter(categorie_article__in=[Product.ADHESION, Product.BADGE ]):
 #     adhe.save()
 
@@ -158,15 +162,9 @@ adhesions_pas_dans_fedow = Membership.objects.filter(
     last_contribution__isnull=False,
     contribution_value__gt=0, 
     fedow_transactions__isnull=True,
+    price__isnull=False,
 )
+
 for adhesion_pas_dans_fedow in adhesions_pas_dans_fedow:
-    serialized_transaction = fedowAPI.membership.create(membership=membership)
-
-# Envoyer l'adhésion à fedow
-logger.info(f"TRIGGER ADHESION PAID -> envoi à Fedow")
-fedow_config = FedowConfig.get_solo()
-fedowAPI = FedowAPI(fedow_config=fedow_config)
-serialized_transaction = fedowAPI.membership.create(membership=membership)
-
-
+    serialized_transaction = fedowAPI.membership.create(membership=adhesion_pas_dans_fedow)
 """

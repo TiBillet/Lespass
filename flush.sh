@@ -4,7 +4,7 @@ set -e
 if [ "$TEST" = "1" ]; then
   export PGPASSWORD=$POSTGRES_PASSWORD
   export PGUSER=$POSTGRES_USER
-  export PGHOST=$POSTGRES_HOST
+  export PGHOST=postgres
   dropdb $POSTGRES_DB
   createdb $POSTGRES_DB
   echo "Database reset complete."

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-08-22 09:41+0000\n"
+"POT-Creation-Date: 2024-08-22 12:00+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1018,65 +1018,65 @@ msgstr ""
 msgid "Tenant name exist"
 msgstr ""
 
-#: BaseBillet/views.py:137
+#: BaseBillet/views.py:136
 msgid ""
 "To access your space, please validate\n"
 "your email address. Don't forget to check your spam!"
 msgstr ""
 
-#: BaseBillet/views.py:219
+#: BaseBillet/views.py:218
 msgid ""
 "You seem to already have a TiBillet card linked to your wallet. Please "
 "revoke it first in your profile area to link a new one."
 msgstr ""
 
-#: BaseBillet/views.py:226
+#: BaseBillet/views.py:225
 msgid "Not valid"
 msgstr ""
 
-#: BaseBillet/views.py:249
+#: BaseBillet/views.py:248
 msgid ""
 "Please validate your email to access all the features of your profile area."
 msgstr ""
 
-#: BaseBillet/views.py:308
+#: BaseBillet/views.py:307
 msgid "Mail sended, please check spam too !"
 msgstr ""
 
-#: BaseBillet/views.py:318
+#: BaseBillet/views.py:317
 msgid ""
 "Your wallet has been detached from this card. You can scan a new one to link "
 "it again."
 msgstr ""
 
-#: BaseBillet/views.py:321
+#: BaseBillet/views.py:320
 msgid "Error when detaching your card. Contact an administrator."
 msgstr ""
 
-#: BaseBillet/views.py:324
+#: BaseBillet/views.py:323
 msgid "User email not active"
 msgstr ""
 
-#: BaseBillet/views.py:473
+#: BaseBillet/views.py:472
 msgid "Refilled wallet"
 msgstr ""
 
-#: BaseBillet/views.py:475
+#: BaseBillet/views.py:474
 msgid "Payment verification error"
 msgstr ""
 
-#: BaseBillet/views.py:594
+#: BaseBillet/views.py:593
 #, python-brace-format
 msgid ""
 "Your subscription has been validated. You will receive a confirmation email "
 "at {email}. Thank you very much!"
 msgstr ""
 
-#: BaseBillet/views.py:596
+#: BaseBillet/views.py:595
 msgid "Your payment is awaiting validation."
 msgstr ""
 
-#: BaseBillet/views.py:599
+#: BaseBillet/views.py:598
 msgid "An error has occurred, please contact the administrator."
 msgstr ""
 

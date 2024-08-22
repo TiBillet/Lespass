@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-08-22 09:41+0000\n"
+"POT-Creation-Date: 2024-08-22 12:00+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1026,7 +1026,7 @@ msgstr ""
 msgid "Tenant name exist"
 msgstr ""
 
-#: BaseBillet/views.py:137
+#: BaseBillet/views.py:136
 msgid ""
 "To access your space, please validate\n"
 "your email address. Don't forget to check your spam!"
@@ -1034,7 +1034,7 @@ msgstr ""
 "Pour accéder à votre espace, merci de valider votre email.\n"
 "N'oubliez pas de regarder dans vos spams :)"
 
-#: BaseBillet/views.py:219
+#: BaseBillet/views.py:218
 msgid ""
 "You seem to already have a TiBillet card linked to your wallet. Please "
 "revoke it first in your profile area to link a new one."
@@ -1042,59 +1042,61 @@ msgstr ""
 "Vous semblez déja posseder une carte TiBillet.\n"
 "Merci de vous connecter à votre compte pour la révoquer."
 
-#: BaseBillet/views.py:226
+#: BaseBillet/views.py:225
 msgid "Not valid"
 msgstr "Non valide"
 
-#: BaseBillet/views.py:249
+#: BaseBillet/views.py:248
 msgid ""
 "Please validate your email to access all the features of your profile area."
 msgstr ""
 "Merci de valider votre email pour avoir accès a toute les options de votre "
 "espace."
 
-#: BaseBillet/views.py:308
+#: BaseBillet/views.py:307
 msgid "Mail sended, please check spam too !"
 msgstr "Email envoyé. Pensez à vérifier dans vos spams :)"
 
-#: BaseBillet/views.py:318
+#: BaseBillet/views.py:317
 msgid ""
 "Your wallet has been detached from this card. You can scan a new one to link "
 "it again."
 msgstr ""
-"Votre portefeuille a été détaché de cette card. Vous pouvez en scanner une "
+"Votre portefeuille a été détaché de cette carte. Vous pouvez en scanner une "
 "nouvelle."
 
-#: BaseBillet/views.py:321
+#: BaseBillet/views.py:320
 msgid "Error when detaching your card. Contact an administrator."
-msgstr ""
+msgstr "Une erreur est survenue. Merci de contacter un administrateur :)"
 
-#: BaseBillet/views.py:324
+#: BaseBillet/views.py:323
 msgid "User email not active"
-msgstr ""
+msgstr "Email non vérifié."
 
-#: BaseBillet/views.py:473
+#: BaseBillet/views.py:472
 msgid "Refilled wallet"
-msgstr ""
+msgstr "Wallet rechargé"
 
-#: BaseBillet/views.py:475
+#: BaseBillet/views.py:474
 msgid "Payment verification error"
-msgstr ""
+msgstr "Erreur lors de la vérification du paiement"
 
-#: BaseBillet/views.py:594
+#: BaseBillet/views.py:593
 #, python-brace-format
 msgid ""
 "Your subscription has been validated. You will receive a confirmation email "
 "at {email}. Thank you very much!"
 msgstr ""
+"Votre adhésion a été validée. Vous allez recevoir un mail de confirmation "
+"sur {email}. Merci beaucoup !"
 
-#: BaseBillet/views.py:596
+#: BaseBillet/views.py:595
 msgid "Your payment is awaiting validation."
-msgstr ""
+msgstr "Votre paiement est en attente de validation"
 
-#: BaseBillet/views.py:599
+#: BaseBillet/views.py:598
 msgid "An error has occurred, please contact the administrator."
-msgstr ""
+msgstr "Une erreur est survenue. Merci de contacter un administrateur :)"
 
 #: Customers/models.py:18 MetaBillet/models.py:165
 msgid "Artiste"

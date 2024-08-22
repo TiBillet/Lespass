@@ -22,6 +22,6 @@ tibinstall() {
 load_sql() {
     export PGPASSWORD=$POSTGRES_PASSWORD
     export PGUSER=$POSTGRES_USER
-    export PGHOST=$POSTGRES_HOST
+    export PGHOST=postgres
     psql --dbname $POSTGRES_DB -f $1
 }
