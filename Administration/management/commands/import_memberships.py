@@ -159,11 +159,8 @@ adhesions_pas_dans_fedow = Membership.objects.filter(
     contribution_value__gt=0, 
     fedow_transactions__isnull=True,
 )
-
 for adhesion_pas_dans_fedow in adhesions_pas_dans_fedow:
-    if membership.last_contribution and membership.contribution_value :
-        if not membership.fedow_transactions:
-            serialized_transaction = fedowAPI.membership.create(membership=membership)
+    serialized_transaction = fedowAPI.membership.create(membership=membership)
 
 # Envoyer l'adhésion à fedow
 logger.info(f"TRIGGER ADHESION PAID -> envoi à Fedow")
