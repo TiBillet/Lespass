@@ -4,8 +4,8 @@
 ##########################
 
 # Secret
-DJANGO_SECRET='' # see upper to create one
-FERNET_KEY='' # see upper to create one
+DJANGO_SECRET='' # see documentation to create one
+FERNET_KEY='' # see documentation to create one
 
 STRIPE_KEY='' # from your stripe account
 # or 
@@ -27,6 +27,10 @@ META='agenda' # the federated agenda for all events on all tenants. If 'agenda',
 ADMIN_EMAIL='' # needed for the first admin account
 
 FEDOW_DOMAIN='fedow.tibillet.localhost' # the same as Fedow
+
+
+
+#### OPTIONAL ENV
 
 # For transactionnal email.
 # Required on prod or if you want to test... emails !
