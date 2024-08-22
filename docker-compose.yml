@@ -54,6 +54,7 @@ services:
       - "cashless.tibillet.localhost:172.17.0.1"
       - "cashless2.tibillet.localhost:172.17.0.1"
 
+
   lespass_celery:
     build: .
 #    image: tibillet/lespass:latest

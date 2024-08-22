@@ -4,6 +4,7 @@ from io import BytesIO
 
 import barcode
 import segno
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import logout, login
 from django.contrib.messages import MessageFailure
@@ -122,14 +123,12 @@ def connexion(request):
         if validator.is_valid():
             # Création de l'user et envoie du mail de validation
             email = validator.validated_data['email']
-            user = get_or_create_user(email=email, send_mail=True)
+            user = get_or_create_user(email=email, send_mail=True, force_mail=True)
 
             # if settings.DEBUG:
             #     login(request, user)
-            #     messages.add_message(request, messages.WARNING, "Debug : login auto, Connexion ok.")
+            #     messages.add_message(request, messages.WARNING, "MODE DEBUG : login auto, Connexion ok.")
 
-            # Le mail a été ernvoyé par le get_or_create_user,
-            # on redirige vers la page d'accueil et on leur demande de valider leur email
             context = {
                 "modal_message": {
                     "type": "success",
@@ -321,7 +320,8 @@ class MyAccount(viewsets.ViewSet):
                                      _("Error when detaching your card. Contact an administrator."))
             return HttpResponseClientRedirect('/my_account/')
         else:
-            logger.warning("User email not active")
+            logger.warning(_("User email not active"))
+            return HttpResponseClientRedirect('/my_account/')
 
     @staticmethod
     def get_place_cached_info(place_uuid):

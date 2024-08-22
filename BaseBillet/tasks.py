@@ -73,11 +73,11 @@ class CeleryMailerClass():
 
         # Si email envoyé par le tenant public (ex : première install), Configuration n'est pas disponible
         self.return_email = os.environ['EMAIL_HOST_USER']
-        try:
-            config = Configuration.get_solo()
-            self.return_email = config.email if config.email else os.environ['EMAIL_HOST_USER']
-        except Exception as e:
-            logger.warning(f'  WORKDER CELERY : self.return_email -> Configuration.get_solo().email ERROR -> {e}')
+        # try:
+        #     config = Configuration.get_solo()
+        #     self.return_email = config.email if config.email else os.environ['EMAIL_HOST_USER']
+        # except Exception as e:
+        #     logger.warning(f'  WORKDER CELERY : self.return_email -> Configuration.get_solo().email ERROR -> {e}')
 
         # TODO: si email retour n'est pas le même nom de domain que le moteur > moteur a spam ?
         # if self.return_email.partition("@")[2] != EMAIL_HOST_USER.partition("@")[2]:

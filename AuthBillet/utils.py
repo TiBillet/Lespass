@@ -65,7 +65,7 @@ def sender_mail_connect(email, subject_mail=None):
     try :
         base_url = connection.tenant.get_primary_domain().domain
     except AttributeError :
-        # get_primary_domain plante lors des test
+        # get_primary_domain plante lors des tests unitaires python :
         base_url = "lespass.tibillet.localhost"
 
     try:
