@@ -209,8 +209,10 @@ class ScanQrCode(viewsets.ViewSet):
         wallet, created = fedowAPI.wallet.get_or_create_wallet(user)
 
         # Si l'user possède déja un wallet et une carte référencée dans Fedow,
-        # il ne peut pas avoir de deuxième carte
-        # Evite le vol de carte : si je connais l'email d'une personne, je peux alors avoir son wallet juste en mettant son email sur une nouvelle carte ...
+        # il ne peut pas avoir de deuxièmes cartes
+        # Evite le vol de carte : si je connais l'email d'une personne,
+        # je peux avoir son wallet juste en mettant son email sur une nouvelle carte…
+        # Fonctionne de concert avec la vérification chez Fedow : fedow_core.views.linkwallet_cardqrcode : 385
         if not created:
             retrieve_wallet = fedowAPI.wallet.retrieve_by_signature(user)
             if retrieve_wallet.validated_data['has_user_card']:
@@ -219,7 +221,7 @@ class ScanQrCode(viewsets.ViewSet):
                                        "Please revoke it first in your profile area to link a new one."))
                 return HttpResponseClientRedirect(request.headers['Referer'])
 
-        # Opération de fusion entre la carte lié au qrcode et le wallet de l'user :
+        # Opération de fusion entre la carte liée au qrcode et le wallet de l'user :
         linked_serialized_card = fedowAPI.NFCcard.linkwallet_cardqrcode(user=user, qrcode_uuid=qrcode_uuid)
         if not linked_serialized_card:
             messages.add_message(request, messages.ERROR, _("Not valid"))
