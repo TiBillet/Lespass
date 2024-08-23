@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-08-22 12:00+0000\n"
+"POT-Creation-Date: 2024-08-23 09:32+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -872,7 +872,14 @@ msgstr ""
 msgid "Create/Reset admin password"
 msgstr ""
 
-#: BaseBillet/templates/htmx/fragments/cards.html:15
+#: BaseBillet/templates/htmx/fragments/cards.html:6
+#, fuzzy
+#| msgid "Please validate your email for activate your account."
+msgid "Please validate your email to view and manage your cards."
+msgstr ""
+"Merci de valider votre email pour voir et gérer vos cartes."
+
+#: BaseBillet/templates/htmx/fragments/cards.html:18
 msgid ""
 "If you've lost your card, please report it. Your account will not be "
 "deleted, and you will keep your tokens and memberships. You can request and "
@@ -883,7 +890,7 @@ msgstr ""
 "ensuite scanner une nouvelle carte vierge à la réception de votre lieu "
 "préféré :)"
 
-#: BaseBillet/templates/htmx/fragments/cards.html:21
+#: BaseBillet/templates/htmx/fragments/cards.html:24
 msgid "I LOST MY CARD NUMBER"
 msgstr "J'ai perdu ma carte numéro"
 
@@ -1022,7 +1029,7 @@ msgid ""
 "compte. Vous trouverez la facture en pièce jointe."
 msgstr ""
 
-#: BaseBillet/validators.py:86
+#: BaseBillet/validators.py:85
 msgid "Tenant name exist"
 msgstr ""
 

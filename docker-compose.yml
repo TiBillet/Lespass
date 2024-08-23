@@ -114,6 +114,6 @@ volumes:
   lespass_dev_db:
 
 
-# django-admin makemessages -l fr && django-admin makemessages -l en && django-admin compilemessages
+# poetry shell && django-admin makemessages -l fr && django-admin makemessages -l en && django-admin compilemessages
 
 # docker build -t lespass . && docker tag lespass tibillet/lespass:latest && docker tag lespass tibillet/lespass:0.9.6 && docker push tibillet/lespass:latest && docker push tibillet/lespass:0.9.6

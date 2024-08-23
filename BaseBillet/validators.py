@@ -17,6 +17,7 @@ class LinkQrCodeValidator(serializers.Serializer):
     cgu = serializers.BooleanField(required=True, allow_null=False)
     qrcode_uuid = serializers.UUIDField()
 
+
 class LoginEmailValidator(serializers.Serializer):
     email = serializers.EmailField()
 
@@ -38,7 +39,6 @@ class MembershipValidator(serializers.Serializer):
                                                       allow_null=True, required=False)
 
     newsletter = serializers.BooleanField()
-
 
     def validate(self, attrs):
         email: str = attrs['email']
@@ -75,13 +75,12 @@ class MembershipValidator(serializers.Serializer):
         return attrs
 
 
-
 class NewSpaceValidator(serializers.Serializer):
     email = serializers.EmailField()
     name = serializers.CharField(max_length=200)
 
     def validate_name(self, value):
-        try :
+        try:
             Client.objects.get(schema_name=slugify(value))
             raise serializers.ValidationError(_('Tenant name exist'))
         except Client.DoesNotExist:
