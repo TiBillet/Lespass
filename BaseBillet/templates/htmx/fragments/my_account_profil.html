@@ -1,18 +1,22 @@
 {% load i18n %}
 
 <p class="container pt-5">
-{#    {% if profile.admin_this_tenant %}#}
-{#        <h1>{% translate "Administration" %}</h1>#}
-{#    {% endif %}#}
+    {#    {% if profile.admin_this_tenant %}#}
+    {#        <h1>{% translate "Administration" %}</h1>#}
+    {#    {% endif %}#}
 
-{#    <h1>{% translate "My cards" %}</h1>#}
-    <div hx-get="/my_account/my_cards/" hx-trigger="revealed" class="mt-4">
-        <span>{% translate "Loading NFC Card info" %}</span>
-        <div class="d-flex justify-content-center align-items-center ">
-            <div class="spinner-border text-info"
-                 role="status"
-            ></div>
+    {% if not user.email_valid %}
+        <p>{% translate "Please validate your email to manage and view your cards." %}</p>
+    {% else %}
+        {#    <h1>{% translate "My cards" %}</h1>#}
+        <div hx-get="/my_account/my_cards/" hx-trigger="revealed" class="mt-4">
+            <span>{% translate "Loading NFC Card info" %}</span>
+            <div class="d-flex justify-content-center align-items-center ">
+                <div class="spinner-border text-info"
+                     role="status"
+                ></div>
+            </div>
         </div>
-    </div>
+    {% endif %}
 </p>
 
