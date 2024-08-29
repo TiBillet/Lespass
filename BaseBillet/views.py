@@ -4,7 +4,7 @@ from io import BytesIO
 
 import barcode
 import segno
-from django.conf import settings
+import stripe
 from django.contrib import messages
 from django.contrib.auth import logout, login
 from django.contrib.messages import MessageFailure
@@ -24,6 +24,7 @@ from rest_framework import viewsets, permissions
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
+from rest_framework.request import Request
 from rest_framework.views import APIView
 
 from ApiBillet.serializers import get_or_create_price_sold
@@ -34,11 +35,12 @@ from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Event, Price, LigneArticle, \
     Paiement_stripe
 from BaseBillet.tasks import create_invoice_pdf
-from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, NewSpaceValidator
+from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator
 from Customers.models import Client
 from PaiementStripe.views import CreationPaiementStripe
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
+from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
 
@@ -52,12 +54,19 @@ def get_context(request):
     base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
     serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
 
+    meta_url = cache.get('meta_url')
+    if not meta_url:
+        meta = Client.objects.filter(categorie=Client.META)[0]
+        meta_url = f"https://{meta.get_primary_domain().domain}"
+        cache.set('meta_url', meta_url, 3600 * 24)
+
     context = {
         "base_template": base_template,
         "url_name": request.resolver_match.url_name,
         "user": request.user,
         "profile": serialized_user,
         "config": config,
+        "meta_url": meta_url,
         "header": True,
     }
     return context
@@ -148,8 +157,6 @@ def emailconfirmation(request, uuid, token):
     return redirect('home')
 
 
-
-
 class ScanQrCode(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
@@ -175,21 +182,19 @@ class ScanQrCode(viewsets.ViewSet):
             template_context['qrcode_uuid'] = qrcode_uuid
             return render(request, "htmx/views/inscription.html", context=template_context)
 
-
         wallet = Wallet.objects.get(uuid=serialized_qrcode_card['wallet_uuid'])
         user: TibilletUser = wallet.user
         user.is_active = True
         user.save()
+
+        # Parti pris : On logue l'user lorsqu'il scanne sa carte.
         login(request, user)
-        # authenticate(request=request, user=user)
-        if not user.email_valid:
-            pass
-            # Ça fait doublon avec /MyAccount
-            # logger.warning("User email not active")
-            # messages.add_message(request, messages.WARNING,
-            #                      _("Please validate your email to access all the features of your profile area."))
 
         return redirect("/my_account")
+
+    # @action(detail=False, methods=['POST'])
+    # def link_with_email_confirm(self, request):
+    # Si l'user a déja une carte
 
     @action(detail=False, methods=['POST'])
     def link(self, request):
@@ -207,10 +212,12 @@ class ScanQrCode(viewsets.ViewSet):
 
         fedowAPI = FedowAPI()
         wallet, created = fedowAPI.wallet.get_or_create_wallet(user)
-
         # Si l'user possède déja un wallet et une carte référencée dans Fedow,
-        # il ne peut pas avoir de deuxième carte
-        # Evite le vol de carte : si je connais l'email d'une personne, je peux alors avoir son wallet juste en mettant son email sur une nouvelle carte ...
+
+        # il ne peut pas avoir de deuxièmes cartes
+        # Evite le vol de carte : si je connais l'email d'une personne,
+        # je peux avoir son wallet juste en mettant son email sur une nouvelle carte…
+        # Fonctionne de concert avec la vérification chez Fedow : fedow_core.views.linkwallet_cardqrcode : 385
         if not created:
             retrieve_wallet = fedowAPI.wallet.retrieve_by_signature(user)
             if retrieve_wallet.validated_data['has_user_card']:
@@ -219,7 +226,7 @@ class ScanQrCode(viewsets.ViewSet):
                                        "Please revoke it first in your profile area to link a new one."))
                 return HttpResponseClientRedirect(request.headers['Referer'])
 
-        # Opération de fusion entre la carte lié au qrcode et le wallet de l'user :
+        # Opération de fusion entre la carte liée au qrcode et le wallet de l'user :
         linked_serialized_card = fedowAPI.NFCcard.linkwallet_cardqrcode(user=user, qrcode_uuid=qrcode_uuid)
         if not linked_serialized_card:
             messages.add_message(request, messages.ERROR, _("Not valid"))
@@ -248,7 +255,6 @@ class MyAccount(viewsets.ViewSet):
                                  _("Please validate your email to access all the features of your profile area."))
 
         return render(request, "htmx/views/my_account.html", context=template_context)
-
 
     ### ONGLET WALLET
     """
@@ -280,7 +286,6 @@ class MyAccount(viewsets.ViewSet):
                                      _("Error, wrong password."))
                 return HttpResponseClientRedirect(request.headers['Referer'])
     """
-
 
     @action(detail=False, methods=['GET'])
     def wallet(self, request: HttpRequest) -> HttpResponse:
@@ -330,7 +335,7 @@ class MyAccount(viewsets.ViewSet):
         if place_info:
             logger.info("place info from cache GET")
             return place_info.get(place_uuid)
-        else :
+        else:
             # Va chercher dans toute les configs de tous les tenants de l'instance
             place_info = {}
             for tenant in Client.objects.filter(categorie=Client.SALLE_SPECTACLE):
@@ -341,10 +346,10 @@ class MyAccount(viewsets.ViewSet):
                     place_info[this_place_uuid] = {
                         'organisation': config.organisation,
                         'logo': config.logo,
-                        }
+                    }
 
             logger.info("place info to cache SET")
-            cache.set(f"place_uuid",place_info,3600 )
+            cache.set(f"place_uuid", place_info, 3600)
         return place_info.get(place_uuid)
 
     @action(detail=False, methods=['GET'])
@@ -356,10 +361,10 @@ class MyAccount(viewsets.ViewSet):
         # On retire les adhésions, on les affiche dans l'autre table
         tokens = [token for token in wallet.get('tokens') if token.get('asset_category') != 'SUB']
 
-        #TODO: Factoriser avec tokens_table / membership_table
-        for token in tokens :
+        # TODO: Factoriser avec tokens_table / membership_table
+        for token in tokens:
             # Recherche du logo du lieu d'origin de l'asset
-            if token['asset']['place_origin'] :
+            if token['asset']['place_origin']:
                 # L'asset fédéré n'a pas d'origin
                 place_uuid_origin = token['asset']['place_origin']['uuid']
                 token['asset']['logo'] = self.get_place_cached_info(place_uuid_origin).get('logo')
@@ -414,10 +419,10 @@ class MyAccount(viewsets.ViewSet):
         # On ne garde que les adhésions
         tokens = [token for token in wallet.get('tokens') if token.get('asset_category') == 'SUB']
 
-        #TODO: Factoriser avec tokens_table / membership_table
-        for token in tokens :
+        # TODO: Factoriser avec tokens_table / membership_table
+        for token in tokens:
             # Recherche du logo du lieu d'origin de l'asset
-            if token['asset']['place_origin'] :
+            if token['asset']['place_origin']:
                 # L'asset fédéré n'a pas d'origin
                 place_uuid_origin = token['asset']['place_origin']['uuid']
                 token['asset']['logo'] = self.get_place_cached_info(place_uuid_origin).get('logo')
@@ -426,7 +431,6 @@ class MyAccount(viewsets.ViewSet):
             for place_federated in token['asset']['place_uuid_federated_with']:
                 names_of_place_federated.append(self.get_place_cached_info(place_federated).get('organisation'))
             token['asset']['names_of_place_federated'] = names_of_place_federated
-
 
         context = {
             'config': config,
@@ -478,15 +482,19 @@ class MyAccount(viewsets.ViewSet):
 
 @require_GET
 def home(request):
-    # import ipdb; ipdb.set_trace()
-    # On redirige vers la page d'adhésion en attendant que les events soient disponible
+    # On redirige vers la page d'adhésion en attendant que les events soient disponibles
+    tenant : Client = connection.tenant
+    if tenant.categorie == Client.META:
+        return redirect('/agenda/')
     return redirect('/memberships')
+
 
 @require_GET
 def agenda(request):
     template_context = get_context(request)
     template_context['events'] = Event.objects.all()
     return render(request, "htmx/views/home.html", context=template_context)
+
 
 @require_GET
 def event(request: HttpRequest, slug) -> HttpResponse:
@@ -620,34 +628,115 @@ class MembershipMVT(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
 
 
-class Tenants(viewsets.ViewSet):
+class Tenant(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
-    permission_classes = [permissions.IsAdminUser, ]
+    # Tout le monde peut créer un tenant, sous reserve d'avoir validé son compte stripe
+    permission_classes = [permissions.AllowAny, ]
 
-    def list(self, request: HttpRequest):
-        pass
+    # def list(self, request: HttpRequest):
+    #     pass
+
+    @action(detail=False, methods=['GET'])
+    def new(self, request: Request, *args, **kwargs):
+        context = get_context(request)
+        context['email_query_params'] = request.query_params.get('email') if request.query_params.get('email') else ""
+        context['name_query_params'] = request.query_params.get('name') if request.query_params.get('name') else ""
+        # import ipdb; ipdb.set_trace()
+        return render(request, "htmx/tenants/new.html", context=context)
 
     @action(detail=False, methods=['POST'])
-    def new_tenant(self, request):
-        new_space = NewSpaceValidator(data=request.data, context={'request': request})
-        if new_space.is_valid():
-            new_space.create_new_space(new_space.validated_data)
+    def onboard_stripe(self, request):
+        new_tenant = TenantCreateValidator(data=request.data, context={'request': request})
+        if not new_tenant.is_valid():
+            for error in new_tenant.errors:
+                messages.add_message(request, messages.ERROR, f"{error} : {new_tenant.errors[error][0]}")
+            return HttpResponseClientRedirect(request.headers['Referer'])
+
+        # Création du lien onboard stripe, qui va renvoyer une fois terminé vers onboard_stripe_return
+        rootConf = RootConfiguration.get_solo()
+        stripe.api_key = rootConf.get_stripe_api()
+
+        meta = Client.objects.filter(categorie=Client.META)[0]
+        meta_url = meta.get_primary_domain().domain
+
+        try :
+            acc_connect = stripe.Account.create(
+                type="standard",
+                country="FR",
+            )
+            id_acc_connect = acc_connect.get('id')
+
+            account_link = stripe.AccountLink.create(
+                account=id_acc_connect,
+                refresh_url=f"https://{meta_url}/tenant/{id_acc_connect}/onboard_stripe_return/",
+                return_url=f"https://{meta_url}/tenant/{id_acc_connect}/onboard_stripe_return/",
+                type="account_onboarding",
+            )
+
+            # Mise en cache pendant 24h des infos name id_acc_connect et email
+            info = new_tenant.validated_data
+            info['id_acc_connect'] = f'{id_acc_connect}'
+            cache.set(f'onboard_stripe_{id_acc_connect}', info, 3600*24)
+            url_onboard = account_link.get('url')
+            return HttpResponseClientRedirect(url_onboard)
+
+        except Exception as e:
+            messages.add_message(request, messages.ERROR, f"{e}")
+            return HttpResponseClientRedirect(request.headers['Referer'])
+
+
+
+    @action(detail=True, methods=['GET'])
+    def onboard_stripe_return(self, request, pk):
+        id_acc_connect = pk
+        # La clé du compte principal stripe connect
+        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+        # Récupération des info lié au lieu via sont id account connect
+        info_stripe = stripe.Account.retrieve(id_acc_connect)
+        details_submitted = info_stripe.details_submitted
+
+        if details_submitted:
+            try :
+                email_stripe = info_stripe['email']
+                # Récupération des infos données précédemment en cache :
+                info = cache.get(f'onboard_stripe_{id_acc_connect}')
+                if info['email'] != email_stripe:
+                    messages.add_message(
+                        request, messages.ERROR,
+                        _("L'email donné ne correspond pas à l'email du compte stripe."))
+                    return redirect('/tenant/new/')
+
+                info['info_stripe'] = info_stripe
+                cache.set(f'onboard_stripe_{id_acc_connect}', info, 3600*24)
+
+                context = get_context(request)
+                return render(request, "htmx/tenants/onboard_stripe_return.html", context=context)
+
+            except Exception as e:
+                messages.add_message(request, messages.ERROR, f"{e}")
+                return HttpResponseClientRedirect(request.headers['Referer'])
+
+        else:
+            messages.add_message(
+                request, messages.ERROR,
+                _("Votre compte stripe ne semble pas valide.\n"
+                  "Merci de terminer votre inscription sur Stripe.com avant de créer un nouvel espace TiBillet."))
+            return redirect('/tenant/new/')
 
     @staticmethod
     def test():
-        from BaseBillet.validators import NewSpaceValidator
+        from BaseBillet.validators import TenantCreateValidator
 
         fake = Faker()
         data = {
-            "email" : "jturbeaux@pm.me",
-            "name" : f"{fake.company()}"
+            "email": "jturbeaux@pm.me",
+            "name": f"{fake.company()}"
         }
-        new_space = NewSpaceValidator(data=data)
+        new_space = TenantCreateValidator(data=data)
         if new_space.is_valid():
-            new_space.create_new_space(new_space.validated_data)
+            new_space.create_tenant(new_space.validated_data)
         # test temporaires a déplacer dans test
         pass
-
 
 
 """
@@ -720,7 +809,8 @@ def tenant_summary(request: HttpRequest) -> HttpResponse:
 
     return render(request, "htmx/forms/tenant_summary.html", context=context)
 
-
+"""
+Déplacé dans viewset Tenant
 @require_GET
 def create_tenant(request: HttpRequest) -> HttpResponse:
     config = Configuration.get_solo()
@@ -760,6 +850,7 @@ def create_tenant(request: HttpRequest) -> HttpResponse:
         "espaces": espaces
     }
     return render(request, "htmx/views/create_tenant.html", context=context)
+"""
 
 
 @require_GET

@@ -264,7 +264,6 @@ class ConfigurationSerializer(serializers.ModelSerializer):
 #     contribution_value = serializers.FloatField()
 
 
-
 def create_account_link_for_onboard(id_acc_connect=None):
     rootConf = RootConfiguration.get_solo()
     stripe.api_key = rootConf.get_stripe_api()
@@ -296,7 +295,9 @@ class CheckMailSerializer(serializers.Serializer):
         self.user = get_or_create_user(value, send_mail=False)
         return value
 
-
+"""
+Ex Methode
+"""
 class WaitingConfigSerializer(serializers.ModelSerializer):
     stripe = serializers.BooleanField()
 

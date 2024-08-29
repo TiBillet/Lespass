@@ -1,0 +1,53 @@
+{% extends base_template %}
+{% load static i18n %}
+
+{% block main %}
+    {% include "htmx/header_groupe.html" %}
+    <div class="container">
+        <form hx-post="/tenant/onboard_stripe/" hx-indicator="#tibillet-spinner">
+
+            <div class="my-6">
+                <p>
+                    {% translate "Pour créer votre espace TiBillet et recevoir des paiements, vous aurez besoin d'un compte Stripe valide. Cette démarche gratuite est disponible ici : https://stripe.com/" %}
+                </p>
+            </div>
+
+            {% include "htmx/components/inputMd.html" with name="email" label="Stripe email admin" type="email" value=email_query_params errors=errors %}
+            {% include "htmx/components/inputMd.html" with name="name" label="Nom de votre futur espace" type="text"  value=name_query_params errors=errors %}
+
+            <div class="form-check text-start ps-0">
+                <input class="form-check-input bg-dark border-dark test-return-agree-link-card"
+                       type="checkbox"
+                       name="laboutik">
+                <label class="form-check-label" for="flexCheckDefault">
+                    <a href="https://tibillet.org/docs/category/cashless/" class="text-dark font-weight-bolder"
+                       target="_blank">
+                        {% translate 'I wish to use a "Laboutik" cash/cashless register too' %}</a>
+                </label>
+            </div>
+
+            <div class="form-check text-start ps-0">
+                <input class="form-check-input bg-dark border-dark test-return-agree-link-card"
+                       type="checkbox"
+                       name="cgu">
+                <label class="form-check-label" for="flexCheckDefault">
+                    {% translate "I agree the" %} <a href="https://tibillet.org/cgucgv/"
+                                                     class="text-dark font-weight-bolder">
+                    {% translate "Terms and Conditions" %}</a>
+                </label>
+            </div>
+
+            {#            <input type="hidden" name="qrcode_uuid" value="{{ qrcode_uuid }}">#}
+
+            <div class="d-flex flex-row">
+                <button type="submit"
+                        class="btn bg-gradient-dark w-100 my-4 mb-2"
+                        role="button"
+                        aria-label="valider formulaire adhésion">
+                    {% translate "Link stripe account" %}
+                </button>
+            </div>
+        </form>
+
+    </div>
+{% endblock main %}

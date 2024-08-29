@@ -19,11 +19,10 @@ from rest_framework_api_key.models import APIKey
 from rest_framework_api_key.permissions import HasAPIKey
 from rest_framework_simplejwt.views import TokenRefreshView
 
-from ApiBillet.views import request_for_data_cashless
 from AuthBillet.models import TibilletUser
 from AuthBillet.serializers import MeSerializer, CreateUserValidator, CreateTerminalValidator, TokenTerminalValidator
 from AuthBillet.utils import get_or_create_user, sender_mail_connect, get_client_ip
-from BaseBillet.models import Configuration, ExternalApiKey
+from BaseBillet.models import ExternalApiKey
 from TiBillet import settings
 
 User = get_user_model()
@@ -226,9 +225,10 @@ class MeViewset(viewsets.ViewSet):
         serializer = MeSerializer(request.user)
         serializer_copy = serializer.data.copy()
 
-        configuration = Configuration.get_solo()
-        if configuration.server_cashless and configuration.key_cashless:
-            serializer_copy['cashless'] = request_for_data_cashless(request.user)
+        # EX request from cashless :
+        # configuration = Configuration.get_solo()
+        # if configuration.server_cashless and configuration.key_cashless:
+        #     serializer_copy['cashless'] = request_for_data_cashless(request.user)
 
         return Response(serializer_copy, status=status.HTTP_200_OK)
 

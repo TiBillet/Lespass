@@ -266,7 +266,7 @@ class MeSerializer(serializers.ModelSerializer):
             'accept_newsletter',
             'postal_code',
             'birth_date',
-            'can_create_tenant',
+            # 'can_create_tenant',
             'espece',
             'is_staff',
             'as_password',

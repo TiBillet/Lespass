@@ -13,7 +13,7 @@
             <div class="card-body" id="subscription_input">
                 {% include "htmx/components/inputMd.html" with name="tibillet-product-name" label="Nom" type="text" errors=errors %}
                 {% include "htmx/components/inputMd.html" with name="tibillet-product-short-description" label="Courte description" type="text" errors=errors %}
-                <button hx-post="/mvt/create_product/" hx-include="closest div" hx-target="#modal_adh"
+                <button hx-post="/z/create_product/" hx-include="closest div" hx-target="#modal_adh"
                     hx-swap="outerHTML" class="btn btn-default">Créer</button>
 </div>
         </div>

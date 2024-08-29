@@ -60,6 +60,11 @@ CSRF_TRUSTED_ORIGINS = [
     f'https://{os.environ["META"]}.{os.environ["DOMAIN"]}',
 ]
 
+if os.environ.get('ADDITIONAL_DOMAINS'):
+    for domain in os.environ.get('ADDITIONAL_DOMAINS').split(','):
+        ALLOWED_HOSTS.append(f'{domain}')
+        CSRF_TRUSTED_ORIGINS.append(f'https://{domain}')
+
 
 CORS_ORIGIN_WHITELIST = CSRF_TRUSTED_ORIGINS
 

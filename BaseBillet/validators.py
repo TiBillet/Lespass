@@ -50,7 +50,6 @@ class MembershipValidator(serializers.Serializer):
             raise serializers.ValidationError('Vous avez déjà une adhésion ou un abonnement valide')
 
         ### CREATION DE LA FICHE MEMBRE
-
         membership, created = Membership.objects.get_or_create(
             user=user,
             price=price
@@ -75,9 +74,16 @@ class MembershipValidator(serializers.Serializer):
         return attrs
 
 
-class NewSpaceValidator(serializers.Serializer):
+class TenantCreateValidator(serializers.Serializer):
     email = serializers.EmailField()
     name = serializers.CharField(max_length=200)
+    laboutik = serializers.BooleanField(required=True)
+    cgu = serializers.BooleanField(required=True)
+
+    def validate_cgu(self, value):
+        if not value:
+            raise serializers.ValidationError(_('Please accept terms and conditions.'))
+        return value
 
     def validate_name(self, value):
         try:
@@ -87,20 +93,44 @@ class NewSpaceValidator(serializers.Serializer):
             return value
 
     @staticmethod
-    def create_new_space(validated_data):
+    def create_tenant(validated_data):
         name = validated_data['name']
+        admin_email = validated_data['email']
+
         with schema_context('public'):
-            new_space, created = Client.objects.get_or_create(
+            tenant, created = Client.objects.get_or_create(
                 schema_name=slugify(name),
                 name=slugify(name),
                 on_trial=False,
                 categorie=Client.SALLE_SPECTACLE,
             )
-            new_space.save()
-
-            new_space_domain = Domain.objects.create(
+            Domain.objects.create(
                 domain=f'{slugify(name)}.{os.getenv("DOMAIN")}',
-                tenant=new_space,
+                tenant=tenant,
                 is_primary=True
             )
-            new_space_domain.save()
+
+        with tenant_context(tenant):
+            ## Création du premier admin:
+            from django.contrib.auth.models import Group
+            staff_group, created = Group.objects.get_or_create(name="staff")
+
+            user: TibilletUser = get_or_create_user(admin_email)
+            user.client_admin.add(tenant)
+            user.is_staff = True
+            user.groups.add(staff_group)
+            user.save()
+
+            from BaseBillet.models import Configuration
+            config = Configuration.get_solo()
+            config.organisation = name.capitalize()
+            config.save()
+
+            # Liaison / création du lieu coté Fedow :
+            from fedow_connect.fedow_api import FedowAPI
+            from fedow_connect.models import FedowConfig
+            FedowAPI()
+            if not FedowConfig.get_solo().can_fedow():
+                raise Exception('Erreur on install : can_fedow = False')
+
+        return tenant

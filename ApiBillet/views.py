@@ -6,7 +6,6 @@ import logging
 import uuid
 from datetime import datetime, timedelta
 
-import dateutil.parser
 import pytz
 import requests
 import stripe
@@ -27,23 +26,22 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
-    ReservationValidator, MembreValidator, ConfigurationSerializer, WaitingConfigSerializer, \
-    EventCreateSerializer, TicketSerializer, OptionsSerializer, ChargeCashlessValidator, NewAdhesionValidator, \
+    ReservationValidator, MembreValidator, ConfigurationSerializer, EventCreateSerializer, TicketSerializer, \
+    OptionsSerializer, ChargeCashlessValidator, NewAdhesionValidator, \
     DetailCashlessCardsValidator, DetailCashlessCardsSerializer, CashlessCardsValidator, \
-    ProductCreateSerializer, create_account_link_for_onboard
+    ProductCreateSerializer
 from AuthBillet.models import TenantAdminPermission, TibilletUser, RootPermission, TenantAdminPermissionWithRequest
 from AuthBillet.utils import user_apikey_valid
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe, \
     OptionGenerale, Membership
 from BaseBillet.tasks import create_ticket_pdf, report_to_pdf, report_celery_mailer
 from Customers.models import Client
-from MetaBillet.models import EventDirectory, ProductDirectory, WaitingConfiguration
+from MetaBillet.models import EventDirectory, ProductDirectory
 from PaiementStripe.views import new_entry_from_stripe_invoice
 from QrcodeCashless.models import Detail, CarteCashless
 from TiBillet import settings
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.utils import rsa_decrypt_string, rsa_encrypt_string, get_public_key, data_to_b64
-from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
 
@@ -142,40 +140,6 @@ class ProductViewSet(viewsets.ViewSet):
 
 
 class TenantViewSet(viewsets.ViewSet):
-    def create(self, request):
-        serializer = WaitingConfigSerializer(data=request.data, context={'request': request})
-
-        if serializer.is_valid():
-            waiting_config: WaitingConfiguration = serializer.save()
-
-            data = {
-                "uuid": f"{waiting_config.uuid}",
-                "stripe_onboard": False
-            }
-            if serializer.validated_data.get('stripe'):
-                data['stripe_onboard'] = serializer.stripe_onboard
-
-            # Envoie le lien de stripe pour onboard
-            return Response(json.dumps(data), status=status.HTTP_201_CREATED, content_type="application/json")
-
-        logger.error(f"serializer.errors : {serializer.errors}")
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    # def update(self, request, pk=None):
-    #     tenant = get_object_or_404(Client, pk=pk)
-    #     user: TibilletUser = request.user
-    #     if tenant not in user.client_admin.all():
-    #         return Response(_(f"Not Allowed"), status=status.HTTP_405_METHOD_NOT_ALLOWED)
-    #     with tenant_context(tenant):
-    #         conf = Configuration.get_solo()
-    #         serializer = WaitingConfigSerializer(conf, data=request.data, partial=True)
-    #         if serializer.is_valid():
-    #             # serializer.save()
-    #             serializer.update(conf, serializer.validated_data)
-    #             return Response(serializer.data, status=status.HTTP_201_CREATED)
-    #
-    #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
     def list(self, request):
         places_serialized_with_uuid = []
         configurations = []
@@ -571,7 +535,7 @@ class TicketViewset(viewsets.ViewSet):
     def get_permissions(self):
         return get_permission_Api_LR_Admin(self)
 
-
+"""
 def maj_membership_from_cashless(user: TibilletUser, data: dict):
     '''
     On met à jour la carte de membre si le cashless à des données plus récentes.
@@ -626,7 +590,6 @@ def maj_membership_from_cashless(user: TibilletUser, data: dict):
         logger.error(f'maj_membership_from_cashless ERROR : {e}')
         return None
 
-
 def request_for_data_cashless(user: TibilletUser):
     if user.email_error or not user.email:
         return {'erreur': f"user.email_error {user.email_error}"}
@@ -656,6 +619,7 @@ def request_for_data_cashless(user: TibilletUser):
             return {'erreur': f"{e}"}
 
     return {'erreur': f"pas de configuration server_cashless"}
+"""
 
 
 class MembershipViewset(viewsets.ViewSet):
@@ -988,27 +952,31 @@ def paiment_stripe_validator(request, paiement_stripe):
     raise Http404(f'{paiement_stripe.status}')
 
 
-def info_connected_account_stripe(id_acc_connect):
-    stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-    info_stripe = stripe.Account.retrieve(id_acc_connect)
-    return info_stripe
 
+"""
+# Déplacé dans Basebillet Tenant
 
 @permission_classes([permissions.AllowAny])
 class Onboard_stripe_return(APIView):
     def get(self, request, id_acc_connect):
-        details_submitted = info_connected_account_stripe(id_acc_connect).details_submitted
+        # La clé du compte principal stripe connect
+        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+        # Récupération des info lié au lieu via sont id account connect
+        info_stripe = stripe.Account.retrieve(id_acc_connect)
+        details_submitted = info_stripe.details_submitted
+
         if details_submitted:
+            import ipdb; ipdb.set_trace()
+
+
             futur_conf = WaitingConfiguration.objects.get(stripe_connect_account=id_acc_connect)
             logger.info(f"details_submitted : {details_submitted}")
             # create_tenant(futur_conf.pk)
-            # TODO: créer le tenant en base de donnée et envoyer un mail de confirmation
-            # Coté front : on valide la création de tenant et on demande la validation par mail
-
             return Response(f"ok", status=status.HTTP_200_OK)
         else:
             # Si les infos stripe ne sont pas complète, on renvoie l'url onboard pour les completer
             return Response(f"{create_account_link_for_onboard()}", status=status.HTTP_206_PARTIAL_CONTENT)
+"""
 
 @permission_classes([permissions.AllowAny])
 class Get_user_pub_pem(APIView):
@@ -1104,10 +1072,10 @@ class Onboard_laboutik(APIView):
         return Response(data=data, status=status.HTTP_200_OK)
 
 
-@permission_classes([permissions.AllowAny])
-class Onboard(APIView):
-    def get(self, request):
-        return Response(f"{create_account_link_for_onboard()}", status=status.HTTP_202_ACCEPTED)
+# @permission_classes([permissions.AllowAny])
+# class Onboard(APIView):
+#     def get(self, request):
+#         return Response(f"{create_account_link_for_onboard()}", status=status.HTTP_202_ACCEPTED)
 
 
 @permission_classes([permissions.AllowAny])
