@@ -483,7 +483,7 @@ class MyAccount(viewsets.ViewSet):
 @require_GET
 def home(request):
     # On redirige vers la page d'adhésion en attendant que les events soient disponibles
-    tenant : Client = connection.tenant
+    tenant: Client = connection.tenant
     if tenant.categorie == Client.META:
         return redirect('/agenda/')
     return redirect('/memberships')
@@ -659,7 +659,7 @@ class Tenant(viewsets.ViewSet):
         meta = Client.objects.filter(categorie=Client.META)[0]
         meta_url = meta.get_primary_domain().domain
 
-        try :
+        try:
             acc_connect = stripe.Account.create(
                 type="standard",
                 country="FR",
@@ -676,15 +676,13 @@ class Tenant(viewsets.ViewSet):
             # Mise en cache pendant 24h des infos name id_acc_connect et email
             info = new_tenant.validated_data
             info['id_acc_connect'] = f'{id_acc_connect}'
-            cache.set(f'onboard_stripe_{id_acc_connect}', info, 3600*24)
+            cache.set(f'onboard_stripe_{id_acc_connect}', info, 3600 * 24)
             url_onboard = account_link.get('url')
             return HttpResponseClientRedirect(url_onboard)
 
         except Exception as e:
             messages.add_message(request, messages.ERROR, f"{e}")
             return HttpResponseClientRedirect(request.headers['Referer'])
-
-
 
     @action(detail=True, methods=['GET'])
     def onboard_stripe_return(self, request, pk):
@@ -696,18 +694,18 @@ class Tenant(viewsets.ViewSet):
         details_submitted = info_stripe.details_submitted
 
         if details_submitted:
-            try :
+            try:
                 email_stripe = info_stripe['email']
                 # Récupération des infos données précédemment en cache :
                 info = cache.get(f'onboard_stripe_{id_acc_connect}')
                 if info['email'] != email_stripe:
                     messages.add_message(
                         request, messages.ERROR,
-                        _("L'email donné ne correspond pas à l'email du compte stripe."))
+                        _("The given email does not match the stripe account email."))
                     return redirect('/tenant/new/')
 
                 info['info_stripe'] = info_stripe
-                cache.set(f'onboard_stripe_{id_acc_connect}', info, 3600*24)
+                cache.set(f'onboard_stripe_{id_acc_connect}', info, 3600 * 24)
 
                 context = get_context(request)
                 return render(request, "htmx/tenants/onboard_stripe_return.html", context=context)
@@ -719,8 +717,8 @@ class Tenant(viewsets.ViewSet):
         else:
             messages.add_message(
                 request, messages.ERROR,
-                _("Votre compte stripe ne semble pas valide.\n"
-                  "Merci de terminer votre inscription sur Stripe.com avant de créer un nouvel espace TiBillet."))
+                _("Your Stripe account does not seem to be valid. "
+                  "\nPlease complete your Stripe.com registration before creating a new TiBillet space."))
             return redirect('/tenant/new/')
 
     @staticmethod
@@ -808,6 +806,7 @@ def tenant_summary(request: HttpRequest) -> HttpResponse:
         # retour modal de sucess ou erreur
 
     return render(request, "htmx/forms/tenant_summary.html", context=context)
+
 
 """
 Déplacé dans viewset Tenant
