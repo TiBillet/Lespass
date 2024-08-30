@@ -1,20 +1,18 @@
 import datetime
+import logging
 
-from django.contrib.auth.tokens import default_token_generator, PasswordResetTokenGenerator
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.db import connection
-from django_tenants.utils import schema_context, tenant_context
+from django.utils.translation import gettext_lazy as _
+from django_tenants.utils import tenant_context
 from rest_framework import serializers
 from rest_framework.generics import get_object_or_404
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from ApiBillet.serializers import ProductSerializer, OptionsSerializer
-from AuthBillet.models import TibilletUser, TermUser, TerminalPairingToken
-import logging
-from django.utils.translation import gettext_lazy as _
-
+from ApiBillet.serializers import OptionsSerializer
+from AuthBillet.models import TibilletUser, TerminalPairingToken
 from AuthBillet.utils import MacAdressField
 from BaseBillet.models import Reservation, Ticket, Membership
-from BaseBillet.tasks import terminal_pairing_celery_mailer
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +91,8 @@ class TokenTerminalValidator(serializers.Serializer):
         return representation
 
 
+"""
+
 class CreateTerminalValidator(serializers.Serializer):
     email_admin = serializers.EmailField()
     unique_id = serializers.CharField()
@@ -160,6 +160,8 @@ class CreateTerminalValidator(serializers.Serializer):
 
         return representation
 
+"""
+
 
 class MeTicketsSerializer(serializers.ModelSerializer):
     class Meta:
@@ -177,9 +179,11 @@ class MeTicketsSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+
 class MembershipSerializer(serializers.ModelSerializer):
     # products = ProductSerializer(many=True)
     option_generale = OptionsSerializer(many=True)
+
     class Meta:
         model = Membership
         fields = [
@@ -208,7 +212,6 @@ class MembershipSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-
 class MeReservationSerializer(serializers.ModelSerializer):
     tickets = MeTicketsSerializer(many=True)
 
@@ -231,6 +234,7 @@ class MeSerializer(serializers.ModelSerializer):
     reservations = serializers.SerializerMethodField()
     membership = serializers.SerializerMethodField()
     admin_this_tenant = serializers.SerializerMethodField()
+
     # membership = MembershipSerializer(many=True )
 
     # On filtre les reservation : pas plus vieille qu'une semaine.

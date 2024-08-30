@@ -37,6 +37,7 @@ from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Ev
 from BaseBillet.tasks import create_invoice_pdf
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator
 from Customers.models import Client
+from MetaBillet.models import WaitingConfiguration
 from PaiementStripe.views import CreationPaiementStripe
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
@@ -633,9 +634,6 @@ class Tenant(viewsets.ViewSet):
     # Tout le monde peut créer un tenant, sous reserve d'avoir validé son compte stripe
     permission_classes = [permissions.AllowAny, ]
 
-    # def list(self, request: HttpRequest):
-    #     pass
-
     @action(detail=False, methods=['GET'])
     def new(self, request: Request, *args, **kwargs):
         context = get_context(request)
@@ -674,9 +672,16 @@ class Tenant(viewsets.ViewSet):
             )
 
             # Mise en cache pendant 24h des infos name id_acc_connect et email
-            info = new_tenant.validated_data
-            info['id_acc_connect'] = f'{id_acc_connect}'
-            cache.set(f'onboard_stripe_{id_acc_connect}', info, 3600 * 24)
+            validated_data = new_tenant.validated_data
+            validated_data['id_acc_connect'] = f'{id_acc_connect}'
+
+            WaitingConfiguration.objects.create(
+                organisation = validated_data['name'],
+                email = validated_data['email'],
+                laboutik_wanted=validated_data['laboutik'],
+                id_acc_connect=id_acc_connect,
+            )
+
             url_onboard = account_link.get('url')
             return HttpResponseClientRedirect(url_onboard)
 
@@ -697,22 +702,37 @@ class Tenant(viewsets.ViewSet):
             try:
                 email_stripe = info_stripe['email']
                 # Récupération des infos données précédemment en cache :
-                info = cache.get(f'onboard_stripe_{id_acc_connect}')
-                if info['email'] != email_stripe:
+                waiting_config = WaitingConfiguration.objects.get(id_acc_connect=id_acc_connect)
+                if waiting_config.email != email_stripe:
                     messages.add_message(
                         request, messages.ERROR,
                         _("The given email does not match the stripe account email."))
                     return redirect('/tenant/new/')
 
-                info['info_stripe'] = info_stripe
-                cache.set(f'onboard_stripe_{id_acc_connect}', info, 3600 * 24)
+                # Recheck de la donnée aucazou
+                validator = TenantCreateValidator(data={
+                    'email': waiting_config.email ,
+                    'name': waiting_config.organisation ,
+                    'laboutik': waiting_config.laboutik_wanted ,
+                    'cgu': True ,
+                })
+                if not validator.is_valid():
+                    for error in validator.errors:
+                        messages.add_message(request, messages.ERROR, f"{error} : {validator.errors[error][0]}")
+                    return redirect('/tenant/new/')
 
+                #TODO: Faire ça en async / celery
+                new_tenant = validator.create_tenant(waiting_config)
+
+                # On indique au front que la création est en cours :
                 context = get_context(request)
+                context['new_tenant'] = new_tenant
                 return render(request, "htmx/tenants/onboard_stripe_return.html", context=context)
 
             except Exception as e:
+                logger.error(e)
                 messages.add_message(request, messages.ERROR, f"{e}")
-                return HttpResponseClientRedirect(request.headers['Referer'])
+                return redirect(r'/tenant/new/')
 
         else:
             messages.add_message(
@@ -721,20 +741,7 @@ class Tenant(viewsets.ViewSet):
                   "\nPlease complete your Stripe.com registration before creating a new TiBillet space."))
             return redirect('/tenant/new/')
 
-    @staticmethod
-    def test():
-        from BaseBillet.validators import TenantCreateValidator
 
-        fake = Faker()
-        data = {
-            "email": "jturbeaux@pm.me",
-            "name": f"{fake.company()}"
-        }
-        new_space = TenantCreateValidator(data=data)
-        if new_space.is_valid():
-            new_space.create_tenant(new_space.validated_data)
-        # test temporaires a déplacer dans test
-        pass
 
 
 """

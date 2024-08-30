@@ -1,11 +1,10 @@
-from django.urls import include, path, re_path
+from django.urls import include, path
+from rest_framework import routers
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenVerifyView
 
 from AuthBillet import views as auth_view
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView, TokenVerifyView
-
-from AuthBillet.views import create_user, create_terminal_user, TokenRefreshViewCustom, OAauthApi, OAauthCallback, \
+from AuthBillet.views import create_user, TokenRefreshViewCustom, OAauthApi, OAauthCallback, \
     test_api_key, SetPasswordIfEmpty
-from rest_framework import routers
 
 router = routers.DefaultRouter()
 router.register(r'me', auth_view.MeViewset, basename='me')

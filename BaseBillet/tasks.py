@@ -1,39 +1,29 @@
 # import base64
 import datetime
 import json
-import jwt
 import logging
 import os
-import random
 import smtplib
 from io import BytesIO
 
 import barcode
+import jwt
 import requests
 import segno
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import EmailMultiAlternatives
-from django.db import connection, IntegrityError
+from django.db import connection
 from django.template.loader import render_to_string, get_template
 from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_encode
-from django.utils.text import slugify
-from django_tenants.utils import tenant_context, schema_context
-from requests.exceptions import ConnectionError
 from weasyprint import HTML, CSS
 from weasyprint.text.fonts import FontConfiguration
 
-
-from AuthBillet.models import TibilletUser, TerminalPairingToken
-from BaseBillet.models import Reservation, Ticket, Configuration, Membership, LigneArticle, Webhook, Paiement_stripe, \
-    Product
-from Customers.models import Client, Domain
-from MetaBillet.models import WaitingConfiguration
-from TiBillet import settings
+from BaseBillet.models import Reservation, Ticket, Configuration, Membership, Webhook, Paiement_stripe
+from Customers.models import Client
 from TiBillet.celery import app
-from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
 
@@ -362,91 +352,7 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
 
 """
 @app.task
-def create_tenant(waiting_configuration_uuid):
-    futur_conf = WaitingConfiguration.objects.get(pk=waiting_configuration_uuid)
-
-    slug = slugify(futur_conf.get('organisation'))
-    with schema_context('public'):
-        try:
-            tenant, created = Client.objects.get_or_create(
-                schema_name=slug,
-                name=futur_conf.get('organisation'),
-                categorie=futur_conf.categorie,
-            )
-
-            if not created:
-                logger.error(f"{futur_conf.get('organisation')} existe déja")
-                raise IntegrityError(f"{futur_conf.get('organisation')} existe déja")
-
-            domain, created = Domain.objects.get_or_create(
-                domain=f"{slug}.{os.getenv('DOMAIN')}",
-                tenant=tenant,
-                is_primary=True
-            )
-
-        except IntegrityError as e:
-            logger.error(e)
-            raise IntegrityError(e)
-        except Exception as e:
-            logger.error(e)
-            raise Exception(e)
-
-    with tenant_context(tenant):
-        rootConf = RootConfiguration.get_solo()
-        conf = Configuration.get_solo()
-        import ipdb; ipdb.set_trace()
-
-        serializer.update(instance=conf, validated_data=futur_conf)
-
-        conf.slug = slug
-        user: TibilletUser = request.user
-        conf.email = user.email
-
-        if getattr(serializer, 'info_stripe', None):
-            info_stripe = serializer.info_stripe
-            conf.site_web = info_stripe.business_profile.url
-            conf.phone = info_stripe.business_profile.support_phone
-
-            conf.stripe_mode_test = rootConf.stripe_mode_test
-            if rootConf.stripe_mode_test:
-                conf.stripe_connect_account_test = info_stripe.id
-            else:
-                conf.stripe_connect_account = info_stripe.id
-
-        if getattr(serializer, 'img_img', None):
-            conf.img.save(serializer.img_name, serializer.img_img.fp)
-        if getattr(serializer, 'logo_img', None):
-            conf.logo.save(serializer.logo_name, serializer.logo_img.fp)
-
-        conf.save()
-        conf.check_serveur_cashless()
-
-        staff_group = Group.objects.get(name="staff")
-
-        user.client_admin.add(tenant)
-        user.is_staff = True
-        user.groups.add(staff_group)
-        user.save()
-
-        place_serialized = ConfigurationSerializer(Configuration.get_solo(), context={'request': request})
-        place_serialized_with_uuid = {'uuid': f"{tenant.uuid}"}
-        place_serialized_with_uuid.update(place_serialized.data)
-
-    return Response(place_serialized_with_uuid, status=status.HTTP_201_CREATED)
-
-"""
-
-
-@app.task
 def terminal_pairing_celery_mailer(term_user_email, subject=None):
-    """
-
-    :param subject: Sujet de l'email
-    :type user_email: str
-    :type url: str
-    :type tenant_name: str
-
-    """
     logger.info(f'WORKDER CELERY app.task terminal_pairing_celery_mailer : {term_user_email}')
     User = get_user_model()
     terminal_user = User.objects.get(email=term_user_email, espece=TibilletUser.TYPE_TERM)
@@ -482,6 +388,8 @@ def terminal_pairing_celery_mailer(term_user_email, subject=None):
     except Exception as e:
         logger.error(f"{timezone.now()} Erreur envoie de mail pour appairage {user_parent.email} : {e}")
         raise Exception
+"""
+
 
 
 @app.task

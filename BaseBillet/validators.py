@@ -1,5 +1,6 @@
 import os
 
+import stripe
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 from django_tenants.utils import tenant_context, schema_context
@@ -9,6 +10,7 @@ from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Price, Product, OptionGenerale, Membership
 from Customers.models import Client, Domain
+from root_billet.models import RootConfiguration
 
 
 class LinkQrCodeValidator(serializers.Serializer):
@@ -93,19 +95,23 @@ class TenantCreateValidator(serializers.Serializer):
             return value
 
     @staticmethod
-    def create_tenant(validated_data):
-        name = validated_data['name']
-        admin_email = validated_data['email']
+    def create_tenant(waiting_config):
+        name = waiting_config.organisation
+        admin_email = waiting_config.email
+        id_acc_connect= waiting_config.id_acc_connect
+        info_stripe = stripe.Account.retrieve(id_acc_connect)
 
         with schema_context('public'):
+            slug = slugify(name)
+            domain = os.getenv("DOMAIN")
             tenant, created = Client.objects.get_or_create(
-                schema_name=slugify(name),
-                name=slugify(name),
+                schema_name=slug,
+                name=name,
                 on_trial=False,
                 categorie=Client.SALLE_SPECTACLE,
             )
             Domain.objects.create(
-                domain=f'{slugify(name)}.{os.getenv("DOMAIN")}',
+                domain=f'{slug}.{domain}',
                 tenant=tenant,
                 is_primary=True
             )
@@ -115,7 +121,8 @@ class TenantCreateValidator(serializers.Serializer):
             from django.contrib.auth.models import Group
             staff_group, created = Group.objects.get_or_create(name="staff")
 
-            user: TibilletUser = get_or_create_user(admin_email)
+            # Sans envoie d'email pour l'instant, on l'envoie quand tout sera bien terminé
+            user: TibilletUser = get_or_create_user(admin_email, send_mail=False)
             user.client_admin.add(tenant)
             user.is_staff = True
             user.groups.add(staff_group)
@@ -123,7 +130,20 @@ class TenantCreateValidator(serializers.Serializer):
 
             from BaseBillet.models import Configuration
             config = Configuration.get_solo()
-            config.organisation = name.capitalize()
+            config.organisation = name
+            config.slug = slugify(name)
+            config.email = user.email
+
+            config.site_web = info_stripe.business_profile.url
+            config.phone = info_stripe.business_profile.support_phone
+
+            rootConf = RootConfiguration.get_solo()
+            config.stripe_mode_test = rootConf.stripe_mode_test
+            if rootConf.stripe_mode_test:
+                config.stripe_connect_account_test = info_stripe.id
+            else:
+                config.stripe_connect_account = info_stripe.id
+
             config.save()
 
             # Liaison / création du lieu coté Fedow :
@@ -132,5 +152,8 @@ class TenantCreateValidator(serializers.Serializer):
             FedowAPI()
             if not FedowConfig.get_solo().can_fedow():
                 raise Exception('Erreur on install : can_fedow = False')
+
+            # Envoie du mail de connection et validation
+            get_or_create_user(admin_email, force_mail=True)
 
         return tenant
