@@ -106,7 +106,7 @@ class TibilletManager(BaseUserManager):
     def create_superuser(self, email, password, **extra_fields):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
-        extra_fields.setdefault('can_create_tenant', True)
+        # extra_fields.setdefault('can_create_tenant', True)
         return self._create_user(email, password, **extra_fields)
 
     def set_permission_staff(self, user):
@@ -155,11 +155,11 @@ class Wallet(models.Model):
 class TibilletUser(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
 
+    username = models.CharField(max_length=200, unique=True) # same as email bu defaut
     email = models.EmailField(unique=True)  # changes email to unique and blank to false
     email_error = models.BooleanField(default=False)
     email_valid = models.BooleanField(default=False)
 
-    username = models.CharField(max_length=200, unique=True)
     rsa_key = models.OneToOneField(RsaKey, on_delete=models.SET_NULL, null=True, related_name='user')
     wallet = models.OneToOneField(Wallet, on_delete=models.SET_NULL, null=True, related_name='user')
 
@@ -174,7 +174,7 @@ class TibilletUser(AbstractUser):
     postal_code = models.IntegerField(null=True, blank=True)
     birth_date = models.DateField(null=True, blank=True)
 
-    can_create_tenant = models.BooleanField(default=False, verbose_name=_("Peux créer des tenants"))
+    # can_create_tenantcan_create_tenant = models.BooleanField(default=False, verbose_name=_("Peux créer des tenants"))
 
     TYPE_TERM, TYPE_HUM, TYPE_ANDR = 'TE', 'HU', 'AN'
     ESPECE_CHOICES = (

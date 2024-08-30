@@ -1,5 +1,3 @@
-import logging
-
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
@@ -8,7 +6,6 @@ from django.http import HttpResponseRedirect
 from django.utils.encoding import force_str, force_bytes, DjangoUnicodeDecodeError
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.utils.translation import gettext_lazy as _
-# Create your views here.
 from rest_framework import status, permissions, viewsets
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.generics import get_object_or_404
@@ -19,14 +16,15 @@ from rest_framework_api_key.models import APIKey
 from rest_framework_api_key.permissions import HasAPIKey
 from rest_framework_simplejwt.views import TokenRefreshView
 
-from ApiBillet.views import request_for_data_cashless
 from AuthBillet.models import TibilletUser
-from AuthBillet.serializers import MeSerializer, CreateUserValidator, CreateTerminalValidator, TokenTerminalValidator
+from AuthBillet.serializers import MeSerializer, CreateUserValidator
 from AuthBillet.utils import get_or_create_user, sender_mail_connect, get_client_ip
-from BaseBillet.models import Configuration, ExternalApiKey
+from BaseBillet.models import ExternalApiKey
 from TiBillet import settings
 
 User = get_user_model()
+import logging
+
 logger = logging.getLogger(__name__)
 
 from authlib.integrations.django_client import OAuth
@@ -168,7 +166,6 @@ def activate(request, uid, token):
     messages.add_message(request, messages.ERROR, _("Token expiré ou non valide."))
 
 
-
 class create_user(APIView):
     permission_classes = [AllowAny]
 
@@ -194,6 +191,7 @@ class create_user(APIView):
                             status=status.HTTP_406_NOT_ACCEPTABLE)
 
 
+"""
 class create_terminal_user(APIView):
     permission_classes = [AllowAny]
 
@@ -206,7 +204,6 @@ class create_terminal_user(APIView):
         logger.info(f"create_terminal_user validated_data : {validator.data}")
         return Response(validator.data, status=status.HTTP_200_OK)
 
-
 class validate_token_terminal(APIView):
     permission_classes = [AllowAny]
 
@@ -218,6 +215,7 @@ class validate_token_terminal(APIView):
 
         logger.info(f"validate_token_terminal validated_data : {validator.data}")
         return Response(validator.data, status=status.HTTP_200_OK)
+"""
 
 
 class MeViewset(viewsets.ViewSet):
@@ -226,9 +224,10 @@ class MeViewset(viewsets.ViewSet):
         serializer = MeSerializer(request.user)
         serializer_copy = serializer.data.copy()
 
-        configuration = Configuration.get_solo()
-        if configuration.server_cashless and configuration.key_cashless:
-            serializer_copy['cashless'] = request_for_data_cashless(request.user)
+        # EX request from cashless :
+        # configuration = Configuration.get_solo()
+        # if configuration.server_cashless and configuration.key_cashless:
+        #     serializer_copy['cashless'] = request_for_data_cashless(request.user)
 
         return Response(serializer_copy, status=status.HTTP_200_OK)
 

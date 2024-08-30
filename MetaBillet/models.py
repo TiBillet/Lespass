@@ -42,9 +42,12 @@ class ProductDirectory(models.Model):
 
 class WaitingConfiguration(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=False)
-
+    email = models.EmailField()
     organisation = models.CharField(db_index=True, max_length=50, verbose_name=_("Nom de l'organisation"))
+    id_acc_connect = models.CharField(max_length=21, blank=True, null=True, verbose_name=_("Id stripe connect"))
+    laboutik_wanted = models.BooleanField(default=False)
 
+    ### Ex method :
     slug = models.SlugField(max_length=50, default="")
 
     short_description = models.CharField(max_length=250, verbose_name=_("Description courte"), blank=True, null=True)
@@ -55,7 +58,6 @@ class WaitingConfiguration(models.Model):
     city = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Ville"))
 
     phone = models.CharField(max_length=20, verbose_name=_("Téléphone"))
-    email = models.EmailField()
 
     site_web = models.URLField(blank=True, null=True)
     legal_documents = models.URLField(blank=True, null=True, verbose_name='Statuts associatif')

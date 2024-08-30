@@ -24,6 +24,8 @@ DOMAIN='tibillet.localhost' # for the wildcard : without subdomain ! ex : tibill
 SUB='lespass' # the sub domain of your first place ex : if 'festival', it will be accessible on https://festival.tibillet.coop. Set lespass for dev/test.
 META='agenda' # the federated agenda for all events on all tenants. If 'agenda', it will be accessible, for exemple, on https://agenda.tibillet.coop
 
+ADDITIONAL_DOMAINS='' # optional - add additional domain for SaaS model, séparated with comma. ex : 'domainbis.localhost,domainter.localhost'
+
 ADMIN_EMAIL='' # needed for the first admin account
 
 FEDOW_DOMAIN='fedow.tibillet.localhost' # the same as Fedow

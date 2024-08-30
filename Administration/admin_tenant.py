@@ -85,6 +85,7 @@ class StaffAdminSite(AdminSite):
         #     root = User.objects.filter(is_superuser=True).first()
         #     login(request, root)
         #     return True
+
         logger.warning(
             f"Tenant AdminSite.has_permission : l'user {request.user} from ip : {get_client_ip(request)} try to get admin on {request.build_absolute_uri()} - tenant : {request.tenant}")
 

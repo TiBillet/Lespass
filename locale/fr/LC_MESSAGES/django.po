@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-08-23 09:32+0000\n"
+"POT-Creation-Date: 2024-08-29 16:06+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -30,11 +30,11 @@ msgstr ""
 msgid "Important dates"
 msgstr ""
 
-#: Administration/admin_tenant.py:479 BaseBillet/models.py:1479
+#: Administration/admin_tenant.py:480 BaseBillet/models.py:1479
 msgid "Évènement"
 msgstr ""
 
-#: Administration/admin_tenant.py:628
+#: Administration/admin_tenant.py:629
 msgid "Merci de renseigner une catégorie pour cet article."
 msgstr ""
 
@@ -44,12 +44,12 @@ msgid "{url} doit contenir une url d'image valide : {e}"
 msgstr ""
 
 #: ApiBillet/serializers.py:107 ApiBillet/serializers.py:117
-#: ApiBillet/serializers.py:515 ApiBillet/serializers.py:525
+#: ApiBillet/serializers.py:516 ApiBillet/serializers.py:526
 #, python-brace-format
 msgid "{uuid} Option non trouvé"
 msgstr ""
 
-#: ApiBillet/serializers.py:127 ApiBillet/serializers.py:419
+#: ApiBillet/serializers.py:127 ApiBillet/serializers.py:420
 msgid "img doit contenir un fichier, ou img_url doit contenir une url valide"
 msgstr ""
 
@@ -63,222 +63,222 @@ msgid ""
 "validité."
 msgstr ""
 
-#: ApiBillet/serializers.py:373
+#: ApiBillet/serializers.py:374
 #, python-brace-format
 msgid "{url_onboard}"
 msgstr ""
 
-#: ApiBillet/serializers.py:376
+#: ApiBillet/serializers.py:377
 msgid "stripe account valid but no detail submitted"
 msgstr ""
 
-#: ApiBillet/serializers.py:385
+#: ApiBillet/serializers.py:386
 msgid ""
 "Stripe account already connected to one Tenant. Please send mail to "
 "contact@tibillet.re to upgrade your plan."
 msgstr ""
 
-#: ApiBillet/serializers.py:389
+#: ApiBillet/serializers.py:390
 msgid "Please set email in your stripe account"
 msgstr ""
 
-#: ApiBillet/serializers.py:392
+#: ApiBillet/serializers.py:393
 msgid "Please set phone number in your stripe account"
 msgstr ""
 
-#: ApiBillet/serializers.py:395
+#: ApiBillet/serializers.py:396
 msgid "Please set website in your stripe account"
 msgstr ""
 
-#: ApiBillet/serializers.py:403
+#: ApiBillet/serializers.py:404
 #, python-brace-format
 msgid "stripe account not valid : {e}"
 msgstr ""
 
-#: ApiBillet/serializers.py:428
+#: ApiBillet/serializers.py:429
 msgid "img doit contenir un fichier, ou logo_url doit contenir une url valide"
 msgstr ""
 
-#: ApiBillet/serializers.py:445
+#: ApiBillet/serializers.py:446
 #, python-brace-format
 msgid "{value} Artiste non trouvé"
 msgstr ""
 
-#: ApiBillet/serializers.py:495
+#: ApiBillet/serializers.py:496
 #, python-brace-format
 msgid "{uuid} Produit non trouvé"
 msgstr ""
 
-#: ApiBillet/serializers.py:505
+#: ApiBillet/serializers.py:506
 msgid "Erreur création du Tag"
 msgstr ""
 
-#: ApiBillet/serializers.py:533
+#: ApiBillet/serializers.py:534
 #, python-brace-format
 msgid "{value} minimum_cashless non valide"
 msgstr ""
 
-#: ApiBillet/serializers.py:648
+#: ApiBillet/serializers.py:649
 msgid "products doit être un json valide"
 msgstr ""
 
-#: ApiBillet/serializers.py:761
+#: ApiBillet/serializers.py:762
 msgid ""
 "Le serveur cashless n'est pas disponible ( check serveur false ). Merci "
 "d'essayer ultérieurement"
 msgstr ""
 
-#: ApiBillet/serializers.py:803 ApiBillet/serializers.py:1082
+#: ApiBillet/serializers.py:804 ApiBillet/serializers.py:1083
 msgid "new_paiement_stripe not valid"
 msgstr ""
 
-#: ApiBillet/serializers.py:836
+#: ApiBillet/serializers.py:837
 msgid "Pas de prix d'adhésion"
 msgstr ""
 
-#: ApiBillet/serializers.py:851
+#: ApiBillet/serializers.py:852
 msgid ""
 "Un abonnement sur ce mail existe déjà et est valide jusque : {self."
 "fiche_membre.deadline()}"
 msgstr ""
 
-#: ApiBillet/serializers.py:855
+#: ApiBillet/serializers.py:856
 msgid "first_name est obligatoire"
 msgstr ""
 
-#: ApiBillet/serializers.py:859
+#: ApiBillet/serializers.py:860
 msgid "last_name est obligatoire"
 msgstr ""
 
-#: ApiBillet/serializers.py:863
+#: ApiBillet/serializers.py:864
 msgid "phone est obligatoire"
 msgstr ""
 
-#: ApiBillet/serializers.py:883
+#: ApiBillet/serializers.py:884
 #, python-brace-format
 msgid "Option {option.name} non disponible dans product"
 msgstr ""
 
-#: ApiBillet/serializers.py:1029
+#: ApiBillet/serializers.py:1030
 msgid "erreur url carte != detail uuid"
 msgstr ""
 
-#: ApiBillet/serializers.py:1053
+#: ApiBillet/serializers.py:1054
 msgid "No request"
 msgstr ""
 
-#: ApiBillet/serializers.py:1056
+#: ApiBillet/serializers.py:1057
 msgid "No user. Auth first."
 msgstr ""
 
-#: ApiBillet/serializers.py:1102
+#: ApiBillet/serializers.py:1103
 msgid "Jauge atteinte : Evenement complet."
 msgstr ""
 
-#: ApiBillet/serializers.py:1112
+#: ApiBillet/serializers.py:1113
 msgid "L'email ne correspond pas à l'utilisateur connecté."
 msgstr ""
 
-#: ApiBillet/serializers.py:1141
+#: ApiBillet/serializers.py:1142
 msgid "Quantitée de réservations suppérieure au maximum autorisé pour ce prix"
 msgstr ""
 
-#: ApiBillet/serializers.py:1149
+#: ApiBillet/serializers.py:1150
 msgid "customers not find in ticket"
 msgstr ""
 
-#: ApiBillet/serializers.py:1151
+#: ApiBillet/serializers.py:1152
 msgid "customers number not equal to ticket qty"
 msgstr ""
 
-#: ApiBillet/serializers.py:1154
+#: ApiBillet/serializers.py:1155
 msgid "first_name and last_name are required"
 msgstr ""
 
-#: ApiBillet/serializers.py:1161
+#: ApiBillet/serializers.py:1162
 #, python-brace-format
 msgid "price non trouvé : {e}"
 msgstr ""
 
-#: ApiBillet/serializers.py:1163
+#: ApiBillet/serializers.py:1164
 #, python-brace-format
 msgid "qty doit être un entier ou un flottant : {e}"
 msgstr ""
 
-#: ApiBillet/serializers.py:1166
+#: ApiBillet/serializers.py:1167
 msgid "pas de billet dans la reservation"
 msgstr ""
 
-#: ApiBillet/serializers.py:1194
+#: ApiBillet/serializers.py:1195
 msgid "Quantitée de réservations suppérieure au maximum autorisé"
 msgstr ""
 
-#: ApiBillet/serializers.py:1197
+#: ApiBillet/serializers.py:1198
 #, python-brace-format
 msgid "Il ne reste que {resas} places disponibles"
 msgstr ""
 
-#: ApiBillet/serializers.py:1211
+#: ApiBillet/serializers.py:1212
 msgid "Article non disponible"
 msgstr ""
 
-#: ApiBillet/serializers.py:1218
+#: ApiBillet/serializers.py:1219
 #, python-brace-format
 msgid "Option {option.name} non disponible dans event"
 msgstr ""
 
-#: ApiBillet/serializers.py:1232 ApiBillet/serializers.py:1233
+#: ApiBillet/serializers.py:1233 ApiBillet/serializers.py:1234
 msgid "L'utilisateur n'est pas membre"
 msgstr ""
 
-#: ApiBillet/serializers.py:1316
+#: ApiBillet/serializers.py:1317
 msgid "checkout strip not valid"
 msgstr ""
 
-#: ApiBillet/views.py:394
+#: ApiBillet/views.py:358
 #, python-brace-format
 msgid "Erreur d'importation {e}"
 msgstr ""
 
-#: ApiBillet/views.py:397
+#: ApiBillet/views.py:361
 msgid "Erreur d'importation : Detail ne correspond pas"
 msgstr ""
 
-#: ApiBillet/views.py:413
+#: ApiBillet/views.py:377
 msgid "Serveur cashless non présent dans configuration"
 msgstr ""
 
-#: ApiBillet/views.py:423
+#: ApiBillet/views.py:387
 #, python-brace-format
 msgid "Requete non comprise : {response.status_code}"
 msgstr ""
 
-#: ApiBillet/views.py:426
+#: ApiBillet/views.py:390
 #, python-brace-format
 msgid "Serveur cashless ne répond pas : {e}"
 msgstr ""
 
-#: ApiBillet/views.py:797
+#: ApiBillet/views.py:761
 msgid "Erreur dans l'envoi du mail. Merci de vérifier l'adresse"
 msgstr ""
 
-#: ApiBillet/views.py:839
+#: ApiBillet/views.py:803
 #, python-brace-format
 msgid "stripe invoice : {invoice.status} - paiement : {paiement_stripe.status}"
 msgstr ""
 
-#: ApiBillet/views.py:864
+#: ApiBillet/views.py:828
 #, python-brace-format
 msgid ""
 "stripe : {checkout_session.payment_status} - paiement : {paiement_stripe."
 "status}"
 msgstr ""
 
-#: ApiBillet/views.py:905
+#: ApiBillet/views.py:869
 msgid "Erreur Meta"
 msgstr ""
 
-#: ApiBillet/views.py:970
+#: ApiBillet/views.py:934
 msgid "Paiement validé."
 msgstr ""
 
@@ -288,10 +288,6 @@ msgstr ""
 
 #: AuthBillet/models.py:173
 msgid "J'accepte de recevoir la newsletter"
-msgstr ""
-
-#: AuthBillet/models.py:177
-msgid "Peux créer des tenants"
 msgstr ""
 
 #: AuthBillet/models.py:208
@@ -331,33 +327,33 @@ msgstr ""
 msgid "Not a mac address"
 msgstr ""
 
-#: AuthBillet/views.py:141 AuthBillet/views.py:145
+#: AuthBillet/views.py:140 AuthBillet/views.py:144
 msgid "Mail non valide"
 msgstr ""
 
-#: AuthBillet/views.py:156
+#: AuthBillet/views.py:155
 msgid "Vous êtes bien connecté. Bienvenue !"
 msgstr ""
 
-#: AuthBillet/views.py:161
+#: AuthBillet/views.py:160
 msgid "Erreur, user non valide."
 msgstr ""
 
-#: AuthBillet/views.py:163
+#: AuthBillet/views.py:162
 msgid "Token non valide."
 msgstr ""
 
-#: AuthBillet/views.py:168
+#: AuthBillet/views.py:167
 msgid "Token expiré ou non valide."
 msgstr ""
 
-#: AuthBillet/views.py:187
+#: AuthBillet/views.py:186
 msgid ""
 "Pour acceder à votre espace et réservations, merci de valider votre adresse "
 "email. Pensez à regarder dans les spams !"
 msgstr ""
 
-#: AuthBillet/views.py:192
+#: AuthBillet/views.py:191
 msgid "Email soumis non valide. Merci de vérifier votre adresse."
 msgstr ""
 
@@ -872,14 +868,24 @@ msgstr ""
 msgid "Create/Reset admin password"
 msgstr ""
 
-#: BaseBillet/templates/htmx/fragments/cards.html:6
-#, fuzzy
-#| msgid "Please validate your email for activate your account."
-msgid "Please validate your email to view and manage your cards."
-msgstr ""
-"Merci de valider votre email pour voir et gérer vos cartes."
+#: BaseBillet/templates/htmx/components/navbar.html:76
+#: BaseBillet/templates/htmx/views/my_account.html:51
+msgid "Memberships"
+msgstr "Adhésions"
 
-#: BaseBillet/templates/htmx/fragments/cards.html:18
+#: BaseBillet/templates/htmx/components/navbar.html:84
+msgid "Agenda"
+msgstr ""
+
+#: BaseBillet/templates/htmx/components/navbar.html:91
+msgid "Federation"
+msgstr ""
+
+#: BaseBillet/templates/htmx/components/navbar.html:100
+msgid "Créer un nouvel espace"
+msgstr ""
+
+#: BaseBillet/templates/htmx/fragments/cards.html:15
 msgid ""
 "If you've lost your card, please report it. Your account will not be "
 "deleted, and you will keep your tokens and memberships. You can request and "
@@ -890,18 +896,24 @@ msgstr ""
 "ensuite scanner une nouvelle carte vierge à la réception de votre lieu "
 "préféré :)"
 
-#: BaseBillet/templates/htmx/fragments/cards.html:24
+#: BaseBillet/templates/htmx/fragments/cards.html:21
 msgid "I LOST MY CARD NUMBER"
 msgstr "J'ai perdu ma carte numéro"
 
 #: BaseBillet/templates/htmx/fragments/my_account_membership.html:4
 #: BaseBillet/templates/htmx/fragments/my_account_wallet.html:18
 msgid "Loading tokens"
-msgstr ""
+msgstr "Chargement du portefeuille"
 
-#: BaseBillet/templates/htmx/fragments/my_account_profil.html:10
+#: BaseBillet/templates/htmx/fragments/my_account_profil.html:9
+#, fuzzy
+#| msgid "Please validate your email for activate your account."
+msgid "Please validate your email to manage and view your cards."
+msgstr "Merci de valider votre email pour voir et gérer vos cartes."
+
+#: BaseBillet/templates/htmx/fragments/my_account_profil.html:13
 msgid "Loading NFC Card info"
-msgstr ""
+msgstr "Chargement des informations de portefeuille"
 
 #: BaseBillet/templates/htmx/fragments/my_account_wallet.html:12
 msgid "Refill my wallet"
@@ -914,29 +926,29 @@ msgstr "Voir les dernieres transactions"
 #: BaseBillet/templates/htmx/fragments/tokens_membership_table.html:8
 #: BaseBillet/templates/htmx/fragments/tokens_table.html:8
 msgid "Asset / Place"
-msgstr ""
+msgstr "Asset / Lieu"
 
 #: BaseBillet/templates/htmx/fragments/tokens_membership_table.html:9
 #: BaseBillet/templates/htmx/fragments/tokens_table.html:9
 msgid "Type / Price"
-msgstr ""
+msgstr "Type / Prix"
 
 #: BaseBillet/templates/htmx/fragments/tokens_membership_table.html:10
 msgid "Start membership"
-msgstr ""
+msgstr "Début de l'abonnement"
 
 #: BaseBillet/templates/htmx/fragments/tokens_membership_table.html:11
 #: BaseBillet/templates/htmx/fragments/tokens_table.html:10
 msgid "Federated with"
-msgstr ""
+msgstr "Fédéré avec"
 
 #: BaseBillet/templates/htmx/fragments/tokens_table.html:11
 msgid "Last action"
-msgstr ""
+msgstr "Dernière action"
 
 #: BaseBillet/templates/htmx/fragments/transactions_table.html:8
 msgid "From / To"
-msgstr ""
+msgstr "Depuis / Vers"
 
 #: BaseBillet/templates/htmx/fragments/transactions_table.html:9
 msgid "Action"
@@ -953,19 +965,49 @@ msgstr ""
 #: BaseBillet/templates/htmx/fragments/transactions_table.html:24
 #: BaseBillet/templates/htmx/fragments/transactions_table.html:30
 msgid "Myself"
+msgstr "Moi"
+
+#: BaseBillet/templates/htmx/tenants/new.html:11
+msgid ""
+"To create your TiBillet space and receive payments, you'll need a valid "
+"Stripe account. This free procedure is available here: https://stripe.com/"
 msgstr ""
+"Pour créer votre espace TiBillet et recevoir des paiements, vous aurez besoin d'un compte Stripe valide. "
+"Cette démarche gratuite est disponible ici : https://stripe.com/"
 
-#: BaseBillet/templates/htmx/views/inscription.html:18
-msgid "Link your card to you"
-msgstr "Associez cette carte"
+#: BaseBillet/templates/htmx/tenants/new.html:25
+msgid "I would also like to use a « LaBoutik » cash register/cashless system."
+msgstr "Je souhaite également utiliser une caisse enregistreuse/cashless « Laboutik »."
 
+#: BaseBillet/templates/htmx/tenants/new.html:34
 #: BaseBillet/templates/htmx/views/inscription.html:66
 msgid "I agree the"
 msgstr "J'accepte les"
 
+#: BaseBillet/templates/htmx/tenants/new.html:36
 #: BaseBillet/templates/htmx/views/inscription.html:68
 msgid "Terms and Conditions"
 msgstr "CGU/CGV"
+
+#: BaseBillet/templates/htmx/tenants/new.html:47
+msgid "Link stripe account"
+msgstr "Lier un compte stripe"
+
+#: BaseBillet/templates/htmx/tenants/onboard_stripe_return.html:8
+msgid ""
+"Your instance is in the process of being created. You will shortly receive "
+"an email inviting you to create your admin account."
+msgstr ""
+"Votre instance est en cours de création. Vous recevrez prochainement un email "
+"vous invitant à créer votre compte administrateur."
+
+#: BaseBillet/templates/htmx/tenants/onboard_stripe_return.html:9
+msgid "Thank you and welcome to the TiBillet cooperative network!"
+msgstr "Merci et bienvenue dans le réseau coopératif TiBillet !"
+
+#: BaseBillet/templates/htmx/views/inscription.html:18
+msgid "Link your card to you"
+msgstr "Associez cette carte"
 
 #: BaseBillet/templates/htmx/views/inscription.html:78
 msgid "Sign up"
@@ -1006,10 +1048,6 @@ msgstr ""
 msgid "Wallet"
 msgstr "Portefeuille"
 
-#: BaseBillet/templates/htmx/views/my_account.html:51
-msgid "Memberships"
-msgstr "Adhésions"
-
 #: BaseBillet/templates/htmx/views/my_account.html:58
 msgid "Cards"
 msgstr "Cartes"
@@ -1030,10 +1068,16 @@ msgid ""
 msgstr ""
 
 #: BaseBillet/validators.py:85
-msgid "Tenant name exist"
-msgstr ""
+#, fuzzy
+#| msgid "Terms and Conditions"
+msgid "Please accept terms and conditions."
+msgstr "Merci d'accepter les CGU/CGV"
 
-#: BaseBillet/views.py:136
+#: BaseBillet/validators.py:91
+msgid "Tenant name exist"
+msgstr "Le nom existe déja."
+
+#: BaseBillet/views.py:145
 msgid ""
 "To access your space, please validate\n"
 "your email address. Don't forget to check your spam!"
@@ -1041,7 +1085,7 @@ msgstr ""
 "Pour accéder à votre espace, merci de valider votre email.\n"
 "N'oubliez pas de regarder dans vos spams :)"
 
-#: BaseBillet/views.py:218
+#: BaseBillet/views.py:225
 msgid ""
 "You seem to already have a TiBillet card linked to your wallet. Please "
 "revoke it first in your profile area to link a new one."
@@ -1049,22 +1093,22 @@ msgstr ""
 "Vous semblez déja posseder une carte TiBillet.\n"
 "Merci de vous connecter à votre compte pour la révoquer."
 
-#: BaseBillet/views.py:225
+#: BaseBillet/views.py:232
 msgid "Not valid"
 msgstr "Non valide"
 
-#: BaseBillet/views.py:248
+#: BaseBillet/views.py:255
 msgid ""
 "Please validate your email to access all the features of your profile area."
 msgstr ""
 "Merci de valider votre email pour avoir accès a toute les options de votre "
 "espace."
 
-#: BaseBillet/views.py:307
+#: BaseBillet/views.py:312
 msgid "Mail sended, please check spam too !"
 msgstr "Email envoyé. Pensez à vérifier dans vos spams :)"
 
-#: BaseBillet/views.py:317
+#: BaseBillet/views.py:322
 msgid ""
 "Your wallet has been detached from this card. You can scan a new one to link "
 "it again."
@@ -1072,23 +1116,23 @@ msgstr ""
 "Votre portefeuille a été détaché de cette carte. Vous pouvez en scanner une "
 "nouvelle."
 
-#: BaseBillet/views.py:320
+#: BaseBillet/views.py:325
 msgid "Error when detaching your card. Contact an administrator."
 msgstr "Une erreur est survenue. Merci de contacter un administrateur :)"
 
-#: BaseBillet/views.py:323
+#: BaseBillet/views.py:328
 msgid "User email not active"
 msgstr "Email non vérifié."
 
-#: BaseBillet/views.py:472
+#: BaseBillet/views.py:476
 msgid "Refilled wallet"
 msgstr "Wallet rechargé"
 
-#: BaseBillet/views.py:474
+#: BaseBillet/views.py:478
 msgid "Payment verification error"
 msgstr "Erreur lors de la vérification du paiement"
 
-#: BaseBillet/views.py:593
+#: BaseBillet/views.py:601
 #, python-brace-format
 msgid ""
 "Your subscription has been validated. You will receive a confirmation email "
@@ -1097,13 +1141,27 @@ msgstr ""
 "Votre adhésion a été validée. Vous allez recevoir un mail de confirmation "
 "sur {email}. Merci beaucoup !"
 
-#: BaseBillet/views.py:595
+#: BaseBillet/views.py:603
 msgid "Your payment is awaiting validation."
 msgstr "Votre paiement est en attente de validation"
 
-#: BaseBillet/views.py:598
+#: BaseBillet/views.py:606
 msgid "An error has occurred, please contact the administrator."
 msgstr "Une erreur est survenue. Merci de contacter un administrateur :)"
+
+#: BaseBillet/views.py:704
+msgid "The given email does not match the stripe account email."
+msgstr "L'email donné ne correspond pas à l'email du compte stripe."
+
+#: BaseBillet/views.py:720
+msgid ""
+"Your Stripe account does not seem to be valid. \n"
+"Please complete your Stripe.com registration before creating a new TiBillet "
+"space."
+msgstr ""
+"Votre compte stripe ne semble pas valide. \n"
+"Merci de terminer votre inscription sur Stripe.com avant de créer un nouvel "
+"espace TiBillet."
 
 #: Customers/models.py:18 MetaBillet/models.py:165
 msgid "Artiste"

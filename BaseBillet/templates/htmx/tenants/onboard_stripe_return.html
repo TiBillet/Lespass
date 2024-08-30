@@ -1,0 +1,12 @@
+{% extends base_template %}
+{% load static i18n %}
+
+{% block main %}
+    {% include "htmx/header_groupe.html" %}
+    <div class="container">
+        <div class="m-8 text-justify">
+            <p>{% translate "Your instance is in the process of being created. You will shortly receive an email inviting you to create your admin account." %}</p>
+            <p>{% translate "Thank you and welcome to the TiBillet cooperative network!" %}</p>
+        </div>
+    </div>
+{% endblock main %}
