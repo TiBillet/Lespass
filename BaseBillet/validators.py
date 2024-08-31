@@ -10,6 +10,7 @@ from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Price, Product, OptionGenerale, Membership
 from Customers.models import Client, Domain
+from MetaBillet.models import WaitingConfiguration
 from root_billet.models import RootConfiguration
 
 
@@ -81,6 +82,7 @@ class TenantCreateValidator(serializers.Serializer):
     name = serializers.CharField(max_length=200)
     laboutik = serializers.BooleanField(required=True)
     cgu = serializers.BooleanField(required=True)
+    dns_choice = serializers.ChoiceField(choices=["tibillet.coop", "tibillet.re"])
 
     def validate_cgu(self, value):
         if not value:
@@ -94,8 +96,9 @@ class TenantCreateValidator(serializers.Serializer):
         except Client.DoesNotExist:
             return value
 
+
     @staticmethod
-    def create_tenant(waiting_config):
+    def create_tenant(waiting_config: WaitingConfiguration):
         name = waiting_config.organisation
         admin_email = waiting_config.email
         id_acc_connect= waiting_config.id_acc_connect
@@ -111,7 +114,7 @@ class TenantCreateValidator(serializers.Serializer):
                 categorie=Client.SALLE_SPECTACLE,
             )
             Domain.objects.create(
-                domain=f'{slug}.{domain}',
+                domain=f'{slug}.{waiting_config.dns_choice}',
                 tenant=tenant,
                 is_primary=True
             )

@@ -544,7 +544,7 @@ class MembershipMVT(viewsets.ViewSet):
         template_context = get_context(request)
         # import ipdb; ipdb.set_trace()
         template_context["memberships"] = Product.objects.filter(categorie_article=Product.ADHESION, publish=True)
-        return render(request, "htmx/views/memberships.html", context=template_context)
+        return render(request, "htmx/views/membership/list.html", context=template_context)
 
     def create(self, request):
         membership_validator = MembershipValidator(data=request.data, context={'request': request})
@@ -642,11 +642,12 @@ class Tenant(viewsets.ViewSet):
         context['email_query_params'] = request.query_params.get('email') if request.query_params.get('email') else ""
         context['name_query_params'] = request.query_params.get('name') if request.query_params.get('name') else ""
         # import ipdb; ipdb.set_trace()
-        return render(request, "htmx/tenants/new.html", context=context)
+        return render(request, "htmx/views/tenant/new.html", context=context)
 
     @action(detail=False, methods=['POST'])
     def onboard_stripe(self, request):
         new_tenant = TenantCreateValidator(data=request.data, context={'request': request})
+        logger.info(new_tenant.initial_data)
         if not new_tenant.is_valid():
             for error in new_tenant.errors:
                 messages.add_message(request, messages.ERROR, f"{error} : {new_tenant.errors[error][0]}")
@@ -682,6 +683,7 @@ class Tenant(viewsets.ViewSet):
                 email = validated_data['email'],
                 laboutik_wanted=validated_data['laboutik'],
                 id_acc_connect=id_acc_connect,
+                dns_choice=validated_data['dns_choice'],
             )
 
             url_onboard = account_link.get('url')
@@ -717,6 +719,7 @@ class Tenant(viewsets.ViewSet):
                     'name': waiting_config.organisation ,
                     'laboutik': waiting_config.laboutik_wanted ,
                     'cgu': True ,
+                    'dns_choice': waiting_config.dns_choice,
                 })
                 if not validator.is_valid():
                     for error in validator.errors:
@@ -729,7 +732,7 @@ class Tenant(viewsets.ViewSet):
                 # On indique au front que la création est en cours :
                 context = get_context(request)
                 context['new_tenant'] = new_tenant
-                return render(request, "htmx/tenants/onboard_stripe_return.html", context=context)
+                return render(request, "htmx/views/tenant/onboard_stripe_return.html", context=context)
 
             except Exception as e:
                 logger.error(e)

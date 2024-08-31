@@ -46,6 +46,7 @@ class WaitingConfiguration(models.Model):
     organisation = models.CharField(db_index=True, max_length=50, verbose_name=_("Nom de l'organisation"))
     id_acc_connect = models.CharField(max_length=21, blank=True, null=True, verbose_name=_("Id stripe connect"))
     laboutik_wanted = models.BooleanField(default=False)
+    dns_choice = models.CharField(max_length=200, blank=True, null=True, verbose_name=_("Choix du nom de domaine"))
 
     ### Ex method :
     slug = models.SlugField(max_length=50, default="")

@@ -29,10 +29,10 @@ def context_for_membership_email(membership: Membership = None, paiement_stripe=
         'username': membership.member_name(),
         'now': timezone.now(),
         'title': f"{config.organisation} : {membership.price.product.name}",
-        'objet': _("Email de confirmation"),
-        'sub_title': _("Bienvenue à bord !"),
+        'objet': _("Confirmation email"),
+        'sub_title': _("Welcome aboard !"),
         'main_text': _(
-            f"Votre paiement pour {membership.price.product.name} à bien été pris en compte. Vous trouverez la facture en pièce jointe."),
+            _(f"Your payment for {membership.price.product.name} has been processed. You will find the invoice attached.")),
         # 'main_text_2': _("Si vous pensez que cette demande est main_text_2, vous n'avez rien a faire de plus :)"),
         # 'main_text_3': _("Dans le cas contraire, vous pouvez main_text_3. Merci de contacter l'équipe d'administration via : contact@tibillet.re au moindre doute."),
         'table_info': {
@@ -47,10 +47,10 @@ def context_for_membership_email(membership: Membership = None, paiement_stripe=
         #     'text': 'RECUPERER UNE FACTURE',
         #     'url': f'https://{domain}/memberships/{paiement_stripe.pk}/invoice/',
         # },
-        'next_text_1': "Si vous recevez cet email par erreur, merci de contacter l'équipe de TiBillet",
+        'next_text_1': _("If you receive this email in error, please contact the TiBillet team."),
         # 'next_text_2': "next_text_2",
-        'end_text': 'A bientôt, et bon voyage',
-        'signature': "Marvin, le robot de TiBillet",
+        'end_text': _('See you soon, and bon voyage.'),
+        'signature': _("Marvin, the TiBillet robot"),
     }
     # Ajout des options str si il y en a :
     if membership.option_generale.count() > 0:

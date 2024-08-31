@@ -1,3 +1,6 @@
+{% load i18n %}
+
+
 <div class="maj-theme modal fade" id="tibillet-membership-modal-{{ membership.uuid }}" tabindex="-1"
      aria-labelledby="exampleModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -22,23 +25,23 @@
                                    class="form-check-input ms-auto mt-1 tibillet-input-checkbox" type="checkbox"
                                    id="acknowledge" required>
                             <label class="form-check-label ms-3" for="acknowledge">
-                                <span>j'ai pris connaissance des </span>
+                                <span>{% translate "I accept the " %}</span>
                                 {% if membership.categorie_article == 'A' %}
                                     <span>
-                                {% if membership.legal_link != None %}
-                                    <a class="text-info" href="{{ membership.legal_link }}" target="_blank">
-                                    statuts et du règlement intérieur de l'association.
-                                </a>
-                                {% else %}
-                                    <span>statuts et du règlement intérieur de l'association</span>
-                                {% endif %}
-                            </span>
+                                    {% if membership.legal_link != None %}
+                                        <a class="text-info" href="{{ membership.legal_link }}" target="_blank">
+                                        {% translate "association rules and regulations." %}
+                                    </a>
+                                    {% else %}
+                                        {% translate "association rules and regulations." %}
+                                    {% endif %}
+                                    </span>
                                 {% else %}
                                     {% if membership.legal_link != None %}
                                         <a class="text-info" href="{{ membership.legal_link }}"
-                                           target="_blank">CGU/CGV.</a>
+                                           target="_blank">{% translate "Terms and conditions." %}</a>
                                     {% else %}
-                                        <span>CGU/CGV.</span>
+                                        <span>{% translate "terms and conditions." %}</span>
                                     {% endif %}
                                 {% endif %}
                             </label>
@@ -71,14 +74,14 @@
 
                     <!-- nom -->
                     <div class="input-group input-group-dynamic mb-4">
-                        <label class="form-label">Nom</label>
+                        <label class="form-label">{% translate "Name or organization" %}</label>
                         <input name="first_name" type="text" class="form-control"
                                role="textbox" aria-label="Nom pour l'adhésion." required>
                     </div>
 
                     <!-- prénom -->
                     <div class="input-group input-group-dynamic mb-4">
-                        <label class="form-label">Prénom</label>
+                        <label class="form-label">{% translate "First name" %}</label>
                         <input name="last_name" type="text" class="form-control"
                                role="textbox" aria-label="Prénom pour l'adhésion." required>
                     </div>
@@ -141,7 +144,8 @@
                                    aria-label="Consentement pour l'adhésion">
                             <label class="form-check-label ms-3"
                                    for="newsletter">
-                                Je ne souhaite pas recevoir de nouvelles par email de la part de l'association.
+                                {% translate "I do not wish to receive news by email from the association." %}
+
                             </label>
                         </div>
                     </div>
@@ -150,7 +154,7 @@
                         <button type="submit" class="btn bg-gradient-info btn-lg mt-4 mb-2 w-75 mx-auto"
                                 role="button"
                                 aria-label="valider formulaire adhésion">
-                            Valider
+                            {% translate "Validate" %}
                         </button>
                     </div>
                 </form>

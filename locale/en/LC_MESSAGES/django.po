@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-08-29 16:06+0000\n"
+"POT-Creation-Date: 2024-08-31 15:02+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -298,62 +298,49 @@ msgstr ""
 msgid "Utilisateur parent"
 msgstr ""
 
-#: AuthBillet/serializers.py:55
+#: AuthBillet/serializers.py:53
 msgid "app_token non valide"
 msgstr ""
 
-#: AuthBillet/serializers.py:60
+#: AuthBillet/serializers.py:58
 msgid "Token expiré"
 msgstr ""
 
-#: AuthBillet/serializers.py:64
+#: AuthBillet/serializers.py:62
 msgid "User invalide"
-msgstr ""
-
-#: AuthBillet/serializers.py:111
-msgid "DoesNotExist"
-msgstr ""
-
-#: AuthBillet/serializers.py:113
-#, python-brace-format
-msgid "{e}"
-msgstr ""
-
-#: AuthBillet/serializers.py:141
-msgid "mac_adress not valid"
 msgstr ""
 
 #: AuthBillet/utils.py:145
 msgid "Not a mac address"
 msgstr ""
 
-#: AuthBillet/views.py:140 AuthBillet/views.py:144
+#: AuthBillet/views.py:139 AuthBillet/views.py:143
 msgid "Mail non valide"
 msgstr ""
 
-#: AuthBillet/views.py:155
+#: AuthBillet/views.py:154
 msgid "Vous êtes bien connecté. Bienvenue !"
 msgstr ""
 
-#: AuthBillet/views.py:160
+#: AuthBillet/views.py:159
 msgid "Erreur, user non valide."
 msgstr ""
 
-#: AuthBillet/views.py:162
+#: AuthBillet/views.py:161
 msgid "Token non valide."
 msgstr ""
 
-#: AuthBillet/views.py:167
+#: AuthBillet/views.py:166
 msgid "Token expiré ou non valide."
 msgstr ""
 
-#: AuthBillet/views.py:186
+#: AuthBillet/views.py:184
 msgid ""
 "Pour acceder à votre espace et réservations, merci de valider votre adresse "
 "email. Pensez à regarder dans les spams !"
 msgstr ""
 
-#: AuthBillet/views.py:191
+#: AuthBillet/views.py:189
 msgid "Email soumis non valide. Merci de vérifier votre adresse."
 msgstr ""
 
@@ -417,23 +404,23 @@ msgstr ""
 msgid "Nom de l'organisation"
 msgstr ""
 
-#: BaseBillet/models.py:109 BaseBillet/models.py:390 MetaBillet/models.py:50
+#: BaseBillet/models.py:109 BaseBillet/models.py:390 MetaBillet/models.py:53
 msgid "Description courte"
 msgstr ""
 
-#: BaseBillet/models.py:110 BaseBillet/models.py:391 MetaBillet/models.py:51
+#: BaseBillet/models.py:110 BaseBillet/models.py:391 MetaBillet/models.py:54
 msgid "Description longue"
 msgstr ""
 
-#: BaseBillet/models.py:112 MetaBillet/models.py:53
+#: BaseBillet/models.py:112 MetaBillet/models.py:56
 msgid "Adresse"
 msgstr ""
 
-#: BaseBillet/models.py:113 MetaBillet/models.py:54
+#: BaseBillet/models.py:113 MetaBillet/models.py:57
 msgid "Code postal"
 msgstr ""
 
-#: BaseBillet/models.py:114 MetaBillet/models.py:55
+#: BaseBillet/models.py:114 MetaBillet/models.py:58
 msgid "Ville"
 msgstr ""
 
@@ -445,7 +432,7 @@ msgstr ""
 msgid "Numéro de SIREN"
 msgstr ""
 
-#: BaseBillet/models.py:118 MetaBillet/models.py:57
+#: BaseBillet/models.py:118 MetaBillet/models.py:60
 msgid "Téléphone"
 msgstr ""
 
@@ -453,19 +440,19 @@ msgstr ""
 msgid "Statuts associatif"
 msgstr ""
 
-#: BaseBillet/models.py:138 MetaBillet/models.py:80
+#: BaseBillet/models.py:138 MetaBillet/models.py:82
 msgid "Carte géographique"
 msgstr ""
 
-#: BaseBillet/models.py:151 MetaBillet/models.py:93
+#: BaseBillet/models.py:151 MetaBillet/models.py:95
 msgid "Carte du restaurant"
 msgstr ""
 
-#: BaseBillet/models.py:171 MetaBillet/models.py:115 root_billet/models.py:18
+#: BaseBillet/models.py:171 MetaBillet/models.py:117 root_billet/models.py:18
 msgid "Indian/Reunion"
 msgstr ""
 
-#: BaseBillet/models.py:172 MetaBillet/models.py:116 root_billet/models.py:19
+#: BaseBillet/models.py:172 MetaBillet/models.py:118 root_billet/models.py:19
 msgid "Europe/Paris"
 msgstr ""
 
@@ -489,8 +476,8 @@ msgstr ""
 msgid "Clé d'API du serveur fedow"
 msgstr ""
 
-#: BaseBillet/models.py:376 BaseBillet/models.py:377 MetaBillet/models.py:186
-#: MetaBillet/models.py:187
+#: BaseBillet/models.py:376 BaseBillet/models.py:377 MetaBillet/models.py:188
+#: MetaBillet/models.py:189
 msgid "Paramètres"
 msgstr ""
 
@@ -656,7 +643,7 @@ msgstr ""
 msgid "Concert"
 msgstr ""
 
-#: BaseBillet/models.py:620 Customers/models.py:20 MetaBillet/models.py:167
+#: BaseBillet/models.py:620 Customers/models.py:20 MetaBillet/models.py:169
 msgid "Festival"
 msgstr ""
 
@@ -873,15 +860,15 @@ msgstr ""
 msgid "Memberships"
 msgstr ""
 
-#: BaseBillet/templates/htmx/components/navbar.html:84
+#: BaseBillet/templates/htmx/components/navbar.html:85
 msgid "Agenda"
 msgstr ""
 
-#: BaseBillet/templates/htmx/components/navbar.html:91
+#: BaseBillet/templates/htmx/components/navbar.html:92
 msgid "Federation"
 msgstr ""
 
-#: BaseBillet/templates/htmx/components/navbar.html:100
+#: BaseBillet/templates/htmx/components/navbar.html:104
 msgid "Créer un nouvel espace"
 msgstr ""
 
@@ -961,42 +948,18 @@ msgstr ""
 msgid "Myself"
 msgstr ""
 
-#: BaseBillet/templates/htmx/tenants/new.html:11
-msgid ""
-"To create your TiBillet space and receive payments, you'll need a valid "
-"Stripe account. This free procedure is available here: https://stripe.com/"
+#: BaseBillet/templates/htmx/views/inscription.html:18
+msgid "Link your card to you"
 msgstr ""
 
-#: BaseBillet/templates/htmx/tenants/new.html:25
-msgid "I would also like to use a « LaBoutik » cash register/cashless system."
-msgstr ""
-
-#: BaseBillet/templates/htmx/tenants/new.html:34
 #: BaseBillet/templates/htmx/views/inscription.html:66
+#: BaseBillet/templates/htmx/views/tenant/new.html:57
 msgid "I agree the"
 msgstr ""
 
-#: BaseBillet/templates/htmx/tenants/new.html:36
 #: BaseBillet/templates/htmx/views/inscription.html:68
+#: BaseBillet/templates/htmx/views/tenant/new.html:59
 msgid "Terms and Conditions"
-msgstr ""
-
-#: BaseBillet/templates/htmx/tenants/new.html:47
-msgid "Link stripe account"
-msgstr ""
-
-#: BaseBillet/templates/htmx/tenants/onboard_stripe_return.html:8
-msgid ""
-"Your instance is in the process of being created. You will shortly receive "
-"an email inviting you to create your admin account."
-msgstr ""
-
-#: BaseBillet/templates/htmx/tenants/onboard_stripe_return.html:9
-msgid "Thank you and welcome to the TiBillet cooperative network!"
-msgstr ""
-
-#: BaseBillet/templates/htmx/views/inscription.html:18
-msgid "Link your card to you"
 msgstr ""
 
 #: BaseBillet/templates/htmx/views/inscription.html:78
@@ -1009,12 +972,45 @@ msgid ""
 "cooperatives networks :"
 msgstr ""
 
-#: BaseBillet/templates/htmx/views/memberships.html:37
+#: BaseBillet/templates/htmx/views/membership/list.html:37
 msgid "Adhésion valide"
 msgstr ""
 
-#: BaseBillet/templates/htmx/views/memberships.html:44
+#: BaseBillet/templates/htmx/views/membership/list.html:44
 msgid "Adhérez"
+msgstr ""
+
+#: BaseBillet/templates/htmx/views/membership/modal_form.html:28
+msgid "I accept the "
+msgstr ""
+
+#: BaseBillet/templates/htmx/views/membership/modal_form.html:33
+#: BaseBillet/templates/htmx/views/membership/modal_form.html:36
+msgid "association rules and regulations."
+msgstr ""
+
+#: BaseBillet/templates/htmx/views/membership/modal_form.html:42
+msgid "Terms and conditions."
+msgstr ""
+
+#: BaseBillet/templates/htmx/views/membership/modal_form.html:44
+msgid "terms and conditions."
+msgstr ""
+
+#: BaseBillet/templates/htmx/views/membership/modal_form.html:77
+msgid "Name or organization"
+msgstr ""
+
+#: BaseBillet/templates/htmx/views/membership/modal_form.html:84
+msgid "First name"
+msgstr ""
+
+#: BaseBillet/templates/htmx/views/membership/modal_form.html:147
+msgid "I do not wish to receive news by email from the association."
+msgstr ""
+
+#: BaseBillet/templates/htmx/views/membership/modal_form.html:157
+msgid "Validate"
 msgstr ""
 
 #: BaseBillet/templates/htmx/views/my_account.html:18
@@ -1038,128 +1034,173 @@ msgstr ""
 msgid "Cards"
 msgstr ""
 
+#: BaseBillet/templates/htmx/views/tenant/new.html:11
+msgid ""
+"To create your TiBillet space and receive payments, you'll need a valid "
+"Stripe account. This free procedure is available here: https://stripe.com/"
+msgstr ""
+
+#: BaseBillet/templates/htmx/views/tenant/new.html:17
+msgid "Preferred DNS :"
+msgstr ""
+
+#: BaseBillet/templates/htmx/views/tenant/new.html:48
+msgid ""
+"I would also like to use a « LaBoutik » cash / cashless register system."
+msgstr ""
+
+#: BaseBillet/templates/htmx/views/tenant/new.html:70
+msgid "Link stripe account"
+msgstr ""
+
+#: BaseBillet/templates/htmx/views/tenant/onboard_stripe_return.html:8
+msgid ""
+"Your instance is in the process of being created. You will shortly receive "
+"an email inviting you to create your admin account."
+msgstr ""
+
+#: BaseBillet/templates/htmx/views/tenant/onboard_stripe_return.html:9
+msgid "Thank you and welcome to the TiBillet cooperative network!"
+msgstr ""
+
 #: BaseBillet/triggers.py:32
-msgid "Email de confirmation"
+msgid "Confirmation email"
 msgstr ""
 
 #: BaseBillet/triggers.py:33
-msgid "Bienvenue à bord !"
+msgid "Welcome aboard !"
 msgstr ""
 
 #: BaseBillet/triggers.py:35
 #, python-brace-format
 msgid ""
-"Votre paiement pour {membership.price.product.name} à bien été pris en "
-"compte. Vous trouverez la facture en pièce jointe."
+"Your payment for {membership.price.product.name} has been processed. You "
+"will find the invoice attached."
 msgstr ""
 
-#: BaseBillet/validators.py:85
+#: BaseBillet/triggers.py:50
+msgid "If you receive this email in error, please contact the TiBillet team."
+msgstr ""
+
+#: BaseBillet/triggers.py:52
+msgid "See you soon, and bon voyage."
+msgstr ""
+
+#: BaseBillet/triggers.py:53
+msgid "Marvin, the TiBillet robot"
+msgstr ""
+
+#: BaseBillet/validators.py:87
 msgid "Please accept terms and conditions."
 msgstr ""
 
-#: BaseBillet/validators.py:91
+#: BaseBillet/validators.py:93
 msgid "Tenant name exist"
 msgstr ""
 
-#: BaseBillet/views.py:145
+#: BaseBillet/views.py:148
 msgid ""
 "To access your space, please validate\n"
 "your email address. Don't forget to check your spam!"
 msgstr ""
 
-#: BaseBillet/views.py:225
+#: BaseBillet/views.py:228
 msgid ""
 "You seem to already have a TiBillet card linked to your wallet. Please "
 "revoke it first in your profile area to link a new one."
 msgstr ""
 
-#: BaseBillet/views.py:232
+#: BaseBillet/views.py:235
 msgid "Not valid"
 msgstr ""
 
-#: BaseBillet/views.py:255
+#: BaseBillet/views.py:258
 msgid ""
 "Please validate your email to access all the features of your profile area."
 msgstr ""
 
-#: BaseBillet/views.py:312
+#: BaseBillet/views.py:315
 msgid "Mail sended, please check spam too !"
 msgstr ""
 
-#: BaseBillet/views.py:322
+#: BaseBillet/views.py:325
 msgid ""
 "Your wallet has been detached from this card. You can scan a new one to link "
 "it again."
 msgstr ""
 
-#: BaseBillet/views.py:325
+#: BaseBillet/views.py:328
 msgid "Error when detaching your card. Contact an administrator."
 msgstr ""
 
-#: BaseBillet/views.py:328
+#: BaseBillet/views.py:331
 msgid "User email not active"
 msgstr ""
 
-#: BaseBillet/views.py:476
+#: BaseBillet/views.py:479
 msgid "Refilled wallet"
 msgstr ""
 
-#: BaseBillet/views.py:478
+#: BaseBillet/views.py:481
 msgid "Payment verification error"
 msgstr ""
 
-#: BaseBillet/views.py:601
+#: BaseBillet/views.py:604
 #, python-brace-format
 msgid ""
 "Your subscription has been validated. You will receive a confirmation email "
 "at {email}. Thank you very much!"
 msgstr ""
 
-#: BaseBillet/views.py:603
+#: BaseBillet/views.py:606
 msgid "Your payment is awaiting validation."
 msgstr ""
 
-#: BaseBillet/views.py:606
+#: BaseBillet/views.py:609
 msgid "An error has occurred, please contact the administrator."
 msgstr ""
 
-#: BaseBillet/views.py:704
+#: BaseBillet/views.py:711
 msgid "The given email does not match the stripe account email."
 msgstr ""
 
-#: BaseBillet/views.py:720
+#: BaseBillet/views.py:742
 msgid ""
 "Your Stripe account does not seem to be valid. \n"
 "Please complete your Stripe.com registration before creating a new TiBillet "
 "space."
 msgstr ""
 
-#: Customers/models.py:18 MetaBillet/models.py:165
+#: Customers/models.py:18 MetaBillet/models.py:167
 msgid "Artiste"
 msgstr ""
 
-#: Customers/models.py:19 MetaBillet/models.py:166
+#: Customers/models.py:19 MetaBillet/models.py:168
 msgid "Lieu de spectacle vivant"
 msgstr ""
 
-#: Customers/models.py:21 MetaBillet/models.py:168
+#: Customers/models.py:21 MetaBillet/models.py:170
 msgid "Tourneur"
 msgstr ""
 
-#: Customers/models.py:22 MetaBillet/models.py:169
+#: Customers/models.py:22 MetaBillet/models.py:171
 msgid "Producteur"
 msgstr ""
 
-#: Customers/models.py:23 MetaBillet/models.py:170
+#: Customers/models.py:23 MetaBillet/models.py:172
 msgid "Agenda culturel"
 msgstr ""
 
-#: Customers/models.py:24 MetaBillet/models.py:171
+#: Customers/models.py:24 MetaBillet/models.py:173
 msgid "Tenant public root"
 msgstr ""
 
-#: Customers/models.py:28 MetaBillet/models.py:175
+#: Customers/models.py:28 MetaBillet/models.py:177
 msgid "Categorie"
+msgstr ""
+
+#: MetaBillet/models.py:47
+msgid "Id stripe connect"
 msgstr ""
 
 #: PaiementStripe/views.py:92
