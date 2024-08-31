@@ -1,4 +1,5 @@
 import logging
+import os
 import uuid
 from io import BytesIO
 
@@ -54,7 +55,7 @@ def get_context(request):
     config = Configuration.get_solo()
     base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
     serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
-
+    # Le lien "Fédération"
     meta_url = cache.get('meta_url')
     if not meta_url:
         meta = Client.objects.filter(categorie=Client.META)[0]
@@ -69,6 +70,7 @@ def get_context(request):
         "config": config,
         "meta_url": meta_url,
         "header": True,
+        "mode_test": True if os.environ.get('TEST') == '1' else False
     }
     return context
 
