@@ -498,6 +498,8 @@ class Price(models.Model):
     name = models.CharField(max_length=50, verbose_name=_("Précisez le nom du Tarif"))
     prix = models.DecimalField(max_digits=6, decimal_places=2)
 
+    publish = models.BooleanField(default=True)
+
     NA, DIX, VINGT, HUITCINQ, DEUXDEUX = 'NA', 'DX', 'VG', 'HC', 'DD'
     TVA_CHOICES = [
         (NA, _('Non applicable')),
