@@ -537,6 +537,39 @@ def modal(request, level="info", title='Information', content: str = None):
     return render(request, "htmx/components/modal_message.html", context=context)
 
 
+class Badge(viewsets.ViewSet):
+    authentication_classes = [SessionAuthentication, ]
+
+    def list(self, request: HttpRequest):
+        template_context = get_context(request)
+        # import ipdb; ipdb.set_trace()
+        template_context["badges"] = Product.objects.filter(categorie_article=Product.BADGE, publish=True)
+        return render(request, "htmx/views/badge/list.html", context=template_context)
+
+    @action(detail=False, methods=['GET'])
+    def check_in(self, request: HttpRequest):
+        template_context = get_context(request)
+        fedowAPI = FedowAPI()
+        messages.add_message(request, messages.SUCCESS, _(f"Check in OK"))
+        return HttpResponseClientRedirect(request.headers['Referer'])
+
+
+    @action(detail=False, methods=['GET'])
+    def check_out(self, request: HttpRequest):
+        template_context = get_context(request)
+        fedowAPI = FedowAPI()
+        messages.add_message(request, messages.WARNING, _(f"Check OUT OK"))
+        return HttpResponseClientRedirect(request.headers['Referer'])
+
+    def get_permissions(self):
+        if self.action in ['retrieve']:
+            permission_classes = [permissions.IsAuthenticated]
+        else:
+            permission_classes = [permissions.AllowAny]
+        return [permission() for permission in permission_classes]
+
+
+
 class MembershipMVT(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 

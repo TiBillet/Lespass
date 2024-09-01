@@ -44,11 +44,12 @@ class Command(BaseCommand):
 
             config = Configuration.get_solo()
             config.organisation = sub.capitalize()
-            config.short_description = "Les scènes oniriques du TiBilletistan : un espace de démonstration."
+            config.short_description = "Les scènes du TiBilletistan : un espace de démonstration."
             config.long_description = (
                 "Vous trouverez ici un exemple de plusieurs types d'évènements, d'adhésions et d'abonnements."
-                "\nGratuit, payant, avec prix préférenciel."
-                "\nAbonnement mensuels récurents ou ahdésion annuelle.")
+                "\nGratuit, payant, avec prix préférentiels."
+                "\nAbonnement mensuels récurents ou adhésion annuelle."
+                "\nAinsi qu'une badgeuse pour la gestion d'accès d'un co working.")
             config.adress = "42 Rue Douglas Adams"
             config.postal_code = "97480"
             config.city = "Saint Joseph"

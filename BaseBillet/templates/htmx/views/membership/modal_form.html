@@ -50,18 +50,19 @@
 
                     <!-- prix -->
                     <div class="d-flex flex-row justify-content-start align-items-start me-2 mb-4 has-validation">
-
                         {% for price in membership.prices.all %}
-                            <div class="form-check me-3" style="padding-left: 0;">
-                                <input class="form-check-input" type="radio"
-                                       name="price"
-                                       id="price-{{ price.uuid }}"
-                                       value="{{ price.uuid }}" required>
-                                <label class="custom-control-label text-darkms-0"
-                                       for="price-{{ price.uuid }}">
-                                    {{ price.name }} - {{ price.prix }}€
-                                </label>
-                            </div>
+                            {% if price.publish %}
+                                <div class="form-check me-3" style="padding-left: 0;">
+                                    <input class="form-check-input" type="radio"
+                                           name="price"
+                                           id="price-{{ price.uuid }}"
+                                           value="{{ price.uuid }}" required>
+                                    <label class="custom-control-label text-darkms-0"
+                                           for="price-{{ price.uuid }}">
+                                        {{ price.name }} - {{ price.prix }}€
+                                    </label>
+                                </div>
+                            {% endif %}
                         {% endfor %}
                     </div>
 

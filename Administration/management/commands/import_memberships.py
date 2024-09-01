@@ -1,13 +1,11 @@
 import json
 from datetime import datetime
+from decimal import Decimal
 
-from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Product, Price, Membership
-from fedow_connect.fedow_api import FedowAPI
-from decimal import Decimal
 
 """
 ### Set all email to lower :
@@ -41,6 +39,8 @@ for user in User.objects.all():
     user.save()
 """
 
+
+
 ## Doit être lancé dans un terminal django
 from fedow_connect.fedow_api import FedowAPI
 fedowAPI = FedowAPI()
@@ -48,15 +48,16 @@ adhesion = Product.objects.get(categorie_article=Product.ADHESION)
 serialized_asset, created = fedowAPI.asset.get_or_create_asset(adhesion)
 asset_fedow = f"{serialized_asset['uuid']}"
 
-
 with open('memberships.json', 'r', encoding='utf-8') as readf:
     loaded_data = json.load(readf)
+
 
 # Checker de mail
 class EmailSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
-#Source depuis LaBoutik : todo, a integrer dans le serializer
+
+# Source depuis LaBoutik : todo, a integrer dans le serializer
 """
 'email': membre.email.lower(),
 'first_name': membre.prenom,
@@ -82,7 +83,7 @@ for member in loaded_data:
     email = member['email'].lower()
     print(email)
     user = get_or_create_user(email, send_mail=False)
-    if not user :
+    if not user:
         # Email non valide
         continue
 
@@ -107,17 +108,16 @@ for member in loaded_data:
             except Price.DoesNotExist:
                 price = None
 
-
         # Contribution déja enregistré sur Lespass.
         if membership:
             # On compare l'adhésion en base de donnée et celle sur le cashless
             # Si elle a une date ultérieure, on la fabrique en db
-            if not membership.last_contribution :
+            if not membership.last_contribution:
                 membership = None
             elif membership.last_contribution < last_contribution:
                 membership = None
 
-        if not membership :
+        if not membership:
             # Création du Membership
             membership = Membership.objects.create(
                 user=user,
@@ -137,7 +137,7 @@ for member in loaded_data:
         if not membership.asset_fedow:
             membership.asset_fedow = asset_fedow
             membership.save()
-        if not membership.fedow_transactions.exists() and membership.contribution_value :
+        if not membership.fedow_transactions.exists() and membership.contribution_value:
             serialized_transaction = fedowAPI.membership.create(membership=membership)
     # Liaison avec la carte
     if member['card_qrcode_uuid']:

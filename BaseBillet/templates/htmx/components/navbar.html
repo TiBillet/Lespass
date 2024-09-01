@@ -78,6 +78,14 @@
                     </li>
                     {% if mode_test %}
                         <li>
+                            <a href="#" class="nav-item text-white mx-2" hx-get="/badge/" hx-target="#main"
+                               hx-swap="outerHTML"
+                               hx-push-url="true" role="button" aria-label="badgeuse">
+                                <i class="fa fa-id-badge" aria-hidden="true"></i>
+                                {% translate "Badgeuse" %}
+                            </a>
+                        </li>
+                        <li>
                             <a href="#" class="nav-item text-white mx-2" hx-get="/agenda/" hx-target="#main"
                                hx-swap="outerHTML"
                                hx-push-url="true" role="button" aria-label="agenda">

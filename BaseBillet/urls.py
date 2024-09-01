@@ -5,13 +5,13 @@ from BaseBillet import views as base_view
 
 router = routers.DefaultRouter()
 router.register(r'memberships', base_view.MembershipMVT, basename='membership_mvt')
+router.register(r'badge', base_view.Badge, basename='badge')
 router.register(r'tenant', base_view.Tenant, basename='tenant')
 
 router.register(r'my_account', base_view.MyAccount, basename='my_account')
 router.register(r'qr', base_view.ScanQrCode, basename='scan_qrcode')
 
 urlpatterns = [
-
 
     path('ticket/<uuid:pk_uuid>/', base_view.Ticket_html_view.as_view()),
     path('event/<slug:slug>/', base_view.event, name='event'),

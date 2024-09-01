@@ -663,7 +663,8 @@ class PriceAdmin(admin.ModelAdmin):
         'prix',
         'adhesion_obligatoire',
         'subscription_type',
-        'recurring_payment'
+        'recurring_payment',
+        'publish',
     )
     ordering = ('product',)
 
