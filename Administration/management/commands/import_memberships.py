@@ -10,7 +10,6 @@ from fedow_connect.fedow_api import FedowAPI
 from decimal import Decimal
 
 """
-
 ### Set all email to lower :
 # a faire pour chaque tenant
 User = get_user_model()
@@ -144,27 +143,3 @@ for member in loaded_data:
     if member['card_qrcode_uuid']:
         for qrcode_uuid in member['card_qrcode_uuid']:
             linked_serialized_card = fedowAPI.NFCcard.linkwallet_cardqrcode(user=user, qrcode_uuid=qrcode_uuid)
-
-
-"""
-Pour les grandes migrations :
-
-# Migration !
-# S'il existe des produits adhésions, on les envois à Fedow via le signal send_membership_and_badge_product_to_fedow au save()
-
-from fedow_connect.fedow_api import FedowAPI
-fedowAPI = FedowAPI()
-
-# for adhe in Product.objects.filter(categorie_article__in=[Product.ADHESION, Product.BADGE ]):
-#     adhe.save()
-
-adhesions_pas_dans_fedow = Membership.objects.filter(
-    last_contribution__isnull=False,
-    contribution_value__gt=0, 
-    fedow_transactions__isnull=True,
-    price__isnull=False,
-)
-
-for adhesion_pas_dans_fedow in adhesions_pas_dans_fedow:
-    serialized_transaction = fedowAPI.membership.create(membership=adhesion_pas_dans_fedow)
-"""
