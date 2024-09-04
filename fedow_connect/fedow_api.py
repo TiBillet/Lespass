@@ -181,6 +181,16 @@ class AssetFedow():
             raise Exception(f"{response_asset.status_code} {response_asset.content}")
 
 
+class BadgeFedow():
+    def __init__(self, fedow_config: FedowConfig or None = None):
+        self.fedow_config: FedowConfig = fedow_config
+        if not fedow_config:
+            self.fedow_config = FedowConfig.get_solo()
+
+    def check_in(self, user):
+        pass
+
+
 class MembershipFedow():
     def __init__(self, fedow_config: FedowConfig or None = None):
         self.fedow_config: FedowConfig = fedow_config

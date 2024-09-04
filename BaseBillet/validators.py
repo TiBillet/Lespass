@@ -96,13 +96,10 @@ class TenantCreateValidator(serializers.Serializer):
         except Client.DoesNotExist:
             return value
 
-
     @staticmethod
     def create_tenant(waiting_config: WaitingConfiguration):
         name = waiting_config.organisation
         admin_email = waiting_config.email
-        id_acc_connect= waiting_config.id_acc_connect
-        info_stripe = stripe.Account.retrieve(id_acc_connect)
 
         with schema_context('public'):
             slug = slugify(name)
@@ -137,15 +134,17 @@ class TenantCreateValidator(serializers.Serializer):
             config.slug = slugify(name)
             config.email = user.email
 
-            config.site_web = info_stripe.business_profile.url
-            config.phone = info_stripe.business_profile.support_phone
-
             rootConf = RootConfiguration.get_solo()
             config.stripe_mode_test = rootConf.stripe_mode_test
-            if rootConf.stripe_mode_test:
-                config.stripe_connect_account_test = info_stripe.id
-            else:
-                config.stripe_connect_account = info_stripe.id
+
+            if waiting_config.id_acc_connect:
+                info_stripe = stripe.Account.retrieve(waiting_config.id_acc_connect)
+                config.site_web = info_stripe.business_profile.url
+                config.phone = info_stripe.business_profile.support_phone
+                if rootConf.stripe_mode_test:
+                    config.stripe_connect_account_test = info_stripe.id
+                else:
+                    config.stripe_connect_account = info_stripe.id
 
             config.save()
 
