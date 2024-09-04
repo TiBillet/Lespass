@@ -20,11 +20,11 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         with schema_context('meta'):
-            import ipdb; ipdb.set_trace()
             waiting_config = WaitingConfiguration.objects.create(
                 organisation=options['name'],
                 slug=slugify(options['name']),
                 email=options['email'],
+                dns_choice='tibillet.coop',
             )
             TenantCreateValidator.create_tenant(waiting_config)
         logger.info('Tenant created: %s', waiting_config)
