@@ -456,7 +456,7 @@ class MyAccount(viewsets.ViewSet):
         if stripe_checkout_url:
             return HttpResponseClientRedirect(stripe_checkout_url)
         else:
-            messages.add_message(request, messages.ERROR, "No available. Contact an admin.")
+            messages.add_message(request, messages.ERROR, _("No available. Contact an admin."))
             return HttpResponseClientRedirect('/my_account/')
 
     @action(detail=True, methods=['GET'])
@@ -465,7 +465,7 @@ class MyAccount(viewsets.ViewSet):
         # On check referer stripe
         if request.headers.get('Referer') != 'https://checkout.stripe.com/':
             logger.error(f"Refill wallet return : Not from stripe")
-            messages.add_message(request, messages.ERROR, "Erreur retour stripe")
+            messages.add_message(request, messages.ERROR, _("Request must be redirect from stripe."))
             return redirect('/memberships/wallet')
 
         # On demande confirmation à Fedow qui a du recevoir la validation en webhook POST
@@ -476,7 +476,10 @@ class MyAccount(viewsets.ViewSet):
         try:
             # TODO; checker la signature du paiement
             wallet = fedowAPI.wallet.retrieve_from_refill_checkout(user, pk)
-            messages.add_message(request, messages.SUCCESS, _("Refilled wallet"))
+            if wallet :
+                messages.add_message(request, messages.SUCCESS, _("Refilled wallet"))
+            else :
+                messages.add_message(request, messages.ERROR, _("Payment verification error"))
         except Exception as e:
             messages.add_message(request, messages.ERROR, _("Payment verification error"))
 

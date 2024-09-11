@@ -211,12 +211,12 @@ class MembershipFedow():
             receiver = wallet.uuid
 
         # Vérification de l'uuid membership présent coté Fedow
-        if not membership.asset_fedow and membership.price :
+        if not membership.asset_fedow and membership.price:
             fedow_asset = AssetFedow(fedow_config=self.fedow_config)
             serialized_asset, created = fedow_asset.get_or_create_asset(membership.price.product)
             asset_fedow = f"{serialized_asset['uuid']}"
             membership.asset_fedow = asset_fedow
-        if not membership.asset_fedow :
+        if not membership.asset_fedow:
             raise Exception("no asset_fedow nor price provided on membership")
 
         amount = membership.contribution_value
@@ -253,7 +253,7 @@ class MembershipFedow():
             if serialized_transaction.is_valid():
                 fedow_transaction = serialized_transaction.fedow_transaction
                 membership.fedow_transactions.add(fedow_transaction)
-                membership.save() # sauvegarde au cas ou membership.asset_fedow
+                membership.save()  # sauvegarde au cas ou membership.asset_fedow
                 if membership.stripe_paiement.exists():
                     membership.stripe_paiement.latest('last_action').fedow_transactions.add(fedow_transaction)
                 return serialized_transaction.validated_data
@@ -284,15 +284,16 @@ class WalletFedow():
         # Solution : soit retirer les () dans le callable, soit utiliser cache.lambda
         if not user.wallet:
             wallet = self.get_or_create_wallet(user)
-        try :
-            serialized_wallet = cache.get_or_set(f"wallet_user_{user.wallet.uuid}", lambda: self.retrieve_by_signature(user), 10)
-        except KeyError as e :
+        try:
+            serialized_wallet = cache.get_or_set(f"wallet_user_{user.wallet.uuid}",
+                                                 lambda: self.retrieve_by_signature(user), 10)
+        except KeyError as e:
             # Exception soulevé parfois : AttributeError: 'NoneType' object has no attribute 'recv'
             # A investiguer, peut être que l'écriture du cache est en concurence avec une autre écriture
             # réalisée en même temps, avec les requetes async
             logger.warning(f"cached_retrieve_by_signature : {e} - fetch from fedow without cache.")
             serialized_wallet = self.retrieve_by_signature(user)
-        except Exception as e :
+        except Exception as e:
             logger.error(f"cached_retrieve_by_signature : {e}")
             raise e
 
@@ -363,22 +364,30 @@ class WalletFedow():
         return stripe_checkout_url
 
     def retrieve_from_refill_checkout(self, user: TibilletUser, pk: uuid4):
+        # Vérifie que le paiement stripe a bien été validé coté Fedow.
         response_checkout = _get(
             self.fedow_config,
             user=user,
             path=f'wallet/{pk}/retrieve_from_refill_checkout'
         )
 
+        if response_checkout.status_code == 402:
+            logger.warning(
+                f"retrieve_from_refill_checkout - Checkout Stripe non paid : 402 - {response_checkout.json()}")
+            return None
+
         if not response_checkout.status_code == 200:
-            logger.error(f"retrieve_from_refill_checkout ERRORS : {response_checkout.status_code}")
-            raise Exception(f"retrieve_from_refill_checkout ERRORS : {response_checkout.status_code}")
+            logger.error(
+                f"retrieve_from_refill_checkout ERRORS : {response_checkout.status_code} - {response_checkout.json()}")
+            raise Exception(
+                f"retrieve_from_refill_checkout ERRORS : {response_checkout.status_code} - {response_checkout.json()}")
 
         wallet_serialized = WalletValidator(data=response_checkout.json())
-        if wallet_serialized.is_valid():
-            return wallet_serialized
-        else:
+        if not wallet_serialized.is_valid():
             logger.error(f"retrieve_by_signature wallet_serialized ERRORS : {wallet_serialized.errors}")
             raise Exception(f"retrieve_by_signature wallet_serialized ERRORS : {wallet_serialized.errors}")
+
+        return wallet_serialized
 
 
 class PlaceFedow():
@@ -393,8 +402,8 @@ class PlaceFedow():
 
     def link_cashless_to_place(self, admin):
         link_response = _get(fedow_config=self.fedow_config,
-                                      user=admin,
-                                      path='place/link_cashless_to_place')
+                             user=admin,
+                             path='place/link_cashless_to_place')
 
         if not link_response.status_code == 201:
             logger.error(f"link_cashless_to_place ERRORS : {link_response.status_code}")
@@ -403,8 +412,6 @@ class PlaceFedow():
         rsa_cypher_message = link_response.json()['rsa_cypher_message']
         temp_key = rsa_decrypt_string(utf8_enc_string=rsa_cypher_message, private_key=admin.get_private_key())
         return temp_key
-
-
 
     def create_place(self, admin: TibilletUser = None, place_name=None):
         # Premier contact entre une nouvelle place (nouveau tenant) et Fedow
@@ -469,8 +476,6 @@ class PlaceFedow():
         self.fedow_config.save()
 
         logger.info(f"Place and Fedow linked : wallet {new_place_data['wallet']}")
-
-
 
 
 class NFCcardFedow():
@@ -606,4 +611,3 @@ class FedowAPI():
 
     def handshake(self):
         pass
-

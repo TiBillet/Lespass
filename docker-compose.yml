@@ -79,6 +79,7 @@ services:
       - "demo.tibillet.localhost:172.17.0.1"
       - "billetistan.tibillet.localhost:172.17.0.1"
       - "cashless.tibillet.localhost:172.17.0.1"
+#    command: "sleep infinity"
     command: "poetry run celery -A TiBillet worker -l INFO"
 
 

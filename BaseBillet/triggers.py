@@ -1,18 +1,14 @@
 import json
 import logging
-from django.core.serializers.json import DjangoJSONEncoder
 
-import requests
-from django.conf import settings
-from django.db import connection
+from django.core.serializers.json import DjangoJSONEncoder
 from django.utils import timezone
 from django.utils.text import slugify
+from django.utils.translation import gettext_lazy as _
 
 from ApiBillet.serializers import LigneArticleSerializer
 from BaseBillet.models import LigneArticle, Product, Membership, Price, Configuration, Paiement_stripe
-from BaseBillet.tasks import send_to_ghost, send_email_generique, create_invoice_pdf
-from django.utils.translation import gettext_lazy as _
-
+from BaseBillet.tasks import send_to_ghost, send_email_generique, create_invoice_pdf, celery_post_request
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
 
@@ -129,25 +125,21 @@ def send_membership_to_ghost(membership: Membership):
 
 ### SEND TO LABOUTIK for comptabilité ###
 
-# TODO: Lancer ça dans un celery avec retry au cazou perte de co depuis le cashless
 def send_sale_to_laboutik(ligne_article: LigneArticle):
     config = Configuration.get_solo()
     if config.check_serveur_cashless():
         serialized_ligne_article = LigneArticleSerializer(ligne_article).data
         json_data = json.dumps(serialized_ligne_article, cls=DjangoJSONEncoder)
-        send_to_laboutik = requests.post(
-            f'{config.server_cashless}/api/salefromlespass',
+
+        # Lancer ça dans un celery avec retry au cazou perte de co depuis le cashless
+        celery_post_request.delay(
+            url=f'{config.server_cashless}/api/salefromlespass',
+            data=json_data,
             headers={
                 "Authorization": f"Api-Key {config.key_cashless}",
                 "Content-type": "application/json",
             },
-            data=json_data,
-            verify=bool(not settings.DEBUG),
-            timeout=2,
         )
-        if send_to_laboutik.status_code != 200:
-            raise Exception(f"send_sale_to_laboutik send_to_laboutik.status_code = {send_to_laboutik.status_code}")
-
     else:
         logger.warning(f"No serveur cashless on config. Memberhsip not sended")
 

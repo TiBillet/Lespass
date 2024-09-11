@@ -10,6 +10,9 @@ import barcode
 import jwt
 import requests
 import segno
+from celery import shared_task
+from celery.exceptions import MaxRetriesExceededError
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import EmailMultiAlternatives
@@ -391,7 +394,6 @@ def terminal_pairing_celery_mailer(term_user_email, subject=None):
 """
 
 
-
 @app.task
 def report_celery_mailer(data_report_list: list):
     configuration = Configuration.get_solo()
@@ -424,7 +426,7 @@ def report_celery_mailer(data_report_list: list):
 
 
 @app.task
-def send_email_generique(context: dict = None, email: str = None, attached_files: dict=None):
+def send_email_generique(context: dict = None, email: str = None, attached_files: dict = None):
     template_name = "mails/email_generique.html"
     try:
         if not context:
@@ -521,6 +523,7 @@ def ticket_celery_mailer(reservation_uuid: str, base_url):
         except Exception as e:
             logger.error(f"{timezone.now()} Erreur envoie de mail pour reservation {reservation} : {e}")
             raise Exception
+
 
 """
 @app.task
@@ -710,6 +713,39 @@ def send_to_ghost(membership_pk):
             config.save()
         except Exception as e:
             logger.error(f"Erreur lors de la mise à jour du log : {e}")
+
+
+
+# @app.task
+@shared_task(bind=True, max_retries=20)
+def celery_post_request(self, url, headers, data):
+    # Le max de temps entre deux retries : 24 heures
+    MAX_RETRY_TIME = 86400  # 24 * 60 * 60 seconds
+    try :
+        logger.info(f"start celery_post_request to {url}")
+        response = requests.post(
+            f'{url}',
+            headers=headers,
+            data=data,
+            verify=bool(not settings.DEBUG),
+            timeout=2,
+        )
+        # Si la réponse est 404, on déclenche un retry
+        if response.status_code == 404:
+            # Augmente le délai de retry avec un backoff exponentiel
+            retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
+            raise self.retry(countdown=retry_delay)
+
+    except requests.exceptions.RequestException as exc:
+        # Log et retry en cas d’erreur réseau ou autre exception
+        logger.error(f"Erreur lors de l'envoi de la requête POST à {url}: {exc}")
+
+        # Ajoute un backoff exponentiel pour les autres erreurs
+        retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
+        raise self.retry(exc=exc, countdown=retry_delay)
+
+    except MaxRetriesExceededError:
+        logger.error(f"La tâche a échoué après plusieurs tentatives pour {url}")
 
 
 @app.task
