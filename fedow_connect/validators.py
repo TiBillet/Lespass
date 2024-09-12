@@ -10,6 +10,7 @@ class PlaceValidator(serializers.Serializer):
     wallet = serializers.UUIDField()
     stripe_connect_valid = serializers.BooleanField()
     dokos_id = serializers.CharField(max_length=50, allow_null=True, required=False)
+    lespass_domain = serializers.CharField(max_length=100, allow_null=True, required=False)
 
 
 class OriginValidator(serializers.Serializer):
@@ -86,6 +87,8 @@ class WalletValidator(serializers.Serializer):
 class QrCardValidator(serializers.Serializer):
     wallet_uuid = serializers.UUIDField()
     is_wallet_ephemere = serializers.BooleanField()
+    origin = OriginValidator()
+
 
 class CardValidator(serializers.Serializer):
     wallet = WalletValidator(many=False)
@@ -95,7 +98,6 @@ class CardValidator(serializers.Serializer):
     first_tag_id = serializers.CharField(min_length=8, max_length=8)
     number_printed = serializers.CharField()
     is_wallet_ephemere = serializers.BooleanField()
-
 
 
 class TransactionValidator(serializers.Serializer):

@@ -11,7 +11,7 @@ from django.contrib.auth import logout, login
 from django.contrib.messages import MessageFailure
 from django.core.cache import cache
 from django.db import connection
-from django.http import HttpResponse, HttpRequest, Http404
+from django.http import HttpResponse, HttpRequest, Http404, HttpResponseRedirect
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.response import TemplateResponse
 from django.utils.encoding import force_str, force_bytes
@@ -37,7 +37,7 @@ from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Ev
     Paiement_stripe
 from BaseBillet.tasks import create_invoice_pdf
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator
-from Customers.models import Client
+from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from PaiementStripe.views import CreationPaiementStripe
 from fedow_connect.fedow_api import FedowAPI
@@ -164,6 +164,7 @@ class ScanQrCode(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
     def retrieve(self, request, pk=None):
+        #TODO: Serializer ?
         try:
             qrcode_uuid: uuid.uuid4 = uuid.UUID(pk)
         except ValueError:
@@ -172,6 +173,22 @@ class ScanQrCode(viewsets.ViewSet):
         except Exception as e:
             logger.error(e)
             raise e
+
+
+        # Pour les cartes en m (qui vont vers l'agenda)
+        # Recherche de l'origine et redirect vers le bon tenant
+        tenant: Client = connection.tenant
+        if tenant.categorie != Client.SALLE_SPECTACLE:
+            first_tenant = Client.objects.filter(categorie=Client.SALLE_SPECTACLE).first()
+            if first_tenant is None:
+                raise Http404("No first tenant for qr card ?")
+            with tenant_context(first_tenant):
+                fedowAPI = FedowAPI()
+                serialized_qrcode_card = fedowAPI.NFCcard.qr_retrieve(qrcode_uuid)
+                domain = serialized_qrcode_card['origin']['place']['lespass_domain']
+                validated_domain = get_object_or_404(Domain, domain=domain).domain
+                return HttpResponseRedirect(f"https://{validated_domain}/qr/{qrcode_uuid}/")
+
 
         fedowAPI = FedowAPI()
         serialized_qrcode_card = fedowAPI.NFCcard.qr_retrieve(qrcode_uuid)
