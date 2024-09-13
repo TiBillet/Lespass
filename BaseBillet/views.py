@@ -179,6 +179,7 @@ class ScanQrCode(viewsets.ViewSet):
         # Recherche de l'origine et redirect vers le bon tenant
         tenant: Client = connection.tenant
         if tenant.categorie != Client.SALLE_SPECTACLE:
+            logger.info("scan de qrcode sur meta. Recherche de l'origin et redirection")
             first_tenant = Client.objects.filter(categorie=Client.SALLE_SPECTACLE).first()
             if first_tenant is None:
                 raise Http404("No first tenant for qr card ?")
@@ -186,6 +187,7 @@ class ScanQrCode(viewsets.ViewSet):
                 fedowAPI = FedowAPI()
                 serialized_qrcode_card = fedowAPI.NFCcard.qr_retrieve(qrcode_uuid)
                 domain = serialized_qrcode_card['origin']['place']['lespass_domain']
+                logger.info(f"    origine trouvée : {domain}")
                 validated_domain = get_object_or_404(Domain, domain=domain).domain
                 return HttpResponseRedirect(f"https://{validated_domain}/qr/{qrcode_uuid}/")
 
@@ -193,6 +195,7 @@ class ScanQrCode(viewsets.ViewSet):
         fedowAPI = FedowAPI()
         serialized_qrcode_card = fedowAPI.NFCcard.qr_retrieve(qrcode_uuid)
         if not serialized_qrcode_card:
+            logger.warning(f"serialized_qrcode_card {qrcode_uuid} non valide")
             raise Http404()
 
         # La carte n'a pas d'user, on redirige vers la page de renseignement d'user
