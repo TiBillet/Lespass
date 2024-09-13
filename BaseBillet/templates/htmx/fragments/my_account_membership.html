@@ -1,5 +1,10 @@
 {% load i18n %}
 <div class="container pt-5">
+    <div class="d-flex flex-row" hx-indicator="#tibillet-spinner">
+        <a href="/memberships/" class="btn bg-gradient-info btn-lg mt-2 p-4 mb-2 w-75 mx-auto">
+            {% translate "I subscribe to a new membership" %}
+        </a>
+    </div>
     <div hx-get="/my_account/membership_table/" hx-trigger="revealed" class="mt-4">
         <span>{% translate "Loading tokens" %}</span>
         <div class="d-flex justify-content-center align-items-center ">
