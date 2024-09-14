@@ -657,7 +657,7 @@ class MembershipMVT(viewsets.ViewSet):
         try:
             if paiement_stripe.status == Paiement_stripe.VALID:
                 messages.add_message(request, messages.SUCCESS,
-                                     _(f"Your subscription has been validated. You will receive a confirmation email at {email}. Thank you very much!"))
+                                     _(f"Your subscription has been validated. You will receive a confirmation email. Thank you very much!"))
             elif paiement_stripe.status == Paiement_stripe.PENDING:
                 messages.add_message(request, messages.WARNING, _(f"Your payment is awaiting validation."))
             else:

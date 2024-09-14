@@ -306,6 +306,11 @@ def pre_save_signal_status(sender, instance, **kwargs):
 # update all cashless serveur
 # get_fedinstance_and_launch_request.delay(instance.pk)
 
+@receiver(pre_save, sender=Product)
+def unpublish_if_archived(sender, instance, **kwargs):
+    if instance.archive:
+        instance.publish = False
+
 
 @receiver(post_save, sender=Product)
 def send_membership_and_badge_product_to_fedow(sender, instance: Product, created, **kwargs):
@@ -315,8 +320,15 @@ def send_membership_and_badge_product_to_fedow(sender, instance: Product, create
     if instance.categorie_article in [Product.ADHESION, Product.BADGE ]:
         fedow_config = FedowConfig.get_solo()
         fedow_asset = AssetFedow(fedow_config=fedow_config)
-        asset, created = fedow_asset.get_or_create_asset(instance)
-        logger.info(f"send_membership_product_to_fedow : created : {created} - asset {asset}")
+        if not instance.archive :
+            # Si l'adhésion n'est pas archivé, on vérifie qu'elle existe bien :
+            asset, created = fedow_asset.get_or_create_asset(instance)
+            logger.info(f"send_membership_product_to_fedow : created : {created} - asset {asset}")
+
+        if instance.archive:
+            # L'instance est archivé, on le notifie à Fedow :
+            fedow_asset.archive_asset(instance)
+
 
 
 # @receiver(post_save, sender=PriceSold)

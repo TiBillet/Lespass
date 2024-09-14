@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-09-13 10:34+0000\n"
+"POT-Creation-Date: 2024-09-14 10:46+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1008,40 +1008,38 @@ msgstr ""
 msgid "Adhérez"
 msgstr ""
 
-#: BaseBillet/templates/htmx/views/membership/modal_form.html:28
+#: BaseBillet/templates/htmx/views/membership/modal_form.html:29
 msgid "I accept the "
 msgstr "J'accepte les "
 
-#: BaseBillet/templates/htmx/views/membership/modal_form.html:33
-#: BaseBillet/templates/htmx/views/membership/modal_form.html:36
+#: BaseBillet/templates/htmx/views/membership/modal_form.html:34
+#: BaseBillet/templates/htmx/views/membership/modal_form.html:37
 msgid "association rules and regulations."
 msgstr "statuts et le règlement intérieur de l'association."
 
-#: BaseBillet/templates/htmx/views/membership/modal_form.html:42
-#| msgid "Terms and Conditions"
+#: BaseBillet/templates/htmx/views/membership/modal_form.html:43
 msgid "Terms and conditions."
 msgstr "CGU/CGV"
 
-#: BaseBillet/templates/htmx/views/membership/modal_form.html:44
-#| msgid "Terms and Conditions"
+#: BaseBillet/templates/htmx/views/membership/modal_form.html:45
 msgid "terms and conditions."
 msgstr "CGU/CGV"
 
-#: BaseBillet/templates/htmx/views/membership/modal_form.html:78
+#: BaseBillet/templates/htmx/views/membership/modal_form.html:79
 msgid "Name or organization"
 msgstr "Nom ou Structure"
 
-#: BaseBillet/templates/htmx/views/membership/modal_form.html:85
+#: BaseBillet/templates/htmx/views/membership/modal_form.html:86
 msgid "First name"
 msgstr "Prénom"
 
-#: BaseBillet/templates/htmx/views/membership/modal_form.html:148
+#: BaseBillet/templates/htmx/views/membership/modal_form.html:149
 msgid "I do not wish to receive news by email from the association."
 msgstr ""
 "Je ne souhaite pas recevoir de nouvelles par email de la part de "
 "l'association."
 
-#: BaseBillet/templates/htmx/views/membership/modal_form.html:158
+#: BaseBillet/templates/htmx/views/membership/modal_form.html:159
 msgid "Validate"
 msgstr "Valider"
 
@@ -1155,7 +1153,7 @@ msgstr ""
 "Pour accéder à votre espace, merci de valider votre email.\n"
 "N'oubliez pas de regarder dans vos spams :)"
 
-#: BaseBillet/views.py:245
+#: BaseBillet/views.py:248
 msgid ""
 "You seem to already have a TiBillet card linked to your wallet. Please "
 "revoke it first in your profile area to link a new one."
@@ -1163,22 +1161,22 @@ msgstr ""
 "Vous semblez déja posseder une carte TiBillet.\n"
 "Merci de vous connecter à votre compte pour la révoquer."
 
-#: BaseBillet/views.py:252
+#: BaseBillet/views.py:255
 msgid "Not valid"
 msgstr "Non valide"
 
-#: BaseBillet/views.py:275
+#: BaseBillet/views.py:278
 msgid ""
 "Please validate your email to access all the features of your profile area."
 msgstr ""
 "Merci de valider votre email pour avoir accès a toute les options de votre "
 "espace."
 
-#: BaseBillet/views.py:332
+#: BaseBillet/views.py:335
 msgid "Mail sended, please check spam too !"
 msgstr "Email envoyé. Pensez à vérifier dans vos spams :)"
 
-#: BaseBillet/views.py:342
+#: BaseBillet/views.py:345
 msgid ""
 "Your wallet has been detached from this card. You can scan a new one to link "
 "it again."
@@ -1186,60 +1184,59 @@ msgstr ""
 "Votre portefeuille a été détaché de cette carte. Vous pouvez en scanner une "
 "nouvelle."
 
-#: BaseBillet/views.py:345
+#: BaseBillet/views.py:348
 msgid "Error when detaching your card. Contact an administrator."
 msgstr "Une erreur est survenue. Merci de contacter un administrateur :)"
 
-#: BaseBillet/views.py:348
+#: BaseBillet/views.py:351
 msgid "User email not active"
 msgstr "Email non vérifié."
 
-#: BaseBillet/views.py:476
+#: BaseBillet/views.py:479
 msgid "No available. Contact an admin."
 msgstr ""
 
-#: BaseBillet/views.py:485
+#: BaseBillet/views.py:488
 msgid "Request must be redirect from stripe."
 msgstr ""
 
-#: BaseBillet/views.py:497
+#: BaseBillet/views.py:500
 msgid "Refilled wallet"
 msgstr "Wallet rechargé"
 
-#: BaseBillet/views.py:499 BaseBillet/views.py:501
+#: BaseBillet/views.py:502 BaseBillet/views.py:504
 msgid "Payment verification error"
 msgstr "Erreur lors de la vérification du paiement"
 
-#: BaseBillet/views.py:573
+#: BaseBillet/views.py:576
 msgid "Check in OK"
 msgstr ""
 
-#: BaseBillet/views.py:581
+#: BaseBillet/views.py:584
 msgid "Check OUT OK"
 msgstr ""
 
-#: BaseBillet/views.py:657
-#, python-brace-format
+#: BaseBillet/views.py:660
 msgid ""
-"Your subscription has been validated. You will receive a confirmation email "
-"at {email}. Thank you very much!"
+"Your subscription has been validated. You will receive a confirmation email. "
+"Thank you very much!"
 msgstr ""
-"Votre adhésion a été validée. Vous allez recevoir un mail de confirmation "
-"sur {email}. Merci beaucoup !"
+"Votre adhésion a été validée. Vous allez recevoir un mail de confirmation. "
+"Merci beaucoup ! "
 
-#: BaseBillet/views.py:659
+#: BaseBillet/views.py:662
 msgid "Your payment is awaiting validation."
 msgstr "Votre paiement est en attente de validation"
 
-#: BaseBillet/views.py:662
+#: BaseBillet/views.py:665
 msgid "An error has occurred, please contact the administrator."
 msgstr "Une erreur est survenue. Merci de contacter un administrateur :)"
 
-#: BaseBillet/views.py:766
+#: BaseBillet/views.py:769
 msgid "The given email does not match the stripe account email."
 msgstr "L'email donné ne correspond pas à l'email du compte stripe."
 
-#: BaseBillet/views.py:798
+#: BaseBillet/views.py:801
 msgid ""
 "Your Stripe account does not seem to be valid. \n"
 "Please complete your Stripe.com registration before creating a new TiBillet "

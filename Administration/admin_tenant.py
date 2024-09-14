@@ -620,6 +620,7 @@ class ProductAdminCustomForm(forms.ModelForm):
             "option_generale_checkbox",
             "legal_link",
             'publish',
+            'archive',
         )
 
     def clean(self):
@@ -650,7 +651,7 @@ class ProductAdmin(admin.ModelAdmin):
         # On retire les recharges cashless et l'article Don
         # Pas besoin de les afficher, ils se créent automatiquement.
         qs = super().get_queryset(request)
-        return qs.exclude(categorie_article__in=[Product.RECHARGE_CASHLESS, Product.DON])
+        return qs.exclude(categorie_article__in=[Product.RECHARGE_CASHLESS, Product.DON]).exclude(archive=True)
 
 
 staff_admin_site.register(Product, ProductAdmin)

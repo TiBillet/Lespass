@@ -1376,5 +1376,6 @@ class LigneArticleSerializer(serializers.ModelSerializer):
             'pricesold',
             'qty',
             'vat',
-            'user_uuid_wallet'
+            'user_uuid_wallet',
+            'datetime',
         ]

@@ -180,6 +180,14 @@ class AssetFedow():
             logger.error(response_asset)
             raise Exception(f"{response_asset.status_code} {response_asset.content}")
 
+    def archive_asset(self, product: Product):
+        response_archive_asset = _get(self.fedow_config, path=f'asset/{product.uuid}/archive_asset')
+        if response_archive_asset.status_code != 200:
+            logger.error(f"archive_asset ERROR {response_archive_asset.status_code} {response_archive_asset.content}")
+            raise Exception(
+                f"archive_asset ERROR {response_archive_asset.status_code} {response_archive_asset.content}")
+        logger.info("Asset archived")
+
 
 class BadgeFedow():
     def __init__(self, fedow_config: FedowConfig or None = None):

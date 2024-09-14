@@ -14,6 +14,7 @@
             <div class="modal-body">
 
                 <form hx-post="/memberships/" hx-target="#tibillet-modal-message" hx-swap="outerHTML" novalidate
+                      hx-indicator="#tibillet-spinner"
                       hx-on:htmx:before-request="validateForm(event)"
                       hx-on:htmx:after-request="membershipActionsAfterSwap('tibillet-membership-modal-{{ membership.uuid }}')">
                     {% csrf_token %}
