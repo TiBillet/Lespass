@@ -127,7 +127,7 @@ def send_membership_to_ghost(membership: Membership):
 
 def send_sale_to_laboutik(ligne_article: LigneArticle):
     config = Configuration.get_solo()
-    if config.check_serveur_cashless():
+    if config.check_serveur_cashless() and ligne_article.status == LigneArticle.VALID:
         serialized_ligne_article = LigneArticleSerializer(ligne_article).data
         json_data = json.dumps(serialized_ligne_article, cls=DjangoJSONEncoder)
 

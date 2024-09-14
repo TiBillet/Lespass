@@ -290,22 +290,6 @@ def pre_save_signal_status(sender, instance, **kwargs):
                     trigger_function(old_instance, new_instance)
 
 
-# @receiver(pre_save, sender=Wallet)
-# def wallet_update_to_celery(sender, instance: Wallet, **kwargs):
-#     # Pre save pour récupérer old_qty
-#     # instance._state.adding = Ne pas lancer à la création
-#
-#     # Le modèle se re-save une seconde fois, à la validation du paiement.
-#     if not instance._state.adding:
-#         if instance.asset.is_federated:
-#             old_instance = sender.objects.get(pk=instance.pk)
-#             new_instance = instance
-#
-#             if old_instance.qty != new_instance.qty:
-#                 logger.info(f"wallet_update_celery : need update cashless serveur ????")
-# update all cashless serveur
-# get_fedinstance_and_launch_request.delay(instance.pk)
-
 @receiver(pre_save, sender=Product)
 def unpublish_if_archived(sender, instance, **kwargs):
     if instance.archive:
@@ -329,10 +313,3 @@ def send_membership_and_badge_product_to_fedow(sender, instance: Product, create
             # L'instance est archivé, on le notifie à Fedow :
             fedow_asset.archive_asset(instance)
 
-
-
-# @receiver(post_save, sender=PriceSold)
-# def send_price_solded_to_laboutik(sender, instance: PriceSold, created, **kwargs):
-    # Pour la comptabilité, on envoie toute les vente à l'instance LaBoutik
-    # import ipdb; ipdb.set_trace()
-    # pass

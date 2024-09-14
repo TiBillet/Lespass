@@ -1285,6 +1285,10 @@ class LigneArticle(models.Model):
             return user.wallet.uuid
         return None
 
+    def paiement_stripe_uuid(self):
+        if self.paiement_stripe:
+            return f"{self.paiement_stripe.uuid}"
+
 
 class Membership(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='membership')

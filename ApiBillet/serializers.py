@@ -1372,6 +1372,7 @@ class LigneArticleSerializer(serializers.ModelSerializer):
     class Meta:
         model = LigneArticle
         fields = [
+            'paiement_stripe_uuid',
             'uuid',
             'pricesold',
             'qty',
