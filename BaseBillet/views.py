@@ -277,7 +277,7 @@ class MyAccount(viewsets.ViewSet):
             messages.add_message(request, messages.WARNING,
                                  _("Please validate your email to access all the features of your profile area."))
 
-        return render(request, "htmx/views/my_account.html", context=template_context)
+        return render(request, "htmx/views/my_account/my_account.html", context=template_context)
 
     ### ONGLET WALLET
     """
@@ -315,7 +315,7 @@ class MyAccount(viewsets.ViewSet):
         template_context = get_context(request)
         # Pas de header sur cette page
         template_context['header'] = False
-        return render(request, "htmx/fragments/my_account_wallet.html", context=template_context)
+        return render(request, "htmx/views/my_account/my_account_wallet.html", context=template_context)
 
     @action(detail=False, methods=['GET'])
     def my_cards(self, request):
@@ -324,7 +324,7 @@ class MyAccount(viewsets.ViewSet):
         context = {
             'cards': cards
         }
-        return render(request, "htmx/fragments/cards.html", context=context)
+        return render(request, "htmx/views/my_account/cards.html", context=context)
 
     @action(detail=False, methods=['GET'])
     def resend_activation_email(self, request):
@@ -405,7 +405,7 @@ class MyAccount(viewsets.ViewSet):
             'tokens': tokens,
         }
 
-        return render(request, "htmx/fragments/tokens_table.html", context=context)
+        return render(request, "htmx/views/my_account/tokens_table.html", context=context)
 
     @action(detail=False, methods=['GET'])
     def transactions_table(self, request):
@@ -426,13 +426,13 @@ class MyAccount(viewsets.ViewSet):
             'next_url': next_url,
             'previous_url': previous_url,
         }
-        return render(request, "htmx/fragments/transactions_table.html", context=context)
+        return render(request, "htmx/views/my_account/transactions_table.html", context=context)
 
     ### ONGLET ADHESION
     @action(detail=False, methods=['GET'])
     def membership(self, request: HttpRequest) -> HttpResponse:
         context = {}
-        return render(request, "htmx/fragments/my_account_membership.html", context=context)
+        return render(request, "htmx/views/my_account/my_account_membership.html", context=context)
 
     @action(detail=False, methods=['GET'])
     def membership_table(self, request):
@@ -459,12 +459,12 @@ class MyAccount(viewsets.ViewSet):
             'config': config,
             'tokens': tokens,
         }
-        return render(request, "htmx/fragments/tokens_membership_table.html", context=context)
+        return render(request, "htmx/views/my_account/tokens_membership_table.html", context=context)
 
     @action(detail=False, methods=['GET'])
     def profile(self, request: HttpRequest) -> HttpResponse:
         context = {}
-        return render(request, "htmx/fragments/my_account_profil.html", context=context)
+        return render(request, "htmx/views/my_account/my_account_profil.html", context=context)
 
     #### REFILL STRIPE PRIMARY ####
 
