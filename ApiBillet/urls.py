@@ -15,10 +15,10 @@ router.register(r'prices', api_view.TarifBilletViewSet, basename='price')
 router.register(r'reservations', api_view.ReservationViewset, basename='reservation')
 router.register(r'membership', api_view.MembershipViewset, basename='membership')
 router.register(r'optionticket', api_view.OptionTicket, basename='optionticket')
-router.register(r'chargecashless', api_view.ChargeCashless, basename='chargecashless')
+# router.register(r'chargecashless', api_view.ChargeCashless, basename='chargecashless')
 router.register(r'ticket', api_view.TicketViewset, basename='ticket')
-router.register(r'detailCashlessCard', api_view.DetailCashlessCards, basename='detailCashlessCard')
-router.register(r'loadCardsFromDict', api_view.Loadcardsfromdict, basename='loadCardsFromDict')
+# router.register(r'detailCashlessCard', api_view.DetailCashlessCards, basename='detailCashlessCard')
+# router.register(r'loadCardsFromDict', api_view.Loadcardsfromdict, basename='loadCardsFromDict')
 
 urlpatterns = [
     path('', include(router.urls)),

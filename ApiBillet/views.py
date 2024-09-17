@@ -3,7 +3,6 @@
 import decimal
 import json
 import logging
-import uuid
 from datetime import datetime, timedelta
 
 import pytz
@@ -27,10 +26,9 @@ from rest_framework.views import APIView
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
     ReservationValidator, MembreValidator, ConfigurationSerializer, EventCreateSerializer, TicketSerializer, \
-    OptionsSerializer, ChargeCashlessValidator, NewAdhesionValidator, \
-    DetailCashlessCardsValidator, DetailCashlessCardsSerializer, CashlessCardsValidator, \
+    OptionsSerializer, NewAdhesionValidator, \
     ProductCreateSerializer
-from AuthBillet.models import TenantAdminPermission, TibilletUser, RootPermission, TenantAdminPermissionWithRequest
+from AuthBillet.models import TenantAdminPermission, TibilletUser, TenantAdminPermissionWithRequest
 from AuthBillet.utils import user_apikey_valid
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe, \
     OptionGenerale, Membership
@@ -38,7 +36,6 @@ from BaseBillet.tasks import create_ticket_pdf, report_to_pdf, report_celery_mai
 from Customers.models import Client
 from MetaBillet.models import EventDirectory, ProductDirectory
 from PaiementStripe.views import new_entry_from_stripe_invoice
-from QrcodeCashless.models import Detail, CarteCashless
 from TiBillet import settings
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.utils import rsa_decrypt_string, rsa_encrypt_string, get_public_key, data_to_b64
@@ -314,6 +311,7 @@ class EventsViewSet(viewsets.ViewSet):
         return get_permission_Api_LR_Any(self)
 
 
+"""
 class DetailCashlessCards(viewsets.ViewSet):
     def create(self, request):
         validator = DetailCashlessCardsValidator(data=request.data, context={'request': request})
@@ -329,8 +327,9 @@ class DetailCashlessCards(viewsets.ViewSet):
     def get_permissions(self):
         permission_classes = [RootPermission]
         return [permission() for permission in permission_classes]
+"""
 
-
+"""
 class Loadcardsfromdict(viewsets.ViewSet):
     def create(self, request):
         # logger.info(request.data)
@@ -368,8 +367,9 @@ class Loadcardsfromdict(viewsets.ViewSet):
     def get_permissions(self):
         permission_classes = [RootPermission]
         return [permission() for permission in permission_classes]
+"""
 
-
+"""
 class ChargeCashless(viewsets.ViewSet):
     def create(self, request):
         configuration = Configuration.get_solo()
@@ -398,6 +398,7 @@ class ChargeCashless(viewsets.ViewSet):
     def get_permissions(self):
         permission_classes = [permissions.IsAuthenticated]
         return [permission() for permission in permission_classes]
+"""
 
 
 class ReservationViewset(viewsets.ViewSet):
@@ -534,6 +535,7 @@ class TicketViewset(viewsets.ViewSet):
 
     def get_permissions(self):
         return get_permission_Api_LR_Admin(self)
+
 
 """
 def maj_membership_from_cashless(user: TibilletUser, data: dict):
@@ -711,9 +713,6 @@ class TicketPdf(APIView):
         return response
 
 
-
-
-
 # On vérifie que les métatada soient les meme dans la DB et chez Stripe.
 def metatadata_valid(paiement_stripe_db: Paiement_stripe, checkout_session):
     metadata_stripe_json = checkout_session.metadata
@@ -872,6 +871,7 @@ def paiment_stripe_validator(request, paiement_stripe):
     paiement_stripe.refresh_from_db()
 
     # Paiement depuis QRCode carte
+    """
     # on envoie au serveur cashless
     if paiement_stripe.source == Paiement_stripe.QRCODE:
         # Si le paiement est valide, c'est que les presave et postsave
@@ -913,9 +913,9 @@ def paiment_stripe_validator(request, paiement_stripe):
                     return HttpResponseRedirect(f"/qr/{ligne_article.carte.uuid}#erreurpaiement")
 
 
-
+    """
     # Derniere action : on crée et envoie les billets si besoin
-    elif paiement_stripe.source == Paiement_stripe.API_BILLETTERIE:
+    if paiement_stripe.source == Paiement_stripe.API_BILLETTERIE:
         if paiement_stripe.reservation:
             if paiement_stripe.reservation.status == Reservation.VALID:
                 serializer = TicketSerializer(paiement_stripe.reservation.tickets.filter(status=Ticket.NOT_SCANNED),
@@ -952,7 +952,6 @@ def paiment_stripe_validator(request, paiement_stripe):
     raise Http404(f'{paiement_stripe.status}')
 
 
-
 """
 # Déplacé dans Basebillet Tenant
 
@@ -978,12 +977,13 @@ class Onboard_stripe_return(APIView):
             return Response(f"{create_account_link_for_onboard()}", status=status.HTTP_206_PARTIAL_CONTENT)
 """
 
+
 @permission_classes([permissions.AllowAny])
 class Get_user_pub_pem(APIView):
     def post(self, request):
         # Si laboutik est déja configuré sur ce tenant, on envoie bouler
         config = Configuration.get_solo()
-        if config.server_cashless or config.key_cashless :
+        if config.server_cashless or config.key_cashless:
             if not settings.DEBUG:
                 logger.error("cashless already config for this tenant")
                 return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
@@ -997,7 +997,7 @@ class Get_user_pub_pem(APIView):
             # Pour les ancienne instances, a virer apres les grandes migrations :
             if settings.DEBUG:
                 user.client_admin.add(connection.tenant)
-            else :
+            else:
                 return Response(status=status.HTTP_401_UNAUTHORIZED)
 
         data = {
@@ -1009,7 +1009,6 @@ class Get_user_pub_pem(APIView):
 @permission_classes([permissions.AllowAny])
 class Onboard_laboutik(APIView):
     def post(self, request):
-        # TODO: Vérifier la validité du compte stripe avant d'envoyer au cashless
         # Si laboutik est déja configuré sur ce tenant, on envoi bouler
         config = Configuration.get_solo()
         if config.server_cashless or config.key_cashless:
@@ -1017,14 +1016,13 @@ class Onboard_laboutik(APIView):
                 return Response(status=status.HTTP_409_CONFLICT)
 
         # On va demander une liaison cashless <-> place a Fedow :
-        #TODO: A tester
         email_admin = f"{request.data['email']}"
         user_admin: TibilletUser = connection.tenant.user_admin.get(email=email_admin)
         logger.info(f"Création de la place Fedow avec admin : {user_admin}")
         fedowAPI = FedowAPI(admin=user_admin)
 
         # Ensure wallet exist for fedow api call
-        wallet_user_admin = fedowAPI.wallet.get_or_create_wallet(user_admin)
+        fedowAPI.wallet.get_or_create_wallet(user_admin)
 
         # Get the temp key for the laboutik onboard
         temp_key = fedowAPI.place.link_cashless_to_place(admin=user_admin)
@@ -1043,21 +1041,23 @@ class Onboard_laboutik(APIView):
         # Un premier hello world a été fait précédemment pour envoyer la clé publique du premier admin de ce tenant
         # On tente de déchiffrer la clé api avec la clé privée de l'admin
         cypher_key_cashless = f"{request.data['key_cashless']}"
-        config.key_cashless = rsa_decrypt_string(utf8_enc_string=cypher_key_cashless, private_key=user_admin.get_private_key())
+        config.key_cashless = rsa_decrypt_string(utf8_enc_string=cypher_key_cashless,
+                                                 private_key=user_admin.get_private_key())
 
         logger.info("Serveur LaBoutik onboarded !")
 
         # La clé rsa ne peux chiffrer que des petites clés,
         # on chiffre alors avec fernet ET rsa (on fait comme TLS!)
         rand_key = Fernet.generate_key()
-        cypher_rand_key = rsa_encrypt_string(utf8_string=rand_key.decode('utf8'), public_key=get_public_key(config.laboutik_public_pem))
+        cypher_rand_key = rsa_encrypt_string(utf8_string=rand_key.decode('utf8'),
+                                             public_key=get_public_key(config.laboutik_public_pem))
 
         encryptor = Fernet(rand_key)
         cypher_json_key_to_cashless = encryptor.encrypt(data_to_b64(json_key_to_cashless)).decode('utf8')
 
-        data={
-            'cypher_rand_key':cypher_rand_key,
-            'cypher_json_key_to_cashless':cypher_json_key_to_cashless,
+        data = {
+            'cypher_rand_key': cypher_rand_key,
+            'cypher_json_key_to_cashless': cypher_json_key_to_cashless,
             "organisation_name": config.organisation,
             "adress": config.adress,
             "postal_code": config.postal_code,
@@ -1102,7 +1102,7 @@ class Webhook_stripe(APIView):
 
             # On utilise les metadata du paiement stripe pour savoir de quel tenant cela vient.
             if f"{connection.tenant.uuid}" != tenant_uuid_in_metadata:
-                try :
+                try:
                     tenant = Client.objects.get(uuid=tenant_uuid_in_metadata)
                 except Client.DoesNotExist:
                     logger.warning(

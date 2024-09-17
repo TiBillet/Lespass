@@ -299,23 +299,22 @@ class Configuration(SingletonModel):
     """
     ######### STRIPE #########
     """
-    # SI FEDOW :
+    stripe_mode_test = models.BooleanField(default=False)
+
     stripe_connect_account = models.CharField(max_length=21, blank=True, null=True)
     stripe_connect_account_test = models.CharField(max_length=21, blank=True, null=True)
     stripe_payouts_enabled = models.BooleanField(default=False)
 
+    # A degager, on utilise uniquement le stripe account connect
     stripe_api_key = models.CharField(max_length=110, blank=True, null=True)
     stripe_test_api_key = models.CharField(max_length=110, blank=True, null=True)
 
-    stripe_mode_test = models.BooleanField(default=True)
 
     def get_stripe_api(self):
-        if self.federated_cashless:
-            if self.get_stripe_connect_account:
-                return RootConfiguration.get_solo().get_stripe_api()
+        if self.get_stripe_connect_account():
+            return RootConfiguration.get_solo().get_stripe_api()
 
         tenant_stripe = self.stripe_test_api_key if self.stripe_mode_test else self.stripe_api_key
-
         if not tenant_stripe:
             logger.warning(
                 f"Configuration.get_stripe_api() - No stripe api key for {connection.tenant}. On utilise celle de root.")

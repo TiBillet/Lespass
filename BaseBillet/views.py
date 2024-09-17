@@ -472,29 +472,27 @@ class MyAccount(viewsets.ViewSet):
     def refill_wallet(self, request):
         user = request.user
         fedowAPI = FedowAPI()
+        # C'est fedow qui génère la demande de paiement à Stripe.
+        # Il ajoute dans les metadonnée les infos du wallet, et le signe.
+        # Lors du retour du paiement, la signature est vérifiée pour être sur que la demande de paiement vient bien de Fedow.
         stripe_checkout_url = fedowAPI.wallet.get_federated_token_refill_checkout(user)
         if stripe_checkout_url:
+            # Redirection du client vers le lien stripe demandé par Fedow
             return HttpResponseClientRedirect(stripe_checkout_url)
         else:
             messages.add_message(request, messages.ERROR, _("No available. Contact an admin."))
             return HttpResponseClientRedirect('/my_account/')
 
+
     @action(detail=True, methods=['GET'])
     def return_refill_wallet(self, request, pk=None):
-        # Le paiemetn stripe a été effectué. Stripe redirige ici.
-        # On check referer stripe
-        if request.headers.get('Referer') != 'https://checkout.stripe.com/':
-            logger.error(f"Refill wallet return : Not from stripe")
-            messages.add_message(request, messages.ERROR, _("Request must be redirect from stripe."))
-            return redirect('/memberships/wallet')
-
         # On demande confirmation à Fedow qui a du recevoir la validation en webhook POST
+        # Fedow vérifie la signature du paiement dans les metada Stripe
+        # C'est Fedow entré le metadata signé, c'est lui qui vérifie.
         user = request.user
         fedowAPI = FedowAPI()
 
-        # pk = checkout_stripe_db_fedow_uuid
         try:
-            # TODO; checker la signature du paiement
             wallet = fedowAPI.wallet.retrieve_from_refill_checkout(user, pk)
             if wallet :
                 messages.add_message(request, messages.SUCCESS, _("Refilled wallet"))

@@ -11,7 +11,6 @@ from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_client_ip
 from Customers.models import Client, Domain
 from MetaBillet.models import EventDirectory, ProductDirectory
-from QrcodeCashless.models import Detail, CarteCashless
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
@@ -23,7 +22,8 @@ class PublicAdminSite(AdminSite):
     site_url = '/'
 
     def has_permission(self, request):
-        logger.warning(f"Tenant AdminSite.has_permission : {request.user} - {request.user.client_source if request.user.is_authenticated else 'No client source'} - ip : {get_client_ip(request)}")
+        logger.warning(
+            f"Tenant AdminSite.has_permission : {request.user} - {request.user.client_source if request.user.is_authenticated else 'No client source'} - ip : {get_client_ip(request)}")
 
         try:
             if request.user.client_source.categorie == Client.ROOT:
@@ -154,7 +154,7 @@ public_admin_site.register(Client, ClientAdmin)
 
 public_admin_site.register(Domain, admin.ModelAdmin)
 
-
+"""
 class DetailAdmin(admin.ModelAdmin):
     list_display = (
         'slug',
@@ -167,7 +167,7 @@ class DetailAdmin(admin.ModelAdmin):
 
 
 public_admin_site.register(Detail, DetailAdmin)
-
+"""
 
 # class CarteCashlessAdmin(admin.ModelAdmin):
 #     list_display = (
@@ -193,4 +193,3 @@ public_admin_site.register(Detail, DetailAdmin)
 public_admin_site.register(ProductDirectory, admin.ModelAdmin)
 public_admin_site.register(EventDirectory, admin.ModelAdmin)
 public_admin_site.register(RootConfiguration, SingletonModelAdmin)
-

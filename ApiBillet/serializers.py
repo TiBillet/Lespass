@@ -20,7 +20,7 @@ from BaseBillet.models import Event, Price, Product, Reservation, Configuration,
 from Customers.models import Client
 from MetaBillet.models import WaitingConfiguration
 from PaiementStripe.views import CreationPaiementStripe
-from QrcodeCashless.models import CarteCashless, Detail
+# from QrcodeCashless.models import CarteCashless, Detail
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
@@ -975,7 +975,7 @@ def line_article_recharge(carte, qty):
     )
     return ligne_article_recharge
 
-
+"""
 class DetailCashlessCardsValidator(serializers.ModelSerializer):
     class Meta:
         model = Detail
@@ -984,8 +984,9 @@ class DetailCashlessCardsValidator(serializers.ModelSerializer):
             "origine",
             "generation",
         ]
+"""
 
-
+"""
 class DetailCashlessCardsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Detail
@@ -995,8 +996,9 @@ class DetailCashlessCardsSerializer(serializers.ModelSerializer):
             "generation",
             "uuid",
         ]
+"""
 
-
+"""
 class CashlessCardsValidator(serializers.Serializer):
     # detail_uuid = serializers.UUIDField()
     generation = serializers.IntegerField(required=True)
@@ -1036,9 +1038,10 @@ class CashlessCardsValidator(serializers.Serializer):
             attrs['detail'] = self.detail_from_db.uuid
         validation = super().validate(attrs)
         return validation
+"""
 
 
-
+"""
 class ChargeCashlessValidator(serializers.Serializer):
     uuid = serializers.UUIDField()
     qty = serializers.IntegerField()
@@ -1087,6 +1090,7 @@ class ChargeCashlessValidator(serializers.Serializer):
         logger.info(f"{self.checkout_session.url}")
         representation['checkout_url'] = self.checkout_session.url
         return representation
+"""
 
 
 class ReservationValidator(serializers.Serializer):

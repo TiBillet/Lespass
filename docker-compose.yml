@@ -115,6 +115,9 @@ volumes:
   lespass_dev_db:
 
 
+# Pour test stripe :
+# stripe listen --forward-to https://fedow.tibillet.localhost/webhook_stripe/ --skip-verify
+
 # poetry shell
 # django-admin makemessages -l fr && django-admin makemessages -l en
 # django-admin compilemessages

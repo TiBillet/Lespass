@@ -1,3 +1,4 @@
+"""
 import logging
 from datetime import datetime
 from decimal import Decimal
@@ -21,11 +22,12 @@ from QrcodeCashless.models import CarteCashless
 from TiBillet import settings
 
 logger = logging.getLogger(__name__)
+"""
 
-
+'''
 def first_true(iterable, default=False, pred=None):
-    """Returns the first true value in the iterable.
-
+    """
+    Returns the first true value in the iterable.
     If no true value is found, returns *default*
 
     If *pred* is not None, returns the first item
@@ -42,8 +44,9 @@ def first_true(iterable, default=False, pred=None):
     first_true([False, False, False], default='No true values found')  # retourne 'No true values found'
     """
     return next(filter(pred, iterable), default)
+'''
 
-
+"""
 def get_domain(request):
     absolute_uri = request.build_absolute_uri()
     for domain in request.tenant.domains.all():
@@ -51,13 +54,11 @@ def get_domain(request):
             return domain.domain
 
     raise Http404
+"""
 
 
-'''
-START Deux fonctions pour gérer la dette technique des premières générations de carte.
-'''
 
-
+"""
 class gen_one_bisik(View):
     # Vue déclenchée lorsqu'on scanne un qrcode de la première génération Bisik avec m.tibllet et qsdf
     def get(self, request, numero_carte):
@@ -68,35 +69,29 @@ class gen_one_bisik(View):
         address = request.build_absolute_uri()
         return HttpResponseRedirect(
             address.replace("://m.", "://bisik.").replace(f"{carte.number}", f"qr/{carte.uuid}"))
+"""
 
 
-'''
-END Dette technique ...
-'''
-
-
-
+"""
 def check_carte_local(uuid):
-    """
-    On vérifie que la carte existe bien en local
-    et que la requete vienne du domain du Client tenant.
-    :param uuid:
-    :return:
-    """
+    # On vérifie que la carte existe bien en local
+    # et que la requete vienne du domain du Client tenant.
+    # :param uuid:
+    # :return:
     carte = get_object_or_404(CarteCashless, uuid=uuid)
     logger.info(f"**1** check_carte_local : {carte}")
     return carte
+"""
+"""
 
 
 def check_carte_serveur_cashless(config, uuid: str) -> dict or HttpResponse:
-    """
-    Avec uniquement l'uuid de la carte, on vérifie qu'elle existe coté serveur cashless
-    et on récupère les informations de l'utilisateur s'il existe.
-
-    :param config:
-    :param uuid:
-    :return:
-    """
+    # Avec uniquement l'uuid de la carte, on vérifie qu'elle existe coté serveur cashless
+    # et on récupère les informations de l'utilisateur s'il existe.
+    # 
+    # :param config:
+    # :param uuid:
+    # :return:
     if not config.server_cashless:
         return HttpResponse(
             "L'adresse du serveur cashless n'est pas renseignée dans la configuration de la billetterie.")
@@ -145,8 +140,9 @@ def check_carte_serveur_cashless(config, uuid: str) -> dict or HttpResponse:
         logger.error(f"Erreur serveur cashless : {reponse.status_code} - {reponse.content}")
         return HttpResponse(f"Erreur serveur cashless : {reponse.status_code} - {reponse.content}",
                             status=reponse.status_code)
+"""
 
-
+"""
 class GetArticleRechargeCashless():
     def __init__(self,
                  carte: CarteCashless = None,
@@ -189,8 +185,9 @@ class GetArticleRechargeCashless():
         )
 
         return price
+"""
 
-
+"""
 class GetMembership():
     def __init__(self, user, config: Configuration = None, form_data: dict = None, cashless_card: CarteCashless = None):
 
@@ -225,15 +222,13 @@ class GetMembership():
         self.reponse_sync_data = self.get_and_sync_user_data()
 
     def get_and_sync_user_data(self):
-        """
-        Synchronise les données de l'utilisateur avec celles du serveur cashless
-        et
-        Requete vers cashless pour savoir quel niveau d'information possède le serveur.
-        Suivant le code de statut de la réponse HTTP, on peut réclamer les informations manquantes
-        :param config:
-        :param data:
-        :return:
-        """
+        # Synchronise les données de l'utilisateur avec celles du serveur cashless
+        # et
+        # Requete vers cashless pour savoir quel niveau d'information possède le serveur.
+        # Suivant le code de statut de la réponse HTTP, on peut réclamer les informations manquantes
+        # :param config:
+        # :param data:
+        # :return:
 
         # Si on cherche l'adhésion depuis un scan de carte, on aura l'info.
         # On vérifie les infos présentes dans le serveur cashless.
@@ -352,13 +347,11 @@ class GetMembership():
         return membership
 
     def data_check_cashless(self) -> dict or None:
-        """
-        Va chercher la carte membre dans le serveur cashless.
-        Renvoie le serialiser APIcashless.serializer.MembreSerializer
-        :param user:
-        :param config:
-        :return:
-        """
+        # Va chercher la carte membre dans le serveur cashless.
+        # Renvoie le serialiser APIcashless.serializer.MembreSerializer
+        # :param user:
+        # :param config:
+        # :return:
         data = None
 
         verify = True
@@ -379,23 +372,22 @@ class GetMembership():
 
         logger.info(f"**5** data_check_cashless -> /api/membre_check : {response.status_code} - {response.content}")
         return data
+"""
 
-
+"""
 class WalletValidator:
     def __init__(self,
                  uuid: str = None,
                  config: Configuration = None,
                  data_post: dict = None,
                  ):
-        """
-        CREATION DE L'OBJECT WALLET
-        en liaison avec le serveur cashless
-        Ceci peut etre une carte NFC cashless ou QrCode seul dans le futur
-
-        :param uuid:
-        :param config:
-        :param user:
-        """
+        # CREATION DE L'OBJECT WALLET
+        # en liaison avec le serveur cashless
+        # Ceci peut etre une carte NFC cashless ou QrCode seul dans le futur
+        # 
+        # :param uuid:
+        # :param config:
+        # :param user:
         if config == None:
             config = Configuration.get_solo()
         self.config = config
@@ -485,17 +477,13 @@ class WalletValidator:
         if len(self.errors) == 0:
             return True
         return False
+"""
 
 
-'''
-END NFC
-'''
-
+"""
 class index_scan(View):
-    """
-    Vue pour les scans de QrCode des cartes cashless
-    En modèle MVT standard, en attendant un full vue.js du front
-    """
+    # Vue pour les scans de QrCode des cartes cashless
+    # En modèle MVT standard, en attendant un full vue.js du front
     template_name = "html5up-dimension/index.html"
 
     def __init__(self, *args, **kwargs):
@@ -676,3 +664,4 @@ class index_scan(View):
         return HttpResponseRedirect(f'#erreur')
 
         # return HttpResponseRedirect(f'#adhesionsuccess')
+"""

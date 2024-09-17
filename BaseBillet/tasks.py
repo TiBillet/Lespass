@@ -720,7 +720,7 @@ def send_to_ghost(membership_pk):
 @shared_task(bind=True, max_retries=20)
 def celery_post_request(self, url, headers, data):
     # Le max de temps entre deux retries : 24 heures
-    MAX_RETRY_TIME = 86400  # 24 * 60 * 60 seconds
+    MAX_RETRY_TIME = 86400  # 24 * 60 * 60 seconds = 24 h
     try :
         logger.info(f"start celery_post_request to {url}")
         response = requests.post(

@@ -1,24 +1,16 @@
 import json
-from datetime import datetime
+import logging
 from decimal import Decimal
 
-from django.contrib import messages
+import stripe
 from django.contrib.auth import get_user_model
 from django.db import connection
-from django.http import HttpResponse, Http404, HttpResponseRedirect
-from django.shortcuts import get_object_or_404
-import stripe
-from django.utils import timezone
-from django.views import View
+from django.http import HttpResponseRedirect
+from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 from stripe.error import InvalidRequestError
 
 from BaseBillet.models import Configuration, LigneArticle, Paiement_stripe, Reservation, Price, PriceSold
-from django.utils.translation import gettext_lazy as _
-
-import logging
-
-from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -37,10 +29,6 @@ class CreationPaiementStripe():
                  cancel_url: (str, None) = None,
                  invoice=None,
                  ) -> None:
-
-        # self.fee = 0
-        # self.application_fee_percent = 0
-        # self.get_fee_in_subscription = {}
 
         # On va chercher les informations de configuration
         # et test si tout est ok pour créer un paiement
@@ -255,31 +243,3 @@ def new_entry_from_stripe_invoice(user, id_invoice):
         return paiement_stripe
 
 
-
-
-#
-# def get_fee_in_subscription(subscription_id, priceSold_id):
-#     # On collecte le don dans le paiement récurent.
-#
-#     stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-#     subscription = stripe.Subscription.retrieve(subscription_id)
-#     customer = stripe.Customer.retrieve(subscription.customer)
-#     priceSold = PriceSold.objects.get(id=priceSold_id)
-#
-#     invoice_item = stripe.InvoiceItem.create(
-#         customer=customer.id,
-#         subscription=subscription_id,
-#         amount=int(priceSold.gift * 100),
-#         currency='eur',
-#         description='Fee for recurring payment',
-#     )
-#
-#     # invoice = stripe.Invoice.create(
-#     #     customer=customer.id,
-#     #     auto_advance=True,
-#     #     collection_method='charge_automatically',
-#     #     default_tax_rates=[subscription.default_tax_rates],
-#     #     subscription=subscription_id,
-#     #     application_fee_amount=subscription.plan.amount,
-#     # )
-#     return invoice_item

@@ -15,7 +15,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-
 class Detail(models.Model):
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     img = StdImageField(upload_to='images/',
@@ -38,6 +37,7 @@ class Detail(models.Model):
 
     def __str__(self):
         return self.base_url
+
 
 
 class CarteCashless(models.Model):
