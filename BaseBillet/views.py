@@ -690,6 +690,8 @@ class Tenant(viewsets.ViewSet):
     # Tout le monde peut créer un tenant, sous reserve d'avoir validé son compte stripe
     permission_classes = [permissions.AllowAny, ]
 
+
+
     @action(detail=False, methods=['GET'])
     def new(self, request: Request, *args, **kwargs):
         context = get_context(request)
@@ -711,22 +713,10 @@ class Tenant(viewsets.ViewSet):
         rootConf = RootConfiguration.get_solo()
         stripe.api_key = rootConf.get_stripe_api()
 
-        meta = Client.objects.filter(categorie=Client.META)[0]
-        meta_url = meta.get_primary_domain().domain
-
         try:
-            acc_connect = stripe.Account.create(
-                type="standard",
-                country="FR",
-            )
-            id_acc_connect = acc_connect.get('id')
-
-            account_link = stripe.AccountLink.create(
-                account=id_acc_connect,
-                refresh_url=f"https://{meta_url}/tenant/{id_acc_connect}/onboard_stripe_return/",
-                return_url=f"https://{meta_url}/tenant/{id_acc_connect}/onboard_stripe_return/",
-                type="account_onboarding",
-            )
+            # On indique le retour sur la page meta, le tenant n'est pas encore créé ici
+            account_link = self.link_for_onboard_stripe(meta=True)
+            id_acc_connect = Configuration.get_solo().get_stripe_connect_account()
 
             # Mise en cache pendant 24h des infos name id_acc_connect et email
             validated_data = new_tenant.validated_data
@@ -755,7 +745,13 @@ class Tenant(viewsets.ViewSet):
         # Récupération des info lié au lieu via sont id account connect
         info_stripe = stripe.Account.retrieve(id_acc_connect)
         details_submitted = info_stripe.details_submitted
+        tenant: Client = connection.tenant
 
+        if tenant.categorie != Client.META:
+            # Demande envoyée depuis l'admin : a retirer dans le futur lorsque tout le monde aura migré
+            return redirect('/adminBaseBillet/configuration/')
+
+        # Si c'est un formulaire depuis META :
         if details_submitted:
             try:
                 email_stripe = info_stripe['email']

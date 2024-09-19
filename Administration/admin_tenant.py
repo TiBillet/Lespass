@@ -291,9 +291,8 @@ class ConfigurationAdmin(SingletonModelAdmin):
         }),
         ('Paiements', {
             'fields': (
-                # 'stripe_api_key',
-                # 'stripe_test_api_key',
                 'vat_taxe',
+                'onboard_stripe',
                 'stripe_mode_test',
             ),
         }),
@@ -304,18 +303,6 @@ class ConfigurationAdmin(SingletonModelAdmin):
                 'option_generale_checkbox',
             ),
         }),
-        # ('Fedow', {
-        #     'fields': (
-        #         'federated_cashless',
-        #         'server_fedow',
-        #     ),
-        # }),
-        # ('Cashless', {
-        #     'fields': (
-        #         'server_cashless',
-                # 'key_cashless',
-            # ),
-        # }),
         ('Ghost', {
             'fields': (
                 'ghost_url',
@@ -325,7 +312,7 @@ class ConfigurationAdmin(SingletonModelAdmin):
         }),
 
     )
-    readonly_fields = ['ghost_last_log', ]
+    readonly_fields = ['ghost_last_log', 'onboard_stripe',]
 
     def save_model(self, request, obj, form, change):
         obj: Configuration
@@ -750,11 +737,9 @@ staff_admin_site.register(Paiement_stripe, PaiementStripeAdmin)
 
 def send_invoice(modeladmin, request, queryset):
     pass
-    # import ipdb; ipdb.set_trace()
 
 def send_to_ghost(modeladmin, request, queryset):
     pass
-    import ipdb; ipdb.set_trace()
 
 class MembershipAdmin(admin.ModelAdmin):
     list_display = (
@@ -778,7 +763,8 @@ class MembershipAdmin(admin.ModelAdmin):
         # 'commentaire',
     )
 
-    actions = [send_invoice, send_to_ghost ]
+    #TODO : actions
+    # actions = [send_invoice, send_to_ghost ]
     ordering = ('-date_added',)
     search_fields = ('user__email', 'user__first_name', 'user__last_name')
 

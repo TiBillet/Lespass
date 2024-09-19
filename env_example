@@ -42,8 +42,12 @@ EMAIL_PORT=''
 EMAIL_HOST_USER=''
 EMAIL_HOST_PASSWORD=''
 
+
 # Usefull for dev/test
 # Auto login for admin, no https cert' verification, demonstration data, auto database flush, etc ...
 # don't set 1 to production !
 TEST=0
 DEBUG=0
+
+# If you have already linked an account on stripe
+STRIPE_CONNECT_ACCOUNT=''

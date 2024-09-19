@@ -5,6 +5,7 @@ import uuid
 from uuid import uuid4
 from datetime import timedelta, datetime
 from decimal import Decimal
+from django.utils.html import format_html
 
 import requests
 import stripe
@@ -328,16 +329,50 @@ class Configuration(SingletonModel):
             return self.stripe_connect_account
 
     # Vérifie que le compte stripe connect soit valide et accepte les paiements.
-    def get_stripe_payouts(self):
-        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+    def check_stripe_payouts(self):
         id_acc_connect = self.get_stripe_connect_account()
-
         if id_acc_connect:
+            stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
             info_stripe = stripe.Account.retrieve(id_acc_connect)
-            self.stripe_payouts_enabled = info_stripe.get('payout_enabled')
-            self.save()
-
+            if info_stripe and info_stripe.get('payouts_enabled') :
+                self.stripe_payouts_enabled = info_stripe.get('payouts_enabled')
+                self.save()
         return self.stripe_payouts_enabled
+
+    @staticmethod
+    def link_for_onboard_stripe(meta=None):
+        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+        # Le tenant n'existe pas encore, on utilise un retour sur la meta
+        tenant = Client.objects.filter(categorie=Client.META)[0] if meta else connection.tenant
+        tenant_url = tenant.get_primary_domain().domain
+
+        config = Configuration.get_solo()
+        if not config.get_stripe_connect_account() or meta:
+            acc_connect = stripe.Account.create(
+                type="standard",
+                country="FR",
+            )
+            id_acc_connect = acc_connect.get('id')
+            config.stripe_connect_account = id_acc_connect
+            if not meta :
+                config.save()
+
+        url_onboard_stripe = stripe.AccountLink.create(
+            account=config.stripe_connect_account,
+            refresh_url=f"https://{tenant_url}/tenant/{config.stripe_connect_account}/onboard_stripe_return/",
+            return_url=f"https://{tenant_url}/tenant/{config.stripe_connect_account}/onboard_stripe_return/",
+            type="account_onboarding",
+        )
+
+        return url_onboard_stripe.url
+
+    def onboard_stripe(self):
+        if self.check_stripe_payouts():
+            return "Stripe connected"
+        url_onboard_stripe = self.link_for_onboard_stripe()
+        msg = _('Link your stripe account to accept payment')
+        return format_html(f"<a href='{url_onboard_stripe}'>{msg}</a>")
+
 
     """
     ### TVA ###

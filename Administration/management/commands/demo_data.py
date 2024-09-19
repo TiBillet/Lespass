@@ -1,25 +1,15 @@
+import logging
+import os
 from datetime import timedelta
-from os.path import exists
-from random import randint
 
-import requests
-import stripe
-from django.conf import settings
-from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from django.utils.text import slugify
 from django_tenants.utils import tenant_context
 
-from BaseBillet.models import Membership, Product, OptionGenerale, Price, Configuration, Event, Tag
-from Customers.models import Client, Domain
-import os
-
+from BaseBillet.models import Product, OptionGenerale, Price, Configuration, Event, Tag
+from Customers.models import Client
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
-from root_billet.models import RootConfiguration
-
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -43,20 +33,22 @@ class Command(BaseCommand):
             ### CONFIGURATION VARIABLE ####
 
             config = Configuration.get_solo()
-            config.organisation = sub.capitalize()
-            config.short_description = "Les scènes du TiBilletistan : un espace de démonstration."
+            config.organisation = "L’interrupteur"
+            config.short_description = "Les scènes du l’Interrupteur : un espace de démonstration."
             config.long_description = (
                 "Vous trouverez ici un exemple de plusieurs types d'évènements, d'adhésions et d'abonnements."
                 "\nGratuit, payant, avec prix préférentiels."
                 "\nAbonnement mensuels récurents ou adhésion annuelle."
                 "\nAinsi qu'une badgeuse pour la gestion d'accès d'un co working.")
             config.adress = "42 Rue Douglas Adams"
-            config.postal_code = "97480"
-            config.city = "Saint Joseph"
+            config.postal_code = "69100"
+            config.city = "Pourtouche"
             config.tva_number = "4242424242424242"
             config.siren = "424242424242"
             config.phone = "06 42 42 42 42"
             config.email = os.environ['ADMIN_EMAIL']
+            config.stripe_mode_test = True
+            config.stripe_connect_account_test = os.environ.get('TEST_STRIPE_CONNECT_ACCOUNT')
             config.site_web = "https://tibillet.org"
             config.legal_documents = "https://tibillet.org/cgucgv"
             config.twitter = "https://twitter.com/tibillet"
