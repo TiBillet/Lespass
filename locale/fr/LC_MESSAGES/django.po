@@ -898,7 +898,7 @@ msgstr "Je souscris à une nouvelle adhésion"
 #: BaseBillet/templates/htmx/fragments/my_account_membership.html:9
 #: BaseBillet/templates/htmx/fragments/my_account_wallet.html:18
 msgid "Loading tokens"
-msgstr "Chargement du portefeuille"
+msgstr "Chargement de la tirelire"
 
 #: BaseBillet/templates/htmx/fragments/my_account_profil.html:9
 #, fuzzy
@@ -908,11 +908,11 @@ msgstr "Merci de valider votre email pour voir et gérer vos cartes."
 
 #: BaseBillet/templates/htmx/fragments/my_account_profil.html:13
 msgid "Loading NFC Card info"
-msgstr "Chargement des informations de portefeuille"
+msgstr "Chargement de la tirelire"
 
 #: BaseBillet/templates/htmx/fragments/my_account_wallet.html:12
 msgid "Refill my wallet"
-msgstr "Je recharge mon portefeuille"
+msgstr "Je recharge ma tirelire"
 
 #: BaseBillet/templates/htmx/fragments/my_account_wallet.html:35
 msgid "Show the last transactions"
@@ -1202,7 +1202,7 @@ msgstr ""
 
 #: BaseBillet/views.py:500
 msgid "Refilled wallet"
-msgstr "Wallet rechargé"
+msgstr "Tirelire rechargé"
 
 #: BaseBillet/views.py:502 BaseBillet/views.py:504
 msgid "Payment verification error"

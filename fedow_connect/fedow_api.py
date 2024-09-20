@@ -335,8 +335,10 @@ class WalletFedow():
         if response_link.status_code in [200, 201]:
             # Création du wallet dans la base de donnée s'il n'existe pas
             if not user.wallet:
-                user.wallet = Wallet.objects.create(uuid=UUID(response_link.json()))
+                user.wallet = Wallet.objects.get_or_create(uuid=UUID(response_link.json()))[0]
                 user.save()
+                logger.info(f"user {user} tout neuf, on ajoute le wallet : {user.wallet}")
+
             # Wallet existe déja et est lié à l'user, on compare avec celui envoyé par Fedow
             elif user.wallet.uuid != UUID(response_link.json()):
                 raise Exception("Wallet and member mismatch")

@@ -291,7 +291,7 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
     user = User.objects.get(email=user_email)
 
     uid = encode_uid(user.pk)
-    token = default_token_generator.make_token(user)
+    token = default_token_generator.make_token(user, )
     connexion_url = f"{base_url}/emailconfirmation/{uid}/{token}"
     logger.info("connexion_celery_mailer -> connection.tenant.schema_name : {connection.tenant.schema_name}")
     if connection.tenant.schema_name != "public":
@@ -344,9 +344,9 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
         except smtplib.SMTPRecipientsRefused as e:
             logger.error(f"ERROR {timezone.now()} Erreur envoie de mail pour connexion {user.email} : {e}")
             logger.error(f"mail.sended : {mail.sended}")
-            user.is_active = False
-            user.email_error = True
-            user.save()
+            User = get_user_model()
+            # ATTENTION : Jamais de user.save() dans celery : s'il ya un traitement en cours dans Django, ça va ecraser l'objet.
+            User.objects.filter(pk=user.pk).update(is_active=False, email_error=True)
 
     except Exception as e:
         logger.error(f"{timezone.now()} Erreur envoie de mail pour connexion {user.email} : {e}")

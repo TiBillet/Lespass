@@ -174,7 +174,6 @@ class ScanQrCode(viewsets.ViewSet):
             logger.error(e)
             raise e
 
-
         # Pour les cartes en m (qui vont vers l'agenda)
         # Recherche de l'origine et redirect vers le bon tenant
         tenant: Client = connection.tenant
@@ -205,7 +204,10 @@ class ScanQrCode(viewsets.ViewSet):
             template_context['qrcode_uuid'] = qrcode_uuid
             return render(request, "htmx/views/inscription.html", context=template_context)
 
+        # Si wallet non ephemere, alors on a un user :
         wallet = Wallet.objects.get(uuid=serialized_qrcode_card['wallet_uuid'])
+        import ipdb; ipdb.set_trace()
+
         user: TibilletUser = wallet.user
         user.is_active = True
         user.save()
@@ -231,7 +233,16 @@ class ScanQrCode(viewsets.ViewSet):
 
         email = validator.validated_data['email']
         qrcode_uuid = validator.validated_data['qrcode_uuid']
+
+        # Le mail est envoyé
         user = get_or_create_user(email)
+        # import ipdb; ipdb.set_trace()
+        if not user :
+            # Le mail n'est pas validé par django (example.org?)
+            messages.add_message(request, messages.ERROR, f"{_('Email not valid')}")
+            logger.error("email validé par validateur DRF mais pas par get_or_create_user "
+                         "-> email de confirmation a renvoyé une erreur")
+            return HttpResponseClientRedirect(request.headers['Referer'])
 
         fedowAPI = FedowAPI()
         wallet, created = fedowAPI.wallet.get_or_create_wallet(user)
@@ -242,6 +253,7 @@ class ScanQrCode(viewsets.ViewSet):
         # je peux avoir son wallet juste en mettant son email sur une nouvelle carte…
         # Fonctionne de concert avec la vérification chez Fedow : fedow_core.views.linkwallet_cardqrcode : 385
         if not created:
+            logger.info(f"wallet {wallet} non created after get_or_create_wallet")
             retrieve_wallet = fedowAPI.wallet.retrieve_by_signature(user)
             if retrieve_wallet.validated_data['has_user_card']:
                 messages.add_message(request, messages.ERROR,
@@ -249,13 +261,16 @@ class ScanQrCode(viewsets.ViewSet):
                                        "Please revoke it first in your profile area to link a new one."))
                 return HttpResponseClientRedirect(request.headers['Referer'])
 
+
         # Opération de fusion entre la carte liée au qrcode et le wallet de l'user :
         linked_serialized_card = fedowAPI.NFCcard.linkwallet_cardqrcode(user=user, qrcode_uuid=qrcode_uuid)
         if not linked_serialized_card:
             messages.add_message(request, messages.ERROR, _("Not valid"))
 
         # On retourne sur la page GET /qr/
-        # Qui redirigera si besoin, ou afficera l'erreur
+        # Qui redirigera si besoin et affichera l'erreur
+        import ipdb; ipdb.set_trace()
+        logger.info(f"SCAN QRCODE LINK : wallet : {wallet}, user : {wallet.user}, card qrcode : {linked_serialized_card['qrcode_uuid']} ")
         return HttpResponseClientRedirect(request.headers['Referer'])
 
     def get_permissions(self):
