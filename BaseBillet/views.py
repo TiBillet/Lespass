@@ -269,7 +269,6 @@ class ScanQrCode(viewsets.ViewSet):
 
         # On retourne sur la page GET /qr/
         # Qui redirigera si besoin et affichera l'erreur
-        import ipdb; ipdb.set_trace()
         logger.info(f"SCAN QRCODE LINK : wallet : {wallet}, user : {wallet.user}, card qrcode : {linked_serialized_card['qrcode_uuid']} ")
         return HttpResponseClientRedirect(request.headers['Referer'])
 
