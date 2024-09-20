@@ -206,7 +206,6 @@ class ScanQrCode(viewsets.ViewSet):
 
         # Si wallet non ephemere, alors on a un user :
         wallet = Wallet.objects.get(uuid=serialized_qrcode_card['wallet_uuid'])
-        import ipdb; ipdb.set_trace()
 
         user: TibilletUser = wallet.user
         user.is_active = True
