@@ -47,7 +47,7 @@ class Command(BaseCommand):
         stripe_api_key = os.environ.get('STRIPE_KEY')
         stripe_test_api_key = os.environ.get('STRIPE_KEY_TEST')
         # Au moins une des deux clés.
-        if not any([stripe_api_key, stripe_test_api_key]):
+        if not any([stripe_api_key, stripe_test_api_key]) and not settings.DEBUG:
             raise Exception("Need Stripe Api Key in .env file")
 
 
@@ -75,8 +75,8 @@ class Command(BaseCommand):
 
 
         # crash if bad api stripe key
+        stripe_mode_test = True
         try:
-            stripe_mode_test = True
             if os.environ.get('STRIPE_TEST') != '1':
                 stripe_mode_test = False
                 stripe.api_key = stripe_api_key
@@ -86,7 +86,7 @@ class Command(BaseCommand):
                 stripe.api_key = stripe_test_api_key
                 stripe.Product.list()
         except Exception as e:
-            raise e
+            logger.error("No stripe Test nor Prod api Key !")
 
         tenant_public, created = Client.objects.get_or_create(
             schema_name='public',
