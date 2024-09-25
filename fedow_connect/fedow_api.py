@@ -332,14 +332,14 @@ class WalletFedow():
             path=f'wallet/refund_fed_by_signature',
         )
 
-        if not response_refund_fed.status_code == 200:
+        if not response_refund_fed.status_code == 202:
             logger.error(f"retrieve_by_signature ERRORS : {response_refund_fed.status_code}")
-            import ipdb; ipdb.set_trace()
+            return (response_refund_fed.status_code, response_refund_fed.json())
 
         wallet_serialized = WalletValidator(data=response_refund_fed.json())
         if wallet_serialized.is_valid():
-            return wallet_serialized
-
+            return response_refund_fed.status_code, wallet_serialized
+        return(500, wallet_serialized.errors)
 
     def get_or_create_wallet(self, user: TibilletUser):
         email = user.email.lower()

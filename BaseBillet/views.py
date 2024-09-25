@@ -376,13 +376,21 @@ class MyAccount(viewsets.ViewSet):
             return HttpResponseClientRedirect('/my_account/')
 
         value = token_fed[0]['value']
+        if value < 1:
+            messages.add_message(request, messages.ERROR,
+                                 _(f"Votre tirelire fédérée est déja vide."))
+            return HttpResponseClientRedirect('/my_account/')
 
         #TODO: Mettre ça dans retour depuis un lien envoyé par email :
-        wallet_serialised_after_refund = fedowAPI.wallet.refund_fed_by_signature(user)
-
-        messages.add_message(request, messages.INFO,
-                             _("Un email vous a été envoyé pour finaliser votre remboursement. Merci de regarder dans vos spams si vous ne l'avez pas reçu !"))
-        return HttpResponseClientRedirect('/my_account/')
+        status_code, result = fedowAPI.wallet.refund_fed_by_signature(user)
+        if status_code == 202 :
+            messages.add_message(request, messages.INFO,
+                                 _("Un email vous a été envoyé pour finaliser votre remboursement. Merci de regarder dans vos spams si vous ne l'avez pas reçu !"))
+            return HttpResponseClientRedirect('/my_account/')
+        else :
+            messages.add_message(request, messages.ERROR,
+                                 _(f"Erreur lors du remboursement. Contacter un administrateur : {result}"))
+            return HttpResponseClientRedirect('/my_account/')
 
 
     @staticmethod
