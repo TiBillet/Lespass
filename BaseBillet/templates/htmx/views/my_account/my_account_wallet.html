@@ -37,6 +37,26 @@
         </div>
     </div>
 
+    <div>
+        <span>Attention, je peux me faire rembourser en ligne uniquement ma tirelire fédérée, c'est-à-dire rechargée en ligne. Les recharges en espèce sur place ne peuvent être remboursées que sur place.</span>
+    </div>
+    <button hx-get="/my_account/refund_online/"
+            hx-trigger='confirmed'
+            hx-indicator="#tibillet-spinner"
+            onClick="Swal.fire({
+                showCancelButton: true,
+                title: 'Remboursement en ligne',
+                html:`Etes vous sûr de vouloir vous faire rembourser ?<br><br>Votre tirelire est disponible à vie et pourra être ré-utilisée lors d'un prochain évènement.<br><br>Vous pouvez aussi faire <strong>don à l'association</strong> du reste de votre tirelire : Sans utilisation de votre part pendant 14 mois la somme sera prélevée et redistribuée (on vous préviendra).<br><br> Et si vous changez d'avis d'ici la, vous savez où venir dépenser votre tirelire :-)`,
+                confirmButtonText: `Je me rembourse`,
+                cancelButtonText: `Je garde pour plus tard`,
+
+            }).then((result)=>{
+            if(result.isConfirmed){
+              htmx.trigger(this, 'confirmed');
+            }
+        })">
+        {% translate "Je souhaite récupérer ma tirelire fédérée" %}
+    </button>
 
 </div>
 

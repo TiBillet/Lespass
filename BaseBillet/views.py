@@ -364,6 +364,27 @@ class MyAccount(viewsets.ViewSet):
             logger.warning(_("User email not active"))
             return HttpResponseClientRedirect('/my_account/')
 
+    @action(detail=False, methods=['GET'])
+    def refund_online(self, request):
+        user = request.user
+        fedowAPI = FedowAPI()
+        wallet = fedowAPI.wallet.cached_retrieve_by_signature(user).validated_data
+        token_fed = [token for token in wallet.get('tokens') if token['asset']['is_stripe_primary'] == True]
+        if len(token_fed) != 1 :
+            messages.add_message(request, messages.ERROR,
+                                     _("Vous n'avez pas de tirelire fédérée. Peut être avez vous rechargé votre carte sur place ?"))
+            return HttpResponseClientRedirect('/my_account/')
+
+        value = token_fed[0]['value']
+
+        #TODO: Mettre ça dans retour depuis un lien envoyé par email :
+        wallet_serialised_after_refund = fedowAPI.wallet.refund_fed_by_signature(user)
+
+        messages.add_message(request, messages.INFO,
+                             _("Un email vous a été envoyé pour finaliser votre remboursement. Merci de regarder dans vos spams si vous ne l'avez pas reçu !"))
+        return HttpResponseClientRedirect('/my_account/')
+
+
     @staticmethod
     def get_place_cached_info(place_uuid):
         # Recherche des infos dans le cache :

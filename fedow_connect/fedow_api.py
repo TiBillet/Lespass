@@ -325,6 +325,22 @@ class WalletFedow():
             logger.error(f"retrieve_by_signature wallet_serialized ERRORS : {wallet_serialized.errors}")
             raise Exception(f"retrieve_by_signature wallet_serialized ERRORS : {wallet_serialized.errors}")
 
+    def refund_fed_by_signature(self, user):
+        response_refund_fed = _get(
+            self.fedow_config,
+            user=user,
+            path=f'wallet/refund_fed_by_signature',
+        )
+
+        if not response_refund_fed.status_code == 200:
+            logger.error(f"retrieve_by_signature ERRORS : {response_refund_fed.status_code}")
+            import ipdb; ipdb.set_trace()
+
+        wallet_serialized = WalletValidator(data=response_refund_fed.json())
+        if wallet_serialized.is_valid():
+            return wallet_serialized
+
+
     def get_or_create_wallet(self, user: TibilletUser):
         email = user.email.lower()
         response_link = _post(self.fedow_config, user=user, path='wallet/get_or_create', data={
