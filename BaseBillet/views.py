@@ -384,12 +384,14 @@ class MyAccount(viewsets.ViewSet):
         #TODO: Mettre ça dans retour depuis un lien envoyé par email :
         status_code, result = fedowAPI.wallet.refund_fed_by_signature(user)
         if status_code == 202 :
+            # On clear le cache du wallet
+            cache.delete(f"wallet_user_{user.wallet.uuid}")
             messages.add_message(request, messages.INFO,
                                  _("Un email vous a été envoyé pour finaliser votre remboursement. Merci de regarder dans vos spams si vous ne l'avez pas reçu !"))
             return HttpResponseClientRedirect('/my_account/')
         else :
             messages.add_message(request, messages.ERROR,
-                                 _(f"Erreur lors du remboursement. Contacter un administrateur : {result}"))
+                                 _(f"Un traitement manuel est nécéssaire. Vous pouvez aller à l'acceuil de votre lieux, ou contacter un administrateur : contact@tibillet.re"))
             return HttpResponseClientRedirect('/my_account/')
 
 
