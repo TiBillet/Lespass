@@ -1,5 +1,5 @@
 from django.contrib import messages
-from django.contrib.auth import get_user_model, login
+from django.contrib.auth import get_user_model, login, logout
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.contrib.auth.tokens import default_token_generator
 from django.http import HttpResponseRedirect
@@ -134,18 +134,26 @@ class test_api_key(APIView):
 def activate(request, uid, token):
     try:
         user: TibilletUser = User.objects.get(pk=decode_uid(uid))
-        if request.user:
-            if user != request.user and request.user.is_authenticated:
-                messages.add_message(request, messages.ERROR, _("Mail non valide"))
-                return None
-
         if user.email_error:
             messages.add_message(request, messages.ERROR, _("Mail non valide"))
             return None
 
+
+        # user déja loggué, on vérifie que c'est le même, sinon, on déconnecte
+        if request.user.is_authenticated:
+            if request.user == user:
+                logger.info("user déja connecté")
+                messages.add_message(request, messages.SUCCESS, _("Vous êtes bien connecté. Bienvenue !"))
+                return True
+
+            logger.info("user déja connecté, mais pas le même")
+            logout(request)
+
+
         # On utilise le même algo que pour le reset password
-        PR = PasswordResetTokenGenerator()
-        is_token_valid = PR.check_token(user, token)
+        is_token_valid = default_token_generator.check_token(user, token)
+        logger.info(f"is_token_valid : {is_token_valid}")
+
         # print(user)
         if is_token_valid:
             user.is_active = True
@@ -163,7 +171,7 @@ def activate(request, uid, token):
         logger.error(e)
         raise e
 
-    messages.add_message(request, messages.ERROR, _("Token expiré ou non valide."))
+    messages.add_message(request, messages.ERROR, _("Token expiré. Merci de vous connecter à nouveau"))
 
 
 class create_user(APIView):
