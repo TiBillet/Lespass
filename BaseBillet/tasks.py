@@ -14,13 +14,14 @@ from celery import shared_task
 from celery.exceptions import MaxRetriesExceededError
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.contrib.auth.tokens import default_token_generator
+# from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import EmailMultiAlternatives
+from django.core.signing import Signer, TimestampSigner
 from django.db import connection
 from django.template.loader import render_to_string, get_template
 from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
-from django.utils.http import urlsafe_base64_encode
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from weasyprint import HTML, CSS
 from weasyprint.text.fonts import FontConfiguration
 
@@ -34,6 +35,8 @@ logger = logging.getLogger(__name__)
 def encode_uid(pk):
     return force_str(urlsafe_base64_encode(force_bytes(pk)))
 
+def decode_uid(pk):
+    return force_str(urlsafe_base64_decode(pk))
 
 class CeleryMailerClass():
 
@@ -290,9 +293,18 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
     User = get_user_model()
     user = User.objects.get(email=user_email)
 
-    uid = encode_uid(user.pk)
-    token = default_token_generator.make_token(user, )
-    connexion_url = f"{base_url}/emailconfirmation/{uid}/{token}"
+    signer = TimestampSigner()
+    signer.sign(f"{user.pk}")
+    token = encode_uid(signer.sign(f"{user.pk}"))
+
+    ### VERIFICATION SIGNATURE AVANT D'ENVOYER
+    user_pk = signer.unsign(decode_uid(token), max_age=(3600 * 72))  # 3 jours
+    designed_user = User.objects.get(pk=user_pk)
+    assert user == designed_user
+
+    # token = default_token_generator.make_token(user, )
+
+    connexion_url = f"{base_url}/emailconfirmation/{token}"
     logger.info("connexion_celery_mailer -> connection.tenant.schema_name : {connection.tenant.schema_name}")
     if connection.tenant.schema_name != "public":
         config = Configuration.get_solo()
@@ -314,7 +326,7 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
         img_orga = "Logo_Tibillet_Noir_Ombre_600px.png"
         meta = Client.objects.filter(categorie=Client.META).first()
         meta_domain = f"https://{meta.get_primary_domain().domain}"
-        connexion_url = f"{meta_domain}/emailconfirmation/{uid}/{token}"
+        connexion_url = f"{meta_domain}/emailconfirmation/{token}"
         logger.info(f'connection.tenant.schema_name == "public" : {connection.tenant.schema_name}')
 
     # Internal SMTP and html template

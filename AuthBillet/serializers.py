@@ -47,6 +47,7 @@ class TokenTerminalValidator(serializers.Serializer):
 
                                     )
 
+
         PR = PasswordResetTokenGenerator()
         is_token_valid = PR.check_token(self.term_user, attrs.get('app_token'))
         if not is_token_valid:

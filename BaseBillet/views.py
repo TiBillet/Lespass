@@ -155,8 +155,8 @@ def connexion(request):
     return redirect('home')
 
 
-def emailconfirmation(request, uuid, token):
-    activate(request, uuid, token)
+def emailconfirmation(request, token):
+    activate(request, token)
     return redirect('home')
 
 
