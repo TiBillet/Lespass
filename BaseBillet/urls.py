@@ -31,7 +31,7 @@ urlpatterns = [
 
     path('connexion/', base_view.connexion, name='connexion'),
     path('deconnexion/', base_view.deconnexion, name='deconnexion'),
-    path('emailconfirmation/<str:uuid>/<str:token>/', base_view.emailconfirmation, name='emailconfirmation'),
+    path('emailconfirmation/<str:token>', base_view.emailconfirmation, name='emailconfirmation'),
 
     ##### TEST NICO
     # path("create_tenant/", base_view.create_tenant, name='create_tenant'),

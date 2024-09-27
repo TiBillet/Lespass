@@ -2,6 +2,8 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model, login, logout
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.contrib.auth.tokens import default_token_generator
+from django.core import signing
+from django.core.signing import SignatureExpired
 from django.http import HttpResponseRedirect
 from django.utils.encoding import force_str, force_bytes, DjangoUnicodeDecodeError
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
@@ -131,9 +133,12 @@ class test_api_key(APIView):
         )
 
 
-def activate(request, uid, token):
+def activate(request, token):
     try:
-        user: TibilletUser = User.objects.get(pk=decode_uid(uid))
+        token = decode_uid(token)
+        signer = signing.TimestampSigner()
+        user_pk = signer.unsign(token, max_age=(3600*72)) # 3 jours
+        user: TibilletUser = User.objects.get(pk=user_pk)
         if user.email_error:
             messages.add_message(request, messages.ERROR, _("Mail non valide"))
             return None
@@ -149,20 +154,15 @@ def activate(request, uid, token):
             logger.info("user déja connecté, mais pas le même")
             logout(request)
 
+        user.is_active = True
+        user.email_valid = True
+        user.save()
+        messages.add_message(request, messages.SUCCESS, _("Vous êtes bien connecté. Bienvenue !"))
+        login(request, user)
+        return True
 
-        # On utilise le même algo que pour le reset password
-        is_token_valid = default_token_generator.check_token(user, token)
-        logger.info(f"is_token_valid : {is_token_valid}")
-
-        # print(user)
-        if is_token_valid:
-            user.is_active = True
-            user.email_valid = True
-            user.save()
-            messages.add_message(request, messages.SUCCESS, _("Vous êtes bien connecté. Bienvenue !"))
-            login(request, user)
-            return True
-
+    except SignatureExpired :
+        messages.add_message(request, messages.ERROR, _("Token expiré. Merci de vous connecter à nouveau."))
     except User.DoesNotExist:
         messages.add_message(request, messages.ERROR, _("Erreur, user non valide."))
     except DjangoUnicodeDecodeError:
@@ -170,8 +170,6 @@ def activate(request, uid, token):
     except Exception as e:
         logger.error(e)
         raise e
-
-    messages.add_message(request, messages.ERROR, _("Token expiré. Merci de vous connecter à nouveau"))
 
 
 class create_user(APIView):
