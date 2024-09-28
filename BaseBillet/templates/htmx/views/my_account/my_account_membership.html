@@ -1,11 +1,30 @@
 {% load i18n %}
-<div class="container pt-5">
+
+<h2 class="mt-5">{% translate "Memberships" %}</h2>
+<div class="container mt-2">
     <div class="d-flex flex-row" hx-indicator="#tibillet-spinner">
         <a href="/memberships/" class="btn bg-gradient-info btn-lg mt-2 p-4 mb-2 w-75 mx-auto">
             {% translate "I subscribe to a new membership" %}
         </a>
     </div>
     <div hx-get="/my_account/membership_table/" hx-trigger="revealed" class="mt-4">
+        <span>{% translate "Loading tokens" %}</span>
+        <div class="d-flex justify-content-center align-items-center ">
+            <div class="spinner-border text-info"
+                 role="status"
+            ></div>
+        </div>
+    </div>
+</div>
+
+<h2 class="mt-5">{% translate "Badge Machine" %}</h2>
+<div class="container mt-2">
+    <div class="d-flex flex-row" hx-indicator="#tibillet-spinner">
+        <a href="/badge/" class="btn bg-gradient-warning btn-lg mt-2 p-4 mb-2 w-75 mx-auto">
+            {% translate "Badge" %}
+        </a>
+    </div>
+    <div hx-get="/my_account/badge_table/" hx-trigger="revealed" class="mt-4">
         <span>{% translate "Loading tokens" %}</span>
         <div class="d-flex justify-content-center align-items-center ">
             <div class="spinner-border text-info"

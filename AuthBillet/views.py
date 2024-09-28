@@ -1,11 +1,10 @@
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login, logout
-from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.contrib.auth.tokens import default_token_generator
 from django.core import signing
-from django.core.signing import SignatureExpired
+from django.core.signing import SignatureExpired, BadSignature
 from django.http import HttpResponseRedirect
-from django.utils.encoding import force_str, force_bytes, DjangoUnicodeDecodeError
+from django.utils.encoding import force_str, force_bytes
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.utils.translation import gettext_lazy as _
 from rest_framework import status, permissions, viewsets
@@ -165,7 +164,7 @@ def activate(request, token):
         messages.add_message(request, messages.ERROR, _("Token expiré. Merci de vous connecter à nouveau."))
     except User.DoesNotExist:
         messages.add_message(request, messages.ERROR, _("Erreur, user non valide."))
-    except DjangoUnicodeDecodeError:
+    except BadSignature:
         messages.add_message(request, messages.ERROR, _("Token non valide."))
     except Exception as e:
         logger.error(e)

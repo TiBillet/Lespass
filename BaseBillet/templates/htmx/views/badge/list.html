@@ -18,7 +18,7 @@
                                      alt="image product" loading="lazy"/>
                             </div>
                         </div>
-                        <div class="col-md-7 my-auto ms-md-3 mt-md-auto mt-4">
+                        <div class="col-md-7 ms-md-3 mt-md-auto mt-4">
                             <h3>{{ badge.name }}</h3>
                             {% if badge.short_description %}
                                 <p style="white-space: pre-line">
@@ -33,18 +33,21 @@
                             {% if user.is_authenticated %}
                                 <button class="btn btn-outline-secondary btn-sm"
                                         role="button" aria-label="check-in {{ badge.name }}"
-                                        hx-get="/badge/check_in/"
-                                >
-                                    {% translate "Check-in" %}
+                                        hx-get="/badge/{{ badge.uuid }}/badge_in/" hx-trigger="click"
+                                        hx-target="#alert-container" hx-swap="innerHTML"
+                                        data-loading-delay="1000"
+                                        hx-indicator="#tibillet-spinner" data-swal="true">
+
+
+                                    {% translate "Badge" %}
                                 </button>
-                                <button class="btn btn-outline-secondary btn-sm"
-                                        role="button" aria-label="check-in {{ badge.name }}"
-                                        hx-get="/badge/check_out/"
-                                >
-                                    {% translate "Check-out" %}
-                                </button>
+                                {#                                <button class="btn btn-outline-secondary btn-sm"#}
+                                {#                                        role="button" aria-label="check-in {{ badge.name }}"#}
+                                {#                                        hx-get="/badge/check_out/">#}
+                                {#                                    {% translate "Check-out" %}#}
+                                {#                                </button>#}
                             {% else %}
-                                <p>{% translate "Please connect to check-in" %}</p>
+                                <p>{% translate "Please connect to badge" %}</p>
                             {% endif %}
                         </div>
                     </div>
@@ -52,4 +55,5 @@
             </div>
         {% endfor %}
     </div>
+
 {% endblock main %}
