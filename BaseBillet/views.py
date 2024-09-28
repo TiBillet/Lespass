@@ -390,8 +390,8 @@ class MyAccount(viewsets.ViewSet):
                                  _("Un email vous a été envoyé pour finaliser votre remboursement. Merci de regarder dans vos spams si vous ne l'avez pas reçu !"))
             return HttpResponseClientRedirect('/my_account/')
         else :
-            messages.add_message(request, messages.ERROR,
-                                 _(f"Un traitement manuel est nécéssaire. Vous pouvez aller à l'acceuil de votre lieux, ou contacter un administrateur : contact@tibillet.re"))
+            messages.add_message(request, messages.WARNING,
+                                 _(f"Toutes nos excuses, il semble qu'un traitement manuel est nécéssaire pour votre remboursement. Vous pouvez aller à l'acceuil de votre lieux, ou contacter un administrateur : contact@tibillet.re"))
             return HttpResponseClientRedirect('/my_account/')
 
 
