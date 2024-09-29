@@ -64,27 +64,16 @@ class CeleryMailerClass():
     def config_valid(self):
         EMAIL_HOST = os.environ.get('EMAIL_HOST')
         EMAIL_PORT = os.environ.get('EMAIL_PORT')
-        EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
-        EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
 
-        # Si email envoyé par le tenant public (ex : première install), Configuration n'est pas disponible
-        self.return_email = os.environ['EMAIL_HOST_USER']
-        # try:
-        #     config = Configuration.get_solo()
-        #     self.return_email = config.email if config.email else os.environ['EMAIL_HOST_USER']
-        # except Exception as e:
-        #     logger.warning(f'  WORKDER CELERY : self.return_email -> Configuration.get_solo().email ERROR -> {e}')
-
-        # TODO: si email retour n'est pas le même nom de domain que le moteur > moteur a spam ?
-        # if self.return_email.partition("@")[2] != EMAIL_HOST_USER.partition("@")[2]:
-        #     logger.error(f'{self.return_email.partition("@")[2]} != {EMAIL_HOST_USER.partition("@")[2]}')
-        #     raise Exception('erreur de domaine email : return_email != HOST_USER')
+        # Adresse d'envoi peut/doit être différente du login du serveur mail.
+        self.return_email = os.environ.get('EMAIL_SENDER', os.environ['EMAIL_HOST_USER'])
 
         if all([
             EMAIL_HOST,
             EMAIL_PORT,
-            EMAIL_HOST_USER,
-            EMAIL_HOST_PASSWORD,
+            # Not required for local server
+            # EMAIL_HOST_USER,
+            # EMAIL_HOST_PASSWORD,
             self.return_email,
             self.title,
             self.email,
