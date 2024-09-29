@@ -474,43 +474,6 @@ class MyAccount(viewsets.ViewSet):
         }
         return render(request, "htmx/views/my_account/tokens_membership_table.html", context=context)
 
-    @action(detail=False, methods=['GET'])
-    def badge_table(self, request):
-        # context = get_context(request)
-        fedowAPI = FedowAPI()
-        ligne_badgeuse = fedowAPI.badge.retrieve_badge_with_signature(request.user).validated_data
-        import ipdb; ipdb.set_trace()
-        dict_carte_passage = {}
-        for ligne in ligne_badgeuse:
-            ligne: Transaction
-            if ligne.card not in dict_carte_passage:
-                dict_carte_passage[ligne.card] = []
-            dict_carte_passage[ligne.card].append(ligne)
-
-        passages = []
-        for carte, transactions in dict_carte_passage.items():
-            horaires = [transaction.datetime for transaction in transactions]
-            horaires_sorted = sorted(horaires)
-            if len(horaires_sorted) % 2 != 0:
-                horaires_sorted.append(None)
-
-            couples_de_passage = list(zip(horaires_sorted[::2], horaires_sorted[1::2]))
-            for horaires in couples_de_passage:
-                # On veut la transaction qui correspond au premier horaire du couple de passage
-                index = couples_de_passage.index(
-                    horaires) * 2  # il y a deux fois plus de transaction que de couple horaire
-                passages.append({carte: {
-                    'horaires': horaires,
-                    'transaction': transactions[index],
-                }
-                })
-
-        context = {
-            'passages': passages,
-        }
-
-        return render(request, "htmx/views/my_account/badge_table.html", context=context)
-
 
     @action(detail=False, methods=['GET'])
     def profile(self, request: HttpRequest) -> HttpResponse:
@@ -614,7 +577,6 @@ class Badge(viewsets.ViewSet):
 
     def list(self, request: HttpRequest):
         template_context = get_context(request)
-        # import ipdb; ipdb.set_trace()
         template_context["badges"] = Product.objects.filter(categorie_article=Product.BADGE, publish=True)
         return render(request, "htmx/views/badge/list.html", context=template_context)
 

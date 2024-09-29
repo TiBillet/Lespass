@@ -214,22 +214,6 @@ class BadgeFedow():
             raise Exception(f"badge_in transaction_serialized ERRORS : {transaction_serialized.errors}")
 
 
-    def retrieve_badge_with_signature(self, user: TibilletUser):
-        response_link = _get(
-            self.fedow_config,
-            user=user,
-            path=f'transaction/retrieve_badge_with_signature',
-        )
-        paginated_transactions_serialized = PaginatedTransactionValidator(data=response_link.json())
-
-        if paginated_transactions_serialized.is_valid():
-            return paginated_transactions_serialized
-        else:
-            logger.error(f"retrieve_by_signature wallet_serialized ERRORS : {paginated_transactions_serialized.errors}")
-            raise Exception(
-                f"retrieve_by_signature wallet_serialized ERRORS : {paginated_transactions_serialized.errors}")
-
-
 class MembershipFedow():
     def __init__(self, fedow_config: FedowConfig or None = None):
         self.fedow_config: FedowConfig = fedow_config
