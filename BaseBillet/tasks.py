@@ -66,7 +66,8 @@ class CeleryMailerClass():
         EMAIL_PORT = os.environ.get('EMAIL_PORT')
 
         # Adresse d'envoi peut/doit être différente du login du serveur mail.
-        self.return_email = os.environ.get('EMAIL_SENDER', os.environ['EMAIL_HOST_USER'])
+        # Error si ni DEFAULT ni HOST
+        self.return_email = os.environ.get('DEFAULT_FROM_EMAIL', os.environ['EMAIL_HOST_USER'])
 
         if all([
             EMAIL_HOST,

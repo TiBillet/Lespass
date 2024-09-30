@@ -41,7 +41,7 @@ EMAIL_HOST=''
 EMAIL_PORT=''
 EMAIL_HOST_USER='' # Not required for local mail server
 EMAIL_HOST_PASSWORD='' # Not required for local mail server
-EMAIL_SENDER='' # If empty, Django use the EMAIL_HOST_USER
+DEFAULT_FROM_EMAIL='' # If empty, we use the EMAIL_HOST_USER
 
 
 # Usefull for dev/test
