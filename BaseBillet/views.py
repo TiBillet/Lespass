@@ -395,7 +395,7 @@ class MyAccount(viewsets.ViewSet):
         wallet = fedowAPI.wallet.cached_retrieve_by_signature(request.user).validated_data
 
         # On retire les adhésions, on les affiche dans l'autre table
-        tokens = [token for token in wallet.get('tokens') if token.get('asset_category') != 'SUB']
+        tokens = [token for token in wallet.get('tokens') if token.get('asset_category') not in ['SUB', 'BDG']]
 
         # TODO: Factoriser avec tokens_table / membership_table
         for token in tokens:
