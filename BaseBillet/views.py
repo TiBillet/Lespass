@@ -734,8 +734,9 @@ class Tenant(viewsets.ViewSet):
 
         try:
             # On indique le retour sur la page meta, le tenant n'est pas encore créé ici
-            account_link = self.link_for_onboard_stripe(meta=True)
-            id_acc_connect = Configuration.get_solo().get_stripe_connect_account()
+            config = Configuration.get_solo()
+            id_acc_connect = config.get_stripe_connect_account()
+            account_link = config.link_for_onboard_stripe(meta=True)
 
             # Mise en cache pendant 24h des infos name id_acc_connect et email
             validated_data = new_tenant.validated_data
@@ -749,10 +750,10 @@ class Tenant(viewsets.ViewSet):
                 dns_choice=validated_data['dns_choice'],
             )
 
-            url_onboard = account_link.get('url')
-            return HttpResponseClientRedirect(url_onboard)
+            return HttpResponseClientRedirect(account_link)
 
         except Exception as e:
+            logger.error(e)
             messages.add_message(request, messages.ERROR, f"{e}")
             return HttpResponseClientRedirect(request.headers['Referer'])
 

@@ -2,7 +2,7 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model, login, logout
 from django.contrib.auth.tokens import default_token_generator
 from django.core import signing
-from django.core.signing import SignatureExpired, BadSignature
+from django.core.signing import SignatureExpired, BadSignature, TimestampSigner
 from django.http import HttpResponseRedirect
 from django.utils.encoding import force_str, force_bytes
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
@@ -312,9 +312,16 @@ class OAauthCallback(APIView):
                     send_mail=False,
                 )
 
-                uid = encode_uid(user.pk)
-                token = default_token_generator.make_token(user)
-                redirect_uri = request.build_absolute_uri(f'/emailconfirmation/{uid}/{token}') \
+                signer = TimestampSigner()
+                signer.sign(f"{user.pk}")
+                token = encode_uid(signer.sign(f"{user.pk}"))
+
+                ### VERIFICATION SIGNATURE AVANT D'ENVOYER
+                user_pk = signer.unsign(decode_uid(token), max_age=(3600 * 72))  # 3 jours
+                designed_user = User.objects.get(pk=user_pk)
+                assert user == designed_user
+
+                redirect_uri = request.build_absolute_uri(f'/emailconfirmation/{token}') \
                     .replace('http://', 'https://')
                 return HttpResponseRedirect(redirect_uri)
 
