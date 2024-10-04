@@ -312,7 +312,7 @@ class Configuration(SingletonModel):
 
 
     def get_stripe_api(self):
-        if self.get_stripe_connect_account():
+        if self.get_stripe_connect_account() and self.stripe_payouts_enabled :
             return RootConfiguration.get_solo().get_stripe_api()
 
         tenant_stripe = self.stripe_test_api_key if self.stripe_mode_test else self.stripe_api_key
