@@ -184,6 +184,8 @@ class Command(BaseCommand):
 
             config = Configuration.get_solo()
             config.organisation = first_sub.capitalize()
+            config.stripe_test_api_key = stripe_test_api_key
+            config.stripe_mode_test = stripe_mode_test
             config.save()
             fedowAPI = FedowAPI()
             if not FedowConfig.get_solo().can_fedow():

@@ -312,15 +312,14 @@ class Configuration(SingletonModel):
 
 
     def get_stripe_api(self):
-        if self.get_stripe_connect_account() and self.stripe_payouts_enabled :
-            return RootConfiguration.get_solo().get_stripe_api()
-
-        tenant_stripe = self.stripe_test_api_key if self.stripe_mode_test else self.stripe_api_key
-        if not tenant_stripe:
-            logger.warning(
-                f"Configuration.get_stripe_api() - No stripe api key for {connection.tenant}. On utilise celle de root.")
-            return RootConfiguration.get_solo().get_stripe_api()
-        return tenant_stripe
+        # if self.get_stripe_connect_account() and self.stripe_payouts_enabled :
+        #     return RootConfiguration.get_solo().get_stripe_api()
+        # tenant_stripe = self.stripe_test_api_key if self.stripe_mode_test else self.stripe_api_key
+        # if not tenant_stripe:
+        #     logger.warning(
+        #         f"Configuration.get_stripe_api() - No stripe api key for {connection.tenant}. On utilise celle de root.")
+        #     return RootConfiguration.get_solo().get_stripe_api()
+        return self.stripe_test_api_key if self.stripe_mode_test else self.stripe_api_key
 
     def get_stripe_connect_account(self):
         if self.stripe_mode_test:
