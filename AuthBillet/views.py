@@ -142,6 +142,9 @@ def activate(request, token):
             messages.add_message(request, messages.ERROR, _("Mail non valide"))
             return None
 
+        user.is_active = True
+        user.email_valid = True
+        user.save()
 
         # user déja loggué, on vérifie que c'est le même, sinon, on déconnecte
         if request.user.is_authenticated:
@@ -153,9 +156,6 @@ def activate(request, token):
             logger.info("user déja connecté, mais pas le même")
             logout(request)
 
-        user.is_active = True
-        user.email_valid = True
-        user.save()
         messages.add_message(request, messages.SUCCESS, _("Vous êtes bien connecté. Bienvenue !"))
         login(request, user)
         return True
