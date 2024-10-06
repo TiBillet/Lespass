@@ -99,7 +99,7 @@ class TenantCreateValidator(serializers.Serializer):
     @staticmethod
     def create_tenant(waiting_config: WaitingConfiguration):
         name = waiting_config.organisation
-        admin_email = waiting_config.email
+        admin_email = waiting_config.email.lower()
 
         with schema_context('public'):
             slug = slugify(name)
