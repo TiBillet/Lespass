@@ -134,9 +134,13 @@ class test_api_key(APIView):
 
 def activate(request, token):
     try:
-        token = decode_uid(token)
         signer = signing.TimestampSigner()
-        user_pk = signer.unsign(token, max_age=(3600*72)) # 3 jours
+        try :
+            user_pk = signer.unsign(urlsafe_base64_decode(token).decode('utf8'), max_age=(3600 * 72))  # 3 jours
+        except UnicodeDecodeError as e:
+            messages.add_message(request, messages.ERROR, _("Token non valide. Merci de vous connecter à nouveau."))
+            return False
+
         user: TibilletUser = User.objects.get(pk=user_pk)
         if user.email_error:
             messages.add_message(request, messages.ERROR, _("Mail non valide"))

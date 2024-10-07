@@ -284,11 +284,10 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
     user = User.objects.get(email=user_email)
 
     signer = TimestampSigner()
-    signer.sign(f"{user.pk}")
-    token = encode_uid(signer.sign(f"{user.pk}"))
+    token = urlsafe_base64_encode(signer.sign(f"{user.pk}").encode('utf8'))
 
     ### VERIFICATION SIGNATURE AVANT D'ENVOYER
-    user_pk = signer.unsign(decode_uid(token), max_age=(3600 * 72))  # 3 jours
+    user_pk = signer.unsign(urlsafe_base64_decode(token).decode('utf8'), max_age=(3600 * 72))  # 3 jours
     designed_user = User.objects.get(pk=user_pk)
     assert user == designed_user
 
