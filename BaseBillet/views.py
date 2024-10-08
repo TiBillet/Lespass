@@ -64,6 +64,7 @@ def get_context(request):
 
     context = {
         "base_template": base_template,
+        "embed": request.query_params.get('embed'),
         "url_name": request.resolver_match.url_name,
         "user": request.user,
         "profile": serialized_user,
@@ -615,7 +616,6 @@ class MembershipMVT(viewsets.ViewSet):
 
     def list(self, request: HttpRequest):
         template_context = get_context(request)
-        # import ipdb; ipdb.set_trace()
         template_context["memberships"] = Product.objects.filter(categorie_article=Product.ADHESION, publish=True)
         return render(request, "htmx/views/membership/list.html", context=template_context)
 
