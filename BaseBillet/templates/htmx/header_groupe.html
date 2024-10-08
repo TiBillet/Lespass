@@ -1,3 +1,5 @@
+<!-- Toaster pour messages django -->
+{% include "htmx/components/django_messages_toast.html" %}
 {% if not embed %}
     {% include "htmx/components/navbar.html" %}
     {# le header est affichable si l'url ne contient pas "tenant" et que header soit non null #}

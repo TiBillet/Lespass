@@ -345,6 +345,7 @@ OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 # LOGGING
 # -------------------------------------/
 
+LOGGING_LVL = 'DEBUG' if DEBUG else 'INFO'
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -365,13 +366,13 @@ LOGGING = {
     },
     'handlers': {
         'console': {
-            'level': 'INFO',
+            'level': LOGGING_LVL,
             'class': 'logging.StreamHandler',
             'formatter': 'simple',
             'filters': ['tenant_context'],
         },
         'logfile': {
-            'level': 'INFO',
+            'level': LOGGING_LVL,
             'class': 'logging.handlers.RotatingFileHandler',
             'filename': f"{BASE_DIR}/logs/Djangologfile",
             'formatter': 'simple',
