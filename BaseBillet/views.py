@@ -626,7 +626,12 @@ class MembershipMVT(viewsets.ViewSet):
     def list(self, request: HttpRequest):
         template_context = get_context(request)
         template_context["memberships"] = Product.objects.filter(categorie_article=Product.ADHESION, publish=True)
-        return render(request, "htmx/views/membership/list.html", context=template_context)
+        response = render(
+            request, "htmx/views/membership/list.html",
+            context=template_context,
+        )
+        response['X-Frame-Options'] = '' if template_context.get('embed') else 'DENY'
+        return response
 
     def create(self, request):
         membership_validator = MembershipValidator(data=request.data, context={'request': request})
