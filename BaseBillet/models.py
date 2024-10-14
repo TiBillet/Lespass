@@ -359,6 +359,7 @@ class Configuration(SingletonModel):
         return url_onboard_stripe.url
 
     def onboard_stripe(self):
+        # on vérifie que le compte soit toujours lié et qu'il peut recevoir des paiements :
         if self.check_stripe_payouts():
             return "Stripe connected"
         url_onboard_stripe = self.link_for_onboard_stripe()
