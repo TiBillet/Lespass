@@ -359,9 +359,8 @@ class Configuration(SingletonModel):
         return url_onboard_stripe.url
 
     def onboard_stripe(self):
-        if self.stripe_payouts_enabled:
+        if self.check_stripe_payouts():
             return "Stripe connected"
-        logger.info("Stripe non connecté, on fabrique le lien stripe.")
         url_onboard_stripe = self.link_for_onboard_stripe()
         msg = _('Link your stripe account to accept payment')
         return format_html(f"<a href='{url_onboard_stripe}'>{msg}</a>")
