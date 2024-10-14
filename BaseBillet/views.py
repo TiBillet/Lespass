@@ -53,8 +53,17 @@ def encode_uid(pk):
 
 def get_context(request):
     config = Configuration.get_solo()
+    logger.debug("request.htmx") if request.htmx else None
     base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
     serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
+
+    # embed ?
+    embed = False
+    try :
+        embed = request.query_params.get('embed')
+    except :
+        embed = False
+
     # Le lien "Fédération"
     meta_url = cache.get('meta_url')
     if not meta_url:
@@ -64,6 +73,7 @@ def get_context(request):
 
     context = {
         "base_template": base_template,
+        "embed": embed,
         "url_name": request.resolver_match.url_name,
         "user": request.user,
         "profile": serialized_user,
@@ -615,9 +625,13 @@ class MembershipMVT(viewsets.ViewSet):
 
     def list(self, request: HttpRequest):
         template_context = get_context(request)
-        # import ipdb; ipdb.set_trace()
         template_context["memberships"] = Product.objects.filter(categorie_article=Product.ADHESION, publish=True)
-        return render(request, "htmx/views/membership/list.html", context=template_context)
+        response = render(
+            request, "htmx/views/membership/list.html",
+            context=template_context,
+        )
+        response['X-Frame-Options'] = '' if template_context.get('embed') else 'DENY'
+        return response
 
     def create(self, request):
         membership_validator = MembershipValidator(data=request.data, context={'request': request})

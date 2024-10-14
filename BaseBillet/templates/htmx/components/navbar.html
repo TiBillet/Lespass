@@ -20,7 +20,9 @@
                 <span class="navbar-toggler-bar bar3"></span>
             </span>
         </button>
-        <div class="collapse navbar-collapse w-100 pt-3 pb-2 py-lg-0 ms-lg-12 ps-lg-5" id="tibilet-navigation">
+        <div class="collapse navbar-collapse w-100 pt-3 pb-2 py-lg-0 ms-lg-12 ps-lg-5" id="tibilet-navigation"
+                {# hx boost permet de rendre les anchor a en hx_get. Ce qui permet de faire clic droit nouvel onglet sans soucis #}
+             hx-boost="true" hx-target="#main">
             <!-- positionner les li inversés -->
             <ul class="navbar-nav navbar-nav-hover w-100 flex-row-reverse text-white">
                 <!-- utilisateur non connecté -->
@@ -34,7 +36,7 @@
                     </li>
                 {% else %}
                     <li>
-                        <a href="#" class="nav-item text-white mx-2" hx-get="/my_account/" hx-target="#main"
+                        <a href="/my_account/" class="nav-item text-white mx-2"
                            hx-swap="outerHTML"
                            hx-push-url="true" role="button" aria-label="Gérer mon compte">
                             <i class="fa fa-user" aria-hidden="true"></i>
@@ -69,7 +71,7 @@
                 <!-- Adhésion -->
                 {% if config.categorie|not_in_list:'M' %}
                     <li>
-                        <a href="#" class="nav-item text-white mx-2" hx-get="/memberships/" hx-target="#main"
+                        <a href="/memberships/" class="nav-item text-white mx-2"
                            hx-swap="outerHTML"
                            hx-push-url="true" role="button" aria-label="Sélectionner une adhésion">
                             <i class="fa fa-users" aria-hidden="true"></i>
@@ -78,7 +80,7 @@
                     </li>
                     {% if mode_test %}
                         <li>
-                            <a href="#" class="nav-item text-white mx-2" hx-get="/badge/" hx-target="#main"
+                            <a href="/badge/" class="nav-item text-white mx-2"
                                hx-swap="outerHTML"
                                hx-push-url="true" role="button" aria-label="badgeuse">
                                 <i class="fa fa-id-badge" aria-hidden="true"></i>
@@ -86,7 +88,7 @@
                             </a>
                         </li>
                         <li>
-                            <a href="#" class="nav-item text-white mx-2" hx-get="/agenda/" hx-target="#main"
+                            <a href="/agenda/" class="nav-item text-white mx-2"
                                hx-swap="outerHTML"
                                hx-push-url="true" role="button" aria-label="agenda">
                                 <i class="fa fa-calendar" aria-hidden="true"></i>
@@ -105,7 +107,7 @@
                     {% if mode_test %}
                         <!-- Instance META -->
                         <li>
-                            <a href="#" class="nav-item text-white mx-2" hx-get="/tenant/new/" hx-target="#main"
+                            <a href="/tenant/new/" class="nav-item text-white mx-2"
                                hx-swap="outerHTML"
                                hx-push-url="true" role="button" aria-label="Créer un nouvel espace">
                                 <i class="fa fa-plus" aria-hidden="true"></i>
