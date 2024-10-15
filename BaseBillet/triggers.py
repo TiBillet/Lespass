@@ -1,14 +1,16 @@
 import json
 import logging
 
+import stripe
 from django.core.serializers.json import DjangoJSONEncoder
 from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 
 from ApiBillet.serializers import LigneArticleSerializer
-from BaseBillet.models import LigneArticle, Product, Membership, Price, Configuration, Paiement_stripe
+from BaseBillet.models import LigneArticle, Product, Membership, Price, Configuration, Paiement_stripe, PriceSold
 from BaseBillet.tasks import send_to_ghost, send_email_generique, create_invoice_pdf, celery_post_request
+from BaseBillet.templatetags.tibitags import dround
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
 
@@ -80,8 +82,22 @@ def get_membership_after_paiement(trigger):
 def update_membership_state_after_paiement(trigger, membership: Membership):
     paiement_stripe = trigger.ligne_article.paiement_stripe
 
-    membership.last_contribution = timezone.now().date()
+    price: Price = trigger.ligne_article.pricesold.price
     membership.contribution_value = trigger.ligne_article.pricesold.prix
+    if price.free_price:
+        # Le tarif a été entré dans stripe.
+        config = Configuration.get_solo()
+        stripe.api_key = config.get_stripe_api()
+        # recherche du checkout
+        checkout_session = stripe.checkout.Session.retrieve(
+            paiement_stripe.checkout_session_id_stripe,
+            # stripe_account=config.get_stripe_connect_account()
+        )
+        contribution = dround(checkout_session['amount_total'])
+        PriceSold.objects.filter(pk=trigger.ligne_article.pricesold.pk).update(prix=contribution)
+        membership.contribution_value=contribution
+
+    membership.last_contribution = timezone.now().date()
     membership.stripe_paiement.add(paiement_stripe)
 
     if paiement_stripe.invoice_stripe:
@@ -127,7 +143,8 @@ def send_membership_to_ghost(membership: Membership):
 
 def send_sale_to_laboutik(ligne_article: LigneArticle):
     config = Configuration.get_solo()
-    if config.check_serveur_cashless() and ligne_article.status == LigneArticle.VALID:
+    # Si c'est VALID, ça veut dire que c'est déja envoyé
+    if config.check_serveur_cashless() and ligne_article.status == LigneArticle.PAID:
         serialized_ligne_article = LigneArticleSerializer(ligne_article).data
         json_data = json.dumps(serialized_ligne_article, cls=DjangoJSONEncoder)
 
@@ -206,13 +223,13 @@ class ActionArticlePaidByCategorie:
         membership: Membership = get_membership_after_paiement(self)
         updated_membership: Membership = update_membership_state_after_paiement(self, membership)
 
+        import ipdb; ipdb.set_trace()
         email_sended = send_membership_invoice_email_after_paiement(self, updated_membership)
         ghost_sended = send_membership_to_ghost(updated_membership)
 
         # Envoyer l'adhésion à fedow
         logger.info(f"TRIGGER ADHESION PAID -> envoi à Fedow")
-        fedow_config = FedowConfig.get_solo()
-        fedowAPI = FedowAPI(fedow_config=fedow_config)
+        fedowAPI = FedowAPI()
         serialized_transaction = fedowAPI.membership.create(membership=membership)
 
         logger.info(f"TRIGGER ADHESION PAID -> envoi à LaBoutik")

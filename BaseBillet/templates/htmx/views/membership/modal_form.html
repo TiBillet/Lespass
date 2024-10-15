@@ -60,7 +60,11 @@
                                            value="{{ price.uuid }}" required>
                                     <label class="custom-control-label text-darkms-0"
                                            for="price-{{ price.uuid }}">
-                                        {{ price.name }} - {{ price.prix }}€
+                                        {% if price.free_price %}
+                                            {{ price.name }}
+                                        {% else %}
+                                            {{ price.name }} - {{ price.prix }}€
+                                        {% endif %}
                                     </label>
                                 </div>
                             {% endif %}

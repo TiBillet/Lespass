@@ -310,7 +310,6 @@ class Configuration(SingletonModel):
     stripe_api_key = models.CharField(max_length=110, blank=True, null=True)
     stripe_test_api_key = models.CharField(max_length=110, blank=True, null=True)
 
-
     def get_stripe_api(self):
         # if self.get_stripe_connect_account() and self.stripe_payouts_enabled :
         #     return RootConfiguration.get_solo().get_stripe_api()
@@ -333,7 +332,7 @@ class Configuration(SingletonModel):
         if id_acc_connect:
             stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
             info_stripe = stripe.Account.retrieve(id_acc_connect)
-            if info_stripe and info_stripe.get('payouts_enabled') :
+            if info_stripe and info_stripe.get('payouts_enabled'):
                 self.stripe_payouts_enabled = info_stripe.get('payouts_enabled')
                 self.save()
         return self.stripe_payouts_enabled
@@ -353,7 +352,7 @@ class Configuration(SingletonModel):
             )
             id_acc_connect = acc_connect.get('id')
             config.stripe_connect_account = id_acc_connect
-            if not meta :
+            if not meta:
                 config.save()
 
         url_onboard_stripe = stripe.AccountLink.create(
@@ -371,7 +370,6 @@ class Configuration(SingletonModel):
         url_onboard_stripe = self.link_for_onboard_stripe()
         msg = _('Link your stripe account to accept payment')
         return format_html(f"<a href='{url_onboard_stripe}'>{msg}</a>")
-
 
     """
     ### TVA ###
@@ -514,6 +512,7 @@ def post_save_Product(sender, instance: Product, created, **kwargs):
             instance.poids = len(Product.objects.all()) + 1
         instance.save()
 
+
 """
 Un autre post save existe dans .signals.py : send_membership_and_badge_product_to_fedow
 Dans fichier signals pour éviter les doubles imports
@@ -530,6 +529,8 @@ class Price(models.Model):
 
     name = models.CharField(max_length=50, verbose_name=_("Précisez le nom du Tarif"))
     prix = models.DecimalField(max_digits=6, decimal_places=2)
+    free_price = models.BooleanField(default=False, verbose_name=_("Prix libre"),
+                                     help_text=_("Si coché, le prix sera demandé sur la page de paiement stripe"))
 
     publish = models.BooleanField(default=True, verbose_name=_("Publié"))
 
@@ -956,6 +957,13 @@ class PriceSold(models.Model):
                 "interval": "year",
                 "interval_count": 1
             }
+
+        if self.price.free_price:
+            data_stripe.pop('unit_amount')
+            data_stripe['billing_scheme'] = "per_unit"
+            data_stripe['custom_unit_amount'] = {
+                    "enabled": "true",
+                }
 
         price = stripe.Price.create(**data_stripe)
 

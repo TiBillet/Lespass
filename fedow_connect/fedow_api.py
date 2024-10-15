@@ -222,6 +222,7 @@ class MembershipFedow():
 
     def create(self, membership: Membership = None):
         # Si Wallet est None, alors nous en créons ou allons chercher un wallet avec l'email
+        membership.refresh_from_db()
         user = membership.user
 
         # TODO: le faire dans le get_or_create user et ajouter dans les test
