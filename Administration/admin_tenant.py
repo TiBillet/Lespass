@@ -626,7 +626,7 @@ class ProductAdmin(admin.ModelAdmin):
         'img',
         'poids',
         'categorie_article',
-        'send_to_cashless',
+        # 'send_to_cashless',
         'publish',
     )
 
@@ -752,11 +752,11 @@ class MembershipAdmin(admin.ModelAdmin):
         'deadline',
         'is_valid',
         'date_added',
-        'first_contribution',
+        # 'first_contribution',
         'last_contribution',
         'contribution_value',
         # 'last_action',
-        'postal_code',
+        # 'postal_code',
         'status',
         # 'birth_date',
         # 'phone',

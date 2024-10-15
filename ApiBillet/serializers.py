@@ -83,7 +83,7 @@ class ProductCreateSerializer(serializers.ModelSerializer):
             "publish",
             "img",
             "categorie_article",
-            "send_to_cashless",
+            # "send_to_cashless",
             "prices",
             "tag",
             "option_generale_radio",
@@ -128,14 +128,14 @@ class ProductCreateSerializer(serializers.ModelSerializer):
         if not attrs.get('img') and img_url:
             self.img_name, self.img_img = get_img_from_url(img_url)
 
-        if attrs.get('send_to_cashless') and attrs.get('categorie_article') == Product.ADHESION:
-            adhesion_to_cashless = Product.objects.filter(
-                categorie_article=Product.ADHESION,
-                send_to_cashless=True
-            )
-            if len(adhesion_to_cashless) > 0:
-                raise serializers.ValidationError(
-                    _(f"Un article d'adhésion vers le cashless existe déja."))
+        # if attrs.get('send_to_cashless') and attrs.get('categorie_article') == Product.ADHESION:
+        #     adhesion_to_cashless = Product.objects.filter(
+        #         categorie_article=Product.ADHESION,
+        #         send_to_cashless=True
+        #     )
+        #     if len(adhesion_to_cashless) > 0:
+        #         raise serializers.ValidationError(
+        #             _(f"Un article d'adhésion vers le cashless existe déja."))
 
         return super().validate(attrs)
 
@@ -156,7 +156,6 @@ class ProductSerializer(serializers.ModelSerializer):
             "publish",
             "img",
             "categorie_article",
-            "send_to_cashless",
             "prices",
             "tag",
             "option_generale_radio",
@@ -187,6 +186,7 @@ class PriceSerializer(serializers.ModelSerializer):
             'short_description',
             'long_description',
             'prix',
+            'free_price',
             'vat',
             'stock',
             'max_per_user',
@@ -752,16 +752,14 @@ class NewAdhesionValidator(serializers.Serializer):
     email = serializers.EmailField()
     gift = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
 
-    def validate_adhesion(self, value: Price):
-
+    # def validate_adhesion(self, value: Price):
         # Si c'est une adhésion à envoyer au serveur cashless, on vérifie qu'il soit up
-        if value.product.send_to_cashless:
-            config = Configuration.get_solo()
-            if not config.check_serveur_cashless():
-                raise serializers.ValidationError(
-                    _(f"Le serveur cashless n'est pas disponible ( check serveur false ). Merci d'essayer ultérieurement"))
-
-        return value
+        # if value.product.send_to_cashless:
+        #     config = Configuration.get_solo()
+        #     if not config.check_serveur_cashless():
+        #         raise serializers.ValidationError(
+        #             _(f"Le serveur cashless n'est pas disponible ( check serveur false ). Merci d'essayer ultérieurement"))
+        # return value
 
     def validate_email(self, value):
         # logger.info(f"NewAdhesionValidator validate email : {value}")

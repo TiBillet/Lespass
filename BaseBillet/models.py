@@ -479,6 +479,7 @@ class Product(models.Model):
     nominative = models.BooleanField(default=True, help_text="Nom/Prenom obligatoire lors de la réservation.")
 
     archive = models.BooleanField(default=False)
+    # TODO: A retirer, plus utilisé ?
     send_to_cashless = models.BooleanField(default=False,
                                            verbose_name="Envoyer au cashless",
                                            help_text="Produit checké par le serveur cashless.",
