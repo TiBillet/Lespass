@@ -62,6 +62,7 @@ def get_membership_after_paiement(trigger):
     price: Price = trigger.ligne_article.pricesold.price
     product: Product = trigger.ligne_article.pricesold.productsold.product
 
+    # TODO : Plusieurs adhésions possible avec le même user ! (enfants) passer par le metadata ?
     # On check s'il n'y a pas déjà une fiche membre avec le "price" correspondant
     membership = Membership.objects.filter(
         user=user,
