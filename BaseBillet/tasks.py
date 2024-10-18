@@ -64,27 +64,17 @@ class CeleryMailerClass():
     def config_valid(self):
         EMAIL_HOST = os.environ.get('EMAIL_HOST')
         EMAIL_PORT = os.environ.get('EMAIL_PORT')
-        EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
-        EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
 
-        # Si email envoyé par le tenant public (ex : première install), Configuration n'est pas disponible
-        self.return_email = os.environ['EMAIL_HOST_USER']
-        # try:
-        #     config = Configuration.get_solo()
-        #     self.return_email = config.email if config.email else os.environ['EMAIL_HOST_USER']
-        # except Exception as e:
-        #     logger.warning(f'  WORKDER CELERY : self.return_email -> Configuration.get_solo().email ERROR -> {e}')
-
-        # TODO: si email retour n'est pas le même nom de domain que le moteur > moteur a spam ?
-        # if self.return_email.partition("@")[2] != EMAIL_HOST_USER.partition("@")[2]:
-        #     logger.error(f'{self.return_email.partition("@")[2]} != {EMAIL_HOST_USER.partition("@")[2]}')
-        #     raise Exception('erreur de domaine email : return_email != HOST_USER')
+        # Adresse d'envoi peut/doit être différente du login du serveur mail.
+        # Error si ni DEFAULT ni HOST
+        self.return_email = os.environ.get('DEFAULT_FROM_EMAIL', os.environ['EMAIL_HOST_USER'])
 
         if all([
             EMAIL_HOST,
             EMAIL_PORT,
-            EMAIL_HOST_USER,
-            EMAIL_HOST_PASSWORD,
+            # Not required for local server
+            # EMAIL_HOST_USER,
+            # EMAIL_HOST_PASSWORD,
             self.return_email,
             self.title,
             self.email,
@@ -294,11 +284,10 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
     user = User.objects.get(email=user_email)
 
     signer = TimestampSigner()
-    signer.sign(f"{user.pk}")
-    token = encode_uid(signer.sign(f"{user.pk}"))
+    token = urlsafe_base64_encode(signer.sign(f"{user.pk}").encode('utf8'))
 
     ### VERIFICATION SIGNATURE AVANT D'ENVOYER
-    user_pk = signer.unsign(decode_uid(token), max_age=(3600 * 72))  # 3 jours
+    user_pk = signer.unsign(urlsafe_base64_decode(token).decode('utf8'), max_age=(3600 * 72))  # 3 jours
     designed_user = User.objects.get(pk=user_pk)
     assert user == designed_user
 

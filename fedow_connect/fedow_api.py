@@ -195,8 +195,23 @@ class BadgeFedow():
         if not fedow_config:
             self.fedow_config = FedowConfig.get_solo()
 
-    def check_in(self, user):
-        pass
+    def badge_in(self, user, product):
+        response_badge = _get(
+            self.fedow_config,
+            user=user,
+            path=f'wallet/{product.uuid}/badge',
+        )
+
+        if not response_badge.status_code == 201:
+            logger.error(f"badge_in ERRORS : {response_badge.status_code}")
+            raise Exception(f"badge_in ERRORS : {response_badge.status_code}")
+
+        transaction_serialized = TransactionValidator(data=response_badge.json())
+        if transaction_serialized.is_valid():
+            return transaction_serialized.validated_data
+        else:
+            logger.error(f"badge_in wallet_serialized transaction_serialized ERRORS : {transaction_serialized.errors}")
+            raise Exception(f"badge_in transaction_serialized ERRORS : {transaction_serialized.errors}")
 
 
 class MembershipFedow():
@@ -608,8 +623,8 @@ class TransactionFedow():
         )
 
         if not response_link.status_code == 200:
-            logger.error(f"retrieve_by_signature ERRORS : {response_link.status_code}")
-            raise Exception(f"retrieve_by_signature ERRORS : {response_link.status_code}")
+            logger.error(f"paginated_list_by_wallet_signature ERRORS : {response_link.status_code}")
+            raise Exception(f"paginated_list_by_wallet_signature ERRORS : {response_link.status_code}")
 
         paginated_transactions_serialized = PaginatedTransactionValidator(data=response_link.json())
 
@@ -619,6 +634,8 @@ class TransactionFedow():
             logger.error(f"retrieve_by_signature wallet_serialized ERRORS : {paginated_transactions_serialized.errors}")
             raise Exception(
                 f"retrieve_by_signature wallet_serialized ERRORS : {paginated_transactions_serialized.errors}")
+
+
 
 
 # from fedow_connect.fedow_api import FedowAPI
@@ -634,6 +651,7 @@ class FedowAPI():
         self.asset = AssetFedow(fedow_config=self.fedow_config)
         self.transaction = TransactionFedow(fedow_config=self.fedow_config)
         self.NFCcard = NFCcardFedow(fedow_config=self.fedow_config)
+        self.badge = BadgeFedow(fedow_config=self.fedow_config)
 
     def handshake(self):
         pass

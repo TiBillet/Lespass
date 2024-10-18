@@ -1,12 +1,12 @@
-{% if "embed" not in url_name %}
+<!-- Toaster pour messages django -->
+{% include "htmx/components/django_messages_toast.html" %}
+{% if not embed %}
     {% include "htmx/components/navbar.html" %}
-    {% include "htmx/components/django_messages_toast.html" %}
     {# le header est affichable si l'url ne contient pas "tenant" et que header soit non null #}
     {% if event %}
         {% include "htmx/components/header_event.html" %}
     {% elif "tenant" not in url_name and header %}
         {% include "htmx/components/header.html" %}
     {% endif %}
-{% else %}
-    {% include "htmx/components/django_messages_toast.html" %}
 {% endif %}
+

@@ -33,8 +33,8 @@ class Command(BaseCommand):
             ### CONFIGURATION VARIABLE ####
 
             config = Configuration.get_solo()
-            config.organisation = "L’interrupteur"
-            config.short_description = "Les scènes du l’Interrupteur : un espace de démonstration."
+            config.organisation = "Lespas'"
+            config.short_description = "Les scènes de Lespas : un espace de démonstration."
             config.long_description = (
                 "Vous trouverez ici un exemple de plusieurs types d'évènements, d'adhésions et d'abonnements."
                 "\nGratuit, payant, avec prix préférentiels."

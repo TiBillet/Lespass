@@ -11,7 +11,7 @@ from django.contrib.auth import logout, login
 from django.contrib.messages import MessageFailure
 from django.core.cache import cache
 from django.db import connection
-from django.http import HttpResponse, HttpRequest, Http404, HttpResponseRedirect
+from django.http import HttpResponse, HttpRequest, Http404, HttpResponseRedirect, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.response import TemplateResponse
 from django.utils.encoding import force_str, force_bytes
@@ -53,8 +53,17 @@ def encode_uid(pk):
 
 def get_context(request):
     config = Configuration.get_solo()
+    logger.debug("request.htmx") if request.htmx else None
     base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
     serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
+
+    # embed ?
+    embed = False
+    try :
+        embed = request.query_params.get('embed')
+    except :
+        embed = False
+
     # Le lien "Fédération"
     meta_url = cache.get('meta_url')
     if not meta_url:
@@ -64,6 +73,7 @@ def get_context(request):
 
     context = {
         "base_template": base_template,
+        "embed": embed,
         "url_name": request.resolver_match.url_name,
         "user": request.user,
         "profile": serialized_user,
@@ -426,7 +436,7 @@ class MyAccount(viewsets.ViewSet):
         wallet = fedowAPI.wallet.cached_retrieve_by_signature(request.user).validated_data
 
         # On retire les adhésions, on les affiche dans l'autre table
-        tokens = [token for token in wallet.get('tokens') if token.get('asset_category') != 'SUB']
+        tokens = [token for token in wallet.get('tokens') if token.get('asset_category') not in ['SUB', 'BDG']]
 
         # TODO: Factoriser avec tokens_table / membership_table
         for token in tokens:
@@ -504,6 +514,7 @@ class MyAccount(viewsets.ViewSet):
             'tokens': tokens,
         }
         return render(request, "htmx/views/my_account/tokens_membership_table.html", context=context)
+
 
     @action(detail=False, methods=['GET'])
     def profile(self, request: HttpRequest) -> HttpResponse:
@@ -607,16 +618,21 @@ class Badge(viewsets.ViewSet):
 
     def list(self, request: HttpRequest):
         template_context = get_context(request)
-        # import ipdb; ipdb.set_trace()
         template_context["badges"] = Product.objects.filter(categorie_article=Product.BADGE, publish=True)
         return render(request, "htmx/views/badge/list.html", context=template_context)
 
-    @action(detail=False, methods=['GET'])
-    def check_in(self, request: HttpRequest):
-        template_context = get_context(request)
+    @action(detail=True, methods=['GET'])
+    def badge_in(self, request: HttpRequest, pk):
+        product = get_object_or_404(Product, uuid=pk)
+        user = request.user
         fedowAPI = FedowAPI()
-        messages.add_message(request, messages.SUCCESS, _(f"Check in OK"))
-        return HttpResponseClientRedirect(request.headers['Referer'])
+        transaction = fedowAPI.badge.badge_in(user, product)
+        
+        return JsonResponse({
+            'icon': 'success',
+            'swal_title': _('Badged !'),
+            'swal_message': _('Thank you for your visit!. You can see a summary in the “My Account” area.'),
+        })
 
 
     @action(detail=False, methods=['GET'])
@@ -640,9 +656,13 @@ class MembershipMVT(viewsets.ViewSet):
 
     def list(self, request: HttpRequest):
         template_context = get_context(request)
-        # import ipdb; ipdb.set_trace()
         template_context["memberships"] = Product.objects.filter(categorie_article=Product.ADHESION, publish=True)
-        return render(request, "htmx/views/membership/list.html", context=template_context)
+        response = render(
+            request, "htmx/views/membership/list.html",
+            context=template_context,
+        )
+        response['X-Frame-Options'] = '' if template_context.get('embed') else 'DENY'
+        return response
 
     def create(self, request):
         membership_validator = MembershipValidator(data=request.data, context={'request': request})
@@ -759,8 +779,9 @@ class Tenant(viewsets.ViewSet):
 
         try:
             # On indique le retour sur la page meta, le tenant n'est pas encore créé ici
-            account_link = self.link_for_onboard_stripe(meta=True)
-            id_acc_connect = Configuration.get_solo().get_stripe_connect_account()
+            config = Configuration.get_solo()
+            id_acc_connect = config.get_stripe_connect_account()
+            account_link = config.link_for_onboard_stripe(meta=True)
 
             # Mise en cache pendant 24h des infos name id_acc_connect et email
             validated_data = new_tenant.validated_data
@@ -774,10 +795,10 @@ class Tenant(viewsets.ViewSet):
                 dns_choice=validated_data['dns_choice'],
             )
 
-            url_onboard = account_link.get('url')
-            return HttpResponseClientRedirect(url_onboard)
+            return HttpResponseClientRedirect(account_link)
 
         except Exception as e:
+            logger.error(e)
             messages.add_message(request, messages.ERROR, f"{e}")
             return HttpResponseClientRedirect(request.headers['Referer'])
 

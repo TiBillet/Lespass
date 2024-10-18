@@ -1,11 +1,10 @@
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login, logout
-from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.contrib.auth.tokens import default_token_generator
 from django.core import signing
-from django.core.signing import SignatureExpired
+from django.core.signing import SignatureExpired, BadSignature, TimestampSigner
 from django.http import HttpResponseRedirect
-from django.utils.encoding import force_str, force_bytes, DjangoUnicodeDecodeError
+from django.utils.encoding import force_str, force_bytes
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.utils.translation import gettext_lazy as _
 from rest_framework import status, permissions, viewsets
@@ -135,14 +134,21 @@ class test_api_key(APIView):
 
 def activate(request, token):
     try:
-        token = decode_uid(token)
         signer = signing.TimestampSigner()
-        user_pk = signer.unsign(token, max_age=(3600*72)) # 3 jours
+        try :
+            user_pk = signer.unsign(urlsafe_base64_decode(token).decode('utf8'), max_age=(3600 * 72))  # 3 jours
+        except UnicodeDecodeError as e:
+            messages.add_message(request, messages.ERROR, _("Token non valide. Merci de vous connecter à nouveau."))
+            return False
+
         user: TibilletUser = User.objects.get(pk=user_pk)
         if user.email_error:
             messages.add_message(request, messages.ERROR, _("Mail non valide"))
             return None
 
+        user.is_active = True
+        user.email_valid = True
+        user.save()
 
         # user déja loggué, on vérifie que c'est le même, sinon, on déconnecte
         if request.user.is_authenticated:
@@ -154,9 +160,6 @@ def activate(request, token):
             logger.info("user déja connecté, mais pas le même")
             logout(request)
 
-        user.is_active = True
-        user.email_valid = True
-        user.save()
         messages.add_message(request, messages.SUCCESS, _("Vous êtes bien connecté. Bienvenue !"))
         login(request, user)
         return True
@@ -165,7 +168,7 @@ def activate(request, token):
         messages.add_message(request, messages.ERROR, _("Token expiré. Merci de vous connecter à nouveau."))
     except User.DoesNotExist:
         messages.add_message(request, messages.ERROR, _("Erreur, user non valide."))
-    except DjangoUnicodeDecodeError:
+    except BadSignature:
         messages.add_message(request, messages.ERROR, _("Token non valide."))
     except Exception as e:
         logger.error(e)
@@ -313,9 +316,16 @@ class OAauthCallback(APIView):
                     send_mail=False,
                 )
 
-                uid = encode_uid(user.pk)
-                token = default_token_generator.make_token(user)
-                redirect_uri = request.build_absolute_uri(f'/emailconfirmation/{uid}/{token}') \
+                signer = TimestampSigner()
+                signer.sign(f"{user.pk}")
+                token = encode_uid(signer.sign(f"{user.pk}"))
+
+                ### VERIFICATION SIGNATURE AVANT D'ENVOYER
+                user_pk = signer.unsign(urlsafe_base64_decode(token).decode('utf8'), max_age=(3600 * 72))  # 3 jours
+                designed_user = User.objects.get(pk=user_pk)
+                assert user == designed_user
+
+                redirect_uri = request.build_absolute_uri(f'/emailconfirmation/{token}') \
                     .replace('http://', 'https://')
                 return HttpResponseRedirect(redirect_uri)
 

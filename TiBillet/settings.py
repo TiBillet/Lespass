@@ -187,8 +187,8 @@ DATABASES = {
         'NAME': os.environ.get('POSTGRES_DB'),
         'USER': os.environ.get('POSTGRES_USER'),
         'PASSWORD': os.environ.get('POSTGRES_PASSWORD'),
-        'HOST': 'postgres',
-        'PORT': '5432',
+        'HOST': os.environ.get('POSTGRES_HOST', 'postgres'),
+        'PORT': os.environ.get('POSTGRES_PORT', '5432'),
     }
 }
 
@@ -290,6 +290,7 @@ EMAIL_HOST = os.environ.get('EMAIL_HOST')
 EMAIL_PORT = os.environ.get('EMAIL_PORT')
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL')
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', False)
 EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', True)
 
@@ -344,6 +345,7 @@ OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 # LOGGING
 # -------------------------------------/
 
+LOGGING_LVL = 'DEBUG' if DEBUG else 'INFO'
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -364,13 +366,13 @@ LOGGING = {
     },
     'handlers': {
         'console': {
-            'level': 'INFO',
+            'level': LOGGING_LVL,
             'class': 'logging.StreamHandler',
             'formatter': 'simple',
             'filters': ['tenant_context'],
         },
         'logfile': {
-            'level': 'INFO',
+            'level': LOGGING_LVL,
             'class': 'logging.handlers.RotatingFileHandler',
             'filename': f"{BASE_DIR}/logs/Djangologfile",
             'formatter': 'simple',

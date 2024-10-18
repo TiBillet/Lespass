@@ -25,7 +25,7 @@ class Command(BaseCommand):
             waiting_config = WaitingConfiguration.objects.create(
                 organisation=options['name'],
                 slug=slugify(options['name']),
-                email=options['email'],
+                email=options['email'].lower(),
                 dns_choice=dns_choice,
             )
             TenantCreateValidator.create_tenant(waiting_config)

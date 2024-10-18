@@ -39,8 +39,9 @@ FEDOW_DOMAIN='fedow.tibillet.localhost' # the same as Fedow
 # Not required on dev' env.
 EMAIL_HOST=''
 EMAIL_PORT=''
-EMAIL_HOST_USER=''
-EMAIL_HOST_PASSWORD=''
+EMAIL_HOST_USER='' # Not required for local mail server
+EMAIL_HOST_PASSWORD='' # Not required for local mail server
+DEFAULT_FROM_EMAIL='' # If empty, we use the EMAIL_HOST_USER
 
 
 # Usefull for dev/test

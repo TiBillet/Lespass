@@ -43,11 +43,37 @@
 <script src="{% static 'mvt_htmx/material_kit_2.0.7/js/material-kit.js' %}"></script>
 <!-- htmx -->
 <script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
-<script src="{% static 'mvt_htmx/js/sweetalert.js' %}"></script>
+<script src="{% static 'mvt_htmx/js/loading-states.js' %}"></script>
 {#<script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js.gz' %}"></script>#}
 
 <!-- commun -->
 <script type="module" src="{% static 'mvt_htmx/js/commun.js' %}"></script>
+
+
+<!-- sweet alert -->
+<script src="{% static 'mvt_htmx/js/sweetalert2@11.js' %}"></script>
+<script>
+    document.body.addEventListener('htmx:afterRequest', function (evt) {
+        // Trouver l'élément qui a déclenché la requête
+        const triggeredElement = evt.detail.elt;
+
+        // Vérifier si cet élément a l'attribut data-swal="true"
+        if (triggeredElement.getAttribute('data-swal') === 'true') {
+
+            // Récupérer la réponse JSON du backend
+            const response = evt.detail.xhr.response;
+            const jsonresponse = JSON.parse(response);
+
+            Swal.fire({
+                icon: jsonresponse.icon,
+                title: jsonresponse.swal_title,
+                text: jsonresponse.swal_message,
+                confirmButtonText: 'OK'
+            });
+        }
+    });
+</script>
+<div id="alert-container" style="display: none"></div>
 
 {% block script %}
 {% endblock script %}
@@ -57,6 +83,8 @@
 
 <!-- spinner -->
 {% include "htmx/components/loading.html" %}
+
+
 </body>
 
 </html>
