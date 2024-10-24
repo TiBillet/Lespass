@@ -867,7 +867,7 @@ class ProductSold(models.Model):
         client = connection.tenant
         # On est en mode test :
         if type(client) == FakeTenant:
-            domain_url = "demo.tibillet.localhost"
+            domain_url = "lespass.tibillet.localhost"
         else:
             domain_url = client.get_primary_domain()
 
