@@ -7,7 +7,7 @@ from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
 
 from AuthBillet.models import TibilletUser
-from BaseBillet.models import Reservation, LigneArticle, Ticket, Paiement_stripe, Product, PriceSold
+from BaseBillet.models import Reservation, LigneArticle, Ticket, Paiement_stripe, Product, PriceSold, Price
 from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation
 from BaseBillet.triggers import ActionArticlePaidByCategorie
 from fedow_connect.fedow_api import AssetFedow
@@ -312,4 +312,5 @@ def send_membership_and_badge_product_to_fedow(sender, instance: Product, create
         if instance.archive:
             # L'instance est archivé, on le notifie à Fedow :
             fedow_asset.archive_asset(instance)
+
 
