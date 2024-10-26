@@ -311,20 +311,13 @@ class Configuration(SingletonModel):
     stripe_test_api_key = models.CharField(max_length=110, blank=True, null=True)
 
     def get_stripe_api(self):
-        # if self.get_stripe_connect_account() and self.stripe_payouts_enabled :
-        #     return RootConfiguration.get_solo().get_stripe_api()
-        # tenant_stripe = self.stripe_test_api_key if self.stripe_mode_test else self.stripe_api_key
-        # if not tenant_stripe:
-        #     logger.warning(
-        #         f"Configuration.get_stripe_api() - No stripe api key for {connection.tenant}. On utilise celle de root.")
-        #     return RootConfiguration.get_solo().get_stripe_api()
+        # Test ou pas test ?
         return self.stripe_test_api_key if self.stripe_mode_test else self.stripe_api_key
 
     def get_stripe_connect_account(self):
-        if self.stripe_mode_test:
-            return self.stripe_connect_account_test
-        else:
-            return self.stripe_connect_account
+        # Test ou pas test ?
+        return self.stripe_connect_account_test if self.stripe_mode_test else self.stripe_connect_account
+
 
     # Vérifie que le compte stripe connect soit valide et accepte les paiements.
     def check_stripe_payouts(self):
@@ -337,34 +330,35 @@ class Configuration(SingletonModel):
                 self.save()
         return self.stripe_payouts_enabled
 
-    @staticmethod
-    def link_for_onboard_stripe(meta=None):
+    def link_for_onboard_stripe(self):
         stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-        # Le tenant n'existe pas encore, on utilise un retour sur la meta
-        tenant = Client.objects.filter(categorie=Client.META)[0] if meta else connection.tenant
+        # Si lien demandé depuis la meta :
+        # le tenant n'existe pas encore, on utilise un retour sur la meta
+        tenant = connection.tenant
         tenant_url = tenant.get_primary_domain().domain
 
-        config = Configuration.get_solo()
-        if not config.get_stripe_connect_account() or meta:
+        # Si la procédure a déja été démmaré, le numero stripe connect a déja été créé.
+        # Sinon, on en cherche un nouveau
+        if not self.get_stripe_connect_account():
             acc_connect = stripe.Account.create(
                 type="standard",
                 country="FR",
             )
             id_acc_connect = acc_connect.get('id')
-            config.stripe_connect_account = id_acc_connect
-            if not meta:
-                config.save()
+            self.stripe_connect_account = id_acc_connect
+            self.save()
 
         url_onboard_stripe = stripe.AccountLink.create(
-            account=config.stripe_connect_account,
-            refresh_url=f"https://{tenant_url}/tenant/{config.stripe_connect_account}/onboard_stripe_return/",
-            return_url=f"https://{tenant_url}/tenant/{config.stripe_connect_account}/onboard_stripe_return/",
+            account=self.stripe_connect_account,
+            refresh_url=f"https://{tenant_url}/tenant/{self.stripe_connect_account}/onboard_stripe_return/",
+            return_url=f"https://{tenant_url}/tenant/{self.stripe_connect_account}/onboard_stripe_return/",
             type="account_onboarding",
         )
 
         return url_onboard_stripe.url
 
     def onboard_stripe(self):
+        # on vérifie que le compte soit toujours lié et qu'il peut recevoir des paiements :
         if self.check_stripe_payouts():
             return "Stripe connected"
         url_onboard_stripe = self.link_for_onboard_stripe()

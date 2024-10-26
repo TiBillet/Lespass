@@ -321,7 +321,7 @@ class OAauthCallback(APIView):
                 token = encode_uid(signer.sign(f"{user.pk}"))
 
                 ### VERIFICATION SIGNATURE AVANT D'ENVOYER
-                user_pk = signer.unsign(decode_uid(token), max_age=(3600 * 72))  # 3 jours
+                user_pk = signer.unsign(urlsafe_base64_decode(token).decode('utf8'), max_age=(3600 * 72))  # 3 jours
                 designed_user = User.objects.get(pk=user_pk)
                 assert user == designed_user
 
