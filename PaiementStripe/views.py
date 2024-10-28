@@ -11,6 +11,7 @@ from rest_framework import serializers
 from stripe.error import InvalidRequestError
 
 from BaseBillet.models import Configuration, LigneArticle, Paiement_stripe, Reservation, Price, PriceSold
+from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -32,7 +33,6 @@ class CreationPaiementStripe():
 
         # On va chercher les informations de configuration
         # et test si tout est ok pour créer un paiement
-        self.configuration = Configuration.get_solo()
         self.user = user
         self.email_paiement = user.email
         self.invoice = invoice
@@ -51,6 +51,8 @@ class CreationPaiementStripe():
 
         # On instancie Stripe et entre en db le paiement en state Pending
         self.stripe_api_key = self._stripe_api_key()
+        self.stripe_connect_account = Configuration.get_solo().get_stripe_connect_account()
+
         self.paiement_stripe_db = self._send_paiement_stripe_in_db()
 
         # Création des items prices et de l'instancee de paiement Stripe
@@ -71,13 +73,12 @@ class CreationPaiementStripe():
         return total
 
     def _stripe_api_key(self):
-        # import ipdb; ipdb.set_trace()
-        api_key = self.configuration.get_stripe_api()
-        if api_key:
-            stripe.api_key = api_key
-            return stripe.api_key
-        else:
+        # La clé root comme clé par default pour tout paiement.
+        api_key = RootConfiguration.get_solo().get_stripe_api()
+        if not api_key:
             raise serializers.ValidationError(_(f"No Stripe Api Key in configuration"))
+        stripe.api_key = api_key
+        return stripe.api_key
 
     def _send_paiement_stripe_in_db(self):
         dict_paiement = {
@@ -155,6 +156,7 @@ class CreationPaiementStripe():
             'mode': self.mode,
             'metadata': self.metadata,
             'client_reference_id': f"{self.user.pk}",
+            'stripe_account': f'{self.stripe_connect_account}',
         }
 
         return data_checkout
@@ -168,7 +170,7 @@ class CreationPaiementStripe():
             # L'id stripe d'un prix est mauvais.
             # Probablement dû à un changement d'état de test/prod.
             # On force là creation de nouvel ID en relançant la boucle self.line_items avec force=True
-            logger.error(f"InvalidRequestError on checkout session creation : {e}")
+            logger.warning(f"InvalidRequestError on checkout session creation : {e}")
             self.line_items = self._set_stripe_line_items(force=True)
             data_checkout = self.dict_checkout_creator()
             checkout_session = stripe.checkout.Session.create(**data_checkout)

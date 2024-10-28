@@ -13,6 +13,7 @@ from BaseBillet.tasks import send_to_ghost, send_email_generique, create_invoice
 from BaseBillet.templatetags.tibitags import dround
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
+from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
 
@@ -56,46 +57,29 @@ def context_for_membership_email(membership: Membership = None, paiement_stripe=
     return context
 
 
-def get_membership_after_paiement(trigger):
-    paiement_stripe: Paiement_stripe = trigger.ligne_article.paiement_stripe
-    user = paiement_stripe.user
-    price: Price = trigger.ligne_article.pricesold.price
-    product: Product = trigger.ligne_article.pricesold.productsold.product
 
-    # TODO : Plusieurs adhésions possible avec le même user ! (enfants) passer par le metadata ?
-    # On check s'il n'y a pas déjà une fiche membre avec le "price" correspondant
-    membership = Membership.objects.filter(
-        user=user,
-        price=price
-    ).first()
-    logger.info(f"    membership trouvé : {membership}")
-
-    if not membership:
-        membership = Membership.objects.create(
-            user=user,
-            price=price,
-            first_contribution=timezone.now().date(),
-        )
-
-    return membership
-
-
-def update_membership_state_after_paiement(trigger, membership: Membership):
+def update_membership_state_after_paiement(trigger):
     paiement_stripe = trigger.ligne_article.paiement_stripe
+    membership = paiement_stripe.membership.first()
 
     price: Price = trigger.ligne_article.pricesold.price
     membership.contribution_value = trigger.ligne_article.pricesold.prix
+
     if price.free_price:
         # Le tarif a été entré dans stripe.
-        config = Configuration.get_solo()
-        stripe.api_key = config.get_stripe_api()
+        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
         # recherche du checkout
         checkout_session = stripe.checkout.Session.retrieve(
             paiement_stripe.checkout_session_id_stripe,
-            # stripe_account=config.get_stripe_connect_account()
+            stripe_account=Configuration.get_solo().get_stripe_connect_account()
         )
         contribution = dround(checkout_session['amount_total'])
-        PriceSold.objects.filter(pk=trigger.ligne_article.pricesold.pk).update(prix=contribution)
+        # PriceSold.objects.filter(pk=trigger.ligne_article.pricesold.pk).update(prix=contribution)
+        trigger.ligne_article.pricesold.prix = contribution
+
+        # Paiement_stripe.objects.filter(pk=paiement_stripe.pk).update(total=contribution)
+        trigger.ligne_article.paiement_stripe.total = contribution
+
         membership.contribution_value=contribution
 
     membership.last_contribution = timezone.now().date()
@@ -144,8 +128,7 @@ def send_membership_to_ghost(membership: Membership):
 
 def send_sale_to_laboutik(ligne_article: LigneArticle):
     config = Configuration.get_solo()
-    # Si c'est VALID, ça veut dire que c'est déja envoyé
-    if config.check_serveur_cashless() and ligne_article.status == LigneArticle.PAID:
+    if config.check_serveur_cashless():
         serialized_ligne_article = LigneArticleSerializer(ligne_article).data
         json_data = json.dumps(serialized_ligne_article, cls=DjangoJSONEncoder)
 
@@ -221,12 +204,11 @@ class ActionArticlePaidByCategorie:
     def trigger_A(self):
         logger.info(f"TRIGGER ADHESION PAID")
 
-        membership: Membership = get_membership_after_paiement(self)
-        updated_membership: Membership = update_membership_state_after_paiement(self, membership)
+        membership: Membership = update_membership_state_after_paiement(self)
+        # Refresh en cas de prix libre, le prix est mis à jour par le update membership.
 
-        import ipdb; ipdb.set_trace()
-        email_sended = send_membership_invoice_email_after_paiement(self, updated_membership)
-        ghost_sended = send_membership_to_ghost(updated_membership)
+        email_sended = send_membership_invoice_email_after_paiement(self, membership)
+        ghost_sended = send_membership_to_ghost(membership)
 
         # Envoyer l'adhésion à fedow
         logger.info(f"TRIGGER ADHESION PAID -> envoi à Fedow")

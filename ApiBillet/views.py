@@ -25,9 +25,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
-    ReservationValidator, MembreValidator, ConfigurationSerializer, EventCreateSerializer, TicketSerializer, \
-    OptionsSerializer, NewAdhesionValidator, \
-    ProductCreateSerializer
+    ReservationValidator, ConfigurationSerializer, EventCreateSerializer, TicketSerializer, \
+    OptionsSerializer,  ProductCreateSerializer
 from AuthBillet.models import TenantAdminPermission, TibilletUser, TenantAdminPermissionWithRequest
 from AuthBillet.utils import user_apikey_valid
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe, \
@@ -624,34 +623,34 @@ def request_for_data_cashless(user: TibilletUser):
 """
 
 
-class MembershipViewset(viewsets.ViewSet):
-
-    def create(self, request):
-        logger.info(f"MembershipViewset reçue -> go MembreValidator")
-
-        # Test pour option :
-        # request.data['options'] = ['1ff89201-edfa-4839-80d8-a5f98737f970',]
-
-        # TODO: Pourquoi deux serializers ?
-        membre_validator = MembreValidator(data=request.data, context={'request': request})
-        if membre_validator.is_valid():
-            adhesion_validator = NewAdhesionValidator(data=request.data, context={'request': request})
-            if adhesion_validator.is_valid():
-                return Response(adhesion_validator.data, status=status.HTTP_201_CREATED)
-
-            logger.error(f'adhesion_validator.errors : {adhesion_validator.errors}')
-            return Response(adhesion_validator.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        logger.error(f'membre_validator.errors : {membre_validator.errors}')
-        return Response(membre_validator.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    def get_permissions(self):
-        if self.action in ['create', 'retrieve']:
-            permission_classes = [permissions.AllowAny]
-        else:
-            permission_classes = [TenantAdminPermission]
-
-        return [permission() for permission in permission_classes]
+# class MembershipViewset(viewsets.ViewSet):
+#
+#     def create(self, request):
+#         logger.info(f"MembershipViewset reçue -> go MembreValidator")
+#
+#         # Test pour option :
+#         # request.data['options'] = ['1ff89201-edfa-4839-80d8-a5f98737f970',]
+#
+#         # TODO: Pourquoi deux serializers ?
+#         membre_validator = MembreValidator(data=request.data, context={'request': request})
+#         if membre_validator.is_valid():
+#             adhesion_validator = NewAdhesionValidator(data=request.data, context={'request': request})
+#             if adhesion_validator.is_valid():
+#                 return Response(adhesion_validator.data, status=status.HTTP_201_CREATED)
+#
+#             logger.error(f'adhesion_validator.errors : {adhesion_validator.errors}')
+#             return Response(adhesion_validator.errors, status=status.HTTP_400_BAD_REQUEST)
+#
+#         logger.error(f'membre_validator.errors : {membre_validator.errors}')
+#         return Response(membre_validator.errors, status=status.HTTP_400_BAD_REQUEST)
+#
+#     def get_permissions(self):
+#         if self.action in ['create', 'retrieve']:
+#             permission_classes = [permissions.AllowAny]
+#         else:
+#             permission_classes = [TenantAdminPermission]
+#
+#         return [permission() for permission in permission_classes]
 
 
 class ZReportPDF(View):

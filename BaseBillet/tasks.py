@@ -139,7 +139,7 @@ def create_invoice_pdf(paiement_stripe: Paiement_stripe):
     font_config = FontConfiguration()
     template = get_template(template_name)
     user = paiement_stripe.user
-    membership = user.membership.first()
+    membership = paiement_stripe.membership.first()
 
     context = {
         'config': config,

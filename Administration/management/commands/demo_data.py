@@ -131,6 +131,15 @@ class Command(BaseCommand):
                 subscription_type=Price.MONTH,
             )
 
+            prix_libre, created = Price.objects.get_or_create(
+                product=adhesion_asso,
+                name="Prix libre",
+                short_description="Prix libre",
+                prix='1',
+                free_price=True,
+                subscription_type=Price.YEAR,
+            )
+
             amap, created = Product.objects.get_or_create(
                 name="Panier AMAP",
                 short_description="Adhésion au panier AMAP",

@@ -296,6 +296,7 @@ def unpublish_if_archived(sender, instance, **kwargs):
         instance.publish = False
 
 
+
 @receiver(post_save, sender=Product)
 def send_membership_and_badge_product_to_fedow(sender, instance: Product, created, **kwargs):
     logger.info(f"send_membership_product_to_fedow")
@@ -314,3 +315,8 @@ def send_membership_and_badge_product_to_fedow(sender, instance: Product, create
             fedow_asset.archive_asset(instance)
 
 
+@receiver(pre_save, sender=Price)
+def price_if_free_set_t_1(sender, instance: Price, **kwargs):
+    if instance.free_price:
+        # Quantité unitaire pour caisse enregistreuse
+        instance.prix=1

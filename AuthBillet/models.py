@@ -243,10 +243,6 @@ class TibilletUser(AbstractUser):
 
     ##### END user terminaux ####
 
-    def get_active_membership(self):
-        # TODO: Vérifier sur Fedow. Si l'adhésion a été faite sur le point de vente LaBoutik, le membership n'est que sur le wallet Fedow
-        return [mem.price.product.uuid for mem in self.membership.all() if mem.is_valid()]
-
     def achat(self):
         return " ".join([achat["schema_name"] for achat in self.client_achat.values("schema_name")])
 

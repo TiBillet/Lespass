@@ -745,146 +745,207 @@ class TicketSerializer(serializers.ModelSerializer):
         representation['options'] = [option.name for option in instance.reservation.options.all()]
         return representation
 
+#
+# class NewAdhesionValidator(serializers.Serializer):
+#     adhesion = serializers.PrimaryKeyRelatedField(
+#         queryset=Price.objects.filter(product__categorie_article=Product.ADHESION))
+#     email = serializers.EmailField()
+#     gift = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+#
+#     # def validate_adhesion(self, value: Price):
+#         # Si c'est une adhésion à envoyer au serveur cashless, on vérifie qu'il soit up
+#         # if value.product.send_to_cashless:
+#         #     config = Configuration.get_solo()
+#         #     if not config.check_serveur_cashless():
+#         #         raise serializers.ValidationError(
+#         #             _(f"Le serveur cashless n'est pas disponible ( check serveur false ). Merci d'essayer ultérieurement"))
+#         # return value
+#
+#     def validate_email(self, value):
+#         # logger.info(f"NewAdhesionValidator validate email : {value}")
+#         user_paiement: TibilletUser = get_or_create_user(value, send_mail=False)
+#         self.user = user_paiement
+#         return user_paiement.email
+#
+#     def validate(self, attrs):
+#         price_adhesion: Price = attrs.get('adhesion')
+#
+#         user: TibilletUser = self.user
+#
+#         metadata = {
+#             'tenant': f'{connection.tenant.uuid}',
+#             'pk_adhesion': f"{price_adhesion.pk}",
+#         }
+#         self.metadata = metadata
+#
+#         ligne_article_adhesion = LigneArticle.objects.create(
+#             pricesold=get_or_create_price_sold(price_adhesion, None, gift=attrs.get('gift')),
+#             qty=1,
+#         )
+#
+#         new_paiement_stripe = CreationPaiementStripe(
+#             user=user,
+#             liste_ligne_article=[ligne_article_adhesion, ],
+#             metadata=metadata,
+#             reservation=None,
+#             source=Paiement_stripe.API_BILLETTERIE,
+#             absolute_domain=self.context.get('request').build_absolute_uri().partition('/api')[0],
+#         )
+#
+#         if new_paiement_stripe.is_valid():
+#             paiement_stripe: Paiement_stripe = new_paiement_stripe.paiement_stripe_db
+#             paiement_stripe.lignearticles.all().update(status=LigneArticle.UNPAID)#
+# class NewAdhesionValidator(serializers.Serializer):
+#     adhesion = serializers.PrimaryKeyRelatedField(
+#         queryset=Price.objects.filter(product__categorie_article=Product.ADHESION))
+#     email = serializers.EmailField()
+#     gift = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+#
+#     # def validate_adhesion(self, value: Price):
+#         # Si c'est une adhésion à envoyer au serveur cashless, on vérifie qu'il soit up
+#         # if value.product.send_to_cashless:
+#         #     config = Configuration.get_solo()
+#         #     if not config.check_serveur_cashless():
+#         #         raise serializers.ValidationError(
+#         #             _(f"Le serveur cashless n'est pas disponible ( check serveur false ). Merci d'essayer ultérieurement"))
+#         # return value
+#
+#     def validate_email(self, value):
+#         # logger.info(f"NewAdhesionValidator validate email : {value}")
+#         user_paiement: TibilletUser = get_or_create_user(value, send_mail=False)
+#         self.user = user_paiement
+#         return user_paiement.email
+#
+#     def validate(self, attrs):
+#         price_adhesion: Price = attrs.get('adhesion')
+#
+#         user: TibilletUser = self.user
+#
+#         metadata = {
+#             'tenant': f'{connection.tenant.uuid}',
+#             'pk_adhesion': f"{price_adhesion.pk}",
+#         }
+#         self.metadata = metadata
+#
+#         ligne_article_adhesion = LigneArticle.objects.create(
+#             pricesold=get_or_create_price_sold(price_adhesion, None, gift=attrs.get('gift')),
+#             qty=1,
+#         )
+#
+#         new_paiement_stripe = CreationPaiementStripe(
+#             user=user,
+#             liste_ligne_article=[ligne_article_adhesion, ],
+#             metadata=metadata,
+#             reservation=None,
+#             source=Paiement_stripe.API_BILLETTERIE,
+#             absolute_domain=self.context.get('request').build_absolute_uri().partition('/api')[0],
+#         )
+#
+#         if new_paiement_stripe.is_valid():
+#             paiement_stripe: Paiement_stripe = new_paiement_stripe.paiement_stripe_db
+#             paiement_stripe.lignearticles.all().update(status=LigneArticle.UNPAID)
+#             self.checkout_session = new_paiement_stripe.checkout_session
+#
+#             return super().validate(attrs)
+#
+#         raise serializers.ValidationError(_(f'new_paiement_stripe not valid'))
+#
+#     def to_representation(self, instance):
+#         representation = super().to_representation(instance)
+#         logger.info(f"{self.checkout_session.url}")
+#         representation['checkout_url'] = self.checkout_session.url
+#         return representation
 
-class NewAdhesionValidator(serializers.Serializer):
-    adhesion = serializers.PrimaryKeyRelatedField(
-        queryset=Price.objects.filter(product__categorie_article=Product.ADHESION))
-    email = serializers.EmailField()
-    gift = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+#             self.checkout_session = new_paiement_stripe.checkout_session
+#
+#             return super().validate(attrs)
+#
+#         raise serializers.ValidationError(_(f'new_paiement_stripe not valid'))
+#
+#     def to_representation(self, instance):
+#         representation = super().to_representation(instance)
+#         logger.info(f"{self.checkout_session.url}")
+#         representation['checkout_url'] = self.checkout_session.url
+#         return representation
 
-    # def validate_adhesion(self, value: Price):
-        # Si c'est une adhésion à envoyer au serveur cashless, on vérifie qu'il soit up
-        # if value.product.send_to_cashless:
-        #     config = Configuration.get_solo()
-        #     if not config.check_serveur_cashless():
-        #         raise serializers.ValidationError(
-        #             _(f"Le serveur cashless n'est pas disponible ( check serveur false ). Merci d'essayer ultérieurement"))
-        # return value
-
-    def validate_email(self, value):
-        # logger.info(f"NewAdhesionValidator validate email : {value}")
-        user_paiement: TibilletUser = get_or_create_user(value, send_mail=False)
-        self.user = user_paiement
-        return user_paiement.email
-
-    def validate(self, attrs):
-        price_adhesion: Price = attrs.get('adhesion')
-
-        user: TibilletUser = self.user
-
-        metadata = {
-            'tenant': f'{connection.tenant.uuid}',
-            'pk_adhesion': f"{price_adhesion.pk}",
-        }
-        self.metadata = metadata
-
-        ligne_article_adhesion = LigneArticle.objects.create(
-            pricesold=get_or_create_price_sold(price_adhesion, None, gift=attrs.get('gift')),
-            qty=1,
-        )
-
-        new_paiement_stripe = CreationPaiementStripe(
-            user=user,
-            liste_ligne_article=[ligne_article_adhesion, ],
-            metadata=metadata,
-            reservation=None,
-            source=Paiement_stripe.API_BILLETTERIE,
-            absolute_domain=self.context.get('request').build_absolute_uri().partition('/api')[0],
-        )
-
-        if new_paiement_stripe.is_valid():
-            paiement_stripe: Paiement_stripe = new_paiement_stripe.paiement_stripe_db
-            paiement_stripe.lignearticles.all().update(status=LigneArticle.UNPAID)
-            self.checkout_session = new_paiement_stripe.checkout_session
-
-            return super().validate(attrs)
-
-        raise serializers.ValidationError(_(f'new_paiement_stripe not valid'))
-
-    def to_representation(self, instance):
-        representation = super().to_representation(instance)
-        logger.info(f"{self.checkout_session.url}")
-        representation['checkout_url'] = self.checkout_session.url
-        return representation
-
-
-class MembreValidator(serializers.Serializer):
-    adhesion = serializers.PrimaryKeyRelatedField(
-        queryset=Price.objects.filter(product__categorie_article=Product.ADHESION)
-    )
-    email = serializers.EmailField()
-    first_name = serializers.CharField(max_length=200, required=False)
-    last_name = serializers.CharField(max_length=200, required=False)
-
-    options = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(),
-                                                 many=True, allow_null=True, required=False)
-
-    phone = serializers.CharField(max_length=20, required=False)
-    postal_code = serializers.IntegerField(required=False)
-    birth_date = serializers.DateField(required=False)
-
-    newsletter = serializers.BooleanField(required=False)
-
-    def validate_adhesion(self, value):
-        self.price = value
-        return value
-
-    def validate_email(self, value):
-        if not getattr(self, 'price', None):
-            raise serializers.ValidationError(
-                _(f"Pas de prix d'adhésion"))
-
-        user_paiement: TibilletUser = get_or_create_user(value)
-        self.user = user_paiement
-
-        self.fiche_membre, created = Membership.objects.get_or_create(
-            user=user_paiement,
-            price=self.price,
-        )
-
-        # Si une adhésion existe déja
-        if not created:
-            # Si elle est encore valide
-            if self.fiche_membre.is_valid():
-                raise serializers.ValidationError(
-                    _(f"Un abonnement sur ce mail existe déjà et est valide jusque : {self.fiche_membre.deadline()}"))
-
-        if not self.fiche_membre.first_name:
-            if not self.initial_data.get('first_name'):
-                raise serializers.ValidationError(_(f'first_name est obligatoire'))
-            self.fiche_membre.first_name = self.initial_data.get('first_name')
-        if not self.fiche_membre.last_name:
-            if not self.initial_data.get('last_name'):
-                raise serializers.ValidationError(_(f'last_name est obligatoire'))
-            self.fiche_membre.last_name = self.initial_data.get('last_name')
-        if not self.fiche_membre.phone:
-            if not self.initial_data.get('phone'):
-                raise serializers.ValidationError(_(f'phone est obligatoire'))
-            self.fiche_membre.phone = self.initial_data.get('phone')
-        if not self.fiche_membre.postal_code:
-            self.fiche_membre.postal_code = self.initial_data.get('postal_code')
-        if not self.fiche_membre.birth_date:
-            self.fiche_membre.birth_date = self.initial_data.get('birth_date')
-        if not self.fiche_membre.newsletter:
-            self.fiche_membre.newsletter = self.initial_data.get('newsletter')
-
-        self.fiche_membre.save()
-
-        return self.fiche_membre.user.email
-
-    def validate_options(self, value):
-        self.options = value
-        for option in value:
-            product = self.price.product
-            option: OptionGenerale
-            if option not in list(
-                    set(product.option_generale_radio.all()) | set(product.option_generale_checkbox.all())):
-                raise serializers.ValidationError(_(f'Option {option.name} non disponible dans product'))
-
-        for option in self.options:
-            self.fiche_membre.option_generale.add(option)
-
-        return value
+#
+# class MembreValidator(serializers.Serializer):
+#     adhesion = serializers.PrimaryKeyRelatedField(
+#         queryset=Price.objects.filter(product__categorie_article=Product.ADHESION)
+#     )
+#     email = serializers.EmailField()
+#     first_name = serializers.CharField(max_length=200, required=False)
+#     last_name = serializers.CharField(max_length=200, required=False)
+#
+#     options = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(),
+#                                                  many=True, allow_null=True, required=False)
+#
+#     phone = serializers.CharField(max_length=20, required=False)
+#     postal_code = serializers.IntegerField(required=False)
+#     birth_date = serializers.DateField(required=False)
+#
+#     newsletter = serializers.BooleanField(required=False)
+#
+#     def validate_adhesion(self, value):
+#         self.price = value
+#         return value
+#
+#     def validate_email(self, value):
+#         if not getattr(self, 'price', None):
+#             raise serializers.ValidationError(
+#                 _(f"Pas de prix d'adhésion"))
+#
+#         user_paiement: TibilletUser = get_or_create_user(value)
+#         self.user = user_paiement
+#
+#         self.fiche_membre, created = Membership.objects.get_or_create(
+#             user=user_paiement,
+#             price=self.price,
+#         )
+#
+#         # Si une adhésion existe déja
+#         if not created:
+#             # Si elle est encore valide
+#             if self.fiche_membre.is_valid():
+#                 raise serializers.ValidationError(
+#                     _(f"Un abonnement sur ce mail existe déjà et est valide jusque : {self.fiche_membre.deadline()}"))
+#
+#         if not self.fiche_membre.first_name:
+#             if not self.initial_data.get('first_name'):
+#                 raise serializers.ValidationError(_(f'first_name est obligatoire'))
+#             self.fiche_membre.first_name = self.initial_data.get('first_name')
+#         if not self.fiche_membre.last_name:
+#             if not self.initial_data.get('last_name'):
+#                 raise serializers.ValidationError(_(f'last_name est obligatoire'))
+#             self.fiche_membre.last_name = self.initial_data.get('last_name')
+#         if not self.fiche_membre.phone:
+#             if not self.initial_data.get('phone'):
+#                 raise serializers.ValidationError(_(f'phone est obligatoire'))
+#             self.fiche_membre.phone = self.initial_data.get('phone')
+#         if not self.fiche_membre.postal_code:
+#             self.fiche_membre.postal_code = self.initial_data.get('postal_code')
+#         if not self.fiche_membre.birth_date:
+#             self.fiche_membre.birth_date = self.initial_data.get('birth_date')
+#         if not self.fiche_membre.newsletter:
+#             self.fiche_membre.newsletter = self.initial_data.get('newsletter')
+#
+#         self.fiche_membre.save()
+#
+#         return self.fiche_membre.user.email
+#
+#     def validate_options(self, value):
+#         self.options = value
+#         for option in value:
+#             product = self.price.product
+#             option: OptionGenerale
+#             if option not in list(
+#                     set(product.option_generale_radio.all()) | set(product.option_generale_checkbox.all())):
+#                 raise serializers.ValidationError(_(f'Option {option.name} non disponible dans product'))
+#
+#         for option in self.options:
+#             self.fiche_membre.option_generale.add(option)
+#
+#         return value
 
 
 def get_near_event_by_date():
@@ -915,7 +976,7 @@ def create_ticket(pricesold, customer, reservation):
     return ticket
 
 
-def get_or_create_price_sold(price: Price, event: Event, gift=None):
+def get_or_create_price_sold(price: Price, event: Event =None):
     """
     Générateur des objets PriceSold pour envoi à Stripe.
     Price + Event = PriceSold
@@ -935,14 +996,14 @@ def get_or_create_price_sold(price: Price, event: Event, gift=None):
     logger.info(f"productsold {productsold.nickname()} created : {created}")
 
     prix = price.prix
-    if gift:
-        prix = price.prix + gift
+    # if gift:
+    #     prix = price.prix + gift
 
     pricesold, created = PriceSold.objects.get_or_create(
         productsold=productsold,
         prix=prix,
         price=price,
-        gift=gift
+        # gift=gift
     )
 
     if created:
@@ -967,7 +1028,7 @@ def line_article_recharge(carte, qty):
 
     # noinspection PyTypeChecker
     ligne_article_recharge = LigneArticle.objects.create(
-        pricesold=get_or_create_price_sold(price, None),
+        pricesold=get_or_create_price_sold(price),
         qty=1,
         carte=carte,
     )
@@ -1260,7 +1321,7 @@ class ReservationValidator(serializers.Serializer):
             qty = price_object.get('qty')
             total_checkout += Decimal(qty) * price_generique.prix
 
-            pricesold: PriceSold = get_or_create_price_sold(price_generique, event)
+            pricesold: PriceSold = get_or_create_price_sold(price_generique, event=event)
 
             # les lignes articles pour la vente
             line_article = LigneArticle.objects.create(

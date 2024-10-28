@@ -291,7 +291,7 @@ class ConfigurationAdmin(SingletonModelAdmin):
         }),
         ('Paiements', {
             'fields': (
-                'vat_taxe',
+                # 'vat_taxe',
                 'onboard_stripe',
                 'stripe_mode_test',
             ),
@@ -743,9 +743,9 @@ def send_to_ghost(modeladmin, request, queryset):
 
 class MembershipAdmin(admin.ModelAdmin):
     list_display = (
-        # 'last_name',
-        # 'first_name',
         'user',
+        'last_name',
+        'first_name',
         'product_name',
         'price',
         'options',

@@ -12,3 +12,8 @@ def fernet_decrypt(message: str) -> str:
     message = message.encode('utf-8')
     decryptor = Fernet(settings.FERNET_KEY)
     return decryptor.decrypt(message).decode('utf-8')
+
+
+from IPython.lib.pretty import pretty
+def pp(arg):
+    print(pretty(arg))

@@ -131,12 +131,12 @@ def test_jinja(request):
     return TemplateResponse(request, "htmx/views/test_jinja.html", context=context)
 
 
-# TODO: passer cette méthode en rendu partiel et la requete en htmx
 def deconnexion(request):
     # un logout peut-il mal se passer ?
     logout(request)
-    messages.add_message(request, messages.SUCCESS, "Déconnexion")
+    messages.add_message(request, messages.SUCCESS, _("Déconnexion réussie"))
     return redirect('home')
+
 
 
 def connexion(request):
@@ -623,6 +623,14 @@ class Badge(viewsets.ViewSet):
 class MembershipMVT(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
+    def create(self, request):
+        membership_validator = MembershipValidator(data=request.data, context={'request': request})
+        if not membership_validator.is_valid():
+            error_messages = [str(item) for sublist in membership_validator.errors.values() for item in sublist]
+            return modal(request, level="warning", content=', '.join(error_messages))
+
+        return HttpResponseClientRedirect(membership_validator.checkout_stripe_url)
+
     def list(self, request: HttpRequest):
         template_context = get_context(request)
         template_context["memberships"] = Product.objects.filter(categorie_article=Product.ADHESION, publish=True)
@@ -630,60 +638,16 @@ class MembershipMVT(viewsets.ViewSet):
             request, "htmx/views/membership/list.html",
             context=template_context,
         )
+        # Pour rendre la page dans un iframe, on vide le header X-Frame-Options pour dire au navigateur que c'est ok.
         response['X-Frame-Options'] = '' if template_context.get('embed') else 'DENY'
         return response
 
-    def create(self, request):
-        membership_validator = MembershipValidator(data=request.data, context={'request': request})
-        if not membership_validator.is_valid():
-            error_messages = [str(item) for sublist in membership_validator.errors.values() for item in sublist]
-            return modal(request, level="warning", content=', '.join(error_messages))
-
-        # Fiche membre créée, si price payant, on crée le checkout stripe :
-        membership = membership_validator.membership
-        price: Price = membership.price
-        user: TibilletUser = membership.user
-
-        metadata = {
-            'tenant': f'{connection.tenant.uuid}',
-            'pk_adhesion': f"{price.pk}",
-            'pk_membership': f"{membership.pk}",
-            'pk_user': f"{user.pk}",
-        }
-
-        ligne_article_adhesion = LigneArticle.objects.create(
-            pricesold=get_or_create_price_sold(price, None),
-            qty=1,
-        )
-
-        # Création de l'objet paiement stripe en base de donnée
-        new_paiement_stripe = CreationPaiementStripe(
-            user=user,
-            liste_ligne_article=[ligne_article_adhesion, ],
-            metadata=metadata,
-            reservation=None,
-            source=Paiement_stripe.API_BILLETTERIE,
-            success_url=f"stripe_return/",
-            cancel_url=f"stripe_return/",
-            absolute_domain=request.build_absolute_uri(),
-        )
-
-        # Passage du status en UNPAID
-        if new_paiement_stripe.is_valid():
-            paiement_stripe: Paiement_stripe = new_paiement_stripe.paiement_stripe_db
-            paiement_stripe.lignearticles.all().update(status=LigneArticle.UNPAID)
-            checkout_stripe_url = new_paiement_stripe.checkout_session.url
-            return HttpResponseClientRedirect(checkout_stripe_url)
-
-        return modal(request, level="error",
-                     content="Erreur lors de la création du paiement, contactez l'administrateur.")
 
     @action(detail=True, methods=['GET'])
     def stripe_return(self, request, pk, *args, **kwargs):
         paiement_stripe = get_object_or_404(Paiement_stripe, uuid=pk)
         paiement_stripe.update_checkout_status()
         paiement_stripe.refresh_from_db()
-        email = paiement_stripe.user.email
 
         try:
             if paiement_stripe.status == Paiement_stripe.VALID:

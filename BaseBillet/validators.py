@@ -1,16 +1,19 @@
 import os
 
 import stripe
+from django.db import connection
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 from django_tenants.utils import tenant_context, schema_context
 from rest_framework import serializers
 
+from ApiBillet.serializers import get_or_create_price_sold
 from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
-from BaseBillet.models import Price, Product, OptionGenerale, Membership
+from BaseBillet.models import Price, Product, OptionGenerale, Membership, Paiement_stripe, LigneArticle
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
+from PaiementStripe.views import CreationPaiementStripe
 from root_billet.models import RootConfiguration
 
 
@@ -43,19 +46,66 @@ class MembershipValidator(serializers.Serializer):
 
     newsletter = serializers.BooleanField()
 
-    def validate(self, attrs):
-        email: str = attrs['email']
-        price: Price = attrs['price']
-        user: TibilletUser = get_or_create_user(email)
+    def validate_email(self, email):
+        self.user = get_or_create_user(email)
+        return email
 
-        # Vérification que l'user ne soit pas déja adhérant :
-        if any([m.is_valid() for m in Membership.objects.filter(price__product=price.product, user=user)]):
-            raise serializers.ValidationError('Vous avez déjà une adhésion ou un abonnement valide')
+    def validate_price(self, price):
+        self.price = price
+        return price
 
-        ### CREATION DE LA FICHE MEMBRE
-        membership, created = Membership.objects.get_or_create(
+
+    def checkout_stripe(self):
+        # Fiche membre créée, si price payant, on crée le checkout stripe :
+        membership: Membership = self.membership
+        price: Price = membership.price
+        user: TibilletUser = membership.user
+        tenant = connection.tenant
+
+        metadata = {
+            'tenant': f'{tenant.uuid}',
+            'price': f"{price.pk}",
+            'membership': f"{membership.pk}",
+            'user': f"{user.pk}",
+        }
+
+        ligne_article_adhesion = LigneArticle.objects.create(
+            pricesold=get_or_create_price_sold(price),
+            qty=1,
+        )
+
+        # Création de l'objet paiement stripe en base de donnée
+        new_paiement_stripe = CreationPaiementStripe(
             user=user,
-            price=price
+            liste_ligne_article=[ligne_article_adhesion, ],
+            metadata=metadata,
+            reservation=None,
+            source=Paiement_stripe.FRONT_BILLETTERIE,
+            success_url=f"stripe_return/",
+            cancel_url=f"stripe_return/",
+            absolute_domain=f"https://{tenant.get_primary_domain()}/memberships/",
+        )
+
+        # Passage du status en UNPAID
+        if not new_paiement_stripe.is_valid():
+            raise serializers.ValidationError(new_paiement_stripe.errors)
+
+        paiement_stripe: Paiement_stripe = new_paiement_stripe.paiement_stripe_db
+        paiement_stripe.lignearticles.all().update(status=LigneArticle.UNPAID)
+
+        # On ajoute le paiement dans l'objet membership
+        membership.stripe_paiement.add(paiement_stripe)
+
+        # Retour de l'url vers qui rediriger
+        checkout_stripe_url = new_paiement_stripe.checkout_session.url
+        return checkout_stripe_url
+
+    def validate(self, attrs):
+        ### CREATION DE LA FICHE MEMBRE
+        # Il peut y avoir plusieurs adhésions pour le même user (ex : parent/enfant)
+        membership = Membership.objects.create(
+            user=self.user,
+            price=self.price
         )
 
         membership.first_name = attrs['first_name']
@@ -73,6 +123,8 @@ class MembershipValidator(serializers.Serializer):
 
         membership.save()
         self.membership = membership
+        # Création du lien de paiement
+        self.checkout_stripe_url = self.checkout_stripe()
 
         return attrs
 

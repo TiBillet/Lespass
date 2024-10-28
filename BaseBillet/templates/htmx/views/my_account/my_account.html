@@ -20,17 +20,9 @@
                         {% translate "Resend validation email" %}
                     </a>
                 {% elif profile.admin_this_tenant %}
-{#                    {% if profile.as_password %}#}
-                        <p><a href="/admin">{% translate "Administration" %}</a></p>
-{#                    {% else %}#}
-{#                        <a href="#" hx-get="/my_account/reset_password/"#}
-{#                           hx-target="#myaccount" hx-swap="innerHTML"#}
-{#                           hx-indicator="#tibillet-spinner">#}
-{#                            {% translate "Please create a password to access administration" %}#}
-{#                        </a>#}
-{#                    {% endif %}#}
-
+                    <p><a href="/admin">{% translate "Administration" %}</a></p>
                 {% endif %}
+                <p class="mt-2"><a href="/deconnexion">{% translate "Se deconnecter" %}</a></p>
 
             </div>
 

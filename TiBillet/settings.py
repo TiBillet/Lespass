@@ -401,6 +401,8 @@ if DEBUG:
 
     SHELL_PLUS_POST_IMPORTS = [  # extra things to import in notebook
         ("django.template.loader", ("get_template", "render_to_string")),
+        ("IPython.lib.pretty", ("pretty")),
+        ("root_billet.utils", ("pp")),
         ("datetime", ("datetime", "timedelta")),
         ("json"),
         ("requests"),

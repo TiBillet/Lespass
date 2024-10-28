@@ -544,8 +544,6 @@ class Price(models.Model):
                            verbose_name=_("Taux TVA"),
                            )
 
-    # id_price_stripe = models.CharField(max_length=30, null=True, blank=True)
-
     stock = models.SmallIntegerField(blank=True, null=True)
     max_per_user = models.PositiveSmallIntegerField(default=10,
                                                     verbose_name=_("Nombre de reservation maximum par utilisateur"),
@@ -556,14 +554,15 @@ class Price(models.Model):
                                              related_name="adhesion_obligatoire",
                                              blank=True, null=True)
 
-    NA, YEAR, MONTH, DAY, HOUR, CIVIL = 'N', 'Y', 'M', 'D', 'H', 'C'
+    NA, YEAR, MONTH, DAY, HOUR, CIVIL, SCHOLAR = 'N', 'Y', 'M', 'D', 'H', 'C', 'S'
     SUB_CHOICES = [
         (NA, _('Non applicable')),
-        (YEAR, _("365 Jours")),
+        (HOUR, _('1 Heure')),
         (MONTH, _('30 Jours')),
         (DAY, _('1 Jour')),
-        (HOUR, _('1 Heure')),
-        (CIVIL, _('Civile')),
+        (YEAR, _("365 Jours")),
+        (CIVIL, _('Civile : 1er Janvier')),
+        (SCHOLAR, _('Scolaire : 1er septembre')),
     ]
 
     subscription_type = models.CharField(max_length=1,
@@ -855,17 +854,12 @@ class ProductSold(models.Model):
         if self.id_product_stripe and not force:
             return self.id_product_stripe
 
-        if stripe_key == None:
-            stripe_key = Configuration.get_solo().get_stripe_api()
+        stripe_key = RootConfiguration.get_solo().get_stripe_api()
         stripe.api_key = stripe_key
-        # config = Configuration.get_solo()
 
         client = connection.tenant
         # On est en mode test :
-        if type(client) == FakeTenant:
-            domain_url = "lespass.tibillet.localhost"
-        else:
-            domain_url = client.get_primary_domain()
+        domain_url = "lespass.tibillet.localhost" if type(client) == FakeTenant else client.get_primary_domain()
 
         # noinspection PyUnresolvedReferences
         images = []
@@ -874,9 +868,10 @@ class ProductSold(models.Model):
 
         product = stripe.Product.create(
             name=f"{self.nickname()}",
-            # stripe_account=config.get_stripe_connect_account(),
+            stripe_account=Configuration.get_solo().get_stripe_connect_account(),
             images=images
         )
+
         logger.info(f"product {product.name} created : {product.id}")
         self.id_product_stripe = product.id
 
@@ -890,11 +885,11 @@ class ProductSold(models.Model):
                 )
 
         self.save()
-
         return self.id_product_stripe
 
     def reset_id_stripe(self):
         self.id_product_stripe = None
+        self.pricesold_set.all().update(id_price_stripe=None)
         self.save()
 
 
@@ -921,8 +916,7 @@ class PriceSold(models.Model):
         if self.id_price_stripe and not force:
             return self.id_price_stripe
 
-        if stripe_key == None:
-            stripe_key = Configuration.get_solo().get_stripe_api()
+        stripe_key = RootConfiguration.get_solo().get_stripe_api()
         stripe.api_key = stripe_key
 
         try:
@@ -935,7 +929,7 @@ class PriceSold(models.Model):
             'unit_amount': f"{int(Decimal(self.prix) * 100)}",
             'currency': "eur",
             'product': product_stripe,
-            # 'stripe_account': config.get_stripe_connect_account(),
+            'stripe_account': Configuration.get_solo().get_stripe_connect_account(),
             'nickname': f"{self.price.name}",
         }
 
@@ -1200,10 +1194,11 @@ class Paiement_stripe(models.Model):
     reservation = models.ForeignKey(Reservation, on_delete=models.PROTECT, blank=True, null=True,
                                     related_name="paiements")
 
-    QRCODE, API_BILLETTERIE, INVOICE = 'Q', 'B', 'I'
+    QRCODE, API_BILLETTERIE, FRONT_BILLETTERIE, INVOICE = 'Q', 'B', 'F', 'I'
     SOURCE_CHOICES = (
         (QRCODE, _('Depuis scan QR-Code')),
-        (API_BILLETTERIE, _('Depuis billetterie')),
+        (API_BILLETTERIE, _('Depuis API')),
+        (FRONT_BILLETTERIE, _('Depuis billetterie')),
         (INVOICE, _('Depuis invoice')),
 
     )
@@ -1238,7 +1233,7 @@ class Paiement_stripe(models.Model):
         stripe.api_key = config.get_stripe_api()
         checkout_session = stripe.checkout.Session.retrieve(
             self.checkout_session_id_stripe,
-            # stripe_account=config.get_stripe_connect_account()
+            stripe_account=config.get_stripe_connect_account()
         )
 
         # Pas payé, on le met en attente
@@ -1259,7 +1254,7 @@ class Paiement_stripe(models.Model):
                     self.subscription = checkout_session.subscription
                     subscription = stripe.Subscription.retrieve(
                         checkout_session.subscription,
-                        # stripe_account=config.get_stripe_connect_account()
+                        stripe_account=config.get_stripe_connect_account()
                     )
                     self.invoice_stripe = subscription.latest_invoice
 
@@ -1395,6 +1390,7 @@ class Membership(models.Model):
         verbose_name = _('Adhésion')
         verbose_name_plural = _('Adhésions')
 
+
     def email(self):
         if self.user:
             return self.user.email
@@ -1407,13 +1403,24 @@ class Membership(models.Model):
 
     def deadline(self):
         if self.last_contribution and self.price:
-            if self.price.subscription_type == Price.YEAR:
-                return self.last_contribution + timedelta(days=365)
+            if self.price.subscription_type == Price.HOUR:
+                return self.last_contribution + timedelta(hours=1)
+            elif self.price.subscription_type == Price.DAY:
+                return self.last_contribution + timedelta(days=1)
             elif self.price.subscription_type == Price.MONTH:
                 return self.last_contribution + timedelta(days=31)
+            elif self.price.subscription_type == Price.YEAR:
+                return self.last_contribution + timedelta(days=365)
             elif self.price.subscription_type == Price.CIVIL:
+                # jusqu'au 31 decembre de cette année
                 return datetime.strptime(f'{self.last_contribution.year}-12-31', '%Y-%m-%d').date()
-
+            elif self.price.subscription_type == Price.SCHOLAR:
+                # Si la date de contribustion est avant septembre, alors on prend l'année de la contribution.
+                if self.last_contribution.month < 9:
+                    return datetime.strptime(f'{self.last_contribution.year}-08-31', '%Y-%m-%d').date()
+                # Si elle est après septembre, on prend l'année prochaine
+                else :
+                    return datetime.strptime(f'{self.last_contribution.year+1}-08-31', '%Y-%m-%d').date()
         return None
 
     def is_valid(self):
