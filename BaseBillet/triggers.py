@@ -210,8 +210,9 @@ class ActionArticlePaidByCategorie:
         email_sended = send_membership_invoice_email_after_paiement(self, membership)
         ghost_sended = send_membership_to_ghost(membership)
 
-        # Envoyer l'adhésion à fedow
         logger.info(f"TRIGGER ADHESION PAID -> envoi à Fedow")
+        # L'adhésion possède désormais une transaction fedow associé
+        # Attention, réalise membership.save()
         fedowAPI = FedowAPI()
         serialized_transaction = fedowAPI.membership.create(membership=membership)
 

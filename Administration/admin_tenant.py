@@ -743,7 +743,7 @@ def send_to_ghost(modeladmin, request, queryset):
 
 class MembershipAdmin(admin.ModelAdmin):
     list_display = (
-        'user',
+        'str_user',
         'last_name',
         'first_name',
         'product_name',
@@ -760,8 +760,39 @@ class MembershipAdmin(admin.ModelAdmin):
         'status',
         # 'birth_date',
         # 'phone',
-        # 'commentaire',
+        'commentaire',
     )
+
+    fields = (
+        'str_user',
+        'last_name',
+        'first_name',
+        ('product_name', 'price'),
+        ('last_contribution', 'contribution_value'),
+        'options',
+        'card_number',
+        'commentaire',
+    )
+
+    readonly_fields = (
+        'str_user',
+        'date_added',
+        'deadline',
+        'is_valid',
+        'options',
+        'product_name',
+        'last_contribution',
+        'contribution_value',
+        'card_number',
+    )
+
+    def str_user(self, obj: Membership):
+        if obj.user :
+            return obj.user.email
+        elif obj.card_number:
+            return obj.card_number
+        return "Anonyme"
+    str_user.short_description = 'User'
 
     def has_delete_permission(self, request, obj=None):
         # return request.user.is_superuser
@@ -770,13 +801,13 @@ class MembershipAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         return False
 
-    def has_change_permission(self, request, obj=None):
-        return False
+    # def has_change_permission(self, request, obj=None):
+    #     return False
 
     #TODO : actions
     # actions = [send_invoice, send_to_ghost ]
     ordering = ('-date_added',)
-    search_fields = ('user__email', 'user__first_name', 'user__last_name')
+    search_fields = ('user__email', 'user__first_name', 'user__last_name', 'card_number')
 
 
 staff_admin_site.register(Membership, MembershipAdmin)

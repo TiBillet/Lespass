@@ -304,11 +304,11 @@ class WalletFedow():
             self.fedow_config = FedowConfig.get_solo()
 
     def cached_retrieve_by_signature(self, user):
-        # get_or_set va toujours faire la fonction callable avant de vérifier le cache.
-        # Solution : soit retirer les () dans le callable, soit utiliser cache.lambda
         if not user.wallet:
             wallet = self.get_or_create_wallet(user)
         try:
+            # get_or_set va toujours faire la fonction callable avant de vérifier le cache.
+            # Solution : soit retirer les () dans le callable, soit utiliser cache.lambda
             serialized_wallet = cache.get_or_set(f"wallet_user_{user.wallet.uuid}",
                                                  lambda: self.retrieve_by_signature(user), 10)
         except KeyError as e:
@@ -586,8 +586,23 @@ class TransactionFedow():
         if fedow_config is None:
             self.config = FedowConfig.get_solo()
 
+
+    def retrieve(self, uuid):
+        response = _get(self.fedow_config, path=f'transaction/{uuid}')
+        if response.status_code == 200:
+            serialized_transaction = TransactionValidator(data=response.json())
+            if serialized_transaction.is_valid():
+                validated_data = serialized_transaction.validated_data
+                return validated_data
+            logger.error(serialized_transaction.errors)
+            return serialized_transaction.errors
+        else:
+            logger.error(response.json())
+            return response.status_code
+
+
     def get_from_hash(self, hash_fedow: str = None):
-        response_hash = _get(self.fedow_config, path=f'transaction/{hash_fedow}')
+        response_hash = _get(self.fedow_config, path=f'transaction/{hash_fedow}/get_from_hash')
         if response_hash.status_code == 200:
             serialized_transaction = TransactionValidator(data=response_hash.json())
             if serialized_transaction.is_valid():

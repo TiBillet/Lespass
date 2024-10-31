@@ -184,6 +184,8 @@ class ScanQrCode(viewsets.ViewSet):
             logger.error(e)
             raise e
 
+        #TODO: 1) checket fedow 2) checker origin card 3) rediriger vers primary_domain
+
         # Pour les cartes en m (qui vont vers l'agenda)
         # Recherche de l'origine et redirect vers le bon tenant
         tenant: Client = connection.tenant

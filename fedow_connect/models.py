@@ -16,19 +16,8 @@ class FedowConfig(SingletonModel):
     fedow_place_wallet_uuid = models.UUIDField(blank=True, null=True, editable=False)
 
     # TODO, a retirer, ça passe direct
-    json_key_to_cashless = models.CharField(max_length=500, editable=False, blank=True, null=True)
-    # def set_json_key_to_cashless(self, string):
-    #     self.json_key_to_cashless = fernet_encrypt(string)
-    #     cache.clear()
-    #     self.save()
-    #
-    # def get_json_key_to_cashless(self):
-    #     cypher = fernet_decrypt(self.json_key_to_cashless)
-    #     # On efface la clé une fois qu'elle a été divulgée
-    #     if not settings.DEBUG:
-    #         self.json_key_to_cashless = None
-    #         self.save()
-    #     return cypher
+    # json_key_to_cashless = models.CharField(max_length=500, editable=False, blank=True, null=True)
+
 
     def set_fedow_place_admin_apikey(self, string):
         self.fedow_place_admin_apikey = fernet_encrypt(string)

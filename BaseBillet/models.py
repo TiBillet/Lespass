@@ -1322,10 +1322,13 @@ class LigneArticle(models.Model):
 
 
 class Membership(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='membership')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+                             related_name='membership', blank=True, null=True)
     price = models.ForeignKey(Price, on_delete=models.PROTECT, related_name='user',
                               null=True, blank=True)
+
     asset_fedow = models.UUIDField(null=True, blank=True)
+    card_number = models.CharField(max_length=16, null=True, blank=True)
 
     stripe_id_subscription = models.CharField(
         max_length=28,
@@ -1458,9 +1461,10 @@ class Membership(models.Model):
             return f"{self.last_name} {self.first_name}"
         elif self.last_name:
             return f"{self.last_name}"
-        else:
+        elif self.user :
             return f"{self.user}"
-
+        else :
+            return "Anonymous"
 
 class ExternalApiKey(models.Model):
     name = models.CharField(max_length=30, unique=True)

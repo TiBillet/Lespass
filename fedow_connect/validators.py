@@ -58,6 +58,50 @@ class AssetValidator(serializers.Serializer):
     total_in_wallet_not_place = serializers.IntegerField(required=False, allow_null=True)
 
 
+class TransactionSimpleValidator(serializers.Serializer):
+    # IDEM que TransactionValidator mais sans les objets associés
+    uuid = serializers.UUIDField()
+    hash = serializers.CharField(min_length=64, max_length=64)
+
+    datetime = serializers.DateTimeField()
+    subscription_start_datetime = serializers.DateTimeField(required=False, allow_null=True)
+    sender = serializers.UUIDField()
+    receiver = serializers.UUIDField()
+
+    asset = serializers.UUIDField()
+
+    amount = serializers.IntegerField()
+    primary_card = serializers.UUIDField(required=False, allow_null=True)
+    previous_transaction = serializers.UUIDField()
+
+    FIRST, SALE, CREATION, REFILL, TRANSFER, SUBSCRIBE, BADGE, FUSION, REFUND, VOID = 'FST', 'SAL', 'CRE', 'REF', 'TRF', 'SUB', 'BDG', 'FUS', 'RFD', 'VID'
+    TYPE_ACTION = (
+        (FIRST, "Premier bloc"),
+        (SALE, "Vente d'article"),
+        (CREATION, 'Creation monétaire'),
+        (REFILL, 'Recharge'),
+        (TRANSFER, 'Transfert'),
+        (SUBSCRIBE, 'Abonnement ou adhésion'),
+        (BADGE, 'Badgeuse'),
+        (FUSION, 'Fusion de deux wallets'),
+        (REFUND, 'Remboursement'),
+        (VOID, 'Dissocciation de la carte et du wallet user'),
+    )
+    action = serializers.ChoiceField(choices=TYPE_ACTION)
+    get_action_display = serializers.CharField()
+
+    comment = serializers.CharField(required=False, allow_null=True)
+    metadata = serializers.JSONField(required=False, allow_null=True)
+    verify_hash = serializers.BooleanField()
+
+    def validate(self, attrs):
+        uuid = attrs['uuid']
+        hash = attrs['hash']
+        datetime = attrs['datetime']
+        self.fedow_transaction, created = FedowTransaction.objects.get_or_create(uuid=uuid, hash=hash,
+                                                                                 datetime=datetime)
+        return attrs
+
 class TokenValidator(serializers.Serializer):
     uuid = serializers.UUIDField()
     name = serializers.CharField()
@@ -69,9 +113,22 @@ class TokenValidator(serializers.Serializer):
     asset_category = serializers.ChoiceField(choices=AssetValidator.CATEGORIES)
 
     is_primary_stripe_token = serializers.BooleanField()
+
+    last_transaction = TransactionSimpleValidator(many=False, required=False, allow_null=True)
+
+    #TODO: a virer, tout est dans last_transaction
     last_transaction_datetime = serializers.DateTimeField(allow_null=True, required=False)
     start_membership_date = serializers.DateTimeField(allow_null=True, required=False)
 
+    def validate(self, attrs):
+        # On check ici les tokens adhésions pour entrer en db s'il n'existe pas :
+        # il peut avoir été créé sur laboutik
+        if attrs['asset_category'] == AssetValidator.SUBSCRIPTION:
+            last_transaction = attrs.get('last_transaction')
+            if last_transaction :
+                pass
+                # import ipdb; ipdb.set_trace()
+        return attrs
 
 class WalletValidator(serializers.Serializer):
     uuid = serializers.UUIDField()
@@ -98,6 +155,8 @@ class CardValidator(serializers.Serializer):
     first_tag_id = serializers.CharField(min_length=8, max_length=8)
     number_printed = serializers.CharField()
     is_wallet_ephemere = serializers.BooleanField()
+
+
 
 
 class TransactionValidator(serializers.Serializer):
