@@ -382,6 +382,37 @@ class MyAccount(viewsets.ViewSet):
             logger.warning(_("User email not active"))
             return HttpResponseClientRedirect('/my_account/')
 
+    @action(detail=False, methods=['GET'])
+    def refund_online(self, request):
+        user = request.user
+        fedowAPI = FedowAPI()
+        wallet = fedowAPI.wallet.cached_retrieve_by_signature(user).validated_data
+        token_fed = [token for token in wallet.get('tokens') if token['asset']['is_stripe_primary'] == True]
+        if len(token_fed) != 1 :
+            messages.add_message(request, messages.ERROR,
+                                     _("Vous n'avez pas de tirelire fédérée. Peut être avez vous rechargé votre carte sur place ?"))
+            return HttpResponseClientRedirect('/my_account/')
+
+        value = token_fed[0]['value']
+        if value < 1:
+            messages.add_message(request, messages.ERROR,
+                                 _(f"Votre tirelire fédérée est déja vide."))
+            return HttpResponseClientRedirect('/my_account/')
+
+        #TODO: Mettre ça dans retour depuis un lien envoyé par email :
+        status_code, result = fedowAPI.wallet.refund_fed_by_signature(user)
+        if status_code == 202 :
+            # On clear le cache du wallet
+            cache.delete(f"wallet_user_{user.wallet.uuid}")
+            messages.add_message(request, messages.INFO,
+                                 _("Un email vous a été envoyé pour finaliser votre remboursement. Merci de regarder dans vos spams si vous ne l'avez pas reçu !"))
+            return HttpResponseClientRedirect('/my_account/')
+        else :
+            messages.add_message(request, messages.WARNING,
+                                 _(f"Toutes nos excuses, il semble qu'un traitement manuel est nécéssaire pour votre remboursement. Vous pouvez aller à l'acceuil de votre lieux, ou contacter un administrateur : contact@tibillet.re"))
+            return HttpResponseClientRedirect('/my_account/')
+
+
     @staticmethod
     def get_place_cached_info(place_uuid):
         # Recherche des infos dans le cache :

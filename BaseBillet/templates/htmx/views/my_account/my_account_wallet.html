@@ -2,8 +2,6 @@
 
 <div class="container pt-5">
 
-    {#    {% include "htmx/fragments/card.html" %}#}
-
     <div class="d-flex flex-row" hx-indicator="#tibillet-spinner">
         <button type="submit" class="btn bg-gradient-info btn-lg mt-2 p-4 mb-2 w-75 mx-auto"
                 role="button"
@@ -12,6 +10,7 @@
             {% translate "Refill my wallet" %}
         </button>
     </div>
+
 
 
     <div hx-get="/my_account/tokens_table/" hx-trigger="revealed" class="mt-4">
@@ -37,6 +36,45 @@
         </div>
     </div>
 
+    <div class="bg-white shadow-card">
+        <span class="m-2">
+            <h5>A Savoir :</h5>
+            Le remboursement en ligne concerne les TiBillets (recharge en ligne), pas les monnaies locales.
+            <br>
+            Le remboursement des recharges sur place se fait directement avec les structures.
+            <br>
+            Le remboursement des TiBillets est fait par Stripe sur la carte bancaire.
+{#            <br>#}
+{#            Un email vous sera envoyé pour sécuriser et valider la transaction.#}
+            <br>
+            Enfin, savez-vous que tant que vous vous en servez, la tirelire reste active !
+            <br>
+            Le solde est redistribué aux structures au bout de 14 mois sans transactions (mais on vous prévient avant) :
+            <br>
+            <a href="https://tibillet.org/fr/docs/presentation/philosophie/">Plus de détails sur notre philosophie d'économie sociale et solidaire ici (clic)</a>
+            <br>
+            Rien ne vous empêche d'attendre pour dépenser votre tirelire à la prochaine occasion ;)
+            <br>
+        </span>
+        <button class="btn bg-gradient-warning btn-lg p-4  w-75 mx-auto test-return-show-transactions"
+                hx-get="/my_account/refund_online/"
+                hx-trigger='confirmed'
+                hx-indicator="#tibillet-spinner"
+                onClick="Swal.fire({
+                showCancelButton: true,
+                title: 'Remboursement en ligne',
+                html:`Sûr·e de vouloir repasser à l'euro ?<br><br>Tant que vous vous en servez, la tirelire reste active !<br><br>Le solde est <a href='https://tibillet.org/fr/docs/presentation/philosophie/'>redistribué aux structures au bout de 14 mois sans transactions. (clic pour en savoir plus)</a><br><br>Rien ne vous empêche d'attendre pour dépenser votre tirelire à la prochaine occasion ;)`,
+                confirmButtonText: `Je me rembourse`,
+                cancelButtonText: `Je garde pour plus tard`,
+
+            }).then((result)=>{
+            if(result.isConfirmed){
+              htmx.trigger(this, 'confirmed');
+            }
+        })">
+            {% translate "Je souhaite récupérer ma tirelire fédérée" %}
+        </button>
+    </div>
 
 </div>
 
