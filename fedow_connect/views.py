@@ -41,7 +41,6 @@ class Membership_fwh(viewsets.ViewSet):
         user = TibilletUser.objects.filter(wallet__uuid=transaction_serialized.get('receiver')).first()
         # Recherche d'une carte associée
 
-
         # Recherche du prix :
         amount = dround(transaction_serialized.get('amount'))
         asset_uuid = transaction_serialized['asset']
