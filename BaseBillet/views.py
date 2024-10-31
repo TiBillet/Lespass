@@ -34,7 +34,7 @@ from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Event, Price, LigneArticle, \
-    Paiement_stripe
+    Paiement_stripe, Membership
 from BaseBillet.tasks import create_invoice_pdf
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator
 from Customers.models import Client, Domain
@@ -281,6 +281,12 @@ class ScanQrCode(viewsets.ViewSet):
         # On retourne sur la page GET /qr/
         # Qui redirigera si besoin et affichera l'erreur
         logger.info(f"SCAN QRCODE LINK : wallet : {wallet}, user : {wallet.user}, card qrcode : {linked_serialized_card['qrcode_uuid']} ")
+
+        # On check si des adhésion n'ont pas été faites avec la carte en wallet ephemère
+        card_number = linked_serialized_card.get('number_printed')
+        if card_number :
+            Membership.objects.filter(user__isnull=True, card_number=card_number).update(user=user)
+
         return HttpResponseClientRedirect(request.headers['Referer'])
 
     def get_permissions(self):
