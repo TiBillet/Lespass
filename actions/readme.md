@@ -29,6 +29,9 @@
   - [ ] Interop DocuSeal pour contrat de bénévolat / volontariat / feuille de mission / devis
 
 - Intéropérabilité
+  - [ ] Minio
+  - [ ] Nextcloud
+  - [ ] DocuSeal
   - [ ] Loot
   - [ ] Bénévalibre
   - [ ] Oceco
