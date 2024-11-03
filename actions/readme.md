@@ -33,11 +33,16 @@
   - [ ] Interop DocuSeal pour contrat de bénévolat / volontariat / feuille de mission / devis
 
 - Intéropérabilité
-  - [ ] Minio
-  - [ ] Nextcloud
-  - [ ] DocuSeal
-  - [ ] Loot
-  - [ ] Bénévalibre
-  - [ ] Noé
-  - [ ] Vikunja / WeKan / Github project, etc ...
-  - [ ] Oceco si reprise de contact avec OpenAtlas (La balle est sortie du camp *sic*)
+  - Documents à signer :
+    - [ ] Minio
+    - [ ] Nextcloud
+    - [ ] DocuSeal
+  - Valorisation temps / co rem
+    - [ ] Loot
+    - [ ] Bénévalibre
+  - Social
+    - [ ] ActivityPub
+  - Gestion de tâche :
+    - [ ] Noé
+    - [ ] Vikunja / WeKan / Github project, etc ...
+    - [ ] Oceco si reprise de contact avec OpenAtlas (La balle est sortie du camp *sic*)
