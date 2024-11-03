@@ -22,7 +22,11 @@
   - [ ] Validation du temps passé par créateur de l'action
 
 - Co-rémunération
-  - [ ] Rétribution sur portefeuille tibillet si action validée
+  - [ ] Action validable par créateur de l'action
+  - [ ] Rétribution sur portefeuille tibillet monnaie temps / fiduciaire / cadeau 
+  - [ ] Stripe connect pour :
+    - [ ] Virement vers compte Stripe des contributeurs
+    - [ ] Vérification de la légalité de la structure contributrice
 
 - Signature de contrat
   - [ ] Gestion de fichier pour facturation / devis / feuille de mission
