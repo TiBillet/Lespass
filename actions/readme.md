@@ -3,7 +3,7 @@
 
 ## spec' vite fait'
 
-- Priorisation des actions 
+- Priorisation et hierarchie des actions 
   - [x] Possibilité de voter pour prioriser
   - [ ] peut filtrer par qty de vote
   - [x] Une action peut être enfant d'une autre action
