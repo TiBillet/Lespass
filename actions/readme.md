@@ -34,4 +34,6 @@
   - [ ] DocuSeal
   - [ ] Loot
   - [ ] Bénévalibre
-  - [ ] Oceco
+  - [ ] Noé
+  - [ ] Vikunja / WeKan / Github project, etc ...
+  - [ ] Oceco si reprise de contact avec OpenAtlas (La balle est sortie du camp *sic*)
