@@ -22,3 +22,8 @@
 
 - Co-rémunération
   - [ ] Rétribution sur portefeuille tibillet si action validée
+
+- Intéropérabilité
+  - [ ] Loot
+  - [ ] Bénévalibre
+  - [ ] Oceco
