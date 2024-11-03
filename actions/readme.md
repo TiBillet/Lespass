@@ -10,7 +10,7 @@
   - [ ] Une action peut être liée a un évènement LesPass
 
 - Crowdfunding : Financement des actions
-  - [x] Dissocier les action en plusieurs sous actions, avec chacune sa jauge de financement
+  - [x] Chaque sous action possède sa propre jauge de financement
   - [x] Jauge % visible des financements total des enfants sur action parent
   - [ ] Paiement direct via Stripe
   - [ ] Possibilité de financer l'action depuis son propre portefeuille TiBillet
