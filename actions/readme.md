@@ -4,9 +4,9 @@
 ## spec' vite fait'
 
 - Priorisation et hierarchie des actions 
+  - [x] Une action peut être enfant d'une autre action
   - [x] Possibilité de voter pour prioriser
   - [ ] peut filtrer par qty de vote
-  - [x] Une action peut être enfant d'une autre action
   - [ ] Une action peut être liée a un évènement LesPass
 
 - Crowdfunding : Financement des actions
