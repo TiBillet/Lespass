@@ -9,7 +9,8 @@ from django.utils.translation import gettext_lazy as _
 
 from ApiBillet.serializers import LigneArticleSerializer
 from BaseBillet.models import LigneArticle, Product, Membership, Price, Configuration, Paiement_stripe, PriceSold
-from BaseBillet.tasks import send_to_ghost, send_email_generique, create_invoice_pdf, celery_post_request
+from BaseBillet.tasks import send_to_ghost, send_email_generique, create_invoice_pdf, celery_post_request, \
+    webhook_reservation, webhook_memberships
 from BaseBillet.templatetags.tibitags import dround
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
@@ -223,3 +224,7 @@ class ActionArticlePaidByCategorie:
         # Tout ceci se déroule dans un pre_save signal.pre_save_signal_status()
         logger.info(f"TRIGGER ADHESION PAID -> set VALID")
         self.ligne_article.status = LigneArticle.VALID
+
+        # On lance les webhook sur les adhésions
+        logger.info(f"CHECK WEBHOOK")
+        webhook_memberships.delay(membership.pk)

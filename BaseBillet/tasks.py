@@ -597,6 +597,32 @@ def send_membership_to_cashless(data):
 
 
 @app.task
+def webhook_memberships(membership_pk):
+    #TODO: a factoriser avec le wehbhook reservation. Code en double.
+    logger.info(f"webhook_reservation : {membership_pk} {timezone.now()} info")
+    # Si plusieurs webhook :
+    webhooks = Webhook.objects.filter(event=Webhook.MEMBERSHIP_V)
+    if webhooks.count() > 0:
+        membership = Membership.objects.get(pk=membership_pk)
+        json = {
+            "object": "membership",
+            "pk": f"{Membership.pk}",
+            "state": f"{Membership.status}",
+            "datetime": f"{Membership.date_added}",
+        }
+
+        # Si plusieurs webhook :
+        for webhook in webhooks:
+            try:
+                response = requests.request("POST", webhook.url, data=json, timeout=2)
+                webhook.last_response = f"{timezone.now()} - status code {response.status_code} - {response.text}"
+            except Exception as e:
+                logger.error(f"webhook_reservation ERROR : {membership_pk} {timezone.now()} {e}")
+                webhook.last_response = f"{timezone.now()} - {e}"
+            webhook.save()
+
+
+@app.task
 def webhook_reservation(reservation_pk):
     logger.info(f"webhook_reservation : {reservation_pk} {timezone.now()} info")
     webhooks = Webhook.objects.filter(event=Webhook.RESERVATION_V)
