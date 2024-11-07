@@ -1230,7 +1230,8 @@ class Paiement_stripe(models.Model):
             return self.status
 
         config = Configuration.get_solo()
-        stripe.api_key = config.get_stripe_api()
+        # stripe.api_key = config.get_stripe_api()
+        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
         checkout_session = stripe.checkout.Session.retrieve(
             self.checkout_session_id_stripe,
             stripe_account=config.get_stripe_connect_account()
