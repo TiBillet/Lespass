@@ -1037,14 +1037,6 @@ msgstr ""
 msgid "Myself"
 msgstr "Moi"
 
-#: BaseBillet/templates/htmx/views/tenant/new.html:11
-msgid ""
-"To create your TiBillet space and receive payments, you'll need a valid "
-"Stripe account. This free procedure is available here: https://stripe.com/"
-msgstr ""
-"Pour créer votre espace TiBillet et recevoir des paiements, vous aurez "
-"besoin d'un compte Stripe valide. Cette démarche gratuite est disponible "
-"ici : https://stripe.com/"
 
 #: BaseBillet/templates/htmx/views/tenant/new.html:17
 msgid "Preferred DNS :"
