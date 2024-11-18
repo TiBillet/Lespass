@@ -231,6 +231,8 @@ class Configuration(SingletonModel):
                                                       blank=True,
                                                       related_name="checkbox")
 
+    need_name = models.BooleanField(default=True, verbose_name=_("Nom requis lors du scan qrcode"))
+
     """
     ######### CASHLESS #########
     """
@@ -365,6 +367,10 @@ class Configuration(SingletonModel):
         msg = _('Link your stripe account to accept payment')
         return format_html(f"<a href='{url_onboard_stripe}'>{msg}</a>")
 
+    def clean_product_stripe_id(self):
+        ProductSold.objects.all().update(id_product_stripe=None)
+        PriceSold.objects.all().update(id_price_stripe=None)
+        return True
     """
     ### TVA ###
     """
