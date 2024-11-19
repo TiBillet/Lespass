@@ -32,8 +32,8 @@
                                     <div class="mb-3">
                                         <span class="text-info">{% translate "Votre nom est requis pour lier vos adhésions associatives : " %}</span>
                                     </div>
-                                    {% include "htmx/components/inputMd.html" with name="firstname" label="Prenom" type="text"  value=name_query_params errors=errors %}
-                                    {% include "htmx/components/inputMd.html" with name="lastname" label="Nom / Structure" type="text"  value=name_query_params errors=errors %}
+                                    {% include "htmx/components/inputMd.html" with name="firstname" label="Prenom" type="text"  value=user.first_name errors=errors %}
+                                    {% include "htmx/components/inputMd.html" with name="lastname" label="Nom / Structure" type="text"  value=user.last_name errors=errors %}
                                 {% endif %}
                                 <div class="form-check text-start ps-0">
                                     <input class="form-check-input bg-dark border-dark test-return-agree-link-card"
