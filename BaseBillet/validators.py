@@ -19,6 +19,8 @@ from root_billet.models import RootConfiguration
 
 class LinkQrCodeValidator(serializers.Serializer):
     email = serializers.EmailField(required=True, allow_null=False)
+    firstname = serializers.CharField(max_length=500, required=False, allow_blank=True)
+    lastname = serializers.CharField(max_length=500, required=False, allow_blank=True)
     # data=request.POST.dict() in the controler for boolean
     cgu = serializers.BooleanField(required=True, allow_null=False)
     qrcode_uuid = serializers.UUIDField()

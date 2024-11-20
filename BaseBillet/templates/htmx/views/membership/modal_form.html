@@ -72,26 +72,11 @@
                     </div>
 
                     <!-- email -->
-                    <div class="input-group input-group-dynamic mb-4">
-                        <label class="form-label">Email</label>
-                        <input name="email" type="email" class="form-control"
-                               role="textbox" aria-label="Email pour l'adhésion." required>
-                    </div>
+                    {% include "htmx/components/inputMd.html" with name="email" label="Email" type="email" value=user.email errors=errors %}
 
-                    <!-- nom -->
-                    <div class="input-group input-group-dynamic mb-4">
-                        <label class="form-label">{% translate "Name or organization" %}</label>
-                        <input name="first_name" type="text" class="form-control"
-                               role="textbox" aria-label="Nom pour l'adhésion." required>
-                    </div>
+                    {% include "htmx/components/inputMd.html" with name="first_name" label="Prenom" type="text"  value=user.first_name errors=errors %}
 
-                    <!-- prénom -->
-                    <div class="input-group input-group-dynamic mb-4">
-                        <label class="form-label">{% translate "First name" %}</label>
-                        <input name="last_name" type="text" class="form-control"
-                               role="textbox" aria-label="Prénom pour l'adhésion." required>
-                    </div>
-
+                    {% include "htmx/components/inputMd.html" with name="last_name" label="Nom / Structure" type="text"  value=user.last_name errors=errors %}
 
                     <!-- code postal -->
                     {#                    <div class="input-group input-group-dynamic mb-4">#}

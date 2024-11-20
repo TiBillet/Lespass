@@ -18,6 +18,7 @@ from django.utils.encoding import force_str, force_bytes
 from django.utils.http import urlsafe_base64_encode
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_GET
+from django_extensions.templatetags.debugger_tags import ipdb
 from django_htmx.http import HttpResponseClientRedirect
 from django_tenants.utils import tenant_context
 from faker import Faker
@@ -184,27 +185,23 @@ class ScanQrCode(viewsets.ViewSet):
             logger.error(e)
             raise e
 
-        #TODO: 1) checket fedow 2) checker origin card 3) rediriger vers primary_domain
-
-        # Pour les cartes en m (qui vont vers l'agenda)
-        # Recherche de l'origine et redirect vers le bon tenant
+        # 1) checket fedow 2) checker origin card 3) rediriger vers primary_domain
+        # redirection des cartes génériques
         tenant: Client = connection.tenant
+        # Besoin d'etre sur un tenant qui a déja échangé avec Fedow
         if tenant.categorie != Client.SALLE_SPECTACLE:
-            # logger.info("scan de qrcode sur meta. Recherche de l'origin et redirection")
-            first_tenant = Client.objects.filter(categorie=Client.SALLE_SPECTACLE).first()
-            if first_tenant is None:
-                raise Http404("No first tenant for qr card ?")
-            with tenant_context(first_tenant):
-                fedowAPI = FedowAPI()
-                serialized_qrcode_card = fedowAPI.NFCcard.qr_retrieve(qrcode_uuid)
-                domain = serialized_qrcode_card['origin']['place']['lespass_domain']
-                # logger.info(f"    origine trouvée : {domain}")
-                validated_domain = get_object_or_404(Domain, domain=domain).domain
-                return HttpResponseRedirect(f"https://{validated_domain}/qr/{qrcode_uuid}/")
+            tenant = Client.objects.filter(categorie=Client.SALLE_SPECTACLE).first()
+        with tenant_context(tenant):
+            fedowAPI = FedowAPI()
+            serialized_qrcode_card = fedowAPI.NFCcard.qr_retrieve(qrcode_uuid)
+
+        lespass_domain = serialized_qrcode_card['origin']['place']['lespass_domain']
+        domain = get_object_or_404(Domain, domain=lespass_domain)
+        primary_domain = domain.tenant.get_primary_domain()
+        if not primary_domain.domain in request.build_absolute_uri():
+            return HttpResponseRedirect(f"https://{primary_domain}/qr/{qrcode_uuid}/")
 
 
-        fedowAPI = FedowAPI()
-        serialized_qrcode_card = fedowAPI.NFCcard.qr_retrieve(qrcode_uuid)
         if not serialized_qrcode_card:
             logger.warning(f"serialized_qrcode_card {qrcode_uuid} non valide")
             raise Http404()
@@ -236,6 +233,8 @@ class ScanQrCode(viewsets.ViewSet):
     def link(self, request):
         # data=request.POST.dict() in the controler for boolean
         # logger.info(request.POST.dict())
+        # import ipdb; ipdb.set_trace()
+        # data=request.POST.dict() in the controler for boolean
         validator = LinkQrCodeValidator(data=request.POST.dict())
         if not validator.is_valid():
             for error in validator.errors:
@@ -246,7 +245,7 @@ class ScanQrCode(viewsets.ViewSet):
         qrcode_uuid = validator.validated_data['qrcode_uuid']
 
         # Le mail est envoyé
-        user = get_or_create_user(email)
+        user: TibilletUser = get_or_create_user(email)
         # import ipdb; ipdb.set_trace()
         if not user :
             # Le mail n'est pas validé par django (example.org?)
@@ -254,6 +253,12 @@ class ScanQrCode(viewsets.ViewSet):
             logger.error("email validé par validateur DRF mais pas par get_or_create_user "
                          "-> email de confirmation a renvoyé une erreur")
             return HttpResponseClientRedirect(request.headers['Referer'])
+
+        if validator.data.get('lastname') and not user.last_name:
+            user.last_name = validator.data.get('lastname')
+        if validator.data.get('firstname') and not user.first_name:
+            user.first_name = validator.data.get('firstname')
+        user.save()
 
         fedowAPI = FedowAPI()
         wallet, created = fedowAPI.wallet.get_or_create_wallet(user)
@@ -282,10 +287,13 @@ class ScanQrCode(viewsets.ViewSet):
         # Qui redirigera si besoin et affichera l'erreur
         logger.info(f"SCAN QRCODE LINK : wallet : {wallet}, user : {wallet.user}, card qrcode : {linked_serialized_card['qrcode_uuid']} ")
 
-        # On check si des adhésion n'ont pas été faites avec la carte en wallet ephemère
+        # On check si des adhésions n'ont pas été faites avec la carte en wallet ephemère
         card_number = linked_serialized_card.get('number_printed')
         if card_number :
-            Membership.objects.filter(user__isnull=True, card_number=card_number).update(user=user)
+            Membership.objects.filter(
+                user__isnull=True,
+                card_number=card_number).update(
+                user=user, first_name=user.first_name, last_name=user.last_name)
 
         return HttpResponseClientRedirect(request.headers['Referer'])
 

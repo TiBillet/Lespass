@@ -3,14 +3,8 @@
 
 {% block main %}
     {% include "htmx/header_groupe.html" %}
-    <div class="container">
+    <div class="container my-8">
         <form hx-post="/tenant/onboard_stripe/" hx-indicator="#tibillet-spinner">
-
-            <div class="my-6">
-                <p>
-                    {% translate "To create your TiBillet space and receive payments, you'll need a valid Stripe account. This free procedure is available here: https://stripe.com/" %}
-                </p>
-            </div>
 
             {% include "htmx/components/inputMd.html" with name="email" label="Email admin" type="email" value=email_query_params errors=errors %}
             {% include "htmx/components/inputMd.html" with name="name" label="Nom de votre futur espace" type="text"  value=name_query_params errors=errors %}
@@ -26,6 +20,7 @@
                         tibillet.coop
                     </label>
                 </div>
+                
                 <div class="form-check me-3" style="padding-left: 0;">
                     <input class="form-check-input" type="radio"
                            name="dns_choice"
@@ -36,6 +31,8 @@
                         tibillet.re
                     </label>
                 </div>
+                
+                
             </div>
 
             <div class="form-check text-start ps-0">
@@ -71,6 +68,6 @@
                 </button>
             </div>
         </form>
-
     </div>
+
 {% endblock main %}

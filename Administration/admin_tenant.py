@@ -296,8 +296,9 @@ class ConfigurationAdmin(SingletonModelAdmin):
                 'stripe_mode_test',
             ),
         }),
-        ('Billetterie options générales', {
+        ('Options générales', {
             'fields': (
+                'need_name',
                 'jauge_max',
                 'option_generale_radio',
                 'option_generale_checkbox',

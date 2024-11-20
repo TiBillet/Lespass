@@ -17,55 +17,33 @@
                                 <h4 class="text-white font-weight-bolder text-center mt-2 mb-0 test-return-titre-popup">
                                     {% translate "Link your card to you" %}
                                 </h4>
-                                {#                                <div class="row mt-3">#}
-                                {#                                    <div class="col-2 text-center ms-auto">#}
-                                {#                                        <a class="btn btn-link px-3" href="javascript:;">#}
-                                {#                                            <i class="fa fa-facebook text-white text-lg"></i>#}
-                                {#                                        </a>#}
-                                {#                                    </div>#}
-                                {#                                    <div class="col-2 text-center px-1">#}
-                                {#                                        <a class="btn btn-link px-3" href="javascript:;">#}
-                                {#                                            <i class="fa fa-github text-white text-lg"></i>#}
-                                {#                                        </a>#}
-                                {#                                    </div>#}
-                                {#                                    <div class="col-2 text-center me-auto">#}
-                                {#                                        <a class="btn btn-link px-3" href="javascript:;">#}
-                                {#                                            <i class="fa fa-google text-white text-lg"></i>#}
-                                {#                                        </a>#}
-                                {#                                    </div>#}
-                                {#                                </div>#}
                             </div>
                         </div>
-                        <div class="row px-xl-5 px-sm-4 px-3">
-                            {#                            <div class="mt-2 position-relative text-center">#}
-                            {#                                <p class="text-sm font-weight-bold mb-2 text-secondary text-border d-inline z-index-2 bg-white px-3">#}
-                            {#                                    or#}
-                            {#                                </p>#}
-                            {#                            </div>#}
-                        </div>
+
+                        <div class="row px-xl-5 px-sm-4 px-3"></div>
+
                         <div class="card-body">
                             <form id="linkform" role="form">
-                                {#                                <div class="input-group input-group-dynamic mb-3">#}
-                                {#                                    <label class="form-label">Name</label>#}
-                                {#                                    <input type="text" class="form-control" aria-label="Name">#}
-                                {#                                </div>#}
-                                <div class="input-group input-group-dynamic mb-3">
-                                    <label class="form-label">Email</label>
-                                    <input name="email" type="email" class="form-control test-return-email-link-card" aria-label="Email"
-                                           value="{{ user.email }}">
+                                <div class="mb-3">
+                                    <span class="text-info">{% translate "L'email est requis en cas de carte perdue :" %}</span>
                                 </div>
-                                {#                                <div class="input-group input-group-dynamic mb-3">#}
-                                {#                                    <label class="form-label">Password</label>#}
-                                {#                                    <input type="password" class="form-control" aria-label="Password">#}
-                                {#                                </div>#}
+                                {% include "htmx/components/inputMd.html" with name="email" label="Email" type="email" value=user.email errors=errors %}
+                                {% if config.need_name %}
+                                    <div class="mb-3">
+                                        <span class="text-info">{% translate "Votre nom est requis pour lier vos adhésions associatives : " %}</span>
+                                    </div>
+                                    {% include "htmx/components/inputMd.html" with name="firstname" label="Prenom" type="text"  value=user.first_name errors=errors %}
+                                    {% include "htmx/components/inputMd.html" with name="lastname" label="Nom / Structure" type="text"  value=user.last_name errors=errors %}
+                                {% endif %}
                                 <div class="form-check text-start ps-0">
                                     <input class="form-check-input bg-dark border-dark test-return-agree-link-card"
                                            type="checkbox"
                                            name="cgu">
                                     <label class="form-check-label" for="flexCheckDefault">
                                         {% translate "I agree the" %} <a href="https://tibillet.org/cgucgv/"
-                                                       class="text-dark font-weight-bolder">
+                                                                         class="text-dark font-weight-bolder">
                                         {% translate "Terms and Conditions" %}</a>
+                                        {% translate "facile à lire et à comprendre :)" %}
                                     </label>
                                 </div>
 
