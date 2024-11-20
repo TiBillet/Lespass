@@ -1022,7 +1022,6 @@ class Onboard_laboutik(APIView):
 
         # Ensure wallet exist for fedow api call
         fedowAPI.wallet.get_or_create_wallet(user_admin)
-
         # Get the temp key for the laboutik onboard
         temp_key = fedowAPI.place.link_cashless_to_place(admin=user_admin)
         fconfig = fedowAPI.fedow_config

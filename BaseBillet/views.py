@@ -195,35 +195,38 @@ class ScanQrCode(viewsets.ViewSet):
             fedowAPI = FedowAPI()
             serialized_qrcode_card = fedowAPI.NFCcard.qr_retrieve(qrcode_uuid)
 
-        lespass_domain = serialized_qrcode_card['origin']['place']['lespass_domain']
-        domain = get_object_or_404(Domain, domain=lespass_domain)
-        primary_domain = domain.tenant.get_primary_domain()
-        if not primary_domain.domain in request.build_absolute_uri():
-            return HttpResponseRedirect(f"https://{primary_domain}/qr/{qrcode_uuid}/")
+            lespass_domain = serialized_qrcode_card['origin']['place']['lespass_domain']
+            if not lespass_domain:
+                raise Http404("Origin error")
+
+            domain = get_object_or_404(Domain, domain=lespass_domain)
+            primary_domain = domain.tenant.get_primary_domain()
+            if not primary_domain.domain in request.build_absolute_uri():
+                return HttpResponseRedirect(f"https://{primary_domain}/qr/{qrcode_uuid}/")
 
 
-        if not serialized_qrcode_card:
-            logger.warning(f"serialized_qrcode_card {qrcode_uuid} non valide")
-            raise Http404()
+            if not serialized_qrcode_card:
+                logger.warning(f"serialized_qrcode_card {qrcode_uuid} non valide")
+                raise Http404()
 
-        # La carte n'a pas d'user, on redirige vers la page de renseignement d'user
-        if serialized_qrcode_card['is_wallet_ephemere']:
-            logger.info("Wallet ephemere, on demande le mail")
-            template_context = get_context(request)
-            template_context['qrcode_uuid'] = qrcode_uuid
-            return render(request, "htmx/views/inscription.html", context=template_context)
+            # La carte n'a pas d'user, on redirige vers la page de renseignement d'user
+            if serialized_qrcode_card['is_wallet_ephemere']:
+                logger.info("Wallet ephemere, on demande le mail")
+                template_context = get_context(request)
+                template_context['qrcode_uuid'] = qrcode_uuid
+                return render(request, "htmx/views/inscription.html", context=template_context)
 
-        # Si wallet non ephemere, alors on a un user :
-        wallet = Wallet.objects.get(uuid=serialized_qrcode_card['wallet_uuid'])
+            # Si wallet non ephemere, alors on a un user :
+            wallet = Wallet.objects.get(uuid=serialized_qrcode_card['wallet_uuid'])
 
-        user: TibilletUser = wallet.user
-        user.is_active = True
-        user.save()
+            user: TibilletUser = wallet.user
+            user.is_active = True
+            user.save()
 
-        # Parti pris : On logue l'user lorsqu'il scanne sa carte.
-        login(request, user)
+            # Parti pris : On logue l'user lorsqu'il scanne sa carte.
+            login(request, user)
 
-        return redirect("/my_account")
+            return redirect("/my_account")
 
     # @action(detail=False, methods=['POST'])
     # def link_with_email_confirm(self, request):
