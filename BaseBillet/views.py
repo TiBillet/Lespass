@@ -467,7 +467,9 @@ class MyAccount(viewsets.ViewSet):
             # Recherche des noms des lieux fédérés
             names_of_place_federated = []
             for place_federated in token['asset']['place_uuid_federated_with']:
-                names_of_place_federated.append(self.get_place_cached_info(place_federated).get('organisation'))
+                place = self.get_place_cached_info(place_federated)
+                if place :
+                    names_of_place_federated.append(place.get('organisation'))
             token['asset']['names_of_place_federated'] = names_of_place_federated
 
         # print(tokens)
@@ -525,7 +527,9 @@ class MyAccount(viewsets.ViewSet):
             # Recherche des noms des lieux fédérés
             names_of_place_federated = []
             for place_federated in token['asset']['place_uuid_federated_with']:
-                names_of_place_federated.append(self.get_place_cached_info(place_federated).get('organisation'))
+                place = self.get_place_cached_info(place_federated)
+                if place :
+                    names_of_place_federated.append(place.get('organisation'))
             token['asset']['names_of_place_federated'] = names_of_place_federated
 
         context = {

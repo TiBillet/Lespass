@@ -27,13 +27,13 @@
                                 <div class="mb-3">
                                     <span class="text-info">{% translate "L'email est requis en cas de carte perdue :" %}</span>
                                 </div>
-                                {% include "htmx/components/inputMd.html" with name="email" label="Email" type="email" value=user.email errors=errors %}
+                                {% include "htmx/components/inputMd.html" with name="email" label="Email" type="email" value=user.email|default_if_none:"" errors=errors %}
                                 {% if config.need_name %}
                                     <div class="mb-3">
                                         <span class="text-info">{% translate "Votre nom est requis pour lier vos adhésions associatives : " %}</span>
                                     </div>
-                                    {% include "htmx/components/inputMd.html" with name="firstname" label="Prenom" type="text"  value=user.first_name errors=errors %}
-                                    {% include "htmx/components/inputMd.html" with name="lastname" label="Nom / Structure" type="text"  value=user.last_name errors=errors %}
+                                    {% include "htmx/components/inputMd.html" with name="firstname" label="Prenom" type="text" value=user.first_name|default_if_none:"" errors=errors %}
+                                    {% include "htmx/components/inputMd.html" with name="lastname" label="Nom / Structure" type="text" value=user.last_name|default_if_none:"" errors=errors %}
                                 {% endif %}
                                 <div class="form-check text-start ps-0">
                                     <input class="form-check-input bg-dark border-dark test-return-agree-link-card"
