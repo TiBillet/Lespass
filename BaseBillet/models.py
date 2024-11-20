@@ -357,6 +357,9 @@ class Configuration(SingletonModel):
             type="account_onboarding",
         )
 
+        # Clean des objets stripes
+        Configuration.get_solo().clean_product_stripe_id()
+
         return url_onboard_stripe.url
 
     def onboard_stripe(self):
