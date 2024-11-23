@@ -8,6 +8,7 @@ from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 
 from ApiBillet.serializers import LigneArticleSerializer
+from AuthBillet.serializers import MembershipSerializer
 from BaseBillet.models import LigneArticle, Product, Membership, Price, Configuration, Paiement_stripe, PriceSold
 from BaseBillet.tasks import send_to_ghost, send_email_generique, create_invoice_pdf, celery_post_request
 from BaseBillet.templatetags.tibitags import dround
@@ -143,6 +144,21 @@ def send_sale_to_laboutik(ligne_article: LigneArticle):
         )
     else:
         logger.warning(f"No serveur cashless on config. Memberhsip not sended")
+
+# Pour usage en CLI :
+def send_sale_from_membership_to_laboutik(membership: Membership):
+    """
+    for m in Membership.objects.filter(stripe_paiement__isnull=False):
+        send_sale_from_membership_to_laboutik(m)
+    """
+    config = Configuration.get_solo()
+    if config.check_serveur_cashless():
+        if membership.stripe_paiement.exists():
+            stripe_paiement:Paiement_stripe = membership.stripe_paiement.first()
+            if stripe_paiement.lignearticles.exists():
+                ligne_article : LigneArticle = stripe_paiement.lignearticles.first()
+                if ligne_article.status in [LigneArticle.PAID, LigneArticle.VALID]:
+                    send_sale_to_laboutik(ligne_article)
 
 
 ### END SEND TO LABOUTIK

@@ -194,6 +194,8 @@ class ScanQrCode(viewsets.ViewSet):
         with tenant_context(tenant):
             fedowAPI = FedowAPI()
             serialized_qrcode_card = fedowAPI.NFCcard.qr_retrieve(qrcode_uuid)
+            if not serialized_qrcode_card:
+                raise Http404("Unknow qrcode_uuid")
 
             lespass_domain = serialized_qrcode_card['origin']['place']['lespass_domain']
             if not lespass_domain:
