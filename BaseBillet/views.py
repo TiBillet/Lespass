@@ -598,6 +598,47 @@ def index(request):
     return render(request, "reunion/index.html", context=template_context)
 
 
+class EventMVT(viewsets.ViewSet):
+    authentication_classes = [SessionAuthentication, ]
+
+    def list(self, request: HttpRequest):
+        template_context = get_context(request)
+        # TODO: filter selon la fédération
+        events = Event.objects.all()
+        template_context['events'] = events
+
+        # TODO: Paginer et aggreger en postgres
+        dated_events = {}
+        for event in events:
+            if dated_events.get(event.datetime.date()):
+                dated_events[event.datetime.date()].append(event)
+            else :
+                dated_events[event.datetime.date()] = [event,]
+
+        template_context['dated_events'] = dated_events
+
+        return render(request, "htmx/views/home.html", context=template_context)
+
+    def retrieve(self, request, pk=None):
+        event = get_object_or_404(Event, slug=pk)
+        template_context = get_context(request)
+        template_context['event'] = event
+        return render(request, "htmx/views/event.html", context=template_context)
+
+    def create(self, request):
+        pass
+
+    def get_permissions(self):
+        if self.action in ['create']:
+            permission_classes = [permissions.IsAuthenticated]
+        else:
+            permission_classes = [permissions.AllowAny]
+        return [permission() for permission in permission_classes]
+
+
+
+
+'''
 @require_GET
 def agenda(request):
     template_context = get_context(request)
@@ -631,6 +672,7 @@ def validate_event(request):
 
     return redirect('home')
 
+'''
 
 def modal(request, level="info", title='Information', content: str = None):
     context = {
@@ -641,6 +683,7 @@ def modal(request, level="info", title='Information', content: str = None):
         }
     }
     return render(request, "htmx/components/modal_message.html", context=context)
+
 
 
 class Badge(viewsets.ViewSet):
@@ -678,6 +721,7 @@ class Badge(viewsets.ViewSet):
         else:
             permission_classes = [permissions.AllowAny]
         return [permission() for permission in permission_classes]
+
 
 
 
@@ -970,7 +1014,6 @@ def create_tenant(request: HttpRequest) -> HttpResponse:
         "espaces": espaces
     }
     return render(request, "htmx/views/create_tenant.html", context=context)
-"""
 
 
 @require_GET
@@ -1052,3 +1095,5 @@ def event_products(request: HttpRequest) -> HttpResponse:
         # retour modal de sucess ou erreur
 
     return render(request, "htmx/forms/event_products.html", context=context)
+
+"""
