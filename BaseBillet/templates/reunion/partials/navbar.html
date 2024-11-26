@@ -1,0 +1,47 @@
+{% load i18n %}
+
+<nav class="navbar navbar-expand-xl bg-body">
+    <div class="container-lg justify-content-between">
+      <a class="navbar-brand flex-grow-1" href="/home/">
+        {{ config.organisation }}
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainMenu"
+        aria-controls="mainMenu" aria-expanded="false" aria-label="Ouvrir le menu">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="mainMenu">
+        
+        <ul class="navbar-nav me-auto">
+          {% for item in main_nav %}
+          <li class="nav-item">
+            <a
+                class="nav-link{% if url_name == item.name %} active" aria-current="page{% endif %}"
+                href="{{ item.url }}">
+              <i class="bi bi-{{ item.icon }}"></i>
+              {% translate item.label %}
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+
+        <div class="navbar-nav d-flex mb-0">
+          <div class="nav-item">
+            {% if user.is_authenticated == False %}
+            <button
+                class="nav-link"
+                data-bs-toggle="offcanvas"
+                data-bs-target="#loginPanel"
+                aria-controls="loginPanel">
+                {% translate 'Me connecter' %}
+            </button>
+            {% else %}
+              <a class="nav-link" href="/my_account/">
+                <i class="bi bi-person-circle"></i>
+                {% translate 'Mon compte' %}
+              </a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>

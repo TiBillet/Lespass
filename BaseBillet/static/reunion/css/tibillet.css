@@ -1,0 +1,64 @@
+@font-face {
+    font-family: 'luciole';
+    src: url('/assets/font/luciole/Luciole-Regular.woff2') format('woff2'),
+         url('/assets/font/luciole/Luciole-Regular.ttf') format('ttf');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'luciole';
+    src: url('/assets/font/luciole/Luciole-Bold.woff2') format('woff2'),
+         url('/assets/font/luciole/Luciole-Bold.ttf') format('ttf');
+    font-weight: bold;
+    font-style: normal;
+}
+
+/* 
+@font-face {
+    font-family: 'luciole';
+    src: url('/assets/font/luciole/Luciole-Italic.woff2') format('woff2'),
+         url('/assets/font/luciole/Luciole-Italic.ttf') format('ttf');
+    font-weight: italic;
+    font-style: normal; */
+/* } */
+
+@font-face {
+    font-family: 'staatliches';
+    src: url('/assets/font/staatliches/staatliches-regular-webfont.woff2') format('woff2'),
+         url('/assets/font/staatliches/Staatliches-Regular.ttf') format('ttf');
+    font-weight: normal;
+    font-style: normal;
+}
+
+a {
+    color: inherit;
+}
+
+body {
+    font-family: luciole, sans-serif;
+}
+
+.navbar {
+    padding-block: 20px;
+    
+    .badge {
+        font-family: luciole, sans-serif;
+        font-size: var(--bs-badge-font-size);
+    }
+
+    .nav-link {
+        font: 20px staatliches, sans-serif;
+    }
+}
+
+.table th, .table td {
+	padding: 1rem;
+	background: none;
+}
+
+@media (min-width: 768px) {
+    .event-tags {
+        max-width: 50%;
+    }
+}

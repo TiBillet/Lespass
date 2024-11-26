@@ -55,7 +55,7 @@ def encode_uid(pk):
 def get_context(request):
     config = Configuration.get_solo()
     logger.debug("request.htmx") if request.htmx else None
-    base_template = "htmx/partial.html" if request.htmx else "htmx/base.html"
+    base_template = "htmx/partial.html" if request.htmx else "reunion/base.html"
     serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
 
     # embed ?
@@ -81,7 +81,13 @@ def get_context(request):
         "config": config,
         "meta_url": meta_url,
         "header": True,
-        "mode_test": True if os.environ.get('TEST') == '1' else False
+        "mode_test": True if os.environ.get('TEST') == '1' else False,
+        "main_nav": [
+            { 'name': 'agenda', 'url': '/agenda/', 'label': 'Agenda', 'icon': 'calendar-date' },
+            { 'name': 'memberships_mvt', 'url': '/memberships/', 'label': 'Adhérer', 'icon': 'person-badge' },
+            { 'name': 'network', 'url': '/network/', 'label': 'Réseau local', 'icon': 'arrow-repeat' },
+            { 'name': 'help', 'url': '/help/', 'label': 'Aide et contact', 'icon': 'question-lg' }
+        ]
     }
     return context
 

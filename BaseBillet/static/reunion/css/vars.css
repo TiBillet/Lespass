@@ -1,0 +1,22 @@
+@import url("https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css");
+
+:root {
+    --kouler-blan: #fff;
+    --kouler-kari: #e9b322;
+    --kouler-losean: #4296cc;
+    --kouler-letsi: #e93363;
+    --kouler-nwar: #000;
+    --kouler-piton: #63515e;
+    --kouler-pitonbraz: #291e26;
+    --kouler-pitonkler: #958c92;
+    --kouler-sousou: #259d49;
+
+    --mayaj-brine: linear-gradient(90deg, var(--kouler-letsi), var(--kouler-losean));
+    --mayaj-fig: linear-gradient(90deg, var(--kouler-kari), var(--kouler-sousou));
+    --mayaj-lagon: linear-gradient(90deg, var(--kouler-losean), var(--kouler-sousou));
+    --mayaj-pons: linear-gradient(90deg, var(--kouler-kari), var(--kouler-letsi));
+
+    --motif-reyone: center / cover url(motif/reyone.svg);
+    --motif-sevronbraz: url(motif/sevronbraz.svg);
+    --motif-sevronkler: url(motif/sevronkler.svg);
+}
