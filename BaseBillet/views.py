@@ -588,9 +588,8 @@ class MyAccount(viewsets.ViewSet):
 def home(request):
     # On redirige vers la page d'adhésion en attendant que les events soient disponibles
     tenant: Client = connection.tenant
-    if tenant.categorie == Client.META:
-        return redirect('/agenda/')
-    return redirect('/memberships')
+    template_context = get_context(request)
+    return render(request, "htmx/views/home.html", context=template_context)
 
 
 @require_GET
