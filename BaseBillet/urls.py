@@ -21,7 +21,7 @@ urlpatterns = [
     path('wiz_event/date/', base_view.event_date, name='event_date'),
     path('wiz_event/presentation/', base_view.event_presentation, name='event_presentation'),
     path('wiz_event/products/', base_view.event_products, name='event_products'),
-    path('home/', base_view.home, name='home'),
+    path('home/', base_view.index, name='home'),
     path('agenda/', base_view.agenda, name='agenda'),
 
     # path("my_account/", base_view.my_account, name='my_account'),
@@ -40,7 +40,7 @@ urlpatterns = [
     # path("tenant/summary/", base_view.tenant_summary, name='tenant_summary'),
     # path('test_jinja/', base_view.test_jinja, name='test_jinja'),
 
-    path('', base_view.home, name="index"),
+    path('', base_view.index, name="index"),
 ]
 
 urlpatterns += router.urls

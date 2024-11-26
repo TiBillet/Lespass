@@ -585,11 +585,11 @@ class MyAccount(viewsets.ViewSet):
 
 
 @require_GET
-def home(request):
+def index(request):
     # On redirige vers la page d'adhésion en attendant que les events soient disponibles
     tenant: Client = connection.tenant
     template_context = get_context(request)
-    return render(request, "htmx/views/home.html", context=template_context)
+    return render(request, "reunion/index.html", context=template_context)
 
 
 @require_GET
