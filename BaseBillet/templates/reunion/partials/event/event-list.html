@@ -1,0 +1,33 @@
+{% for date_key, events in dated_events.items %}
+<h2 class="fs-5 p-3 text-dark" style="background: var(--mayaj-pons);">
+  {{ date_key|date:'l j F'|capfirst }}
+</h2>
+{% for event in events %}
+<div class="row align-items-center mb-3">
+  <div class="col-md-auto">
+    <h3 class="mb-0 mt-2 mt-md-0">{{ event.datetime|time:'H\hi' }}</h3>
+  </div>
+  <div class="col-auto">
+    <img style="background-color: var(--kouler-losean);max-width: 140px;max-height: 100px;"
+      src="{{ event.img }}"
+      class="d-block my-3 rounded"
+      alt="{{ event.name }}">
+  </div>
+  <a href="/event{{ event.slug }}/" class="col fs-5">
+    {{ event.name }}
+  </a>
+  <div class="col-md-auto text-md-end event-tags">
+    {% for tag in event.tag.all %}
+    <a href="?type=Scène ouverte" class="btn btn-info btn-sm mb-1">
+      {{ tag }}
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% if loop.last is False %}<hr />{% endif %}
+{% endfor %}
+{% endfor %}
+
+<p class="py-3 mb-5 text-center">
+  <a href="#" class="btn btn-outline-primary d-block d-sm-inline">Plus d'évènements</a>
+</p>

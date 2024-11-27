@@ -213,6 +213,7 @@ class Command(BaseCommand):
                 long_description="Un évènement gratuit, ouvert à tous.tes sans réservation."
                                  "\nSeul les artistes annoncés et les descriptions sont affichés.",
                 categorie=Event.CONCERT,
+                img="/static/reunion/media/concert-3084876_640.jpg",
             )
             event_entree_libre.tag.add(prix_libre)
             event_entree_libre.tag.add(rock)
@@ -242,6 +243,7 @@ class Command(BaseCommand):
                 long_description="Un évènement gratuit, avec une jauge maximale de 200 personnes et un nombre de billet limités à 4 par reservation."
                                  "\nBillets non nominatifs.",
                 categorie=Event.CONCERT,
+                img="/static/reunion/media/guitar-756326_640.jpg",
             )
             event_gratuit_avec_free_resa.products.add(free_resa)
             event_gratuit_avec_free_resa.tag.add(prix_libre)
@@ -280,6 +282,7 @@ class Command(BaseCommand):
                 long_description="Jauge maximale de 600 personnes et un nombre de billet limités à 10 par reservation."
                                  "\nBillets nominatifs.",
                 categorie=Event.CONCERT,
+                img="/static/reunion/media/theater-stage-430552_640.jpg",
             )
             event_payant_nominatif_tarif_asso.products.add(billet)
 

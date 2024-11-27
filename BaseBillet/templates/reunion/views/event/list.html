@@ -1,0 +1,23 @@
+{% extends base_template %}
+{% load static %}
+
+{% block head %}
+<script type="module" src="{% static 'reunion/js/filter-tags.js' %}"></script>
+{% endblock %}
+
+{% block main %}
+<!-- slideshow -->
+<header class="container-lg">
+    {% include "reunion/partials/event/carousel.html" %}
+</header>
+
+<!-- search bar and filtering -->
+<section class="container-lg p-3 sticky-top bg-body" style="height: fit-content;">
+    {% include "reunion/partials/event/search.html" %}
+</section>
+
+<!-- event list -->
+<main class="container-lg">
+    {% include "reunion/partials/event/event-list.html" %}
+</main>
+{% endblock %}

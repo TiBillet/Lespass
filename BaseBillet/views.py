@@ -55,7 +55,7 @@ def encode_uid(pk):
 def get_context(request):
     config = Configuration.get_solo()
     logger.debug("request.htmx") if request.htmx else None
-    base_template = "htmx/partial.html" if request.htmx else "reunion/base.html"
+    base_template = "reunion/main.html" if request.htmx else "reunion/base.html"
     serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
 
     # embed ?
@@ -83,7 +83,7 @@ def get_context(request):
         "header": True,
         "mode_test": True if os.environ.get('TEST') == '1' else False,
         "main_nav": [
-            { 'name': 'agenda', 'url': '/agenda/', 'label': 'Agenda', 'icon': 'calendar-date' },
+            { 'name': 'event', 'url': '/event/', 'label': 'Agenda', 'icon': 'calendar-date' },
             { 'name': 'memberships_mvt', 'url': '/memberships/', 'label': 'Adhérer', 'icon': 'person-badge' },
             { 'name': 'network', 'url': '/network/', 'label': 'Réseau local', 'icon': 'arrow-repeat' },
             { 'name': 'help', 'url': '/help/', 'label': 'Aide et contact', 'icon': 'question-lg' }
@@ -595,7 +595,7 @@ def index(request):
     # On redirige vers la page d'adhésion en attendant que les events soient disponibles
     tenant: Client = connection.tenant
     template_context = get_context(request)
-    return render(request, "reunion/index.html", context=template_context)
+    return render(request, "reunion/views/home.html", context=template_context)
 
 
 class EventMVT(viewsets.ViewSet):
@@ -604,7 +604,7 @@ class EventMVT(viewsets.ViewSet):
     def list(self, request: HttpRequest):
         template_context = get_context(request)
         # TODO: filter selon la fédération
-        events = Event.objects.all()
+        events = Event.objects.all().order_by('datetime')
         template_context['events'] = events
 
         # TODO: Paginer et aggreger en postgres
@@ -617,7 +617,7 @@ class EventMVT(viewsets.ViewSet):
 
         template_context['dated_events'] = dated_events
 
-        return render(request, "htmx/views/home.html", context=template_context)
+        return render(request, "reunion/views/event/list.html", context=template_context)
 
     def retrieve(self, request, pk=None):
         event = get_object_or_404(Event, slug=pk)

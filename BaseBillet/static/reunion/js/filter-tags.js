@@ -22,4 +22,4 @@ Array.from(target.querySelectorAll('.js-filter-tag')).forEach(child =>
 //
 
 if (tags.length === 0)
-    target.querySelector('js-filter-indicator').classList.add('d-none')
+    document.querySelector('.js-filter-indicator').classList.add('d-none')
