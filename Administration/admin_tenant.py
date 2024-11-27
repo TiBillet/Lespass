@@ -296,6 +296,11 @@ class ConfigurationAdmin(SingletonModelAdmin):
                 'stripe_mode_test',
             ),
         }),
+        ('Fédération', {
+            'fields': (
+                'federated_with',
+            ),
+        }),
         ('Options générales', {
             'fields': (
                 'need_name',
