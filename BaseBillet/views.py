@@ -738,7 +738,7 @@ class MembershipMVT(viewsets.ViewSet):
 
     def list(self, request: HttpRequest):
         template_context = get_context(request)
-        template_context["memberships"] = Product.objects.filter(categorie_article=Product.ADHESION, publish=True)
+        template_context["products"] = Product.objects.filter(categorie_article=Product.ADHESION, publish=True)
         response = render(
             request, "htmx/views/membership/list.html",
             context=template_context,

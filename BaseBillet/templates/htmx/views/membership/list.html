@@ -8,33 +8,37 @@
 
     {% comment %} content of the partial rendering {% endcomment %}
     <div class="container pb-5">
-        {% for membership in memberships %}
+
+        {% for product in products %}
             <div class="row justify-space-between py-2">
                 <div class="card card-plain card-blog mt-5">
                     <div class="row">
                         <div class="col-md-4">
                             <div class="card-image position-relative border-radius-lg">
                                 <img class="img border-radius-lg w-100 h-auto"
-                                     src="{{ membership.img.med.url | randImg }}"
+                                     src="{{ product.img.med.url | randImg }}"
                                      alt="image product" loading="lazy"/>
                             </div>
                         </div>
                         <div class="col-md-7 my-auto ms-md-3 mt-md-auto mt-4">
-                            <h3>{{ membership.name }}</h3>
-                            {% if membership.short_description %}
+                            <h3>{{ product.name }}</h3>
+                            
+                            {% if product.short_description %}
                                 <p style="white-space: pre-line">
-                                    {{ membership.short_description }}
+                                    {{ product.short_description }}
                                 </p>
                             {% endif %}
-                            {% if membership.long_description %}
+                        
+                            {% if product.long_description %}
                                 <p style="white-space: pre-line">
-                                    {{ membership.long_description }}
+                                    {{ product.long_description }}
                                 </p>
                             {% endif %}
+                        
                             <button class="btn btn-outline-secondary btn-sm"
                                     data-bs-toggle="modal"
-                                    data-bs-target="#tibillet-membership-modal-{{ membership.uuid }}"
-                                    role="button" aria-label="Adhérez {{ membership.name }}">
+                                    data-bs-target="#tibillet-membership-modal-{{ product.uuid }}"
+                                    role="button" aria-label="Adhérez {{ product.name }}">
                                 {% translate "Adhérez" %}
                             </button>
                         </div>
@@ -42,8 +46,8 @@
                 </div>
             </div>
         {% endfor %}
-    </div>
 
+    </div>
     <!-- création d'un modal par adhésion -->
     {% for membership in memberships %}
         {% include 'htmx/views/membership/modal_form.html' %}
