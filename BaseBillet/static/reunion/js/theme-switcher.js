@@ -22,4 +22,5 @@ const update = ({ target: { checked }}) => {
 
 refresh(query)
 query.addEventListener('change', refresh)
-toggle.addEventListener('click', update)
+
+if (toggle) toggle.addEventListener('click', update)

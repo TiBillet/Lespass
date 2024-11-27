@@ -15,7 +15,9 @@
     integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
   <link rel="stylesheet" href="{% static 'reunion/css/vars.css' %}">
   <link rel="stylesheet" href="{% static 'reunion/css/tibillet.css' %}">
+
   <script type="module" async src="{% static 'reunion/js/theme-switcher.js' %}"></script>
+  <script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
 
   {% block head %}{% endblock head %}
 </head>
@@ -24,7 +26,7 @@
 
   {% include "reunion/partials/navbar.html" %}
 
-  <div class="flex-fill">
+  <div id="main" class="flex-fill">
     {% block main %}{% endblock main %}
   </div>
 
