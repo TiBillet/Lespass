@@ -374,6 +374,14 @@ class Configuration(SingletonModel):
         ProductSold.objects.all().update(id_product_stripe=None)
         PriceSold.objects.all().update(id_price_stripe=None)
         return True
+
+
+    """
+    ### FEDERATION
+    """
+
+    federated_with = models.ManyToManyField(Client, blank=True, related_name="federated_with", help_text=_("Affiche les évènements et les adhésions des structures fédérées."))
+
     """
     ### TVA ###
     """
