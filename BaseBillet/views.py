@@ -1,3 +1,4 @@
+import collections
 import logging
 import os
 import uuid
@@ -14,6 +15,8 @@ from django.db import connection
 from django.http import HttpResponse, HttpRequest, Http404, HttpResponseRedirect, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.response import TemplateResponse
+from django.utils import timezone
+from django.utils.datetime_safe import datetime
 from django.utils.encoding import force_str, force_bytes
 from django.utils.http import urlsafe_base64_encode
 from django.utils.translation import gettext_lazy as _
@@ -60,9 +63,9 @@ def get_context(request):
 
     # embed ?
     embed = False
-    try :
+    try:
         embed = request.query_params.get('embed')
-    except :
+    except:
         embed = False
 
     # Le lien "Fédération"
@@ -83,10 +86,10 @@ def get_context(request):
         "header": True,
         "mode_test": True if os.environ.get('TEST') == '1' else False,
         "main_nav": [
-            { 'name': 'event', 'url': '/event/', 'label': 'Agenda', 'icon': 'calendar-date' },
-            { 'name': 'memberships_mvt', 'url': '/memberships/', 'label': 'Adhérer', 'icon': 'person-badge' },
-            { 'name': 'network', 'url': '/network/', 'label': 'Réseau local', 'icon': 'arrow-repeat' },
-            { 'name': 'help', 'url': '/help/', 'label': 'Aide et contact', 'icon': 'question-lg' }
+            {'name': 'event', 'url': '/event/', 'label': 'Agenda', 'icon': 'calendar-date'},
+            {'name': 'memberships_mvt', 'url': '/memberships/', 'label': 'Adhérer', 'icon': 'person-badge'},
+            {'name': 'network', 'url': '/network/', 'label': 'Réseau local', 'icon': 'arrow-repeat'},
+            {'name': 'help', 'url': '/help/', 'label': 'Aide et contact', 'icon': 'question-lg'}
         ]
     }
     return context
@@ -145,7 +148,6 @@ def deconnexion(request):
     return redirect('home')
 
 
-
 def connexion(request):
     if request.method == 'POST':
         validator = LoginEmailValidator(data=request.POST)
@@ -181,7 +183,7 @@ class ScanQrCode(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
     def retrieve(self, request, pk=None):
-        #TODO: Serializer ?
+        # TODO: Serializer ?
         try:
             qrcode_uuid: uuid.uuid4 = uuid.UUID(pk)
         except ValueError:
@@ -211,7 +213,6 @@ class ScanQrCode(viewsets.ViewSet):
             primary_domain = domain.tenant.get_primary_domain()
             if not primary_domain.domain in request.build_absolute_uri():
                 return HttpResponseRedirect(f"https://{primary_domain}/qr/{qrcode_uuid}/")
-
 
             if not serialized_qrcode_card:
                 logger.warning(f"serialized_qrcode_card {qrcode_uuid} non valide")
@@ -258,7 +259,7 @@ class ScanQrCode(viewsets.ViewSet):
         # Le mail est envoyé
         user: TibilletUser = get_or_create_user(email)
         # import ipdb; ipdb.set_trace()
-        if not user :
+        if not user:
             # Le mail n'est pas validé par django (example.org?)
             messages.add_message(request, messages.ERROR, f"{_('Email not valid')}")
             logger.error("email validé par validateur DRF mais pas par get_or_create_user "
@@ -288,7 +289,6 @@ class ScanQrCode(viewsets.ViewSet):
                                        "Please revoke it first in your profile area to link a new one."))
                 return HttpResponseClientRedirect(request.headers['Referer'])
 
-
         # Opération de fusion entre la carte liée au qrcode et le wallet de l'user :
         linked_serialized_card = fedowAPI.NFCcard.linkwallet_cardqrcode(user=user, qrcode_uuid=qrcode_uuid)
         if not linked_serialized_card:
@@ -296,11 +296,12 @@ class ScanQrCode(viewsets.ViewSet):
 
         # On retourne sur la page GET /qr/
         # Qui redirigera si besoin et affichera l'erreur
-        logger.info(f"SCAN QRCODE LINK : wallet : {wallet}, user : {wallet.user}, card qrcode : {linked_serialized_card['qrcode_uuid']} ")
+        logger.info(
+            f"SCAN QRCODE LINK : wallet : {wallet}, user : {wallet.user}, card qrcode : {linked_serialized_card['qrcode_uuid']} ")
 
         # On check si des adhésions n'ont pas été faites avec la carte en wallet ephemère
         card_number = linked_serialized_card.get('number_printed')
-        if card_number :
+        if card_number:
             Membership.objects.filter(
                 user__isnull=True,
                 card_number=card_number).update(
@@ -407,9 +408,9 @@ class MyAccount(viewsets.ViewSet):
         fedowAPI = FedowAPI()
         wallet = fedowAPI.wallet.cached_retrieve_by_signature(user).validated_data
         token_fed = [token for token in wallet.get('tokens') if token['asset']['is_stripe_primary'] == True]
-        if len(token_fed) != 1 :
+        if len(token_fed) != 1:
             messages.add_message(request, messages.ERROR,
-                                     _("Vous n'avez pas de tirelire fédérée. Peut être avez vous rechargé votre carte sur place ?"))
+                                 _("Vous n'avez pas de tirelire fédérée. Peut être avez vous rechargé votre carte sur place ?"))
             return HttpResponseClientRedirect('/my_account/')
 
         value = token_fed[0]['value']
@@ -418,19 +419,18 @@ class MyAccount(viewsets.ViewSet):
                                  _(f"Votre tirelire fédérée est déja vide."))
             return HttpResponseClientRedirect('/my_account/')
 
-        #TODO: Mettre ça dans retour depuis un lien envoyé par email :
+        # TODO: Mettre ça dans retour depuis un lien envoyé par email :
         status_code, result = fedowAPI.wallet.refund_fed_by_signature(user)
-        if status_code == 202 :
+        if status_code == 202:
             # On clear le cache du wallet
             cache.delete(f"wallet_user_{user.wallet.uuid}")
             messages.add_message(request, messages.INFO,
                                  _("Un email vous a été envoyé pour finaliser votre remboursement. Merci de regarder dans vos spams si vous ne l'avez pas reçu !"))
             return HttpResponseClientRedirect('/my_account/')
-        else :
+        else:
             messages.add_message(request, messages.WARNING,
                                  _(f"Toutes nos excuses, il semble qu'un traitement manuel est nécéssaire pour votre remboursement. Vous pouvez aller à l'acceuil de votre lieux, ou contacter un administrateur : contact@tibillet.re"))
             return HttpResponseClientRedirect('/my_account/')
-
 
     @staticmethod
     def get_place_cached_info(place_uuid):
@@ -476,7 +476,7 @@ class MyAccount(viewsets.ViewSet):
             names_of_place_federated = []
             for place_federated in token['asset']['place_uuid_federated_with']:
                 place = self.get_place_cached_info(place_federated)
-                if place :
+                if place:
                     names_of_place_federated.append(place.get('organisation'))
             token['asset']['names_of_place_federated'] = names_of_place_federated
 
@@ -536,7 +536,7 @@ class MyAccount(viewsets.ViewSet):
             names_of_place_federated = []
             for place_federated in token['asset']['place_uuid_federated_with']:
                 place = self.get_place_cached_info(place_federated)
-                if place :
+                if place:
                     names_of_place_federated.append(place.get('organisation'))
             token['asset']['names_of_place_federated'] = names_of_place_federated
 
@@ -545,7 +545,6 @@ class MyAccount(viewsets.ViewSet):
             'tokens': tokens,
         }
         return render(request, "htmx/views/my_account/tokens_membership_table.html", context=context)
-
 
     @action(detail=False, methods=['GET'])
     def profile(self, request: HttpRequest) -> HttpResponse:
@@ -569,7 +568,6 @@ class MyAccount(viewsets.ViewSet):
             messages.add_message(request, messages.ERROR, _("No available. Contact an admin."))
             return HttpResponseClientRedirect('/my_account/')
 
-
     @action(detail=True, methods=['GET'])
     def return_refill_wallet(self, request, pk=None):
         # On demande confirmation à Fedow qui a du recevoir la validation en webhook POST
@@ -580,9 +578,9 @@ class MyAccount(viewsets.ViewSet):
 
         try:
             wallet = fedowAPI.wallet.retrieve_from_refill_checkout(user, pk)
-            if wallet :
+            if wallet:
                 messages.add_message(request, messages.SUCCESS, _("Refilled wallet"))
-            else :
+            else:
                 messages.add_message(request, messages.ERROR, _("Payment verification error"))
         except Exception as e:
             messages.add_message(request, messages.ERROR, _("Payment verification error"))
@@ -602,21 +600,24 @@ class EventMVT(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
     def list(self, request: HttpRequest):
-        template_context = get_context(request)
-        # TODO: filter selon la fédération
-        events = Event.objects.all().order_by('datetime')
-        template_context['events'] = events
-
-        # TODO: Paginer et aggreger en postgres
         dated_events = {}
-        for event in events:
-            if dated_events.get(event.datetime.date()):
-                dated_events[event.datetime.date()].append(event)
-            else :
-                dated_events[event.datetime.date()] = [event,]
 
-        template_context['dated_events'] = dated_events
+        template_context = get_context(request)
+        config = template_context['config']
 
+        # Récupération de tout les évènement de la fédération
+        tenants = [tenant for tenant in config.federated_with.all()]
+        tenants.append(connection.tenant)
+        for tenant in tenants:
+            with tenant_context(tenant):
+                events = Event.objects.filter(datetime__gte=timezone.localtime()).order_by('datetime')
+                for event in events:
+                    date = event.datetime.date()
+                    # setdefault pour éviter de faire un if date exist dans le dict
+                    dated_events.setdefault(date, []).append(event)
+
+        # Classement du dictionnaire par date
+        template_context['dated_events'] = collections.OrderedDict(sorted(dated_events.items()))
         return render(request, "reunion/views/event/list.html", context=template_context)
 
     def retrieve(self, request, pk=None):
@@ -634,8 +635,6 @@ class EventMVT(viewsets.ViewSet):
         else:
             permission_classes = [permissions.AllowAny]
         return [permission() for permission in permission_classes]
-
-
 
 
 '''
@@ -674,6 +673,7 @@ def validate_event(request):
 
 '''
 
+
 def modal(request, level="info", title='Information', content: str = None):
     context = {
         "modal_message": {
@@ -683,7 +683,6 @@ def modal(request, level="info", title='Information', content: str = None):
         }
     }
     return render(request, "htmx/components/modal_message.html", context=context)
-
 
 
 class Badge(viewsets.ViewSet):
@@ -700,13 +699,12 @@ class Badge(viewsets.ViewSet):
         user = request.user
         fedowAPI = FedowAPI()
         transaction = fedowAPI.badge.badge_in(user, product)
-        
+
         return JsonResponse({
             'icon': 'success',
             'swal_title': _('Badged !'),
             'swal_message': _('Thank you for your visit!. You can see a summary in the “My Account” area.'),
         })
-
 
     @action(detail=False, methods=['GET'])
     def check_out(self, request: HttpRequest):
@@ -721,8 +719,6 @@ class Badge(viewsets.ViewSet):
         else:
             permission_classes = [permissions.AllowAny]
         return [permission() for permission in permission_classes]
-
-
 
 
 class MembershipMVT(viewsets.ViewSet):
@@ -746,7 +742,6 @@ class MembershipMVT(viewsets.ViewSet):
         # Pour rendre la page dans un iframe, on vide le header X-Frame-Options pour dire au navigateur que c'est ok.
         response['X-Frame-Options'] = '' if template_context.get('embed') else 'DENY'
         return response
-
 
     @action(detail=True, methods=['GET'])
     def stripe_return(self, request, pk, *args, **kwargs):
@@ -792,8 +787,6 @@ class Tenant(viewsets.ViewSet):
     # Tout le monde peut créer un tenant, sous reserve d'avoir validé son compte stripe
     permission_classes = [permissions.AllowAny, ]
 
-
-
     @action(detail=False, methods=['GET'])
     def new(self, request: Request, *args, **kwargs):
         context = get_context(request)
@@ -826,8 +819,8 @@ class Tenant(viewsets.ViewSet):
             validated_data['id_acc_connect'] = f'{id_acc_connect}'
 
             WaitingConfiguration.objects.create(
-                organisation = validated_data['name'],
-                email = validated_data['email'],
+                organisation=validated_data['name'],
+                email=validated_data['email'],
                 laboutik_wanted=validated_data['laboutik'],
                 id_acc_connect=id_acc_connect,
                 dns_choice=validated_data['dns_choice'],
@@ -868,10 +861,10 @@ class Tenant(viewsets.ViewSet):
 
                 # Recheck de la donnée aucazou
                 validator = TenantCreateValidator(data={
-                    'email': waiting_config.email ,
-                    'name': waiting_config.organisation ,
-                    'laboutik': waiting_config.laboutik_wanted ,
-                    'cgu': True ,
+                    'email': waiting_config.email,
+                    'name': waiting_config.organisation,
+                    'laboutik': waiting_config.laboutik_wanted,
+                    'cgu': True,
                     'dns_choice': waiting_config.dns_choice,
                 })
                 if not validator.is_valid():
@@ -879,7 +872,7 @@ class Tenant(viewsets.ViewSet):
                         messages.add_message(request, messages.ERROR, f"{error} : {validator.errors[error][0]}")
                     return redirect('/tenant/new/')
 
-                #TODO: Faire ça en async / celery
+                # TODO: Faire ça en async / celery
                 new_tenant = validator.create_tenant(waiting_config)
 
                 # On indique au front que la création est en cours :
@@ -898,8 +891,6 @@ class Tenant(viewsets.ViewSet):
                 _("Your Stripe account does not seem to be valid. "
                   "\nPlease complete your Stripe.com registration before creating a new TiBillet space."))
             return redirect('/tenant/new/')
-
-
 
 
 """

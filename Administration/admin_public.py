@@ -1,9 +1,12 @@
 import logging
 
+from django.conf import settings
 from django.contrib import admin
 from django.contrib.admin import AdminSite
+from django.contrib.auth import login
 from django.contrib.auth.admin import UserAdmin, GroupAdmin
 from django.contrib.auth.models import Group
+from django.db import connection
 from django.utils.translation import gettext_lazy as _
 from solo.admin import SingletonModelAdmin
 
@@ -24,6 +27,15 @@ class PublicAdminSite(AdminSite):
     def has_permission(self, request):
         logger.warning(
             f"Tenant AdminSite.has_permission : {request.user} - {request.user.client_source if request.user.is_authenticated else 'No client source'} - ip : {get_client_ip(request)}")
+
+        # Dans le cas ou on debug, on se log auto :
+        # if settings.DEBUG:
+        #     tenant : Client = connection.tenant
+        #     admin_user = tenant.user_admin.first()
+        #     if admin_user:
+        #         login(request, admin_user)
+        #         return True
+
 
         try:
             if request.user.client_source.categorie == Client.ROOT:

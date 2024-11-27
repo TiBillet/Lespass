@@ -9,6 +9,7 @@ from django.contrib.admin.views.main import ChangeList
 from django.contrib.auth import get_user_model, login
 from django.contrib.auth.models import Group
 from django.core.handlers.asgi import ASGIRequest
+from django.db import connection
 from django.http import HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import reverse, NoReverseMatch, re_path
@@ -78,13 +79,13 @@ class StaffAdminSite(AdminSite):
         Return SuperUser :
         """
 
-        # Dans le cas ou on debug, on se log auto en root :
-        # BUG CSRF ????
+        # # Dans le cas ou on debug, on se log auto :
         # if settings.DEBUG:
-        #     User = get_user_model()
-        #     root = User.objects.filter(is_superuser=True).first()
-        #     login(request, root)
-        #     return True
+        #     tenant : Client = connection.tenant
+        #     admin_user = tenant.user_admin.first()
+        #     if admin_user:
+        #         login(request, admin_user)
+        #         return True
 
         logger.warning(
             f"Tenant AdminSite.has_permission : l'user {request.user} from ip : {get_client_ip(request)} try to get admin on {request.build_absolute_uri()} - tenant : {request.tenant}")
@@ -318,7 +319,7 @@ class ConfigurationAdmin(SingletonModelAdmin):
         }),
 
     )
-    readonly_fields = ['ghost_last_log', 'onboard_stripe',]
+    readonly_fields = ['ghost_last_log', 'onboard_stripe', ]
 
     def save_model(self, request, obj, form, change):
         obj: Configuration
@@ -744,8 +745,10 @@ staff_admin_site.register(Paiement_stripe, PaiementStripeAdmin)
 def send_invoice(modeladmin, request, queryset):
     pass
 
+
 def send_to_ghost(modeladmin, request, queryset):
     pass
+
 
 class MembershipAdmin(admin.ModelAdmin):
     list_display = (
@@ -793,11 +796,12 @@ class MembershipAdmin(admin.ModelAdmin):
     )
 
     def str_user(self, obj: Membership):
-        if obj.user :
+        if obj.user:
             return obj.user.email
         elif obj.card_number:
             return obj.card_number
         return "Anonyme"
+
     str_user.short_description = 'User'
 
     def has_delete_permission(self, request, obj=None):
@@ -810,7 +814,7 @@ class MembershipAdmin(admin.ModelAdmin):
     # def has_change_permission(self, request, obj=None):
     #     return False
 
-    #TODO : actions
+    # TODO : actions
     # actions = [send_invoice, send_to_ghost ]
     ordering = ('-date_added',)
     search_fields = ('user__email', 'user__first_name', 'user__last_name', 'card_number')

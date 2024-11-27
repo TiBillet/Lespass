@@ -993,11 +993,7 @@ class Get_user_pub_pem(APIView):
         User = get_user_model()
         user: TibilletUser = get_object_or_404(User, email=f"{request.data['email']}")
         if connection.tenant not in user.client_admin.all():
-            # Pour les ancienne instances, a virer apres les grandes migrations :
-            if settings.DEBUG:
-                user.client_admin.add(connection.tenant)
-            else:
-                return Response(status=status.HTTP_401_UNAUTHORIZED)
+            return Response(status=status.HTTP_401_UNAUTHORIZED)
 
         data = {
             'public_pem': f"{user.get_public_pem()}",
