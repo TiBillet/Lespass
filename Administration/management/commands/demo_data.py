@@ -4,10 +4,13 @@ from datetime import timedelta
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from django_tenants.utils import tenant_context
+from django.utils.text import slugify
+from django_tenants.utils import tenant_context, schema_context
 
+from AuthBillet.models import TibilletUser
+from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Product, OptionGenerale, Price, Configuration, Event, Tag
-from Customers.models import Client
+from Customers.models import Client, Domain
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
 
@@ -26,265 +29,293 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         # START MIGRATE AND INSTALL BEFORE THIS SCRIPT
         sub = os.environ['SUB']
-        tenant = Client.objects.get(name=sub)
-        with tenant_context(tenant):
-            logger.info(f"Start demo_data. Sub : {sub}, tenant : {tenant}")
 
-            ### CONFIGURATION VARIABLE ####
-
-            config = Configuration.get_solo()
-            config.organisation = "Lespas'"
-            config.short_description = "Les scènes de Lespas : un espace de démonstration."
-            config.long_description = (
-                "Vous trouverez ici un exemple de plusieurs types d'évènements, d'adhésions et d'abonnements."
-                "\nGratuit, payant, avec prix préférentiels."
-                "\nAbonnement mensuels récurents ou adhésion annuelle."
-                "\nAinsi qu'une badgeuse pour la gestion d'accès d'un co working.")
-            config.adress = "42 Rue Douglas Adams"
-            config.postal_code = "69100"
-            config.city = "Pourtouche"
-            config.tva_number = "4242424242424242"
-            config.siren = "424242424242"
-            config.phone = "06 42 42 42 42"
-            config.email = os.environ['ADMIN_EMAIL']
-            config.stripe_mode_test = True
-            config.stripe_connect_account_test = os.environ.get('TEST_STRIPE_CONNECT_ACCOUNT')
-            config.site_web = "https://tibillet.org"
-            config.legal_documents = "https://tibillet.org/cgucgv"
-            config.twitter = "https://twitter.com/tibillet"
-            config.facebook = "https://facebook.com/tibillet"
-            config.instagram = "https://instagram.com/tibillet"
-            config.save()
-
-            ### LINK TO FEDOW
-
-            # TODO: a faire dans la création de nouveau tenant, connection fedow obligatoire et check admin wallet
-            ## Liaison tenant avec Fedow
-            fedowAPI = FedowAPI()
-            # La première création de l'instance FedowAPI génère un nouveau lieu coté Fedow s'il n'existe pas.
-            # avec la fonction : fedowAPI.place.create()
-            assert FedowConfig.get_solo().can_fedow()
-
-            ### PRODUCT ###
-            option_membre_actif, created = OptionGenerale.objects.get_or_create(
-                name="Membre actif.ve",
-                description="Je souhaite m'investir à donf !",
+        # Fabrication d'un tenant pour de la fédération
+        with schema_context('public'):
+            name = "L'intérupteur"
+            domain = os.getenv("DOMAIN")
+            tenant, created = Client.objects.get_or_create(
+                schema_name=slugify(name),
+                name=name,
+                on_trial=False,
+                categorie=Client.SALLE_SPECTACLE,
             )
-
-            vege, created = OptionGenerale.objects.get_or_create(
-                name="Vegetarien",
-                description="Je suis végé",
+            Domain.objects.get_or_create(
+                domain=f'{slugify(name)}.tibillet.localhost',
+                tenant=tenant,
+                is_primary=True
             )
+            # Sans envoie d'email pour l'instant, on l'envoie quand tout sera bien terminé
+            user: TibilletUser = get_or_create_user(os.environ['ADMIN_EMAIL'], send_mail=False)
+            user.client_admin.add(tenant)
+            user.is_staff = True
+            user.save()
 
-            intolerance, created = OptionGenerale.objects.get_or_create(
-                name="Intolérance au glutent",
-            )
 
-            livraison_asso, created = OptionGenerale.objects.get_or_create(
-                name="Livraison à l'asso"
-            )
 
-            livraison_maison, created = OptionGenerale.objects.get_or_create(
-                name="Livraison à la maison"
-            )
+        tenant1 = Client.objects.get(name=sub)
+        tenant2 = Client.objects.get(name="L'intérupteur")
+        for tenant in [tenant1, tenant2]:
+            with tenant_context(tenant):
+                logger.info(f"Start demo_data. Sub : {sub}, tenant : {tenant}")
 
-            terasse, created = OptionGenerale.objects.get_or_create(
-                name="Terrasse",
-                description="Une table en terasse",
-            )
+                ### CONFIGURATION VARIABLE ####
 
-            interieur, created = OptionGenerale.objects.get_or_create(
-                name="Salle",
-                description="Une table à l'intérieur",
-            )
+                config = Configuration.get_solo()
+                config.organisation = tenant.name
+                config.short_description = f"Les scènes de {tenant.name} : un espace de démonstration."
+                config.long_description = (
+                    "Vous trouverez ici un exemple de plusieurs types d'évènements, d'adhésions et d'abonnements."
+                    "\nGratuit, payant, avec prix préférentiels."
+                    "\nAbonnement mensuels récurents ou adhésion annuelle."
+                    "\nAinsi qu'une badgeuse pour la gestion d'accès d'un co working.")
+                config.adress = "42 Rue Douglas Adams"
+                config.postal_code = "69100"
+                config.city = "Pourtouche"
+                config.tva_number = "4242424242424242"
+                config.siren = "424242424242"
+                config.phone = "06 42 42 42 42"
+                config.email = os.environ['ADMIN_EMAIL']
+                config.stripe_mode_test = True
+                config.stripe_connect_account_test = os.environ.get('TEST_STRIPE_CONNECT_ACCOUNT')
+                config.site_web = "https://tibillet.org"
+                config.legal_documents = "https://tibillet.org/cgucgv"
+                config.twitter = "https://twitter.com/tibillet"
+                config.facebook = "https://facebook.com/tibillet"
+                config.instagram = "https://instagram.com/tibillet"
+                config.federated_with.add(tenant1)
+                config.federated_with.add(tenant2)
+                config.save()
 
-            terasse, created = OptionGenerale.objects.get_or_create(
-                name="Terrasse",
-                description="Une table en terasse",
-            )
+                ### LINK TO FEDOW
 
-            ### MEMBERSHIP ###
+                # TODO: a faire dans la création de nouveau tenant, connection fedow obligatoire et check admin wallet
+                ## Liaison tenant avec Fedow
+                fedowAPI = FedowAPI()
+                # La première création de l'instance FedowAPI génère un nouveau lieu coté Fedow s'il n'existe pas.
+                # avec la fonction : fedowAPI.place.create()
+                assert FedowConfig.get_solo().can_fedow()
 
-            adhesion_asso, created = Product.objects.get_or_create(
-                name="Adhésion associative",
-                short_description="Adhérez à l'association",
-                long_description="Vous pouvez prendre une adhésion en une seule fois, ou payer tout les mois.",
-                categorie_article=Product.ADHESION,
-            )
-            adhesion_asso.option_generale_checkbox.add(option_membre_actif)
+                ### PRODUCT ###
+                option_membre_actif, created = OptionGenerale.objects.get_or_create(
+                    name="Membre actif.ve",
+                    description="Je souhaite m'investir à donf !",
+                )
 
-            adhesion_asso_annuelle, created = Price.objects.get_or_create(
-                product=adhesion_asso,
-                name="Annuelle",
-                short_description="Adhésion annuelle",
-                prix='20',
-                recurring_payment=False,
-                subscription_type=Price.YEAR,
-            )
+                vege, created = OptionGenerale.objects.get_or_create(
+                    name="Vegetarien",
+                    description="Je suis végé",
+                )
 
-            adhesion_asso_mensuelle_recurente, created = Price.objects.get_or_create(
-                product=adhesion_asso,
-                name="Mensuelle",
-                short_description="Adhésion mensuelle récurente",
-                prix='2',
-                recurring_payment=True,
-                subscription_type=Price.MONTH,
-            )
+                intolerance, created = OptionGenerale.objects.get_or_create(
+                    name="Intolérance au gluten",
+                )
 
-            prix_libre, created = Price.objects.get_or_create(
-                product=adhesion_asso,
-                name="Prix libre",
-                short_description="Prix libre",
-                prix='1',
-                free_price=True,
-                subscription_type=Price.YEAR,
-            )
+                livraison_asso, created = OptionGenerale.objects.get_or_create(
+                    name="Livraison à l'asso"
+                )
 
-            amap, created = Product.objects.get_or_create(
-                name="Panier AMAP",
-                short_description="Adhésion au panier AMAP",
-                long_description="Association pour le maintient d'une agriculture paysanne, recevez un panier par semaine.",
-                categorie_article=Product.ADHESION,
+                livraison_maison, created = OptionGenerale.objects.get_or_create(
+                    name="Livraison à la maison"
+                )
 
-            )
-            amap.option_generale_radio.add(livraison_asso)
-            amap.option_generale_radio.add(livraison_maison)
+                terasse, created = OptionGenerale.objects.get_or_create(
+                    name="Terrasse",
+                    description="Une table en terasse",
+                )
 
-            amap_annuelle, created = Price.objects.get_or_create(
-                product=amap,
-                name="Annuel",
-                short_description="Adhésion annuel",
-                prix='400',
-                recurring_payment=False,
-                subscription_type=Price.YEAR,
-            )
+                interieur, created = OptionGenerale.objects.get_or_create(
+                    name="Salle",
+                    description="Une table à l'intérieur",
+                )
 
-            amap_mensuelle_recurente, created = Price.objects.get_or_create(
-                product=amap,
-                name="Mensuel",
-                short_description="Adhésion récurente",
-                prix='40',
-                recurring_payment=True,
-                subscription_type=Price.MONTH,
-            )
+                terasse, created = OptionGenerale.objects.get_or_create(
+                    name="Terrasse",
+                    description="Une table en terasse",
+                )
 
-            ### BADGEUSE ###
+                ### MEMBERSHIP ###
 
-            badgeuse_cowork, created = Product.objects.get_or_create(
-                name="Badgeuse Co-Working",
-                short_description="Badger l'acces au co working",
-                long_description="Venez pointer votre présence.",
-                categorie_article=Product.BADGE,
-            )
+                adhesion_asso, created = Product.objects.get_or_create(
+                    name="Adhésion associative",
+                    short_description="Adhérez à l'association",
+                    long_description="Vous pouvez prendre une adhésion en une seule fois, ou payer tout les mois.",
+                    categorie_article=Product.ADHESION,
+                )
+                adhesion_asso.option_generale_checkbox.add(option_membre_actif)
 
-            badge_zero, created = Price.objects.get_or_create(
-                product=badgeuse_cowork,
-                name="Passage",
-                short_description="Pointage d'un passage",
-                prix=0,
-                recurring_payment=False,
-            )
+                adhesion_asso_annuelle, created = Price.objects.get_or_create(
+                    product=adhesion_asso,
+                    name="Annuelle",
+                    short_description="Adhésion annuelle",
+                    prix='20',
+                    recurring_payment=False,
+                    subscription_type=Price.YEAR,
+                )
 
-            # badge_jour, created = Price.objects.get_or_create(
-            #     product=badgeuse_cowork,
-            #     name="Jour",
-            #     short_description="Pointage payant pour la journée",
-            #     prix=5,
-            #     recurring_payment=False,
-            # )
-            #
-            # badge_hour, created = Price.objects.get_or_create(
-            #     product=badgeuse_cowork,
-            #     name="Heure",
-            #     short_description="Pointage à l'heure",
-            #     prix=1,
-            #     recurring_payment=False,
-            # )
+                adhesion_asso_mensuelle_recurente, created = Price.objects.get_or_create(
+                    product=adhesion_asso,
+                    name="Mensuelle",
+                    short_description="Adhésion mensuelle récurente",
+                    prix='2',
+                    recurring_payment=True,
+                    subscription_type=Price.MONTH,
+                )
 
-            ### EVENTS ###
-            rock, created = Tag.objects.get_or_create(name='Rock')
-            jazz, created = Tag.objects.get_or_create(name='Jazz')
-            prix_libre, created = Tag.objects.get_or_create(name='Prix libre')
+                prix_libre, created = Price.objects.get_or_create(
+                    product=adhesion_asso,
+                    name="Prix libre",
+                    short_description="Prix libre",
+                    prix='1',
+                    free_price=True,
+                    subscription_type=Price.YEAR,
+                )
 
-            event_entree_libre, created = Event.objects.get_or_create(
-                name="Entrée libre",
-                datetime=timezone.now() + timedelta(days=10),
-                short_description="Scène ouverte Rock !",
-                long_description="Un évènement gratuit, ouvert à tous.tes sans réservation."
-                                 "\nSeul les artistes annoncés et les descriptions sont affichés.",
-                categorie=Event.CONCERT,
-                img="/static/reunion/media/concert-3084876_640.jpg",
-            )
-            event_entree_libre.tag.add(prix_libre)
-            event_entree_libre.tag.add(rock)
+                amap, created = Product.objects.get_or_create(
+                    name="Panier AMAP",
+                    short_description="Adhésion au panier AMAP",
+                    long_description="Association pour le maintient d'une agriculture paysanne, recevez un panier par semaine.",
+                    categorie_article=Product.ADHESION,
 
-            ### GRATUIT MAIS AVEC RESERVATION OBLIGATOIRE ###
+                )
+                amap.option_generale_radio.add(livraison_asso)
+                amap.option_generale_radio.add(livraison_maison)
 
-            free_resa, created = Product.objects.get_or_create(
-                name="Reservation gratuite",
-                short_description="Reservation gratuite",
-                categorie_article=Product.FREERES,
-                nominative=False,
-            )
+                amap_annuelle, created = Price.objects.get_or_create(
+                    product=amap,
+                    name="Annuel",
+                    short_description="Adhésion annuel",
+                    prix='400',
+                    recurring_payment=False,
+                    subscription_type=Price.YEAR,
+                )
 
-            free_resa_price, created = Price.objects.get_or_create(
-                name="Tarif gratuit",
-                prix=0,
-                short_description="Tarif gratuit",
-                product=free_resa,
-            )
+                amap_mensuelle_recurente, created = Price.objects.get_or_create(
+                    product=amap,
+                    name="Mensuel",
+                    short_description="Adhésion récurente",
+                    prix='40',
+                    recurring_payment=True,
+                    subscription_type=Price.MONTH,
+                )
 
-            event_gratuit_avec_free_resa, created = Event.objects.get_or_create(
-                name="Gratuit avec reservation",
-                datetime=timezone.now() + timedelta(days=12),
-                jauge_max=200,
-                max_per_user=4,
-                short_description="Attention, places limités, pensez à réserver !",
-                long_description="Un évènement gratuit, avec une jauge maximale de 200 personnes et un nombre de billet limités à 4 par reservation."
-                                 "\nBillets non nominatifs.",
-                categorie=Event.CONCERT,
-                img="/static/reunion/media/guitar-756326_640.jpg",
-            )
-            event_gratuit_avec_free_resa.products.add(free_resa)
-            event_gratuit_avec_free_resa.tag.add(prix_libre)
-            event_gratuit_avec_free_resa.tag.add(jazz)
+                ### BADGEUSE ###
 
-            ### PAYANT AVEC BILLET NOMINATIFS ET TARIF PREFERENTIEL ###
+                badgeuse_cowork, created = Product.objects.get_or_create(
+                    name="Badgeuse Co-Working",
+                    short_description="Badger l'acces au co working",
+                    long_description="Venez pointer votre présence.",
+                    categorie_article=Product.BADGE,
+                )
 
-            billet, created = Product.objects.get_or_create(
-                name="Billet",
-                short_description="Billet",
-                categorie_article=Product.BILLET,
-                nominative=True,
-            )
+                badge_zero, created = Price.objects.get_or_create(
+                    product=badgeuse_cowork,
+                    name="Passage",
+                    short_description="Pointage d'un passage",
+                    prix=0,
+                    recurring_payment=False,
+                )
 
-            plein_tarif, created = Price.objects.get_or_create(
-                name="Plein tarif",
-                short_description="Plein tarif",
-                prix=20,
-                product=billet,
-            )
+                # badge_jour, created = Price.objects.get_or_create(
+                #     product=badgeuse_cowork,
+                #     name="Jour",
+                #     short_description="Pointage payant pour la journée",
+                #     prix=5,
+                #     recurring_payment=False,
+                # )
+                #
+                # badge_hour, created = Price.objects.get_or_create(
+                #     product=badgeuse_cowork,
+                #     name="Heure",
+                #     short_description="Pointage à l'heure",
+                #     prix=1,
+                #     recurring_payment=False,
+                # )
 
-            tarif_adherant, created = Price.objects.get_or_create(
-                name="Tarif Adhérant",
-                short_description="Plein tarif",
-                prix=10,
-                product=billet,
-                adhesion_obligatoire=adhesion_asso,
-            )
+                ### EVENTS ###
+                rock, created = Tag.objects.get_or_create(name='Rock')
+                jazz, created = Tag.objects.get_or_create(name='Jazz')
+                prix_libre, created = Tag.objects.get_or_create(name='Prix libre')
 
-            event_payant_nominatif_tarif_asso, created = Event.objects.get_or_create(
-                name="Spectacle payant",
-                datetime=timezone.now() + timedelta(days=13),
-                jauge_max=600,
-                max_per_user=10,
-                short_description="Spectacle payant avec tarif préférentiel pour les adhérants à l'association",
-                long_description="Jauge maximale de 600 personnes et un nombre de billet limités à 10 par reservation."
-                                 "\nBillets nominatifs.",
-                categorie=Event.CONCERT,
-                img="/static/reunion/media/theater-stage-430552_640.jpg",
-            )
-            event_payant_nominatif_tarif_asso.products.add(billet)
+                event_entree_libre, created = Event.objects.get_or_create(
+                    name="Entrée libre",
+                    datetime=timezone.now() + timedelta(days=10),
+                    short_description="Scène ouverte Rock !",
+                    long_description="Un évènement gratuit, ouvert à tous.tes sans réservation."
+                                     "\nSeul les artistes annoncés et les descriptions sont affichés.",
+                    categorie=Event.CONCERT,
+                    img="/static/reunion/media/concert-3084876_640.jpg",
+                )
+                event_entree_libre.tag.add(prix_libre)
+                event_entree_libre.tag.add(rock)
 
-            # TODO: Gratuit mais avec recharge cashless obligatoire
-            # TODO: Multi artiste
+                ### GRATUIT MAIS AVEC RESERVATION OBLIGATOIRE ###
+
+                free_resa, created = Product.objects.get_or_create(
+                    name="Reservation gratuite",
+                    short_description="Reservation gratuite",
+                    categorie_article=Product.FREERES,
+                    nominative=False,
+                )
+
+                free_resa_price, created = Price.objects.get_or_create(
+                    name="Tarif gratuit",
+                    prix=0,
+                    short_description="Tarif gratuit",
+                    product=free_resa,
+                )
+
+                event_gratuit_avec_free_resa, created = Event.objects.get_or_create(
+                    name="Gratuit avec reservation",
+                    datetime=timezone.now() + timedelta(days=12),
+                    jauge_max=200,
+                    max_per_user=4,
+                    short_description="Attention, places limités, pensez à réserver !",
+                    long_description="Un évènement gratuit, avec une jauge maximale de 200 personnes et un nombre de billet limités à 4 par reservation."
+                                     "\nBillets non nominatifs.",
+                    categorie=Event.CONCERT,
+                    img="/static/reunion/media/guitar-756326_640.jpg",
+                )
+                event_gratuit_avec_free_resa.products.add(free_resa)
+                event_gratuit_avec_free_resa.tag.add(prix_libre)
+                event_gratuit_avec_free_resa.tag.add(jazz)
+
+                ### PAYANT AVEC BILLET NOMINATIFS ET TARIF PREFERENTIEL ###
+
+                billet, created = Product.objects.get_or_create(
+                    name="Billet",
+                    short_description="Billet",
+                    categorie_article=Product.BILLET,
+                    nominative=True,
+                )
+
+                plein_tarif, created = Price.objects.get_or_create(
+                    name="Plein tarif",
+                    short_description="Plein tarif",
+                    prix=20,
+                    product=billet,
+                )
+
+                tarif_adherant, created = Price.objects.get_or_create(
+                    name="Tarif Adhérant",
+                    short_description="Plein tarif",
+                    prix=10,
+                    product=billet,
+                    adhesion_obligatoire=adhesion_asso,
+                )
+
+                event_payant_nominatif_tarif_asso, created = Event.objects.get_or_create(
+                    name="Spectacle payant",
+                    datetime=timezone.now() + timedelta(days=13),
+                    jauge_max=600,
+                    max_per_user=10,
+                    short_description="Spectacle payant avec tarif préférentiel pour les adhérants à l'association",
+                    long_description="Jauge maximale de 600 personnes et un nombre de billet limités à 10 par reservation."
+                                     "\nBillets nominatifs.",
+                    categorie=Event.CONCERT,
+                    img="/static/reunion/media/theater-stage-430552_640.jpg",
+                )
+                event_payant_nominatif_tarif_asso.products.add(billet)
+
+                # TODO: Gratuit mais avec recharge cashless obligatoire
+                # TODO: Multi artiste
