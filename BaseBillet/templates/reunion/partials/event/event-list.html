@@ -1,3 +1,4 @@
+{% load i18n %}
 {% load tibitags %}
 {% for date_key, events in dated_events.items %}
 <h2 class="fs-5 p-3 text-dark" style="background: var(--mayaj-pons);">
@@ -14,7 +15,7 @@
       class="d-block my-3 rounded"
       alt="{{ event.name }}">
   </div>
-  <a href="/event{{ event.slug }}/" class="col fs-5">
+  <a href="/event/{{ event.slug }}/" class="col fs-5">
     {{ event.name }}
   </a>
   <div class="col-md-auto text-md-end event-tags">
@@ -30,5 +31,7 @@
 {% endfor %}
 
 <p class="py-3 mb-5 text-center">
-  <a href="#" class="btn btn-outline-primary d-block d-sm-inline">Plus d'évènements</a>
+  <a href="#" class="btn btn-outline-primary d-block d-sm-inline">
+    {% translate "Plus d'évènements" %}
+  </a>
 </p>

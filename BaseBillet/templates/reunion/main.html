@@ -1,3 +1,8 @@
 <div id="main" class="flex-fill">
     {% block main %}{% endblock main %}
 </div>
+<script>
+    document.title = `
+{% block title %}Accueil{% endblock %} | {{ config.organisation }}
+    `
+</script>

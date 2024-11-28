@@ -628,7 +628,7 @@ class EventMVT(viewsets.ViewSet):
         event = get_object_or_404(Event, slug=pk)
         template_context = get_context(request)
         template_context['event'] = event
-        return render(request, "htmx/views/event.html", context=template_context)
+        return render(request, "reunion/views/event/retrieve.html", context=template_context)
 
     def create(self, request):
         pass
