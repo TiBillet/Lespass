@@ -751,7 +751,7 @@ class MembershipMVT(viewsets.ViewSet):
 
         template_context['products'] = products
         response = render(
-            request, "htmx/views/membership/list.html",
+            request, "reunion/views/membership/list.html",
             context=template_context,
         )
         # Pour rendre la page dans un iframe, on vide le header X-Frame-Options pour dire au navigateur que c'est ok.

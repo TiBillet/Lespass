@@ -54,7 +54,6 @@
     {% endif %}
   
     {% if event.products.count %}
-    {{ event.products.first }}
     {% include 'reunion/partials/event/booking.html' %}
     {% else %}
     <a href="#" class="btn btn-lg btn-primary d-block mb-5 disabled" role="button" aria-disabled="true">
@@ -98,43 +97,19 @@
         </h2>
         <div id="timeAndPlace" class="accordion-collapse collapse" data-bs-parent="#infoAccordion">
           <div class="accordion-body">
-            <ul class="list-group list-group-horizontal-xl">
-              <li class="list-group-item border-start-0 border-end-0 rounded-0 px-0 py-3 p-xl-3">
+            <ul class="list-group list-group-horizontal-xl w-100">
+              <li class="list-group-item border-start-0 border-end-0 rounded-0 px-0 py-3 p-xl-5">
                 <i class="bi bi-calendar-check me-3"></i>
                 {{ event.datetime|date:'j F Y, H:i' }}
               </li>
-              <li class="list-group-item border-start-0 border-end-0 px-0 py-3 p-xl-3">
-                <div class="card border-0">
-                  <div class="row g-0">
-                    <div class="col-auto">
-                      <i class="bi bi-house-fill me-1"></i>
-                    </div>
-                    <div class="col">
-                      <div class="card-body py-0">
-                        <h5 class="card-title">Secret Place</h5>
-                        <p class="card-text">
-                          <span class="badge text-bg-info me-1">Bistrot</span>
-                          <span class="badge text-bg-info me-1">Tous les âges</span>
-                          <span class="badge text-bg-info me-1">Accès PMR</span>
-                        </p>
-                        <p class="card-text mb-0">
-                          <a href="#" class="btn btn-outline-secondary">
-                            Voir le lieu
-                          </a>
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </li>
-              <li class="list-group-item border-start-0 border-end-0 px-0 py-3 p-xl-3">
+              <li class="list-group-item border-start-0 border-end-0 px-0 py-3 p-xl-5">
                 <i class="bi bi-geo-alt-fill me-3"></i>
-                25 rue Saint-Exupéry,<br/>
-                34430 Saint-Jean-de-Védas
+                {{ event.postal_address.street_address }}<br/>
+                {{ event.postal_address.postal_code }} {{ event.postal_address.address_locality }}
               </li>
-              <li class="list-group-item border-start-0 border-end-0 rounded-0 px-0 py-3 p-xl-3">
+              <li class="list-group-item border-start-0 border-end-0 rounded-0 px-0 py-3 p-xl-5 flex-fill">
                 <i class="bi bi-bus-front-fill me-3"></i>
-                5mn de marche de l'arrêt Grismuguet, ligne 5 direction Champiply
+                {{ event.postal_address.comment }}
               </li>
             </ul>
           </div>
