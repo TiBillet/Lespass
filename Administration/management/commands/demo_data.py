@@ -269,7 +269,6 @@ class Command(BaseCommand):
                     short_description="Reservation gratuite",
                     categorie_article=Product.FREERES,
                     nominative=False,
-                    postal_adress=postal_address,
                 )
 
                 free_resa_price, created = Price.objects.get_or_create(
@@ -277,7 +276,6 @@ class Command(BaseCommand):
                     prix=0,
                     short_description="Tarif gratuit",
                     product=free_resa,
-                    postal_adress=postal_address,
                 )
 
                 event_gratuit_avec_free_resa, created = Event.objects.get_or_create(
@@ -330,6 +328,7 @@ class Command(BaseCommand):
                                      "\nBillets nominatifs.",
                     categorie=Event.CONCERT,
                     img="/static/reunion/media/theater-stage-430552_640.jpg",
+                    postal_adress=postal_address,
                 )
                 event_payant_nominatif_tarif_asso.products.add(billet)
 
