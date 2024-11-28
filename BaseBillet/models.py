@@ -12,7 +12,7 @@ import stripe
 from dateutil.relativedelta import relativedelta
 from django.db import connection
 from django.db import models
-from django.db.models import JSONField
+from django.db.models import JSONField, SET_NULL
 # Create your models here.
 from django.db.models import Q
 from django.db.models.signals import post_save
@@ -83,6 +83,71 @@ class OptionGenerale(models.Model):
         verbose_name_plural = _('Options')
 
 
+
+class PostalAddress(models.Model):
+    """
+    Modèle Django conforme à Schema.org pour une adresse postale avec coordonnées GPS.
+    """
+    street_address = models.TextField(
+        verbose_name="Adresse de la rue",
+        help_text="Le numéro de la rue, le nom de la rue, etc."
+    )
+    address_locality = models.CharField(
+        max_length=255,
+        verbose_name="Localité",
+        help_text="La ville ou la localité."
+    )
+    address_region = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name="Région",
+        help_text="L'état, la province ou la région."
+    )
+    postal_code = models.CharField(
+        max_length=20,
+        verbose_name="Code postal",
+        help_text="Le code postal ou code ZIP."
+    )
+    address_country = models.CharField(
+        max_length=255,
+        verbose_name="Pays",
+        help_text="Le pays de l'adresse (en toutes lettres ou code ISO 3166-1 alpha-2)."
+    )
+    latitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        blank=True,
+        null=True,
+        verbose_name="Latitude",
+        help_text="Coordonnée GPS : latitude."
+    )
+    longitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        blank=True,
+        null=True,
+        verbose_name="Longitude",
+        help_text="Coordonnée GPS : longitude."
+    )
+    comment = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Commentaire",
+        help_text="Un commentaire sur l'adresse."
+    )
+    is_main = models.BooleanField(
+        default=False,
+        verbose_name="Adresse principale",
+    )
+
+    def __str__(self):
+        return f"{self.street_address}, {self.address_locality}, {self.address_country}"
+
+    class Meta:
+        verbose_name = "Adresse postale"
+        verbose_name_plural = "Adresses postales"
+
 # class ExternalLink(models.Model):
 #     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
 #     name = models.CharField(max_length=50, verbose_name=_("Nom du lien"))
@@ -109,6 +174,8 @@ class Configuration(SingletonModel):
 
     short_description = models.CharField(max_length=250, verbose_name=_("Description courte"), blank=True, null=True)
     long_description = models.TextField(blank=True, null=True, verbose_name=_("Description longue"))
+
+    postal_adress = models.ForeignKey(PostalAddress, on_delete=SET_NULL, blank=True, null=True)
 
     adress = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Adresse"))
     postal_code = models.IntegerField(blank=True, null=True, verbose_name=_("Code postal"))
@@ -320,7 +387,6 @@ class Configuration(SingletonModel):
         # Test ou pas test ?
         return self.stripe_connect_account_test if self.stripe_mode_test else self.stripe_connect_account
 
-
     # Vérifie que le compte stripe connect soit valide et accepte les paiements.
     def check_stripe_payouts(self):
         id_acc_connect = self.get_stripe_connect_account()
@@ -375,12 +441,12 @@ class Configuration(SingletonModel):
         PriceSold.objects.all().update(id_price_stripe=None)
         return True
 
-
     """
     ### FEDERATION
     """
 
-    federated_with = models.ManyToManyField(Client, blank=True, related_name="federated_with", help_text=_("Affiche les évènements et les adhésions des structures fédérées."))
+    federated_with = models.ManyToManyField(Client, blank=True, related_name="federated_with", help_text=_(
+        "Affiche les évènements et les adhésions des structures fédérées."))
 
     """
     ### TVA ###
@@ -607,6 +673,8 @@ class Price(models.Model):
         verbose_name_plural = _('Tarifs')
 
 
+
+
 class Event(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
 
@@ -619,6 +687,8 @@ class Event(models.Model):
                                                     verbose_name=_("Nombre de reservation maximum par utilisateur"),
                                                     help_text=_("ex : Un même email peut réserver plusieurs billets.")
                                                     )
+
+    postal_adress = models.ForeignKey(PostalAddress, on_delete=SET_NULL, blank=True, null=True)
 
     short_description = models.CharField(max_length=250, blank=True, null=True)
     long_description = models.TextField(blank=True, null=True)
@@ -968,8 +1038,8 @@ class PriceSold(models.Model):
             data_stripe.pop('unit_amount')
             data_stripe['billing_scheme'] = "per_unit"
             data_stripe['custom_unit_amount'] = {
-                    "enabled": "true",
-                }
+                "enabled": "true",
+            }
 
         price = stripe.Price.create(**data_stripe)
 
@@ -1411,7 +1481,6 @@ class Membership(models.Model):
         verbose_name = _('Adhésion')
         verbose_name_plural = _('Adhésions')
 
-
     def email(self):
         if self.user:
             return self.user.email
@@ -1440,8 +1509,8 @@ class Membership(models.Model):
                 if self.last_contribution.month < 9:
                     return datetime.strptime(f'{self.last_contribution.year}-08-31', '%Y-%m-%d').date()
                 # Si elle est après septembre, on prend l'année prochaine
-                else :
-                    return datetime.strptime(f'{self.last_contribution.year+1}-08-31', '%Y-%m-%d').date()
+                else:
+                    return datetime.strptime(f'{self.last_contribution.year + 1}-08-31', '%Y-%m-%d').date()
         return None
 
     def is_valid(self):
@@ -1479,10 +1548,11 @@ class Membership(models.Model):
             return f"{self.last_name} {self.first_name}"
         elif self.last_name:
             return f"{self.last_name}"
-        elif self.user :
+        elif self.user:
             return f"{self.user}"
-        else :
+        else:
             return "Anonymous"
+
 
 class ExternalApiKey(models.Model):
     name = models.CharField(max_length=30, unique=True)

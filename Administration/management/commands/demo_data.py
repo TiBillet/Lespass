@@ -6,10 +6,11 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 from django.utils.text import slugify
 from django_tenants.utils import tenant_context, schema_context
+from faker import Faker
 
 from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
-from BaseBillet.models import Product, OptionGenerale, Price, Configuration, Event, Tag
+from BaseBillet.models import Product, OptionGenerale, Price, Configuration, Event, Tag, PostalAddress
 from Customers.models import Client, Domain
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
@@ -51,12 +52,11 @@ class Command(BaseCommand):
             user.is_staff = True
             user.save()
 
-
-
         tenant1 = Client.objects.get(name=sub)
         tenant2 = Client.objects.get(name="L'intérupteur")
         for tenant in [tenant1, tenant2]:
             with tenant_context(tenant):
+                fake = Faker()
                 logger.info(f"Start demo_data. Sub : {sub}, tenant : {tenant}")
 
                 ### CONFIGURATION VARIABLE ####
@@ -85,10 +85,22 @@ class Command(BaseCommand):
                 config.instagram = "https://instagram.com/tibillet"
                 config.federated_with.add(tenant1)
                 config.federated_with.add(tenant2)
+
+                postal_address = PostalAddress.objects.create(
+                    street_address=fake.street_address(),
+                    address_locality=fake.city(),
+                    address_region=fake.state(),
+                    postal_code=fake.postcode(),
+                    address_country=fake.country(),
+                    latitude=fake.latitude(),
+                    longitude=fake.longitude(),
+                    comment=fake.sentence(),
+                    is_main=True,
+                )
+                config.postal_address = postal_address
                 config.save()
 
                 ### LINK TO FEDOW
-
                 # TODO: a faire dans la création de nouveau tenant, connection fedow obligatoire et check admin wallet
                 ## Liaison tenant avec Fedow
                 fedowAPI = FedowAPI()
@@ -245,6 +257,7 @@ class Command(BaseCommand):
                                      "\nSeul les artistes annoncés et les descriptions sont affichés.",
                     categorie=Event.CONCERT,
                     img="/static/reunion/media/concert-3084876_640.jpg",
+                    postal_adress=postal_address,
                 )
                 event_entree_libre.tag.add(prix_libre)
                 event_entree_libre.tag.add(rock)
@@ -256,6 +269,7 @@ class Command(BaseCommand):
                     short_description="Reservation gratuite",
                     categorie_article=Product.FREERES,
                     nominative=False,
+                    postal_adress=postal_address,
                 )
 
                 free_resa_price, created = Price.objects.get_or_create(
@@ -263,6 +277,7 @@ class Command(BaseCommand):
                     prix=0,
                     short_description="Tarif gratuit",
                     product=free_resa,
+                    postal_adress=postal_address,
                 )
 
                 event_gratuit_avec_free_resa, created = Event.objects.get_or_create(
@@ -275,6 +290,7 @@ class Command(BaseCommand):
                                      "\nBillets non nominatifs.",
                     categorie=Event.CONCERT,
                     img="/static/reunion/media/guitar-756326_640.jpg",
+                    postal_adress=postal_address,
                 )
                 event_gratuit_avec_free_resa.products.add(free_resa)
                 event_gratuit_avec_free_resa.tag.add(prix_libre)
