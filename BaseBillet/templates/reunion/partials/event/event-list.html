@@ -1,3 +1,4 @@
+{% load tibitags %}
 {% for date_key, events in dated_events.items %}
 <h2 class="fs-5 p-3 text-dark" style="background: var(--mayaj-pons);">
   {{ date_key|date:'l j F'|capfirst }}
@@ -9,7 +10,7 @@
   </div>
   <div class="col-auto">
     <img style="background-color: var(--kouler-losean);max-width: 140px;max-height: 100px;"
-      src="{{ event.img }}"
+      src="{{ event.img|randImg }}"
       class="d-block my-3 rounded"
       alt="{{ event.name }}">
   </div>
@@ -24,7 +25,7 @@
     {% endfor %}
   </div>
 </div>
-{% if loop.last is False %}<hr />{% endif %}
+{% if not forloop.last %}<hr />{% endif %}
 {% endfor %}
 {% endfor %}
 

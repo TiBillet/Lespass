@@ -1,5 +1,5 @@
 {% extends base_template %}
-{% load static %}
+{% load tibitags %}
 
 {% block main %}
 <main class="container-lg my-5">
@@ -7,7 +7,7 @@
         <h1 class="display-1">{{ config.organisation }}</h1>
         <img
             style="background-color: var(--kouler-piton)"
-            src="{% static 'reunion/media/theater-stage-430552_640.jpg' %}"
+            src="{{ ''|randImg }}"
             class="img-fluid float-md-start d-none d-md-block w-25 rounded me-3 mb-2"
             alt="..."
         />
@@ -21,7 +21,7 @@
         <div class="col d-flex flex-column position-relative">
             <img
                 style="background-color: var(--kouler-sousou)"
-                src="./assets/motif/sevronkler.svg"
+                src="{{ ''|randImg }}"
                 class="img-fluid rounded"
                 alt="..."
             />
@@ -33,7 +33,7 @@
         <div class="col d-flex flex-column position-relative">
             <img
                 style="background-color: var(--kouler-losean)"
-                src="./assets/motif/sevronkler.svg"
+                src="{{ ''|randImg }}"
                 class="img-fluid rounded"
                 alt="..."
             />
@@ -45,7 +45,7 @@
         <div class="col d-flex flex-column position-relative">
             <img
                 style="background-color: var(--kouler-kari)"
-                src="./assets/motif/sevronkler.svg"
+                src="{{ ''|randImg }}"
                 class="img-fluid rounded"
                 alt="..."
             />
