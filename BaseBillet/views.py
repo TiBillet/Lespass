@@ -145,7 +145,7 @@ def deconnexion(request):
     # un logout peut-il mal se passer ?
     logout(request)
     messages.add_message(request, messages.SUCCESS, _("Déconnexion réussie"))
-    return redirect('home')
+    return redirect('index')
 
 
 def connexion(request):
@@ -171,12 +171,12 @@ def connexion(request):
             return render(request, "htmx/components/modal_message.html", context=context)
 
     messages.add_message(request, messages.WARNING, "Erreur de validation de l'email")
-    return redirect('home')
+    return redirect('index')
 
 
 def emailconfirmation(request, token):
     activate(request, token)
-    return redirect('home')
+    return redirect('index')
 
 
 class ScanQrCode(viewsets.ViewSet):
@@ -616,8 +616,12 @@ class EventMVT(viewsets.ViewSet):
                     # setdefault pour éviter de faire un if date exist dans le dict
                     dated_events.setdefault(date, []).append(event)
 
-        # Classement du dictionnaire par date
-        template_context['dated_events'] = collections.OrderedDict(sorted(dated_events.items()))
+        # Classement du dictionnaire
+        sorted_d = {
+            k: sorted(v, key=lambda obj: obj.datetime) for k, v in sorted(dated_events.items())
+        }
+        template_context['dated_events'] = sorted_d
+
         return render(request, "reunion/views/event/list.html", context=template_context)
 
     def retrieve(self, request, pk=None):
@@ -734,7 +738,18 @@ class MembershipMVT(viewsets.ViewSet):
 
     def list(self, request: HttpRequest):
         template_context = get_context(request)
-        template_context["products"] = Product.objects.filter(categorie_article=Product.ADHESION, publish=True)
+        config = template_context['config']
+
+        # Récupération de tout les produits adhésions de la fédération
+        tenants = [tenant for tenant in config.federated_with.all()]
+        tenants.append(connection.tenant)
+        products = []
+        for tenant in tenants:
+            with tenant_context(tenant):
+                for product in Product.objects.filter(categorie_article=Product.ADHESION, publish=True):
+                    products.append(product)
+
+        template_context['products'] = products
         response = render(
             request, "htmx/views/membership/list.html",
             context=template_context,
