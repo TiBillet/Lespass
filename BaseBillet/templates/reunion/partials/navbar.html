@@ -2,8 +2,7 @@
 
 <nav class="navbar navbar-expand-xl bg-body">
     <div class="container-lg justify-content-between">
-      <a class="navbar-brand flex-grow-1" href="#"
-        hx-get="/" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">
+      <a class="navbar-brand flex-grow-1" href="/" hx-get="/" hx-target="body" hx-push-url="true">
         {{ config.organisation }}
       </a>
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainMenu"
@@ -15,8 +14,8 @@
         <ul class="navbar-nav me-auto">
           {% for item in main_nav %}
           <li class="nav-item">
-            <a class="nav-link{% if url_name == item.name %} active" aria-current="page{% endif %}" href="#"
-                hx-get="{{ item.url }}" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">
+            <a class="nav-link{% if url_name == item.name %} active" aria-current="page{% endif %}"
+                href="{{ item.url }}" hx-get="{{ item.url }}" hx-target="body" hx-push-url="true">
               <i class="bi bi-{{ item.icon }}"></i>
               {% translate item.label %}
             </a>
@@ -35,8 +34,7 @@
                 {% translate 'Me connecter' %}
             </button>
             {% else %}
-              <a class="nav-link" href="#"
-                hx-get="/my_account/" hx-target="#main" hx-swap="outerHTML" hx-push-url="true">>
+              <a class="nav-link" href="/my_account/" hx-get="/my_account/" hx-target="body" hx-push-url="true">
                 <i class="bi bi-person-circle"></i>
                 {% translate 'Mon compte' %}
               </a>

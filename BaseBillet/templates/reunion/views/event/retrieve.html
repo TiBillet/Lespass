@@ -4,7 +4,7 @@
 {% block title %}{{ event.name }}{% endblock %}
 
 {% block main %}
-<main class="container-lg">
+<main class="container-lg pb-5">
     <header class="mb-3">
       <img style="background-color: var(--kouler-sousou); max-height: 33vh;"
         src="{{ event.img|randImg }}"
@@ -53,46 +53,14 @@
     </div>
     {% endif %}
   
-    <!-- booking panel -->
-    <div class="offcanvas-start offcanvas" tabindex="-1" id="bookingPanel" aria-labelledby="bookingPanelLabel">
-      <div class="offcanvas-header">
-          <h5 class="offcanvas-title" id="bookingPanelLabel">Je réserve ma place</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-      </div>
-      <div class="offcanvas-body">
-        <h4>Email de contact</h4>
-        <p><code>contact@tibillet.re</code></p>
-        
-        <div class="mb-3">
-          <label for="booking-regular" class="form-label">Places plein tarif</label>
-          <input type="number" class="form-control" id="booking-regular">
-        </div>
-        <div class="mb-3">
-          <label for="booking-a11y" class="form-label">Places adhérent·e</label>
-          <input type="number" class="form-control" id="booking-a11y">
-        </div>
-        <h4>Total : 0 place(s) pour <span class="fs-5 badge bg-secondary-subtle mb-md-0">0,00€</span></h2>
-        <p>
-            Jauge maximale de {{ event.jauge_max }} personnes et un nombre de
-            billets limité à {{ event.max_per_user }} par réservation. Billets
-            nominatifs.
-        </p>
-        
-        <div class="position-absolute bottom-0 start-0 end-0 p-3">
-            <a href="." class="btn btn-primary d-block mb-3">Confirmer la réservation</a>
-            <a href="." class="btn btn-danger d-block">Annuler</a>
-        </div>
-      </div>
-    </div>
-  
-    <button
-        class="btn btn-lg btn-primary w-100 mb-5"
-        type="button"
-        data-bs-toggle="offcanvas"
-        data-bs-target="#bookingPanel"
-        aria-controls="bookingPanel">
-        Je réserve ma place
-    </button>
+    {% if event.products.count %}
+    {{ event.products.first }}
+    {% include 'reunion/partials/event/booking.html' %}
+    {% else %}
+    <a href="#" class="btn btn-lg btn-primary d-block mb-5 disabled" role="button" aria-disabled="true">
+        Entrée libre
+    </a>
+    {% endif %}
   
     <!-- info sections -->
     <div class="accordion accordion-flush mb-3" id="infoAccordion">
@@ -109,7 +77,7 @@
             Programme
           </button>
         </h2>
-        <div id="schedule" class="accordion-collapse collapse" data-bs-parent="#infoAccordion">
+        <div id="schedule" class="accordion-collapse collapse show" data-bs-parent="#infoAccordion">
           <div class="accordion-body">
             <p>{{ event.long_description }}</p>
           </div>
@@ -118,11 +86,11 @@
       {% endif %}
       <div class="accordion-item">
         <h2 class="accordion-header">
-          <button class="accordion-button text-dark"
+          <button class="accordion-button collapsed text-dark"
             type="button"
             data-bs-toggle="collapse"
             data-bs-target="#timeAndPlace"
-            aria-expanded="true"
+            aria-expanded="false"
             aria-controls="timeAndPlace"
             style="background: var(--mayaj-pons);">
             Heure et lieu
@@ -169,49 +137,6 @@
                 5mn de marche de l'arrêt Grismuguet, ligne 5 direction Champiply
               </li>
             </ul>
-          </div>
-        </div>
-      </div>
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="book-now">
-          <button class="accordion-button text-dark"
-            type="button"
-            data-bs-toggle="collapse"
-            data-bs-target="#get-involved"
-            aria-expanded="true"
-            aria-controls="get-involved"
-            style="background: var(--mayaj-pons);">
-            Appel à volontaires
-          </button>
-        </h2>
-        <div id="get-involved" class="accordion-collapse collapse" data-bs-parent="#infoAccordion">
-          <div class="accordion-body">
-            <p>
-              <i class="bi bi-megaphone-fill"></i>
-              <a href="#">La TAF et Boomerang</a> cherchent 5 volontaires pour
-              assurer entrée, bar et service de sécu durant la soirée.
-              Compensation en monnaie-heure sur la carte TiBillet.
-            </p>
-            <p>
-              <a href="#" class="btn btn-outline-secondary">
-                Fichier d'orga des bénévoles
-              </a>
-            </p>
-  
-            <div class="alert alert-warning" role="alert">
-              <h4>
-                <i class="bi bi-exclamation-diamond-fill"></i>
-                Rappel
-              </h4>
-              L'organisation n'est ni votre patron·ne, ni votre ami·e ! Pour le
-              confort de toustes, proposez-vous seulement sur des postes qui vous
-              plaisent d'assurer, et n'hésitez pas à refuser des conditions qui
-              vous déplaisent. <a href="#">
-                Si vous vous sentez pris·e pour eun
-                employé·, parlez-en au réseau local
-              </a>, c'est inacceptable.
-            </div>
-  
           </div>
         </div>
       </div>
