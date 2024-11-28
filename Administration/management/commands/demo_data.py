@@ -257,7 +257,7 @@ class Command(BaseCommand):
                                      "\nSeul les artistes annoncés et les descriptions sont affichés.",
                     categorie=Event.CONCERT,
                     img="/static/reunion/media/concert-3084876_640.jpg",
-                    postal_adress=postal_address,
+                    postal_address=postal_address,
                 )
                 event_entree_libre.tag.add(prix_libre)
                 event_entree_libre.tag.add(rock)
@@ -288,7 +288,7 @@ class Command(BaseCommand):
                                      "\nBillets non nominatifs.",
                     categorie=Event.CONCERT,
                     img="/static/reunion/media/guitar-756326_640.jpg",
-                    postal_adress=postal_address,
+                    postal_address=postal_address,
                 )
                 event_gratuit_avec_free_resa.products.add(free_resa)
                 event_gratuit_avec_free_resa.tag.add(prix_libre)
@@ -328,7 +328,7 @@ class Command(BaseCommand):
                                      "\nBillets nominatifs.",
                     categorie=Event.CONCERT,
                     img="/static/reunion/media/theater-stage-430552_640.jpg",
-                    postal_adress=postal_address,
+                    postal_address=postal_address,
                 )
                 event_payant_nominatif_tarif_asso.products.add(billet)
 

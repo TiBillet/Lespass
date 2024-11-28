@@ -175,7 +175,7 @@ class Configuration(SingletonModel):
     short_description = models.CharField(max_length=250, verbose_name=_("Description courte"), blank=True, null=True)
     long_description = models.TextField(blank=True, null=True, verbose_name=_("Description longue"))
 
-    postal_adress = models.ForeignKey(PostalAddress, on_delete=SET_NULL, blank=True, null=True)
+    postal_address = models.ForeignKey(PostalAddress, on_delete=SET_NULL, blank=True, null=True)
 
     adress = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Adresse"))
     postal_code = models.IntegerField(blank=True, null=True, verbose_name=_("Code postal"))
@@ -688,7 +688,7 @@ class Event(models.Model):
                                                     help_text=_("ex : Un même email peut réserver plusieurs billets.")
                                                     )
 
-    postal_adress = models.ForeignKey(PostalAddress, on_delete=SET_NULL, blank=True, null=True)
+    postal_address = models.ForeignKey(PostalAddress, on_delete=SET_NULL, blank=True, null=True)
 
     short_description = models.CharField(max_length=250, blank=True, null=True)
     long_description = models.TextField(blank=True, null=True)
