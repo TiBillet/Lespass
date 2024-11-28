@@ -1,5 +1,8 @@
 {% extends base_template %}
 {% load static %}
+{% load i18n %}
+
+{% block title %}{% translate 'Agenda' %}{% endblock %}
 
 {% block head %}
 <script type="module" src="{% static 'reunion/js/filter-tags.js' %}"></script>

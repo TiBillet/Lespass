@@ -58,7 +58,7 @@ def encode_uid(pk):
 def get_context(request):
     config = Configuration.get_solo()
     logger.debug("request.htmx") if request.htmx else None
-    base_template = "reunion/main.html" if request.htmx else "reunion/base.html"
+    base_template = "reunion/headless.html" if request.htmx else "reunion/base.html"
     serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
 
     # embed ?
@@ -86,7 +86,7 @@ def get_context(request):
         "header": True,
         "mode_test": True if os.environ.get('TEST') == '1' else False,
         "main_nav": [
-            {'name': 'event', 'url': '/event/', 'label': 'Agenda', 'icon': 'calendar-date'},
+            {'name': 'event-list', 'url': '/event/', 'label': 'Agenda', 'icon': 'calendar-date'},
             {'name': 'memberships_mvt', 'url': '/memberships/', 'label': 'Adhérer', 'icon': 'person-badge'},
             {'name': 'network', 'url': '/network/', 'label': 'Réseau local', 'icon': 'arrow-repeat'},
             {'name': 'help', 'url': '/help/', 'label': 'Aide et contact', 'icon': 'question-lg'}
@@ -628,7 +628,7 @@ class EventMVT(viewsets.ViewSet):
         event = get_object_or_404(Event, slug=pk)
         template_context = get_context(request)
         template_context['event'] = event
-        return render(request, "htmx/views/event.html", context=template_context)
+        return render(request, "reunion/views/event/retrieve.html", context=template_context)
 
     def create(self, request):
         pass
