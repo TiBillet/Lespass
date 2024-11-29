@@ -245,6 +245,7 @@ class Command(BaseCommand):
                 rock, created = Tag.objects.get_or_create(name='Rock')
                 jazz, created = Tag.objects.get_or_create(name='Jazz')
                 gratuit, created = Tag.objects.get_or_create(name='Gratuit')
+                entree_libre, created = Tag.objects.get_or_create(name='Entrée libre')
 
                 event_entree_libre, created = Event.objects.get_or_create(
                     name=f"{fake.word().capitalize()} : Entrée libre",
@@ -257,6 +258,7 @@ class Command(BaseCommand):
                 )
                 event_entree_libre.tag.add(rock)
                 event_entree_libre.tag.add(gratuit)
+                event_entree_libre.tag.add(entree_libre)
 
                 ### GRATUIT MAIS AVEC RESERVATION OBLIGATOIRE ###
 
@@ -286,6 +288,7 @@ class Command(BaseCommand):
                     postal_address=postal_address,
                 )
                 event_gratuit_avec_free_resa.products.add(free_resa)
+
                 event_gratuit_avec_free_resa.tag.add(jazz)
                 event_gratuit_avec_free_resa.tag.add(gratuit)
 
@@ -318,9 +321,9 @@ class Command(BaseCommand):
                     categorie=Event.CONCERT,
                     postal_address=postal_address,
                 )
-                event_gratuit_avec_free_resa.products.add(free_price_resa)
-                event_gratuit_avec_free_resa.tag.add(jazz)
-                event_gratuit_avec_free_resa.tag.add(prix_libre)
+                event_prix_libre.products.add(free_price_resa)
+                event_prix_libre.tag.add(jazz)
+                event_prix_libre.tag.add(prix_libre)
 
                 ### PAYANT AVEC BILLET NOMINATIFS ET TARIF PREFERENTIEL ###
 
