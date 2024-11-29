@@ -609,7 +609,7 @@ class EventMVT(viewsets.ViewSet):
         tenants = [tenant for tenant in config.federated_with.all()]
         tenants.append(connection.tenant)
         for tenant in set(tenants):
-            with ((tenant_context(tenant))):
+            with tenant_context(tenant):
                 events = Event.objects.prefetch_related('tag', 'postal_address',
                                                         ).filter(datetime__gte=timezone.localtime()
                                                                  ).order_by('datetime')
