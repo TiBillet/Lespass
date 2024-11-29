@@ -608,8 +608,9 @@ class EventMVT(viewsets.ViewSet):
         tenants = [tenant for tenant in config.federated_with.all()]
         tenants.append(connection.tenant)
         for tenant in set(tenants):
-            with tenant_context(tenant):
-                events = Event.objects.filter(datetime__gte=timezone.localtime()).order_by('datetime')
+            with (tenant_context(tenant)):
+                events = Event.objects.filter(datetime__gte=timezone.localtime()
+                                              ).order_by('datetime').prefetch_related('tag','postal_address',)
                 for event in events:
                     date = event.datetime.date()
                     # setdefault pour éviter de faire un if date exist dans le dict

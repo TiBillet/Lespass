@@ -362,7 +362,7 @@ class Command(BaseCommand):
                     postal_address=postal_address,
                 )
                 event_payant_nominatif_tarif_asso.products.add(billet)
-                event_prix_libre.tag.add(world)
+                event_payant_nominatif_tarif_asso.tag.add(world)
 
 
                 # TODO: Gratuit mais avec recharge cashless obligatoire
