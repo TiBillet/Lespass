@@ -21,6 +21,16 @@
             </a>
           </li>
           {% endfor %}
+          <li class="nav-item">
+            <a class="nav-link"
+                href="mailto:contact@tibillet.re" 
+                data-bs-toggle="offcanvas"
+                data-bs-target="#contactPanel"
+                aria-controls="contactPanel">
+              <i class="bi bi-question-lg"></i>
+              {% translate 'Aide et contact' %}
+            </a>
+          </li>
         </ul>
 
         <div class="navbar-nav d-flex mb-0">
@@ -44,3 +54,15 @@
       </div>
     </div>
   </nav>
+
+  <!-- contact panel -->
+  <div class="offcanvas-start offcanvas" tabindex="-1" id="contactPanel" aria-labelledby="contactPanelLabel">
+      <div class="offcanvas-header">
+          <h5 class="offcanvas-title" id="contactPanelLabel">{% translate 'Aide et contact' %}</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% translate 'Fermer' %}"></button>
+      </div>
+      <div class="offcanvas-body">
+          {# TODO: load all forms through htmx? #}
+          {% include 'reunion/forms/contact.html' %}
+      </div>
+  </div>

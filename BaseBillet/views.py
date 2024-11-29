@@ -89,7 +89,6 @@ def get_context(request):
             {'name': 'event-list', 'url': '/event/', 'label': 'Agenda', 'icon': 'calendar-date'},
             {'name': 'memberships_mvt', 'url': '/memberships/', 'label': 'Adhérer', 'icon': 'person-badge'},
             #{'name': 'network', 'url': '/network/', 'label': 'Réseau local', 'icon': 'arrow-repeat'},
-            {'name': 'help', 'url': '/help/', 'label': 'Aide et contact', 'icon': 'question-lg'}
         ]
     }
     return context
