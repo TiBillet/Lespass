@@ -605,10 +605,10 @@ class EventMVT(viewsets.ViewSet):
         template_context = get_context(request)
         config = template_context['config']
 
-        # Récupération de tout les évènement de la fédération
+        # Récupération de tout les évènements de la fédération
         tenants = [tenant for tenant in config.federated_with.all()]
         tenants.append(connection.tenant)
-        for tenant in tenants:
+        for tenant in set(tenants):
             with tenant_context(tenant):
                 events = Event.objects.filter(datetime__gte=timezone.localtime()).order_by('datetime')
                 for event in events:
@@ -620,6 +620,8 @@ class EventMVT(viewsets.ViewSet):
         sorted_d = {
             k: sorted(v, key=lambda obj: obj.datetime) for k, v in sorted(dated_events.items())
         }
+
+        import ipdb; ipdb.set_trace()
         template_context['dated_events'] = sorted_d
 
         return render(request, "reunion/views/event/list.html", context=template_context)
