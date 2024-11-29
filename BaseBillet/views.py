@@ -12,6 +12,7 @@ from django.contrib.auth import logout, login
 from django.contrib.messages import MessageFailure
 from django.core.cache import cache
 from django.db import connection
+from django.db.models import Count
 from django.http import HttpResponse, HttpRequest, Http404, HttpResponseRedirect, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.response import TemplateResponse
@@ -605,7 +606,7 @@ class EventMVT(viewsets.ViewSet):
         template_context = get_context(request)
         config = template_context['config']
 
-        tags=request.GET.getlist('tag')
+        tags = request.GET.getlist('tag')
 
         # Récupération de tout les évènements de la fédération
         tenants = [tenant for tenant in config.federated_with.all()]
@@ -615,7 +616,10 @@ class EventMVT(viewsets.ViewSet):
                 events = Event.objects.prefetch_related('tag', 'postal_address').filter(
                     datetime__gte=timezone.localtime())
                 if tags:
-                    events = events.filter(tag__name__in=tags)
+                    # Annotate et filter Pour avoir les events qui ont TOUT les tags
+                    events = events.filter(
+                        tag__slug__in=tags).annotate(
+                        num_tag=Count('tag')).filter(num_tag=len(tags))
 
                 for event in events.order_by('datetime'):
                     date = event.datetime.date()
