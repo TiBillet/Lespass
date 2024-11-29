@@ -1,5 +1,6 @@
 {% load i18n %}
 
+{# title gets picked up automatically by htmx when hx-target == body #}
 <title>{% block title %}{% translate 'Accueil' %}{% endblock %} | {{ config.organisation }}</title>
 
 {% include "reunion/partials/navbar.html" %}
@@ -9,7 +10,3 @@
 </div>
 
 {% include "reunion/partials/footer.html" %}
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-  integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
-  crossorigin="anonymous"></script>
