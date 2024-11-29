@@ -56,7 +56,7 @@ class Command(BaseCommand):
         tenant2 = Client.objects.get(name="L'intérupteur")
         for tenant in [tenant1, tenant2]:
             with tenant_context(tenant):
-                fake = Faker()
+                fake = Faker('fr_FR')
                 logger.info(f"Start demo_data. Sub : {sub}, tenant : {tenant}")
 
                 ### CONFIGURATION VARIABLE ####
@@ -69,12 +69,9 @@ class Command(BaseCommand):
                     "\nGratuit, payant, avec prix préférentiels."
                     "\nAbonnement mensuels récurents ou adhésion annuelle."
                     "\nAinsi qu'une badgeuse pour la gestion d'accès d'un co working.")
-                config.adress = "42 Rue Douglas Adams"
-                config.postal_code = "69100"
-                config.city = "Pourtouche"
-                config.tva_number = "4242424242424242"
-                config.siren = "424242424242"
-                config.phone = "06 42 42 42 42"
+                config.tva_number = fake.bban()[:20]
+                config.siren = fake.siret()[:20]
+                config.phone = fake.phone_number()[:20]
                 config.email = os.environ['ADMIN_EMAIL']
                 config.stripe_mode_test = True
                 config.stripe_connect_account_test = os.environ.get('TEST_STRIPE_CONNECT_ACCOUNT')
@@ -89,9 +86,9 @@ class Command(BaseCommand):
                 postal_address = PostalAddress.objects.create(
                     street_address=fake.street_address(),
                     address_locality=fake.city(),
-                    address_region=fake.state(),
+                    address_region=fake.region(),
                     postal_code=fake.postcode(),
-                    address_country=fake.country(),
+                    address_country='France',
                     latitude=fake.latitude(),
                     longitude=fake.longitude(),
                     comment=fake.sentence(),
@@ -247,20 +244,19 @@ class Command(BaseCommand):
                 ### EVENTS ###
                 rock, created = Tag.objects.get_or_create(name='Rock')
                 jazz, created = Tag.objects.get_or_create(name='Jazz')
-                prix_libre, created = Tag.objects.get_or_create(name='Prix libre')
+                gratuit, created = Tag.objects.get_or_create(name='Gratuit')
 
                 event_entree_libre, created = Event.objects.get_or_create(
-                    name="Entrée libre",
-                    datetime=timezone.now() + timedelta(days=10),
+                    name=f"{fake.word().capitalize()} : Entrée libre",
+                    datetime=fake.future_datetime('+7d'),
                     short_description="Scène ouverte Rock !",
                     long_description="Un évènement gratuit, ouvert à tous.tes sans réservation."
                                      "\nSeul les artistes annoncés et les descriptions sont affichés.",
                     categorie=Event.CONCERT,
-                    img="/static/reunion/media/concert-3084876_640.jpg",
                     postal_address=postal_address,
                 )
-                event_entree_libre.tag.add(prix_libre)
                 event_entree_libre.tag.add(rock)
+                event_entree_libre.tag.add(gratuit)
 
                 ### GRATUIT MAIS AVEC RESERVATION OBLIGATOIRE ###
 
@@ -279,20 +275,52 @@ class Command(BaseCommand):
                 )
 
                 event_gratuit_avec_free_resa, created = Event.objects.get_or_create(
-                    name="Gratuit avec reservation",
-                    datetime=timezone.now() + timedelta(days=12),
+                    name=f"{fake.word().capitalize()} : Gratuit avec reservation",
+                    datetime=fake.future_datetime('+7d'),
                     jauge_max=200,
                     max_per_user=4,
                     short_description="Attention, places limités, pensez à réserver !",
                     long_description="Un évènement gratuit, avec une jauge maximale de 200 personnes et un nombre de billet limités à 4 par reservation."
                                      "\nBillets non nominatifs.",
                     categorie=Event.CONCERT,
-                    img="/static/reunion/media/guitar-756326_640.jpg",
                     postal_address=postal_address,
                 )
                 event_gratuit_avec_free_resa.products.add(free_resa)
-                event_gratuit_avec_free_resa.tag.add(prix_libre)
                 event_gratuit_avec_free_resa.tag.add(jazz)
+                event_gratuit_avec_free_resa.tag.add(gratuit)
+
+                ### PAYANT AVEC PRIX LIBRE ###
+
+                free_price_resa, created = Product.objects.get_or_create(
+                    name="Reservation à prix libre",
+                    short_description="Reservation à prix libre",
+                    categorie_article=Product.BILLET,
+                    nominative=False,
+                )
+
+                free_price_resa_price, created = Price.objects.get_or_create(
+                    name="Prix libre",
+                    prix=1,
+                    free_price=True,
+                    short_description="Prix libre",
+                    product=free_price_resa,
+                )
+                prix_libre, created = Tag.objects.get_or_create(name='Prix libre')
+
+                event_prix_libre, created = Event.objects.get_or_create(
+                    name=f"{fake.word().capitalize()} : Entrée a prix libre",
+                    datetime=fake.future_datetime('+7d'),
+                    jauge_max=200,
+                    max_per_user=4,
+                    short_description="Attention, places limités, pensez à réserver !",
+                    long_description="Un évènement gratuit, avec une jauge maximale de 200 personnes et un nombre de billet limités à 4 par reservation."
+                                     "\nBillets non nominatifs.",
+                    categorie=Event.CONCERT,
+                    postal_address=postal_address,
+                )
+                event_gratuit_avec_free_resa.products.add(free_price_resa)
+                event_gratuit_avec_free_resa.tag.add(jazz)
+                event_gratuit_avec_free_resa.tag.add(prix_libre)
 
                 ### PAYANT AVEC BILLET NOMINATIFS ET TARIF PREFERENTIEL ###
 
@@ -319,15 +347,14 @@ class Command(BaseCommand):
                 )
 
                 event_payant_nominatif_tarif_asso, created = Event.objects.get_or_create(
-                    name="Spectacle payant",
-                    datetime=timezone.now() + timedelta(days=13),
+                    name=f"{fake.word().capitalize()} : Spectacle payant",
+                    datetime=fake.future_datetime('+7d'),
                     jauge_max=600,
                     max_per_user=10,
                     short_description="Spectacle payant avec tarif préférentiel pour les adhérants à l'association",
                     long_description="Jauge maximale de 600 personnes et un nombre de billet limités à 10 par reservation."
                                      "\nBillets nominatifs.",
                     categorie=Event.CONCERT,
-                    img="/static/reunion/media/theater-stage-430552_640.jpg",
                     postal_address=postal_address,
                 )
                 event_payant_nominatif_tarif_asso.products.add(billet)

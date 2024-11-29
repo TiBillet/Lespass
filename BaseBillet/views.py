@@ -620,8 +620,6 @@ class EventMVT(viewsets.ViewSet):
         sorted_d = {
             k: sorted(v, key=lambda obj: obj.datetime) for k, v in sorted(dated_events.items())
         }
-
-        import ipdb; ipdb.set_trace()
         template_context['dated_events'] = sorted_d
 
         return render(request, "reunion/views/event/list.html", context=template_context)

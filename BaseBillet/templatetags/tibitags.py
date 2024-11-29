@@ -68,7 +68,7 @@ def from_iso_to_date(value):
 @register.filter
 def randImg(value):
     if not value :
-        return f"/static/images/404-{randint(1,9)}.jpg"
+        return f"/static/images/404-{randint(1,12)}.jpg"
     return value
 
 @register.filter
