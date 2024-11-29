@@ -21,8 +21,8 @@
   </a>
   <div class="col-md-auto text-md-end event-tags">
     {% for tag in event.tag.all %}
-    <a href="?type=Scène ouverte" class="btn btn-info btn-sm mb-1">
-      {{ tag }}
+    <a href="?tag={{ tag.name }}" hx-boost="true" class="btn btn-info btn-sm mb-1">
+      {{ tag.name }}
     </a>
     {% endfor %}
   </div>

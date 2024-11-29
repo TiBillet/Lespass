@@ -146,8 +146,8 @@ class Command(BaseCommand):
                 ### MEMBERSHIP ###
 
                 adhesion_asso, created = Product.objects.get_or_create(
-                    name="Adhésion associative",
-                    short_description="Adhérez à l'association",
+                    name=f"Adhésion {tenant.name}",
+                    short_description=f"Adhérez à l'association {tenant.name}",
                     long_description="Vous pouvez prendre une adhésion en une seule fois, ou payer tout les mois.",
                     categorie_article=Product.ADHESION,
                 )
@@ -181,8 +181,8 @@ class Command(BaseCommand):
                 )
 
                 amap, created = Product.objects.get_or_create(
-                    name="Panier AMAP",
-                    short_description="Adhésion au panier AMAP",
+                    name=f"Panier AMAP {tenant.name}",
+                    short_description=f"Adhésion au panier de l'AMAP {tenant.name}",
                     long_description="Association pour le maintient d'une agriculture paysanne, recevez un panier par semaine.",
                     categorie_article=Product.ADHESION,
 
@@ -211,7 +211,7 @@ class Command(BaseCommand):
                 ### BADGEUSE ###
 
                 badgeuse_cowork, created = Product.objects.get_or_create(
-                    name="Badgeuse Co-Working",
+                    name=f"Badgeuse Co-Working {tenant.name}",
                     short_description="Badger l'acces au co working",
                     long_description="Venez pointer votre présence.",
                     categorie_article=Product.BADGE,

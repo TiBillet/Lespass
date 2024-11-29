@@ -605,15 +605,19 @@ class EventMVT(viewsets.ViewSet):
         template_context = get_context(request)
         config = template_context['config']
 
+        tags=request.GET.getlist('tag')
+
         # Récupération de tout les évènements de la fédération
         tenants = [tenant for tenant in config.federated_with.all()]
         tenants.append(connection.tenant)
         for tenant in set(tenants):
             with tenant_context(tenant):
-                events = Event.objects.prefetch_related('tag', 'postal_address',
-                                                        ).filter(datetime__gte=timezone.localtime()
-                                                                 ).order_by('datetime')
-                for event in events:
+                events = Event.objects.prefetch_related('tag', 'postal_address').filter(
+                    datetime__gte=timezone.localtime())
+                if tags:
+                    events = events.filter(tag__name__in=tags)
+
+                for event in events.order_by('datetime'):
                     date = event.datetime.date()
                     # setdefault pour éviter de faire un if date exist dans le dict
                     dated_events.setdefault(date, []).append(event)
@@ -626,6 +630,7 @@ class EventMVT(viewsets.ViewSet):
 
         return render(request, "reunion/views/event/list.html", context=template_context)
 
+    # Recherche dans tout les tenant fédérés
     def tenant_retrieve(self, slug):
         config = Configuration.get_solo()
         for tenant in config.federated_with.all():

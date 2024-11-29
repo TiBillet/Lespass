@@ -57,11 +57,16 @@ class Weekday(models.Model):
 
 class Tag(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid4)
-    name = models.CharField(max_length=50, verbose_name=_("Nom du tag"), db_index=True)
+    name = models.CharField(max_length=50, verbose_name=_("Nom du tag"))
+    slug = models.CharField(max_length=50, verbose_name=_("slug du tag"), db_index=True)
     color = models.CharField(max_length=7, verbose_name=_("Couleur du tag"), default="#000000")
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        self.slug = slugify(f"{self.name}")
+        super().save(*args, **kwargs)
 
     class Meta:
         verbose_name = _("Tag")
