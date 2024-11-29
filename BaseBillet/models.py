@@ -693,10 +693,10 @@ class Event(models.Model):
     short_description = models.CharField(max_length=250, blank=True, null=True)
     long_description = models.TextField(blank=True, null=True)
 
-    # event_facebook_url = models.URLField(blank=True, null=True)
     is_external = models.BooleanField(default=False, verbose_name=_("Billetterie/Reservation externe"), help_text=_(
         "Si l'évènement est géré par une autre billetterie ou un autre site de réservation. Ex : Un event Facebook"))
-    url_external = models.URLField(blank=True, null=True)
+    full_url = models.URLField(blank=True, null=True)
+
 
     published = models.BooleanField(default=True, verbose_name=_("Publier"))
 
@@ -759,8 +759,6 @@ class Event(models.Model):
                     return True
         return False
 
-    def url(self):
-        return f"https://{connection.tenant.get_primary_domain().domain}/event/{self.slug}/"
 
     # noinspection PyUnresolvedReferences
     def img_variations(self):
@@ -833,6 +831,13 @@ class Event(models.Model):
         Transforme le titre de l'evenemennt en slug, pour en faire une url lisible
         """
         self.slug = slugify(f"{self.name} {self.datetime.strftime('%y%m%d-%H%M')}")
+
+        # Génère l'url de l'évènement si il n'est pas externe.
+        # Nécéssaire pour le prefetch multi tenant
+        if not self.is_external:
+            self.full_url = f"https://{connection.tenant.get_primary_domain().domain}/event/{self.slug}/"
+
+
         super().save(*args, **kwargs)
 
     def __str__(self):
