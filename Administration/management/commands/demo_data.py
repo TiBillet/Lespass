@@ -244,6 +244,7 @@ class Command(BaseCommand):
                 ### EVENTS ###
                 rock, created = Tag.objects.get_or_create(name='Rock')
                 jazz, created = Tag.objects.get_or_create(name='Jazz')
+                world, created = Tag.objects.get_or_create(name='World Music')
                 gratuit, created = Tag.objects.get_or_create(name='Gratuit')
                 entree_libre, created = Tag.objects.get_or_create(name='Entrée libre')
 
@@ -361,6 +362,8 @@ class Command(BaseCommand):
                     postal_address=postal_address,
                 )
                 event_payant_nominatif_tarif_asso.products.add(billet)
+                event_prix_libre.tag.add(world)
+
 
                 # TODO: Gratuit mais avec recharge cashless obligatoire
                 # TODO: Multi artiste
