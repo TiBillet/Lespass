@@ -31,6 +31,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.views import APIView
+from txaio.aio import config
 
 from ApiBillet.serializers import get_or_create_price_sold
 from AuthBillet.models import TibilletUser, Wallet
@@ -88,7 +89,7 @@ def get_context(request):
         "main_nav": [
             {'name': 'event-list', 'url': '/event/', 'label': 'Agenda', 'icon': 'calendar-date'},
             {'name': 'memberships_mvt', 'url': '/memberships/', 'label': 'Adhérer', 'icon': 'person-badge'},
-            #{'name': 'network', 'url': '/network/', 'label': 'Réseau local', 'icon': 'arrow-repeat'},
+            # {'name': 'network', 'url': '/network/', 'label': 'Réseau local', 'icon': 'arrow-repeat'},
         ]
     }
     return context
@@ -608,9 +609,10 @@ class EventMVT(viewsets.ViewSet):
         tenants = [tenant for tenant in config.federated_with.all()]
         tenants.append(connection.tenant)
         for tenant in set(tenants):
-            with (tenant_context(tenant)):
-                events = Event.objects.filter(datetime__gte=timezone.localtime()
-                                              ).order_by('datetime').prefetch_related('tag','postal_address',)
+            with ((tenant_context(tenant))):
+                events = Event.objects.prefetch_related('tag', 'postal_address',
+                                                        ).filter(datetime__gte=timezone.localtime()
+                                                                 ).order_by('datetime')
                 for event in events:
                     date = event.datetime.date()
                     # setdefault pour éviter de faire un if date exist dans le dict
@@ -624,8 +626,26 @@ class EventMVT(viewsets.ViewSet):
 
         return render(request, "reunion/views/event/list.html", context=template_context)
 
+    def tenant_retrieve(self, slug):
+        config = Configuration.get_solo()
+        for tenant in config.federated_with.all():
+            logger.info(f'on test avec {tenant.name}')
+            with tenant_context(tenant):
+                try:
+                    event = Event.objects.prefetch_related('tag', 'postal_address', ).get(slug=slug)
+                    logger.info(f'trouvé')
+                    return event
+                except Event.DoesNotExist:
+                    continue
+        raise Http404
+
     def retrieve(self, request, pk=None):
-        event = get_object_or_404(Event, slug=pk)
+        slug = pk
+        try:
+            event = Event.objects.prefetch_related('tag', 'postal_address', ).get(slug=slug)
+        except Event.DoesNotExist:
+            event = self.tenant_retrieve(slug)
+
         template_context = get_context(request)
         template_context['event'] = event
         return render(request, "reunion/views/event/retrieve.html", context=template_context)
