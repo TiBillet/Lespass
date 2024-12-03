@@ -216,6 +216,8 @@ class ScanQrCode(viewsets.ViewSet):
                 logger.info("Wallet ephemere, on demande le mail")
                 template_context = get_context(request)
                 template_context['qrcode_uuid'] = qrcode_uuid
+                # On logout l'user au cas ou on scanne les carte a la suite.
+                logout(request)
                 return render(request, "htmx/views/inscription.html", context=template_context)
 
             # Si wallet non ephemere, alors on a un user :
