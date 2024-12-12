@@ -4,8 +4,8 @@ services:
     restart: always
     container_name: lespass_postgres
     hostname: lespass_postgres
-    ports:
-      - 5432:5432
+#    ports:
+#      - 5432:5432
     volumes:
 #      - ./database:/var/lib/postgresql/data
       - lespass_dev_db:/var/lib/postgresql/data
