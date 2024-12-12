@@ -27,7 +27,7 @@ from rest_framework_api_key.models import APIKey
 from solo.models import SingletonModel
 from stdimage import StdImageField
 from stdimage.validators import MaxSizeValidator, MinSizeValidator
-from stripe.error import InvalidRequestError
+from stripe import InvalidRequestError
 
 import AuthBillet.models
 from Customers.models import Client

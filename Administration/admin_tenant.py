@@ -1,257 +1,30 @@
 import datetime
-import uuid
+import logging
 
 from django import forms
-from django.conf import settings
-from django.contrib import admin, messages
-from django.contrib.admin import AdminSite, SimpleListFilter
-from django.contrib.admin.views.main import ChangeList
-from django.contrib.auth import get_user_model, login
-from django.contrib.auth.models import Group
-from django.core.handlers.asgi import ASGIRequest
+from django.contrib import admin
+from django.contrib import messages
+from django.contrib.admin import SimpleListFilter
 from django.http import HttpResponseRedirect
-from django.template.response import TemplateResponse
-from django.urls import reverse, NoReverseMatch, re_path
+from django.urls import reverse, re_path
 from django.utils.html import format_html
-from django.utils.text import capfirst
-# from rest_framework_api_key.models import APIKey
-from rest_framework_api_key.models import APIKey
-from solo.admin import SingletonModelAdmin
 from django.utils.translation import gettext_lazy as _
+from solo.admin import SingletonModelAdmin
+from unfold.admin import ModelAdmin
+from unfold.sites import UnfoldAdminSite
 
-from AuthBillet.models import HumanUser, SuperHumanUser, TermUser
-from AuthBillet.utils import get_client_ip
-from BaseBillet.models import Configuration, Event, OptionGenerale, Product, Price, Reservation, LigneArticle, Ticket, \
-    Paiement_stripe, ProductSold, PriceSold, Membership, ExternalApiKey, Webhook, Tag
-from django.contrib.auth.admin import UserAdmin
-from Customers.models import Client
-
-import logging
+from BaseBillet.models import Configuration, Event, OptionGenerale, Product, Price, Reservation, Ticket, \
+    Paiement_stripe, Membership, Webhook, Tag
 
 logger = logging.getLogger(__name__)
 
-
-class StaffAdminSite(AdminSite):
-    site_header = "TiBillet Staff Admin"
-    site_title = "TiBillet Staff Admin"
-    site_url = '/'
-
-    def get_app_list(self, request):
-        # app_dict = self._build_app_dict(request)
-
-        ordering = {
-            "Billetterie": [
-                "Paramètres",
-                "Produits",
-                "Tarifs",
-                "Tags",
-                "Evenements",
-                "Options",
-                "Paiements Stripe",
-                "Réservations",
-                "Adhésions",
-                "Api keys",
-                "Webhooks",
-            ]
-        }
-
-        logger.info("")
-        app_dict = self._build_app_dict(request)
-        logger.info("")
-
-        # a.sort(key=lambda x: b.index(x[0]))
-        # Sort the apps alphabetically.
-        app_list = sorted(app_dict.values(), key=lambda x: x['name'].lower())
-
-        # Sort the models alphabetically within each app.
-        for app in app_list:
-            order = ordering.get(app['name'])
-            if order:
-                app['models'].sort(key=lambda x: order.index(x['name']))
-
-        return app_list
-
-    def has_permission(self, request: ASGIRequest) -> bool:
-        """
-        Removed check for is_staff.
-        Ensure that the tenant is in client_admin for the current user.
-        Return SuperUser :
-        """
-
-        # Dans le cas ou on debug, on se log auto en root :
-        # BUG CSRF ????
-        # if settings.DEBUG:
-        #     User = get_user_model()
-        #     root = User.objects.filter(is_superuser=True).first()
-        #     login(request, root)
-        #     return True
-
-        logger.warning(
-            f"Tenant AdminSite.has_permission : l'user {request.user} from ip : {get_client_ip(request)} try to get admin on {request.build_absolute_uri()} - tenant : {request.tenant}")
-
-        try:
-            if request.tenant in request.user.client_admin.all() and request.user.email_valid:
-                # return request.user.is_staff
-                return True
-            if request.user.client_source.categorie == Client.ROOT:
-                return request.user.is_superuser
-        except AttributeError as e:
-            logger.warning(f"{e} : AnonymousUser for admin ?")
-            return False
-        except Exception as e:
-            raise e
-
-        if settings.DEBUG:
-            return True
-
-        logger.warning(f"{request.user} has permission on {request.build_absolute_uri()} : False")
-        return False
-
-    # def get_app_list(self, request):
-    #     import ipdb; ipdb.set_trace()
-    #     return super().get_app_list(request)
-
+class StaffAdminSite(UnfoldAdminSite):
+    pass
 
 staff_admin_site = StaffAdminSite(name='staff_admin')
 
-
-# USER
-# -------------------------------------/
-class UserAdminTibillet(UserAdmin):
-    # list_display = ('email', 'client_source', 'achat')
-    list_display = ('email', 'is_active', 'last_see')
-    list_filter = ('email', 'is_active',)
-    fieldsets = (
-        (None, {'fields': ('email', 'password')}),
-        # ('Permissions', {'fields': ('is_staff', 'is_active')}),
-    )
-
-    add_fieldsets = (
-        (None, {
-            'classes': ('wide',),
-            'fields': ('email',)}
-         # 'fields': ('email', 'password1', 'password2', 'is_active')}
-         ),
-    )
-
-    search_fields = ('email',)
-    ordering = ('-last_see',)
-
-    def save_model(self, request, obj, form, change):
-        if not obj.client_source:
-            obj.client_source = request.tenant
-            obj.username = obj.email
-            obj.save()
-        obj.client_achat.add(request.tenant)
-
-    def has_delete_permission(self, request, obj=None):
-        # return request.user.is_superuser
-        return False
-
-    def has_add_permission(self, request):
-        return False
-
-    def has_change_permission(self, request, obj=None):
-        return False
-
-
-class HumanUserAdmin(UserAdminTibillet):
-    pass
-
-
-staff_admin_site.register(HumanUser, HumanUserAdmin)
-
-
-class SuperHumanUserAdmin(UserAdminTibillet):
-    def save_model(self, request, obj, form, change):
-        staff_group = Group.objects.get_or_create(name="staff")[0]
-        obj.groups.add(staff_group)
-        obj.client_achat.add(request.tenant)
-        obj.client_admin.add(request.tenant)
-
-        # execution du save de la classe orginale user admin ( heritage de l'hérité )
-        super(UserAdminTibillet, self).save_model(request, obj, form, change)
-
-
-staff_admin_site.register(SuperHumanUser, SuperHumanUserAdmin)
-
-
-class TermUserAdmin(UserAdminTibillet):
-    pass
-
-
-staff_admin_site.register(TermUser, TermUserAdmin)
-
-
-class ExtApiKeyAdmin(admin.ModelAdmin):
-    readonly_fields = ["key", ]
-
-    list_display = [
-        "name",
-        "created",
-        "ip",
-        "api_permissions",
-        "user"
-    ]
-
-    fields = [
-        "name",
-        "ip",
-        "revoquer_apikey",
-        "event",
-        "product",
-        "place",
-        "artist",
-        "reservation",
-        "ticket",
-    ]
-
-    def save_model(self, request, instance, form, change):
-        # obj.user = request.user
-        ex_api_key = None
-        if instance.revoquer_apikey:
-            if instance.key:
-                ex_api_key = APIKey.objects.get(id=instance.key.id)
-                instance.key = None
-                messages.add_message(request, messages.WARNING, "API Key deleted")
-
-            else:
-                api_key = None
-                key = " "
-                # On affiche le string Key sur l'admin de django en message
-                # et django.message capitalize chaque message...
-                # Du coup, on fait bien gaffe à ce que je la clée générée ai bien une majusculle au début ...
-                while key[0].isupper() == False:
-                    api_key, key = APIKey.objects.create_key(name=instance.name)
-                    if key[0].isupper() == False:
-                        api_key.delete()
-
-                instance.key = api_key
-
-                messages.add_message(
-                    request,
-                    messages.SUCCESS,
-                    f"Copiez bien la clé suivante et mettez la en lieu sur ! Elle est chifrée coté serveur et ne sera affichée qu'une seule fois ici :"
-                )
-                messages.add_message(
-                    request,
-                    messages.WARNING,
-                    f"{key}"
-                )
-
-            instance.revoquer_apikey = False
-
-        instance.user = request.user
-
-        super().save_model(request, instance, form, change)
-        if ex_api_key:
-            ex_api_key.delete()
-
-
-staff_admin_site.register(ExternalApiKey, ExtApiKeyAdmin)
-
-
-class WebhookAdmin(admin.ModelAdmin):
+@admin.register(Webhook, site=staff_admin_site)
+class WebhookAdmin(ModelAdmin):
     readonly_fields = ['last_response', ]
     fields = [
         "url",
@@ -268,8 +41,8 @@ class WebhookAdmin(admin.ModelAdmin):
     ]
 
 
-staff_admin_site.register(Webhook, WebhookAdmin)
 
+"""
 
 ########################################################################
 class ConfigurationAdmin(SingletonModelAdmin):
@@ -819,3 +592,6 @@ class MembershipAdmin(admin.ModelAdmin):
 staff_admin_site.register(Membership, MembershipAdmin)
 
 staff_admin_site.register(OptionGenerale, admin.ModelAdmin)
+
+
+"""
