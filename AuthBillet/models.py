@@ -46,7 +46,7 @@ def TenantAdminPermissionWithRequest(request):
 
 
 class TenantAdminPermission(permissions.BasePermission):
-    message = 'No admin in tenant'
+    message = 'User no admin in tenant'
 
     def has_permission(self, request, view):
         return TenantAdminPermissionWithRequest(request)

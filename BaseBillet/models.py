@@ -164,7 +164,7 @@ class Configuration(SingletonModel):
                             'crop': (480, 270, True),
                         },
                         delete_orphans=True,
-                        verbose_name='Background image',
+                        verbose_name=_('Background image'),
                         )
 
     TZ_REUNION, TZ_PARIS = "Indian/Reunion", "Europe/Paris"
@@ -323,6 +323,7 @@ class Configuration(SingletonModel):
 
     # Vérifie que le compte stripe connect soit valide et accepte les paiements.
     def check_stripe_payouts(self):
+        logger.info("check_stripe_payouts")
         id_acc_connect = self.get_stripe_connect_account()
         if id_acc_connect:
             stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
@@ -351,7 +352,7 @@ class Configuration(SingletonModel):
             self.save()
 
         url_onboard_stripe = stripe.AccountLink.create(
-            account=self.stripe_connect_account,
+            account=self.get_stripe_connect_account(),
             refresh_url=f"https://{tenant_url}/tenant/{self.stripe_connect_account}/onboard_stripe_return/",
             return_url=f"https://{tenant_url}/tenant/{self.stripe_connect_account}/onboard_stripe_return/",
             type="account_onboarding",
@@ -364,11 +365,14 @@ class Configuration(SingletonModel):
 
     def onboard_stripe(self):
         # on vérifie que le compte soit toujours lié et qu'il peut recevoir des paiements :
-        if self.check_stripe_payouts():
-            return "Stripe connected"
-        url_onboard_stripe = self.link_for_onboard_stripe()
-        msg = _('Link your stripe account to accept payment')
-        return format_html(f"<a href='{url_onboard_stripe}'>{msg}</a>")
+        if not self.stripe_payouts_enabled:
+            logger.info("onboard_stripe")
+            # if self.check_stripe_payouts():
+            #     return "Stripe connected"
+            url_onboard_stripe = self.link_for_onboard_stripe()
+            msg = _('Link your stripe account to accept payment')
+            return format_html(f"<a href='{url_onboard_stripe}'>{msg}</a>")
+        return "Stripe connected"
 
     def clean_product_stripe_id(self):
         ProductSold.objects.all().update(id_product_stripe=None)

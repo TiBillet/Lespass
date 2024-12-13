@@ -21,7 +21,7 @@ class CreateUserValidator(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(min_length=8, required=False)
 
-
+"""
 class TokenTerminalValidator(serializers.Serializer):
     email_term = serializers.EmailField()
     unique_id = serializers.CharField()
@@ -90,77 +90,6 @@ class TokenTerminalValidator(serializers.Serializer):
         representation['tenants_admin'] = self.tenant_admin
 
         return representation
-
-
-"""
-
-class CreateTerminalValidator(serializers.Serializer):
-    email_admin = serializers.EmailField()
-    unique_id = serializers.CharField()
-    mac_adress = MacAdressField()
-    ip_locale = serializers.IPAddressField()
-
-    def validate_email_admin(self, value):
-        try:
-            with schema_context('public'):
-                user = TibilletUser.objects.get(
-                    email=value,
-                    is_active=True,
-                    is_staff=True)
-
-        except TibilletUser.DoesNotExist:
-            raise serializers.ValidationError(_(f'DoesNotExist'))
-        except Exception as e:
-            raise serializers.ValidationError(_(f'{e}'))
-
-        self.user_parent = user
-        return user.email
-
-    def validate(self, attrs):
-        validation_data = super().validate(attrs)
-
-        part_email = list(self.user_parent.email.partition('@'))
-        part_email[0] = f"{part_email[0]}+{attrs.get('unique_id')}"
-        email = "".join(part_email).lower()
-
-        logger.info(f'email : {email}, {self.user_parent.pk}')
-
-        term_user, created = TibilletUser.objects.get_or_create(
-            email=email,
-            username=email,
-            user_parent_pk=self.user_parent.pk,
-            espece=TibilletUser.TYPE_TERM
-        )
-
-        if created:
-            term_user.client_source = connection.tenant
-            term_user.terminal_uuid = attrs.get('unique_id')
-            term_user.local_ip_sended = attrs.get('ip_locale')
-            term_user.mac_adress_sended = attrs.get('mac_adress')
-        else:
-            if term_user.mac_adress_sended != attrs.get('mac_adress'):
-                raise serializers.ValidationError(_(f"mac_adress not valid"))
-
-        # for tenant in self.user_parent.client_admin.all():
-        #     term_user.client_admin.add(tenant)
-
-        term_user.is_active = False
-        term_user.save()
-
-        self.term_user = term_user
-        task = terminal_pairing_celery_mailer.delay(term_user.email)
-
-        return validation_data
-
-    def to_representation(self, instance):
-        representation = super().to_representation(instance)
-        representation['email_admin'] = self.user_parent.email
-        representation['term_user'] = self.term_user.email
-        representation['espece'] = self.term_user.espece
-        representation['app_token'] = default_token_generator.make_token(self.term_user)
-
-        return representation
-
 """
 
 

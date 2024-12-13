@@ -3,8 +3,10 @@ import logging
 
 from django import forms
 from django.contrib import admin
+from django.db import models
 from django.contrib import messages
 from django.contrib.admin import SimpleListFilter
+from django.forms import ModelForm, TextInput
 from django.http import HttpResponseRedirect
 from django.urls import reverse, re_path
 from django.utils.html import format_html
@@ -18,10 +20,19 @@ from BaseBillet.models import Configuration, Event, OptionGenerale, Product, Pri
 
 logger = logging.getLogger(__name__)
 
+
 class StaffAdminSite(UnfoldAdminSite):
     pass
 
+
 staff_admin_site = StaffAdminSite(name='staff_admin')
+
+""" Configuration UNFOLD """
+
+
+def badge_callback(request):
+    return 3
+
 
 @admin.register(Webhook, site=staff_admin_site)
 class WebhookAdmin(ModelAdmin):
@@ -41,11 +52,12 @@ class WebhookAdmin(ModelAdmin):
     ]
 
 
-
-"""
-
 ########################################################################
-class ConfigurationAdmin(SingletonModelAdmin):
+@admin.register(Configuration, site=staff_admin_site)
+class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
+    compressed_fields = True  # Default: False
+    warn_unsaved_form = True  # Default: False
+
     fieldsets = (
         (None, {
             'fields': (
@@ -62,11 +74,11 @@ class ConfigurationAdmin(SingletonModelAdmin):
                 # 'map_img',
             )
         }),
-        ('Paiements', {
+        ('Stripe', {
             'fields': (
                 # 'vat_taxe',
                 'onboard_stripe',
-                'stripe_mode_test',
+                # 'stripe_mode_test',
             ),
         }),
         ('Fédération', {
@@ -74,14 +86,14 @@ class ConfigurationAdmin(SingletonModelAdmin):
                 'federated_with',
             ),
         }),
-        ('Options générales', {
-            'fields': (
-                'need_name',
-                'jauge_max',
-                'option_generale_radio',
-                'option_generale_checkbox',
-            ),
-        }),
+        # ('Options générales', {
+        #     'fields': (
+        #         'need_name',
+        #         'jauge_max',
+        #         'option_generale_radio',
+        #         'option_generale_checkbox',
+        #     ),
+        # }),
         ('Ghost', {
             'fields': (
                 'ghost_url',
@@ -91,7 +103,7 @@ class ConfigurationAdmin(SingletonModelAdmin):
         }),
 
     )
-    readonly_fields = ['ghost_last_log', 'onboard_stripe',]
+    readonly_fields = ['ghost_last_log', 'onboard_stripe', ]
 
     def save_model(self, request, obj, form, change):
         obj: Configuration
@@ -104,19 +116,47 @@ class ConfigurationAdmin(SingletonModelAdmin):
         super().save_model(request, obj, form, change)
 
 
-staff_admin_site.register(Configuration, ConfigurationAdmin)
+class TagForm(ModelForm):
+    class Meta:
+        model = Tag
+        fields = '__all__'
+        widgets = {
+            'color': TextInput(attrs={'type': 'color'}),
+        }
 
 
-class TagAdmin(admin.ModelAdmin):
+@admin.register(Tag, site=staff_admin_site)
+class TagAdmin(ModelAdmin):
+    compressed_fields = True  # Default: False
+    warn_unsaved_form = True  # Default: False
+
+    form = TagForm
+    fields = ("name", "color")
     list_display = [
         "name",
-        "color",
+        "_color",
     ]
-    fields = list_display
     readonly_fields = ['uuid', ]
 
+    def _color(self, obj):
+        return format_html(
+            '<div style="width: 20px; height: 20px; background-color: {}; border: 1px solid #000;"></div>',
+            obj.color, )
 
-staff_admin_site.register(Tag, TagAdmin)
+    _color.short_description = _("Couleur")
+
+    # def has_view_or_change_permission(self, request, obj=None):
+    #     return True
+    #
+    # def has_delete_permission(self, request, obj=None):
+    # return False
+    #
+    # def has_add_permission(self, request):
+    #     return False
+
+
+"""
+
 
 
 class CustomEventForm(forms.ModelForm):

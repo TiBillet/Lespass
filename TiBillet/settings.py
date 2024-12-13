@@ -12,7 +12,9 @@ https://docs.djangoproject.com/en/3.1/ref/settings/
 import os
 from datetime import timedelta
 from pathlib import Path
-
+from django.utils.translation import gettext_lazy as _
+from django.templatetags.static import static
+from django.urls import reverse_lazy
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve(strict=True).parent.parent
@@ -67,7 +69,6 @@ if os.environ.get('ADDITIONAL_DOMAINS'):
         CSRF_TRUSTED_ORIGINS.append(f'https://{domain}')
         CSRF_TRUSTED_ORIGINS.append(f'https://*.{domain}')
 
-
 CORS_ORIGIN_WHITELIST = CSRF_TRUSTED_ORIGINS
 
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
@@ -79,12 +80,12 @@ SHARED_APPS = (
     'Customers',  # you must list the app where your tenant model resides in
 
     "unfold",  # before django.contrib.admin
-    "unfold.contrib.filters",  # optional, if special filters are needed
-    "unfold.contrib.forms",  # optional, if special form elements are needed
-    "unfold.contrib.inlines",  # optional, if special inlines are needed
-    "unfold.contrib.import_export",  # optional, if django-import-export package is used
-    "unfold.contrib.guardian",  # optional, if django-guardian package is used
-    "unfold.contrib.simple_history",  # optional, if django-simple-history package is used
+    # "unfold.contrib.filters",  # optional, if special filters are needed
+    # "unfold.contrib.forms",  # optional, if special form elements are needed
+    # "unfold.contrib.inlines",  # optional, if special inlines are needed
+    # "unfold.contrib.import_export",  # optional, if django-import-export package is used
+    # "unfold.contrib.guardian",  # optional, if django-guardian package is used
+    # "unfold.contrib.simple_history",  # optional, if django-simple-history package is used
 
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -166,7 +167,7 @@ MIDDLEWARE = [
 ]
 
 if DEBUG:
-    MIDDLEWARE += ['django_browser_reload.middleware.BrowserReloadMiddleware',]
+    MIDDLEWARE += ['django_browser_reload.middleware.BrowserReloadMiddleware', ]
 
 TEMPLATES = [
     {
@@ -402,6 +403,63 @@ LOGGING = {
         'handlers': ['console']
     },
 }
+
+
+
+UNFOLD = {
+    "SITE_TITLE": "TiBillet",
+    "SITE_HEADER": "TiBillet Admin",
+    "SIDEBAR": {
+        "show_search": True,  # Search in applications and models names
+        "show_all_applications": True,  # Dropdown with all applications and models
+        "navigation": [
+            {
+                "title": _("Configuration générale"),
+                "separator": True,  # Top border
+                "collapsible": False,  # Collapsible group of links
+                "items": [
+                    {
+                        "title": _("Configuration"),
+                        "icon": "manufacturing",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_configuration_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        # "permission": lambda request: request.user.is_staff,
+                        "permission": "AuthBillet.models.TenantAdminPermissionWithRequest"
+                    },
+                ],
+            },
+            {
+                "title": _("Évènementiel"),
+                "separator": True,  # Top border
+                "collapsible": False,  # Collapsible group of links
+                "items": [
+                    # {
+                    #     "title": _("Evènements"),
+                    #     "icon": "event",  # Supported icon set: https://fonts.google.com/icons
+                    #     "link": reverse_lazy("staff_admin:BaseBillet_events_changelist"),
+                    #     # "badge": "Administration.admin_tenant.badge_callback",
+                    #     "permission": lambda request: request.user.is_staff,
+                    # },
+                    # {
+                    #     "title": _("Produits"),
+                    #     "icon": "confirmation_number",  # Supported icon set: https://fonts.google.com/icons
+                    #     "link": reverse_lazy("staff_admin:BaseBillet_price_changelist"),
+                    #     # "badge": "Administration.admin_tenant.badge_callback",
+                    #     "permission": lambda request: request.user.is_staff,
+                    # },
+                    {
+                        "title": _("Tags"),
+                        "icon": "style",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_tag_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": lambda request: request.user.is_staff,
+                    },
+                ],
+            },
+        ],
+    },
+}
+
 
 
 if DEBUG:
