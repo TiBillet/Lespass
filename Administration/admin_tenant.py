@@ -12,7 +12,7 @@ from django.urls import reverse, re_path
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from solo.admin import SingletonModelAdmin
-from unfold.admin import ModelAdmin
+from unfold.admin import ModelAdmin, TabularInline
 from unfold.sites import UnfoldAdminSite
 
 from BaseBillet.models import Configuration, Event, OptionGenerale, Product, Price, Reservation, Ticket, \
@@ -155,10 +155,214 @@ class TagAdmin(ModelAdmin):
     #     return False
 
 
+@admin.register(OptionGenerale, site=staff_admin_site)
+class OptionGeneraleAdmin(ModelAdmin):
+    compressed_fields = True  # Default: False
+    warn_unsaved_form = True  # Default: False
+    search_fields = ('name',)
+    list_display = (
+        'name',
+        'poids',
+    )
+
+
+class ProductAdminCustomForm(ModelForm):
+    class Meta:
+        model = Product
+        fields = (
+            'name',
+            'categorie_article',
+            'nominative',
+            'short_description',
+            'long_description',
+            'img',
+            'poids',
+            "option_generale_radio",
+            "option_generale_checkbox",
+            "legal_link",
+            'publish',
+            'archive',
+        )
+
+    def clean(self):
+        cleaned_data = self.cleaned_data
+        categorie = cleaned_data.get('categorie_article')
+        if categorie == Product.NONE:
+            raise forms.ValidationError(_("Merci de renseigner une catégorie pour cet article."))
+        return cleaned_data
+
+
+class PriceInline(TabularInline):
+    model = Price
+    fk_name = 'product'
+    # hide_title = True
+    fields = (
+        'name',
+        'product',
+        'prix',
+        # 'adhesion_obligatoire',
+        'subscription_type',
+        'recurring_payment',
+        'publish',
+    )
+
+    # ordering_field = "weight"
+    # max_num = 1
+    extra = 0
+    show_change_link = True
+    tab = True
+
+
+@admin.register(Product, site=staff_admin_site)
+class ProductAdmin(ModelAdmin):
+    compressed_fields = True  # Default: False
+    warn_unsaved_form = True  # Default: False
+    inlines = [PriceInline, ]
+
+    form = ProductAdminCustomForm
+    list_display = (
+        'name',
+        'img',
+        'poids',
+        'categorie_article',
+        'publish',
+    )
+    ordering = ("poids",)
+    autocomplete_fields = [
+        "option_generale_radio", "option_generale_checkbox",
+    ]
+
+    def get_queryset(self, request):
+        # On retire les recharges cashless et l'article Don
+        # Pas besoin de les afficher, ils se créent automatiquement.
+        qs = super().get_queryset(request)
+        return qs.exclude(categorie_article__in=[Product.RECHARGE_CASHLESS, Product.DON]).exclude(archive=True)
+
+
+@admin.register(Price, site=staff_admin_site)
+class PriceAdmin(ModelAdmin):
+    compressed_fields = True  # Default: False
+    warn_unsaved_form = True  # Default: False
+
+    fields = (
+        'name',
+        'product',
+        'prix',
+        'subscription_type',
+        'recurring_payment',
+        'publish',
+        'adhesion_obligatoire',
+    )
+
+    # def has_view_or_change_permission(self, request, obj=None):
+    #     return True
+    #
+    # def has_add_permission(self, request):
+    #     return True
+
+
+@admin.register(Paiement_stripe, site=staff_admin_site)
+class PaiementStripeAdmin(ModelAdmin):
+    list_display = (
+        'uuid_8',
+        'user',
+        'total',
+        'order_date',
+        'status',
+        # 'traitement_en_cours',
+        # 'source_traitement',
+        'source',
+        'articles',
+    )
+    readonly_fields = list_display
+    ordering = ('-order_date',)
+
+    def has_delete_permission(self, request, obj=None):
+        # return request.user.is_superuser
+        return False
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+
+@admin.register(Membership, site=staff_admin_site)
+class MembershipAdmin(ModelAdmin):
+    compressed_fields = True  # Default: False
+    warn_unsaved_form = True  # Default: False
+
+    list_display = (
+        'str_user',
+        'last_name',
+        'first_name',
+        'product_name',
+        'price',
+        'options',
+        'deadline',
+        'is_valid',
+        'date_added',
+        # 'first_contribution',
+        'last_contribution',
+        'contribution_value',
+        # 'last_action',
+        # 'postal_code',
+        'status',
+        # 'birth_date',
+        # 'phone',
+        'commentaire',
+    )
+
+    fields = (
+        'str_user',
+        'last_name',
+        'first_name',
+        ('product_name', 'price'),
+        ('last_contribution', 'contribution_value'),
+        'options',
+        'card_number',
+        'commentaire',
+    )
+
+    readonly_fields = (
+        'str_user',
+        'date_added',
+        'deadline',
+        'is_valid',
+        'options',
+        'product_name',
+        'last_contribution',
+        'contribution_value',
+        'card_number',
+    )
+
+    def str_user(self, obj: Membership):
+        if obj.user :
+            return obj.user.email
+        elif obj.card_number:
+            return obj.card_number
+        return "Anonyme"
+    str_user.short_description = 'User'
+
+    def has_delete_permission(self, request, obj=None):
+        # return request.user.is_superuser
+        return False
+
+    def has_add_permission(self, request):
+        return False
+
+    # def has_change_permission(self, request, obj=None):
+    #     return False
+
+    #TODO : actions
+    # actions = [send_invoice, send_to_ghost ]
+    ordering = ('-date_added',)
+    search_fields = ('user__email', 'user__first_name', 'user__last_name', 'card_number')
+
+
 """
-
-
-
 class CustomEventForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -245,17 +449,7 @@ class EventAdmin(admin.ModelAdmin):
 staff_admin_site.register(Event, EventAdmin)
 
 
-# class OptionGeneraleAdmin(admin.ModelAdmin):
-#     list_display = (
-#         'name',
-#         'poids',
-#     )
-#     list_editable = (
-#         'poids',
-#     )
-#
-#
-# staff_admin_site.register(OptionGenerale, OptionGeneraleAdmin)
+
 
 
 # class QuantitiesSoldAdmin(admin.ModelAdmin):
@@ -410,80 +604,6 @@ class TicketAdmin(admin.ModelAdmin):
 staff_admin_site.register(Ticket, TicketAdmin)
 
 
-class ProductAdminCustomForm(forms.ModelForm):
-    class Meta:
-        model = Product
-        fields = (
-            'name',
-            'categorie_article',
-            'nominative',
-            'short_description',
-            'long_description',
-            'img',
-            'poids',
-            "tag",
-            "option_generale_radio",
-            "option_generale_checkbox",
-            "legal_link",
-            'publish',
-            'archive',
-        )
-
-    def clean(self):
-        cleaned_data = self.cleaned_data
-        categorie = cleaned_data.get('categorie_article')
-        if categorie == Product.NONE:
-            raise forms.ValidationError(_("Merci de renseigner une catégorie pour cet article."))
-        return cleaned_data
-
-
-class ProductAdmin(admin.ModelAdmin):
-    # exclude = ('publish',)
-    form = ProductAdminCustomForm
-    list_display = (
-        'name',
-        'img',
-        'poids',
-        'categorie_article',
-        # 'send_to_cashless',
-        'publish',
-    )
-
-    list_editable = (
-        'poids',
-    )
-
-    def get_queryset(self, request):
-        # On retire les recharges cashless et l'article Don
-        # Pas besoin de les afficher, ils se créent automatiquement.
-        qs = super().get_queryset(request)
-        return qs.exclude(categorie_article__in=[Product.RECHARGE_CASHLESS, Product.DON]).exclude(archive=True)
-
-
-staff_admin_site.register(Product, ProductAdmin)
-
-
-class PriceAdmin(admin.ModelAdmin):
-    list_display = (
-        'name',
-        'product',
-        'prix',
-        'adhesion_obligatoire',
-        'subscription_type',
-        'recurring_payment',
-        'publish',
-    )
-    ordering = ('product',)
-
-    def get_queryset(self, request):
-        # On retire les recharges cashless et l'article Don
-        # Pas besoin de les afficher, ils se créent automatiquement.
-        qs = super().get_queryset(request)
-        return qs.exclude(product__categorie_article__in=[Product.RECHARGE_CASHLESS, Product.DON])
-
-
-staff_admin_site.register(Price, PriceAdmin)
-
 
 # class ProductSoldAdmin(admin.ModelAdmin):
 #     list_display = (
@@ -508,31 +628,6 @@ staff_admin_site.register(Price, PriceAdmin)
 #
 # staff_admin_site.register(PriceSold, PricesSoldAdmin)
 
-
-class PaiementStripeAdmin(admin.ModelAdmin):
-    list_display = (
-        'uuid_8',
-        'user',
-        'total',
-        'order_date',
-        'status',
-        # 'traitement_en_cours',
-        # 'source_traitement',
-        'source',
-        'articles',
-    )
-    readonly_fields = list_display
-    ordering = ('-order_date',)
-
-    def has_delete_permission(self, request, obj=None):
-        # return request.user.is_superuser
-        return False
-
-    def has_add_permission(self, request):
-        return False
-
-    def has_change_permission(self, request, obj=None):
-        return False
 
 
 staff_admin_site.register(Paiement_stripe, PaiementStripeAdmin)
@@ -560,78 +655,7 @@ def send_invoice(modeladmin, request, queryset):
 def send_to_ghost(modeladmin, request, queryset):
     pass
 
-class MembershipAdmin(admin.ModelAdmin):
-    list_display = (
-        'str_user',
-        'last_name',
-        'first_name',
-        'product_name',
-        'price',
-        'options',
-        'deadline',
-        'is_valid',
-        'date_added',
-        # 'first_contribution',
-        'last_contribution',
-        'contribution_value',
-        # 'last_action',
-        # 'postal_code',
-        'status',
-        # 'birth_date',
-        # 'phone',
-        'commentaire',
-    )
 
-    fields = (
-        'str_user',
-        'last_name',
-        'first_name',
-        ('product_name', 'price'),
-        ('last_contribution', 'contribution_value'),
-        'options',
-        'card_number',
-        'commentaire',
-    )
-
-    readonly_fields = (
-        'str_user',
-        'date_added',
-        'deadline',
-        'is_valid',
-        'options',
-        'product_name',
-        'last_contribution',
-        'contribution_value',
-        'card_number',
-    )
-
-    def str_user(self, obj: Membership):
-        if obj.user :
-            return obj.user.email
-        elif obj.card_number:
-            return obj.card_number
-        return "Anonyme"
-    str_user.short_description = 'User'
-
-    def has_delete_permission(self, request, obj=None):
-        # return request.user.is_superuser
-        return False
-
-    def has_add_permission(self, request):
-        return False
-
-    # def has_change_permission(self, request, obj=None):
-    #     return False
-
-    #TODO : actions
-    # actions = [send_invoice, send_to_ghost ]
-    ordering = ('-date_added',)
-    search_fields = ('user__email', 'user__first_name', 'user__last_name', 'card_number')
-
-
-staff_admin_site.register(Membership, MembershipAdmin)
-
-staff_admin_site.register(OptionGenerale, admin.ModelAdmin)
 
 
 """

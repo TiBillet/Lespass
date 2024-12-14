@@ -404,8 +404,6 @@ LOGGING = {
     },
 }
 
-
-
 UNFOLD = {
     "SITE_TITLE": "TiBillet",
     "SITE_HEADER": "TiBillet Admin",
@@ -425,6 +423,52 @@ UNFOLD = {
                         # "badge": "Administration.admin_tenant.badge_callback",
                         # "permission": lambda request: request.user.is_staff,
                         "permission": "AuthBillet.models.TenantAdminPermissionWithRequest"
+                    },
+                ],
+            },
+            {
+                "title": _("Produits"),
+                "separator": True,  # Top border
+                "collapsible": False,  # Collapsible group of links
+                "items": [
+                    {
+                        "title": _("Produits"),
+                        "icon": "storefront",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_product_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "AuthBillet.models.TenantAdminPermissionWithRequest"
+
+                    },
+                    {
+                        "title": _("Paiements stripe"),
+                        "icon": "price_change",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_paiement_stripe_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "AuthBillet.models.TenantAdminPermissionWithRequest"
+
+                    }
+                    # {
+                    #     "title": _("Options"),
+                    #     "icon": "page_info",  # Supported icon set: https://fonts.google.com/icons
+                    #     "link": reverse_lazy("staff_admin:BaseBillet_optiongenerale_changelist"),
+                    #     # "badge": "Administration.admin_tenant.badge_callback",
+                    #     "permission": "AuthBillet.models.TenantAdminPermissionWithRequest"
+                    #
+                    # },
+                ],
+            },
+            {
+                "title": _("Adhésions"),
+                "separator": True,  # Top border
+                "collapsible": False,  # Collapsible group of links
+                "items": [
+                    {
+                        "title": _("Membres"),
+                        "icon": "card_membership",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_membership_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "AuthBillet.models.TenantAdminPermissionWithRequest"
+
                     },
                 ],
             },
@@ -452,15 +496,14 @@ UNFOLD = {
                         "icon": "style",  # Supported icon set: https://fonts.google.com/icons
                         "link": reverse_lazy("staff_admin:BaseBillet_tag_changelist"),
                         # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": lambda request: request.user.is_staff,
+                        "permission": "AuthBillet.models.TenantAdminPermissionWithRequest"
+
                     },
                 ],
             },
         ],
     },
 }
-
-
 
 if DEBUG:
     SHELL_PLUS = "ipython"

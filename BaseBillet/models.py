@@ -72,7 +72,7 @@ class OptionGenerale(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
     name = models.CharField(max_length=30, unique=True)
     description = models.CharField(max_length=250, blank=True, null=True)
-    poids = models.PositiveSmallIntegerField(default=0, verbose_name=_("Poids"))
+    poids = models.PositiveIntegerField(default=0, verbose_name=_("Poids"), db_index=True)
 
     def __str__(self):
         return self.name
@@ -320,7 +320,6 @@ class Configuration(SingletonModel):
         # Test ou pas test ?
         return self.stripe_connect_account_test if self.stripe_mode_test else self.stripe_connect_account
 
-
     # Vérifie que le compte stripe connect soit valide et accepte les paiements.
     def check_stripe_payouts(self):
         logger.info("check_stripe_payouts")
@@ -379,12 +378,12 @@ class Configuration(SingletonModel):
         PriceSold.objects.all().update(id_price_stripe=None)
         return True
 
-
     """
     ### FEDERATION
     """
 
-    federated_with = models.ManyToManyField(Client, blank=True, related_name="federated_with", help_text=_("Affiche les évènements et les adhésions des structures fédérées."))
+    federated_with = models.ManyToManyField(Client, blank=True, related_name="federated_with", help_text=_(
+        "Affiche les évènements et les adhésions des structures fédérées."))
 
     """
     ### TVA ###
@@ -436,7 +435,7 @@ class Product(models.Model):
     short_description = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Description courte"))
     long_description = models.TextField(blank=True, null=True, verbose_name=_("Description longue"))
 
-    publish = models.BooleanField(default=True)
+    publish = models.BooleanField(default=True, verbose_name=_("Publier"))
     poids = models.PositiveSmallIntegerField(default=0, verbose_name=_("Poids"),
                                              help_text="Ordre d'apparition du plus leger au plus lourd")
 
@@ -444,15 +443,21 @@ class Product(models.Model):
 
     option_generale_radio = models.ManyToManyField(OptionGenerale,
                                                    blank=True,
-                                                   related_name="produits_radio")
+                                                   related_name="produits_radio",
+                                                   verbose_name=_("Option choix unique"),
+                                                   help_text=_(
+                                                       "Peux choisir entre une seule des options selectionnés."))
 
     option_generale_checkbox = models.ManyToManyField(OptionGenerale,
                                                       blank=True,
-                                                      related_name="produits_checkbox")
+                                                      related_name="produits_checkbox",
+                                                      verbose_name=_("Option choix multiple"),
+                                                      help_text=_(
+                                                          "Peux choisir plusieurs options selectionnés."))
 
     # TODO: doublon ?
     terms_and_conditions_document = models.URLField(blank=True, null=True)
-    legal_link = models.URLField(blank=True, null=True, verbose_name=_("Mentions légales"))
+    legal_link = models.URLField(blank=True, null=True, verbose_name=_("Lien vers mentions légales"), help_text=_("Non obligatoire"))
 
     img = StdImageField(upload_to='images/',
                         null=True, blank=True,
@@ -475,32 +480,34 @@ class Product(models.Model):
 
     CATEGORIE_ARTICLE_CHOICES = [
         (NONE, _('Selectionnez une catégorie')),
-        (BILLET, _('Billet payant')),
-        (PACK, _("Pack d'objets")),
-        (RECHARGE_CASHLESS, _('Recharge cashless')),
-        (RECHARGE_FEDERATED, _('Recharge suspendue')),
-        (VETEMENT, _('Vetement')),
-        (MERCH, _('Merchandasing')),
+        (BILLET, _('Billet pour reservation payante')),
+        # (PACK, _("Pack d'objets")),
+        # (RECHARGE_CASHLESS, _('Recharge cashless')),
+        # (RECHARGE_FEDERATED, _('Recharge suspendue')),
+        # (VETEMENT, _('Vetement')),
+        # (MERCH, _('Merchandasing')),
         (ADHESION, _('Abonnement et/ou adhésion associative')),
         (BADGE, _('Badgeuse')),
-        (DON, _('Don')),
+        # (DON, _('Don')),
         (FREERES, _('Reservation gratuite')),
-        (NEED_VALIDATION, _('Nécessite une validation manuelle'))
+        # (NEED_VALIDATION, _('Nécessite une validation manuelle'))
     ]
 
     categorie_article = models.CharField(max_length=3, choices=CATEGORIE_ARTICLE_CHOICES, default=NONE,
                                          verbose_name=_("Type de produit"))
 
-    nominative = models.BooleanField(default=True, help_text="Nom/Prenom obligatoire lors de la réservation.")
+    nominative = models.BooleanField(default=False,
+                                     verbose_name=_("Nominatif"),
+                                     help_text=_("Nom/Prenom obligatoire par billet si plusieurs réservation."),
+                                     )
 
-    archive = models.BooleanField(default=False)
+    archive = models.BooleanField(default=False, verbose_name=_("Archiver"))
+
     # TODO: A retirer, plus utilisé ?
-    send_to_cashless = models.BooleanField(default=False,
-                                           verbose_name="Envoyer au cashless",
-                                           help_text="Produit checké par le serveur cashless.",
-                                           )
-
-    # id_product_stripe = models.CharField(max_length=30, null=True, blank=True)
+    # send_to_cashless = models.BooleanField(default=False,
+    #                                        verbose_name="Envoyer au cashless",
+    #                                        help_text="Produit checké par le serveur cashless.",
+    #                                        )
 
     def fedow_category(self):
         self_category_map = {
@@ -548,7 +555,7 @@ class Price(models.Model):
     free_price = models.BooleanField(default=False, verbose_name=_("Prix libre"),
                                      help_text=_("Si coché, le prix sera demandé sur la page de paiement stripe"))
 
-    publish = models.BooleanField(default=True, verbose_name=_("Publié"))
+    publish = models.BooleanField(default=True, verbose_name=_("Publier"))
 
     NA, DIX, VINGT, HUITCINQ, DEUXDEUX = 'NA', 'DX', 'VG', 'HC', 'DD'
     TVA_CHOICES = [
@@ -573,6 +580,8 @@ class Price(models.Model):
 
     adhesion_obligatoire = models.ForeignKey(Product, on_delete=models.PROTECT,
                                              related_name="adhesion_obligatoire",
+                                             verbose_name=_("Adhésion obligatoire"),
+                                             help_text=_("Ce tarif n'est possible que si l'utilisateur.ices est adhérant.e à "),
                                              blank=True, null=True)
 
     NA, YEAR, MONTH, DAY, HOUR, CIVIL, SCHOLAR = 'N', 'Y', 'M', 'D', 'H', 'C', 'S'
@@ -972,8 +981,8 @@ class PriceSold(models.Model):
             data_stripe.pop('unit_amount')
             data_stripe['billing_scheme'] = "per_unit"
             data_stripe['custom_unit_amount'] = {
-                    "enabled": "true",
-                }
+                "enabled": "true",
+            }
 
         price = stripe.Price.create(**data_stripe)
 
@@ -1415,7 +1424,6 @@ class Membership(models.Model):
         verbose_name = _('Adhésion')
         verbose_name_plural = _('Adhésions')
 
-
     def email(self):
         if self.user:
             return self.user.email
@@ -1444,8 +1452,8 @@ class Membership(models.Model):
                 if self.last_contribution.month < 9:
                     return datetime.strptime(f'{self.last_contribution.year}-08-31', '%Y-%m-%d').date()
                 # Si elle est après septembre, on prend l'année prochaine
-                else :
-                    return datetime.strptime(f'{self.last_contribution.year+1}-08-31', '%Y-%m-%d').date()
+                else:
+                    return datetime.strptime(f'{self.last_contribution.year + 1}-08-31', '%Y-%m-%d').date()
         return None
 
     def is_valid(self):
@@ -1483,10 +1491,11 @@ class Membership(models.Model):
             return f"{self.last_name} {self.first_name}"
         elif self.last_name:
             return f"{self.last_name}"
-        elif self.user :
+        elif self.user:
             return f"{self.user}"
-        else :
+        else:
             return "Anonymous"
+
 
 class ExternalApiKey(models.Model):
     name = models.CharField(max_length=30, unique=True)
