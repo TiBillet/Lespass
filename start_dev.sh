@@ -3,8 +3,8 @@ mkdir -p /DjangoFiles/logs
 
 # check id
 id
-ls -ll /DjangoFiles
-ls -ll /DjangoFiles/logs
+ls -l /DjangoFiles
+ls -l /DjangoFiles/logs
 
 touch /DjangoFiles/logs/nginxAccess.log
 touch /DjangoFiles/logs/nginxError.log
