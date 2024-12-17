@@ -13,8 +13,10 @@ from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from solo.admin import SingletonModelAdmin
 from unfold.admin import ModelAdmin, TabularInline
+from unfold.decorators import display
 from unfold.sites import UnfoldAdminSite
 
+from AuthBillet.models import HumanUser
 from BaseBillet.models import Configuration, Event, OptionGenerale, Product, Price, Reservation, Ticket, \
     Paiement_stripe, Membership, Webhook, Tag
 
@@ -288,30 +290,93 @@ class PaiementStripeAdmin(ModelAdmin):
         return False
 
 
+"""
+USER
+"""
 
+
+class MembershipInline(TabularInline):
+    model = Membership
+    # hide_title = True
+    fields = (
+        'first_name',
+        'last_name',
+        'last_contribution',
+        'pro'
+        'contribution_value',
+    )
+
+    # ordering_field = "weight"
+    # max_num = 1
+    extra = 0
+    show_change_link = True
+    tab = True
+
+
+# Tout les utilisateurs de type HUMAIN
+@admin.register(HumanUser, site=staff_admin_site)
+class HumanUser(ModelAdmin):
+    compressed_fields = True  # Default: False
+    warn_unsaved_form = True  # Default: False
+    inlines = [MembershipInline, ]
+
+    list_display = [
+        'email',
+        'first_name',
+        'last_name',
+        'display_memberships_valid',
+    ]
+
+    search_fields = [
+        'email',
+        'first_name',
+        'last_name',
+    ]
+
+    fieldsets = [
+        ('Général', {
+            'fields': [
+                'email',
+                'first_name',
+                'last_name',
+            ],
+        }),
+    ]
+
+    # noinspection PyTypeChecker
+    @display(description=_("Adhésions"), label={None: "danger", True: "success"})
+    def display_memberships_valid(self, instance: HumanUser):
+        count = instance.memberships_valid()
+        if count > 0:
+            return True, f"Valide : {count}"
+        return None, _("Aucune")
+
+
+    def has_view_permission(self, request, obj=None):
+        return True
+
+    def has_change_permission(self, request, obj=None):
+        return True
+
+
+### ADHESION
 @admin.register(Membership, site=staff_admin_site)
 class MembershipAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 
     list_display = (
-        'str_user',
-        'last_name',
         'first_name',
+        'last_name',
         'product_name',
         'price',
         'options',
         'deadline',
         'is_valid',
         'date_added',
-        # 'first_contribution',
         'last_contribution',
         'contribution_value',
-        # 'last_action',
-        # 'postal_code',
         'status',
-        # 'birth_date',
-        # 'phone',
         'commentaire',
     )
 
@@ -339,24 +404,35 @@ class MembershipAdmin(ModelAdmin):
     )
 
     def str_user(self, obj: Membership):
-        if obj.user :
+        if obj.user:
             return obj.user.email
         elif obj.card_number:
             return obj.card_number
         return "Anonyme"
+
     str_user.short_description = 'User'
+
+    def get_form(self, request, obj=None, **kwargs):
+        """
+        Use special form during foo creation
+        """
+        defaults = {}
+        if obj is None:
+            defaults['form'] = self.add_form
+        defaults.update(kwargs)
+        return super().get_form(request, obj, **defaults)
 
     def has_delete_permission(self, request, obj=None):
         # return request.user.is_superuser
         return False
 
-    def has_add_permission(self, request):
-        return False
+    # def has_add_permission(self, request):
+    #     return True
 
     # def has_change_permission(self, request, obj=None):
     #     return False
 
-    #TODO : actions
+    # TODO : actions
     # actions = [send_invoice, send_to_ghost ]
     ordering = ('-date_added',)
     search_fields = ('user__email', 'user__first_name', 'user__last_name', 'card_number')

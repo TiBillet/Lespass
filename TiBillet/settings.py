@@ -458,17 +458,16 @@ UNFOLD = {
                 ],
             },
             {
-                "title": _("Adhésions"),
+                "title": _("Utilisateur.ices"),
                 "separator": True,  # Top border
                 "collapsible": False,  # Collapsible group of links
                 "items": [
                     {
-                        "title": _("Membres"),
+                        "title": _("Adhérant.es"),
                         "icon": "card_membership",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:BaseBillet_membership_changelist"),
+                        "link": reverse_lazy("staff_admin:AuthBillet_humanuser_changelist"),
                         # "badge": "Administration.admin_tenant.badge_callback",
                         "permission": "AuthBillet.models.TenantAdminPermissionWithRequest"
-
                     },
                 ],
             },

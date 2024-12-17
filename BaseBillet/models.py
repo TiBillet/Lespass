@@ -1373,8 +1373,9 @@ class Membership(models.Model):
 
     date_added = models.DateTimeField(auto_now_add=True)
     first_contribution = models.DateField(null=True, blank=True)
-    last_contribution = models.DateField(null=True, blank=True)
-    last_action = models.DateTimeField(auto_now=True, verbose_name="Présence")
+    last_contribution = models.DateField(null=True, blank=True, verbose_name=_("Date"))
+    last_action = models.DateTimeField(auto_now=True, verbose_name=_("Présence"))
+    contribution_value = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True, verbose_name=_("Contribution"))
 
     first_name = models.CharField(
         db_index=True,
@@ -1414,7 +1415,6 @@ class Membership(models.Model):
 
     stripe_paiement = models.ManyToManyField(Paiement_stripe, blank=True, related_name="membership")
     fedow_transactions = models.ManyToManyField(FedowTransaction, blank=True, related_name="membership")
-    contribution_value = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
 
     # def last_contribution_value(self):
     #     last

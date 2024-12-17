@@ -163,16 +163,16 @@ class TibilletUser(AbstractUser):
     rsa_key = models.OneToOneField(RsaKey, on_delete=models.SET_NULL, null=True, related_name='user')
     wallet = models.OneToOneField(Wallet, on_delete=models.SET_NULL, null=True, related_name='user')
 
-    first_name = models.CharField(max_length=200, null=True, blank=True)
-    last_name = models.CharField(max_length=200, null=True, blank=True)
+    first_name = models.CharField(max_length=200, null=True, blank=True, verbose_name=_('Prenom'))
+    last_name = models.CharField(max_length=200, null=True, blank=True, verbose_name=_('Nom'))
 
-    phone = models.CharField(max_length=20, null=True, blank=True)
+    phone = models.CharField(max_length=20, null=True, blank=True, verbose_name=_('Téléphone'))
 
-    last_see = models.DateTimeField(auto_now=True)
+    last_see = models.DateTimeField(auto_now=True, verbose_name=_('Dernière connexion'))
     accept_newsletter = models.BooleanField(
         default=True, verbose_name=_("J'accepte de recevoir la newsletter"))
-    postal_code = models.IntegerField(null=True, blank=True)
-    birth_date = models.DateField(null=True, blank=True)
+    postal_code = models.IntegerField(null=True, blank=True, verbose_name=_('Code postal'))
+    birth_date = models.DateField(null=True, blank=True, verbose_name=_('Date de naissance'))
 
     # can_create_tenantcan_create_tenant = models.BooleanField(default=False, verbose_name=_("Peux créer des tenants"))
 
@@ -219,6 +219,15 @@ class TibilletUser(AbstractUser):
 
     last_know_ip = models.GenericIPAddressField(blank=True, null=True)
     last_know_user_agent = models.CharField(max_length=500, blank=True, null=True)
+
+    ### ADHESIONS ###
+
+    def memberships_valid(self):
+        count = 0
+        for m in self.membership.all():
+            if m.is_valid():
+                count += 1
+        return count
 
     ##### Pour les user terminaux ####
 
@@ -322,8 +331,8 @@ class HumanUserManager(TibilletManager):
 
     def get_queryset(self):
         return super().get_queryset().filter(espece=TibilletUser.TYPE_HUM,
-                                             is_staff=False,
-                                             is_superuser=False,
+                                             # is_staff=False,
+                                             # is_superuser=False,
                                              client_achat__pk__in=[connection.tenant.pk, ],
                                              )
 
@@ -342,8 +351,8 @@ class HumanUser(TibilletUser):
 
         self.espece = TibilletUser.TYPE_HUM
 
-        self.is_staff = False
-        self.is_superuser = False
+        # self.is_staff = False
+        # self.is_superuser = False
         self.email = self.email.lower()
 
         super().save(*args, **kwargs)
