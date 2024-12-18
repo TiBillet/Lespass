@@ -526,85 +526,16 @@ def ticket_celery_mailer(reservation_uuid: str, base_url):
             raise Exception
 
 
-"""
-@app.task
-def send_membership_to_cashless(data):
-    configuration = Configuration.get_solo()
-    if not configuration.server_cashless or not configuration.key_cashless:
-        logger.error(f'Pas de configuration cashless')
-        raise Exception(f'Fonction send_membership_to_cashless : Pas de configuration cashless')
-
-    ligne_article = LigneArticle.objects.get(pk=data.get('ligne_article_pk'))
-    user = ligne_article.paiement_stripe.user
-
-    price_obj = ligne_article.pricesold.price
-    price_decimal = ligne_article.pricesold.prix
-
-    # Si c'est un price avec un don intégré (comme une adhésion récurente)
-    # On garde 1€ pour l'instance
-    if ligne_article.pricesold.gift:
-        price_decimal += -1
-
-    membre = Membership.objects.get(user=user, price=price_obj)
-
-    if not membre.first_contribution:
-        membre.first_contribution = timezone.now().date()
-
-    membre.last_contribution = timezone.now().date()
-    membre.contribution_value = price_decimal
-    membre.save()
-
-    data = {
-        "email": membre.email(),
-        "adhesion": price_decimal,
-        "uuid_commande": ligne_article.paiement_stripe.uuid,
-        "first_name": membre.first_name,
-        "last_name": membre.last_name,
-        "phone": membre.phone,
-        "postal_code": membre.postal_code,
-        "birth_date": membre.birth_date,
-    }
-
-    try:
-
-        sess = requests.Session()
-        r = sess.post(
-            f'{configuration.server_cashless}/api/membership',
-            headers={
-                'Authorization': f'Api-Key {configuration.key_cashless}'
-            },
-            data=data,
-            verify=bool(not settings.DEBUG),
-        )
-
-        sess.close()
-        logger.info(
-            f"        demande au serveur cashless pour {data}. réponse : {r.status_code} ")
-
-        if r.status_code in [200, 201, 202]:
-            ligne_article.status = LigneArticle.VALID
-        else:
-            logger.error(
-                f"erreur réponse serveur cashless {r.status_code} {r.text}")
-
-    except ConnectionError as e:
-        logger.error(
-            f"ConnectionError serveur cashless {configuration.server_cashless} : {e}")
-
-    except Exception as e:
-        raise Exception(f'Exception request send_membership_to_cashless {type(e)} : {e} ')
-"""
-
-
 @app.task
 def webhook_memberships(membership_pk):
     #TODO: a factoriser avec le wehbhook reservation. Code en double.
     logger.info(f"webhook_reservation : {membership_pk} {timezone.now()} info")
     # Si plusieurs webhook :
     webhooks = Webhook.objects.filter(event=Webhook.MEMBERSHIP_V)
+    configuration = Configuration.get_solo()
     if webhooks.count() > 0:
         membership = Membership.objects.get(pk=membership_pk)
-        json = {
+        return_body = {
             "object": "membership",
             "pk": str(membership.pk),
             "state": str(membership.status),
@@ -615,12 +546,14 @@ def webhook_memberships(membership_pk):
             "pseudo": str(membership.pseudo),
             "price": str(membership.price.prix),
             "user_id": str(membership.user.id),
+            "organisation": configuration.organisation,
+            "organisation_id": configuration.uuid,
         }
 
         # Si plusieurs webhook :
         for webhook in webhooks:
             try:
-                response = requests.request("POST", webhook.url, data=json, timeout=2)
+                response = requests.request("POST", webhook.url, json=return_body, timeout=2)
                 webhook.last_response = f"{timezone.now()} - status code {response.status_code} - {response.text}"
             except Exception as e:
                 logger.error(f"webhook_reservation ERROR : {membership_pk} {timezone.now()} {e}")
