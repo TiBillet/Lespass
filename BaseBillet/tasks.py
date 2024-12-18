@@ -606,9 +606,15 @@ def webhook_memberships(membership_pk):
         membership = Membership.objects.get(pk=membership_pk)
         json = {
             "object": "membership",
-            "pk": f"{membership.pk}",
-            "state": f"{membership.status}",
-            "datetime": f"{membership.date_added}"
+            "pk": str(membership.pk),
+            "state": str(membership.status),
+            "datetime": str(membership.date_added),
+            "email": str(membership.email()),
+            "first_name": str(membership.first_name),
+            "last_name": str(membership.last_name),
+            "pseudo": str(membership.pseudo),
+            "price": str(membership.price.prix),
+            "user_id": str(membership.user.id),
         }
 
         # Si plusieurs webhook :
