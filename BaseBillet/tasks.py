@@ -133,17 +133,17 @@ def report_to_pdf(report):
     return pdf_binary
 
 
-def create_invoice_pdf(paiement_stripe: Paiement_stripe):
+def create_membership_invoice_pdf(membership: Membership):
     config = Configuration.get_solo()
     template_name = 'invoice/invoice.html'
     font_config = FontConfiguration()
     template = get_template(template_name)
-    user = paiement_stripe.user
-    membership = paiement_stripe.membership.first()
+
+    user = membership.user
 
     context = {
         'config': config,
-        'paiement': paiement_stripe,
+        'paiement': membership.stripe_paiement.first(),
         'membership': membership,
         'email': user.email,
     }
@@ -154,7 +154,7 @@ def create_invoice_pdf(paiement_stripe: Paiement_stripe):
               '''
                 @font-face {
                   font-family: BeStrong;
-                  src: url(file:///DjangoFiles/ApiBillet/templates/invoice/BeStrongRegular.otf);
+                  src: url(file:///DjangoFiles/BaseBillet/static/polices/Playwrite_IS/PlaywriteIS-VariableFont_wght.ttf);
                 }
                 @font-face {
                   font-family: Libre Barcode;

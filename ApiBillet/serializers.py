@@ -1,6 +1,5 @@
 import datetime
 import logging
-import uuid
 from decimal import Decimal
 
 import requests
@@ -13,14 +12,12 @@ from django_tenants.utils import tenant_context
 from rest_framework import serializers
 from rest_framework.generics import get_object_or_404
 
-from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, Paiement_stripe, \
-    PriceSold, ProductSold, Artist_on_event, OptionGenerale, Membership, Tag, Weekday
+    PriceSold, ProductSold, Artist_on_event, OptionGenerale, Tag, Weekday
 from Customers.models import Client
 from MetaBillet.models import WaitingConfiguration
 from PaiementStripe.views import CreationPaiementStripe
-# from QrcodeCashless.models import CarteCashless, Detail
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)

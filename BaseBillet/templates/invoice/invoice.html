@@ -1,3 +1,4 @@
+{% load tibitags humanize static i18n %}
 <html>
 <head>
     <meta charset="utf-8">
@@ -137,7 +138,7 @@
 </head>
 
 <body>
-<h1>Facture</h1>
+<h1>{% trans 'Facture' %}</h1>
 
 <aside>
     <address id="from">
@@ -157,29 +158,29 @@
 </aside>
 
 <dl id="informations">
-    <dt>Invoice number</dt>
+    <dt>{% trans 'Numéro' %}</dt>
     <dd>{{ paiement.invoice_number }}</dd>
-    <dt>Order date</dt>
+    <dt>{% trans 'Date' %}</dt>
     <dd>{{ paiement.order_date }}</dd>
 </dl>
 <table>
     <thead>
     <tr>
-        <th>Description</th>
-        <th>Price</th>
-        <th>Quantity</th>
-        <th>TVA</th>
-        <th>Subtotal</th>
+        <th>{% trans 'Description' %}</th>
+        <th>{% trans 'Montant' %}</th>
+        <th>{% trans 'Quantitée' %}</th>
+        <th>{% trans 'TVA' %}</th>
+        <th>{% trans 'Total' %}</th>
     </tr>
     </thead>
     <tbody>
-    {% for line in paiement.lignearticles.all %}<tr>
+    {% for paiement in membership.stripe_paiement.all %}{% for line in paiement.lignearticles.all %}<tr>
         <td>{{ line.pricesold.price.product.name }} / {{ line.pricesold.price.name }}</td>
-        <td>€{{ line.amount_decimal }}</td>
+        <td>{{ line.amount_decimal }}€</td>
         <td>{{ line.qty }}</td>
         <td>{{ line.vat }}%</td>
-        <td>€{{ line.total_decimal }}</td>
-    </tr>{% endfor %}
+        <td>{{ line.total_decimal }}€</td>
+    </tr>{% endfor %}{% endfor %}
     </tbody>
 </table>
 
@@ -187,16 +188,16 @@
     <table id="total">
         <thead>
         <tr>
-            <th>Date du paiement</th>
-            <th>Moyen de paiement</th>
-            <th>Total</th>
+            <th>{% trans 'Date du paiement' %}</th>
+            <th>{% trans 'Moyen de paiement' %}</th>
+            <th>{% trans 'Total' %}</th>
         </tr>
         </thead>
         <tbody>
         <tr>
             <td>{{ paiement.last_action }}</td>
             <td>Stripe</td>
-            <td>€{{ paiement.total}}</td>
+            <td>{{ paiement.total}}€</td>
         </tr>
         </tbody>
     </table>

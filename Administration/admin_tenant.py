@@ -9,18 +9,20 @@ from django.db import models
 from django.contrib import messages
 from django.contrib.admin import SimpleListFilter
 from django.forms import ModelForm, TextInput
-from django.http import HttpResponseRedirect
-from django.urls import reverse, re_path
+from django.http import HttpResponseRedirect, HttpRequest, HttpResponse
+from django.shortcuts import redirect
+from django.urls import reverse, re_path, reverse_lazy
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from solo.admin import SingletonModelAdmin
 from unfold.admin import ModelAdmin, TabularInline
-from unfold.decorators import display
+from unfold.decorators import display, action
 from unfold.sites import UnfoldAdminSite
 
 from AuthBillet.models import HumanUser
 from BaseBillet.models import Configuration, Event, OptionGenerale, Product, Price, Reservation, Ticket, \
     Paiement_stripe, Membership, Webhook, Tag, LigneArticle
+from BaseBillet.tasks import create_membership_invoice_pdf
 from fedow_connect.utils import dround
 
 logger = logging.getLogger(__name__)
@@ -487,6 +489,45 @@ class MembershipAdmin(ModelAdmin):
     ordering = ('-date_added',)
     search_fields = ('user__email', 'user__first_name', 'user__last_name', 'card_number')
 
+
+    # Pour les bouton en haut de la vue change
+    # chaque decorateur @action génère une nouvelle route
+    actions_detail = ["send_invoice","get_invoice"]
+
+    @action(
+        description=_("Envoyer une facture par mail"),
+        url_path="send_invoice",
+        permissions=["custom_actions_detail"],
+    )
+    def send_invoice(self, request, object_id):
+        membership = Membership.objects.get(pk=object_id)
+        messages.success(
+            request,
+            _(f"Facture envoyée sur {membership.user.email}"),
+        )
+        return redirect(request.META["HTTP_REFERER"])
+
+    @action(
+        description=_("Générer une facture"),
+        url_path="get_invoice",
+        permissions=["custom_actions_detail"],
+    )
+    def get_invoice(self, request, object_id):
+        membership = Membership.objects.get(pk=object_id)
+        pdf_binary = create_membership_invoice_pdf(membership)
+        response = HttpResponse(pdf_binary, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="facture.pdf"'
+        return response
+        # messages.success(
+        #     request,
+        #     _(f"Facture générée"),
+        # )
+        # return redirect(request.META["HTTP_REFERER"])
+
+    def has_custom_actions_detail_permission(self, request, object_id):
+        return True
+
+
     def has_view_permission(self, request, obj=None):
         return True
 
@@ -535,7 +576,6 @@ class LigneArticleAdmin(ModelAdmin):
     @display(description=_("Total"))
     def total_decimal(self, obj):
         return dround(obj.total())
-
 
     @display(description=_("Produit"))
     def productsold(self, obj):

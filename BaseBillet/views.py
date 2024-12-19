@@ -36,7 +36,7 @@ from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Event, Price, LigneArticle, \
     Paiement_stripe, Membership
-from BaseBillet.tasks import create_invoice_pdf
+from BaseBillet.tasks import create_membership_invoice_pdf
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
@@ -726,8 +726,8 @@ class MembershipMVT(viewsets.ViewSet):
 
     @action(detail=True, methods=['GET'])
     def invoice(self, request, pk):
-        paiement_stripe = get_object_or_404(Paiement_stripe, uuid=pk)
-        pdf_binary = create_invoice_pdf(paiement_stripe)
+        membership = get_object_or_404(Membership, pk=pk)
+        pdf_binary = create_membership_invoice_pdf(membership)
         response = HttpResponse(pdf_binary, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="facture.pdf"'
         return response
