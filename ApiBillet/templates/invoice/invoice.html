@@ -175,10 +175,10 @@
     <tbody>
     {% for line in paiement.lignearticles.all %}<tr>
         <td>{{ line.pricesold.price.product.name }} / {{ line.pricesold.price.name }}</td>
-        <td>€{{ line.pricesold.prix }}</td>
+        <td>€{{ line.amount_decimal }}</td>
         <td>{{ line.qty }}</td>
         <td>{{ line.vat }}%</td>
-        <td>€{{ line.total }}</td>
+        <td>€{{ line.total_decimal }}</td>
     </tr>{% endfor %}
     </tbody>
 </table>

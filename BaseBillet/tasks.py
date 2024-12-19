@@ -147,6 +147,7 @@ def create_invoice_pdf(paiement_stripe: Paiement_stripe):
         'membership': membership,
         'email': user.email,
     }
+
     html = template.render(context)
 
     css = CSS(string=

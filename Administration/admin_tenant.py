@@ -1,8 +1,10 @@
 import datetime
 import logging
+from unicodedata import category
 
 from django import forms
 from django.contrib import admin
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.contrib import messages
 from django.contrib.admin import SimpleListFilter
@@ -18,7 +20,8 @@ from unfold.sites import UnfoldAdminSite
 
 from AuthBillet.models import HumanUser
 from BaseBillet.models import Configuration, Event, OptionGenerale, Product, Price, Reservation, Ticket, \
-    Paiement_stripe, Membership, Webhook, Tag
+    Paiement_stripe, Membership, Webhook, Tag, LigneArticle
+from fedow_connect.utils import dround
 
 logger = logging.getLogger(__name__)
 
@@ -262,9 +265,14 @@ class PriceAdmin(ModelAdmin):
     # def has_add_permission(self, request):
     #     return True
 
+    def has_delete_permission(self, request, obj=None):
+        return False
+
 
 @admin.register(Paiement_stripe, site=staff_admin_site)
 class PaiementStripeAdmin(ModelAdmin):
+    compressed_fields = True  # Default: False
+
     list_display = (
         'uuid_8',
         'user',
@@ -289,33 +297,78 @@ class PaiementStripeAdmin(ModelAdmin):
     def has_change_permission(self, request, obj=None):
         return False
 
+    def has_view_permission(self, request, obj=None):
+        return True
+
 
 """
 USER
 """
 
 
+class MembershipInlineForm(forms.ModelForm):
+    class Meta:
+        model = Membership
+        fields = (
+            'first_name',
+            'last_name',
+            'last_contribution',
+            'price',
+            'contribution_value',
+        )
+
+    def clean_price(self):
+        price = self.cleaned_data.get("price")
+        if not price:
+            raise ValidationError(_("Vous devez associer un couple produit/prix."))
+        return price
+
+    def clean_contribution_value(self):
+        contribution_value = self.cleaned_data.get("contribution_value")
+        if contribution_value is None:
+            raise ValidationError(_("Vous devez indiquer un montant (0 si offert)."))
+        return contribution_value
+
+
 class MembershipInline(TabularInline):
     model = Membership
-    # hide_title = True
-    fields = (
-        'first_name',
-        'last_name',
-        'last_contribution',
-        'pro'
-        'contribution_value',
-    )
-
-    # ordering_field = "weight"
-    # max_num = 1
+    form = MembershipInlineForm
     extra = 0
     show_change_link = True
+    can_delete = False
     tab = True
+
+    def formfield_for_foreignkey(self, db_field, request=None, **kwargs):
+        if db_field.name == "price":  # Filtre sur le champ ForeignKey "prix"
+            # Appliquez un filtre sur les objets accessibles via la ForeignKey
+            kwargs["queryset"] = Price.objects.filter(product__categorie_article=Product.ADHESION,
+                                                      publish=True)  # Exemple de filtre
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    # pour retirer les petits boutons add/edit a coté de la foreign key
+    def get_formset(self, request, obj=None, **kwargs):
+        formset = super().get_formset(request, obj, **kwargs)
+        price = formset.form.base_fields['price']
+
+        price.widget.can_add_related = False
+        price.widget.can_delete_related = False
+        price.widget.can_change_related = False
+        price.widget.can_view_related = False
+
+        return formset
+
+    def has_change_permission(self, request, obj=None):
+        """Empêche l'édition des objets existants."""
+        return False  # On interdit la modification
+
+    def has_add_permission(self, request, obj=None):
+        """Autorise la création d'un nouvel objet."""
+        return True  # Autoriser l'ajout
 
 
 # Tout les utilisateurs de type HUMAIN
 @admin.register(HumanUser, site=staff_admin_site)
-class HumanUser(ModelAdmin):
+class HumanUserAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
     inlines = [MembershipInline, ]
@@ -351,7 +404,6 @@ class HumanUser(ModelAdmin):
             return True, f"Valide : {count}"
         return None, _("Aucune")
 
-
     def has_view_permission(self, request, obj=None):
         return True
 
@@ -360,12 +412,14 @@ class HumanUser(ModelAdmin):
 
 
 ### ADHESION
+
 @admin.register(Membership, site=staff_admin_site)
 class MembershipAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 
     list_display = (
+        'str_user',
         'first_name',
         'last_name',
         'product_name',
@@ -422,10 +476,6 @@ class MembershipAdmin(ModelAdmin):
         defaults.update(kwargs)
         return super().get_form(request, obj, **defaults)
 
-    def has_delete_permission(self, request, obj=None):
-        # return request.user.is_superuser
-        return False
-
     # def has_add_permission(self, request):
     #     return True
 
@@ -436,6 +486,80 @@ class MembershipAdmin(ModelAdmin):
     # actions = [send_invoice, send_to_ghost ]
     ordering = ('-date_added',)
     search_fields = ('user__email', 'user__first_name', 'user__last_name', 'card_number')
+
+    def has_view_permission(self, request, obj=None):
+        return True
+
+    def has_change_permission(self, request, obj=None):
+        return True
+
+    def has_add_permission(self, request, obj=None):
+        return True
+
+    def has_delete_permission(self, request, obj=None):
+        # return request.user.is_superuser
+        return False
+
+
+### VENTES ###
+
+@admin.register(LigneArticle, site=staff_admin_site)
+class LigneArticleAdmin(ModelAdmin):
+    compressed_fields = True  # Default: False
+    warn_unsaved_form = True  # Default: False
+
+    list_display = [
+        'productsold',
+        'datetime',
+        'amount_decimal',
+        'qty',
+        'vat',
+        'total_decimal',
+        'display_status',
+        'payment_method',
+    ]
+    # fields = "__all__"
+    # readonly_fields = fields
+
+    ordering = ('-datetime',)
+
+    def get_queryset(self, request):
+        # Utiliser select_related pour précharger pricesold et productsold
+        queryset = super().get_queryset(request)
+        return queryset.select_related('pricesold__productsold')
+
+    @display(description=_("Montant"))
+    def amount_decimal(self, obj):
+        return dround(obj.amount)
+
+    @display(description=_("Total"))
+    def total_decimal(self, obj):
+        return dround(obj.total())
+
+
+    @display(description=_("Produit"))
+    def productsold(self, obj):
+        return f"{obj.pricesold.productsold} - {obj.pricesold}"
+
+    # noinspection PyTypeChecker
+    @display(description=_("Status"), label={None: "danger", True: "success"})
+    def display_status(self, instance: LigneArticle):
+        status = instance.status
+        if status in [LigneArticle.VALID, LigneArticle.PAID, LigneArticle.FREERES]:
+            return True, f"{instance.get_status_display()}"
+        return None, f"{instance.get_status_display()}"
+
+    def has_view_permission(self, request, obj=None):
+        return True
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 """

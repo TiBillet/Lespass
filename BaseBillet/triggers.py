@@ -37,9 +37,9 @@ def context_for_membership_email(membership: Membership = None, paiement_stripe=
         # 'main_text_3': _("Dans le cas contraire, vous pouvez main_text_3. Merci de contacter l'équipe d'administration via : contact@tibillet.re au moindre doute."),
         'table_info': {
             'Reçu pour': f'{membership.member_name()}',
-            'Article': f'{membership.price.product.name}',
-            'Tarif': f'{membership.price.name} {membership.price.prix} €',
-            'Dernière contribution': f'{membership.last_contribution}',
+            'Article': f'{membership.price.product.name} - {membership.price.name}',
+            'Contribution': f'{membership.contribution_value}',
+            'Date': f'{membership.last_contribution}',
             'Valable jusque': f'{membership.deadline()}',
         },
         'button_color': "#009058",
@@ -75,6 +75,8 @@ def update_membership_state_after_paiement(trigger):
             stripe_account=Configuration.get_solo().get_stripe_connect_account()
         )
         contribution = dround(checkout_session['amount_total'])
+        trigger.ligne_article.amount = checkout_session['amount_total']
+
         # PriceSold.objects.filter(pk=trigger.ligne_article.pricesold.pk).update(prix=contribution)
         trigger.ligne_article.pricesold.prix = contribution
 
@@ -98,7 +100,7 @@ def update_membership_state_after_paiement(trigger):
     return membership
 
 
-def send_membership_invoice_email_after_paiement(trigger, membership: Membership):
+def send_membership_invoice_email_after_paiement(trigger: "ActionArticlePaidByCategorie", membership: "Membership"):
     paiement_stripe = trigger.ligne_article.paiement_stripe
     user = paiement_stripe.user
 

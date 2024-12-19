@@ -427,6 +427,27 @@ UNFOLD = {
                 ],
             },
             {
+                "title": _("Utilisateur.ices"),
+                "separator": True,  # Top border
+                "collapsible": False,  # Collapsible group of links
+                "items": [
+                    {
+                        "title": _("Comptes utilisateur.ices"),
+                        "icon": "person_add",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:AuthBillet_humanuser_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "AuthBillet.models.TenantAdminPermissionWithRequest"
+                    },
+                    {
+                        "title": _("Adhésions"),
+                        "icon": "card_membership",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_membership_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "AuthBillet.models.TenantAdminPermissionWithRequest"
+                    },
+                ],
+            },
+            {
                 "title": _("Produits"),
                 "separator": True,  # Top border
                 "collapsible": False,  # Collapsible group of links
@@ -439,14 +460,6 @@ UNFOLD = {
                         "permission": "AuthBillet.models.TenantAdminPermissionWithRequest"
 
                     },
-                    {
-                        "title": _("Paiements stripe"),
-                        "icon": "price_change",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:BaseBillet_paiement_stripe_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "AuthBillet.models.TenantAdminPermissionWithRequest"
-
-                    }
                     # {
                     #     "title": _("Options"),
                     #     "icon": "page_info",  # Supported icon set: https://fonts.google.com/icons
@@ -455,20 +468,6 @@ UNFOLD = {
                     #     "permission": "AuthBillet.models.TenantAdminPermissionWithRequest"
                     #
                     # },
-                ],
-            },
-            {
-                "title": _("Utilisateur.ices"),
-                "separator": True,  # Top border
-                "collapsible": False,  # Collapsible group of links
-                "items": [
-                    {
-                        "title": _("Adhérant.es"),
-                        "icon": "card_membership",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:AuthBillet_humanuser_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "AuthBillet.models.TenantAdminPermissionWithRequest"
-                    },
                 ],
             },
             {
@@ -498,6 +497,28 @@ UNFOLD = {
                         "permission": "AuthBillet.models.TenantAdminPermissionWithRequest"
 
                     },
+                ],
+            },
+            {
+                "title": _("Ventes"),
+                "separator": True,  # Top border
+                "collapsible": False,  # Collapsible group of links
+                "items": [
+                    {
+                        "title": _("Ventes"),
+                        "icon": "receipt_long",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_lignearticle_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "AuthBillet.models.TenantAdminPermissionWithRequest"
+                    },
+                    {
+                        "title": _("Paiements stripe"),
+                        "icon": "price_change",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_paiement_stripe_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "AuthBillet.models.TenantAdminPermissionWithRequest"
+
+                    }
                 ],
             },
         ],

@@ -7,7 +7,8 @@ from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
 
 from AuthBillet.models import TibilletUser
-from BaseBillet.models import Reservation, LigneArticle, Ticket, Paiement_stripe, Product, PriceSold, Price
+from BaseBillet.models import Reservation, LigneArticle, Ticket, Paiement_stripe, Product, PriceSold, Price, \
+    PaymentMethod
 from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation
 from BaseBillet.triggers import ActionArticlePaidByCategorie
 from fedow_connect.fedow_api import AssetFedow
@@ -36,6 +37,7 @@ def set_ligne_article_paid(old_instance, new_instance):
     for ligne_article in lignes_article:
         logger.info(f"            {ligne_article.pricesold} {ligne_article.status} to P")
         ligne_article.status = LigneArticle.PAID
+        ligne_article.payment_method = PaymentMethod.STRIPE
         ligne_article.save()
 
     # s'il y a une réservation, on la met aussi en payée :

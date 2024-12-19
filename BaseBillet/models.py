@@ -2,6 +2,7 @@
 
 import logging
 import uuid
+from tabnanny import verbose
 from uuid import uuid4
 from datetime import timedelta, datetime
 from decimal import Decimal
@@ -34,6 +35,7 @@ from Customers.models import Client
 from MetaBillet.models import EventDirectory, ProductDirectory
 from QrcodeCashless.models import CarteCashless
 from TiBillet import settings
+from fedow_connect.utils import dround
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
@@ -365,12 +367,13 @@ class Configuration(SingletonModel):
     def onboard_stripe(self):
         # on vérifie que le compte soit toujours lié et qu'il peut recevoir des paiements :
         if not self.stripe_payouts_enabled:
-            logger.info("onboard_stripe")
-            # if self.check_stripe_payouts():
-            #     return "Stripe connected"
-            url_onboard_stripe = self.link_for_onboard_stripe()
-            msg = _('Link your stripe account to accept payment')
-            return format_html(f"<a href='{url_onboard_stripe}'>{msg}</a>")
+            if not self.check_stripe_payouts():
+                logger.info("onboard_stripe")
+                # if self.check_stripe_payouts():
+                #     return "Stripe connected"
+                url_onboard_stripe = self.link_for_onboard_stripe()
+                msg = _('Link your stripe account to accept payment')
+                return format_html(f"<a href='{url_onboard_stripe}'>{msg}</a>")
         return "Stripe connected"
 
     def clean_product_stripe_id(self):
@@ -457,7 +460,8 @@ class Product(models.Model):
 
     # TODO: doublon ?
     terms_and_conditions_document = models.URLField(blank=True, null=True)
-    legal_link = models.URLField(blank=True, null=True, verbose_name=_("Lien vers mentions légales"), help_text=_("Non obligatoire"))
+    legal_link = models.URLField(blank=True, null=True, verbose_name=_("Lien vers mentions légales"),
+                                 help_text=_("Non obligatoire"))
 
     img = StdImageField(upload_to='images/',
                         null=True, blank=True,
@@ -545,13 +549,13 @@ Il vérifie l'existante du produit Adhésion et Badge dans Fedow et le créé si
 
 class Price(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
-    product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="prices")
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="prices", verbose_name=_("Produit"))
 
     short_description = models.CharField(max_length=250, blank=True, null=True)
     long_description = models.TextField(blank=True, null=True)
 
     name = models.CharField(max_length=50, verbose_name=_("Précisez le nom du Tarif"))
-    prix = models.DecimalField(max_digits=6, decimal_places=2)
+    prix = models.DecimalField(max_digits=6, decimal_places=2, verbose_name=_("Prix"))
     free_price = models.BooleanField(default=False, verbose_name=_("Prix libre"),
                                      help_text=_("Si coché, le prix sera demandé sur la page de paiement stripe"))
 
@@ -581,7 +585,8 @@ class Price(models.Model):
     adhesion_obligatoire = models.ForeignKey(Product, on_delete=models.PROTECT,
                                              related_name="adhesion_obligatoire",
                                              verbose_name=_("Adhésion obligatoire"),
-                                             help_text=_("Ce tarif n'est possible que si l'utilisateur.ices est adhérant.e à "),
+                                             help_text=_(
+                                                 "Ce tarif n'est possible que si l'utilisateur.ices est adhérant.e à "),
                                              blank=True, null=True)
 
     NA, YEAR, MONTH, DAY, HOUR, CIVIL, SCHOLAR = 'N', 'Y', 'M', 'D', 'H', 'C', 'S'
@@ -611,7 +616,7 @@ class Price(models.Model):
     #     return range(self.max_per_user + 1)
 
     def __str__(self):
-        return f"{self.name}"
+        return f"{self.product.name} {self.name}"
 
     class Meta:
         unique_together = ('name', 'product')
@@ -928,7 +933,7 @@ class PriceSold(models.Model):
 
     id_price_stripe = models.CharField(max_length=30, null=True, blank=True)
 
-    productsold = models.ForeignKey(ProductSold, on_delete=models.PROTECT)
+    productsold = models.ForeignKey(ProductSold, on_delete=models.PROTECT, verbose_name=_("Produit"))
     price = models.ForeignKey(Price, on_delete=models.PROTECT)
 
     qty_solded = models.SmallIntegerField(default=0)
@@ -1301,19 +1306,33 @@ class Paiement_stripe(models.Model):
         verbose_name_plural = _('Paiements Stripe')
 
 
+class PaymentMethod(models.TextChoices):
+    CB = "CB", _("Carte bancaire : TPE")
+    CASH = "CS", _("Espèce")
+    CHEQUE = "CH", _("Cheque bancaire")
+    STRIPE = "ST", _("En ligne : Stripe")
+    STRIPE_RECURENT = "SR", _("Paiement récurent : Stripe")
+
+
 class LigneArticle(models.Model):
     uuid = models.UUIDField(primary_key=True, db_index=True, default=uuid.uuid4)
     datetime = models.DateTimeField(auto_now=True)
 
-    pricesold = models.ForeignKey(PriceSold, on_delete=models.CASCADE)
+    # L'objet price sold. Contient l'id Stripe
+    pricesold = models.ForeignKey(PriceSold, on_delete=models.CASCADE, verbose_name=_("Article vendu"))
 
     qty = models.SmallIntegerField()
-    vat = models.DecimalField(max_digits=4, decimal_places=2, default=0)
+    amount = models.SmallIntegerField(default=0, verbose_name=_("Montant")) # Centimes en entier (50.10€ = 5010)
+    vat = models.DecimalField(max_digits=4, decimal_places=2, default=0, verbose_name=_("TVA"))
 
     carte = models.ForeignKey(CarteCashless, on_delete=models.PROTECT, blank=True, null=True)
 
     paiement_stripe = models.ForeignKey(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True,
                                         related_name="lignearticles")
+
+    payment_method = models.CharField(max_length=2, choices=PaymentMethod.choices, blank=True, null=True,
+                                      verbose_name=_("Moyen de paiement"))
+
 
     CANCELED, CREATED, UNPAID, PAID, FREERES, VALID, = 'C', 'O', 'U', 'P', 'F', 'V'
     TYPE_CHOICES = [
@@ -1322,7 +1341,7 @@ class LigneArticle(models.Model):
         (UNPAID, _('Non payée')),
         (FREERES, _('Reservation gratuite')),
         (PAID, _('Payée')),
-        (VALID, _('Validée par serveur cashless')),
+        (VALID, _('Validée')),
     ]
 
     status = models.CharField(max_length=3, choices=TYPE_CHOICES, default=CREATED,
@@ -1331,8 +1350,14 @@ class LigneArticle(models.Model):
     class Meta:
         ordering = ('-datetime',)
 
-    def total(self):
-        return Decimal(self.pricesold.prix) * Decimal(self.qty)
+    def total(self) -> int:
+        return self.amount * self.qty
+
+    def amount_decimal(self):
+        return dround(self.amount)
+
+    def total_decimal(self):
+        return dround(self.total())
 
     def status_stripe(self):
         if self.paiement_stripe:
@@ -1355,7 +1380,8 @@ class LigneArticle(models.Model):
 class Membership(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
                              related_name='membership', blank=True, null=True)
-    price = models.ForeignKey(Price, on_delete=models.PROTECT, related_name='user',
+    price = models.ForeignKey(Price, on_delete=models.PROTECT, related_name='membership',
+                              verbose_name=_('Produit/Prix'),
                               null=True, blank=True)
 
     asset_fedow = models.UUIDField(null=True, blank=True)
@@ -1375,7 +1401,8 @@ class Membership(models.Model):
     first_contribution = models.DateField(null=True, blank=True)
     last_contribution = models.DateField(null=True, blank=True, verbose_name=_("Date"))
     last_action = models.DateTimeField(auto_now=True, verbose_name=_("Présence"))
-    contribution_value = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True, verbose_name=_("Contribution"))
+    contribution_value = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True,
+                                             verbose_name=_("Contribution"))
 
     first_name = models.CharField(
         db_index=True,

@@ -26,6 +26,9 @@ from root_billet.models import RootConfiguration
 logger = logging.getLogger(__name__)
 
 
+def dec_to_int(value):
+    return int(value*100)
+
 def get_img_from_url(url):
     try:
         res = requests.get(url, stream=True)
@@ -1029,6 +1032,7 @@ def line_article_recharge(carte, qty):
     # noinspection PyTypeChecker
     ligne_article_recharge = LigneArticle.objects.create(
         pricesold=get_or_create_price_sold(price),
+        amount=dec_to_int(price.prix),
         qty=1,
         carte=carte,
     )
@@ -1326,6 +1330,7 @@ class ReservationValidator(serializers.Serializer):
             # les lignes articles pour la vente
             line_article = LigneArticle.objects.create(
                 pricesold=pricesold,
+                amount=dec_to_int(pricesold.prix),
                 qty=qty,
             )
             list_line_article_sold.append(line_article)
