@@ -729,8 +729,10 @@ class MembershipMVT(viewsets.ViewSet):
     def invoice(self, request, pk):
         membership = get_object_or_404(Membership, pk=pk)
         pdf_binary = create_membership_invoice_pdf(membership)
+        if not pdf_binary:
+            return HttpResponse(_('Erreur lors de la génération du PDF'), status=500)
+
         response = HttpResponse(pdf_binary, content_type='application/pdf')
-        # response['Content-Disposition'] = f'attachment; filename="facture.pdf"'
         response['Content-Disposition'] = f'inline; filename="facture.pdf"'
         return response
 
