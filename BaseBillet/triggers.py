@@ -3,58 +3,19 @@ import logging
 
 import stripe
 from django.core.serializers.json import DjangoJSONEncoder
-from django.db import connection
 from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 
 from ApiBillet.serializers import LigneArticleSerializer
 from BaseBillet.models import LigneArticle, Product, Membership, Price, Configuration, Paiement_stripe
-from BaseBillet.tasks import send_to_ghost, send_email_generique, celery_post_request, create_membership_invoice_pdf
+from BaseBillet.tasks import send_to_ghost, send_email_generique, celery_post_request, create_membership_invoice_pdf, \
+    send_membership_invoice_to_email
 from BaseBillet.templatetags.tibitags import dround
 from fedow_connect.fedow_api import FedowAPI
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
-
-
-### MEMBERSHIP TRIGGER : Lors qu'une vente article adhésion est PAID ####
-
-def context_for_membership_email(membership: "Membership" = None):
-    config = Configuration.get_solo()
-    domain = connection.tenant.get_primary_domain().domain
-
-    context = {
-        'username': membership.member_name(),
-        'now': timezone.now(),
-        'title': f"{config.organisation} : {membership.price.product.name}",
-        'objet': _("Confirmation email"),
-        'sub_title': _("Welcome aboard !"),
-        'main_text': _(
-            _(f"Votre paiement pour {membership.price.product.name} a bien été reçu.")),
-        # 'main_text_2': _("Si vous pensez que cette demande est main_text_2, vous n'avez rien a faire de plus :)"),
-        # 'main_text_3': _("Dans le cas contraire, vous pouvez main_text_3. Merci de contacter l'équipe d'administration via : contact@tibillet.re au moindre doute."),
-        'table_info': {
-            _('Reçu pour'): f'{membership.member_name()}',
-            _('Article'): f'{membership.price.product.name} - {membership.price.name}',
-            _('Contribution'): f'{membership.contribution_value}',
-            _('Date'): f'{membership.last_contribution}',
-            _('Valable jusque'): f'{membership.deadline()}',
-        },
-        'button_color': "#009058",
-        'button': {
-            'text': _('RECUPERER UNE FACTURE'),
-            'url': f'https://{domain}/memberships/{membership.pk}/invoice/',
-        },
-        'next_text_1': _("If you receive this email in error, please contact the TiBillet team."),
-        # 'next_text_2': "next_text_2",
-        'end_text': _('See you soon, and bon voyage.'),
-        'signature': _("Marvin, the TiBillet robot"),
-    }
-    # Ajout des options str si il y en a :
-    if membership.option_generale.count() > 0:
-        context['table_info']['Options'] = f"{membership.options()}"
-    return context
 
 
 
@@ -97,23 +58,6 @@ def update_membership_state_after_paiement(trigger):
     membership.save()
     logger.info(f"    update_membership_state_after_paiement : Mise à jour de la fiche membre OK")
     return membership
-
-
-def send_membership_invoice_email_after_paiement(trigger: "ActionArticlePaidByCategorie", membership: "Membership"):
-    paiement_stripe = trigger.ligne_article.paiement_stripe
-    user = paiement_stripe.user
-
-    # Mails de confirmation et facture en PJ :
-    logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation par email")
-    send_email_generique.delay(
-        context=context_for_membership_email(membership=membership),
-        email=f"{user.email}",
-        attached_files={
-            f'{slugify(membership.member_name())}_{slugify(paiement_stripe.invoice_number())}_tibillet_invoice.pdf':
-                create_membership_invoice_pdf(membership)},
-    )
-    logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation par email DELAY")
-    return True
 
 
 def send_membership_to_ghost(membership: Membership):
@@ -224,7 +168,7 @@ class ActionArticlePaidByCategorie:
         membership: Membership = update_membership_state_after_paiement(self)
         # Refresh en cas de prix libre, le prix est mis à jour par le update membership.
 
-        email_sended = send_membership_invoice_email_after_paiement(self, membership)
+        email_sended = send_membership_invoice_to_email(membership)
         ghost_sended = send_membership_to_ghost(membership)
 
         logger.info(f"TRIGGER ADHESION PAID -> envoi à Fedow")

@@ -22,11 +22,12 @@ from django_extensions.templatetags.debugger_tags import ipdb
 from django_htmx.http import HttpResponseClientRedirect
 from django_tenants.utils import tenant_context
 from faker import Faker
-from rest_framework import viewsets, permissions
+from rest_framework import viewsets, permissions, status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
+from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from ApiBillet.serializers import get_or_create_price_sold
@@ -36,7 +37,7 @@ from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Event, Price, LigneArticle, \
     Paiement_stripe, Membership
-from BaseBillet.tasks import create_membership_invoice_pdf
+from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
@@ -729,8 +730,15 @@ class MembershipMVT(viewsets.ViewSet):
         membership = get_object_or_404(Membership, pk=pk)
         pdf_binary = create_membership_invoice_pdf(membership)
         response = HttpResponse(pdf_binary, content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="facture.pdf"'
+        # response['Content-Disposition'] = f'attachment; filename="facture.pdf"'
+        response['Content-Disposition'] = f'inline; filename="facture.pdf"'
         return response
+
+    @action(detail=True, methods=['GET'])
+    def invoice_to_mail(self, request, pk):
+        membership = get_object_or_404(Membership, pk=pk)
+        send_membership_invoice_to_email(membership)
+        return Response("sended", status=status.HTTP_200_OK)
 
     def get_permissions(self):
         if self.action in ['retrieve']:

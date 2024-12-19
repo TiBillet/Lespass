@@ -22,12 +22,14 @@ from django.template.loader import render_to_string, get_template
 from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.text import slugify
 from weasyprint import HTML, CSS
 from weasyprint.text.fonts import FontConfiguration
 
 from BaseBillet.models import Reservation, Ticket, Configuration, Membership, Webhook, Paiement_stripe
 from Customers.models import Client
 from TiBillet.celery import app
+from django.utils.translation import gettext_lazy as _
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +37,10 @@ logger = logging.getLogger(__name__)
 def encode_uid(pk):
     return force_str(urlsafe_base64_encode(force_bytes(pk)))
 
+
 def decode_uid(pk):
     return force_str(urlsafe_base64_decode(pk))
+
 
 class CeleryMailerClass():
 
@@ -183,6 +187,60 @@ def create_membership_invoice_pdf(membership: Membership):
     )
 
     return pdf_binary
+
+
+def context_for_membership_email(membership: "Membership"):
+    config = Configuration.get_solo()
+    domain = connection.tenant.get_primary_domain().domain
+
+    context = {
+        'username': membership.member_name(),
+        'now': timezone.now(),
+        'title': f"{config.organisation} : {membership.price.product.name}",
+        'objet': _("Confirmation email"),
+        'sub_title': _("Welcome aboard !"),
+        'main_text': _(
+            _(f"Votre paiement pour {membership.price.product.name} a bien été reçu.")),
+        # 'main_text_2': _("Si vous pensez que cette demande est main_text_2, vous n'avez rien a faire de plus :)"),
+        # 'main_text_3': _("Dans le cas contraire, vous pouvez main_text_3. Merci de contacter l'équipe d'administration via : contact@tibillet.re au moindre doute."),
+        'table_info': {
+            _('Reçu pour'): f'{membership.member_name()}',
+            _('Article'): f'{membership.price.product.name} - {membership.price.name}',
+            _('Contribution'): f'{membership.contribution_value}',
+            _('Date'): f'{membership.last_contribution}',
+            _('Valable jusque'): f'{membership.deadline()}',
+        },
+        'button_color': "#009058",
+        'button': {
+            'text': _('RECUPERER UNE FACTURE'),
+            'url': f'https://{domain}/memberships/{membership.pk}/invoice/',
+        },
+        'next_text_1': _("If you receive this email in error, please contact the TiBillet team."),
+        # 'next_text_2': "next_text_2",
+        'end_text': _('See you soon, and bon voyage.'),
+        'signature': _("Marvin, the TiBillet robot"),
+    }
+    # Ajout des options str si il y en a :
+    if membership.option_generale.count() > 0:
+        context['table_info']['Options'] = f"{membership.options()}"
+    return context
+
+
+def send_membership_invoice_to_email(membership: "Membership"):
+    user = membership.user
+    paiement_stripe = membership.stripe_paiement.first()
+
+    # Mails de confirmation et facture en PJ :
+    logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation par email")
+    send_email_generique(
+        context=context_for_membership_email(membership),
+        email=f"{user.email}",
+        # attached_files={
+        #     f'{slugify(membership.member_name())}_{slugify(paiement_stripe.invoice_number())}_tibillet_invoice.pdf':
+        #         create_membership_invoice_pdf(membership)},
+    )
+    logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation par email DELAY")
+    return True
 
 
 def create_ticket_pdf(ticket: Ticket):
@@ -717,13 +775,12 @@ def send_to_ghost(membership_pk):
             logger.error(f"Erreur lors de la mise à jour du log : {e}")
 
 
-
 # @app.task
 @shared_task(bind=True, max_retries=20)
 def celery_post_request(self, url, headers, data):
     # Le max de temps entre deux retries : 24 heures
     MAX_RETRY_TIME = 86400  # 24 * 60 * 60 seconds = 24 h
-    try :
+    try:
         logger.info(f"start celery_post_request to {url}")
         response = requests.post(
             f'{url}',

@@ -22,7 +22,7 @@ from unfold.sites import UnfoldAdminSite
 from AuthBillet.models import HumanUser
 from BaseBillet.models import Configuration, Event, OptionGenerale, Product, Price, Reservation, Ticket, \
     Paiement_stripe, Membership, Webhook, Tag, LigneArticle
-from BaseBillet.tasks import create_membership_invoice_pdf
+from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email
 from fedow_connect.utils import dround
 
 logger = logging.getLogger(__name__)
@@ -501,6 +501,7 @@ class MembershipAdmin(ModelAdmin):
     )
     def send_invoice(self, request, object_id):
         membership = Membership.objects.get(pk=object_id)
+        send_membership_invoice_to_email(membership)
         messages.success(
             request,
             _(f"Facture envoyée sur {membership.user.email}"),
