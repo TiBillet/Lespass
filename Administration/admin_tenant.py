@@ -1,17 +1,14 @@
-import datetime
 import logging
-from unicodedata import category
+from datetime import timedelta
 
 from django import forms
 from django.contrib import admin
-from django.core.exceptions import ValidationError
-from django.db import models
 from django.contrib import messages
-from django.contrib.admin import SimpleListFilter
+from django.core.exceptions import ValidationError
 from django.forms import ModelForm, TextInput
-from django.http import HttpResponseRedirect, HttpRequest, HttpResponse
+from django.http import HttpResponse
 from django.shortcuts import redirect
-from django.urls import reverse, re_path, reverse_lazy
+from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from solo.admin import SingletonModelAdmin
@@ -20,8 +17,8 @@ from unfold.decorators import display, action
 from unfold.sites import UnfoldAdminSite
 
 from AuthBillet.models import HumanUser
-from BaseBillet.models import Configuration, Event, OptionGenerale, Product, Price, Reservation, Ticket, \
-    Paiement_stripe, Membership, Webhook, Tag, LigneArticle
+from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
+    LigneArticle
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email
 from fedow_connect.utils import dround
 
@@ -368,6 +365,55 @@ class MembershipInline(TabularInline):
         return True  # Autoriser l'ajout
 
 
+class MembershipValid(admin.SimpleListFilter):
+    # Human-readable title which will be displayed in the
+    # right admin sidebar just above the filter options.
+    title = _("Adhésion valide")
+
+    # Parameter for the filter that will be used in the URL query.
+    parameter_name = "membership_valid"
+
+    def lookups(self, request, model_admin):
+        """
+        Returns a list of tuples. The first element in each
+        tuple is the coded value for the option that will
+        appear in the URL query. The second element is the
+        human-readable name for the option that will appear
+        in the right sidebar.
+        """
+        return [
+            ("Y", _("Oui")),
+            ("N", _("Non")),
+            ("B", _("Expire bientôt (2 semaines)")),
+            ("O", _("Aucune adhésion prise")),
+
+        ]
+
+    def queryset(self, request, queryset):
+        """
+        Returns the filtered queryset based on the value
+        provided in the query string and retrievable via
+        `self.value()`.
+        """
+        # Compare the requested value (either '80s' or '90s')
+        # to decide how to filter the queryset.
+        if self.value() == "Y":
+            return queryset.filter(
+                membership__deadline__gte=timezone.localtime(),
+            ).distinct()
+        if self.value() == "N":
+            return queryset.filter(
+                membership__deadline__lte=timezone.localtime(),
+            ).distinct()
+        if self.value() == "B":
+            return queryset.filter(
+                membership__deadline__lte=timezone.localtime() + timedelta(weeks=2),
+                membership__deadline__gte=timezone.localtime(),
+            ).distinct()
+        if self.value() == 'O':
+            return queryset.filter(membership__isnull=True).distinct()
+
+
 # Tout les utilisateurs de type HUMAIN
 @admin.register(HumanUser, site=staff_admin_site)
 class HumanUserAdmin(ModelAdmin):
@@ -396,6 +442,16 @@ class HumanUserAdmin(ModelAdmin):
                 'last_name',
             ],
         }),
+    ]
+
+    list_filter = [
+        "is_active",
+        "email_error",
+        MembershipValid,
+        # "is_hidden",
+        # ("salary", RangeNumericFilter),
+        # ("status", ChoicesDropdownFilter),
+        # ("created_at", RangeDateTimeFilter),
     ]
 
     # noinspection PyTypeChecker
@@ -427,7 +483,7 @@ class MembershipAdmin(ModelAdmin):
         'product_name',
         'price',
         'options',
-        'deadline',
+        'get_deadline',
         'is_valid',
         'date_added',
         'last_contribution',
@@ -450,7 +506,7 @@ class MembershipAdmin(ModelAdmin):
     readonly_fields = (
         'str_user',
         'date_added',
-        'deadline',
+        'get_deadline',
         'is_valid',
         'options',
         'product_name',

@@ -27,22 +27,16 @@ def update_membership_state_after_paiement(trigger):
     membership.contribution_value = trigger.ligne_article.pricesold.prix
 
     if price.free_price:
-        # Le tarif a été entré dans stripe.
+        # Le montant a été entré dans stripe, on ne l'a pas entré à la création
         stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
         # recherche du checkout
         checkout_session = stripe.checkout.Session.retrieve(
             paiement_stripe.checkout_session_id_stripe,
             stripe_account=Configuration.get_solo().get_stripe_connect_account()
         )
-        contribution = dround(checkout_session['amount_total'])
+        # Mise à jour du montant
         trigger.ligne_article.amount = checkout_session['amount_total']
-
-        # PriceSold.objects.filter(pk=trigger.ligne_article.pricesold.pk).update(prix=contribution)
-        trigger.ligne_article.pricesold.prix = contribution
-
-        # Paiement_stripe.objects.filter(pk=paiement_stripe.pk).update(total=contribution)
-        trigger.ligne_article.paiement_stripe.total = contribution
-
+        contribution = dround(checkout_session['amount_total'])
         membership.contribution_value=contribution
 
     membership.last_contribution = timezone.now().date()

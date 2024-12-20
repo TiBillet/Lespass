@@ -80,7 +80,7 @@ SHARED_APPS = (
     'Customers',  # you must list the app where your tenant model resides in
 
     "unfold",  # before django.contrib.admin
-    # "unfold.contrib.filters",  # optional, if special filters are needed
+    "unfold.contrib.filters",  # optional, if special filters are needed
     # "unfold.contrib.forms",  # optional, if special form elements are needed
     # "unfold.contrib.inlines",  # optional, if special inlines are needed
     # "unfold.contrib.import_export",  # optional, if django-import-export package is used
@@ -407,6 +407,39 @@ LOGGING = {
 UNFOLD = {
     "SITE_TITLE": "TiBillet",
     "SITE_HEADER": "TiBillet Admin",
+    "TABS": [
+        {
+            # Déclare dans quel affichage les tabs s'activent
+            "models": ["AuthBillet.humanuser", "BaseBillet.membership"],
+            "items": [
+                {
+                    "title": _("Tous.tes"),
+                    # "icon": "sports_motorsports",
+                    "link": reverse_lazy("staff_admin:AuthBillet_humanuser_changelist"),
+                },
+                {
+                    "title": _("Adhésion à jours"),
+                    # "icon": "sports_motorsports",
+                    "link": lambda request: f'{reverse_lazy("staff_admin:AuthBillet_humanuser_changelist")}?membership_valid=Y',
+                },
+                {
+                    "title": _("Utilisateur.ices sans adhésions"),
+                    # "icon": "sports_motorsports",
+                    "link": lambda request: f'{reverse_lazy("staff_admin:AuthBillet_humanuser_changelist")}?membership_valid=O',
+                },
+                {
+                    "title": _("Adhésions"),
+                    # "icon": "precision_manufacturing",
+                    "link": reverse_lazy("staff_admin:BaseBillet_membership_changelist"),
+                },
+                # {
+                #     "title": _("Custom page"),
+                #     "icon": "grade",
+                #     "link": reverse_lazy("staff_admin:AuthBillet_humanuser_changelist"),
+                # },
+            ],
+        },
+    ],
     "SIDEBAR": {
         "show_search": True,  # Search in applications and models names
         "show_all_applications": True,  # Dropdown with all applications and models

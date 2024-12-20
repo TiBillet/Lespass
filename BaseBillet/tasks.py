@@ -208,7 +208,7 @@ def context_for_membership_email(membership: "Membership"):
             _('Article'): f'{membership.price.product.name} - {membership.price.name}',
             _('Contribution'): f'{membership.contribution_value}',
             _('Date'): f'{membership.last_contribution}',
-            _('Valable jusque'): f'{membership.deadline()}',
+            _('Valable jusque'): f'{membership.get_deadline()}',
         },
         'button_color': "#009058",
         'button': {

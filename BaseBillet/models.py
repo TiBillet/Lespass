@@ -929,6 +929,10 @@ class ProductSold(models.Model):
 
 
 class PriceSold(models.Model):
+    '''
+    Un objet article vendu. Ne change pas si l'article original change.
+    Différente de LigneArticle qui est la ligne comptable
+    '''
     uuid = models.UUIDField(primary_key=True, default=uuid4)
 
     id_price_stripe = models.CharField(max_length=30, null=True, blank=True)
@@ -936,7 +940,9 @@ class PriceSold(models.Model):
     productsold = models.ForeignKey(ProductSold, on_delete=models.PROTECT, verbose_name=_("Produit"))
     price = models.ForeignKey(Price, on_delete=models.PROTECT)
 
+    # TODO: A virer, inutile ici, c'est ligne article qui comptabilise les qty
     qty_solded = models.SmallIntegerField(default=0)
+
     prix = models.DecimalField(max_digits=6, decimal_places=2)
     gift = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
 
@@ -999,8 +1005,8 @@ class PriceSold(models.Model):
         self.id_price_stripe = None
         self.save()
 
-    def total(self):
-        return Decimal(self.prix) * Decimal(self.qty_solded)
+    # def total(self):
+    #     return Decimal(self.prix) * Decimal(self.qty_solded)
     # class meta:
     #     unique_together = [['productsold', 'price']]
 
@@ -1260,10 +1266,7 @@ class Paiement_stripe(models.Model):
                 f"{ligne.pricesold.productsold.product.name} {ligne.pricesold.price.name} {ligne.qty * ligne.pricesold.price.prix}€"
                 for ligne in self.lignearticles.all()])
 
-    def update_checkout_status(self) -> str:
-        if self.status == Paiement_stripe.VALID:
-            return self.status
-
+    def get_checkout_session(self):
         config = Configuration.get_solo()
         # stripe.api_key = config.get_stripe_api()
         stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
@@ -1271,6 +1274,13 @@ class Paiement_stripe(models.Model):
             self.checkout_session_id_stripe,
             stripe_account=config.get_stripe_connect_account()
         )
+        return checkout_session
+
+    def update_checkout_status(self) -> str:
+        if self.status == Paiement_stripe.VALID:
+            return self.status
+
+        checkout_session = self.get_checkout_session()
 
         # Pas payé, on le met en attente
         if checkout_session.payment_status == "unpaid":
@@ -1316,13 +1326,13 @@ class PaymentMethod(models.TextChoices):
 
 class LigneArticle(models.Model):
     uuid = models.UUIDField(primary_key=True, db_index=True, default=uuid.uuid4)
-    datetime = models.DateTimeField(auto_now=True)
+    datetime = models.DateTimeField(auto_now_add=True)
 
     # L'objet price sold. Contient l'id Stripe
     pricesold = models.ForeignKey(PriceSold, on_delete=models.CASCADE, verbose_name=_("Article vendu"))
 
     qty = models.SmallIntegerField()
-    amount = models.SmallIntegerField(default=0, verbose_name=_("Montant")) # Centimes en entier (50.10€ = 5010)
+    amount = models.IntegerField(default=0, verbose_name=_("Montant"))  # Centimes en entier (50.10€ = 5010)
     vat = models.DecimalField(max_digits=4, decimal_places=2, default=0, verbose_name=_("TVA"))
 
     carte = models.ForeignKey(CarteCashless, on_delete=models.PROTECT, blank=True, null=True)
@@ -1332,7 +1342,6 @@ class LigneArticle(models.Model):
 
     payment_method = models.CharField(max_length=2, choices=PaymentMethod.choices, blank=True, null=True,
                                       verbose_name=_("Moyen de paiement"))
-
 
     CANCELED, CREATED, UNPAID, PAID, FREERES, VALID, = 'C', 'O', 'U', 'P', 'F', 'V'
     TYPE_CHOICES = [
@@ -1351,13 +1360,28 @@ class LigneArticle(models.Model):
         ordering = ('-datetime',)
 
     def total(self) -> int:
+        # Mise à jour de amount en cas de paiement stripe ( a virer après les migration ? )
+        if self.amount == 0 and self.paiement_stripe:
+            self.update_amount()
         return self.amount * self.qty
-
-    def amount_decimal(self):
-        return dround(self.amount)
 
     def total_decimal(self):
         return dround(self.total())
+
+    def get_stripe_checkout_session(self):
+        paiement_stripe = self.paiement_stripe
+        checkout_session = paiement_stripe.get_checkout_session()
+        return checkout_session
+
+    def update_amount(self):
+        '''Dans le cas d'un prix libre, la somme payée n'est pas connu d'avance'''
+        checkout_session = self.get_stripe_checkout_session()
+        self.amount = checkout_session['amount_total']
+        self.save()
+        return self.amount
+
+    def amount_decimal(self):
+        return dround(self.amount)
 
     def status_stripe(self):
         if self.paiement_stripe:
@@ -1403,6 +1427,7 @@ class Membership(models.Model):
     last_action = models.DateTimeField(auto_now=True, verbose_name=_("Présence"))
     contribution_value = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True,
                                              verbose_name=_("Contribution"))
+    deadline = models.DateTimeField(null=True, blank=True, verbose_name=("Fin d'adhésion"))
 
     first_name = models.CharField(
         db_index=True,
@@ -1461,31 +1486,39 @@ class Membership(models.Model):
             return self.pseudo
         return f"{self.last_name} {self.first_name}"
 
-    def deadline(self):
+    def set_deadline(self):
+        deadline = None
         if self.last_contribution and self.price:
             if self.price.subscription_type == Price.HOUR:
-                return self.last_contribution + timedelta(hours=1)
+                deadline = self.last_contribution + timedelta(hours=1)
             elif self.price.subscription_type == Price.DAY:
-                return self.last_contribution + timedelta(days=1)
+                deadline = self.last_contribution + timedelta(days=1)
             elif self.price.subscription_type == Price.MONTH:
-                return self.last_contribution + timedelta(days=31)
+                deadline = self.last_contribution + timedelta(days=31)
             elif self.price.subscription_type == Price.YEAR:
-                return self.last_contribution + timedelta(days=365)
+                deadline = self.last_contribution + timedelta(days=365)
             elif self.price.subscription_type == Price.CIVIL:
                 # jusqu'au 31 decembre de cette année
-                return datetime.strptime(f'{self.last_contribution.year}-12-31', '%Y-%m-%d').date()
+                deadline = datetime.strptime(f'{self.last_contribution.year}-12-31', '%Y-%m-%d').date()
             elif self.price.subscription_type == Price.SCHOLAR:
                 # Si la date de contribustion est avant septembre, alors on prend l'année de la contribution.
                 if self.last_contribution.month < 9:
-                    return datetime.strptime(f'{self.last_contribution.year}-08-31', '%Y-%m-%d').date()
+                    deadline = datetime.strptime(f'{self.last_contribution.year}-08-31', '%Y-%m-%d').date()
                 # Si elle est après septembre, on prend l'année prochaine
                 else:
-                    return datetime.strptime(f'{self.last_contribution.year + 1}-08-31', '%Y-%m-%d').date()
-        return None
+                    deadline = datetime.strptime(f'{self.last_contribution.year + 1}-08-31', '%Y-%m-%d').date()
+        self.deadline = deadline
+        self.save()
+        return deadline
+
+    def get_deadline(self):
+        if not self.deadline:
+            self.set_deadline()
+        return self.deadline
 
     def is_valid(self):
-        if self.deadline():
-            if datetime.now().date() < self.deadline():
+        if self.get_deadline():
+            if timezone.localtime() < self.get_deadline():
                 return True
         return False
 

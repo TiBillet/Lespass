@@ -725,8 +725,13 @@ class MembershipMVT(viewsets.ViewSet):
 
         return redirect('/memberships/')
 
+
     @action(detail=True, methods=['GET'])
     def invoice(self, request, pk):
+        '''
+        - lien "recevoir une facture" dans le mail de confirmation
+        - Bouton d'action "générer une facture" dans l'admin Adhésion
+        '''
         membership = get_object_or_404(Membership, pk=pk)
         pdf_binary = create_membership_invoice_pdf(membership)
         if not pdf_binary:
@@ -738,13 +743,18 @@ class MembershipMVT(viewsets.ViewSet):
 
     @action(detail=True, methods=['GET'])
     def invoice_to_mail(self, request, pk):
+        '''
+        - Bouton action "Envoyer une facture par mail" dans admin adhésion
+        '''
         membership = get_object_or_404(Membership, pk=pk)
         send_membership_invoice_to_email(membership)
         return Response("sended", status=status.HTTP_200_OK)
 
     def get_permissions(self):
-        if self.action in ['retrieve']:
+        if self.action in ['retrieve',]:
             permission_classes = [permissions.IsAuthenticated]
+        elif self.action in ['invoice_to_mail',]:
+            permission_classes = [permissions.IsAdminUser]
         else:
             permission_classes = [permissions.AllowAny]
         return [permission() for permission in permission_classes]
