@@ -31,6 +31,7 @@ from stdimage.validators import MaxSizeValidator, MinSizeValidator
 from stripe import InvalidRequestError
 
 import AuthBillet.models
+from AuthBillet.models import HumanUser
 from Customers.models import Client
 from MetaBillet.models import EventDirectory, ProductDirectory
 from QrcodeCashless.models import CarteCashless
@@ -316,7 +317,8 @@ class Configuration(SingletonModel):
 
     def get_stripe_api(self):
         # Test ou pas test ?
-        return self.stripe_test_api_key if self.stripe_mode_test else self.stripe_api_key
+        # return self.stripe_test_api_key if self.stripe_mode_test else self.stripe_api_key
+        return RootConfiguration.get_solo().get_stripe_api()
 
     def get_stripe_connect_account(self):
         # Test ou pas test ?
@@ -1300,7 +1302,7 @@ class Paiement_stripe(models.Model):
                     self.subscription = checkout_session.subscription
                     subscription = stripe.Subscription.retrieve(
                         checkout_session.subscription,
-                        stripe_account=config.get_stripe_connect_account()
+                        stripe_account=Configuration.get_solo().get_stripe_connect_account()
                     )
                     self.invoice_stripe = subscription.latest_invoice
 
@@ -1317,11 +1319,27 @@ class Paiement_stripe(models.Model):
 
 
 class PaymentMethod(models.TextChoices):
-    CB = "CB", _("Carte bancaire : TPE")
-    CASH = "CS", _("Espèce")
+    FREE = "NA", _("Aucun : offert")
+    CC = "CC", _("Carte bancaire : TPE")
+    CASH = "CA", _("Espèce")
     CHEQUE = "CH", _("Cheque bancaire")
-    STRIPE = "ST", _("En ligne : Stripe")
-    STRIPE_RECURENT = "SR", _("Paiement récurent : Stripe")
+    STRIPE_FED = "SF", _("En ligne : Stripe fédéré")
+    STRIPE_NOFED = "SN", _("En ligne : Stripe account")
+    STRIPE_RECURENT = "SR", _("Paiement récurent : Stripe account")
+
+    @classmethod
+    def online(cls):
+        """Renvoie uniquement les choix de type 'en ligne'"""
+        return [
+            (choice, label) for choice, label in cls.choices if choice in [cls.STRIPE_FED, cls.STRIPE_NOFED, cls.STRIPE_RECURENT]
+        ]
+
+    @classmethod
+    def not_online(cls):
+        """Renvoie uniquement les choix de type 'en ligne'"""
+        return [
+            (choice, label) for choice, label in cls.choices if choice not in [cls.STRIPE_FED, cls.STRIPE_NOFED, cls.STRIPE_RECURENT]
+        ]
 
 
 class LigneArticle(models.Model):
@@ -1339,6 +1357,8 @@ class LigneArticle(models.Model):
 
     paiement_stripe = models.ForeignKey(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True,
                                         related_name="lignearticles")
+    membership = models.ForeignKey("Membership", on_delete=models.PROTECT, blank=True, null=True,
+                                   verbose_name=_("Adhésion associée"), related_name="lignearticles")
 
     payment_method = models.CharField(max_length=2, choices=PaymentMethod.choices, blank=True, null=True,
                                       verbose_name=_("Moyen de paiement"))
@@ -1389,16 +1409,23 @@ class LigneArticle(models.Model):
         else:
             return _('no stripe send')
 
-    def user_uuid_wallet(self):
-        if self.paiement_stripe.user:
-            user = self.paiement_stripe.user
-            user.refresh_from_db()
-            return user.wallet.uuid
-        return None
+    # def user_uuid_wallet(self):
+    #     if self.paiement_stripe:
+    #         user: "HumanUser" = self.paiement_stripe.user
+    #         user.refresh_from_db()
+    #         return user.wallet.uuid
+    #     elif self.membership:
+    #         user: "HumanUser" = self.membership.user
+    #         user.refresh_from_db()
+    #         return user.wallet.uuid
+    #     return None
 
     def paiement_stripe_uuid(self):
+        # LaBoutik récupère cet uuid comme commande
+        # Si la vente à été prise dans l'admin, on prend l'uuid de l'objet
         if self.paiement_stripe:
             return f"{self.paiement_stripe.uuid}"
+        return f"{self.uuid}"
 
 
 class Membership(models.Model):
@@ -1411,22 +1438,15 @@ class Membership(models.Model):
     asset_fedow = models.UUIDField(null=True, blank=True)
     card_number = models.CharField(max_length=16, null=True, blank=True)
 
-    stripe_id_subscription = models.CharField(
-        max_length=28,
-        null=True, blank=True
-    )
-
-    last_stripe_invoice = models.CharField(
-        max_length=278,
-        null=True, blank=True
-    )
-
     date_added = models.DateTimeField(auto_now_add=True)
-    first_contribution = models.DateField(null=True, blank=True)
-    last_contribution = models.DateField(null=True, blank=True, verbose_name=_("Date"))
+    first_contribution = models.DateTimeField(null=True, blank=True)
+    last_contribution = models.DateTimeField(null=True, blank=True, verbose_name=_("Date"))
     last_action = models.DateTimeField(auto_now=True, verbose_name=_("Présence"))
     contribution_value = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True,
                                              verbose_name=_("Contribution"))
+    payment_method = models.CharField(max_length=2, choices=PaymentMethod.choices, blank=True, null=True,
+                                      verbose_name=_("Moyen de paiement"))
+
     deadline = models.DateTimeField(null=True, blank=True, verbose_name=("Fin d'adhésion"))
 
     first_name = models.CharField(
@@ -1451,9 +1471,10 @@ class Membership(models.Model):
     phone = models.CharField(max_length=20, null=True, blank=True)
     commentaire = models.TextField(null=True, blank=True)
 
-    CANCELED, AUTO, ONCE = 'C', 'A', 'O'
+    CANCELED, AUTO, ONCE, ADMIN = 'C', 'A', 'O', 'D'
     STATUS_CHOICES = [
-        (ONCE, _('Paiement unique')),
+        (ADMIN, _("Enregistré via l'administration")),
+        (ONCE, _('Paiement unique en ligne')),
         (AUTO, _('Renouvellement automatique')),
         (CANCELED, _('Annulée')),
     ]
@@ -1466,10 +1487,17 @@ class Membership(models.Model):
                                              related_name="membership_options")
 
     stripe_paiement = models.ManyToManyField(Paiement_stripe, blank=True, related_name="membership")
-    fedow_transactions = models.ManyToManyField(FedowTransaction, blank=True, related_name="membership")
+    stripe_id_subscription = models.CharField(
+        max_length=28,
+        null=True, blank=True
+    )
 
-    # def last_contribution_value(self):
-    #     last
+    last_stripe_invoice = models.CharField(
+        max_length=278,
+        null=True, blank=True
+    )
+
+    fedow_transactions = models.ManyToManyField(FedowTransaction, blank=True, related_name="membership")
 
     class Meta:
         # unique_together = ('user', 'price')
@@ -1477,9 +1505,12 @@ class Membership(models.Model):
         verbose_name_plural = _('Adhésions')
 
     def email(self):
+        self.user: "HumanUser"
         if self.user:
-            return self.user.email
-        return None
+            return str(self.user.email).lower()
+        if self.card_number:
+            return f'Anonyme - {self.card_number}'
+        return f'Anonyme'
 
     def member_name(self):
         if self.pseudo:
@@ -1499,26 +1530,26 @@ class Membership(models.Model):
                 deadline = self.last_contribution + timedelta(days=365)
             elif self.price.subscription_type == Price.CIVIL:
                 # jusqu'au 31 decembre de cette année
-                deadline = datetime.strptime(f'{self.last_contribution.year}-12-31', '%Y-%m-%d').date()
+                deadline = datetime.strptime(f'{self.last_contribution.year}-12-31', '%Y-%m-%d')
             elif self.price.subscription_type == Price.SCHOLAR:
                 # Si la date de contribustion est avant septembre, alors on prend l'année de la contribution.
                 if self.last_contribution.month < 9:
-                    deadline = datetime.strptime(f'{self.last_contribution.year}-08-31', '%Y-%m-%d').date()
+                    deadline = datetime.strptime(f'{self.last_contribution.year}-08-31', '%Y-%m-%d')
                 # Si elle est après septembre, on prend l'année prochaine
                 else:
-                    deadline = datetime.strptime(f'{self.last_contribution.year + 1}-08-31', '%Y-%m-%d').date()
+                    deadline = datetime.strptime(f'{self.last_contribution.year + 1}-08-31', '%Y-%m-%d')
         self.deadline = deadline
         self.save()
         return deadline
 
     def get_deadline(self):
         if not self.deadline:
-            self.set_deadline()
+            return self.set_deadline()
         return self.deadline
 
     def is_valid(self):
         if self.get_deadline():
-            if timezone.localtime() < self.get_deadline():
+            if timezone.localtime() < self.deadline:
                 return True
         return False
 

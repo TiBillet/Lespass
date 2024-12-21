@@ -420,12 +420,14 @@ UNFOLD = {
                 {
                     "title": _("Adhésion à jours"),
                     # "icon": "sports_motorsports",
-                    "link": lambda request: f'{reverse_lazy("staff_admin:AuthBillet_humanuser_changelist")}?membership_valid=Y',
+                    "link": lambda
+                        request: f'{reverse_lazy("staff_admin:AuthBillet_humanuser_changelist")}?membership_valid=Y',
                 },
                 {
                     "title": _("Utilisateur.ices sans adhésions"),
                     # "icon": "sports_motorsports",
-                    "link": lambda request: f'{reverse_lazy("staff_admin:AuthBillet_humanuser_changelist")}?membership_valid=O',
+                    "link": lambda
+                        request: f'{reverse_lazy("staff_admin:AuthBillet_humanuser_changelist")}?membership_valid=O',
                 },
                 {
                     "title": _("Adhésions"),
@@ -575,6 +577,8 @@ if DEBUG:
         (("cryptography.hazmat.primitives"), ("serialization",)),
         (("BaseBillet.tasks"), ("test_logger",)),
         (("BaseBillet.tests"), ("BaseBilletTest",)),
+        (("ApiBillet.serializers"), ("get_or_create_price_sold",)),
+
         (("fedow_connect.fedow_api"), ("FedowAPI",)),
         (("django.db"), ("connection",)),
 

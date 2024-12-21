@@ -1,5 +1,6 @@
 import logging
 from datetime import timedelta
+from decimal import Decimal
 
 from django import forms
 from django.contrib import admin
@@ -15,10 +16,13 @@ from solo.admin import SingletonModelAdmin
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.decorators import display, action
 from unfold.sites import UnfoldAdminSite
+from unfold.widgets import UnfoldAdminTextInputWidget, UnfoldAdminEmailInputWidget, UnfoldAdminSelectWidget
 
+from ApiBillet.serializers import get_or_create_price_sold
 from AuthBillet.models import HumanUser
+from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
-    LigneArticle
+    LigneArticle, PaymentMethod
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email
 from fedow_connect.utils import dround
 
@@ -471,84 +475,150 @@ class HumanUserAdmin(ModelAdmin):
 
 ### ADHESION
 
+class NewMembershipForm(ModelForm):
+    # Un formulaire d'email qui va générer les action get_or_create_user
+    email = forms.EmailField(
+        required=True,
+        widget=UnfoldAdminEmailInputWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
+        label="Email",
+    )
+
+    # Uniquement les tarif Adhésion
+    price = forms.ModelChoiceField(
+        queryset=Price.objects.filter(product__categorie_article=Product.ADHESION), # Remplis le champ select avec les objets Price
+        empty_label=_("Sélectionnez une adhésion"),  # Texte affiché par défaut
+        required=True,
+        widget=UnfoldAdminSelectWidget(),
+        label=_("Adhésion")
+    )
+
+    # La donnée est un entier en base de donnée. On crée le formulaire pour faire du float, un peu plus FALC
+    contribution = forms.FloatField(
+        required=False,
+        widget=UnfoldAdminTextInputWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
+        label=_("Cotisation"),
+    )
+
+    payment_method = forms.ChoiceField(
+        required=False,
+        choices=PaymentMethod.not_online(), # on retire les choix stripe
+        widget=UnfoldAdminSelectWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
+        label=_("Moyen de paiement"),
+    )
+
+    class Meta:
+        model = Membership
+        fields = [
+            'last_name',
+            'first_name',
+        ]
+
+    def clean(self):
+        # On vérifie que le moyen de paiement est bien entré si > 0
+        cleaned_data = self.cleaned_data
+        if cleaned_data.get("contribution"):
+            if cleaned_data.get("contribution") > 0 and cleaned_data.get("payment_method") == PaymentMethod.FREE:
+                raise forms.ValidationError(_("Merci de renseigner un moyen de paiement si la contribution est > 0"))
+
+        if cleaned_data.get("payment_method") != PaymentMethod.FREE:
+            if not cleaned_data.get("contribution"):
+                raise forms.ValidationError(_("Merci de renseigner un montant."))
+            if not cleaned_data.get("contribution") > 0:
+                raise forms.ValidationError(_("Merci de renseigner un montant positif."))
+
+        return cleaned_data
+
+
+    def save(self, commit=True):
+        self.instance:Membership
+        # On indique que l'adhésion a été créé sur l'admin
+        self.instance.status = Membership.ADMIN
+
+        # Associez l'utilisateur au champ 'user' du formulaire
+        email = self.cleaned_data.pop('email')
+        user = get_or_create_user(email)
+        self.instance.user = user
+
+        # Flotant (FALC) vers INT
+        contribution = self.cleaned_data.pop('contribution')
+        self.instance.contribution_value = dround(Decimal(contribution)) if contribution else 0
+
+        # Mise à jour des dates de contribution :
+        self.instance.first_contribution = timezone.localtime()
+        self.instance.last_contribution = timezone.localtime()
+
+        # Le post save BaseBillet.signals.create_lignearticle_if_membership_created_on_admin s'executera
+        # # Création de la ligne Article vendu qui envera à la caisse si besoin
+        return super().save(commit=commit)
+
+class MembershipForm(ModelForm):
+    class Meta:
+        model = Membership
+        fields = (
+            'last_name',
+            'first_name',
+            # ('product_name', 'price'),
+            # ('last_contribution', 'contribution_value'),
+            # 'options',
+            # 'card_number',
+            # 'commentaire',
+        )
+
+        #     # 'str_user',
+        #     'date_added',
+        #     # 'get_deadline',
+        #     'is_valid',
+        #     'options',
+        #     'product_name',
+        #     'last_contribution',
+        #     'contribution_value',
+        #     'card_number',
+        # )
+
+
 @admin.register(Membership, site=staff_admin_site)
 class MembershipAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 
+    # Formulaire de modification
+    form = MembershipForm
+    # Formulaire de création. A besoin de get_form pour fonctionner
+    add_form = NewMembershipForm
+
     list_display = (
-        'str_user',
+        'email',
         'first_name',
         'last_name',
-        'product_name',
         'price',
-        'options',
-        'get_deadline',
-        'is_valid',
-        'date_added',
-        'last_contribution',
         'contribution_value',
-        'status',
-        'commentaire',
-    )
-
-    fields = (
-        'str_user',
-        'last_name',
-        'first_name',
-        ('product_name', 'price'),
-        ('last_contribution', 'contribution_value'),
         'options',
-        'card_number',
-        'commentaire',
-    )
-
-    readonly_fields = (
-        'str_user',
         'date_added',
         'get_deadline',
         'is_valid',
-        'options',
-        'product_name',
-        'last_contribution',
-        'contribution_value',
-        'card_number',
+        # 'last_contribution',
+        # 'status',
+        # 'commentaire',
     )
 
-    def str_user(self, obj: Membership):
-        if obj.user:
-            return obj.user.email
-        elif obj.card_number:
-            return obj.card_number
-        return "Anonyme"
-
-    str_user.short_description = 'User'
+    # readonly_fields = (
+    #     'email',
+    # )
 
     def get_form(self, request, obj=None, **kwargs):
-        """
-        Use special form during foo creation
-        """
+        """ Si c'est un add, on modifie un peu le formulaire pour avoir un champs email """
         defaults = {}
         if obj is None:
             defaults['form'] = self.add_form
         defaults.update(kwargs)
         return super().get_form(request, obj, **defaults)
 
-    # def has_add_permission(self, request):
-    #     return True
-
-    # def has_change_permission(self, request, obj=None):
-    #     return False
-
-    # TODO : actions
-    # actions = [send_invoice, send_to_ghost ]
     ordering = ('-date_added',)
     search_fields = ('user__email', 'user__first_name', 'user__last_name', 'card_number')
 
-
     # Pour les bouton en haut de la vue change
     # chaque decorateur @action génère une nouvelle route
-    actions_detail = ["send_invoice","get_invoice"]
+    actions_detail = ["send_invoice", "get_invoice"]
 
     @action(
         description=_("Envoyer une facture par mail"),
@@ -583,7 +653,6 @@ class MembershipAdmin(ModelAdmin):
 
     def has_custom_actions_detail_permission(self, request, object_id):
         return True
-
 
     def has_view_permission(self, request, obj=None):
         return True

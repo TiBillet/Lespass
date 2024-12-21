@@ -16,6 +16,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 # from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import EmailMultiAlternatives
+from django.core.serializers.json import DjangoJSONEncoder
 from django.core.signing import Signer, TimestampSigner
 from django.db import connection
 from django.template.loader import render_to_string, get_template
@@ -26,7 +27,8 @@ from django.utils.text import slugify
 from weasyprint import HTML, CSS
 from weasyprint.text.fonts import FontConfiguration
 
-from BaseBillet.models import Reservation, Ticket, Configuration, Membership, Webhook, Paiement_stripe
+from ApiBillet.serializers import LigneArticleSerializer
+from BaseBillet.models import Reservation, Ticket, Configuration, Membership, Webhook, Paiement_stripe, LigneArticle
 from Customers.models import Client
 from TiBillet.celery import app
 from django.utils.translation import gettext_lazy as _
@@ -241,6 +243,28 @@ def send_membership_invoice_to_email(membership: "Membership"):
     )
     logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation par email DELAY")
     return True
+
+
+@app.task
+def send_sale_to_laboutik(ligne_article_pk):
+    config = Configuration.get_solo()
+    if config.check_serveur_cashless():
+        ligne_article = LigneArticle.objects.get(pk=ligne_article_pk)
+        serialized_ligne_article = LigneArticleSerializer(ligne_article).data
+        json_data = json.dumps(serialized_ligne_article, cls=DjangoJSONEncoder)
+        import ipdb; ipdb.set_trace()
+
+        # Lancer ça dans un celery avec retry
+        celery_post_request(
+            url=f'{config.server_cashless}/api/salefromlespass',
+            data=json_data,
+            headers={
+                "Authorization": f"Api-Key {config.key_cashless}",
+                "Content-type": "application/json",
+            },
+        )
+    else:
+        logger.warning(f"No serveur cashless on config. Membership not sended")
 
 
 def create_ticket_pdf(ticket: Ticket):

@@ -776,6 +776,8 @@ def paiment_stripe_validator(request, paiement_stripe):
 
     # configuration = Configuration.get_solo()
     # stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+
+    # TODO a revoir avec le stripe connect
     stripe.api_key = Configuration.get_solo().get_stripe_api()
 
     # SI c'est une source depuis INVOICE,

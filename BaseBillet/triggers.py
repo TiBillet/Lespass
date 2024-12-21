@@ -1,16 +1,10 @@
-import json
 import logging
 
 import stripe
-from django.core.serializers.json import DjangoJSONEncoder
 from django.utils import timezone
-from django.utils.text import slugify
-from django.utils.translation import gettext_lazy as _
 
-from ApiBillet.serializers import LigneArticleSerializer
-from BaseBillet.models import LigneArticle, Product, Membership, Price, Configuration, Paiement_stripe
-from BaseBillet.tasks import send_to_ghost, send_email_generique, celery_post_request, create_membership_invoice_pdf, \
-    send_membership_invoice_to_email
+from BaseBillet.models import LigneArticle, Product, Membership, Price, Configuration
+from BaseBillet.tasks import send_to_ghost, send_membership_invoice_to_email, send_sale_to_laboutik
 from BaseBillet.templatetags.tibitags import dround
 from fedow_connect.fedow_api import FedowAPI
 from root_billet.models import RootConfiguration
@@ -19,12 +13,12 @@ logger = logging.getLogger(__name__)
 
 
 
-def update_membership_state_after_paiement(trigger):
-    paiement_stripe = trigger.ligne_article.paiement_stripe
+def update_membership_state_after_stripe_paiement(ligne_article):
+    paiement_stripe = ligne_article.paiement_stripe
     membership = paiement_stripe.membership.first()
 
-    price: Price = trigger.ligne_article.pricesold.price
-    membership.contribution_value = trigger.ligne_article.pricesold.prix
+    price: Price = ligne_article.pricesold.price
+    membership.contribution_value = ligne_article.pricesold.prix
 
     if price.free_price:
         # Le montant a été entré dans stripe, on ne l'a pas entré à la création
@@ -35,7 +29,7 @@ def update_membership_state_after_paiement(trigger):
             stripe_account=Configuration.get_solo().get_stripe_connect_account()
         )
         # Mise à jour du montant
-        trigger.ligne_article.amount = checkout_session['amount_total']
+        ligne_article.amount = checkout_session['amount_total']
         contribution = dround(checkout_session['amount_total'])
         membership.contribution_value=contribution
 
@@ -66,42 +60,27 @@ def send_membership_to_ghost(membership: Membership):
 
 ### SEND TO LABOUTIK for comptabilité ###
 
-def send_sale_to_laboutik(ligne_article: LigneArticle):
-    config = Configuration.get_solo()
-    if config.check_serveur_cashless():
-        serialized_ligne_article = LigneArticleSerializer(ligne_article).data
-        json_data = json.dumps(serialized_ligne_article, cls=DjangoJSONEncoder)
 
-        # Lancer ça dans un celery avec retry au cazou perte de co depuis le cashless
-        celery_post_request.delay(
-            url=f'{config.server_cashless}/api/salefromlespass',
-            data=json_data,
-            headers={
-                "Authorization": f"Api-Key {config.key_cashless}",
-                "Content-type": "application/json",
-            },
-        )
-    else:
-        logger.warning(f"No serveur cashless on config. Memberhsip not sended")
 
 # Pour usage en CLI :
-def send_sale_from_membership_to_laboutik(membership: Membership):
-    """
-    for m in Membership.objects.filter(stripe_paiement__isnull=False):
-        send_sale_from_membership_to_laboutik(m)
-    """
-    config = Configuration.get_solo()
-    if config.check_serveur_cashless():
-        if membership.stripe_paiement.exists():
-            stripe_paiement:Paiement_stripe = membership.stripe_paiement.first()
-            if stripe_paiement.lignearticles.exists():
-                ligne_article : LigneArticle = stripe_paiement.lignearticles.first()
-                if ligne_article.status in [LigneArticle.PAID, LigneArticle.VALID]:
-                    send_sale_to_laboutik(ligne_article)
+# def send_sale_from_membership_to_laboutik(membership: Membership):
+#     """
+#     for m in Membership.objects.filter(stripe_paiement__isnull=False):
+#         send_sale_from_membership_to_laboutik(m)
+#     """
+#     config = Configuration.get_solo()
+#     if config.check_serveur_cashless():
+#         if membership.stripe_paiement.exists():
+#             stripe_paiement:Paiement_stripe = membership.stripe_paiement.first()
+#             if stripe_paiement.lignearticles.exists():
+#                 ligne_article : LigneArticle = stripe_paiement.lignearticles.first()
+#                 if ligne_article.status in [LigneArticle.PAID, LigneArticle.VALID]:
+#                     send_sale_to_laboutik(ligne_article)
 
 
 ### END SEND TO LABOUTIK
 
+# MACHINE A ETAT pour les ventes
 class ActionArticlePaidByCategorie:
     """
     Trigged action by categorie when Article is PAID
@@ -128,8 +107,8 @@ class ActionArticlePaidByCategorie:
                 f"category_trigger launched - ligne_article : {self.ligne_article} - trigger_name : {trigger_name}")
             trigger = getattr(self, f"trigger{trigger_name}")
             trigger()
-        except AttributeError:
-            logger.info(f"Pas de trigger pour la categorie {self.categorie}")
+        except AttributeError as exc:
+            logger.info(f"Pas de trigger pour la categorie {self.categorie} - ERROR : {exc} - {type(exc)}")
         except Exception as exc:
             logger.error(f"category_trigger {self.categorie.upper()} ERROR : {exc} - {type(exc)}")
 
@@ -159,8 +138,14 @@ class ActionArticlePaidByCategorie:
     def trigger_A(self):
         logger.info(f"TRIGGER ADHESION PAID")
 
-        membership: Membership = update_membership_state_after_paiement(self)
+        # On va chercher l'article vendu et l'adhésion associéé
+        ligne_article: LigneArticle = self.ligne_article
+        membership = ligne_article.membership
+
+
         # Refresh en cas de prix libre, le prix est mis à jour par le update membership.
+        if ligne_article.paiement_stripe:
+            membership: Membership = update_membership_state_after_stripe_paiement(ligne_article)
 
         email_sended = send_membership_invoice_to_email(membership)
         ghost_sended = send_membership_to_ghost(membership)
@@ -171,8 +156,9 @@ class ActionArticlePaidByCategorie:
         fedowAPI = FedowAPI()
         serialized_transaction = fedowAPI.membership.create(membership=membership)
 
+
         logger.info(f"TRIGGER ADHESION PAID -> envoi à LaBoutik")
-        laboutik_sended = send_sale_to_laboutik(self.ligne_article)
+        laboutik_sended = send_sale_to_laboutik(self.ligne_article.pk)
 
         # Si tout est passé plus haut, on VALID La ligne :
         # Tout ceci se déroule dans un pre_save signal.pre_save_signal_status()

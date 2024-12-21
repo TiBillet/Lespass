@@ -1,4 +1,3 @@
-from django.db import connection
 import logging
 
 from django.db import connection
@@ -6,10 +5,11 @@ from django.db.models import Q
 from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
 
+from ApiBillet.serializers import get_or_create_price_sold
 from AuthBillet.models import TibilletUser
-from BaseBillet.models import Reservation, LigneArticle, Ticket, Paiement_stripe, Product, PriceSold, Price, \
-    PaymentMethod
-from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation
+from BaseBillet.models import Reservation, LigneArticle, Ticket, Paiement_stripe, Product, Price, \
+    PaymentMethod, Membership
+from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation, send_sale_to_laboutik
 from BaseBillet.triggers import ActionArticlePaidByCategorie
 from fedow_connect.fedow_api import AssetFedow
 from fedow_connect.models import FedowConfig
@@ -94,10 +94,6 @@ def set_paiement_stripe_valid(old_instance: LigneArticle, new_instance: LigneArt
 def action_x_to_paid(old_instance: LigneArticle, new_instance: LigneArticle):
     # Fonction qui passe les artcle de payé en validé, en fonction de sa catégorie
     ActionArticlePaidByCategorie(new_instance)
-
-    # logger.info(
-    #     f"    SIGNAL LIGNE ARTICLE check_paid {old_instance.pricesold} new_instance status : {new_instance.status}")
-
     logger.info(
         f"    SIGNAL LIGNE ARTICLE action_x_to_paid {old_instance.pricesold} new_instance status : {new_instance.status}")
     set_paiement_stripe_valid(old_instance, new_instance)
@@ -322,3 +318,28 @@ def price_if_free_set_t_1(sender, instance: Price, **kwargs):
     if instance.free_price:
         # Quantité unitaire pour caisse enregistreuse
         instance.prix=1
+
+
+@receiver(post_save, sender=Membership)
+def create_lignearticle_if_membership_created_on_admin(sender, instance: Membership, created, **kwargs):
+    membership: Membership = instance
+    # Pour une nouvelle adhésion réalisée sur l'admin et non offerte, une vente est enregitrée.
+    if (created
+            and membership.status == Membership.ADMIN
+            and membership.payment_method != PaymentMethod.FREE):
+
+        logger.info(f"create_lignearticle_if_membership_created_on_admin {instance} {created}")
+
+        vente = LigneArticle.objects.create(
+            pricesold=get_or_create_price_sold(membership.price),
+            qty=1,
+            membership=membership,
+            amount=int(membership.contribution_value*100),
+            payment_method=membership.payment_method,
+            status=LigneArticle.CREATED,
+        )
+
+        # On lance les triggers PAID (envoie a la boutik, webhook, etc ...)
+        vente.status = LigneArticle.PAID
+        vente.save()
+
