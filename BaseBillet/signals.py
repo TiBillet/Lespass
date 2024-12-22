@@ -9,7 +9,7 @@ from ApiBillet.serializers import get_or_create_price_sold
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, LigneArticle, Ticket, Paiement_stripe, Product, Price, \
     PaymentMethod, Membership
-from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation, send_sale_to_laboutik
+from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation
 from BaseBillet.triggers import ActionArticlePaidByCategorie
 from fedow_connect.fedow_api import AssetFedow
 from fedow_connect.models import FedowConfig
@@ -324,10 +324,7 @@ def price_if_free_set_t_1(sender, instance: Price, **kwargs):
 def create_lignearticle_if_membership_created_on_admin(sender, instance: Membership, created, **kwargs):
     membership: Membership = instance
     # Pour une nouvelle adhésion réalisée sur l'admin et non offerte, une vente est enregitrée.
-    if (created
-            and membership.status == Membership.ADMIN
-            and membership.payment_method != PaymentMethod.FREE):
-
+    if created and membership.status == Membership.ADMIN:
         logger.info(f"create_lignearticle_if_membership_created_on_admin {instance} {created}")
 
         vente = LigneArticle.objects.create(
@@ -339,7 +336,8 @@ def create_lignearticle_if_membership_created_on_admin(sender, instance: Members
             status=LigneArticle.CREATED,
         )
 
-        # On lance les triggers PAID (envoie a la boutik, webhook, etc ...)
+        # On lance les post_save et triggers associés au adhésions en passant en PAID
+        # Envoie a la boutik, Fedow, webhook, etc ...
         vente.status = LigneArticle.PAID
         vente.save()
 

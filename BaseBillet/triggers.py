@@ -156,9 +156,9 @@ class ActionArticlePaidByCategorie:
         fedowAPI = FedowAPI()
         serialized_transaction = fedowAPI.membership.create(membership=membership)
 
-
+        import ipdb; ipdb.set_trace()
         logger.info(f"TRIGGER ADHESION PAID -> envoi à LaBoutik")
-        laboutik_sended = send_sale_to_laboutik(self.ligne_article.pk)
+        laboutik_sended = send_sale_to_laboutik(self.ligne_article)
 
         # Si tout est passé plus haut, on VALID La ligne :
         # Tout ceci se déroule dans un pre_save signal.pre_save_signal_status()

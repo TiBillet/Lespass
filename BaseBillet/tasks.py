@@ -245,17 +245,14 @@ def send_membership_invoice_to_email(membership: "Membership"):
     return True
 
 
-@app.task
-def send_sale_to_laboutik(ligne_article_pk):
+def send_sale_to_laboutik(ligne_article):
     config = Configuration.get_solo()
     if config.check_serveur_cashless():
-        ligne_article = LigneArticle.objects.get(pk=ligne_article_pk)
         serialized_ligne_article = LigneArticleSerializer(ligne_article).data
         json_data = json.dumps(serialized_ligne_article, cls=DjangoJSONEncoder)
-        import ipdb; ipdb.set_trace()
 
         # Lancer ça dans un celery avec retry
-        celery_post_request(
+        celery_post_request.delay(
             url=f'{config.server_cashless}/api/salefromlespass',
             data=json_data,
             headers={
