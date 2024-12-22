@@ -148,7 +148,9 @@ class ActionArticlePaidByCategorie:
             membership: Membership = update_membership_state_after_stripe_paiement(ligne_article)
 
         email_sended = send_membership_invoice_to_email(membership)
-        ghost_sended = send_membership_to_ghost(membership)
+
+        # TODO: a séparer et ajouter dans un objet "connect"
+        # ghost_sended = send_membership_to_ghost(membership)
 
         logger.info(f"TRIGGER ADHESION PAID -> envoi à Fedow")
         # L'adhésion possède désormais une transaction fedow associé
@@ -156,7 +158,6 @@ class ActionArticlePaidByCategorie:
         fedowAPI = FedowAPI()
         serialized_transaction = fedowAPI.membership.create(membership=membership)
 
-        import ipdb; ipdb.set_trace()
         logger.info(f"TRIGGER ADHESION PAID -> envoi à LaBoutik")
         laboutik_sended = send_sale_to_laboutik(self.ligne_article)
 
