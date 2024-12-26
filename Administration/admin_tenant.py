@@ -308,65 +308,53 @@ class PaiementStripeAdmin(ModelAdmin):
 USER
 """
 
-
-class MembershipInlineForm(forms.ModelForm):
-    class Meta:
-        model = Membership
-        fields = (
-            'first_name',
-            'last_name',
-            'last_contribution',
-            'price',
-            'contribution_value',
-        )
-
-    def clean_price(self):
-        price = self.cleaned_data.get("price")
-        if not price:
-            raise ValidationError(_("Vous devez associer un couple produit/prix."))
-        return price
-
-    def clean_contribution_value(self):
-        contribution_value = self.cleaned_data.get("contribution_value")
-        if contribution_value is None:
-            raise ValidationError(_("Vous devez indiquer un montant (0 si offert)."))
-        return contribution_value
-
-
 class MembershipInline(TabularInline):
     model = Membership
-    form = MembershipInlineForm
+    # form = MembershipInlineForm
     extra = 0
-    show_change_link = True
+    # show_change_link = True
     can_delete = False
     tab = True
 
-    def formfield_for_foreignkey(self, db_field, request=None, **kwargs):
-        if db_field.name == "price":  # Filtre sur le champ ForeignKey "prix"
-            # Appliquez un filtre sur les objets accessibles via la ForeignKey
-            kwargs["queryset"] = Price.objects.filter(product__categorie_article=Product.ADHESION,
-                                                      publish=True)  # Exemple de filtre
-        return super().formfield_for_foreignkey(db_field, request, **kwargs)
-
-    # pour retirer les petits boutons add/edit a coté de la foreign key
-    def get_formset(self, request, obj=None, **kwargs):
-        formset = super().get_formset(request, obj, **kwargs)
-        price = formset.form.base_fields['price']
-
-        price.widget.can_add_related = False
-        price.widget.can_delete_related = False
-        price.widget.can_change_related = False
-        price.widget.can_view_related = False
-
-        return formset
+    fields = (
+        'first_name',
+        'last_name',
+        'last_contribution',
+        'price',
+        'contribution_value',
+        'deadline',
+        'is_valid',
+    )
+    readonly_fields = fields
 
     def has_change_permission(self, request, obj=None):
-        """Empêche l'édition des objets existants."""
         return False  # On interdit la modification
 
+    def has_delete_permission(self, request, obj=None):
+        return False
+
     def has_add_permission(self, request, obj=None):
-        """Autorise la création d'un nouvel objet."""
-        return True  # Autoriser l'ajout
+        return False  # Autoriser l'ajout
+
+    # def formfield_for_foreignkey(self, db_field, request=None, **kwargs):
+    #     if db_field.name == "price":  # Filtre sur le champ ForeignKey "prix"
+    #         # Appliquez un filtre sur les objets accessibles via la ForeignKey
+    #         kwargs["queryset"] = Price.objects.filter(product__categorie_article=Product.ADHESION,
+    #                                                   publish=True)  # Exemple de filtre
+    #     return super().formfield_for_foreignkey(db_field, request, **kwargs)
+    #
+    # # pour retirer les petits boutons add/edit a coté de la foreign key
+    # def get_formset(self, request, obj=None, **kwargs):
+    #     formset = super().get_formset(request, obj, **kwargs)
+    #     price = formset.form.base_fields['price']
+    #
+    #     price.widget.can_add_related = False
+    #     price.widget.can_delete_related = False
+    #     price.widget.can_change_related = False
+    #     price.widget.can_view_related = False
+    #
+    #     return formset
+
 
 
 class MembershipValid(admin.SimpleListFilter):
@@ -485,14 +473,15 @@ class NewMembershipForm(ModelForm):
 
     # Uniquement les tarif Adhésion
     price = forms.ModelChoiceField(
-        queryset=Price.objects.filter(product__categorie_article=Product.ADHESION), # Remplis le champ select avec les objets Price
+        queryset=Price.objects.filter(product__categorie_article=Product.ADHESION),
+        # Remplis le champ select avec les objets Price
         empty_label=_("Sélectionnez une adhésion"),  # Texte affiché par défaut
         required=True,
         widget=UnfoldAdminSelectWidget(),
         label=_("Adhésion")
     )
 
-    # La donnée est un entier en base de donnée. On crée le formulaire pour faire du float, un peu plus FALC
+    # Fabrication au cas ou = 0
     contribution = forms.FloatField(
         required=False,
         widget=UnfoldAdminTextInputWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
@@ -501,7 +490,7 @@ class NewMembershipForm(ModelForm):
 
     payment_method = forms.ChoiceField(
         required=False,
-        choices=PaymentMethod.not_online(), # on retire les choix stripe
+        choices=PaymentMethod.not_online(),  # on retire les choix stripe
         widget=UnfoldAdminSelectWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
         label=_("Moyen de paiement"),
     )
@@ -511,6 +500,7 @@ class NewMembershipForm(ModelForm):
         fields = [
             'last_name',
             'first_name',
+            'option_generale',
         ]
 
     def clean(self):
@@ -528,9 +518,8 @@ class NewMembershipForm(ModelForm):
 
         return cleaned_data
 
-
     def save(self, commit=True):
-        self.instance:Membership
+        self.instance: Membership
         # On indique que l'adhésion a été créé sur l'admin
         self.instance.status = Membership.ADMIN
 
@@ -539,7 +528,7 @@ class NewMembershipForm(ModelForm):
         user = get_or_create_user(email)
         self.instance.user = user
 
-        # Flotant (FALC) vers INT
+        # Flotant (FALC) vers Decimal
         contribution = self.cleaned_data.pop('contribution')
         self.instance.contribution_value = dround(Decimal(contribution)) if contribution else 0
 
@@ -551,29 +540,17 @@ class NewMembershipForm(ModelForm):
         # # Création de la ligne Article vendu qui envera à la caisse si besoin
         return super().save(commit=commit)
 
+
 class MembershipForm(ModelForm):
+    # Le formulaire pour changer une adhésion
     class Meta:
         model = Membership
         fields = (
             'last_name',
             'first_name',
-            # ('product_name', 'price'),
-            # ('last_contribution', 'contribution_value'),
-            # 'options',
-            # 'card_number',
-            # 'commentaire',
+            'option_generale',
+            'commentaire',
         )
-
-        #     # 'str_user',
-        #     'date_added',
-        #     # 'get_deadline',
-        #     'is_valid',
-        #     'options',
-        #     'product_name',
-        #     'last_contribution',
-        #     'contribution_value',
-        #     'card_number',
-        # )
 
 
 @admin.register(Membership, site=staff_admin_site)
@@ -594,16 +571,14 @@ class MembershipAdmin(ModelAdmin):
         'contribution_value',
         'options',
         'date_added',
-        'get_deadline',
+        'deadline',
         'is_valid',
-        # 'last_contribution',
-        # 'status',
+        'status',
         # 'commentaire',
     )
 
-    # readonly_fields = (
-    #     'email',
-    # )
+    ### FORMULAIRES
+    autocomplete_fields = ['option_generale', ]
 
     def get_form(self, request, obj=None, **kwargs):
         """ Si c'est un add, on modifie un peu le formulaire pour avoir un champs email """

@@ -1480,7 +1480,7 @@ class Membership(models.Model):
     ]
 
     status = models.CharField(max_length=1, choices=STATUS_CHOICES, default=ONCE,
-                              verbose_name=_("Status"))
+                              verbose_name=_("Origine"))
 
     option_generale = models.ManyToManyField(OptionGenerale,
                                              blank=True,
