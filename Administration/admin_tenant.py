@@ -24,6 +24,7 @@ from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
     LigneArticle, PaymentMethod
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email
+from Customers.models import Client
 from fedow_connect.utils import dround
 
 logger = logging.getLogger(__name__)
@@ -112,6 +113,7 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
 
     )
     readonly_fields = ['ghost_last_log', 'onboard_stripe', ]
+    autocomplete_fields = ['federated_with', ]
 
     def save_model(self, request, obj, form, change):
         obj: Configuration
@@ -995,8 +997,25 @@ def send_invoice(modeladmin, request, queryset):
 
 def send_to_ghost(modeladmin, request, queryset):
     pass
-
-
-
-
 """
+
+
+
+@admin.register(Client, site=staff_admin_site)
+class TenantAdmin(ModelAdmin):
+    # Doit être référencé pour le champs autocomplete_fields federated_with de configuration
+    # est en CRUD total false
+    # Seul le search fields est utile :
+    search_fields = ['name',]
+
+    def has_view_permission(self, request, obj=None):
+        return True
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

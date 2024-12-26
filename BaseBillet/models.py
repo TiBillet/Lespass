@@ -387,7 +387,9 @@ class Configuration(SingletonModel):
     ### FEDERATION
     """
 
-    federated_with = models.ManyToManyField(Client, blank=True, related_name="federated_with", help_text=_(
+    federated_with = models.ManyToManyField(Client, blank=True,
+                                            verbose_name=_("Fédéré avec"),
+                                            related_name="federated_with", help_text=_(
         "Affiche les évènements et les adhésions des structures fédérées."))
 
     """
