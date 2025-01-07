@@ -1,5 +1,11 @@
 set -e
 mkdir -p /DjangoFiles/logs
+
+# check id
+id
+ls -l /DjangoFiles
+ls -l /DjangoFiles/logs
+
 touch /DjangoFiles/logs/nginxAccess.log
 touch /DjangoFiles/logs/nginxError.log
 touch /DjangoFiles/logs/gunicorn.logs
