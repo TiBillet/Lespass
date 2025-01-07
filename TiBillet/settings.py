@@ -477,7 +477,7 @@ UNFOLD = {
                         "title": _("Adhésions"),
                         "icon": "card_membership",  # Supported icon set: https://fonts.google.com/icons
                         "link": reverse_lazy("staff_admin:BaseBillet_membership_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "badge": "Administration.admin_tenant.adhesion_badge_callback",
                         "permission": "AuthBillet.models.TenantAdminPermissionWithRequest"
                     },
                 ],
@@ -561,13 +561,13 @@ UNFOLD = {
                 "separator": True,  # Top border
                 "collapsible": True,  # Collapsible group of links
                 "items": [
-                    # {
-                    #     "title": _("API Key"),
-                    #     "icon": "api",  # Supported icon set: https://fonts.google.com/icons
-                    #     "link": reverse_lazy("staff_admin:BaseBillet_externalapikey_changelist"),
+                    {
+                        "title": _("API Key"),
+                        "icon": "api",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_externalapikey_changelist"),
                         # "badge": "Administration.admin_tenant.badge_callback",
-                        # "permission": "AuthBillet.models.TenantAdminPermissionWithRequest"
-                    # },
+                        "permission": "AuthBillet.models.TenantAdminPermissionWithRequest"
+                    },
                     {
                         "title": _("Webhook"),
                         "icon": "webhook",  # Supported icon set: https://fonts.google.com/icons

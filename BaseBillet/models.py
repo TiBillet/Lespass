@@ -1608,11 +1608,11 @@ class ExternalApiKey(models.Model):
         verbose_name="Ip source",
     )
 
-    revoquer_apikey = models.BooleanField(
-        default=False,
-        verbose_name='Créer / Révoquer',
-        help_text="Selectionnez et validez pour générer ou supprimer une clé API. La clé ne sera affiché qu'a la création, notez la bien !"
-    )
+    # revoquer_apikey = models.BooleanField(
+    #     default=False,
+    #     verbose_name='Créer / Révoquer',
+    #     help_text="Selectionnez et validez pour générer ou supprimer une clé API. La clé ne sera affiché qu'a la création, notez la bien !"
+    # )
 
     created = models.DateTimeField(auto_now=True)
 
@@ -1622,12 +1622,12 @@ class ExternalApiKey(models.Model):
     # Pour créer de nouvelles authorisations,
     # ajoutez un nouvel objet dans le dictionnaire permission correspondant au basename du viewset.
 
-    event = models.BooleanField(default=False, verbose_name="Creation d'évènements")
-    product = models.BooleanField(default=False, verbose_name="Creation de produits")
-    place = models.BooleanField(default=False, verbose_name="Creation de nouvelles instances lieux")
-    artist = models.BooleanField(default=False, verbose_name="Creation de nouvelles instances artiste")
-    reservation = models.BooleanField(default=False, verbose_name="Lister les reservations")
-    ticket = models.BooleanField(default=False, verbose_name="Lister et valider les billets")
+    event = models.BooleanField(default=False, verbose_name=_("Creation d'évènements"))
+    product = models.BooleanField(default=False, verbose_name=_("Creation de produits"))
+    place = models.BooleanField(default=False, verbose_name=_("Creation de nouvelles instances lieux"))
+    artist = models.BooleanField(default=False, verbose_name=_("Creation de nouvelles instances artiste"))
+    reservation = models.BooleanField(default=False, verbose_name=_("Créer des reservations"))
+    ticket = models.BooleanField(default=False, verbose_name=_("Lister et valider les billets"))
 
     def api_permissions(self):
         return {

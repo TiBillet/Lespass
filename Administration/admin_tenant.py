@@ -22,9 +22,10 @@ from ApiBillet.serializers import get_or_create_price_sold
 from AuthBillet.models import HumanUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
-    LigneArticle, PaymentMethod, Reservation
+    LigneArticle, PaymentMethod, Reservation, ExternalApiKey
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
     webhook_membership
+from BaseBillet.views import Badge
 from Customers.models import Client
 from fedow_connect.utils import dround
 
@@ -40,9 +41,34 @@ staff_admin_site = StaffAdminSite(name='staff_admin')
 """ Configuration UNFOLD """
 
 
-def badge_callback(request):
-    return 3
 
+
+
+@admin.register(ExternalApiKey, site=staff_admin_site)
+class ExternalApiKeyAdmin(ModelAdmin):
+    compressed_fields = True
+    warn_unsaved_form = True
+
+    fields = [
+        'name',
+        'user',
+        'key',
+        'ip',
+        'created',
+        # Les boutons de permissions :
+        'event',
+        'product',
+        'place',
+        'artist',
+        'reservation',
+        'ticket',
+    ]
+
+    readonly_fields = [
+        'created',
+        'user',
+        'key',
+    ]
 
 @admin.register(Webhook, site=staff_admin_site)
 class WebhookAdmin(ModelAdmin):
@@ -595,6 +621,10 @@ class MembershipForm(ModelForm):
             'commentaire',
         )
 
+# Le petit badge route a droite du titre "adhésion"
+def adhesion_badge_callback(request):
+    # Recherche de la quantité de nouvelles adhésions ces 14 dernièrs jours
+    return f"+ {Membership.objects.filter(last_contribution__gte=timezone.localtime() - timedelta(days=7)).count()}"
 
 @admin.register(Membership, site=staff_admin_site)
 class MembershipAdmin(ModelAdmin):
