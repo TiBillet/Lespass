@@ -389,7 +389,7 @@ class Configuration(SingletonModel):
     federated_with = models.ManyToManyField(Client, blank=True,
                                             verbose_name=_("Fédéré avec"),
                                             related_name="federated_with", help_text=_(
-        "Affiche les évènements et les adhésions des structures fédérées."))
+            "Affiche les évènements et les adhésions des structures fédérées."))
 
     """
     ### TVA ###
@@ -1332,14 +1332,16 @@ class PaymentMethod(models.TextChoices):
     def online(cls):
         """Renvoie uniquement les choix de type 'en ligne'"""
         return [
-            (choice, label) for choice, label in cls.choices if choice in [cls.STRIPE_FED, cls.STRIPE_NOFED, cls.STRIPE_RECURENT]
+            (choice, label) for choice, label in cls.choices if
+            choice in [cls.STRIPE_FED, cls.STRIPE_NOFED, cls.STRIPE_RECURENT]
         ]
 
     @classmethod
     def not_online(cls):
         """Renvoie uniquement les choix de type 'en ligne'"""
         return [
-            (choice, label) for choice, label in cls.choices if choice not in [cls.STRIPE_FED, cls.STRIPE_NOFED, cls.STRIPE_RECURENT]
+            (choice, label) for choice, label in cls.choices if
+            choice not in [cls.STRIPE_FED, cls.STRIPE_NOFED, cls.STRIPE_RECURENT]
         ]
 
 
@@ -1430,7 +1432,6 @@ class LigneArticle(models.Model):
 
 
 class Membership(models.Model):
-
     # TODO: Passer en primary key lors de la migration V1
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
@@ -1596,16 +1597,21 @@ class ExternalApiKey(models.Model):
     name = models.CharField(max_length=30, unique=True)
     user = models.OneToOneField(settings.AUTH_USER_MODEL,
                                 on_delete=models.CASCADE,
-                                blank=True, null=True)
+                                blank=True, null=True,
+                                help_text=_("Utilisateur qui a créé cette clé.")
+                                )
 
     key = models.OneToOneField(APIKey,
                                on_delete=models.CASCADE,
                                blank=True, null=True,
-                               related_name="api_key"
+                               related_name="api_key",
+                               help_text=_("Validez l'enregistrement pour faire apparaitre la clé. Elle n'apparaitra qu'à la création.")
                                )
 
     ip = models.GenericIPAddressField(
-        verbose_name="Ip source",
+        blank=True, null=True,
+        verbose_name=_("Ip source"),
+        help_text=_("Si non renseignée, la clé api fonctionnera depuis n'importe quelle ip.")
     )
 
     # revoquer_apikey = models.BooleanField(
@@ -1644,6 +1650,10 @@ class ExternalApiKey(models.Model):
         verbose_name = _('Api key')
         verbose_name_plural = _('Api keys')
 
+    def __str__(self):
+        return f"{self.name} - {self.user}"
+
+
 
 class Webhook(models.Model):
     active = models.BooleanField(default=False)
@@ -1660,7 +1670,9 @@ class Webhook(models.Model):
     last_response = models.TextField(null=True, blank=True)
 
     def send(self, event):
-        import ipdb; ipdb.set_trace()
+        import ipdb;
+        ipdb.set_trace()
+
 
 class History(models.Model):
     """

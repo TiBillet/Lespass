@@ -1,17 +1,20 @@
 import logging
 from datetime import timedelta
 from decimal import Decimal
+from typing import Any
 
 from django import forms
 from django.contrib import admin
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from django.forms import ModelForm, TextInput
-from django.http import HttpResponse
+from django.db.models import Model
+from django.forms import ModelForm, TextInput, Form
+from django.http import HttpResponse, HttpRequest
 from django.shortcuts import redirect
 from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
+from rest_framework_api_key.models import APIKey
 from solo.admin import SingletonModelAdmin
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.decorators import display, action
@@ -51,17 +54,14 @@ class ExternalApiKeyAdmin(ModelAdmin):
 
     fields = [
         'name',
-        'user',
-        'key',
         'ip',
         'created',
         # Les boutons de permissions :
-        'event',
-        'product',
-        'place',
-        'artist',
-        'reservation',
-        'ticket',
+        ('event', 'product',),
+        ('reservation', 'ticket'),
+        ('place','artist'),
+        'user',
+        'key',
     ]
 
     readonly_fields = [
@@ -69,6 +69,33 @@ class ExternalApiKeyAdmin(ModelAdmin):
         'user',
         'key',
     ]
+
+    def save_model(self, request: HttpRequest, obj: ExternalApiKey, form: Form, change: Any) -> None:
+        if not obj.pk and not obj.key and obj.name:
+
+            # On affiche la string Key sur l'admin de django en message
+            # et django.message capitalize chaque message...
+            # du coup on fait bien gaffe à ce que je la clée générée ai bien une majusculle au début ...
+            api_key, key = APIKey.objects.create_key(name=obj.name)
+            while key[0].isupper() == False:
+                api_key, key = APIKey.objects.create_key(name=obj.name)
+                if key[0].isupper() == False:
+                    api_key.delete()
+
+            messages.add_message(
+                request,
+                messages.SUCCESS,
+                _(f"Copiez bien la clé suivante et mettez la en lieu sur ! Elle n'est pas enregistrée sur nos serveurs et ne sera affichée qu'une seule fois ici :")
+            )
+            messages.add_message(
+                request,
+                messages.WARNING,
+                f"{key}"
+            )
+            obj.key = api_key
+            obj.user = request.user
+        super().save_model(request, obj, form, change)
+
 
 @admin.register(Webhook, site=staff_admin_site)
 class WebhookAdmin(ModelAdmin):
