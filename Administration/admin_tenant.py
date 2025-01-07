@@ -52,14 +52,25 @@ class ExternalApiKeyAdmin(ModelAdmin):
     compressed_fields = True
     warn_unsaved_form = True
 
+    list_display = [
+        'name',
+        'user',
+        'created',
+        'read',
+        'event',
+        'product',
+        'reservation',
+        'ticket',
+    ]
+
     fields = [
         'name',
         'ip',
         'created',
         # Les boutons de permissions :
+        'read',
         ('event', 'product',),
         ('reservation', 'ticket'),
-        ('place','artist'),
         'user',
         'key',
     ]

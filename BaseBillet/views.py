@@ -567,6 +567,7 @@ class MyAccount(viewsets.ViewSet):
             return HttpResponseClientRedirect('/my_account/')
 
 
+
     @action(detail=True, methods=['GET'])
     def return_refill_wallet(self, request, pk=None):
         # On demande confirmation à Fedow qui a du recevoir la validation en webhook POST

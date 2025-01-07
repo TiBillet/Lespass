@@ -9,26 +9,26 @@ import pytz
 import requests
 import stripe
 from cryptography.fernet import Fernet
-from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.db import connection
-from django.http import HttpResponseRedirect, Http404, HttpResponse
+from django.http import Http404, HttpResponse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django_tenants.utils import schema_context, tenant_context
 from rest_framework import viewsets, permissions, status
-from rest_framework.decorators import permission_classes
+from rest_framework.decorators import permission_classes, action, throttle_classes
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle, AnonRateThrottle
 from rest_framework.views import APIView
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
     ReservationValidator, ConfigurationSerializer, EventCreateSerializer, TicketSerializer, \
-    OptionsSerializer,  ProductCreateSerializer
-from AuthBillet.models import TenantAdminPermission, TibilletUser, TenantAdminPermissionWithRequest
-from AuthBillet.utils import user_apikey_valid
+    OptionsSerializer, ProductCreateSerializer
+from AuthBillet.models import TenantAdminPermission, TibilletUser, TenantAdminPermissionWithRequest, HumanUser
+from AuthBillet.utils import user_apikey_valid, get_or_create_user
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe, \
     OptionGenerale, Membership
 from BaseBillet.tasks import create_ticket_pdf, report_to_pdf, report_celery_mailer
@@ -1076,6 +1076,27 @@ class Onboard_laboutik(APIView):
 # class Onboard(APIView):
 #     def get(self, request):
 #         return Response(f"{create_account_link_for_onboard()}", status=status.HTTP_202_ACCEPTED)
+
+
+# api check wallet
+class Wallet(viewsets.ViewSet):
+
+    @action(detail=False, methods=['POST'], throttle_classes=[AnonRateThrottle], permission_classes=[permissions.AllowAny])
+    def get_stripe_checkout_with_email(self, request):
+        # Création d'un lien de paiement pour une recharge Stripe.
+        # Peut être réalisée par n'importe qui. Valide du moment qu'il y a paiement.
+        email = request.data['email']
+        success_url = request.data.get('success_url')
+        cancel_url = request.data.get('cancel_url')
+        user: HumanUser = get_or_create_user(email)
+
+        fedowAPI = FedowAPI()
+        stripe_checkout_url = fedowAPI.wallet.get_federated_token_refill_checkout(user)
+        if stripe_checkout_url:
+            # Envoi du lien
+            return Response(stripe_checkout_url, status=status.HTTP_201_CREATED)
+
+        return Response(status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
 @permission_classes([permissions.AllowAny])
