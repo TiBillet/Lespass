@@ -22,8 +22,9 @@ from ApiBillet.serializers import get_or_create_price_sold
 from AuthBillet.models import HumanUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
-    LigneArticle, PaymentMethod
-from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email
+    LigneArticle, PaymentMethod, Reservation
+from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
+    webhook_membership
 from Customers.models import Client
 from fedow_connect.utils import dround
 
@@ -45,20 +46,59 @@ def badge_callback(request):
 
 @admin.register(Webhook, site=staff_admin_site)
 class WebhookAdmin(ModelAdmin):
+    compressed_fields = True
+    warn_unsaved_form = True
+
     readonly_fields = ['last_response', ]
     fields = [
         "url",
-        "active",
         "event",
+        "active",
         "last_response",
     ]
 
     list_display = [
         "url",
-        "active",
         "event",
+        "active",
         "last_response",
     ]
+
+    actions_detail = ["test_webhook"]
+    @action(
+        description=_("Test"),
+        url_path="test_webhook",
+        permissions=["custom_actions_detail"],
+    )
+    def test_webhook(self, request, object_id):
+        # Lancement d'un test de webhook :
+        webhook = Webhook.objects.get(pk=object_id)
+        try :
+            if webhook.event == Webhook.MEMBERSHIP:
+                # On va chercher le membership le plus récent
+                membership = Membership.objects.filter(contribution_value__isnull=False).first()
+                webhook_membership(membership.pk, solo_webhook_pk=object_id)
+                webhook.refresh_from_db()
+            elif webhook.event == Webhook.RESERVATION_V:
+                # On va chercher le membership le plus récent
+                reservation = Reservation.objects.filter(status=Reservation.VALID).first()
+                webhook_reservation(reservation.pk, solo_webhook_pk=object_id)
+                webhook.refresh_from_db()
+
+            messages.info(
+                request,
+                _(f"{webhook.last_response}"),
+            )
+            return redirect(request.META["HTTP_REFERER"])
+
+        except Exception as e:
+            messages.error(
+                request,
+                _(f"{e}"),
+            )
+
+    def has_custom_actions_detail_permission(self, request, object_id):
+        return True
 
 
 ########################################################################

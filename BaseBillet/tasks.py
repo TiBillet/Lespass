@@ -677,10 +677,17 @@ def send_membership_to_cashless(data):
 
 
 @app.task
-def webhook_reservation(reservation_pk):
-    logger.info(f"webhook_reservation : {reservation_pk} {timezone.now()} info")
-    webhooks = Webhook.objects.filter(event=Webhook.RESERVATION_V)
-    if webhooks.count() > 0:
+def webhook_reservation(reservation_pk, solo_webhook_pk=None):
+    logger.info(f"webhook_reservation : {reservation_pk}")
+
+    # On lance tous les webhook ou juste un seul ?
+    webhooks = []
+    if solo_webhook_pk:
+        webhooks.append(Webhook.objects.get(pk=solo_webhook_pk))
+    else :
+        webhooks = Webhook.objects.filter(event=Webhook.RESERVATION_V, active=True)
+
+    if len(webhooks) > 0:
         reservation = Reservation.objects.get(pk=reservation_pk)
         json = {
             "object": "reservation",
@@ -691,11 +698,49 @@ def webhook_reservation(reservation_pk):
 
         for webhook in webhooks:
             try:
-                response = requests.request("POST", webhook.url, data=json, timeout=2)
-                webhook.last_response = f"{timezone.now()} - status code {response.status_code} - {response.text}"
+                response = requests.request("POST", webhook.url, data=json, timeout=2, verify=bool(not settings.DEBUG))
+                webhook.last_response = f"{timezone.now()} - status code {response.status_code} - {response.content}"
+                if not response.ok:
+                    logger.error(f"webhook_reservation ERROR : {reservation_pk} {timezone.now()} {response.content}")
+                    webhook.active = False
             except Exception as e:
                 logger.error(f"webhook_reservation ERROR : {reservation_pk} {timezone.now()} {e}")
                 webhook.last_response = f"{timezone.now()} - {e}"
+                webhook.active = False
+            webhook.save()
+
+
+@app.task
+def webhook_membership(membership_pk, solo_webhook_pk=None):
+    logger.info(f"webhook_membership : {membership_pk}")
+
+    # On lance tous les webhook ou juste un seul ?
+    webhooks = []
+    if solo_webhook_pk:
+        webhooks.append(Webhook.objects.get(pk=solo_webhook_pk))
+    else :
+        webhooks = Webhook.objects.filter(event=Webhook.MEMBERSHIP, active=True)
+
+    if len(webhooks) > 0:
+        membership = Membership.objects.get(pk=membership_pk)
+        json = {
+            "object": "reservation",
+            "uuid": f"{membership.uuid}",
+            "state": f"{membership.status}",
+            "datetime": f"{membership.date_added}",
+        }
+
+        for webhook in webhooks:
+            try:
+                response = requests.request("POST", webhook.url, data=json, timeout=2, verify=bool(not settings.DEBUG))
+                webhook.last_response = f"{timezone.now()} - status code {response.status_code} - {response.content}"
+                if not response.ok:
+                    logger.error(f"webhook_membership ERROR : {membership_pk} {timezone.now()} {response.content}")
+                    webhook.active = False
+            except Exception as e:
+                logger.error(f"webhook_membership ERROR : {membership_pk} {timezone.now()} {e}")
+                webhook.last_response = f"{timezone.now()} - {e}"
+                webhook.active = False
             webhook.save()
 
 

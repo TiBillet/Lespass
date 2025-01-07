@@ -1431,6 +1431,9 @@ class LigneArticle(models.Model):
 
 
 class Membership(models.Model):
+
+    # TODO: Passer en primary key lors de la migration V1
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
                              related_name='membership', blank=True, null=True)
     price = models.ForeignKey(Price, on_delete=models.PROTECT, related_name='membership',
@@ -1647,8 +1650,9 @@ class Webhook(models.Model):
     active = models.BooleanField(default=False)
     url = models.URLField()
 
-    RESERVATION_V = "RV"
+    RESERVATION_V, MEMBERSHIP = "RV", "MB"
     EVENT_CHOICES = [
+        (MEMBERSHIP, _('Adhésion validée')),
         (RESERVATION_V, _('Réservation validée')),
     ]
 
@@ -1656,6 +1660,8 @@ class Webhook(models.Model):
                              verbose_name=_("Évènement"))
     last_response = models.TextField(null=True, blank=True)
 
+    def send(self, event):
+        import ipdb; ipdb.set_trace()
 
 class History(models.Model):
     """

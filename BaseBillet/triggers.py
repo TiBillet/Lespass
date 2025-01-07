@@ -4,13 +4,12 @@ import stripe
 from django.utils import timezone
 
 from BaseBillet.models import LigneArticle, Product, Membership, Price, Configuration
-from BaseBillet.tasks import send_to_ghost, send_membership_invoice_to_email, send_sale_to_laboutik
+from BaseBillet.tasks import send_to_ghost, send_membership_invoice_to_email, send_sale_to_laboutik, webhook_membership
 from BaseBillet.templatetags.tibitags import dround
 from fedow_connect.fedow_api import FedowAPI
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
-
 
 
 def update_membership_state_after_stripe_paiement(ligne_article):
@@ -31,7 +30,7 @@ def update_membership_state_after_stripe_paiement(ligne_article):
         # Mise à jour du montant
         ligne_article.amount = checkout_session['amount_total']
         contribution = dround(checkout_session['amount_total'])
-        membership.contribution_value=contribution
+        membership.contribution_value = contribution
 
     membership.last_contribution = timezone.now().date()
     membership.stripe_paiement.add(paiement_stripe)
@@ -61,7 +60,6 @@ def send_membership_to_ghost(membership: Membership):
 ### SEND TO LABOUTIK for comptabilité ###
 
 
-
 # Pour usage en CLI :
 # def send_sale_from_membership_to_laboutik(membership: Membership):
 #     """
@@ -80,25 +78,26 @@ def send_membership_to_ghost(membership: Membership):
 
 ### END SEND TO LABOUTIK
 
-# MACHINE A ETAT pour les ventes
-class ActionArticlePaidByCategorie:
+# MACHINE A ETAT pour les ventes, activé lorsque LigneArticle passe à PAID
+# Actions qui se lancent en fonction de la catégorie d'article ( adhésion, don, reservation, etc ... )
+class LigneArticlePaid_ActionByCategorie:
     """
     Trigged action by categorie when Article is PAID
     """
 
     def __init__(self, ligne_article: LigneArticle):
         self.ligne_article = ligne_article
-        self.categorie = self.ligne_article.pricesold.productsold.categorie_article
 
+        self.categorie = self.ligne_article.pricesold.productsold.categorie_article
         if self.categorie == Product.NONE:
             self.categorie = self.ligne_article.pricesold.productsold.product.categorie_article
 
-        self.data_for_cashless = {}
-        if ligne_article.paiement_stripe:
-            self.data_for_cashless = {
-                'uuid_commande': ligne_article.paiement_stripe.uuid,
-                'email': ligne_article.paiement_stripe.user.email
-            }
+        # self.data_for_cashless = {}
+        # if ligne_article.paiement_stripe:
+        #     self.data_for_cashless = {
+        #         'uuid_commande': ligne_article.paiement_stripe.uuid,
+        #         'email': ligne_article.paiement_stripe.user.email
+        #     }
 
         try:
             # on met en majuscule et on rajoute _ au début du nom de la catégorie.
@@ -142,7 +141,6 @@ class ActionArticlePaidByCategorie:
         ligne_article: LigneArticle = self.ligne_article
         membership = ligne_article.membership
 
-
         # Refresh en cas de prix libre, le prix est mis à jour par le update membership.
         if ligne_article.paiement_stripe:
             membership: Membership = update_membership_state_after_stripe_paiement(ligne_article)
@@ -158,8 +156,12 @@ class ActionArticlePaidByCategorie:
         fedowAPI = FedowAPI()
         serialized_transaction = fedowAPI.membership.create(membership=membership)
 
+        # Envoi de la vente à LaBoutik
         logger.info(f"TRIGGER ADHESION PAID -> envoi à LaBoutik")
         laboutik_sended = send_sale_to_laboutik(self.ligne_article)
+
+        # Envoi des webhooks
+        webhook_membership(membership.pk)
 
         # Si tout est passé plus haut, on VALID La ligne :
         # Tout ceci se déroule dans un pre_save signal.pre_save_signal_status()

@@ -556,6 +556,36 @@ UNFOLD = {
                     }
                 ],
             },
+            {
+                "title": _("Connect'"),
+                "separator": True,  # Top border
+                "collapsible": True,  # Collapsible group of links
+                "items": [
+                    # {
+                    #     "title": _("API Key"),
+                    #     "icon": "api",  # Supported icon set: https://fonts.google.com/icons
+                    #     "link": reverse_lazy("staff_admin:BaseBillet_externalapikey_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        # "permission": "AuthBillet.models.TenantAdminPermissionWithRequest"
+                    # },
+                    {
+                        "title": _("Webhook"),
+                        "icon": "webhook",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_webhook_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "AuthBillet.models.TenantAdminPermissionWithRequest"
+
+                    },
+                    {
+                        "title": _("Ghost"),
+                        "icon": "circle",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_paiement_stripe_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "AuthBillet.models.TenantAdminPermissionWithRequest"
+
+                    },
+                ],
+            },
         ],
     },
 }

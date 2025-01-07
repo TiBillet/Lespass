@@ -10,7 +10,7 @@ from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, LigneArticle, Ticket, Paiement_stripe, Product, Price, \
     PaymentMethod, Membership
 from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation
-from BaseBillet.triggers import ActionArticlePaidByCategorie
+from BaseBillet.triggers import LigneArticlePaid_ActionByCategorie
 from fedow_connect.fedow_api import AssetFedow
 from fedow_connect.models import FedowConfig
 
@@ -91,11 +91,13 @@ def set_paiement_stripe_valid(old_instance: LigneArticle, new_instance: LigneArt
 
 
 
-def action_x_to_paid(old_instance: LigneArticle, new_instance: LigneArticle):
-    # Fonction qui passe les artcle de payé en validé, en fonction de sa catégorie
-    ActionArticlePaidByCategorie(new_instance)
+def ligne_article_paid(old_instance: LigneArticle, new_instance: LigneArticle):
+    # MACHINE A ETAT pour les ventes, activé lorsque LigneArticle passe à PAID
+    # Actions qui se lancent en fonction de la catégorie d'article ( adhésion, don, reservation, etc ... )
+    LigneArticlePaid_ActionByCategorie(new_instance)
     logger.info(
         f"    SIGNAL LIGNE ARTICLE action_x_to_paid {old_instance.pricesold} new_instance status : {new_instance.status}")
+
     set_paiement_stripe_valid(old_instance, new_instance)
 
 
@@ -103,7 +105,8 @@ def action_x_to_paid(old_instance: LigneArticle, new_instance: LigneArticle):
 
 # @receiver(post_save, sender=Reservation)
 # def send_billet_to_mail(sender, instance: Reservation, **kwargs):
-def send_billet_to_mail(old_instance: Reservation, new_instance: Reservation):
+def reservation_paid(old_instance: Reservation, new_instance: Reservation):
+
     # On check les webhooks
     webhook_reservation.delay(new_instance.pk)
 
@@ -116,12 +119,10 @@ def send_billet_to_mail(old_instance: Reservation, new_instance: Reservation):
             ticket.status = Ticket.NOT_SCANNED
             ticket.save()
 
-    # import ipdb; ipdb.set_trace()
-
     # On vérifie que le mail n'a pas déja été envoyé
     if not new_instance.mail_send:
         logger.info(f"    SIGNAL RESERVATION send_billet_to_mail {new_instance.status}")
-
+        # Envoie du mail
         if new_instance.user_commande.email:
             # import ipdb; ipdb.set_trace()
             base_url = f"https://{connection.tenant.get_primary_domain().domain}"
@@ -206,13 +207,13 @@ PRE_SAVE_TRANSITIONS = {
 
     'LIGNEARTICLE': {
         LigneArticle.CREATED: {
-            LigneArticle.PAID: action_x_to_paid,
+            LigneArticle.PAID: ligne_article_paid,
         },
         LigneArticle.UNPAID: {
-            LigneArticle.PAID: action_x_to_paid,
+            LigneArticle.PAID: ligne_article_paid,
         },
         LigneArticle.PAID: {
-            LigneArticle.PAID: action_x_to_paid,
+            LigneArticle.PAID: ligne_article_paid,
             LigneArticle.VALID: set_paiement_stripe_valid,
             '_else_': error_regression,
         },
@@ -223,21 +224,21 @@ PRE_SAVE_TRANSITIONS = {
 
     'RESERVATION': {
         Reservation.CREATED: {
-            Reservation.PAID: send_billet_to_mail,
-            Reservation.FREERES_USERACTIV: send_billet_to_mail,
+            Reservation.PAID: reservation_paid,
+            Reservation.FREERES_USERACTIV: reservation_paid,
         },
         Reservation.FREERES: {
-            Reservation.FREERES_USERACTIV: send_billet_to_mail,
+            Reservation.FREERES_USERACTIV: reservation_paid,
         },
         Reservation.FREERES_USERACTIV: {
-            Reservation.FREERES_USERACTIV: send_billet_to_mail,
+            Reservation.FREERES_USERACTIV: reservation_paid,
         },
         Reservation.UNPAID: {
-            Reservation.PAID: send_billet_to_mail,
+            Reservation.PAID: reservation_paid,
         },
         Reservation.PAID: {
             Reservation.PAID_ERROR: error_in_mail,
-            Reservation.PAID: send_billet_to_mail,
+            Reservation.PAID: reservation_paid,
             Reservation.VALID: set_paiement_valid,
             '_else_': error_regression,
         },
@@ -254,6 +255,7 @@ PRE_SAVE_TRANSITIONS = {
 }
 
 
+# MACHINE A ETAT
 # Pour tout les modèls qui possèdent un système de status choice
 @receiver(pre_save)
 def pre_save_signal_status(sender, instance, **kwargs):
