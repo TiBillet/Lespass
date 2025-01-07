@@ -1649,10 +1649,9 @@ class Webhook(models.Model):
     active = models.BooleanField(default=False)
     url = models.URLField()
 
-    RESERVATION_V, MEMBERSHIP = "RV", "MB"
     RESERVATION_V, MEMBERSHIP_V = "RV", "MV"
     EVENT_CHOICES = [
-        (MEMBERSHIP, _('Adhésion validée')),
+        (MEMBERSHIP_V, _('Adhésion validée')),
         (RESERVATION_V, _('Réservation validée')),
     ]
 

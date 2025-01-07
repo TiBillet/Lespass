@@ -650,7 +650,7 @@ def webhook_membership(membership_pk, solo_webhook_pk=None):
     if solo_webhook_pk:
         webhooks.append(Webhook.objects.get(pk=solo_webhook_pk))
     else :
-        webhooks = Webhook.objects.filter(event=Webhook.MEMBERSHIP, active=True)
+        webhooks = Webhook.objects.filter(event=Webhook.MEMBERSHIP_V, active=True)
 
     if len(webhooks) > 0:
         membership = Membership.objects.get(pk=membership_pk)
