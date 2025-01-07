@@ -65,6 +65,7 @@ class WebhookAdmin(ModelAdmin):
     ]
 
     actions_detail = ["test_webhook"]
+
     @action(
         description=_("Test"),
         url_path="test_webhook",
@@ -73,7 +74,7 @@ class WebhookAdmin(ModelAdmin):
     def test_webhook(self, request, object_id):
         # Lancement d'un test de webhook :
         webhook = Webhook.objects.get(pk=object_id)
-        try :
+        try:
             if webhook.event == Webhook.MEMBERSHIP:
                 # On va chercher le membership le plus récent
                 membership = Membership.objects.filter(contribution_value__isnull=False).first()
@@ -350,6 +351,7 @@ class PaiementStripeAdmin(ModelAdmin):
 USER
 """
 
+
 class MembershipInline(TabularInline):
     model = Membership
     # form = MembershipInlineForm
@@ -396,7 +398,6 @@ class MembershipInline(TabularInline):
     #     price.widget.can_view_related = False
     #
     #     return formset
-
 
 
 class MembershipValid(admin.SimpleListFilter):
@@ -1040,13 +1041,12 @@ def send_to_ghost(modeladmin, request, queryset):
 """
 
 
-
 @admin.register(Client, site=staff_admin_site)
 class TenantAdmin(ModelAdmin):
     # Doit être référencé pour le champs autocomplete_fields federated_with de configuration
     # est en CRUD total false
     # Seul le search fields est utile :
-    search_fields = ['name',]
+    search_fields = ['name', ]
 
     def has_view_permission(self, request, obj=None):
         return True
