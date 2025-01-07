@@ -607,41 +607,6 @@ def ticket_celery_mailer(reservation_uuid: str, base_url):
 
 
 @app.task
-def webhook_memberships(membership_pk):
-    #TODO: a factoriser avec le wehbhook reservation. Code en double.
-    logger.info(f"webhook_reservation : {membership_pk} {timezone.now()} info")
-    # Si plusieurs webhook :
-    webhooks = Webhook.objects.filter(event=Webhook.MEMBERSHIP_V)
-    configuration = Configuration.get_solo()
-    if webhooks.count() > 0:
-        membership = Membership.objects.get(pk=membership_pk)
-        return_body = {
-            "object": "membership",
-            "pk": str(membership.pk),
-            "state": str(membership.status),
-            "datetime": str(membership.date_added),
-            "email": str(membership.email()),
-            "first_name": str(membership.first_name),
-            "last_name": str(membership.last_name),
-            "pseudo": str(membership.pseudo),
-            "price": str(membership.price.prix),
-            "user_id": str(membership.user.id),
-            "organisation": configuration.organisation,
-            "organisation_id": configuration.uuid,
-        }
-
-        # Si plusieurs webhook :
-        for webhook in webhooks:
-            try:
-                response = requests.request("POST", webhook.url, json=return_body, timeout=2)
-                webhook.last_response = f"{timezone.now()} - status code {response.status_code} - {response.text}"
-            except Exception as e:
-                logger.error(f"webhook_reservation ERROR : {membership_pk} {timezone.now()} {e}")
-                webhook.last_response = f"{timezone.now()} - {e}"
-            webhook.save()
-
-
-@app.task
 def webhook_reservation(reservation_pk, solo_webhook_pk=None):
     logger.info(f"webhook_reservation : {reservation_pk}")
 
@@ -675,6 +640,7 @@ def webhook_reservation(reservation_pk, solo_webhook_pk=None):
             webhook.save()
 
 
+
 @app.task
 def webhook_membership(membership_pk, solo_webhook_pk=None):
     logger.info(f"webhook_membership : {membership_pk}")
@@ -688,16 +654,28 @@ def webhook_membership(membership_pk, solo_webhook_pk=None):
 
     if len(webhooks) > 0:
         membership = Membership.objects.get(pk=membership_pk)
-        json = {
-            "object": "reservation",
+        configuration = Configuration.get_solo()
+        # TODO: remplacer par un choix de champs sur l'admin
+        return_body = {
+            "object": "membership",
+            "pk": str(membership.pk),
             "uuid": f"{membership.uuid}",
-            "state": f"{membership.status}",
-            "datetime": f"{membership.date_added}",
+            "state": str(membership.status),
+            "datetime": str(membership.date_added),
+            "email": str(membership.email()),
+            "first_name": str(membership.first_name),
+            "last_name": str(membership.last_name),
+            "pseudo": str(membership.pseudo),
+            "price": str(membership.price_name()),
+            # "user_id": str(membership.user.id), # Utile ?
+            "organisation": f"{configuration.organisation}",
+            "organisation_id": f"{configuration.uuid}",
         }
 
+        # Si plusieurs webhook :
         for webhook in webhooks:
             try:
-                response = requests.request("POST", webhook.url, data=json, timeout=2, verify=bool(not settings.DEBUG))
+                response = requests.request("POST", webhook.url, json=return_body, timeout=2, verify=bool(not settings.DEBUG))
                 webhook.last_response = f"{timezone.now()} - status code {response.status_code} - {response.content}"
                 if not response.ok:
                     logger.error(f"webhook_membership ERROR : {membership_pk} {timezone.now()} {response.content}")
