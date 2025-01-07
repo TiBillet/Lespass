@@ -2,7 +2,6 @@
 
 import logging
 import uuid
-from tabnanny import verbose
 from uuid import uuid4
 from datetime import timedelta, datetime
 from decimal import Decimal
@@ -1651,6 +1650,7 @@ class Webhook(models.Model):
     url = models.URLField()
 
     RESERVATION_V, MEMBERSHIP = "RV", "MB"
+    RESERVATION_V, MEMBERSHIP_V = "RV", "MV"
     EVENT_CHOICES = [
         (MEMBERSHIP, _('Adhésion validée')),
         (RESERVATION_V, _('Réservation validée')),
