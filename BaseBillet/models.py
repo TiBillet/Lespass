@@ -397,13 +397,10 @@ class Configuration(SingletonModel):
 
     vat_taxe = models.DecimalField(max_digits=4, decimal_places=2, default=0)
 
-    """
     ######### GHOST #########
-    """
-
-    ghost_url = models.URLField(blank=True, null=True)
-    ghost_key = models.CharField(max_length=200, blank=True, null=True)
-    ghost_last_log = models.TextField(blank=True, null=True)
+    # ghost_url = models.URLField(blank=True, null=True)
+    # ghost_key = models.CharField(max_length=200, blank=True, null=True)
+    # ghost_last_log = models.TextField(blank=True, null=True)
 
     """
     ### Tenant fields ###
@@ -1593,6 +1590,8 @@ class Membership(models.Model):
             return "Anonymous"
 
 
+#### MODEL POUR INTEROP ####
+
 class ExternalApiKey(models.Model):
     name = models.CharField(max_length=30, unique=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL,
@@ -1661,10 +1660,6 @@ class Webhook(models.Model):
                              verbose_name=_("Évènement"))
     last_response = models.TextField(null=True, blank=True)
 
-    def send(self, event):
-        import ipdb;
-        ipdb.set_trace()
-
 
 class History(models.Model):
     """
@@ -1677,3 +1672,19 @@ class History(models.Model):
     datetime = models.DateTimeField(auto_now_add=True)
     description = models.TextField(null=True, blank=True)
     link = models.URLField(null=True, blank=True)
+
+
+### APP EXTERNE ###
+
+class GhostConfig(SingletonModel):
+    """
+    Utilisé pour envoyer le mail des nouveaux adhérants automatiquement.
+    Trigger : pre save adhésion sur BasBillet.triggers.LigneArticlePaid_ActionByCategorie.trigger_A
+    Méthode async celery : BaseBillet.tasks.send_to_ghost
+    """
+    ghost_url = models.URLField(blank=True, null=True)
+    ghost_key = models.CharField(max_length=200, blank=True, null=True)
+    ghost_last_log = models.TextField(blank=True, null=True)
+
+# class DokosConfig(SingletonModel):
+#     dokos_id = models.CharField(max_length=100, blank=True, null=True, editable=False)

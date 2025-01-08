@@ -204,16 +204,8 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
         #         'option_generale_checkbox',
         #     ),
         # }),
-        ('Ghost', {
-            'fields': (
-                'ghost_url',
-                'ghost_key',
-                'ghost_last_log',
-            ),
-        }),
-
     )
-    readonly_fields = ['ghost_last_log', 'onboard_stripe', ]
+    readonly_fields = ['onboard_stripe', ]
     autocomplete_fields = ['federated_with', ]
 
     def save_model(self, request, obj, form, change):

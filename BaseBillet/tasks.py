@@ -28,7 +28,8 @@ from weasyprint import HTML, CSS
 from weasyprint.text.fonts import FontConfiguration
 
 from ApiBillet.serializers import LigneArticleSerializer
-from BaseBillet.models import Reservation, Ticket, Configuration, Membership, Webhook, Paiement_stripe, LigneArticle
+from BaseBillet.models import Reservation, Ticket, Configuration, Membership, Webhook, Paiement_stripe, LigneArticle, \
+    GhostConfig
 from Customers.models import Client
 from TiBillet.celery import app
 from django.utils.translation import gettext_lazy as _
@@ -694,16 +695,16 @@ def send_to_ghost(membership_pk):
     # Email du compte :
     user = membership.user
     email = user.email
-    name = f"{membership.first_name} {membership.last_name}"
+    name = f"{membership.first_name.capitalize()} {membership.last_name.capitalize()}"
 
     # Si tu as besoin du produit adhésion, tu peux utiliser les deux variables ci-dessous.
     # Le model est BaseBillet/models.py
     # product: Product = trigger.ligne_article.pricesold.productsold.product
 
     # Et ici, tu as les cred' ghost à entrer dans l'admin.
-    config = Configuration.get_solo()
-    ghost_url = config.ghost_url
-    ghost_key = config.ghost_key
+    ghost_config = GhostConfig.get_solo()
+    ghost_url = ghost_config.ghost_url
+    ghost_key = ghost_config.ghost_key
 
     if ghost_url and ghost_key and email and name:
         ###################################
@@ -741,7 +742,7 @@ def send_to_ghost(membership_pk):
         response = requests.get(ghost_url + "/ghost/api/admin/members/", params=filter, headers=headers)
 
         # Vérifier que la réponse de l'API est valide
-        if response.status_code == 200:
+        if response.ok:
             # Décoder la réponse JSON
             j = response.json()
             members = j['members']
@@ -760,7 +761,7 @@ def send_to_ghost(membership_pk):
                 }
 
                 # Ajouter le nouveau membre à l'instance Ghost
-                response = requests.post(ghost_url + "/ghost/api/admin/members/", json=member_data, headers=headers)
+                response = requests.post(ghost_url + "/ghost/api/admin/members/", json=member_data, headers=headers, timeout=2)
 
                 # Vérifier que la réponse de l'API est valide
                 if response.status_code == 201:
@@ -778,8 +779,8 @@ def send_to_ghost(membership_pk):
 
         # On met à jour les logs pour debug
         try:
-            config.ghost_last_log = f"{timezone.now()} : {response.text}"
-            config.save()
+            ghost_config.ghost_last_log = f"{timezone.now()} : {response.text}"
+            ghost_config.save()
         except Exception as e:
             logger.error(f"Erreur lors de la mise à jour du log : {e}")
 

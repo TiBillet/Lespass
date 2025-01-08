@@ -455,7 +455,7 @@ UNFOLD = {
         "show_all_applications": True,  # Dropdown with all applications and models
         "navigation": [
             {
-                "title": _("Configuration générale"),
+                "title": _("Informations générales"),
                 "separator": True,  # Top border
                 "collapsible": False,  # Collapsible group of links
                 "items": [
@@ -584,14 +584,13 @@ UNFOLD = {
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
 
                     },
-                    # {
-                    #     "title": _("Ghost"),
-                    #     "icon": "circle",  # Supported icon set: https://fonts.google.com/icons
-                    #     "link": reverse_lazy("staff_admin:BaseBillet_paiement_stripe_changelist"),
-                    #     # "badge": "Administration.admin_tenant.badge_callback",
-                    #     "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-                    #
-                    # },
+                    {
+                        "title": _("Ghost"),
+                        "icon": "circle",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_paiement_stripe_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+                    },
                     # {
                     #     "title": _("Dokos"),
                     #     "icon": "circle",  # Supported icon set: https://fonts.google.com/icons

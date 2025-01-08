@@ -47,13 +47,6 @@ def update_membership_state_after_stripe_paiement(ligne_article):
     return membership
 
 
-def send_membership_to_ghost(membership: Membership):
-    # Envoyer à ghost :
-    if membership.newsletter:
-        send_to_ghost.delay(membership.pk)
-        logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation à Ghost DELAY")
-    return True
-
 
 ### END MEMBERSHIP TRIGGER ####
 
@@ -147,8 +140,9 @@ class LigneArticlePaid_ActionByCategorie:
 
         email_sended = send_membership_invoice_to_email(membership)
 
-        # TODO: a séparer et ajouter dans un objet "connect"
-        # ghost_sended = send_membership_to_ghost(membership)
+        # Si la personne accepte la newsletter :
+        if membership.newsletter:
+            send_to_ghost.delay(membership.pk)
 
         logger.info(f"TRIGGER ADHESION PAID -> envoi à Fedow")
         # L'adhésion possède désormais une transaction fedow associé
