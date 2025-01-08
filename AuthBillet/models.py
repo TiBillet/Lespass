@@ -1,5 +1,6 @@
-import uuid
+import logging
 from uuid import uuid4
+
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -10,69 +11,19 @@ from django.db import connection
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from rest_framework import permissions
 
 from Customers.models import Client
 
+logger = logging.getLogger(__name__)
 
-class RootPermission(permissions.BasePermission):
-    message = 'No root'
+"""
+Ici sont déclaré les modèles utilisateurs
+L'idée est de séparer les users terminaux (caisse enregistreuse, scanneur de billet) 
+des users humains (adhérants, administrateurs, participants, etc ...)
 
-    def has_permission(self, request, view):
-        if request.user.client_source.categorie == Client.ROOT:
-            return request.user.is_superuser
-        return False
-
-
-# Mis à l'extérieur pour pouvoir être utilisé
-# tout seul dans les class view de Django sans RESTframework
-def TenantAdminPermissionWithRequest(request):
-    if request.user.is_authenticated:
-        return any([
-            all([
-                connection.tenant in request.user.client_admin.all(),
-                request.user.is_staff,
-                request.user.is_active,
-                request.user.espece == TibilletUser.TYPE_HUM
-            ]),
-            # Pour l'user ROOT qui peut tout faire
-            all([
-                request.user.client_source.categorie == Client.ROOT,
-                request.user.is_superuser,
-            ]),
-        ])
-    else:
-        return False
-
-
-class TenantAdminPermission(permissions.BasePermission):
-    message = 'User no admin in tenant'
-
-    def has_permission(self, request, view):
-        return TenantAdminPermissionWithRequest(request)
-
-
-class TerminalScanPermission(permissions.BasePermission):
-    message = "Termnal must be validated by an admin"
-
-    def has_permission(self, request, view):
-        if request.user.is_authenticated:
-            return any([
-                all([
-                    connection.tenant in request.user.client_admin.all(),
-                    request.user.is_active,
-                    request.user.user_parent().is_staff,
-                    request.user.espece == TibilletUser.TYPE_TERM
-                ]),
-                # Pour l'user ROOT qui peut tout faire
-                all([
-                    request.user.client_source.categorie == Client.ROOT,
-                    request.user.is_superuser,
-                ]),
-            ])
-        else:
-            return False
-
+Dans une stack multi tenant, il est aussi utile de savoir d'ou vient l'utilisateur 
+Par exemple pour lui donner des droits admin a un ou plusieurs lieux
+"""
 
 class TibilletManager(BaseUserManager):
     def _create_user(self, email, password, **extra_fields):
@@ -155,7 +106,7 @@ class Wallet(models.Model):
 class TibilletUser(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
 
-    username = models.CharField(max_length=200, unique=True) # same as email bu defaut
+    username = models.CharField(max_length=200, unique=True)  # same as email bu defaut
     email = models.EmailField(unique=True)  # changes email to unique and blank to false
     email_error = models.BooleanField(default=False)
     email_valid = models.BooleanField(default=False)

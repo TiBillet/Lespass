@@ -6,8 +6,6 @@ from typing import Any
 from django import forms
 from django.contrib import admin
 from django.contrib import messages
-from django.core.exceptions import ValidationError
-from django.db.models import Model
 from django.forms import ModelForm, TextInput, Form
 from django.http import HttpResponse, HttpRequest
 from django.shortcuts import redirect
@@ -21,14 +19,12 @@ from unfold.decorators import display, action
 from unfold.sites import UnfoldAdminSite
 from unfold.widgets import UnfoldAdminTextInputWidget, UnfoldAdminEmailInputWidget, UnfoldAdminSelectWidget
 
-from ApiBillet.serializers import get_or_create_price_sold
 from AuthBillet.models import HumanUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
     webhook_membership
-from BaseBillet.views import Badge
 from Customers.models import Client
 from fedow_connect.utils import dround
 
@@ -56,11 +52,11 @@ class ExternalApiKeyAdmin(ModelAdmin):
         'name',
         'user',
         'created',
-        'read',
         'event',
         'product',
         'reservation',
         'ticket',
+        'wallet',
     ]
 
     fields = [
@@ -68,9 +64,9 @@ class ExternalApiKeyAdmin(ModelAdmin):
         'ip',
         'created',
         # Les boutons de permissions :
-        'read',
         ('event', 'product',),
         ('reservation', 'ticket'),
+        ('wallet', ),
         'user',
         'key',
     ]

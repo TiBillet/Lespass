@@ -1595,7 +1595,7 @@ class Membership(models.Model):
 
 class ExternalApiKey(models.Model):
     name = models.CharField(max_length=30, unique=True)
-    user = models.OneToOneField(settings.AUTH_USER_MODEL,
+    user = models.ForeignKey(settings.AUTH_USER_MODEL,
                                 on_delete=models.CASCADE,
                                 blank=True, null=True,
                                 help_text=_("Utilisateur qui a créé cette clé.")
@@ -1616,27 +1616,26 @@ class ExternalApiKey(models.Model):
 
     created = models.DateTimeField(auto_now=True)
 
-    read = models.BooleanField(default=True, verbose_name=_("Lecture"))
+    # read = models.BooleanField(default=True, verbose_name=_("Lecture"))
 
-    event = models.BooleanField(default=False, verbose_name=_("Creation d'évènements"))
-    product = models.BooleanField(default=False, verbose_name=_("Creation de produits"))
-    # place = models.BooleanField(default=False, verbose_name=_("Creation de nouvelles instances lieux"))
-    # artist = models.BooleanField(default=False, verbose_name=_("Creation de nouvelles instances artiste"))
-    reservation = models.BooleanField(default=False, verbose_name=_("Créer des reservations"))
-    ticket = models.BooleanField(default=False, verbose_name=_("Lister et valider les billets"))
+    # Droit des routes API (nom de variable doit être le basename de la route url vers le viewset)
+    event = models.BooleanField(default=False, verbose_name=_("Évènements"))
+    product = models.BooleanField(default=False, verbose_name=_("Produits"))
+
+    reservation = models.BooleanField(default=False, verbose_name=_("Reservations"))
+    ticket = models.BooleanField(default=False, verbose_name=_("Billets"))
+
+    wallet = models.BooleanField(default=False, verbose_name=_("Wallets"))
 
     def api_permissions(self):
         return {
-            "read": self.read,
-
             # Basename ( regarder dans utils.py -> user_apikey_valid pour comprendre le mecanisme )
             "event": self.event,
             "product": self.product,
             "price": self.product,
-            # "place": self.place,
-            # "artist": self.artist,
             "reservation": self.reservation,
             "ticket": self.ticket,
+            "wallet": self.wallet,
         }
 
     class Meta:

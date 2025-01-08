@@ -1448,3 +1448,7 @@ class LigneArticleSerializer(serializers.ModelSerializer):
             # 'paiement_stripe_uuid',
             # 'user_uuid_wallet',
         ]
+
+
+class EmailSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)

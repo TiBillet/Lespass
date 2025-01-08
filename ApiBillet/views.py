@@ -1,12 +1,10 @@
 # Create your views here.
 
-import decimal
 import json
 import logging
 from datetime import datetime, timedelta
 
 import pytz
-import requests
 import stripe
 from cryptography.fernet import Fernet
 from django.contrib.auth import get_user_model
@@ -14,24 +12,25 @@ from django.db import connection
 from django.http import Http404, HttpResponse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django.views import View
 from django_tenants.utils import schema_context, tenant_context
 from rest_framework import viewsets, permissions, status
-from rest_framework.decorators import permission_classes, action, throttle_classes
+from rest_framework.decorators import permission_classes, action
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from rest_framework.throttling import UserRateThrottle, AnonRateThrottle
+from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
+from rest_framework.viewsets import ViewSet
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
     ReservationValidator, ConfigurationSerializer, EventCreateSerializer, TicketSerializer, \
-    OptionsSerializer, ProductCreateSerializer
-from AuthBillet.models import TenantAdminPermission, TibilletUser, TenantAdminPermissionWithRequest, HumanUser
-from AuthBillet.utils import user_apikey_valid, get_or_create_user
+    OptionsSerializer, ProductCreateSerializer, EmailSerializer
+from ApiBillet.permissions import TenantAdminApiPermission, TibilletUser, get_apikey_valid
+from AuthBillet.models import HumanUser
+from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe, \
     OptionGenerale, Membership
-from BaseBillet.tasks import create_ticket_pdf, report_to_pdf, report_celery_mailer
+from BaseBillet.tasks import create_ticket_pdf
 from Customers.models import Client
 from MetaBillet.models import EventDirectory, ProductDirectory
 from PaiementStripe.views import new_entry_from_stripe_invoice
@@ -42,45 +41,63 @@ from fedow_connect.utils import rsa_decrypt_string, rsa_encrypt_string, get_publ
 logger = logging.getLogger(__name__)
 
 
-class DecimalEncoder(json.JSONEncoder):
-    def default(self, o):
-        if isinstance(o, decimal.Decimal):
-            return str(o)
-        return super(DecimalEncoder, self).default(o)
+# class DecimalEncoder(json.JSONEncoder):
+#     def default(self, o):
+#         if isinstance(o, decimal.Decimal):
+#             return str(o)
+#         return super(DecimalEncoder, self).default(o)
 
 
-# Refactor for get_permission
-# Si c'est list/retrieve -> pour tout le monde
-# Sinon, on vérifie la clé api
-def get_permission_Api_LR_Any(self):
-    # Si c'est une auth avec APIKEY,
-    # on vérifie avec notre propre moteur
-    # Si l'user est rendu, la clé est valide
-    user_api = user_apikey_valid(self)
-    if user_api:
-        permission_classes = []
-        self.request.user = user_api
 
-    elif self.action in ['list', 'retrieve']:
+def get_permission_Api_LR_Any_CU_Admin(self: ViewSet):
+    # Si c'est list/retrieve -> pour tout le monde
+    # Pour le reste, c'est clé API + admin tenant
+    if self.action in ['list', 'retrieve']:
+        # Tout le monde peut list et retrieve
         permission_classes = [permissions.AllowAny]
     else:
-        permission_classes = [TenantAdminPermission]
+        api_key = get_apikey_valid(self)
+        user = api_key.user if api_key else None
+        if not user:
+            return False
+
+        # user doit être admin dans tenant
+        self.request.user = user
+        permission_classes = [TenantAdminApiPermission]
 
     return [permission() for permission in permission_classes]
 
 
-def get_permission_Api_LR_Admin(self):
-    user_api = user_apikey_valid(self)
-    if user_api:
-        permission_classes = []
-        self.request.user = user_api
+def get_permission_Api_LR_Admin_CU_Any(self: ViewSet):
+    # Si c'est list/retrieve -> clé API + admin tenant
+    # Pour le reste, c'est tout le monde
+    if self.action in ['list', 'retrieve']:
 
-    elif self.action in ['list', 'retrieve']:
-        permission_classes = [TenantAdminPermission]
+        api_key = get_apikey_valid(self)
+        user = api_key.user if api_key else None
+        if not user:
+            return Http404
+        # user doit être admin dans tenant
+        self.request.user = user
+        permission_classes = [TenantAdminApiPermission]
+
     else:
         permission_classes = [permissions.AllowAny]
     return [permission() for permission in permission_classes]
 
+def get_permission_Api_ALL_Admin(self: ViewSet):
+    # clé API + admin tenant pour tout
+    api_key = get_apikey_valid(self)
+    user = api_key.user if api_key else None
+    if not user:
+        return Http404
+    # user doit être admin dans tenant
+    self.request.user = user
+    permission_classes = [TenantAdminApiPermission]
+    return [permission() for permission in permission_classes]
+
+
+### END GET PERMISSION ###
 
 class TarifBilletViewSet(viewsets.ViewSet):
 
@@ -97,7 +114,7 @@ class TarifBilletViewSet(viewsets.ViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_permissions(self):
-        return get_permission_Api_LR_Any(self)
+        return get_permission_Api_LR_Any_CU_Admin(self)
 
 
 class ProductViewSet(viewsets.ViewSet):
@@ -132,7 +149,7 @@ class ProductViewSet(viewsets.ViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_permissions(self):
-        return get_permission_Api_LR_Any(self)
+        return get_permission_Api_LR_Any_CU_Admin(self)
 
 
 class TenantViewSet(viewsets.ViewSet):
@@ -170,7 +187,7 @@ class TenantViewSet(viewsets.ViewSet):
             permission_classes = [permissions.AllowAny]
             return [permission() for permission in permission_classes]
         else:
-            return get_permission_Api_LR_Any(self)
+            return get_permission_Api_LR_Any_CU_Admin(self)
         # permission_classes = [permissions.AllowAny]
 
 
@@ -196,7 +213,7 @@ class HereViewSet(viewsets.ViewSet):
         return Response(dict_return)
 
     def get_permissions(self):
-        return get_permission_Api_LR_Any(self)
+        return get_permission_Api_LR_Any_CU_Admin(self)
 
 
 class EventsSlugViewSet(viewsets.ViewSet):
@@ -214,7 +231,7 @@ class EventsSlugViewSet(viewsets.ViewSet):
         return Response(serializer.data)
 
     def get_permissions(self):
-        return get_permission_Api_LR_Any(self)
+        return get_permission_Api_LR_Any_CU_Admin(self)
 
 
 class EventsViewSet(viewsets.ViewSet):
@@ -307,7 +324,7 @@ class EventsViewSet(viewsets.ViewSet):
         return Response(('deleted'), status=status.HTTP_200_OK)
 
     def get_permissions(self):
-        return get_permission_Api_LR_Any(self)
+        return get_permission_Api_LR_Any_CU_Admin(self)
 
 
 """
@@ -424,7 +441,8 @@ class ReservationViewset(viewsets.ViewSet):
         return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_permissions(self):
-        return get_permission_Api_LR_Admin(self)
+        # Tout le monde peut reserver (create), mais seul les admins peuvent lister
+        return get_permission_Api_LR_Admin_CU_Any(self)
 
 
 class OptionTicket(viewsets.ViewSet):
@@ -445,7 +463,7 @@ class OptionTicket(viewsets.ViewSet):
         return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_permissions(self):
-        return get_permission_Api_LR_Any(self)
+        return get_permission_Api_LR_Any_CU_Admin(self)
 
 
 def borne_temps_4h():
@@ -491,7 +509,7 @@ class CancelSubscription(APIView):
         return Response('Pas de renouvellement automatique sur cette adhésion.', status=status.HTTP_406_NOT_ACCEPTABLE)
 
 
-@permission_classes([TenantAdminPermission])
+@permission_classes([TenantAdminApiPermission])
 class Gauge(APIView):
 
     # API pour avoir l'état de la jauge (GAUGE in inglishe) et des billets scannés.
@@ -514,6 +532,9 @@ class Gauge(APIView):
 
 
 class TicketViewset(viewsets.ViewSet):
+    # Vérifie la clé API et que l'user de la clé est admin du tenant
+    permission_classes = [TenantAdminApiPermission]
+
     def list(self, request):
         debut_jour, lendemain_quatre_heure = borne_temps_4h()
 
@@ -532,8 +553,6 @@ class TicketViewset(viewsets.ViewSet):
         serializer = TicketSerializer(ticket)
         return Response(serializer.data)
 
-    def get_permissions(self):
-        return get_permission_Api_LR_Admin(self)
 
 
 """
@@ -653,6 +672,7 @@ def request_for_data_cashless(user: TibilletUser):
 #         return [permission() for permission in permission_classes]
 
 
+"""
 class ZReportPDF(View):
     def get(self, request, pk_uuid):
         logger.info(f"ZReportPDF user : {request.user}")
@@ -694,6 +714,7 @@ class ZReportPDF(View):
             return HttpResponse(f"{response.status_code}", content_type='application/json')
 
         # return {'erreur': f"pas de configuration server_cashless"}
+"""
 
 
 class TicketPdf(APIView):
@@ -1081,22 +1102,33 @@ class Onboard_laboutik(APIView):
 # api check wallet
 class Wallet(viewsets.ViewSet):
 
-    @action(detail=False, methods=['POST'], throttle_classes=[AnonRateThrottle], permission_classes=[permissions.AllowAny])
+    @action(detail=False, methods=['POST'], throttle_classes=[UserRateThrottle], permission_classes=[TenantAdminApiPermission])
     def get_stripe_checkout_with_email(self, request):
         # Création d'un lien de paiement pour une recharge Stripe.
         # Peut être réalisée par n'importe qui. Valide du moment qu'il y a paiement.
-        email = request.data['email']
-        success_url = request.data.get('success_url')
-        cancel_url = request.data.get('cancel_url')
-        user: HumanUser = get_or_create_user(email)
+        serializer = EmailSerializer(data=request.data)
+        if not serializer.is_valid():
+            # success_url = request.data.get('success_url')
+            # cancel_url = request.data.get('cancel_url')
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        email = serializer.validated_data['email']
+        user: "HumanUser" = get_or_create_user(email)
+        if not user :
+            return Response(f"User not valid", status=status.HTTP_406_NOT_ACCEPTABLE)
 
         fedowAPI = FedowAPI()
         stripe_checkout_url = fedowAPI.wallet.get_federated_token_refill_checkout(user)
         if stripe_checkout_url:
             # Envoi du lien
-            return Response(stripe_checkout_url, status=status.HTTP_201_CREATED)
+            data = {
+                "stripe_checkout_url": f"{stripe_checkout_url}"
+            }
+            return Response(data=data, status=status.HTTP_201_CREATED)
 
         return Response(status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+
 
 
 @permission_classes([permissions.AllowAny])
