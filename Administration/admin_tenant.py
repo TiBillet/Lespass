@@ -19,10 +19,11 @@ from unfold.decorators import display, action
 from unfold.sites import UnfoldAdminSite
 from unfold.widgets import UnfoldAdminTextInputWidget, UnfoldAdminEmailInputWidget, UnfoldAdminSelectWidget
 
+from ApiBillet.permissions import TenantAdminPermissionWithRequest
 from AuthBillet.models import HumanUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
-    LigneArticle, PaymentMethod, Reservation, ExternalApiKey
+    LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
     webhook_membership
 from Customers.models import Client
@@ -1115,3 +1116,29 @@ class TenantAdmin(ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+
+### Connect
+
+@admin.register(GhostConfig, site=staff_admin_site)
+class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
+    compressed_fields = True  # Default: False
+    warn_unsaved_form = True  # Default: False
+
+    fields = [
+        "ghost_url",
+        "ghost_key",
+        "ghost_last_log",
+    ]
+
+    readonly_fields = ["ghost_last_log",]
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)

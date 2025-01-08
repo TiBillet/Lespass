@@ -582,12 +582,11 @@ UNFOLD = {
                         "link": reverse_lazy("staff_admin:BaseBillet_webhook_changelist"),
                         # "badge": "Administration.admin_tenant.badge_callback",
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-
                     },
                     {
                         "title": _("Ghost"),
                         "icon": "circle",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:BaseBillet_paiement_stripe_changelist"),
+                        "link": reverse_lazy("staff_admin:BaseBillet_ghostconfig_changelist"),
                         # "badge": "Administration.admin_tenant.badge_callback",
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
                     },
