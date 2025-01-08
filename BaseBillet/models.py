@@ -628,18 +628,21 @@ class Price(models.Model):
 class Event(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
 
-    name = models.CharField(max_length=200)
+    name = models.CharField(max_length=200, verbose_name=_("Nom de l'évènement"))
     slug = models.SlugField(unique=True, db_index=True, blank=True, null=True, max_length=250)
-    datetime = models.DateTimeField()
+
+    datetime = models.DateTimeField(verbose_name=_("Date de début"))
+    end_datetime = models.DateTimeField(blank=True, null=True, verbose_name=_("Date de fin"), help_text=_("Non obligatoire"))
+
     created = models.DateTimeField(auto_now=True)
     jauge_max = models.PositiveSmallIntegerField(default=50, verbose_name=_("Jauge maximale"))
     max_per_user = models.PositiveSmallIntegerField(default=10,
-                                                    verbose_name=_("Nombre de reservation maximum par utilisateur"),
+                                                    verbose_name=_("Nombre de reservation maximales par utilisateur.ices"),
                                                     help_text=_("ex : Un même email peut réserver plusieurs billets.")
                                                     )
 
-    short_description = models.CharField(max_length=250, blank=True, null=True)
-    long_description = models.TextField(blank=True, null=True)
+    short_description = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Description courte"))
+    long_description = models.TextField(blank=True, null=True, verbose_name=_("Description longue"))
 
     # event_facebook_url = models.URLField(blank=True, null=True)
     is_external = models.BooleanField(default=False, verbose_name=_("Billetterie/Reservation externe"), help_text=_(
@@ -648,9 +651,9 @@ class Event(models.Model):
 
     published = models.BooleanField(default=True, verbose_name=_("Publier"))
 
-    products = models.ManyToManyField(Product, blank=True)
+    products = models.ManyToManyField(Product, blank=True, verbose_name=_("Produits"))
 
-    tag = models.ManyToManyField(Tag, blank=True, related_name="events")
+    tag = models.ManyToManyField(Tag, blank=True, related_name="events", verbose_name=_("Tags"))
 
     options_radio = models.ManyToManyField(OptionGenerale, blank=True, related_name="options_radio",
                                            verbose_name="Option choix unique")
@@ -659,7 +662,7 @@ class Event(models.Model):
 
     # cashless = models.BooleanField(default=False, verbose_name="Proposer la recharge cashless")
     minimum_cashless_required = models.SmallIntegerField(default=0,
-                                                         verbose_name="Montant obligatoire minimum de la recharge cashless")
+                                                         verbose_name=_("Montant obligatoire minimum de la recharge cashless"))
 
     img = StdImageField(upload_to='images/',
                         validators=[MaxSizeValidator(1920, 1920)],
@@ -672,7 +675,7 @@ class Event(models.Model):
                             'crop_hdr': (960, 540, True),
                             'crop': (480, 270, True),
                         },
-                        delete_orphans=True
+                        delete_orphans=True, verbose_name=_("Image")
                         )
 
     CONCERT = "LIV"

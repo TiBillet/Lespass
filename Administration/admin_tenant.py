@@ -4,6 +4,7 @@ from decimal import Decimal
 from typing import Any
 
 from django import forms
+from django.db import models
 from django.contrib import admin
 from django.contrib import messages
 from django.forms import ModelForm, TextInput, Form
@@ -18,12 +19,13 @@ from unfold.admin import ModelAdmin, TabularInline
 from unfold.decorators import display, action
 from unfold.sites import UnfoldAdminSite
 from unfold.widgets import UnfoldAdminTextInputWidget, UnfoldAdminEmailInputWidget, UnfoldAdminSelectWidget
+from unfold.contrib.forms.widgets import WysiwygWidget
 
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
 from AuthBillet.models import HumanUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
-    LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig
+    LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
     webhook_membership
 from Customers.models import Client
@@ -39,9 +41,6 @@ class StaffAdminSite(UnfoldAdminSite):
 staff_admin_site = StaffAdminSite(name='staff_admin')
 
 """ Configuration UNFOLD """
-
-
-
 
 
 @admin.register(ExternalApiKey, site=staff_admin_site)
@@ -67,7 +66,7 @@ class ExternalApiKeyAdmin(ModelAdmin):
         # Les boutons de permissions :
         ('event', 'product',),
         ('reservation', 'ticket'),
-        ('wallet', ),
+        ('wallet',),
         'user',
         'key',
     ]
@@ -241,6 +240,7 @@ class TagAdmin(ModelAdmin):
         "_color",
     ]
     readonly_fields = ['uuid', ]
+    search_fields = ['name']
 
     def _color(self, obj):
         return format_html(
@@ -335,6 +335,9 @@ class ProductAdmin(ModelAdmin):
     autocomplete_fields = [
         "option_generale_radio", "option_generale_checkbox",
     ]
+
+    search_fields = ['name']
+
 
     def get_queryset(self, request):
         # On retire les recharges cashless et l'article Don
@@ -559,7 +562,7 @@ class HumanUserAdmin(ModelAdmin):
 
 ### ADHESION
 
-class NewMembershipForm(ModelForm):
+class MembershipNewForm(ModelForm):
     # Un formulaire d'email qui va générer les action get_or_create_user
     email = forms.EmailField(
         required=True,
@@ -637,7 +640,7 @@ class NewMembershipForm(ModelForm):
         return super().save(commit=commit)
 
 
-class MembershipForm(ModelForm):
+class MembershipChangeForm(ModelForm):
     # Le formulaire pour changer une adhésion
     class Meta:
         model = Membership
@@ -648,10 +651,12 @@ class MembershipForm(ModelForm):
             'commentaire',
         )
 
+
 # Le petit badge route a droite du titre "adhésion"
 def adhesion_badge_callback(request):
     # Recherche de la quantité de nouvelles adhésions ces 14 dernièrs jours
     return f"+ {Membership.objects.filter(last_contribution__gte=timezone.localtime() - timedelta(days=7)).count()}"
+
 
 @admin.register(Membership, site=staff_admin_site)
 class MembershipAdmin(ModelAdmin):
@@ -659,9 +664,9 @@ class MembershipAdmin(ModelAdmin):
     warn_unsaved_form = True  # Default: False
 
     # Formulaire de modification
-    form = MembershipForm
+    form = MembershipChangeForm
     # Formulaire de création. A besoin de get_form pour fonctionner
-    add_form = NewMembershipForm
+    add_form = MembershipNewForm
 
     list_display = (
         'email',
@@ -803,52 +808,56 @@ class LigneArticleAdmin(ModelAdmin):
         return False
 
 
-"""
-class CustomEventForm(forms.ModelForm):
+##### EVENT ADMIN
+
+
+class EventForm(ModelForm):
+    # def save(self, commit=True):
+    #     return super().save(commit)
+
+    # def clean(self):
+    #     return super().clean()
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # On mets la valeur de la jauge réglée dans la config par default
         config = Configuration.get_solo()
-        self.fields['jauge_max'].initial = config.jauge_max
+        self.fields['jauge_max'].initial = 454
 
 
-class EventAdmin(admin.ModelAdmin):
-    form = CustomEventForm
+@admin.register(Event, site=staff_admin_site)
+class EventAdmin(ModelAdmin):
+    form = EventForm
+    compressed_fields = True  # Default: False
+    warn_unsaved_form = True  # Default: False
     fieldsets = (
-        ('Nouvel évènement', {
+        (None, {
             'fields': (
                 'name',
                 'datetime',
+                'end_datetime',
                 'img',
                 'short_description',
                 'long_description',
+                'jauge_max',
                 'published',
             )
         }),
-        ('Articles', {
+        ('Produits', {
             'fields': (
-                'products',
-            )
-        }),
-        ('Options', {
-            'fields': (
-                'jauge_max',
                 'max_per_user',
+                'products',
+            ),
+            "classes": ["tab"],
+        }),
+        ('Tags et formulaires', {
+            'fields': (
+                'categorie',
                 'tag',
                 'options_radio',
                 'options_checkbox',
-            )
-        }),
-        ('Recurence', {
-            'fields': (
-                'recurrent',
-                'booking',
-            )
-        }),
-        ('Cashless', {
-            'fields': (
-                # 'cashless',
-                'minimum_cashless_required',
-            )
+            ),
+            "classes": ["tab"],
         }),
     )
 
@@ -861,34 +870,21 @@ class EventAdmin(admin.ModelAdmin):
         'reservations',
     )
     search_fields = ['name']
+    autocomplete_fields = [
+        "products",
+        "tag",
+        "options_radio",
+        "options_checkbox",
+    ]
 
-    # pour selectionner uniquement les articles ventes et retour consigne
-    def formfield_for_manytomany(self, db_field, request, **kwargs):
-        produits_non_affichables = [Product.RECHARGE_CASHLESS, Product.DON, Product.ADHESION]
-        if db_field.name == "products":
-            kwargs["queryset"] = Product.objects \
-                .exclude(
-                categorie_article__in=produits_non_affichables) \
-                .exclude(archive=True)
-        return super().formfield_for_foreignkey(db_field, request, **kwargs)
-
-    def save_model(self, request, obj, form, change):
-        # On check si le cashless est opé.
-        # if obj.recharge_cashless:
-        #     config = Configuration.get_solo()
-        #     if config.check_serveur_cashless():
-        #         messages.add_message(request, messages.INFO, f"Cashless server ONLINE")
-        #     else:
-        #         obj.recharge_cashless = False
-        #         messages.add_message(request, messages.ERROR, "Cashless server OFFLINE or BAD KEY")
-
-        super().save_model(request, obj, form, change)
-
-        # import ipdb; ipdb.set_trace()
+    formfield_overrides = {
+        models.TextField: {
+            "widget": WysiwygWidget,
+        }
+    }
 
 
-staff_admin_site.register(Event, EventAdmin)
-
+"""
 
 
 
@@ -1118,7 +1114,6 @@ class TenantAdmin(ModelAdmin):
         return False
 
 
-
 ### Connect
 
 @admin.register(GhostConfig, site=staff_admin_site)
@@ -1132,7 +1127,7 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
         "ghost_last_log",
     ]
 
-    readonly_fields = ["ghost_last_log",]
+    readonly_fields = ["ghost_last_log", ]
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
