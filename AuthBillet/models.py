@@ -7,8 +7,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from django.conf import settings
 from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractUser, Group
-from django.db import connection
-from django.db import models
+from django.db import models, connection
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -212,7 +211,9 @@ class TibilletUser(AbstractUser):
     def as_password(self):
         return bool(self.password)
 
-    def set_staff(self, tenant):
+    def set_staff(self, tenant=None):
+        if not tenant:
+            tenant = connection.tenant
         self.client_admin.add(tenant)
         self.is_staff = True
         self.groups.add(Group.objects.get(name="staff"))
