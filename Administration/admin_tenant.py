@@ -791,7 +791,7 @@ class LigneArticleAdmin(ModelAdmin):
     @display(description=_("Status"), label={None: "danger", True: "success"})
     def display_status(self, instance: LigneArticle):
         status = instance.status
-        if status in [LigneArticle.VALID, LigneArticle.PAID, LigneArticle.FREERES]:
+        if status in [LigneArticle.VALID, LigneArticle.FREERES]:
             return True, f"{instance.get_status_display()}"
         return None, f"{instance.get_status_display()}"
 

@@ -1372,7 +1372,7 @@ class LigneArticle(models.Model):
         (CREATED, _('Non envoyé en paiement')),
         (UNPAID, _('Non payée')),
         (FREERES, _('Reservation gratuite')),
-        (PAID, _('Payée')),
+        (PAID, _('Payée & non validée')),
         (VALID, _('Validée')),
     ]
 
