@@ -8,8 +8,9 @@ from django.db import models
 from django.contrib import admin
 from django.contrib import messages
 from django.forms import ModelForm, TextInput, Form
-from django.http import HttpResponse, HttpRequest
+from django.http import HttpResponse, HttpRequest, HttpResponseRedirect
 from django.shortcuts import redirect
+from django.urls import reverse, re_path
 from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
@@ -18,14 +19,15 @@ from solo.admin import SingletonModelAdmin
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.decorators import display, action
 from unfold.sites import UnfoldAdminSite
-from unfold.widgets import UnfoldAdminTextInputWidget, UnfoldAdminEmailInputWidget, UnfoldAdminSelectWidget
+from unfold.widgets import UnfoldAdminTextInputWidget, UnfoldAdminEmailInputWidget, UnfoldAdminSelectWidget, \
+    UnfoldAdminSelectMultipleWidget, UnfoldAdminRadioSelectWidget, UnfoldAdminCheckboxSelectMultiple
 from unfold.contrib.forms.widgets import WysiwygWidget
 
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
 from AuthBillet.models import HumanUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
-    LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event
+    LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
     webhook_membership
 from Customers.models import Client
@@ -338,7 +340,6 @@ class ProductAdmin(ModelAdmin):
 
     search_fields = ['name']
 
-
     def get_queryset(self, request):
         # On retire les recharges cashless et l'article Don
         # Pas besoin de les afficher, ils se créent automatiquement.
@@ -562,7 +563,7 @@ class HumanUserAdmin(ModelAdmin):
 
 ### ADHESION
 
-class MembershipNewForm(ModelForm):
+class MembershipAddForm(ModelForm):
     # Un formulaire d'email qui va générer les action get_or_create_user
     email = forms.EmailField(
         required=True,
@@ -666,7 +667,7 @@ class MembershipAdmin(ModelAdmin):
     # Formulaire de modification
     form = MembershipChangeForm
     # Formulaire de création. A besoin de get_form pour fonctionner
-    add_form = MembershipNewForm
+    add_form = MembershipAddForm
 
     list_display = (
         'email',
@@ -830,6 +831,7 @@ class EventAdmin(ModelAdmin):
     form = EventForm
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
+
     fieldsets = (
         (None, {
             'fields': (
@@ -884,21 +886,8 @@ class EventAdmin(ModelAdmin):
     }
 
 
-"""
-
-
-
-
-# class QuantitiesSoldAdmin(admin.ModelAdmin):
-#     list_display = (
-#         'price',
-#         'event',
-#         'qty',
-#     )
-# staff_admin_site.register(QuantitiesSold, QuantitiesSoldAdmin)
-
-
-class ReservationAdmin(admin.ModelAdmin):
+@admin.register(Reservation, site=staff_admin_site)
+class ReservationAdmin(ModelAdmin):
     list_display = (
         'datetime',
         'user_commande',
@@ -907,43 +896,122 @@ class ReservationAdmin(admin.ModelAdmin):
         'total_paid',
     )
     # readonly_fields = list_display
-    # search_fields = ['event']
+    search_fields = ['event', 'user_commande__email']
+
+    def has_view_permission(self, request, obj=None):
+        return True
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
-# staff_admin_site.register(Reservation, ReservationAdmin)
+class TicketAddAdmin(ModelForm):
+    # Uniquement les tarif Adhésion
+    email = forms.EmailField(
+        required=True,
+        widget=UnfoldAdminEmailInputWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
+        label="Email",
+    )
+
+    pricesold = forms.ModelChoiceField(
+        queryset=PriceSold.objects.filter(productsold__event__datetime__gte=timezone.localtime() - timedelta(days=1)),
+        # Remplis le champ select avec les objets Price
+        empty_label=_("Sélectionnez un produit"),  # Texte affiché par défaut
+        required=True,
+        widget=UnfoldAdminSelectWidget(),
+        label=_("Tarif")
+    )
+
+    options_checkbox = forms.ModelMultipleChoiceField(
+        # Uniquement les options qui sont utilisé dans les évènements futurs
+        required=False,
+        queryset=OptionGenerale.objects.filter(options_checkbox__datetime__gte=timezone.localtime() - timedelta(days=1)),
+        widget=UnfoldAdminCheckboxSelectMultiple(),
+        label=_("Options multiples"),
+    )
+
+    options_radio = forms.ModelChoiceField(
+        # Uniquement les options qui sont utilisé dans les évènements futurs
+        required=False,
+        queryset=OptionGenerale.objects.filter(options_radio__datetime__gte=timezone.localtime() - timedelta(days=1)),
+        widget=UnfoldAdminRadioSelectWidget(),
+        label=_("Option unique"),
+    )
+
+    payment_method = forms.ChoiceField(
+        required=False,
+        choices=PaymentMethod.not_online(),  # on retire les choix stripe
+        widget=UnfoldAdminSelectWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
+        label=_("Moyen de paiement"),
+    )
+
+    class Meta:
+        model = Ticket
+        fields = [
+            'first_name',
+            'last_name',
+        ]
+
+    def clean(self):
+        return super().clean()
 
 
-class EventFilter(SimpleListFilter):
-    title = _('Évènement')
-    parameter_name = 'reservation__event__name'
+    def save(self, commit=True):
+        cleaned_data = self.cleaned_data
+        ticket: Ticket = self.instance
+        # On indique que l'adhésion a été créé sur l'admin
+        ticket.status = Ticket.CREATED
+        ticket.sale_origin = SaleOrigin.ADMIN
+        ticket.payment_method = self.cleaned_data.pop('payment_method')
 
-    def lookups(self, request, model_admin):
-        events = Event.objects.filter(
-            datetime__gt=(datetime.datetime.now() - datetime.timedelta(days=2)).date(),
-        )
-
-        tuples_list = []
-        for event in events:
-            if event.reservation.count() > 0:
-                t = (event.uuid, event.name.capitalize())
-                tuples_list.append(t)
-        return tuples_list
-
-    def queryset(self, request, queryset):
-        if not self.value():
-            return queryset
-        else:
-            return queryset.filter(reservation__event__uuid=self.value())
+        # Création de l'objet reservation avec l'user
+        email = self.cleaned_data.pop('email')
+        user = get_or_create_user(email)
 
 
-def valider_ticket(modeladmin, request, queryset):
-    queryset.update(status=Ticket.SCANNED)
+        # Création de l'objet reservation
+        pricesold: PriceSold = cleaned_data.pop('pricesold')
+        event: Event = pricesold.productsold.event
+        reservation = Reservation.objects.create(user_commande=user, event=event)
+        ticket.reservation = reservation
+
+        # On va chercher les options
+        options_checkbox = cleaned_data.pop('options_checkbox')
+        if options_checkbox:
+            reservation.options.set(options_checkbox)
+        options_radio = cleaned_data.pop('options_radio')
+        if options_radio:
+            reservation.options.add(options_radio)
+
+        # Le post save BaseBillet.signals.create_lignearticle_if_membership_created_on_admin s'executera
+        # # Création de la ligne Article vendu qui envera à la caisse si besoin
+        return super().save(commit=commit)
+
+class TicketChangeAdmin(ModelForm):
+    class Meta:
+        model = Ticket
+        fields = [
+            'first_name',
+            'last_name',
+        ]
 
 
-valider_ticket.short_description = "Valider le/les tickets"
+@admin.register(Ticket, site=staff_admin_site)
+class TicketAdmin(ModelAdmin):
+    compressed_fields = True  # Default: False
+    warn_unsaved_form = True  # Default: False
 
+    # Formulaire de modification
+    form = TicketChangeAdmin
+    # Formulaire de création. A besoin de get_form pour fonctionner
+    add_form = TicketAddAdmin
 
-class TicketAdmin(admin.ModelAdmin):
     list_display = [
         'reservations',
         'first_name',
@@ -954,12 +1022,9 @@ class TicketAdmin(admin.ModelAdmin):
     ]
 
     # list_editable = ['status',]
-    readonly_fields = list_display
-    actions = [valider_ticket, ]
+    # actions = [valider_ticket, ]
     ordering = ('-reservation__datetime',)
-
     # list_filter = [EventFilter, ]
-
     # list_filter = (
     #     EventFilter,
     # 'reservation__uuid'
@@ -1023,22 +1088,81 @@ class TicketAdmin(admin.ModelAdmin):
     reservations.short_description = 'Reservations'
     reservations.allow_tags = True
 
+    def get_form(self, request, obj=None, **kwargs):
+        """ Si c'est un add, on modifie le formulaire"""
+        defaults = {}
+        if obj is None:
+            defaults['form'] = self.add_form
+        defaults.update(kwargs)
+        return super().get_form(request, obj, **defaults)
+
+    def has_view_permission(self, request, obj=None):
+        return True
+
+    def has_change_permission(self, request, obj=None):
+        return True
+
+    def has_add_permission(self, request, obj=None):
+        return True
+
     def has_delete_permission(self, request, obj=None):
         # return request.user.is_superuser
         return False
 
-    def has_add_permission(self, request):
-        return False
+    # def get_queryset(self, request):
+    #     qs = super(TicketAdmin, self).get_queryset(request)
+    #     future_events = qs.filter(
+    #         reservation__event__datetime__gt=(timezone.localtime() - timedelta(days=2)).date(),
+    #     )
+    #     return future_events
 
-    def get_queryset(self, request):
-        qs = super(TicketAdmin, self).get_queryset(request)
-        future_events = qs.filter(
-            reservation__event__datetime__gt=(datetime.datetime.now() - datetime.timedelta(days=2)).date(),
+
+"""
+
+
+
+
+# class QuantitiesSoldAdmin(admin.ModelAdmin):
+#     list_display = (
+#         'price',
+#         'event',
+#         'qty',
+#     )
+# staff_admin_site.register(QuantitiesSold, QuantitiesSoldAdmin)
+
+
+
+
+class EventFilter(SimpleListFilter):
+    title = _('Évènement')
+    parameter_name = 'reservation__event__name'
+
+    def lookups(self, request, model_admin):
+        events = Event.objects.filter(
+            datetime__gt=(datetime.datetime.now() - datetime.timedelta(days=2)).date(),
         )
-        return future_events
+
+        tuples_list = []
+        for event in events:
+            if event.reservation.count() > 0:
+                t = (event.uuid, event.name.capitalize())
+                tuples_list.append(t)
+        return tuples_list
+
+    def queryset(self, request, queryset):
+        if not self.value():
+            return queryset
+        else:
+            return queryset.filter(reservation__event__uuid=self.value())
 
 
-staff_admin_site.register(Ticket, TicketAdmin)
+def valider_ticket(modeladmin, request, queryset):
+    queryset.update(status=Ticket.SCANNED)
+
+
+valider_ticket.short_description = "Valider le/les tickets"
+
+
 
 
 
@@ -1115,7 +1239,6 @@ class TenantAdmin(ModelAdmin):
 
 
 ### Connect
-
 @admin.register(GhostConfig, site=staff_admin_site)
 class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
     compressed_fields = True  # Default: False

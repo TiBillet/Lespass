@@ -41,6 +41,7 @@ from root_billet.models import RootConfiguration
 logger = logging.getLogger(__name__)
 
 
+# TODO, plus utile, a retirer et utiler un choice
 class Weekday(models.Model):
     WEEK = [
         (0, _('Lundi')),
@@ -55,6 +56,39 @@ class Weekday(models.Model):
 
     def __str__(self):
         return self.get_day_display()
+
+
+class SaleOrigin(models.TextChoices):
+    LESPASS = "LP", _("En ligne")
+    LABOUTIK = "LB", _("Caisse")
+    ADMIN = "AD", _("Administration")
+    EXTERNAL = "EX", _("Extérieur")
+
+
+class PaymentMethod(models.TextChoices):
+    FREE = "NA", _("Aucun : offert")
+    CC = "CC", _("Carte bancaire : TPE")
+    CASH = "CA", _("Espèce")
+    CHEQUE = "CH", _("Cheque bancaire")
+    STRIPE_FED = "SF", _("En ligne : Stripe fédéré")
+    STRIPE_NOFED = "SN", _("En ligne : Stripe account")
+    STRIPE_RECURENT = "SR", _("Paiement récurent : Stripe account")
+
+    @classmethod
+    def online(cls):
+        """Renvoie uniquement les choix de type 'en ligne'"""
+        return [
+            (choice, label) for choice, label in cls.choices if
+            choice in [cls.STRIPE_FED, cls.STRIPE_NOFED, cls.STRIPE_RECURENT]
+        ]
+
+    @classmethod
+    def not_online(cls):
+        """Renvoie uniquement les choix de type 'en ligne'"""
+        return [
+            (choice, label) for choice, label in cls.choices if
+            choice not in [cls.STRIPE_FED, cls.STRIPE_NOFED, cls.STRIPE_RECURENT]
+        ]
 
 
 class Tag(models.Model):
@@ -632,12 +666,14 @@ class Event(models.Model):
     slug = models.SlugField(unique=True, db_index=True, blank=True, null=True, max_length=250)
 
     datetime = models.DateTimeField(verbose_name=_("Date de début"))
-    end_datetime = models.DateTimeField(blank=True, null=True, verbose_name=_("Date de fin"), help_text=_("Non obligatoire"))
+    end_datetime = models.DateTimeField(blank=True, null=True, verbose_name=_("Date de fin"),
+                                        help_text=_("Non obligatoire"))
 
     created = models.DateTimeField(auto_now=True)
     jauge_max = models.PositiveSmallIntegerField(default=50, verbose_name=_("Jauge maximale"))
     max_per_user = models.PositiveSmallIntegerField(default=10,
-                                                    verbose_name=_("Nombre de reservation maximales par utilisateur.ices"),
+                                                    verbose_name=_(
+                                                        "Nombre de reservation maximales par utilisateur.ices"),
                                                     help_text=_("ex : Un même email peut réserver plusieurs billets.")
                                                     )
 
@@ -662,7 +698,8 @@ class Event(models.Model):
 
     # cashless = models.BooleanField(default=False, verbose_name="Proposer la recharge cashless")
     minimum_cashless_required = models.SmallIntegerField(default=0,
-                                                         verbose_name=_("Montant obligatoire minimum de la recharge cashless"))
+                                                         verbose_name=_(
+                                                             "Montant obligatoire minimum de la recharge cashless"))
 
     img = StdImageField(upload_to='images/',
                         validators=[MaxSizeValidator(1920, 1920)],
@@ -694,10 +731,10 @@ class Event(models.Model):
     categorie = models.CharField(max_length=3, choices=TYPE_CHOICES, default=CONCERT,
                                  verbose_name=_("Catégorie d'évènement"))
 
-    recurrent = models.ManyToManyField(Weekday, blank=True,
-                                       help_text=_(
-                                           "Selectionnez le jour de la semaine pour une récurence hebdomadaire. La date de l'évènement sera la date de fin de la récurence."),
-                                       verbose_name=_("Jours de la semaine"))
+    # recurrent = models.ManyToManyField(Weekday, blank=True,
+    #                                    help_text=_(
+    #                                        "Selectionnez le jour de la semaine pour une récurence hebdomadaire. La date de l'évènement sera la date de fin de la récurence."),
+    #                                    verbose_name=_("Jours de la semaine"))
 
     booking = models.BooleanField(default=False, verbose_name=_("Mode restauration/booking"),
                                   help_text=_(
@@ -800,6 +837,7 @@ class Event(models.Model):
 def add_to_public_event_directory(sender, instance: Event, created, **kwargs):
     """
     Vérifie que le priceSold est créé pour chaque price de chaque product présent dans l'évènement
+    L'objet PriceSold est nécéssaire pour la création d'un ticket.
     """
     for product in instance.products.all():
         # On va chercher le stripe id du product
@@ -838,7 +876,7 @@ class Artist_on_event(models.Model):
 
 
 @receiver(post_save, sender=Artist_on_event)
-def add_to_public_event_directory(sender, instance: Artist_on_event, created, **kwargs):
+def event_productsold_create(sender, instance: Artist_on_event, created, **kwargs):
     place = connection.tenant
     artist = instance.artist
     with schema_context('public'):
@@ -950,6 +988,8 @@ class PriceSold(models.Model):
     gift = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
 
     def __str__(self):
+        if self.productsold.event:
+            return f"{self.productsold.event.name} - {self.price.name} - {self.prix}€"
         return self.price.name
 
     def get_id_price_stripe(self,
@@ -1117,8 +1157,8 @@ class Reservation(models.Model):
 class Ticket(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
 
-    first_name = models.CharField(max_length=200)
-    last_name = models.CharField(max_length=200)
+    first_name = models.CharField(max_length=200, blank=True, null=True)
+    last_name = models.CharField(max_length=200, blank=True, null=True)
 
     reservation = models.ForeignKey(Reservation, on_delete=models.CASCADE, related_name="tickets")
 
@@ -1136,6 +1176,11 @@ class Ticket(models.Model):
                               verbose_name=_("Status du scan"))
 
     seat = models.CharField(max_length=20, default=_('L'))
+
+    sale_origin = models.CharField(max_length=2, choices=SaleOrigin.choices, default=SaleOrigin.LESPASS,
+                                   verbose_name=_("Origine du paiement"))
+    payment_method = models.CharField(max_length=2, choices=PaymentMethod.choices, blank=True, null=True,
+                                      verbose_name=_("Moyen de paiement"))
 
     def pdf_filename(self):
         config = Configuration.get_solo()
@@ -1180,8 +1225,8 @@ class Ticket(models.Model):
         return " - ".join([option.name for option in self.reservation.options.all()])
 
     class Meta:
-        verbose_name = _('Réservation')
-        verbose_name_plural = _('Réservations')
+        verbose_name = _('Billet')
+        verbose_name_plural = _('Billets')
 
 
 class FedowTransaction(models.Model):
@@ -1317,32 +1362,6 @@ class Paiement_stripe(models.Model):
     class Meta:
         verbose_name = _('Paiement Stripe')
         verbose_name_plural = _('Paiements Stripe')
-
-
-class PaymentMethod(models.TextChoices):
-    FREE = "NA", _("Aucun : offert")
-    CC = "CC", _("Carte bancaire : TPE")
-    CASH = "CA", _("Espèce")
-    CHEQUE = "CH", _("Cheque bancaire")
-    STRIPE_FED = "SF", _("En ligne : Stripe fédéré")
-    STRIPE_NOFED = "SN", _("En ligne : Stripe account")
-    STRIPE_RECURENT = "SR", _("Paiement récurent : Stripe account")
-
-    @classmethod
-    def online(cls):
-        """Renvoie uniquement les choix de type 'en ligne'"""
-        return [
-            (choice, label) for choice, label in cls.choices if
-            choice in [cls.STRIPE_FED, cls.STRIPE_NOFED, cls.STRIPE_RECURENT]
-        ]
-
-    @classmethod
-    def not_online(cls):
-        """Renvoie uniquement les choix de type 'en ligne'"""
-        return [
-            (choice, label) for choice, label in cls.choices if
-            choice not in [cls.STRIPE_FED, cls.STRIPE_NOFED, cls.STRIPE_RECURENT]
-        ]
 
 
 class LigneArticle(models.Model):
@@ -1598,16 +1617,17 @@ class Membership(models.Model):
 class ExternalApiKey(models.Model):
     name = models.CharField(max_length=30, unique=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL,
-                                on_delete=models.CASCADE,
-                                blank=True, null=True,
-                                help_text=_("Utilisateur qui a créé cette clé.")
-                                )
+                             on_delete=models.CASCADE,
+                             blank=True, null=True,
+                             help_text=_("Utilisateur qui a créé cette clé.")
+                             )
 
     key = models.OneToOneField(APIKey,
                                on_delete=models.CASCADE,
                                blank=True, null=True,
                                related_name="api_key",
-                               help_text=_("Validez l'enregistrement pour faire apparaitre la clé. Elle n'apparaitra qu'à la création.")
+                               help_text=_(
+                                   "Validez l'enregistrement pour faire apparaitre la clé. Elle n'apparaitra qu'à la création.")
                                )
 
     ip = models.GenericIPAddressField(
@@ -1646,7 +1666,6 @@ class ExternalApiKey(models.Model):
 
     def __str__(self):
         return f"{self.name} - {self.user} - {self.created.astimezone().strftime('%d-%m-%Y %H:%M:%S')}"
-
 
 
 class Webhook(models.Model):

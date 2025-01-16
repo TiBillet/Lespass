@@ -56,12 +56,12 @@ class TagSerializer(serializers.ModelSerializer):
         read_only_fields = ('uuid',)
 
 
-class WeekdaySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Weekday
-        fields = [
-            'day',
-        ]
+# class WeekdaySerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = Weekday
+#         fields = [
+#             'day',
+#         ]
 
 
 class ProductCreateSerializer(serializers.ModelSerializer):
@@ -605,7 +605,7 @@ class EventSerializer(serializers.ModelSerializer):
     options_checkbox = OptionsSerializer(many=True)
     artists = Artist_on_eventSerializer(many=True)
     tag = TagSerializer(many=True)
-    recurrent = WeekdaySerializer(many=True)
+    # recurrent = WeekdaySerializer(many=True)
 
     class Meta:
         model = Event

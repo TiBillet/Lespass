@@ -8,7 +8,7 @@ from django.dispatch import receiver
 from ApiBillet.serializers import get_or_create_price_sold
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, LigneArticle, Ticket, Paiement_stripe, Product, Price, \
-    PaymentMethod, Membership
+    PaymentMethod, Membership, SaleOrigin
 from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation
 from BaseBillet.triggers import LigneArticlePaid_ActionByCategorie
 from fedow_connect.fedow_api import AssetFedow
@@ -337,6 +337,30 @@ def create_lignearticle_if_membership_created_on_admin(sender, instance: Members
             payment_method=membership.payment_method,
             status=LigneArticle.CREATED,
         )
+
+        # On lance les post_save et triggers associés au adhésions en passant en PAID
+        # Envoie a la boutik, Fedow, webhook, etc ...
+        vente.status = LigneArticle.PAID
+        vente.save()
+
+
+
+@receiver(post_save, sender=Ticket)
+def create_lignearticle_if_ticket_created_on_admin(sender, instance: Ticket, created, **kwargs):
+    ticket: Ticket = instance
+    # Pour une nouvelle adhésion réalisée sur l'admin et non offerte, une vente est enregitrée.
+    if created and ticket.sale_origin == SaleOrigin.ADMIN:
+        logger.info(f"create_lignearticle_if_ticket_created_on_admin {instance} {created}")
+
+        vente = LigneArticle.objects.create(
+            pricesold=ticket.pricesold,
+            qty=1,
+            amount=int(ticket.pricesold.prix*100),
+            payment_method=ticket.payment_method,
+            status=LigneArticle.CREATED,
+        )
+
+        # import ipdb; ipdb.set_trace()
 
         # On lance les post_save et triggers associés au adhésions en passant en PAID
         # Envoie a la boutik, Fedow, webhook, etc ...

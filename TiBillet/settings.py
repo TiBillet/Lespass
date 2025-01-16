@@ -503,6 +503,14 @@ UNFOLD = {
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
 
                     },
+                    {
+                        "title": _("Tags"),
+                        "icon": "style",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_tag_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+
+                    },
                     # {
                     #     "title": _("Options"),
                     #     "icon": "page_info",  # Supported icon set: https://fonts.google.com/icons
@@ -525,20 +533,19 @@ UNFOLD = {
                         # "badge": "Administration.admin_tenant.badge_callback",
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest",
                     },
-                    # {
-                    #     "title": _("Produits"),
-                    #     "icon": "confirmation_number",  # Supported icon set: https://fonts.google.com/icons
-                    #     "link": reverse_lazy("staff_admin:BaseBillet_price_changelist"),
-                    #     # "badge": "Administration.admin_tenant.badge_callback",
-                    #     "permission": lambda request: request.user.is_staff,
-                    # },
                     {
-                        "title": _("Tags"),
-                        "icon": "style",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:BaseBillet_tag_changelist"),
+                        "title": _("Réservations"),
+                        "icon": "event_upcoming",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_reservation_changelist"),
                         # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest",
+                    },
+                    {
+                        "title": _("Billets"),
+                        "icon": "confirmation_number",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_ticket_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest",
                     },
                 ],
             },
