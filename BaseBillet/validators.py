@@ -70,9 +70,10 @@ class MembershipValidator(serializers.Serializer):
             'membership': f"{membership.pk}",
             'user': f"{user.pk}",
         }
-
         ligne_article_adhesion = LigneArticle.objects.create(
             pricesold=get_or_create_price_sold(price),
+            membership=membership,
+            amount=int(price.prix*100),
             qty=1,
         )
 

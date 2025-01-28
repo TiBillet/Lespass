@@ -16,18 +16,23 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 # from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import EmailMultiAlternatives
+from django.core.serializers.json import DjangoJSONEncoder
 from django.core.signing import Signer, TimestampSigner
 from django.db import connection
 from django.template.loader import render_to_string, get_template
 from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.text import slugify
 from weasyprint import HTML, CSS
 from weasyprint.text.fonts import FontConfiguration
 
-from BaseBillet.models import Reservation, Ticket, Configuration, Membership, Webhook, Paiement_stripe
+from ApiBillet.serializers import LigneArticleSerializer
+from BaseBillet.models import Reservation, Ticket, Configuration, Membership, Webhook, Paiement_stripe, LigneArticle, \
+    GhostConfig
 from Customers.models import Client
 from TiBillet.celery import app
+from django.utils.translation import gettext_lazy as _
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +40,10 @@ logger = logging.getLogger(__name__)
 def encode_uid(pk):
     return force_str(urlsafe_base64_encode(force_bytes(pk)))
 
+
 def decode_uid(pk):
     return force_str(urlsafe_base64_decode(pk))
+
 
 class CeleryMailerClass():
 
@@ -133,27 +140,28 @@ def report_to_pdf(report):
     return pdf_binary
 
 
-def create_invoice_pdf(paiement_stripe: Paiement_stripe):
+def create_membership_invoice_pdf(membership: Membership):
     config = Configuration.get_solo()
     template_name = 'invoice/invoice.html'
     font_config = FontConfiguration()
     template = get_template(template_name)
-    user = paiement_stripe.user
-    membership = paiement_stripe.membership.first()
+
+    user = membership.user
 
     context = {
         'config': config,
-        'paiement': paiement_stripe,
+        'paiement': membership.stripe_paiement.first(),
         'membership': membership,
         'email': user.email,
     }
+
     html = template.render(context)
 
     css = CSS(string=
               '''
                 @font-face {
                   font-family: BeStrong;
-                  src: url(file:///DjangoFiles/ApiBillet/templates/invoice/BeStrongRegular.otf);
+                  src: url(file:///DjangoFiles/BaseBillet/static/polices/Playwrite_IS/PlaywriteIS-VariableFont_wght.ttf);
                 }
                 @font-face {
                   font-family: Libre Barcode;
@@ -182,6 +190,79 @@ def create_invoice_pdf(paiement_stripe: Paiement_stripe):
     )
 
     return pdf_binary
+
+
+def context_for_membership_email(membership: "Membership"):
+    config = Configuration.get_solo()
+    domain = connection.tenant.get_primary_domain().domain
+
+    context = {
+        'username': membership.member_name(),
+        'now': timezone.now(),
+        'title': f"{config.organisation} : {membership.price.product.name}",
+        'objet': _("Confirmation email"),
+        'sub_title': _("Welcome aboard !"),
+        'main_text': _(
+            _(f"Votre paiement pour {membership.price.product.name} a bien été reçu.")),
+        # 'main_text_2': _("Si vous pensez que cette demande est main_text_2, vous n'avez rien a faire de plus :)"),
+        # 'main_text_3': _("Dans le cas contraire, vous pouvez main_text_3. Merci de contacter l'équipe d'administration via : contact@tibillet.re au moindre doute."),
+        'table_info': {
+            _('Reçu pour'): f'{membership.member_name()}',
+            _('Article'): f'{membership.price.product.name} - {membership.price.name}',
+            _('Contribution'): f'{membership.contribution_value}',
+            _('Date'): f'{membership.last_contribution}',
+            _('Valable jusque'): f'{membership.get_deadline()}',
+        },
+        'button_color': "#009058",
+        'button': {
+            'text': _('RECUPERER UNE FACTURE'),
+            'url': f'https://{domain}/memberships/{membership.pk}/invoice/',
+        },
+        'next_text_1': _("If you receive this email in error, please contact the TiBillet team."),
+        # 'next_text_2': "next_text_2",
+        'end_text': _('See you soon, and bon voyage.'),
+        'signature': _("Marvin, the TiBillet robot"),
+    }
+    # Ajout des options str si il y en a :
+    if membership.option_generale.count() > 0:
+        context['table_info']['Options'] = f"{membership.options()}"
+    return context
+
+
+def send_membership_invoice_to_email(membership: "Membership"):
+    user = membership.user
+    paiement_stripe = membership.stripe_paiement.first()
+
+    # Mails de confirmation et facture en PJ :
+    logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation par email")
+    send_email_generique(
+        context=context_for_membership_email(membership),
+        email=f"{user.email}",
+        # attached_files={
+        #     f'{slugify(membership.member_name())}_{slugify(paiement_stripe.invoice_number())}_tibillet_invoice.pdf':
+        #         create_membership_invoice_pdf(membership)},
+    )
+    logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation par email DELAY")
+    return True
+
+
+def send_sale_to_laboutik(ligne_article):
+    config = Configuration.get_solo()
+    if config.check_serveur_cashless():
+        serialized_ligne_article = LigneArticleSerializer(ligne_article).data
+        json_data = json.dumps(serialized_ligne_article, cls=DjangoJSONEncoder)
+
+        # Lancer ça dans un celery avec retry
+        celery_post_request.delay(
+            url=f'{config.server_cashless}/api/salefromlespass',
+            data=json_data,
+            headers={
+                "Authorization": f"Api-Key {config.key_cashless}",
+                "Content-type": "application/json",
+            },
+        )
+    else:
+        logger.warning(f"No serveur cashless on config. Membership not sended")
 
 
 def create_ticket_pdf(ticket: Ticket):
@@ -526,81 +607,18 @@ def ticket_celery_mailer(reservation_uuid: str, base_url):
             raise Exception
 
 
-"""
 @app.task
-def send_membership_to_cashless(data):
-    configuration = Configuration.get_solo()
-    if not configuration.server_cashless or not configuration.key_cashless:
-        logger.error(f'Pas de configuration cashless')
-        raise Exception(f'Fonction send_membership_to_cashless : Pas de configuration cashless')
+def webhook_reservation(reservation_pk, solo_webhook_pk=None):
+    logger.info(f"webhook_reservation : {reservation_pk}")
 
-    ligne_article = LigneArticle.objects.get(pk=data.get('ligne_article_pk'))
-    user = ligne_article.paiement_stripe.user
+    # On lance tous les webhook ou juste un seul ?
+    webhooks = []
+    if solo_webhook_pk:
+        webhooks.append(Webhook.objects.get(pk=solo_webhook_pk))
+    else :
+        webhooks = Webhook.objects.filter(event=Webhook.RESERVATION_V, active=True)
 
-    price_obj = ligne_article.pricesold.price
-    price_decimal = ligne_article.pricesold.prix
-
-    # Si c'est un price avec un don intégré (comme une adhésion récurente)
-    # On garde 1€ pour l'instance
-    if ligne_article.pricesold.gift:
-        price_decimal += -1
-
-    membre = Membership.objects.get(user=user, price=price_obj)
-
-    if not membre.first_contribution:
-        membre.first_contribution = timezone.now().date()
-
-    membre.last_contribution = timezone.now().date()
-    membre.contribution_value = price_decimal
-    membre.save()
-
-    data = {
-        "email": membre.email(),
-        "adhesion": price_decimal,
-        "uuid_commande": ligne_article.paiement_stripe.uuid,
-        "first_name": membre.first_name,
-        "last_name": membre.last_name,
-        "phone": membre.phone,
-        "postal_code": membre.postal_code,
-        "birth_date": membre.birth_date,
-    }
-
-    try:
-
-        sess = requests.Session()
-        r = sess.post(
-            f'{configuration.server_cashless}/api/membership',
-            headers={
-                'Authorization': f'Api-Key {configuration.key_cashless}'
-            },
-            data=data,
-            verify=bool(not settings.DEBUG),
-        )
-
-        sess.close()
-        logger.info(
-            f"        demande au serveur cashless pour {data}. réponse : {r.status_code} ")
-
-        if r.status_code in [200, 201, 202]:
-            ligne_article.status = LigneArticle.VALID
-        else:
-            logger.error(
-                f"erreur réponse serveur cashless {r.status_code} {r.text}")
-
-    except ConnectionError as e:
-        logger.error(
-            f"ConnectionError serveur cashless {configuration.server_cashless} : {e}")
-
-    except Exception as e:
-        raise Exception(f'Exception request send_membership_to_cashless {type(e)} : {e} ')
-"""
-
-
-@app.task
-def webhook_reservation(reservation_pk):
-    logger.info(f"webhook_reservation : {reservation_pk} {timezone.now()} info")
-    webhooks = Webhook.objects.filter(event=Webhook.RESERVATION_V)
-    if webhooks.count() > 0:
+    if len(webhooks) > 0:
         reservation = Reservation.objects.get(pk=reservation_pk)
         json = {
             "object": "reservation",
@@ -611,11 +629,62 @@ def webhook_reservation(reservation_pk):
 
         for webhook in webhooks:
             try:
-                response = requests.request("POST", webhook.url, data=json, timeout=2)
-                webhook.last_response = f"{timezone.now()} - status code {response.status_code} - {response.text}"
+                response = requests.request("POST", webhook.url, data=json, timeout=2, verify=bool(not settings.DEBUG))
+                webhook.last_response = f"{timezone.now()} - status code {response.status_code} - {response.content}"
+                if not response.ok:
+                    logger.error(f"webhook_reservation ERROR : {reservation_pk} {timezone.now()} {response.content}")
+                    webhook.active = False
             except Exception as e:
                 logger.error(f"webhook_reservation ERROR : {reservation_pk} {timezone.now()} {e}")
                 webhook.last_response = f"{timezone.now()} - {e}"
+                webhook.active = False
+            webhook.save()
+
+
+
+@app.task
+def webhook_membership(membership_pk, solo_webhook_pk=None):
+    logger.info(f"webhook_membership : {membership_pk}")
+
+    # On lance tous les webhook ou juste un seul ?
+    webhooks = []
+    if solo_webhook_pk:
+        webhooks.append(Webhook.objects.get(pk=solo_webhook_pk))
+    else :
+        webhooks = Webhook.objects.filter(event=Webhook.MEMBERSHIP_V, active=True)
+
+    if len(webhooks) > 0:
+        membership = Membership.objects.get(pk=membership_pk)
+        configuration = Configuration.get_solo()
+        # TODO: remplacer par un choix de champs sur l'admin
+        return_body = {
+            "object": "membership",
+            "pk": str(membership.pk),
+            "uuid": f"{membership.uuid}",
+            "state": str(membership.status),
+            "datetime": str(membership.date_added),
+            "email": str(membership.email()),
+            "first_name": str(membership.first_name),
+            "last_name": str(membership.last_name),
+            "pseudo": str(membership.pseudo),
+            "price": str(membership.price_name()),
+            # "user_id": str(membership.user.id), # Utile ?
+            "organisation": f"{configuration.organisation}",
+            "organisation_id": f"{configuration.uuid}",
+        }
+
+        # Si plusieurs webhook :
+        for webhook in webhooks:
+            try:
+                response = requests.request("POST", webhook.url, json=return_body, timeout=2, verify=bool(not settings.DEBUG))
+                webhook.last_response = f"{timezone.now()} - status code {response.status_code} - {response.content}"
+                if not response.ok:
+                    logger.error(f"webhook_membership ERROR : {membership_pk} {timezone.now()} {response.content}")
+                    webhook.active = False
+            except Exception as e:
+                logger.error(f"webhook_membership ERROR : {membership_pk} {timezone.now()} {e}")
+                webhook.last_response = f"{timezone.now()} - {e}"
+                webhook.active = False
             webhook.save()
 
 
@@ -626,16 +695,16 @@ def send_to_ghost(membership_pk):
     # Email du compte :
     user = membership.user
     email = user.email
-    name = f"{membership.first_name} {membership.last_name}"
+    name = f"{membership.first_name.capitalize()} {membership.last_name.capitalize()}"
 
     # Si tu as besoin du produit adhésion, tu peux utiliser les deux variables ci-dessous.
     # Le model est BaseBillet/models.py
     # product: Product = trigger.ligne_article.pricesold.productsold.product
 
     # Et ici, tu as les cred' ghost à entrer dans l'admin.
-    config = Configuration.get_solo()
-    ghost_url = config.ghost_url
-    ghost_key = config.ghost_key
+    ghost_config = GhostConfig.get_solo()
+    ghost_url = ghost_config.ghost_url
+    ghost_key = ghost_config.ghost_key
 
     if ghost_url and ghost_key and email and name:
         ###################################
@@ -673,7 +742,7 @@ def send_to_ghost(membership_pk):
         response = requests.get(ghost_url + "/ghost/api/admin/members/", params=filter, headers=headers)
 
         # Vérifier que la réponse de l'API est valide
-        if response.status_code == 200:
+        if response.ok:
             # Décoder la réponse JSON
             j = response.json()
             members = j['members']
@@ -692,7 +761,7 @@ def send_to_ghost(membership_pk):
                 }
 
                 # Ajouter le nouveau membre à l'instance Ghost
-                response = requests.post(ghost_url + "/ghost/api/admin/members/", json=member_data, headers=headers)
+                response = requests.post(ghost_url + "/ghost/api/admin/members/", json=member_data, headers=headers, timeout=2)
 
                 # Vérifier que la réponse de l'API est valide
                 if response.status_code == 201:
@@ -710,11 +779,10 @@ def send_to_ghost(membership_pk):
 
         # On met à jour les logs pour debug
         try:
-            config.ghost_last_log = f"{timezone.now()} : {response.text}"
-            config.save()
+            ghost_config.ghost_last_log = f"{timezone.now()} : {response.text}"
+            ghost_config.save()
         except Exception as e:
             logger.error(f"Erreur lors de la mise à jour du log : {e}")
-
 
 
 # @app.task
@@ -722,7 +790,7 @@ def send_to_ghost(membership_pk):
 def celery_post_request(self, url, headers, data):
     # Le max de temps entre deux retries : 24 heures
     MAX_RETRY_TIME = 86400  # 24 * 60 * 60 seconds = 24 h
-    try :
+    try:
         logger.info(f"start celery_post_request to {url}")
         response = requests.post(
             f'{url}',

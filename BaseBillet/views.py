@@ -26,11 +26,12 @@ from django_extensions.templatetags.debugger_tags import ipdb
 from django_htmx.http import HttpResponseClientRedirect
 from django_tenants.utils import tenant_context
 from faker import Faker
-from rest_framework import viewsets, permissions
+from rest_framework import viewsets, permissions, status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
+from rest_framework.response import Response
 from rest_framework.views import APIView
 from txaio.aio import config
 
@@ -41,7 +42,7 @@ from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Event, Price, LigneArticle, \
     Paiement_stripe, Membership
-from BaseBillet.tasks import create_invoice_pdf
+from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
@@ -224,6 +225,8 @@ class ScanQrCode(viewsets.ViewSet):
                 logger.info("Wallet ephemere, on demande le mail")
                 template_context = get_context(request)
                 template_context['qrcode_uuid'] = qrcode_uuid
+                # On logout l'user au cas ou on scanne les carte a la suite.
+                logout(request)
                 return render(request, "htmx/views/inscription.html", context=template_context)
 
             # Si wallet non ephemere, alors on a un user :
@@ -569,6 +572,8 @@ class MyAccount(viewsets.ViewSet):
             messages.add_message(request, messages.ERROR, _("No available. Contact an admin."))
             return HttpResponseClientRedirect('/my_account/')
 
+
+
     @action(detail=True, methods=['GET'])
     def return_refill_wallet(self, request, pk=None):
         # On demande confirmation à Fedow qui a du recevoir la validation en webhook POST
@@ -810,17 +815,36 @@ class MembershipMVT(viewsets.ViewSet):
 
         return redirect('/memberships/')
 
+
     @action(detail=True, methods=['GET'])
     def invoice(self, request, pk):
-        paiement_stripe = get_object_or_404(Paiement_stripe, uuid=pk)
-        pdf_binary = create_invoice_pdf(paiement_stripe)
+        '''
+        - lien "recevoir une facture" dans le mail de confirmation
+        - Bouton d'action "générer une facture" dans l'admin Adhésion
+        '''
+        membership = get_object_or_404(Membership, pk=pk)
+        pdf_binary = create_membership_invoice_pdf(membership)
+        if not pdf_binary:
+            return HttpResponse(_('Erreur lors de la génération du PDF'), status=500)
+
         response = HttpResponse(pdf_binary, content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="facture.pdf"'
+        response['Content-Disposition'] = f'inline; filename="facture.pdf"'
         return response
 
+    @action(detail=True, methods=['GET'])
+    def invoice_to_mail(self, request, pk):
+        '''
+        - Bouton action "Envoyer une facture par mail" dans admin adhésion
+        '''
+        membership = get_object_or_404(Membership, pk=pk)
+        send_membership_invoice_to_email(membership)
+        return Response("sended", status=status.HTTP_200_OK)
+
     def get_permissions(self):
-        if self.action in ['retrieve']:
+        if self.action in ['retrieve',]:
             permission_classes = [permissions.IsAuthenticated]
+        elif self.action in ['invoice_to_mail',]:
+            permission_classes = [permissions.IsAdminUser]
         else:
             permission_classes = [permissions.AllowAny]
         return [permission() for permission in permission_classes]

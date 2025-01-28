@@ -1,29 +1,26 @@
 import datetime
 import logging
-import uuid
 from decimal import Decimal
 
 import requests
 import stripe
 from PIL import Image
 from django.db import connection
-from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 from django_tenants.utils import tenant_context
 from rest_framework import serializers
 from rest_framework.generics import get_object_or_404
-
-from AuthBillet.models import TibilletUser
-from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, Paiement_stripe, \
-    PriceSold, ProductSold, Artist_on_event, OptionGenerale, Membership, Tag, Weekday
+    PriceSold, ProductSold, Artist_on_event, OptionGenerale, Tag, Weekday
 from Customers.models import Client
-from MetaBillet.models import WaitingConfiguration
 from PaiementStripe.views import CreationPaiementStripe
-# from QrcodeCashless.models import CarteCashless, Detail
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
+
+
+def dec_to_int(value):
+    return int(value * 100)
 
 
 def get_img_from_url(url):
@@ -59,12 +56,12 @@ class TagSerializer(serializers.ModelSerializer):
         read_only_fields = ('uuid',)
 
 
-class WeekdaySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Weekday
-        fields = [
-            'day',
-        ]
+# class WeekdaySerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = Weekday
+#         fields = [
+#             'day',
+#         ]
 
 
 class ProductCreateSerializer(serializers.ModelSerializer):
@@ -288,16 +285,17 @@ def create_account_link_for_onboard(id_acc_connect=None):
     url_onboard = account_link.get('url')
     return url_onboard
 
-class CheckMailSerializer(serializers.Serializer):
-    email = serializers.EmailField()
 
-    def validate_email(self, value):
-        self.user = get_or_create_user(value, send_mail=False)
-        return value
+# class CheckMailSerializer(serializers.Serializer):
+#     email = serializers.EmailField()
+#
+#     def validate_email(self, value):
+#         self.user = get_or_create_user(value, send_mail=False)
+#         return value
+
 
 """
 Ex Methode
-"""
 class WaitingConfigSerializer(serializers.ModelSerializer):
     stripe = serializers.BooleanField()
 
@@ -429,6 +427,7 @@ class WaitingConfigSerializer(serializers.ModelSerializer):
                 _(f'img doit contenir un fichier, ou logo_url doit contenir une url valide'))
 
         return super().validate(attrs)
+"""
 
 
 class ArtistEventCreateSerializer(serializers.Serializer):
@@ -606,7 +605,7 @@ class EventSerializer(serializers.ModelSerializer):
     options_checkbox = OptionsSerializer(many=True)
     artists = Artist_on_eventSerializer(many=True)
     tag = TagSerializer(many=True)
-    recurrent = WeekdaySerializer(many=True)
+    # recurrent = WeekdaySerializer(many=True)
 
     class Meta:
         model = Event
@@ -670,7 +669,6 @@ class EventSerializer(serializers.ModelSerializer):
                                                                   name="Don pour la coopérative")
             gift_price, created = Price.objects.get_or_create(product=gift_product, prix=1, name="Coopérative TiBillet")
             instance.products.add(gift_product)
-
 
         # if instance.recharge_cashless :
         #     recharge_suspendue, created = Product.objects.get_or_create(categorie_article=Product.RECHARGE_SUSPENDUE, name="Recharge cashless")
@@ -744,6 +742,7 @@ class TicketSerializer(serializers.ModelSerializer):
         representation = super().to_representation(instance)
         representation['options'] = [option.name for option in instance.reservation.options.all()]
         return representation
+
 
 #
 # class NewAdhesionValidator(serializers.Serializer):
@@ -976,7 +975,7 @@ def create_ticket(pricesold, customer, reservation):
     return ticket
 
 
-def get_or_create_price_sold(price: Price, event: Event =None):
+def get_or_create_price_sold(price: Price, event: Event = None):
     """
     Générateur des objets PriceSold pour envoi à Stripe.
     Price + Event = PriceSold
@@ -992,26 +991,25 @@ def get_or_create_price_sold(price: Price, event: Event =None):
     )
 
     if created:
+        logger.info(f"get_or_create_price_sold -> Demande de productsold {productsold.nickname()} created : {created}")
         productsold.get_id_product_stripe()
-    logger.info(f"productsold {productsold.nickname()} created : {created}")
 
     prix = price.prix
-    # if gift:
-    #     prix = price.prix + gift
 
     pricesold, created = PriceSold.objects.get_or_create(
         productsold=productsold,
         prix=prix,
         price=price,
-        # gift=gift
     )
 
     if created:
+        logger.info(f"pricesold {pricesold.price.name} created : {created}")
         pricesold.get_id_price_stripe()
-    logger.info(f"pricesold {pricesold.price.name} created : {created}")
 
     return pricesold
 
+
+"""
 
 def line_article_recharge(carte, qty):
     product, created = Product.objects.get_or_create(
@@ -1029,10 +1027,12 @@ def line_article_recharge(carte, qty):
     # noinspection PyTypeChecker
     ligne_article_recharge = LigneArticle.objects.create(
         pricesold=get_or_create_price_sold(price),
+        amount=dec_to_int(price.prix),
         qty=1,
         carte=carte,
     )
     return ligne_article_recharge
+"""
 
 """
 class DetailCashlessCardsValidator(serializers.ModelSerializer):
@@ -1098,7 +1098,6 @@ class CashlessCardsValidator(serializers.Serializer):
         validation = super().validate(attrs)
         return validation
 """
-
 
 """
 class ChargeCashlessValidator(serializers.Serializer):
@@ -1169,13 +1168,12 @@ class ReservationValidator(serializers.Serializer):
     def validate_email(self, value):
         # On vérifie que l'utilisateur connecté et l'email correspondent bien.
         request = self.context.get('request')
-        self.user_commande = get_or_create_user(value)
 
         if request.user.is_authenticated:
             if request.user.email != request.user:
                 raise serializers.ValidationError(_(f"L'email ne correspond pas à l'utilisateur connecté."))
 
-        return self.user_commande.email
+        return value
 
     def validate_prices(self, value):
         """
@@ -1326,6 +1324,8 @@ class ReservationValidator(serializers.Serializer):
             # les lignes articles pour la vente
             line_article = LigneArticle.objects.create(
                 pricesold=pricesold,
+                amount=dec_to_int(pricesold.prix),
+                # pas d'objet reservation ?
                 qty=qty,
             )
             list_line_article_sold.append(line_article)
@@ -1423,6 +1423,7 @@ class ReservationValidator(serializers.Serializer):
 
 class PriceSoldSerializer(serializers.ModelSerializer):
     price = PriceSerializer(many=False)
+
     class Meta:
         model = PriceSold
         fields = [
@@ -1430,16 +1431,24 @@ class PriceSoldSerializer(serializers.ModelSerializer):
             'prix',
         ]
 
+
 class LigneArticleSerializer(serializers.ModelSerializer):
     pricesold = PriceSoldSerializer(many=False)
+
     class Meta:
         model = LigneArticle
         fields = [
-            'paiement_stripe_uuid',
             'uuid',
             'pricesold',
             'qty',
             'vat',
-            'user_uuid_wallet',
             'datetime',
+            'payment_method',
+            'amount',
+            # 'paiement_stripe_uuid',
+            # 'user_uuid_wallet',
         ]
+
+
+class EmailSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
