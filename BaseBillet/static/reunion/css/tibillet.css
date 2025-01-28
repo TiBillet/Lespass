@@ -1,15 +1,13 @@
 @font-face {
     font-family: 'luciole';
-    src: url('/assets/font/luciole/Luciole-Regular.woff2') format('woff2'),
-         url('/assets/font/luciole/Luciole-Regular.ttf') format('ttf');
+    src: url('../font/luciole/luciole.woff2') format('woff2');
     font-weight: normal;
     font-style: normal;
 }
 
 @font-face {
     font-family: 'luciole';
-    src: url('/assets/font/luciole/Luciole-Bold.woff2') format('woff2'),
-         url('/assets/font/luciole/Luciole-Bold.ttf') format('ttf');
+    src: url('../font/luciole/luciole-bold.woff2') format('woff2');
     font-weight: bold;
     font-style: normal;
 }
@@ -17,16 +15,14 @@
 /* 
 @font-face {
     font-family: 'luciole';
-    src: url('/assets/font/luciole/Luciole-Italic.woff2') format('woff2'),
-         url('/assets/font/luciole/Luciole-Italic.ttf') format('ttf');
+    src: url('../font/luciole/luciole-italic.woff2') format('woff2');
     font-weight: italic;
     font-style: normal; */
 /* } */
 
 @font-face {
     font-family: 'staatliches';
-    src: url('/assets/font/staatliches/staatliches-regular-webfont.woff2') format('woff2'),
-         url('/assets/font/staatliches/Staatliches-Regular.ttf') format('ttf');
+    src: url('../font/staatliches/staatliches.woff2') format('woff2');
     font-weight: normal;
     font-style: normal;
 }
