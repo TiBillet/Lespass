@@ -66,3 +66,15 @@
           {% include 'reunion/forms/contact.html' %}
       </div>
   </div>
+
+  <!-- login panel -->
+  <div class="offcanvas-start offcanvas" tabindex="-1" id="loginPanel" aria-labelledby="loginPanelLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="loginPanelLabel">{% translate 'Connexion' %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% translate 'Fermer' %}"></button>
+    </div>
+    <div class="offcanvas-body">
+        {# TODO: load all forms through htmx? #}
+        {% include 'reunion/forms/login.html' %}
+    </div>
+  </div>
