@@ -12,7 +12,9 @@ https://docs.djangoproject.com/en/3.1/ref/settings/
 import os
 from datetime import timedelta
 from pathlib import Path
-
+from django.utils.translation import gettext_lazy as _
+from django.templatetags.static import static
+from django.urls import reverse_lazy
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve(strict=True).parent.parent
@@ -67,7 +69,6 @@ if os.environ.get('ADDITIONAL_DOMAINS'):
         CSRF_TRUSTED_ORIGINS.append(f'https://{domain}')
         CSRF_TRUSTED_ORIGINS.append(f'https://*.{domain}')
 
-
 CORS_ORIGIN_WHITELIST = CSRF_TRUSTED_ORIGINS
 
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
@@ -77,6 +78,14 @@ SHARED_APPS = (
     'django_tenants',  # mandatory
     "daphne",
     'Customers',  # you must list the app where your tenant model resides in
+
+    "unfold",  # before django.contrib.admin
+    "unfold.contrib.filters",  # optional, if special filters are needed
+    "unfold.contrib.forms",  # optional, if special form elements are needed
+    # "unfold.contrib.inlines",  # optional, if special inlines are needed
+    # "unfold.contrib.import_export",  # optional, if django-import-export package is used
+    # "unfold.contrib.guardian",  # optional, if django-guardian package is used
+    # "unfold.contrib.simple_history",  # optional, if django-simple-history package is used
 
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -158,7 +167,7 @@ MIDDLEWARE = [
 ]
 
 if DEBUG:
-    MIDDLEWARE += ['django_browser_reload.middleware.BrowserReloadMiddleware',]
+    MIDDLEWARE += ['django_browser_reload.middleware.BrowserReloadMiddleware', ]
 
 TEMPLATES = [
     {
@@ -215,49 +224,57 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 REST_FRAMEWORK = {
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle'
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/day',
+        'user': '1000/day'
+    },
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
         "rest_framework_api_key.permissions.HasAPIKey",
     ),
-    "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
-    ),
+    # "DEFAULT_AUTHENTICATION_CLASSES": (
+    #     "rest_framework_simplejwt.authentication.JWTAuthentication",
+    # ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10
 }
-
-SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
-    #     'REFRESH_TOKEN_LIFETIME': timedelta(seconds=30),
-    'ROTATE_REFRESH_TOKENS': False,
-    'BLACKLIST_AFTER_ROTATION': False,
-    'UPDATE_LAST_LOGIN': False,
-
-    'ALGORITHM': 'HS256',
-    'SIGNING_KEY': SECRET_KEY,
-    'VERIFYING_KEY': None,
-    'AUDIENCE': None,
-    'ISSUER': None,
-    'JWK_URL': None,
-    'LEEWAY': 0,
-
-    'AUTH_HEADER_TYPES': ('Bearer',),
-    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
-    'USER_ID_FIELD': 'id',
-    'USER_ID_CLAIM': 'user_id',
-    'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',
-
-    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
-    'TOKEN_TYPE_CLAIM': 'token_type',
-    'TOKEN_USER_CLASS': 'rest_framework_simplejwt.models.TokenUser',
-
-    'JTI_CLAIM': 'jti',
-
-    'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
-    'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
-    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
-}
+#
+# SIMPLE_JWT = {
+#     'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
+#     'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
+#     #     'REFRESH_TOKEN_LIFETIME': timedelta(seconds=30),
+#     'ROTATE_REFRESH_TOKENS': False,
+#     'BLACKLIST_AFTER_ROTATION': False,
+#     'UPDATE_LAST_LOGIN': False,
+#
+#     'ALGORITHM': 'HS256',
+#     'SIGNING_KEY': SECRET_KEY,
+#     'VERIFYING_KEY': None,
+#     'AUDIENCE': None,
+#     'ISSUER': None,
+#     'JWK_URL': None,
+#     'LEEWAY': 0,
+#
+#     'AUTH_HEADER_TYPES': ('Bearer',),
+#     'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+#     'USER_ID_FIELD': 'id',
+#     'USER_ID_CLAIM': 'user_id',
+#     'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',
+#
+#     'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+#     'TOKEN_TYPE_CLAIM': 'token_type',
+#     'TOKEN_USER_CLASS': 'rest_framework_simplejwt.models.TokenUser',
+#
+#     'JTI_CLAIM': 'jti',
+#
+#     'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
+#     'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
+#     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
+# }
 
 # Internationalization
 # https://docs.djangoproject.com/en/3.1/topics/i18n/
@@ -395,6 +412,204 @@ LOGGING = {
     },
 }
 
+UNFOLD = {
+    "SITE_TITLE": "TiBillet",
+    "SITE_HEADER": "TiBillet Admin",
+    "TABS": [
+        {
+            # Déclare dans quel affichage les tabs s'activent
+            "models": ["AuthBillet.humanuser", "BaseBillet.membership"],
+            "items": [
+                {
+                    "title": _("Tous.tes"),
+                    # "icon": "sports_motorsports",
+                    "link": reverse_lazy("staff_admin:AuthBillet_humanuser_changelist"),
+                },
+                {
+                    "title": _("Adhésion à jours"),
+                    # "icon": "sports_motorsports",
+                    "link": lambda
+                        request: f'{reverse_lazy("staff_admin:AuthBillet_humanuser_changelist")}?membership_valid=Y',
+                },
+                {
+                    "title": _("Utilisateur.ices sans adhésions"),
+                    # "icon": "sports_motorsports",
+                    "link": lambda
+                        request: f'{reverse_lazy("staff_admin:AuthBillet_humanuser_changelist")}?membership_valid=O',
+                },
+                {
+                    "title": _("Adhésions"),
+                    # "icon": "precision_manufacturing",
+                    "link": reverse_lazy("staff_admin:BaseBillet_membership_changelist"),
+                },
+                # {
+                #     "title": _("Custom page"),
+                #     "icon": "grade",
+                #     "link": reverse_lazy("staff_admin:AuthBillet_humanuser_changelist"),
+                # },
+            ],
+        },
+    ],
+    "SIDEBAR": {
+        "show_search": True,  # Search in applications and models names
+        "show_all_applications": True,  # Dropdown with all applications and models
+        "navigation": [
+            {
+                "title": _("Informations générales"),
+                "separator": True,  # Top border
+                "collapsible": False,  # Collapsible group of links
+                "items": [
+                    {
+                        "title": _("Configuration"),
+                        "icon": "manufacturing",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_configuration_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        # "permission": lambda request: request.user.is_staff,
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+                    },
+                ],
+            },
+            {
+                "title": _("Utilisateur.ices"),
+                "separator": True,  # Top border
+                "collapsible": False,  # Collapsible group of links
+                "items": [
+                    {
+                        "title": _("Comptes utilisateur.ices"),
+                        "icon": "person_add",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:AuthBillet_humanuser_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+                    },
+                    {
+                        "title": _("Adhésions"),
+                        "icon": "card_membership",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_membership_changelist"),
+                        "badge": "Administration.admin_tenant.adhesion_badge_callback",
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+                    },
+                ],
+            },
+            {
+                "title": _("Produits"),
+                "separator": True,  # Top border
+                "collapsible": False,  # Collapsible group of links
+                "items": [
+                    {
+                        "title": _("Produits"),
+                        "icon": "storefront",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_product_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+
+                    },
+                    {
+                        "title": _("Tags"),
+                        "icon": "style",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_tag_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+
+                    },
+                    # {
+                    #     "title": _("Options"),
+                    #     "icon": "page_info",  # Supported icon set: https://fonts.google.com/icons
+                    #     "link": reverse_lazy("staff_admin:BaseBillet_optiongenerale_changelist"),
+                    #     # "badge": "Administration.admin_tenant.badge_callback",
+                    #     "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+                    #
+                    # },
+                ],
+            },
+            {
+                "title": _("Évènementiel"),
+                "separator": True,  # Top border
+                "collapsible": False,  # Collapsible group of links
+                "items": [
+                    {
+                        "title": _("Evènements"),
+                        "icon": "event",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_event_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest",
+                    },
+                    {
+                        "title": _("Réservations"),
+                        "icon": "event_upcoming",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_reservation_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest",
+                    },
+                    {
+                        "title": _("Billets"),
+                        "icon": "confirmation_number",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_ticket_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest",
+                    },
+                ],
+            },
+            {
+                "title": _("Ventes"),
+                "separator": True,  # Top border
+                "collapsible": False,  # Collapsible group of links
+                "items": [
+                    {
+                        "title": _("Ventes"),
+                        "icon": "receipt_long",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_lignearticle_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+                    },
+                    {
+                        "title": _("Paiements stripe"),
+                        "icon": "price_change",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_paiement_stripe_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+
+                    }
+                ],
+            },
+            {
+                "title": _("Connect'"),
+                "separator": True,  # Top border
+                "collapsible": True,  # Collapsible group of links
+                "items": [
+                    {
+                        "title": _("API Key"),
+                        "icon": "api",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_externalapikey_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+                    },
+                    {
+                        "title": _("Webhook"),
+                        "icon": "webhook",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_webhook_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+                    },
+                    {
+                        "title": _("Ghost"),
+                        "icon": "circle",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_ghostconfig_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+                    },
+                    # {
+                    #     "title": _("Dokos"),
+                    #     "icon": "circle",  # Supported icon set: https://fonts.google.com/icons
+                    #     "link": reverse_lazy("staff_admin:BaseBillet_paiement_stripe_changelist"),
+                    #     # "badge": "Administration.admin_tenant.badge_callback",
+                    #     "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+                    #
+                    # },
+                ],
+            },
+        ],
+    },
+}
 
 if DEBUG:
     SHELL_PLUS = "ipython"
@@ -413,6 +628,8 @@ if DEBUG:
         (("cryptography.hazmat.primitives"), ("serialization",)),
         (("BaseBillet.tasks"), ("test_logger",)),
         (("BaseBillet.tests"), ("BaseBilletTest",)),
+        (("ApiBillet.serializers"), ("get_or_create_price_sold",)),
+
         (("fedow_connect.fedow_api"), ("FedowAPI",)),
         (("django.db"), ("connection",)),
 

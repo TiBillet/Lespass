@@ -10,7 +10,7 @@ from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 from stripe.error import InvalidRequestError
 
-from BaseBillet.models import Configuration, LigneArticle, Paiement_stripe, Reservation, Price, PriceSold
+from BaseBillet.models import Configuration, LigneArticle, Paiement_stripe, Reservation, Price, PriceSold, PaymentMethod
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
@@ -210,7 +210,6 @@ class CreationPaiementStripe():
 
 
 def new_entry_from_stripe_invoice(user, id_invoice):
-    # stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
     stripe.api_key = Configuration.get_solo().get_stripe_api()
     invoice = stripe.Invoice.retrieve(id_invoice)
 
@@ -219,6 +218,8 @@ def new_entry_from_stripe_invoice(user, id_invoice):
     for line in lines['data']:
         ligne_article = LigneArticle.objects.create(
             pricesold=PriceSold.objects.get(id_price_stripe=line.price.id),
+            payment_method=PaymentMethod.STRIPE_RECURENT,
+            amount=line.amount,
             qty=line.quantity,
         )
         lignes_articles.append(ligne_article)

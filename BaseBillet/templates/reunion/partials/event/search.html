@@ -1,33 +1,48 @@
+{% load i18n %}
 <!-- search and filtering -->
 <form class="my-3" action=".">
     <div class="input-group input-group-lg">
-        <button class="btn btn-outline-secondary position-relative" type="button" id="button-filters" data-bs-toggle="offcanvas"
-        data-bs-target="#filterPanel" aria-controls="filterPanel">
-        <i class="bi bi-funnel"></i>
-        <span class="js-filter-indicator position-absolute top-0 start-0 translate-middle p-2 bg-info rounded-circle d-md-none">
-            <span class="visually-hidden">Filtres actifs</span>
+        <button class="btn btn-outline-secondary position-relative" type="button" id="button-filters"
+                data-bs-toggle="offcanvas"
+                data-bs-target="#filterPanel" aria-controls="filterPanel">
+            <i class="bi bi-funnel"></i>
+            <span class="js-filter-indicator position-absolute top-0 start-0 translate-middle p-2 bg-info rounded-circle d-md-none">
+            <span class="visually-hidden">{% translate "Filtres actifs" %}</span>
         </span>
-
         </button>
+
+        {# TODO: il disparait ?#}
+        {% if tags %}
+            <div id="filterTags" class="btn-group">
+                {% for tag in tags %}
+                    <button class="btn btn-info d-none d-md-block" type="button" id="button-tag-{{ tag }}">{{ tag }}<i
+                            class="bi bi-x"></i></button>
+                {% endfor %}
+            </div>
+        {% endif %}
+
         <div id="filterTags" class="btn-group">
-        <button class="btn btn-info d-none d-md-block" type="button" id="button-addon1">
-            Punk <i class="bi bi-x"></i>
-        </button>
+                <button class="btn btn-info d-none d-md-block" type="button" id="button-addon1">Punk<i
+                        class="bi bi-x"></i></button>
         </div>
-        <div class="form-floating">
-        <input type="text" class="form-control" id="exampleFormControlInput1" placeholder="un évènement">
-        <label for="exampleFormControlInput1" class="form-label"> Je recherche… </label>
-        </div>
-        <button class="btn btn-outline-primary" id="inputGroup-sizing-lg" type="submit">
-        <i class="bi bi-search"></i>
-        </button>
-    </div>
-    </form>
 
-    <!-- filtering panel -->
-    <div class="offcanvas-start offcanvas" tabindex="-1" id="filterPanel" aria-labelledby="filterPanelLabel">
+        <div class="form-floating" id="search_form">
+            <input type="text" class="form-control" id="search" placeholder="un évènement" name="search">
+            <label for="exampleFormControlInput1" class="form-label"> {% translate "Je recherche…" %} </label>
+        </div>
+
+        <button class="btn btn-outline-primary" id="submit_event_search" type="submit"
+                hx-post="/event/partial_list/?page={{ page }}" hx-include="#search_form" hx-target="#event_list">
+            <i class="bi bi-search"></i>
+        </button>
+
+    </div>
+</form>
+
+<!-- filtering panel -->
+<div class="offcanvas-start offcanvas" tabindex="-1" id="filterPanel" aria-labelledby="filterPanelLabel">
     <div class="offcanvas-header">
-        <h5 class="offcanvas-title" id="filterPanelLabel">Filtres</h5>
+        <h5 class="offcanvas-title" id="filterPanelLabel">{% translate "Filtres" %}</h5>
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
     </div>
     <div class="offcanvas-body">

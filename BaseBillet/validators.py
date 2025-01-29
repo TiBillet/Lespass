@@ -10,12 +10,15 @@ from rest_framework import serializers
 from ApiBillet.serializers import get_or_create_price_sold
 from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
-from BaseBillet.models import Price, Product, OptionGenerale, Membership, Paiement_stripe, LigneArticle
+from BaseBillet.models import Price, Product, OptionGenerale, Membership, Paiement_stripe, LigneArticle, Tag
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from PaiementStripe.views import CreationPaiementStripe
 from root_billet.models import RootConfiguration
 
+
+class TagValidator(serializers.Serializer):
+    tags = serializers.PrimaryKeyRelatedField(source="slug", queryset=Tag.objects.all(), many=True)
 
 class LinkQrCodeValidator(serializers.Serializer):
     email = serializers.EmailField(required=True, allow_null=False)
@@ -56,7 +59,6 @@ class MembershipValidator(serializers.Serializer):
         self.price = price
         return price
 
-
     def checkout_stripe(self):
         # Fiche membre créée, si price payant, on crée le checkout stripe :
         membership: Membership = self.membership
@@ -70,9 +72,10 @@ class MembershipValidator(serializers.Serializer):
             'membership': f"{membership.pk}",
             'user': f"{user.pk}",
         }
-
         ligne_article_adhesion = LigneArticle.objects.create(
             pricesold=get_or_create_price_sold(price),
+            membership=membership,
+            amount=int(price.prix*100),
             qty=1,
         )
 

@@ -226,7 +226,6 @@ class validate_token_terminal(APIView):
         return Response(validator.data, status=status.HTTP_200_OK)
 """
 
-
 class MeViewset(viewsets.ViewSet):
 
     def list(self, request):

@@ -11,6 +11,8 @@ alias test="poetry run python /DjangoFiles/manage.py test"
 alias mmes="poetry run django-admin makemessages -l en && django-admin makemessages -l fr"
 alias cmes="poetry run django-admin compilemessages"
 
+alias pshell="eval $(poetry env activate)"
+
 tibinstall() {
     poetry run python /DjangoFiles/manage.py collectstatic
     poetry run python /DjangoFiles/manage.py migrate

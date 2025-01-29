@@ -77,6 +77,11 @@ class Command(BaseCommand):
             "delete_webhook",
             "view_webhook",
 
+            "add_tag",
+            "change_tag",
+            "delete_tag",
+            "view_tag",
+
         ]
 
         with schema_context('public'):
