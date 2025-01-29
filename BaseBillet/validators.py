@@ -59,7 +59,6 @@ class MembershipValidator(serializers.Serializer):
         self.price = price
         return price
 
-
     def checkout_stripe(self):
         # Fiche membre créée, si price payant, on crée le checkout stripe :
         membership: Membership = self.membership

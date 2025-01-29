@@ -604,7 +604,11 @@ class EventMVT(viewsets.ViewSet):
     def get_federated_events(self, tags=None, search=None, page=1 ):
         config = Configuration.get_solo()
         dated_events = {}
-
+        paginated_info = {
+            'page': page,
+            'has_next':False,
+            'has_previous':False,
+        }
         # Récupération de tous les évènements de la fédération
         tenants = [tenant for tenant in config.federated_with.all()]
         tenants.append(connection.tenant)
@@ -630,19 +634,24 @@ class EventMVT(viewsets.ViewSet):
                     )
 
                 # Mécanisme de pagination : 10 évènements max par lieux ? A définir dans la config' ?
-                paginator = Paginator(events.order_by('datetime'), 2)
+                paginator = Paginator(events.order_by('datetime'), 20)
                 paginated_events = paginator.get_page(page)
+                paginated_info['page'] = page
+                paginated_info['has_next'] = paginated_events.has_next()
+                paginated_info['has_previous'] = paginated_events.has_previous()
 
                 for event in paginated_events:
                     date = event.datetime.date()
                     # setdefault pour éviter de faire un if date exist dans le dict
                     dated_events.setdefault(date, []).append(event)
 
-        # Classement du dictionnaire
+        # Classement du dictionnaire : TODO: mettre en cache
         sorted_dict_by_date = {
             k: sorted(v, key=lambda obj: obj.datetime) for k, v in sorted(dated_events.items())
         }
-        return sorted_dict_by_date
+
+        # Retourn les évènements classés par date et les infos de pagination
+        return sorted_dict_by_date, paginated_info
 
     @action(detail=False, methods=['POST'])
     def partial_list(self, request):
@@ -656,7 +665,7 @@ class EventMVT(viewsets.ViewSet):
         ctx = {
             'page' : page,
         }
-        ctx['dated_events'] = self.get_federated_events(search=search, page=page, tags=tags)
+        ctx['dated_events'], ctx['paginated_info'] = self.get_federated_events(tags=tags, search=search, page=page)
         return render(request, "reunion/partials/event/list.html", context=ctx)
 
     # La page get /
@@ -664,7 +673,7 @@ class EventMVT(viewsets.ViewSet):
         ctx = get_context(request)
         tags = request.GET.getlist('tag')
         page = request.GET.get('page', 1)
-        ctx['dated_events'] = self.get_federated_events(tags=tags, page=page)
+        ctx['dated_events'], ctx['paginated_info'] = self.get_federated_events(tags=tags, page=page)
         # On renvoie la page en entier
         return render(request, "reunion/views/event/list.html", context=ctx)
 
