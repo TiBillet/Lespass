@@ -1,0 +1,79 @@
+{% extends base_template %}
+{% load static %}
+{% load i18n %}
+
+{% block main %}
+<main class="container-lg py-5">
+    <p class="lead mb-5">
+        Adresse liée : <code>{{ user.email }}</code><br />
+        {% if not user.email_valid %}
+            {% translate "Please validate your email for activate your account." %}<br />
+            <a aria-label="{% translate "Resend validation email" %}"
+                href=""
+                hx-get="/my_account/resend_activation_email/">
+                {% translate "Resend validation email" %}
+            </a>
+        {% elif profile.admin_this_tenant %}
+            <span class="text-danger">Carte primaire</span>
+        {% endif %}
+    </p>
+
+    <div class="overflow-x-scroll">
+        <ul class="nav nav-tabs mb-0 flex-nowrap">
+            <li class="nav-item">
+                <a class="nav-link{% if account_tab == 'balance' %} active" aria-current="page{% endif %}" href="/my_account/">
+                    <i class="bi bi-piggy-bank-fill"></i>
+                    <span class="d-none d-md-inline">Tirelire</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link $subscriptions_link" href="/my_account/membership/">
+                    <i class="bi bi-person-badge-fill"></i>
+                    <span class="d-none d-md-inline">Adhésions</span>
+                </a>
+            </li>
+            <!-- <li class="nav-item">
+                <a class="nav-link" href="#">
+                    <i class="bi bi-ticket-perforated-fill"></i>
+                    <span class="d-none d-md-inline">Réservations</span>
+                </a>
+            </li> -->
+            <li class="nav-item">
+                <a class="nav-link $punchclock_link" href="/badge/">
+                    <i class="bi bi-stopwatch-fill"></i>
+                    <span class="d-none d-md-inline">Badgeuse</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link $card_link" href="/my_account/profile/">
+                    <i class="bi bi-postcard-fill"></i>
+                    <span class="d-none d-md-inline">Carte</span>
+                </a>
+            </li>
+            <li class="nav-item me-auto">
+                <a class="nav-link $settings_link" href="$base_url/compte/preferences/">
+                    <i class="bi bi-gear-fill"></i>
+                    <span class="d-none d-md-inline">Préférences</span>
+                </a>
+            </li>
+            {% if profile.admin_this_tenant %}
+            <li class="nav-item">
+                <a class="nav-link link-danger" href="/admin/">
+                    <i class="bi bi-database-fill"></i>
+                    <span class="d-none d-md-inline">Administration</span>
+                </a>
+            </li>
+            {% endif %}
+            <li class="nav-item">
+                <a class="nav-link link-secondary" href="/deconnexion/">
+                    <i class="bi bi-box-arrow-right"></i>
+                    <span class="d-none d-md-inline">Me déconnecter</span>
+                </a>
+            </li>
+        </ul>
+    </div>
+
+    {% block account_page %}{% endblock %}
+    
+</main>
+{% endblock %}

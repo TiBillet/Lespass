@@ -1,0 +1,38 @@
+{% load tibitags %}
+{% load humanize i18n %}
+
+<table class="table">
+    <thead>
+        <th>Solde</th>
+        <th>Réseau concerné</th>
+        <th>Dernière transaction</th>
+    </thead>
+    <tbody>
+        {% for token in tokens %}
+        <tr{% if config.organisation not in token.asset.names_of_place_federated %} class="opacity-50"{% endif %}>
+            <td>
+                <strong>{{ token.value | dround }}</strong>
+                {% if token.asset.is_stripe_primary %}
+                TiBillet
+                {% else %}
+                <img src="{{ token.asset.logo.thumbnail.url }}" alt="{{ token.name }}">
+                {{ token.name }}
+                {% endif %}
+            </td>
+            <td>
+                {% if token.asset.is_stripe_primary %}
+                Utilisables partout
+                {% else %}
+                {# TODO: url du lespass d'origine pour accès facile à plus d'infos ? #}
+                <a href="#">
+                    {% for place_name in token.asset.names_of_place_federated %}
+                        {{ place_name }}{% if not forloop.last %},{% endif %}
+                    {% endfor %}
+                </a>
+                {% endif %}
+            </td>
+            <td>{{ token.last_transaction_datetime }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>

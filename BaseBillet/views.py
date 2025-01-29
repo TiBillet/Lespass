@@ -323,13 +323,14 @@ class MyAccount(viewsets.ViewSet):
         template_context = get_context(request)
         # Pas de header sur cette page
         template_context['header'] = False
+        template_context['account_tab'] = 'balance'
 
         if not request.user.email_valid:
             logger.warning("User email not active")
             messages.add_message(request, messages.WARNING,
                                  _("Please validate your email to access all the features of your profile area."))
 
-        return render(request, "htmx/views/my_account/my_account.html", context=template_context)
+        return render(request, "reunion/views/account/balance.html", context=template_context)
 
     ### ONGLET WALLET
     """
@@ -510,7 +511,7 @@ class MyAccount(viewsets.ViewSet):
             'next_url': next_url,
             'previous_url': previous_url,
         }
-        return render(request, "htmx/views/my_account/transactions_table.html", context=context)
+        return render(request, "reunion/partials/account/transaction_history.html", context=context)
 
     ### ONGLET ADHESION
     @action(detail=False, methods=['GET'])
