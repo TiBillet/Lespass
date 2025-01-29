@@ -1,38 +1,42 @@
 {% load i18n %}
 {% load tibitags %}
+
 {% for date_key, events in dated_events.items %}
-<h2 class="fs-5 p-3 text-dark" style="background: var(--mayaj-pons);">
-  {{ date_key|date:'l j F'|capfirst }}
-</h2>
-{% for event in events %}
-<div class="row align-items-center mb-3">
-  <div class="col-md-auto">
-    <h3 class="mb-0 mt-2 mt-md-0">{{ event.datetime|time:'H\hi' }}</h3>
-  </div>
-  <div class="col-auto">
-    <img style="background-color: var(--kouler-losean);max-width: 140px;max-height: 100px;"
-      src="{{ event.img|randImg }}"
-      class="d-block my-3 rounded"
-      alt="{{ event.name }}">
-  </div>
-{#  <a href="{{ event.full_url }}" hx-get="{{ event.full_url }}" hx-target="body" hx-push-url="true" class="col fs-5">#}
-  <a href="/event/{{ event.slug }}/" hx-boost="true" hx-target="body" class="col fs-5">
-    {{ event.name }}
-  </a>
-  <div class="col-md-auto text-md-end event-tags">
-    {% for tag in event.tag.all %}
-    <a href="?tag={{ tag.slug }}" hx-boost="true" class="btn btn-info btn-sm mb-1">
-      {{ tag.name }}
-    </a>
+    <h2 class="fs-5 p-3 text-dark" style="background: var(--mayaj-pons);">
+        {{ date_key|date:'l j F'|capfirst }}
+    </h2>
+    {% for event in events %}
+        <div class="row align-items-center mb-3">
+            <div class="col-md-auto">
+                <h3 class="mb-0 mt-2 mt-md-0">{{ event.datetime|time:'H\hi' }}</h3>
+            </div>
+            <div class="col-auto">
+                <img style="background-color: var(--kouler-losean);max-width: 140px;max-height: 100px;"
+                     src="{{ event.img|randImg }}"
+                     class="d-block my-3 rounded"
+                     alt="{{ event.name }}">
+            </div>
+            {#  <a href="{{ event.full_url }}" hx-get="{{ event.full_url }}" hx-target="body" hx-push-url="true" class="col fs-5">#}
+            <a href="/event/{{ event.slug }}/" hx-boost="true" hx-target="body" class="col fs-5">
+                {{ event.name }}
+            </a>
+            <div class="col-md-auto text-md-end event-tags">
+                {% for tag in event.tag.all %}
+                    <a href="?tag={{ tag.slug }}" hx-boost="true" class="btn btn-info btn-sm mb-1">
+                        {{ tag.name }}
+                    </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% if not forloop.last %}
+            <hr/>{% endif %}
     {% endfor %}
-  </div>
-</div>
-{% if not forloop.last %}<hr />{% endif %}
-{% endfor %}
 {% endfor %}
 
-<p class="py-3 mb-5 text-center">
-  <a href="#" class="btn btn-outline-primary d-block d-sm-inline">
-    {% translate "Plus d'évènements" %}
-  </a>
+<p class="py-3 mb-5 text-center" id="paginator">
+    <a class="btn btn-outline-primary d-block d-sm-inline"
+       hx-boost="true" hx-post="/event/partial_list/?page={{ page }}"
+       hx-include="#search_form" hx-target="#paginator" hx-swap="outerHTML">
+        {% translate "Plus d'évènements" %}
+    </a>
 </p>

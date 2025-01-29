@@ -10,12 +10,15 @@ from rest_framework import serializers
 from ApiBillet.serializers import get_or_create_price_sold
 from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
-from BaseBillet.models import Price, Product, OptionGenerale, Membership, Paiement_stripe, LigneArticle
+from BaseBillet.models import Price, Product, OptionGenerale, Membership, Paiement_stripe, LigneArticle, Tag
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from PaiementStripe.views import CreationPaiementStripe
 from root_billet.models import RootConfiguration
 
+
+class TagValidator(serializers.Serializer):
+    tags = serializers.PrimaryKeyRelatedField(source="slug", queryset=Tag.objects.all(), many=True)
 
 class LinkQrCodeValidator(serializers.Serializer):
     email = serializers.EmailField(required=True, allow_null=False)

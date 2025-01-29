@@ -1,7 +1,7 @@
-import collections
 import logging
 import os
 import uuid
+from datetime import timedelta
 from io import BytesIO
 
 import barcode
@@ -12,20 +12,19 @@ from django.contrib.auth import logout, login
 from django.contrib.messages import MessageFailure
 from django.core.cache import cache
 from django.db import connection
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.http import HttpResponse, HttpRequest, Http404, HttpResponseRedirect, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.response import TemplateResponse
 from django.utils import timezone
-from django.utils.datetime_safe import datetime
 from django.utils.encoding import force_str, force_bytes
 from django.utils.http import urlsafe_base64_encode
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_GET
-from django_extensions.templatetags.debugger_tags import ipdb
 from django_htmx.http import HttpResponseClientRedirect
 from django_tenants.utils import tenant_context
-from faker import Faker
+from django.core.paginator import Paginator
+
 from rest_framework import viewsets, permissions, status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
@@ -33,20 +32,16 @@ from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from txaio.aio import config
 
-from ApiBillet.serializers import get_or_create_price_sold
 from AuthBillet.models import TibilletUser, Wallet
 from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
-from BaseBillet.models import Configuration, Ticket, OptionGenerale, Product, Event, Price, LigneArticle, \
-    Paiement_stripe, Membership
+from BaseBillet.models import Configuration, Ticket, Product, Event, Paiement_stripe, Membership
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
-from PaiementStripe.views import CreationPaiementStripe
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
 from root_billet.models import RootConfiguration
@@ -81,6 +76,7 @@ def get_context(request):
     context = {
         "base_template": base_template,
         "embed": embed,
+        "page": request.GET.get('page', 1),
         "url_name": request.resolver_match.url_name,
         "user": request.user,
         "profile": serialized_user,
@@ -605,39 +601,72 @@ def index(request):
 class EventMVT(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
-    def list(self, request: HttpRequest):
+    def get_federated_events(self, tags=None, search=None, page=1 ):
+        config = Configuration.get_solo()
         dated_events = {}
 
-        template_context = get_context(request)
-        config = template_context['config']
-
-        tags = request.GET.getlist('tag')
-
-        # Récupération de tout les évènements de la fédération
+        # Récupération de tous les évènements de la fédération
         tenants = [tenant for tenant in config.federated_with.all()]
         tenants.append(connection.tenant)
         for tenant in set(tenants):
             with tenant_context(tenant):
                 events = Event.objects.prefetch_related('tag', 'postal_address').filter(
-                    datetime__gte=timezone.localtime())
+                    published=True,
+                    datetime__gte=timezone.localtime() - timedelta(days=1),
+                ) # On prend les évènement d'aujourd'hui
                 if tags:
-                    # Annotate et filter Pour avoir les events qui ont TOUT les tags
+                    # Annotate et filter Pour avoir les events qui ont TOUS les tags
                     events = events.filter(
                         tag__slug__in=tags).annotate(
                         num_tag=Count('tag')).filter(num_tag=len(tags))
+                elif search:
+                    # On recherche dans nom, description et tag
+                    events = events.filter(
+                        Q(name__icontains=search) |
+                        Q(short_description__icontains=search) |
+                        Q(long_description__icontains=search) |
+                        Q(tag__slug__icontains=search) |
+                        Q(tag__name__icontains=search),
+                    )
 
-                for event in events.order_by('datetime'):
+                # Mécanisme de pagination : 10 évènements max par lieux ? A définir dans la config' ?
+                paginator = Paginator(events.order_by('datetime'), 2)
+                paginated_events = paginator.get_page(page)
+
+                for event in paginated_events:
                     date = event.datetime.date()
                     # setdefault pour éviter de faire un if date exist dans le dict
                     dated_events.setdefault(date, []).append(event)
 
         # Classement du dictionnaire
-        sorted_d = {
+        sorted_dict_by_date = {
             k: sorted(v, key=lambda obj: obj.datetime) for k, v in sorted(dated_events.items())
         }
-        template_context['dated_events'] = sorted_d
+        return sorted_dict_by_date
 
-        return render(request, "reunion/views/event/list.html", context=template_context)
+    @action(detail=False, methods=['POST'])
+    def partial_list(self, request):
+        logger.info(f"request.data : {request.data}")
+        search = str(request.data['search']) # on s'assure que c'est bien une string. Todo : Validator !
+        tags = request.GET.getlist('tag')
+        page = request.GET.get('page', 1)
+
+        logger.info(f"request.GET : {request.GET}")
+
+        ctx = {
+            'page' : page,
+        }
+        ctx['dated_events'] = self.get_federated_events(search=search, page=page, tags=tags)
+        return render(request, "reunion/partials/event/list.html", context=ctx)
+
+    # La page get /
+    def list(self, request: HttpRequest):
+        ctx = get_context(request)
+        tags = request.GET.getlist('tag')
+        page = request.GET.get('page', 1)
+        ctx['dated_events'] = self.get_federated_events(tags=tags, page=page)
+        # On renvoie la page en entier
+        return render(request, "reunion/views/event/list.html", context=ctx)
 
     # Recherche dans tout les tenant fédérés
     def tenant_retrieve(self, slug):
