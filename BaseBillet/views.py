@@ -77,6 +77,7 @@ def get_context(request):
         "base_template": base_template,
         "embed": embed,
         "page": request.GET.get('page', 1),
+        "tags": request.GET.getlist('tag'),
         "url_name": request.resolver_match.url_name,
         "user": request.user,
         "profile": serialized_user,
@@ -634,7 +635,7 @@ class EventMVT(viewsets.ViewSet):
                     )
 
                 # Mécanisme de pagination : 10 évènements max par lieux ? A définir dans la config' ?
-                paginator = Paginator(events.order_by('datetime'), 20)
+                paginator = Paginator(events.order_by('datetime'), 3)
                 paginated_events = paginator.get_page(page)
                 paginated_info['page'] = page
                 paginated_info['has_next'] = paginated_events.has_next()
@@ -662,9 +663,7 @@ class EventMVT(viewsets.ViewSet):
 
         logger.info(f"request.GET : {request.GET}")
 
-        ctx = {
-            'page' : page,
-        }
+        ctx = {} # le dict de context pour template
         ctx['dated_events'], ctx['paginated_info'] = self.get_federated_events(tags=tags, search=search, page=page)
         return render(request, "reunion/partials/event/list.html", context=ctx)
 

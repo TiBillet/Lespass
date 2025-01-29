@@ -11,10 +11,19 @@
         </span>
         </button>
 
+
+        {% if tags %}
+            <div id="filterTags" class="btn-group">
+                {% for tag in tags %}
+                    <button class="btn btn-info d-none d-md-block" type="button" id="button-tag-{{ tag }}">{{ tag }}<i
+                            class="bi bi-x"></i></button>
+                {% endfor %}
+            </div>
+        {% endif %}
+
         <div id="filterTags" class="btn-group">
-            <button class="btn btn-info d-none d-md-block" type="button" id="button-addon1">
-                Punk <i class="bi bi-x"></i>
-            </button>
+                <button class="btn btn-info d-none d-md-block" type="button" id="button-addon1">Punk<i
+                        class="bi bi-x"></i></button>
         </div>
 
         <div class="form-floating" id="search_form">
@@ -23,7 +32,7 @@
         </div>
 
         <button class="btn btn-outline-primary" id="submit_event_search" type="submit"
-                hx-post="/event/partial_list/?page={{ page }}" hx-include="#search_form" hx-target="#event_list"> 
+                hx-post="/event/partial_list/?page={{ page }}" hx-include="#search_form" hx-target="#event_list">
             <i class="bi bi-search"></i>
         </button>
 
