@@ -865,11 +865,11 @@ class EventAdmin(ModelAdmin):
 
     list_display = [
         'name',
-        'reservations',
+        'valid_tickets_count',
         'datetime',
     ]
     readonly_fields = (
-        'reservations',
+        'valid_tickets_count',
     )
     search_fields = ['name']
     autocomplete_fields = [

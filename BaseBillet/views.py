@@ -37,9 +37,10 @@ from AuthBillet.models import TibilletUser, Wallet
 from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
-from BaseBillet.models import Configuration, Ticket, Product, Event, Paiement_stripe, Membership
+from BaseBillet.models import Configuration, Ticket, Product, Event, Paiement_stripe, Membership, Reservation
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email
-from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator
+from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
+    ReservationValidator
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from fedow_connect.fedow_api import FedowAPI
@@ -704,6 +705,22 @@ class EventMVT(viewsets.ViewSet):
 
     def create(self, request):
         pass
+
+    @action(detail=True, methods=['POST'])
+    def reservation(self, request, pk):
+        # Vérification que l'évent existe bien sur ce tenant.
+        event = get_object_or_404(Event, slug=pk)
+        logger.info(f"Event Reservation : {request.data}")
+
+        # Un validateur des données envoyées
+        validator = ReservationValidator(data=request.data, context={'request': request})
+        if validator.is_valid():
+            return render(request, "reunion/views/event/reservation_ok.html", context={
+                "user":request.user,
+            })
+
+        logger.error(f"ReservationViewset CREATE ERROR : {validator.errors}")
+        return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_permissions(self):
         if self.action in ['create']:

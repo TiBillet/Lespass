@@ -430,9 +430,7 @@ class ReservationViewset(viewsets.ViewSet):
         return Response(serializer.data)
 
     def create(self, request):
-        # import ipdb; ipdb.set_trace()
         logger.info(f"ReservationViewset CREATE : {request.data}")
-
         validator = ReservationValidator(data=request.data, context={'request': request})
         if validator.is_valid():
             return Response(validator.data, status=status.HTTP_201_CREATED)

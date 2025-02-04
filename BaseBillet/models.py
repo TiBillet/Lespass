@@ -855,9 +855,9 @@ class Event(models.Model):
         else:
             return {}
 
-    def reservations(self):
+    def valid_tickets_count(self):
         """
-        Renvoie toutes les réservations valide d'un évènement.
+        Renvoie la quantité de tous les ticket valide d'un évènement.
         Compte les billets achetés/réservés.
         """
 
@@ -871,7 +871,7 @@ class Event(models.Model):
         Un booléen pour savoir si l'évènement est complet ou pas.
         """
 
-        if self.reservations() >= self.jauge_max:
+        if self.valid_tickets_count() >= self.jauge_max:
             return True
         else:
             return False

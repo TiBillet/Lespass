@@ -1,22 +1,48 @@
-<h4>Email de contact</h4>
-<p><code>contact@tibillet.re</code></p>
+{% load i18n %}
+<form id="reservation_form" hx-post="reservation/">
+    <input type="hidden" name="event" value="{{ event.uuid }}">
 
-<div class="mb-3">
-  <label for="booking-regular" class="form-label">Places plein tarif</label>
-  <input type="number" class="form-control" id="booking-regular">
-</div>
-<div class="mb-3">
-  <label for="booking-a11y" class="form-label">Places adhérent·e</label>
-  <input type="number" class="form-control" id="booking-a11y">
-</div>
-<h4>Total : 0 place(s) pour <span class="fs-5 badge bg-secondary-subtle mb-md-0">0,00€</span></h2>
-<p>
-    Jauge maximale de {{ event.jauge_max }} personnes et un nombre de
-    billets limité à {{ event.max_per_user }} par réservation. Billets
-    nominatifs.
-</p>
+    {% if user.is_anonymous %}
+        <div class="mb-3">
+            <label for="booking-regular" class="form-label">Email</label>
+            <input type="email" name="email" class="form-control" id="booking-regular">
+        </div>
+        <div class="mb-3">
+            <label for="booking-regular" class="form-label">Confirmez votre email</label>
+            <input type="email" name="email-confirm" class="form-control" id="booking-regular">
+        </div>
+        <p><code>{{ user.email }}</code></p>
+    {% elif user.is_active %}
+        <div class="mb-3">
+            <label for="booking-regular" class="form-label">Email</label>
+            <input type="email" class="form-control" id="booking-regular" name="email" value="{{ user.email }}"
+                   readonly>
+        </div>
+    {% else %}
+        <p><code>{% translate "Vous n'avez pas validé votre email. Merci de vérifier dans vos spams :)" %}</code></p>
+    {% endif %}
 
-<div class="position-absolute bottom-0 start-0 end-0 p-3">
-    <a href="." class="btn btn-primary d-block mb-3">Confirmer la réservation</a>
-    <a href="." class="btn btn-danger d-block">Annuler</a>
-</div>
+    {% for product in event.products.all %}
+        {% for price in product.prices.all %}
+            <div class="mb-3">
+                <label for="booking-regular" class="form-label">{{ price.name }}</label>
+                <input type="number" step="1" min="0" max="{{ event.max_per_user }}" class="form-control"
+                       id="price-{{ price.uuid }}"
+                       value="1" {# todo: a virer en prod, pour dev #}
+                       name="products[{{ product.uuid }}][{{ price.uuid }}]">
+            </div>
+        {% endfor %}
+    {% endfor %}
+
+    <h4>Total : 0 place(s) pour <span class="fs-5 badge bg-secondary-subtle mb-md-0">0,00€</span></h4>
+
+    <p>
+        Jauge maximale de {{ event.jauge_max }} personnes et un nombre de
+        billets limité à {{ event.max_per_user }} par réservation.
+    </p>
+
+    <div class="position-absolute bottom-0 start-0 end-0 p-3">
+        <button type="submit" class="btn btn-primary d-block mb-3">Confirmer la réservation</button>
+        <a href="." class="btn btn-danger d-block">Annuler</a>
+    </div>
+</form>
