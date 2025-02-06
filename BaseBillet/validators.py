@@ -222,8 +222,6 @@ class ReservationValidator(serializers.Serializer):
             remains = event.jauge_max - valid_tickets_count
             raise serializers.ValidationError(_(f'Il ne reste que {remains} places disponibles'))
 
-
-
         """
         TODO: Verifier l'adhésion
         # si un tarif à une adhésion obligatoire, on confirme que :

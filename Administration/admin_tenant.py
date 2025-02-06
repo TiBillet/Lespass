@@ -893,10 +893,21 @@ class ReservationAdmin(ModelAdmin):
         'user_commande',
         'event',
         'status',
+        'tickets_count',
+        'options_str',
         'total_paid',
     )
     # readonly_fields = list_display
-    search_fields = ['event', 'user_commande__email']
+    search_fields = ['event__name', 'user_commande__email', 'options__name']
+
+    @display(description=_("Nbrs billets"))
+    def tickets_count(self, instance: Reservation):
+        return instance.tickets.count()
+
+    @display(description=_("Options"))
+    def options_str(self, instance: Reservation):
+        return " - ".join([option.name for option in instance.options.all()])
+
 
     def has_view_permission(self, request, obj=None):
         return True
