@@ -393,9 +393,10 @@ class MyAccount(viewsets.ViewSet):
                 Reservation.VALID,
             ]
         )
-        context = {
-            'reservations': reservations
-        }
+        context = get_context(request)
+        context['reservations'] = reservations
+        context['account_tab'] = 'reservations'
+        
         return render(request, "reunion/views/account/reservations.html", context=context)
 
     @action(detail=False, methods=['GET'])
