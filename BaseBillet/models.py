@@ -124,7 +124,6 @@ class OptionGenerale(models.Model):
         verbose_name_plural = _('Options')
 
 
-
 class PostalAddress(models.Model):
     """
     Modèle Django conforme à Schema.org pour une adresse postale avec coordonnées GPS.
@@ -188,6 +187,7 @@ class PostalAddress(models.Model):
     class Meta:
         verbose_name = "Adresse postale"
         verbose_name_plural = "Adresses postales"
+
 
 # class ExternalLink(models.Model):
 #     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
@@ -731,8 +731,6 @@ class Price(models.Model):
         verbose_name_plural = _('Tarifs')
 
 
-
-
 class Event(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
 
@@ -759,7 +757,6 @@ class Event(models.Model):
     is_external = models.BooleanField(default=False, verbose_name=_("Billetterie/Reservation externe"), help_text=_(
         "Si l'évènement est géré par une autre billetterie ou un autre site de réservation. Ex : Un event Facebook"))
     full_url = models.URLField(blank=True, null=True)
-
 
     published = models.BooleanField(default=True, verbose_name=_("Publier"))
 
@@ -855,9 +852,9 @@ class Event(models.Model):
         else:
             return {}
 
-    def reservations(self):
+    def valid_tickets_count(self):
         """
-        Renvoie toutes les réservations valide d'un évènement.
+        Renvoie la quantité de tous les ticket valide d'un évènement.
         Compte les billets achetés/réservés.
         """
 
@@ -871,7 +868,7 @@ class Event(models.Model):
         Un booléen pour savoir si l'évènement est complet ou pas.
         """
 
-        if self.reservations() >= self.jauge_max:
+        if self.valid_tickets_count() >= self.jauge_max:
             return True
         else:
             return False
@@ -902,7 +899,6 @@ class Event(models.Model):
         # Nécéssaire pour le prefetch multi tenant
         if not self.is_external:
             self.full_url = f"https://{connection.tenant.get_primary_domain().domain}/event/{self.slug}/"
-
 
         super().save(*args, **kwargs)
 
@@ -1266,11 +1262,15 @@ class Ticket(models.Model):
                                       verbose_name=_("Moyen de paiement"))
 
     def pdf_filename(self):
+        first_name = f"{self.first_name.upper()}" if self.first_name else ""
+        last_name = f"{self.last_name.upper()}" if self.last_name else ""
+
         config = Configuration.get_solo()
         return f"{config.organisation.upper()} " \
+               f"{self.reservation.event.name} " \
                f"{self.reservation.event.datetime.astimezone().strftime('%d/%m/%Y')} " \
-               f"{self.first_name.upper()} " \
-               f"{self.last_name.capitalize()}" \
+               f"{first_name}" \
+               f"{last_name}" \
                f"{self.status}-{self.numero_uuid()}-{self.seat}" \
                f".pdf"
 
@@ -1693,6 +1693,29 @@ class Membership(models.Model):
             return f"{self.user}"
         else:
             return "Anonymous"
+
+
+#TODO: dans le futur, gérer les fédération comme cela ?
+"""
+class Federation(models.Model):
+    '''
+    Chaque ligne correspond à un lieu.
+    On affiche les évènements et les adhésiosn de la fédération
+    tag filter = que ces tags
+    tag exlcuse = retirer les tags
+    '''
+    place = models.ForeignKey(Client,
+                              verbose_name=_("Lieu"),
+                              related_name="federations", help_text=_(
+            "Lieu avec qui nous partageons les évènements et les adhésions"))
+
+    tag_filter = models.ManyToManyField(Tag, blank=True,
+                                        help_text=_("Uniquement ces tags si selectionné")
+                                        )
+    tag_exclude = models.ManyToManyField(Tag, blank=True,
+                                        help_text=_("Ces tags sont exclus"))
+
+"""
 
 
 #### MODEL POUR INTEROP ####

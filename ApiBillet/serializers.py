@@ -1150,7 +1150,6 @@ class ChargeCashlessValidator(serializers.Serializer):
         return representation
 """
 
-
 class ReservationValidator(serializers.Serializer):
     email = serializers.EmailField()
     to_mail = serializers.BooleanField(default=True, required=False)
@@ -1250,7 +1249,7 @@ class ReservationValidator(serializers.Serializer):
         options = attrs.get('options')
         to_mail: bool = attrs.get('to_mail')
 
-        resas = event.reservations()
+        resas = event.valid_tickets_count()
 
         if self.nbr_ticket > event.max_per_user:
             raise serializers.ValidationError(_(f'Quantitée de réservations suppérieure au maximum autorisé'))
@@ -1267,8 +1266,6 @@ class ReservationValidator(serializers.Serializer):
 
         for price_object in self.prices_list:
             if price_object['price'].product not in product_list:
-                import ipdb;
-                ipdb.set_trace()
                 logger.error(f'Article non présent dans event : {price_object["price"].product.name}')
                 raise serializers.ValidationError(_(f'Article non disponible'))
 

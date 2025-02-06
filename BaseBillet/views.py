@@ -37,9 +37,10 @@ from AuthBillet.models import TibilletUser, Wallet
 from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
-from BaseBillet.models import Configuration, Ticket, Product, Event, Paiement_stripe, Membership
+from BaseBillet.models import Configuration, Ticket, Product, Event, Paiement_stripe, Membership, Reservation
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email
-from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator
+from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
+    ReservationValidator
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from fedow_connect.fedow_api import FedowAPI
@@ -380,6 +381,24 @@ class MyAccount(viewsets.ViewSet):
         return render(request, "htmx/views/my_account/cards.html", context=context)
 
     @action(detail=False, methods=['GET'])
+    def my_reservations(self, request):
+        reservations = Reservation.objects.filter(
+            user_commande=request.user,
+            status__in=[
+                Reservation.FREERES,
+                Reservation.FREERES_USERACTIV,
+                Reservation.PAID,
+                Reservation.PAID_ERROR,
+                Reservation.PAID_NOMAIL,
+                Reservation.VALID,
+            ]
+        )
+        context = {
+            'reservations': reservations
+        }
+        return render(request, "reunion/views/account/reservations.html", context=context)
+
+    @action(detail=False, methods=['GET'])
     def resend_activation_email(self, request):
         user = request.user
         email = request.user.email
@@ -571,8 +590,6 @@ class MyAccount(viewsets.ViewSet):
             messages.add_message(request, messages.ERROR, _("No available. Contact an admin."))
             return HttpResponseClientRedirect('/my_account/')
 
-
-
     @action(detail=True, methods=['GET'])
     def return_refill_wallet(self, request, pk=None):
         # On demande confirmation à Fedow qui a du recevoir la validation en webhook POST
@@ -604,13 +621,13 @@ def index(request):
 class EventMVT(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
-    def get_federated_events(self, tags=None, search=None, page=1 ):
+    def get_federated_events(self, tags=None, search=None, page=1):
         config = Configuration.get_solo()
         dated_events = {}
         paginated_info = {
             'page': page,
-            'has_next':False,
-            'has_previous':False,
+            'has_next': False,
+            'has_previous': False,
         }
         # Récupération de tous les évènements de la fédération
         tenants = [tenant for tenant in config.federated_with.all()]
@@ -620,7 +637,7 @@ class EventMVT(viewsets.ViewSet):
                 events = Event.objects.prefetch_related('tag', 'postal_address').filter(
                     published=True,
                     datetime__gte=timezone.localtime() - timedelta(days=1),
-                ) # On prend les évènement d'aujourd'hui
+                )  # On prend les évènement d'aujourd'hui
                 if tags:
                     # Annotate et filter Pour avoir les events qui ont TOUS les tags
                     events = events.filter(
@@ -659,13 +676,13 @@ class EventMVT(viewsets.ViewSet):
     @action(detail=False, methods=['POST'])
     def partial_list(self, request):
         logger.info(f"request.data : {request.data}")
-        search = str(request.data['search']) # on s'assure que c'est bien une string. Todo : Validator !
+        search = str(request.data['search'])  # on s'assure que c'est bien une string. Todo : Validator !
         tags = request.GET.getlist('tag')
         page = request.GET.get('page', 1)
 
         logger.info(f"request.GET : {request.GET}")
 
-        ctx = {} # le dict de context pour template
+        ctx = {}  # le dict de context pour template
         ctx['dated_events'], ctx['paginated_info'] = self.get_federated_events(tags=tags, search=search, page=page)
         return render(request, "reunion/partials/event/list.html", context=ctx)
 
@@ -705,6 +722,22 @@ class EventMVT(viewsets.ViewSet):
 
     def create(self, request):
         pass
+
+    @action(detail=True, methods=['POST'])
+    def reservation(self, request, pk):
+        # Vérification que l'évent existe bien sur ce tenant.
+        event = get_object_or_404(Event, slug=pk)
+        logger.info(f"Event Reservation : {request.data}")
+
+        # Un validateur des données envoyées
+        validator = ReservationValidator(data=request.data, context={'request': request})
+        if validator.is_valid():
+            return render(request, "reunion/views/event/reservation_ok.html", context={
+                "user": request.user,
+            })
+
+        logger.error(f"ReservationViewset CREATE ERROR : {validator.errors}")
+        return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_permissions(self):
         if self.action in ['create']:
@@ -854,7 +887,6 @@ class MembershipMVT(viewsets.ViewSet):
 
         return redirect('/memberships/')
 
-
     @action(detail=True, methods=['GET'])
     def invoice(self, request, pk):
         '''
@@ -880,9 +912,9 @@ class MembershipMVT(viewsets.ViewSet):
         return Response("sended", status=status.HTTP_200_OK)
 
     def get_permissions(self):
-        if self.action in ['retrieve',]:
+        if self.action in ['retrieve', ]:
             permission_classes = [permissions.IsAuthenticated]
-        elif self.action in ['invoice_to_mail',]:
+        elif self.action in ['invoice_to_mail', ]:
             permission_classes = [permissions.IsAdminUser]
         else:
             permission_classes = [permissions.AllowAny]

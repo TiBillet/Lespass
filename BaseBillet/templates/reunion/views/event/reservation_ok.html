@@ -1,0 +1,7 @@
+{% load i18n %}
+
+{% if user.is_active %}
+    <span>{% translate "Votre réservation a été confirmée. Vos billets ont été envoyés par e-mail." %}</span>
+{% else %}
+    <span>{% translate "Veuillez valider votre e-mail pour confirmer votre réservation. N'oubliez pas de vérifier vos spams !" %}</span>
+{% endif %}

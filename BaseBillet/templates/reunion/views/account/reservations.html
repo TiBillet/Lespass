@@ -1,0 +1,36 @@
+{% load i18n static %}
+
+{% for resa in reservations %}
+    <ul>
+        <li><a href="{{ resa.event.full_url }}">{{ resa.event.name }}</a></li>
+        <ul>
+            <li>{{ resa.event.datetime }}</li>
+            <li>{{ resa.total_paid }}€</li>
+            <li>{% translate "Status" %} : {{ resa.get_status_display }}</li>
+
+            {% if resa.options.all %}
+                <li>{% for option in resa.options.all %} {{ option.name }} {% endfor %}</li>
+            {% endif %}
+
+            <li>Tickets :</li>
+            <ul>
+                {% for ticket in resa.tickets.all %}
+                    <li>{{ ticket.pricesold.price.product.name }} - {{ ticket.pricesold.price.name }}, {{ ticket.pricesold.prix }}€</li>
+                    <li>{% translate "Numéro" %} : {{ ticket.numero_uuid }}</li>
+                    <li>{% if ticket.first_name %}{{ ticket.first_name }}{% else %}
+                        {% translate "Anonyme" %}{% endif %}</li>
+                    <li>{% if ticket.last_name %}{{ ticket.last_name }}{% else %}
+                        {% translate "Anonyme" %}{% endif %}</li>
+                    <li>
+                        <button>{% translate "Voir le billet" %}</button>
+                    </li>
+                    <li>
+                        <button>{% translate "Annuler le billet" %}</button>
+                    </li>
+                    <li>{% translate "Status" %} : {{ ticket.get_status_display }}</li>
+                {% endfor %}
+            </ul>
+        </ul>
+    </ul>
+{% endfor %}
+
