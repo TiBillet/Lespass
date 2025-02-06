@@ -3,6 +3,7 @@ import os
 import uuid
 from datetime import timedelta
 from io import BytesIO
+from itertools import product
 
 import barcode
 import segno
@@ -21,9 +22,10 @@ from django.utils.encoding import force_str, force_bytes
 from django.utils.http import urlsafe_base64_encode
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_GET
-from django_htmx.http import HttpResponseClientRedirect
 from django_tenants.utils import tenant_context
 from django.core.paginator import Paginator
+
+from django_htmx.http import HttpResponseClientRedirect
 
 from rest_framework import viewsets, permissions, status
 from rest_framework.authentication import SessionAuthentication
@@ -834,11 +836,16 @@ class MembershipMVT(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
     def create(self, request):
+        logger.info(f"new membership : {request.data}")
         membership_validator = MembershipValidator(data=request.data, context={'request': request})
         if not membership_validator.is_valid():
+            logger.error(f"MembershipViewset CREATE ERROR : {membership_validator.errors}")
             error_messages = [str(item) for sublist in membership_validator.errors.values() for item in sublist]
-            return modal(request, level="warning", content=', '.join(error_messages))
+            messages.add_message(request, messages.ERROR, error_messages)
+            return Response(membership_validator.errors, status=status.HTTP_400_BAD_REQUEST)
+            # return modal(request, level="warning", content=', '.join(error_messages))
 
+        # return Http404
         return HttpResponseClientRedirect(membership_validator.checkout_stripe_url)
 
     def list(self, request: HttpRequest):
@@ -862,6 +869,45 @@ class MembershipMVT(viewsets.ViewSet):
         # Pour rendre la page dans un iframe, on vide le header X-Frame-Options pour dire au navigateur que c'est ok.
         response['X-Frame-Options'] = '' if template_context.get('embed') else 'DENY'
         return response
+
+
+    def get_federated_membership_url(self, uuid=uuid):
+        config = Configuration.get_solo()
+        # Récupération de tous les évènements de la fédération
+        tenants = [tenant for tenant in config.federated_with.all()]
+        tenants.append(connection.tenant)
+        for tenant in set(tenants):
+            with tenant_context(tenant):
+                try :
+                    product = Product.objects.get(uuid=uuid, categorie_article=Product.ADHESION, publish=True)
+                    url = f"https://{tenant.get_primary_domain().domain}/memberships/{product.uuid}"
+                    return url
+                except Product.DoesNotExist:
+                    continue
+
+        return False
+
+
+    def retrieve(self, request, pk):
+        '''
+        La fonction qui va chercher le formulaire d'inscription.
+        - Redirige vers le bon tenant si il faut
+        - Fait apparaitre formbricks si besoin
+        '''
+        try :
+            # On essaye sur ce tenant :
+            product = Product.objects.get(uuid=pk, categorie_article=Product.ADHESION, publish=True)
+        except Product.DoesNotExist:
+            # Il est possible que ça soit sur un autre tenant ?
+            url = self.get_federated_membership_url(uuid=pk)
+            return HttpResponseClientRedirect(url)
+        except:
+            raise Http404
+
+        context = get_context(request)
+        context['product'] = product
+        return render(request, "reunion/views/membership/form.html", context=context)
+
 
     @action(detail=True, methods=['GET'])
     def stripe_return(self, request, pk, *args, **kwargs):
@@ -911,9 +957,7 @@ class MembershipMVT(viewsets.ViewSet):
         return Response("sended", status=status.HTTP_200_OK)
 
     def get_permissions(self):
-        if self.action in ['retrieve', ]:
-            permission_classes = [permissions.IsAuthenticated]
-        elif self.action in ['invoice_to_mail', ]:
+        if self.action in ['invoice_to_mail', ]:
             permission_classes = [permissions.IsAdminUser]
         else:
             permission_classes = [permissions.AllowAny]

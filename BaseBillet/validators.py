@@ -269,14 +269,11 @@ class MembershipValidator(serializers.Serializer):
     )
 
     email = serializers.EmailField()
-    first_name = serializers.CharField(max_length=200)
-    last_name = serializers.CharField(max_length=200)
+    firstname = serializers.CharField(max_length=200)
+    lastname = serializers.CharField(max_length=200)
 
-    options_checkbox = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(), many=True,
+    options = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(), many=True,
                                                           allow_null=True, required=False)
-
-    option_radio = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(),
-                                                      allow_null=True, required=False)
 
     newsletter = serializers.BooleanField()
 
@@ -342,18 +339,17 @@ class MembershipValidator(serializers.Serializer):
             price=self.price
         )
 
-        membership.first_name = attrs['first_name']
-        membership.last_name = attrs['last_name']
+        membership.first_name = attrs['firstname']
+        membership.last_name = attrs['lastname']
 
         # Sur le form, on coche pour NE PAS recevoir la news
-        membership.newsletter = not attrs['newsletter']
+        membership.newsletter = not attrs.get('newsletter')
 
         # Set remplace les options existantes, accepte les listes
-        if 'options_checkbox' in attrs:
-            membership.option_generale.set(attrs['options_checkbox'])
-        # Add ajoute sans toucher aux précédentes
-        if 'option_radio' in attrs:
-            membership.option_generale.add(attrs['option_radio'])
+        options = attrs.get('options', [])
+        if options:
+            membership.option_generale.set(attrs['options'])
+
 
         membership.save()
         self.membership = membership
