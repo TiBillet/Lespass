@@ -1,0 +1,44 @@
+{% load tibitags %}
+{% load humanize i18n %}
+
+{% for token in tokens %}
+<div class="col">
+    <div class="card h-100">
+        <div class="card-body">
+            <h3 class="card-title">{{ token.name }} ({{ token.value | dround }})</h3>
+            {# TODO: ppersonnes visées par l'abonnement #}
+            <h4><i class="bi bi-person-badge"></i> Jackie Dulac</h4>
+            <ul class="list-group list-group-flush">
+                <li class="list-group-item">Émis par <strong>{{ token.asset.place_origin.name }}</strong></li>
+                <li class="list-group-item">
+                    Valable pour
+                    {{ token.asset.names_of_place_federated|join:", " }}
+                </li>
+                </ul>                
+            {# TODO: description de l'abonnement #}
+            <p class="card-text">
+                L'adhésion donne accès au Fusible (fablab, ateliers
+                bois et élec) et à l'Ampoule (café-concert, scène
+                musicale). L'atelier bois et géré à 80% par
+                l'association Chantefrein, adhésion séparée à prévoir
+                pour se servir des machines sur leurs créneaux.
+            </p>
+        </div>
+        <div class="card-footer">
+            <p>
+                <strong>Adhésion</strong> démarrée le
+                {{ token.start_membership_date }}
+            </p>
+
+            {# TODO: actions renouvellement et résiliation #}
+            {# TODO: date de fin ou durée restante ? #}
+            <a href="#" class="btn btn-primary d-block mb-3">
+                Renouveler (6 mois restants)
+            </a>
+            <a href="#" class="btn btn-danger d-block mb-3">
+                Résilier l'adhésion
+            </a>
+        </div>
+    </div>
+</div>
+{% endfor %}
