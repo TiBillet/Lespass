@@ -378,7 +378,7 @@ class MyAccount(viewsets.ViewSet):
         context = {
             'cards': cards
         }
-        return render(request, "htmx/views/my_account/cards.html", context=context)
+        return render(request, "reunion/partials/account/card_table.html", context=context)
 
     @action(detail=False, methods=['GET'])
     def my_reservations(self, request):
@@ -570,8 +570,9 @@ class MyAccount(viewsets.ViewSet):
 
     @action(detail=False, methods=['GET'])
     def profile(self, request: HttpRequest) -> HttpResponse:
-        context = {}
-        return render(request, "htmx/views/my_account/my_account_profil.html", context=context)
+        context = get_context(request)
+        context['account_tab'] = 'card'
+        return render(request, "reunion/views/account/card.html", context=context)
 
     #### REFILL STRIPE PRIMARY ####
 
@@ -801,7 +802,8 @@ class Badge(viewsets.ViewSet):
     def list(self, request: HttpRequest):
         template_context = get_context(request)
         template_context["badges"] = Product.objects.filter(categorie_article=Product.BADGE, publish=True)
-        return render(request, "htmx/views/badge/list.html", context=template_context)
+        template_context["account_tab"] = "punchclock"
+        return render(request, "reunion/views/account/punchclock.html", context=template_context)
 
     @action(detail=True, methods=['GET'])
     def badge_in(self, request: HttpRequest, pk):

@@ -5,7 +5,7 @@
 <div class="col">
     <div class="card h-100">
         <div class="card-body">
-            <h3 class="card-title">{{ token.name }} ({{ token.value | dround }} {{ token.asset.get_category_display }})</h3>
+            <h3 class="card-title">{{ token.name }} ({{ token.value | dround }})</h3>
             {# TODO: ppersonnes visées par l'abonnement #}
             <h4><i class="bi bi-person-badge"></i> Jackie Dulac</h4>
             <ul class="list-group list-group-flush">
@@ -26,12 +26,12 @@
         </div>
         <div class="card-footer">
             <p>
-                <strong>Adhésion</strong>
-                du {{ token.start_membership_date }}
-                au {{ token.end_membership_date }}
+                <strong>Adhésion</strong> démarrée le
+                {{ token.start_membership_date }}
             </p>
 
             {# TODO: actions renouvellement et résiliation #}
+            {# TODO: date de fin ou durée restante ? #}
             <a href="#" class="btn btn-primary d-block mb-3">
                 Renouveler (6 mois restants)
             </a>

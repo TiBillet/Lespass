@@ -15,7 +15,9 @@
                 {% if token.asset.is_stripe_primary %}
                 TiBillet
                 {% else %}
-                <img src="{{ token.asset.logo.thumbnail.url }}" alt="{{ token.name }}">
+                {% if token.asset.logo.thumbnail.url %}
+                <img src="{{ token.asset.logo.thumbnail.url }}" alt="Icone monnaie">
+                {% endif %}
                 {{ token.name }}
                 {% endif %}
             </td>

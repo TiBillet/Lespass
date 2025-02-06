@@ -5,18 +5,23 @@
 {% block main %}
 <main class="container-lg py-5">
     <p class="lead mb-5">
-        Adresse liée : <code>{{ user.email }}</code><br />
-        {% if not user.email_valid %}
-            {% translate "Please validate your email for activate your account." %}<br />
-            <a aria-label="{% translate "Resend validation email" %}"
-                href=""
-                hx-get="/my_account/resend_activation_email/">
-                {% translate "Resend validation email" %}
-            </a>
-        {% elif profile.admin_this_tenant %}
-            <span class="text-danger">Carte primaire</span>
+        Adresse liée : <code>{{ user.email }}</code>
+        
+        {% if profile.admin_this_tenant %}
+        <span class="text-danger">Carte primaire</span>
         {% endif %}
     </p>
+  
+    {% if not user.email_valid %}
+    <div class="alert alert-warning mb-5" role="alert">
+        {% translate "Please validate your email for activate your account." %}<br />
+        <a aria-label="{% translate "Resend validation email" %}"
+            href=""
+            hx-get="/my_account/resend_activation_email/">
+            {% translate "Resend validation email" %}
+        </a>
+    </div>
+    {% endif %}
 
     <div class="overflow-x-scroll">
         <ul class="nav nav-tabs mb-0 flex-nowrap">
@@ -27,7 +32,7 @@
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link {% if account_tab == 'memberships' %} active" aria-current="page{% endif %}" href="/my_account/membership/">
+                <a class="nav-link{% if account_tab == 'memberships' %} active" aria-current="page{% endif %}" href="/my_account/membership/">
                     <i class="bi bi-person-badge-fill"></i>
                     <span class="d-none d-md-inline">Adhésions</span>
                 </a>
@@ -39,13 +44,13 @@
                 </a>
             </li> -->
             <li class="nav-item">
-                <a class="nav-link $punchclock_link" href="/badge/">
+                <a class="nav-link{% if account_tab == 'punchclock' %} active" aria-current="page{% endif %}" href="/badge/">
                     <i class="bi bi-stopwatch-fill"></i>
                     <span class="d-none d-md-inline">Badgeuse</span>
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link $card_link" href="/my_account/profile/">
+                <a class="nav-link{% if account_tab == 'card' %} active" aria-current="page{% endif %}" href="/my_account/profile/">
                     <i class="bi bi-postcard-fill"></i>
                     <span class="d-none d-md-inline">Carte</span>
                 </a>
