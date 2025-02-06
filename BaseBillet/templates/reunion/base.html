@@ -6,38 +6,65 @@
 <html lang="{{ LANGUAGE_CODE }}">
 
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-  <title>{% block title %}{% translate 'Accueil' %}{% endblock %} | {{ config.organisation }}</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>{% block title %}{% translate 'Accueil' %}{% endblock %} | {{ config.organisation }}</title>
 
-  <link rel="icon" type="image/png" href="{% static 'reunion/img/favicon.png' %}">
-  <link href="{% static 'reunion/css/bootstrap.min.5.3.3.css' %}" rel="stylesheet"
-    integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
-  <link rel="stylesheet" href="{% static 'reunion/css/vars.css' %}">
-  <link rel="stylesheet" href="{% static 'reunion/css/tibillet.css' %}">
+    <link rel="icon" type="image/png" href="{% static 'reunion/img/favicon.png' %}">
+    <link href="{% static 'reunion/css/bootstrap.min.5.3.3.css' %}" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <link rel="stylesheet" href="{% static 'reunion/css/vars.css' %}">
+    <link rel="stylesheet" href="{% static 'reunion/css/tibillet.css' %}">
 
-  <script type="module" async src="{% static 'reunion/js/theme-switcher.js' %}"></script>
-  <script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
+    <script type="module" async src="{% static 'reunion/js/theme-switcher.js' %}"></script>
+    <script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
+    <script src="{% static 'mvt_htmx/js/loading-states.js' %}"></script>
 
-  {% block head %}{% endblock head %}
+    {% block head %}{% endblock head %}
 </head>
 
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' class="min-vh-100 d-flex flex-column">
 
-  {% include "reunion/partials/navbar.html" %}
+{% include "reunion/partials/navbar.html" %}
 
-  <div class="flex-fill">
+<div class="flex-fill">
     {% block main %}{% endblock main %}
-  </div>
+</div>
 
-  {% include "reunion/partials/footer.html" %}
+{% include "reunion/partials/footer.html" %}
 
-  <script src="{%  static 'reunion/js/bootstrap.bundle.min.5.3.3.js' %}"
-    integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
-    crossorigin="anonymous"></script>
+<script src="{% static 'reunion/js/bootstrap.bundle.min.5.3.3.js' %}"
+        integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+        crossorigin="anonymous"></script>
 
 <!-- spinner -->
 {% include "reunion/loading.html" %}
+
+
+<!-- sweet alert -->
+<script src="{% static 'mvt_htmx/js/sweetalert2@11.js' %}"></script>
+<script>
+    document.body.addEventListener('htmx:afterRequest', function (evt) {
+        // Trouver l'élément qui a déclenché la requête
+        const triggeredElement = evt.detail.elt;
+
+        // Vérifier si cet élément a l'attribut data-swal="true"
+        if (triggeredElement.getAttribute('data-swal') === 'true') {
+
+            // Récupérer la réponse JSON du backend
+            const response = evt.detail.xhr.response;
+            const jsonresponse = JSON.parse(response);
+
+            Swal.fire({
+                icon: jsonresponse.icon,
+                title: jsonresponse.swal_title,
+                text: jsonresponse.swal_message,
+                confirmButtonText: 'OK'
+            });
+        }
+    });
+</script>
+<div id="alert-container" style="display: none"></div>
 
 </body>
 
