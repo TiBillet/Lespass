@@ -1695,6 +1695,29 @@ class Membership(models.Model):
             return "Anonymous"
 
 
+#TODO: dans le futur, gérer les fédération comme cela ?
+"""
+class Federation(models.Model):
+    '''
+    Chaque ligne correspond à un lieu.
+    On affiche les évènements et les adhésiosn de la fédération
+    tag filter = que ces tags
+    tag exlcuse = retirer les tags
+    '''
+    place = models.ForeignKey(Client,
+                              verbose_name=_("Lieu"),
+                              related_name="federations", help_text=_(
+            "Lieu avec qui nous partageons les évènements et les adhésions"))
+
+    tag_filter = models.ManyToManyField(Tag, blank=True,
+                                        help_text=_("Uniquement ces tags si selectionné")
+                                        )
+    tag_exclude = models.ManyToManyField(Tag, blank=True,
+                                        help_text=_("Ces tags sont exclus"))
+
+"""
+
+
 #### MODEL POUR INTEROP ####
 
 class ExternalApiKey(models.Model):
