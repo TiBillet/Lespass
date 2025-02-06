@@ -12,12 +12,10 @@
             <h5 class="offcanvas-title" id="subscribePanelLabel">{% translate 'Prendre une adhésion' %}</h5>
             <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% translate 'Fermer' %}"></button>
         </div>
-        <div class="offcanvas-body">
-            {# TODO: load all forms through htmx? #}
-            {% include 'reunion/forms/membership/subscribe.html' %}
+        <div class="offcanvas-body" id="offcanvas-membership">
         </div>
     </div>
-    
+
     <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-3 mb-5">
         {% for product in products %}
         <div class="col">
@@ -32,6 +30,8 @@
                         class="btn btn-primary w-100 my-3"
                         type="button"
                         id="button-filters"
+                        hx-get="/memberships/{{ product.uuid }}" hx-swap="innerHTML" hx-target="#offcanvas-membership"
+
                         data-bs-toggle="offcanvas"
                         data-bs-target="#subscribePanel"
                         aria-controls="subscribePanel">

@@ -37,7 +37,7 @@ def set_ligne_article_paid(old_instance, new_instance):
     for ligne_article in lignes_article:
         logger.info(f"            {ligne_article.pricesold} {ligne_article.status} to P")
         ligne_article.status = LigneArticle.PAID
-        ligne_article.payment_method = PaymentMethod.STRIPE
+        ligne_article.payment_method = PaymentMethod.STRIPE_NOFED
         ligne_article.save()
 
     # s'il y a une réservation, on la met aussi en payée :
