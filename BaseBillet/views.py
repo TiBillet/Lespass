@@ -845,6 +845,12 @@ class MembershipMVT(viewsets.ViewSet):
             logger.error(f"MembershipViewset CREATE ERROR : {membership_validator.errors}")
             error_messages = [str(item) for sublist in membership_validator.errors.values() for item in sublist]
             messages.add_message(request, messages.ERROR, error_messages)
+
+            # return JsonResponse({
+            #     'icon': 'error',
+            #     'swal_title': _('Badged !'),
+            #     'swal_message': _('Thank you for your visit!. You can see a summary in the “My Account” area.'),
+            # })
             return Response(membership_validator.errors, status=status.HTTP_400_BAD_REQUEST)
             # return modal(request, level="warning", content=', '.join(error_messages))
 
@@ -863,6 +869,8 @@ class MembershipMVT(viewsets.ViewSet):
             with tenant_context(tenant):
                 for product in Product.objects.filter(categorie_article=Product.ADHESION, publish=True):
                     products.append(product)
+
+        messages.add_message(request, messages.SUCCESS, "coucou")
 
         template_context['products'] = products
         response = render(

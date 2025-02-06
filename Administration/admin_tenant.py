@@ -518,6 +518,7 @@ class HumanUserAdmin(ModelAdmin):
         'first_name',
         'last_name',
         'display_memberships_valid',
+        'is_active',
     ]
 
     search_fields = [
