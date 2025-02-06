@@ -6,6 +6,7 @@
         <ul>
             <li>{{ resa.event.datetime }}</li>
             <li>{{ resa.total_paid }}€</li>
+            <li>{% translate "Status" %} : {{ resa.get_status_display }}</li>
 
             {% if resa.options.all %}
                 <li>{% for option in resa.options.all %} {{ option.name }} {% endfor %}</li>
@@ -26,6 +27,7 @@
                     <li>
                         <button>{% translate "Annuler le billet" %}</button>
                     </li>
+                    <li>{% translate "Status" %} : {{ ticket.get_status_display }}</li>
                 {% endfor %}
             </ul>
         </ul>
