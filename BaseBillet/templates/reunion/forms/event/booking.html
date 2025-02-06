@@ -34,6 +34,29 @@
         {% endfor %}
     {% endfor %}
 
+    {% for option in event.options_radio.all %}
+        <div class="d-flex flex-row justify-content-start align-items-start mb-3 has-validation">
+            <div class="form-check me-3">
+                <input id="option-radio-{{ option.uuid }}" name="options"
+                       class="form-check-input" type="radio" value="{{ option.uuid }}"
+                       required>
+                <label class="custom-control-label" for="option-radio-{{ option.uuid }}">
+                    {{ option.name }}
+                </label>
+            </div>
+        </div>
+    {% endfor %}
+
+    {% for option in event.options_checkbox.all %}
+        <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" role="switch" id="option-checkbox-{{ option.uuid }}"
+                   name="options" value="{{ option.uuid }}">
+            <label class="form-check-label" for="option-checkbox-{{ option.uuid }}">
+                {{ option.name }}
+            </label>
+        </div>
+    {% endfor %}
+
     <h4>Total : 0 place(s) pour <span class="fs-5 badge bg-secondary-subtle mb-md-0">0,00€</span></h4>
 
     <p>

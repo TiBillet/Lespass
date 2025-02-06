@@ -124,7 +124,6 @@ class OptionGenerale(models.Model):
         verbose_name_plural = _('Options')
 
 
-
 class PostalAddress(models.Model):
     """
     Modèle Django conforme à Schema.org pour une adresse postale avec coordonnées GPS.
@@ -188,6 +187,7 @@ class PostalAddress(models.Model):
     class Meta:
         verbose_name = "Adresse postale"
         verbose_name_plural = "Adresses postales"
+
 
 # class ExternalLink(models.Model):
 #     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
@@ -731,8 +731,6 @@ class Price(models.Model):
         verbose_name_plural = _('Tarifs')
 
 
-
-
 class Event(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
 
@@ -759,7 +757,6 @@ class Event(models.Model):
     is_external = models.BooleanField(default=False, verbose_name=_("Billetterie/Reservation externe"), help_text=_(
         "Si l'évènement est géré par une autre billetterie ou un autre site de réservation. Ex : Un event Facebook"))
     full_url = models.URLField(blank=True, null=True)
-
 
     published = models.BooleanField(default=True, verbose_name=_("Publier"))
 
@@ -902,7 +899,6 @@ class Event(models.Model):
         # Nécéssaire pour le prefetch multi tenant
         if not self.is_external:
             self.full_url = f"https://{connection.tenant.get_primary_domain().domain}/event/{self.slug}/"
-
 
         super().save(*args, **kwargs)
 
@@ -1266,11 +1262,15 @@ class Ticket(models.Model):
                                       verbose_name=_("Moyen de paiement"))
 
     def pdf_filename(self):
+        first_name = f"{self.first_name.upper()}" if self.first_name else ""
+        last_name = f"{self.last_name.upper()}" if self.last_name else ""
+
         config = Configuration.get_solo()
         return f"{config.organisation.upper()} " \
+               f"{self.reservation.event.name} " \
                f"{self.reservation.event.datetime.astimezone().strftime('%d/%m/%Y')} " \
-               f"{self.first_name.upper()} " \
-               f"{self.last_name.capitalize()}" \
+               f"{first_name}" \
+               f"{last_name}" \
                f"{self.status}-{self.numero_uuid()}-{self.seat}" \
                f".pdf"
 

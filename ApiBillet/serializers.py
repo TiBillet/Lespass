@@ -1266,8 +1266,6 @@ class ReservationValidator(serializers.Serializer):
 
         for price_object in self.prices_list:
             if price_object['price'].product not in product_list:
-                import ipdb;
-                ipdb.set_trace()
                 logger.error(f'Article non présent dans event : {price_object["price"].product.name}')
                 raise serializers.ValidationError(_(f'Article non disponible'))
 

@@ -60,13 +60,7 @@ class TicketCreator():
 
     # FREERES : réservation gratuite
     def method_F(self, prices_dict):
-        # Dans la méthode reservation gratuite, le ticket est créé non pas en non payé mais en non actif
-        # Il sera actif une fois le mail de l'user vérifié
-        # La fonctione presave du fichier BaseBillet.signals
-        # mettra à jour le statut de la réservation et enverra le billet dés validation de l'email
         reservation: Reservation = self.reservation
-        reservation.status = Reservation.FREERES_USERACTIV if reservation.user_commande.is_active else Reservation.FREERES
-        reservation.save()
 
         tickets = []
         for price, qty in prices_dict.items():
@@ -76,7 +70,7 @@ class TicketCreator():
             # Recherche ou création du produit vendu
             # On est sur une reservation gratuite, on va pas chercher de paiement
             productsold, created = ProductSold.objects.get_or_create(
-                event=self.reservation.event,
+                event=reservation.event,
                 product=price.product
             )
             pricesold, created = PriceSold.objects.get_or_create(
@@ -86,16 +80,22 @@ class TicketCreator():
             )
 
             # Fabrication d'un ticket par qty
+            # Dans la méthode reservation gratuite, le ticket est créé non pas en non payé mais en non actif
+            # Il sera actif une fois le mail de l'user vérifié
+            # La fonctione presave du fichier BaseBillet.signals
+            # mettra à jour le statut de la réservation et enverra le billet dés validation de l'email
             for i in range(int(qty)):
                 ticket = Ticket.objects.create(
                     status=Ticket.NOT_ACTIV,
-                    reservation=self.reservation,
+                    reservation=reservation,
                     pricesold=pricesold,
                     # first_name=customer.get('first_name'),
                     # last_name=customer.get('last_name'),
                 )
                 tickets.append(ticket)
 
+        reservation.status = Reservation.FREERES_USERACTIV if reservation.user_commande.is_active else Reservation.FREERES
+        reservation.save()
         return tickets
 
 
@@ -167,16 +167,15 @@ class ReservationValidator(serializers.Serializer):
         self.user = user
         return value
 
-    """
     def validate_options(self, value):
         # On check que les options sont bien dans l'event original.
+        event: Event = self.event
         if value:
             for option in value:
                 option: OptionGenerale
                 if option not in list(set(event.options_checkbox.all()) | set(event.options_radio.all())):
                     raise serializers.ValidationError(_(f'Option {option.name} non disponible dans event'))
         return value
-    """
 
     def validate(self, attrs):
         """
@@ -190,7 +189,7 @@ class ReservationValidator(serializers.Serializer):
         products_dict = self.products_dict
         user = self.user
         event = self.event
-        # options = self.options
+        options = attrs.get('options')
         total_ticket_qty = 0
 
         # existe au moins un billet pour la reservation ?
@@ -248,9 +247,11 @@ class ReservationValidator(serializers.Serializer):
             user_commande=user,
             event=event,
         )
-        # if options:
-        #     for option in options:
-        #         reservation.options.add(option)
+
+        if options:
+            for option in options:
+                reservation.options.add(option)
+
         self.reservation = reservation
 
         # Fabrication de la reservation et des tickets en fonction du type de produit
