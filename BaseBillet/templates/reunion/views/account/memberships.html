@@ -1,0 +1,30 @@
+{% extends 'reunion/account_base.html' %}
+{% load static %}
+{% load tibitags %}
+{% load humanize i18n %}
+
+{% block title %}{% translate 'Adhésions' %}{% endblock %}
+
+{% block account_page %}
+<section class="card border-top-0 rounded-top-0">
+    <div class="card-body">
+        <h1 class="card-title d-md-none">Adhésions</h1>
+        <p class="lead">
+            Ici je peux voir mes adhésions en cours, les renouveler et
+            souscrire une nouvelle adhésion parmi celles disponibles sur le
+            réseau.
+        </p>
+    </div>
+</section>
+
+<div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-3 mb-5">
+    <div hx-get="/my_account/membership_table/" hx-trigger="revealed" class="mt-4">
+        <span>{% translate "Loading tokens" %}</span>
+        <div class="d-flex justify-content-center align-items-center ">
+            <div class="spinner-border text-info"
+                 role="status"
+            ></div>
+        </div>
+    </div>
+</div>
+{% endblock %}

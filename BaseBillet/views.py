@@ -490,7 +490,7 @@ class MyAccount(viewsets.ViewSet):
             'tokens': tokens,
         }
 
-        return render(request, "htmx/views/my_account/tokens_table.html", context=context)
+        return render(request, "reunion/partials/account/token_table.html", context=context)
 
     @action(detail=False, methods=['GET'])
     def transactions_table(self, request):
@@ -516,8 +516,9 @@ class MyAccount(viewsets.ViewSet):
     ### ONGLET ADHESION
     @action(detail=False, methods=['GET'])
     def membership(self, request: HttpRequest) -> HttpResponse:
-        context = {}
-        return render(request, "htmx/views/my_account/my_account_membership.html", context=context)
+        context = get_context(request)
+        context['account_tab'] = 'memberships'
+        return render(request, "reunion/views/account/memberships.html", context=context)
 
     @action(detail=False, methods=['GET'])
     def membership_table(self, request):
@@ -546,7 +547,7 @@ class MyAccount(viewsets.ViewSet):
             'config': config,
             'tokens': tokens,
         }
-        return render(request, "htmx/views/my_account/tokens_membership_table.html", context=context)
+        return render(request, "reunion/partials/account/membership_table.html", context=context)
 
     @action(detail=False, methods=['GET'])
     def profile(self, request: HttpRequest) -> HttpResponse:

@@ -25,9 +25,7 @@
                 {% else %}
                 {# TODO: url du lespass d'origine pour accès facile à plus d'infos ? #}
                 <a href="#">
-                    {% for place_name in token.asset.names_of_place_federated %}
-                        {{ place_name }}{% if not forloop.last %},{% endif %}
-                    {% endfor %}
+                    {{ token.asset.names_of_place_federated|join:", " }}
                 </a>
                 {% endif %}
             </td>

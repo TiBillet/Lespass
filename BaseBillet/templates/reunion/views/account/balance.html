@@ -109,7 +109,15 @@
 <div class="row">
     <div class="col-md">
         <h2 class="pt-3" id="detail-monnaies">Détail des monnaies</h2>
-        {% include "reunion/partials/account/token_table.html" %}
+        
+        <div hx-get="/my_account/tokens_table/" hx-trigger="revealed" class="mt-4">
+            <span>{% translate "Loading tokens" %}</span>
+            <div class="d-flex justify-content-center align-items-center ">
+                <div class="spinner-border text-info"
+                     role="status"
+                ></div>
+            </div>
+        </div>
     </div>
     <div class="col-md">
         <h2 class="pt-3" id="detail-heures">Détail du temps</h2>
