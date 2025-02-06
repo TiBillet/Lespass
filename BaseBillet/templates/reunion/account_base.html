@@ -5,7 +5,7 @@
 {% block main %}
 <main class="container-lg py-5">
     <p class="lead mb-5">
-        Adresse liée : <code>{{ user.email }}</code>
+        Adresse liée : <code>{{ user.email }}</code><br/>
         
         {% if profile.admin_this_tenant %}
         <span class="text-danger">Carte primaire</span>
@@ -24,55 +24,55 @@
     {% endif %}
 
     <div class="overflow-x-scroll">
-        <ul class="nav nav-tabs mb-0 flex-nowrap">
+        <ul class="nav nav-tabs mb-0 flex-nowrap text-center">
             <li class="nav-item">
                 <a class="nav-link{% if account_tab == 'balance' %} active" aria-current="page{% endif %}" href="/my_account/">
                     <i class="bi bi-piggy-bank-fill"></i>
-                    <span class="d-none d-md-inline">Tirelire</span>
+                    <span class="d-none d-lg-inline">Tirelire</span>
                 </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link{% if account_tab == 'memberships' %} active" aria-current="page{% endif %}" href="/my_account/membership/">
                     <i class="bi bi-person-badge-fill"></i>
-                    <span class="d-none d-md-inline">Adhésions</span>
+                    <span class="d-none d-lg-inline">Adhésions</span>
                 </a>
             </li>
-            <!-- <li class="nav-item">
-                <a class="nav-link" href="#">
+            <li class="nav-item">
+                <a class="nav-link{% if account_tab == 'reservations' %} active" aria-current="page{% endif %}" href="/my_account/my_reservations/">
                     <i class="bi bi-ticket-perforated-fill"></i>
-                    <span class="d-none d-md-inline">Réservations</span>
+                    <span class="d-none d-lg-inline">Réservations</span>
                 </a>
-            </li> -->
+            </li>
             <li class="nav-item">
                 <a class="nav-link{% if account_tab == 'punchclock' %} active" aria-current="page{% endif %}" href="/badge/">
                     <i class="bi bi-stopwatch-fill"></i>
-                    <span class="d-none d-md-inline">Badgeuse</span>
+                    <span class="d-none d-lg-inline">Badgeuse</span>
                 </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link{% if account_tab == 'card' %} active" aria-current="page{% endif %}" href="/my_account/profile/">
                     <i class="bi bi-postcard-fill"></i>
-                    <span class="d-none d-md-inline">Carte</span>
+                    <span class="d-none d-lg-inline">Carte</span>
                 </a>
             </li>
             <li class="nav-item me-auto">
                 <a class="nav-link $settings_link" href="$base_url/compte/preferences/">
                     <i class="bi bi-gear-fill"></i>
-                    <span class="d-none d-md-inline">Préférences</span>
+                    <span class="d-none d-lg-inline">Préférences</span>
                 </a>
             </li>
             {% if profile.admin_this_tenant %}
             <li class="nav-item">
                 <a class="nav-link link-danger" href="/admin/">
-                    <i class="bi bi-database-fill"></i>
-                    <span class="d-none d-md-inline">Administration</span>
+                    <i class="bi bi-key-fill"></i>
+                    <span class="d-none d-lg-inline">Administration</span>
                 </a>
             </li>
             {% endif %}
             <li class="nav-item">
                 <a class="nav-link link-secondary" href="/deconnexion/">
                     <i class="bi bi-box-arrow-right"></i>
-                    <span class="d-none d-md-inline">Me déconnecter</span>
+                    <span class="d-none d-lg-inline">Me déconnecter</span>
                 </a>
             </li>
         </ul>

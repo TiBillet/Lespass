@@ -1,36 +1,49 @@
-{% load i18n static %}
+{% extends 'reunion/account_base.html' %}
+{% load static %}
+{% load tibitags %}
+{% load humanize i18n %}
 
+{% block title %}{% translate 'Réservations' %}{% endblock %}
+
+{% block account_page %}
 {% for resa in reservations %}
-    <ul>
-        <li><a href="{{ resa.event.full_url }}">{{ resa.event.name }}</a></li>
-        <ul>
-            <li>{{ resa.event.datetime }}</li>
-            <li>{{ resa.total_paid }}€</li>
-            <li>{% translate "Status" %} : {{ resa.get_status_display }}</li>
-
-            {% if resa.options.all %}
-                <li>{% for option in resa.options.all %} {{ option.name }} {% endfor %}</li>
-            {% endif %}
-
-            <li>Tickets :</li>
-            <ul>
-                {% for ticket in resa.tickets.all %}
-                    <li>{{ ticket.pricesold.price.product.name }} - {{ ticket.pricesold.price.name }}, {{ ticket.pricesold.prix }}€</li>
-                    <li>{% translate "Numéro" %} : {{ ticket.numero_uuid }}</li>
-                    <li>{% if ticket.first_name %}{{ ticket.first_name }}{% else %}
-                        {% translate "Anonyme" %}{% endif %}</li>
-                    <li>{% if ticket.last_name %}{{ ticket.last_name }}{% else %}
-                        {% translate "Anonyme" %}{% endif %}</li>
-                    <li>
-                        <button>{% translate "Voir le billet" %}</button>
-                    </li>
-                    <li>
-                        <button>{% translate "Annuler le billet" %}</button>
-                    </li>
-                    <li>{% translate "Status" %} : {{ ticket.get_status_display }}</li>
-                {% endfor %}
-            </ul>
-        </ul>
-    </ul>
+<div class="card my-5">
+    <div class="row g-0">
+        <div class="col-md-4">
+            <img src="{{ resa.event.img|randImg }}" class="object-fit-cover w-100 h-100 rounded-start" alt="{{ resa.event.name }}">
+        </div>
+        <div class="col-md-8">
+            <div class="card-body">
+                <h3 class="card-title">
+                    <small>
+                        {{ resa.event.datetime|date:'l j F'|capfirst }} <br />
+                        {{ resa.event.datetime|time:'H\hi' }} <br />
+                    </small>
+                    {{ resa.event.name }}
+                    <a href="{{ resa.event.full_url }}">
+                        <i class="bi bi-box-arrow-up-right"></i>
+                        <span class="visually-hidden">Page de l'évènement</span>
+                    </a>
+                </h3>
+                <div class="card-text hstack gap-3">
+                    <div class="p-2">{{ resa.tickets.all|length }} places</div>
+                    <div class="vr"></div>
+                    <div class="p-2">{{ resa.total_paid }}€</div>
+                    <div class="vr"></div>
+                    <div class="p-2">{{ resa.get_status_display }}</div>
+                </div>
+                {% comment %}
+                TODO: options, j'attends de les voir pour savoir comment les afficher
+                {% if resa.options.all %}
+                    {% for option in resa.options.all %} {{ option.name }} {% endfor %}
+                {% endif %}
+                {% endcomment %}
+                <div class="card-footer p-0">
+                    {% include 'reunion/partials/account/ticket_accordion.html' %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endfor %}
-
+{% endblock %}
