@@ -381,6 +381,15 @@ class MyAccount(viewsets.ViewSet):
         return render(request, "htmx/views/my_account/cards.html", context=context)
 
     @action(detail=False, methods=['GET'])
+    def my_reservations(self, request):
+        reservations = Reservation.objects.filter(user_commande=request.user)
+        context = {
+            'reservations': reservations
+        }
+        return render(request, "htmx/views/my_account/reservations.html", context=context)
+
+
+    @action(detail=False, methods=['GET'])
     def resend_activation_email(self, request):
         user = request.user
         email = request.user.email
