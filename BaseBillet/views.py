@@ -396,7 +396,7 @@ class MyAccount(viewsets.ViewSet):
         context = {
             'reservations': reservations
         }
-        return render(request, "htmx/views/my_account/reservations.html", context=context)
+        return render(request, "reunion/views/account/reservations.html", context=context)
 
     @action(detail=False, methods=['GET'])
     def resend_activation_email(self, request):
