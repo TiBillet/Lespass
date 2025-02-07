@@ -50,13 +50,13 @@
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link{% if account_tab == 'card' %} active" aria-current="page{% endif %}" href="/my_account/profile/">
+                <a class="nav-link{% if account_tab == 'card' %} active" aria-current="page{% endif %}" href="/my_account/card/">
                     <i class="bi bi-postcard-fill"></i>
                     <span class="d-none d-lg-inline">Carte</span>
                 </a>
             </li>
             <li class="nav-item me-auto">
-                <a class="nav-link $settings_link" href="$base_url/compte/preferences/">
+                <a class="nav-link{% if account_tab == 'profile' %} active" aria-current="page{% endif %}" href="/my_account/profile/">
                     <i class="bi bi-gear-fill"></i>
                     <span class="d-none d-lg-inline">Préférences</span>
                 </a>

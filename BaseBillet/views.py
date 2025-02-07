@@ -572,10 +572,17 @@ class MyAccount(viewsets.ViewSet):
         return render(request, "reunion/partials/account/membership_table.html", context=context)
 
     @action(detail=False, methods=['GET'])
-    def profile(self, request: HttpRequest) -> HttpResponse:
+    def card(self, request: HttpRequest) -> HttpResponse:
         context = get_context(request)
         context['account_tab'] = 'card'
         return render(request, "reunion/views/account/card.html", context=context)
+
+
+    @action(detail=False, methods=['GET'])
+    def profile(self, request: HttpRequest) -> HttpResponse:
+        context = get_context(request)
+        context['account_tab'] = 'profile'
+        return render(request, "reunion/views/account/preferences.html", context=context)
 
     #### REFILL STRIPE PRIMARY ####
 
