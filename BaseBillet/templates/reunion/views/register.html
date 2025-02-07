@@ -1,0 +1,68 @@
+{% extends base_template %}
+{% load i18n %}
+{% load tibitags %}
+
+{% block main %}
+<div class="flex-fill">
+    <div class="container-lg py-5">
+        <div class="row">
+            <div class="col-md-8 offset-md-2 col-lg-6 offset-lg-3 col-xl-4 offset-xl-4">
+                <h1>Associer ma carte</h1>
+                <p>
+                    Pour utiliser mon compte en ligne, recharger ma carte et pouvoir
+                    récupérer mon crédit en cas de perte de la carte, j'associe une
+                    adresse email à ma carte.
+                </p>
+                <form id="linkform" role="form">
+                    <div class="form-floating mb-3">
+                        <input name="email" type="email" class="form-control" placeholder="adresse@exemple.fr" role="textbox" aria-label="Adresse mail de l'adhéranne" required>
+                        <label for="email">Addresse mail</label>
+                    </div>
+                    {% include 'reunion/partials/field_errors.html' %}
+                    
+                    {% if config.need_name %}
+                    <div class="row">
+                        <div class="col">
+                            <div class="form-floating mb-3">
+                                <input name="firstname" type="text" class="form-control" placeholder="Jaz" role="textbox" aria-label="Prénom de l'adhéranne" required>
+                                <label for="firstname">Prénom</label>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="form-floating mb-3">
+                                <input name="lastname" type="text" class="form-control" placeholder="Doe" role="textbox" aria-label="Nom de famille ou organisation de l'adhéranne" required>
+                                <label for="lastname">Nom ou orga</label>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="form-text">{% translate "Votre nom est requis pour lier vos adhésions associatives." %}</p>
+                    {% include 'reunion/partials/field_errors.html' %}
+                    {% endif %}
+    
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" role="switch" name="newsletter" id="newsletter">
+                        <label class="form-check-label" for="newsletter">
+                            Je veux recevoir la newsletter TiBillet
+                        </label>
+                    </div>
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" role="switch" name="cgu" id="cgu" required>
+                        <label class="form-check-label" for="cgu">
+                            J'accepte <a href="#">les conditions d'utilisation</a>
+                        </label>
+                    </div>
+                    {% include 'reunion/partials/field_errors.html' %}
+    
+                    <input type="hidden" name="qrcode_uuid" value="{{ qrcode_uuid }}">
+                    <button type="button"
+                            class="btn btn-primary w-100 mb-3 test-return-validate-link-card"
+                            hx-post="/qr/link/"
+                            hx-indicator="#tibillet-spinner"
+                    >{% translate "Confirmer" %}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

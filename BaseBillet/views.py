@@ -227,7 +227,7 @@ class ScanQrCode(viewsets.ViewSet):
                 template_context['qrcode_uuid'] = qrcode_uuid
                 # On logout l'user au cas ou on scanne les carte a la suite.
                 logout(request)
-                return render(request, "htmx/views/inscription.html", context=template_context)
+                return render(request, "reunion/views/register.html", context=template_context)
 
             # Si wallet non ephemere, alors on a un user :
             wallet = Wallet.objects.get(uuid=serialized_qrcode_card['wallet_uuid'])
