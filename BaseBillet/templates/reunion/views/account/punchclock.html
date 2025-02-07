@@ -35,19 +35,21 @@
                 {% endif %}
             </div>
             <div class="card-footer">
-                <button class="btn btn-primary d-block my-3"
+                <button class="btn btn-primary w-100 my-3"
                         role="button" aria-label="check-in {{ badge.name }}"
                         hx-get="/badge/{{ badge.uuid }}/badge_in/" hx-trigger="click"
                         hx-target="#alert-container" hx-swap="innerHTML"
                         data-loading-delay="1000"
                         hx-indicator="#tibillet-spinner" data-swal="true">
-                    {% translate "Badger" %}
+                    {% translate "Badger l'arrivée" %}
                 </button>
             </div>
         </div>
     </div>
     {% endfor %}
 </div>
+
+{% comment %} HIDE: historique des pointages
 {# TODO: historique à rajouter dans le contexte ? #}
 <h2 class="pt-3">Historique des pointages</h2>
 <div class="table-responsive">
@@ -66,4 +68,6 @@
         </tbody>
     </table>
 </div>
+{% endcomment %}
+
 {% endblock %}

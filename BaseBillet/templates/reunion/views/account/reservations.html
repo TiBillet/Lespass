@@ -20,12 +20,12 @@
                         {{ resa.event.datetime|time:'H\hi' }} <br />
                     </small>
                     {{ resa.event.name }}
-                    <a href="{{ resa.event.full_url }}">
+                    <a href="{{ resa.event.full_url }}" target="_blank">
                         <i class="bi bi-box-arrow-up-right"></i>
                         <span class="visually-hidden">Page de l'évènement</span>
                     </a>
                 </h3>
-                <div class="card-text hstack gap-3">
+                <div class="card-text hstack gap-3 mb-3">
                     <div class="p-2">{{ resa.tickets.all|length }} places</div>
                     <div class="vr"></div>
                     <div class="p-2">{{ resa.total_paid }}€</div>

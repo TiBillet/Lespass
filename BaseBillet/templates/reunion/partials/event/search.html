@@ -2,13 +2,14 @@
 <!-- search and filtering -->
 <form class="my-3" action=".">
     <div class="input-group input-group-lg">
+        {% comment %} HIDE: filtres de recherche
         <button class="btn btn-outline-secondary position-relative" type="button" id="button-filters"
                 data-bs-toggle="offcanvas"
                 data-bs-target="#filterPanel" aria-controls="filterPanel">
             <i class="bi bi-funnel"></i>
             <span class="js-filter-indicator position-absolute top-0 start-0 translate-middle p-2 bg-info rounded-circle d-md-none">
-            <span class="visually-hidden">{% translate "Filtres actifs" %}</span>
-        </span>
+                <span class="visually-hidden">{% translate "Filtres actifs" %}</span>
+            </span>
         </button>
 
         {# TODO: il disparait ?#}
@@ -20,11 +21,7 @@
                 {% endfor %}
             </div>
         {% endif %}
-
-        <div id="filterTags" class="btn-group">
-                <button class="btn btn-info d-none d-md-block" type="button" id="button-addon1">Punk<i
-                        class="bi bi-x"></i></button>
-        </div>
+        {% endcomment %}
 
         <div class="form-floating" id="search_form">
             <input type="text" class="form-control" id="search" placeholder="un évènement" name="search">

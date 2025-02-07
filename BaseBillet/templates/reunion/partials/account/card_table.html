@@ -20,7 +20,7 @@
 </table>
 <div class="row">
     <div class="col-md">
-        <button type="submit" class="btn btn-primary d-block mb-3 mb-md-0"
+        <button type="submit" class="btn btn-primary w-100 mb-3 mb-md-0"
             role="button"
             aria-label="valider formulaire adhésion"
             hx-get="/my_account/{{ card.number_printed }}/lost_my_card/"
@@ -28,6 +28,8 @@
         {% translate "I LOST MY CARD NUMBER" %} {{ card.number_printed }}
     </button>
     </div>
+
+    {% comment %} HIDE: dissociation de carte
     <div class="col-md">
         {# TODO: route dissociation par carte ? #}
         <a href="#" class="btn btn-danger d-block">
@@ -35,5 +37,6 @@
         </a>
         <p>La carte redeviendra éphémère, non liée à une adresse mail </p>
     </div>
+    {% endcomment %}
 </div>
 {% endfor %}

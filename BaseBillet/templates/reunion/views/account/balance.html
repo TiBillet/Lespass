@@ -61,12 +61,15 @@
     <div class="row g-0">
         <div class="col-md bg-body-tertiary p-3">
             <h3>Monnaies</h3>
+
+            {% comment %} HIDE: total cumulé des sous utilisables dans le lieu, total global
             <p class="lead">
                 {# TODO: total utilisable avec l'orga et total toutes instances #}
                 <strong>40,25</strong> tibillets utilisables avec
                 <em>{{ config.organisation }}</em> <br />
                 <span class="opacity-50"><strong>80,25</strong> tibillets en tout</span>
             </p>
+            {% endcomment %}
 
             <a href="#" hx-get="/my_account/refill_wallet" class="btn btn-primary d-block mb-3">
                 Recharger ma tirelire
@@ -89,6 +92,8 @@
                 ligne. Pour les monnaies locales, demandez directement à une
                 caisse de votre réseau local.</p>
         </div>
+
+        {% comment %} HIDE: monnaie-temps
         <div class="col-md bg-body-tertiary p-3">
             <h3>Temps</h3>
             <p class="lead">
@@ -103,6 +108,7 @@
                 Détail du temps
             </a>
         </div>
+        {% endcomment %}
     </div>
 </section>    
 
@@ -119,6 +125,8 @@
             </div>
         </div>
     </div>
+
+    {% comment %} HIDE: monnaie temps
     <div class="col-md">
         <h2 class="pt-3" id="detail-heures">Détail du temps</h2>
         <table class="table">
@@ -149,6 +157,7 @@
             </tbody>
         </table>
     </div>
+    {% endcomment %}
 </div>
 
 <section id="transactionHistory">
