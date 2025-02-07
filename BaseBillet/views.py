@@ -724,8 +724,8 @@ class EventMVT(viewsets.ViewSet):
         template_context['event'] = event
         return render(request, "reunion/views/event/retrieve.html", context=template_context)
 
-    def create(self, request):
-        pass
+    # def create(self, request):
+    #     pass
 
     @action(detail=True, methods=['POST'])
     def reservation(self, request, pk):

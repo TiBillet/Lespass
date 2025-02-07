@@ -15,7 +15,7 @@
     </h2>
     <div id="schedule" class="accordion-collapse collapse show" data-bs-parent="#infoAccordion">
     <div class="accordion-body">
-        <p>{{ event.long_description }}</p>
+        <p>{{ event.long_description | safe }}</p>
     </div>
     </div>
 </div>
