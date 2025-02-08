@@ -35,11 +35,13 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from Administration.admin_tenant import FormbricksConfigAddform
 from AuthBillet.models import TibilletUser, Wallet
 from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
-from BaseBillet.models import Configuration, Ticket, Product, Event, Paiement_stripe, Membership, Reservation
+from BaseBillet.models import Configuration, Ticket, Product, Event, Paiement_stripe, Membership, Reservation, \
+    FormbricksConfig, FormbricksForms
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
     ReservationValidator
@@ -398,7 +400,7 @@ class MyAccount(viewsets.ViewSet):
         context = get_context(request)
         context['reservations'] = reservations
         context['account_tab'] = 'reservations'
-        
+
         return render(request, "reunion/views/account/reservations.html", context=context)
 
     @action(detail=False, methods=['GET'])
@@ -576,7 +578,6 @@ class MyAccount(viewsets.ViewSet):
         context = get_context(request)
         context['account_tab'] = 'card'
         return render(request, "reunion/views/account/card.html", context=context)
-
 
     @action(detail=False, methods=['GET'])
     def profile(self, request: HttpRequest) -> HttpResponse:
@@ -853,14 +854,24 @@ class MembershipMVT(viewsets.ViewSet):
             logger.error(f"MembershipViewset CREATE ERROR : {membership_validator.errors}")
             error_messages = [str(item) for sublist in membership_validator.errors.values() for item in sublist]
             messages.add_message(request, messages.ERROR, error_messages)
-
-            # return JsonResponse({
-            #     'icon': 'error',
-            #     'swal_title': _('Badged !'),
-            #     'swal_message': _('Thank you for your visit!. You can see a summary in the “My Account” area.'),
-            # })
             return Response(membership_validator.errors, status=status.HTTP_400_BAD_REQUEST)
-            # return modal(request, level="warning", content=', '.join(error_messages))
+
+        # Le formulaire est valide.
+        # Vérification de la demande de fomulaire supplémentaire avec Formbricks
+        as_formbricks = membership_validator.price.product.formbricksform.exists()
+        if as_formbricks:
+            formbicks_form: FormbricksForms = membership_validator.price.product.formbricksform.first()
+            formbricks_config = FormbricksConfig.get_solo()
+            membership: Membership = membership_validator.membership
+            context = {'form': {'apiHost': formbricks_config.api_host,
+                                'trigger_name': formbicks_form.trigger_name,
+                                'environmentId': formbicks_form.environmentId, },
+                       'membership': membership, }
+
+            return render(request, "reunion/views/membership/formbricks.html", context=context)
+        #
+        # if formbricks.api_host and formbricks.api_key:
+        # Une configuration formbricks à été trouvé.
 
         # return Http404
         return HttpResponseClientRedirect(membership_validator.checkout_stripe_url)
@@ -889,7 +900,6 @@ class MembershipMVT(viewsets.ViewSet):
         response['X-Frame-Options'] = '' if template_context.get('embed') else 'DENY'
         return response
 
-
     def get_federated_membership_url(self, uuid=uuid):
         config = Configuration.get_solo()
         # Récupération de tous les évènements de la fédération
@@ -897,7 +907,7 @@ class MembershipMVT(viewsets.ViewSet):
         tenants.append(connection.tenant)
         for tenant in set(tenants):
             with tenant_context(tenant):
-                try :
+                try:
                     product = Product.objects.get(uuid=uuid, categorie_article=Product.ADHESION, publish=True)
                     url = f"https://{tenant.get_primary_domain().domain}/memberships/{product.uuid}"
                     return url
@@ -906,14 +916,13 @@ class MembershipMVT(viewsets.ViewSet):
 
         return False
 
-
     def retrieve(self, request, pk):
         '''
         La fonction qui va chercher le formulaire d'inscription.
         - Redirige vers le bon tenant si il faut
         - Fait apparaitre formbricks si besoin
         '''
-        try :
+        try:
             # On essaye sur ce tenant :
             product = Product.objects.get(uuid=pk, categorie_article=Product.ADHESION, publish=True)
         except Product.DoesNotExist:
@@ -926,7 +935,6 @@ class MembershipMVT(viewsets.ViewSet):
         context = get_context(request)
         context['product'] = product
         return render(request, "reunion/views/membership/form.html", context=context)
-
 
     @action(detail=True, methods=['GET'])
     def stripe_return(self, request, pk, *args, **kwargs):

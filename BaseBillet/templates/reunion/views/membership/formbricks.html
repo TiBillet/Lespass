@@ -1,0 +1,29 @@
+<div class="position-absolute bottom-0 start-0 end-0 p-3">
+    <span class="badge rounded-pill bg-warning text-dark">survey</span>
+</div>
+
+<!-- START Formbricks Surveys -->
+<script type="text/javascript">
+    !function () {
+        var t = document.createElement("script");
+        t.type = "text/javascript", t.async = !0, t.src = "https://app.formbricks.com/js/formbricks.umd.cjs";
+        var e = document.getElementsByTagName("script")[0];
+        e.parentNode.insertBefore(t, e), setTimeout(function () {
+            window.formbricks.init({
+                environmentId: "{{ form.environmentId }}",
+                apiHost: "{{ form.apiHost }}",
+                userId: "{{ membership.email }} {{ membership.uuid | slice:":4" }}",
+            });
+            window.formbricks.track("{{ form.trigger_name }}", {
+                hiddenFields: {
+                    email: "{{ membership.email }}",
+                    name: "{{ membership.member_name }}"
+                },
+            });
+        }, 500)
+    }();
+    // console.log('formbricks ok, on lance le track adhesion')
+    // console.log('formbricks ok, on lance le track adhesion')
+
+</script>
+<!-- END Formbricks Surveys -->

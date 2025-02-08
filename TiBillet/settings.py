@@ -449,6 +449,22 @@ UNFOLD = {
                 # },
             ],
         },
+        {
+            # Déclare dans quel affichage les tabs s'activent
+            "models": ["BaseBillet.formbricksconfig", "BaseBillet.formbricksforms"],
+            "items": [
+                {
+                    "title": _("Formulaires"),
+                    # "icon": "sports_motorsports",
+                    "link": reverse_lazy("staff_admin:BaseBillet_formbricksforms_changelist"),
+                },
+                {
+                    "title": _("Configuration"),
+                    # "icon": "precision_manufacturing",
+                    "link": reverse_lazy("staff_admin:BaseBillet_formbricksconfig_changelist"),
+                },
+            ],
+        },
     ],
     "SIDEBAR": {
         "show_search": True,  # Search in applications and models names
@@ -574,7 +590,7 @@ UNFOLD = {
             {
                 "title": _("Connect'"),
                 "separator": True,  # Top border
-                "collapsible": True,  # Collapsible group of links
+                "collapsible": False,  # Collapsible group of links
                 "items": [
                     {
                         "title": _("API Key"),
@@ -594,6 +610,13 @@ UNFOLD = {
                         "title": _("Ghost"),
                         "icon": "circle",  # Supported icon set: https://fonts.google.com/icons
                         "link": reverse_lazy("staff_admin:BaseBillet_ghostconfig_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+                    },
+                    {
+                        "title": _("Formbricks"),
+                        "icon": "list_alt",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_formbricksforms_changelist"),
                         # "badge": "Administration.admin_tenant.badge_callback",
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
                     },

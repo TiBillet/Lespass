@@ -37,6 +37,7 @@ from QrcodeCashless.models import CarteCashless
 from TiBillet import settings
 from fedow_connect.utils import dround
 from root_billet.models import RootConfiguration
+from root_billet.utils import fernet_decrypt, fernet_encrypt
 
 logger = logging.getLogger(__name__)
 
@@ -1816,3 +1817,26 @@ class GhostConfig(SingletonModel):
 
 # class DokosConfig(SingletonModel):
 #     dokos_id = models.CharField(max_length=100, blank=True, null=True, editable=False)
+
+class FormbricksForms(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    environmentId = models.CharField(max_length=30, help_text="Id d'environnement du projet Formbricks")
+    trigger_name = models.CharField(max_length=30, help_text="Le nom du trigger qui va lancer le formulaire", unique=True)
+    # Formulaire à l'achat d'une adhésion ou d'un billet d'evènement
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="formbricksform")
+
+
+class FormbricksConfig(SingletonModel):
+    """
+    Configuration de Formbricks pour les fomulaires sur mesures
+    """
+    api_key = models.CharField(max_length=200, blank=True, null=True)
+    api_host = models.CharField(max_length=220, default="https://app.formbricks.com")
+
+    def get_api_key(self):
+        return fernet_decrypt(self.api_key) if self.api_key else None
+
+    def set_api_key(self, string):
+        self.api_key = fernet_encrypt(string)
+        self.save()
+        return True

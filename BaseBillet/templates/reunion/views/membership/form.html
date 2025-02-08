@@ -1,5 +1,5 @@
 {% load i18n %}
-<form hx-post="/memberships/" hx-indicator="#tibillet-spinner">
+<form hx-post="/memberships/" hx-indicator="#tibillet-spinner" hx-target="">
 
     <input type="hidden" name="product" value="{{ product.uuid }}">
 
@@ -113,9 +113,13 @@
             {% endif %}
         </label>
     </div>
+    <span id="membership-cancel">survey</span>
 
     <div class="position-absolute bottom-0 start-0 end-0 p-3">
-        <button type="submit" class="btn btn-primary w-100 mb-3">Confirmer</button>
+        <button id="membership-submit" type="submit" class="btn btn-primary w-100 mb-3">Confirmer</button>
         <a href="." class="btn btn-danger d-block">Annuler</a>
     </div>
 </form>
+
+
+

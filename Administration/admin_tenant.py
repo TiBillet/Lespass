@@ -3,6 +3,7 @@ from datetime import timedelta
 from decimal import Decimal
 from typing import Any
 
+import requests
 from django import forms
 from django.db import models
 from django.contrib import admin
@@ -27,7 +28,8 @@ from ApiBillet.permissions import TenantAdminPermissionWithRequest
 from AuthBillet.models import HumanUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
-    LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin
+    LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
+    FormbricksConfig, FormbricksForms
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
     webhook_membership
 from Customers.models import Client
@@ -161,7 +163,7 @@ class WebhookAdmin(ModelAdmin):
             )
 
     def has_custom_actions_detail_permission(self, request, object_id):
-        return True
+        return TenantAdminPermissionWithRequest(request)
 
 
 ########################################################################
@@ -556,10 +558,10 @@ class HumanUserAdmin(ModelAdmin):
         return None, _("Aucune")
 
     def has_view_permission(self, request, obj=None):
-        return True
+        return TenantAdminPermissionWithRequest(request)
 
     def has_change_permission(self, request, obj=None):
-        return True
+        return TenantAdminPermissionWithRequest(request)
 
 
 ### ADHESION
@@ -734,16 +736,16 @@ class MembershipAdmin(ModelAdmin):
         # return redirect(request.META["HTTP_REFERER"])
 
     def has_custom_actions_detail_permission(self, request, object_id):
-        return True
+        return TenantAdminPermissionWithRequest(request)
 
     def has_view_permission(self, request, obj=None):
-        return True
+        return TenantAdminPermissionWithRequest(request)
 
     def has_change_permission(self, request, obj=None):
-        return True
+        return TenantAdminPermissionWithRequest(request)
 
     def has_add_permission(self, request, obj=None):
-        return True
+        return TenantAdminPermissionWithRequest(request)
 
     def has_delete_permission(self, request, obj=None):
         # return request.user.is_superuser
@@ -798,7 +800,7 @@ class LigneArticleAdmin(ModelAdmin):
         return None, f"{instance.get_status_display()}"
 
     def has_view_permission(self, request, obj=None):
-        return True
+        return TenantAdminPermissionWithRequest(request)
 
     def has_change_permission(self, request, obj=None):
         return False
@@ -911,7 +913,7 @@ class ReservationAdmin(ModelAdmin):
 
 
     def has_view_permission(self, request, obj=None):
-        return True
+        return TenantAdminPermissionWithRequest(request)
 
     def has_change_permission(self, request, obj=None):
         return False
@@ -1109,13 +1111,13 @@ class TicketAdmin(ModelAdmin):
         return super().get_form(request, obj, **defaults)
 
     def has_view_permission(self, request, obj=None):
-        return True
+        return TenantAdminPermissionWithRequest(request)
 
     def has_change_permission(self, request, obj=None):
-        return True
+        return TenantAdminPermissionWithRequest(request)
 
     def has_add_permission(self, request, obj=None):
-        return True
+        return TenantAdminPermissionWithRequest(request)
 
     def has_delete_permission(self, request, obj=None):
         # return request.user.is_superuser
@@ -1238,7 +1240,7 @@ class TenantAdmin(ModelAdmin):
     search_fields = ['name', ]
 
     def has_view_permission(self, request, obj=None):
-        return True
+        return TenantAdminPermissionWithRequest(request)
 
     def has_change_permission(self, request, obj=None):
         return False
@@ -1271,4 +1273,104 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
     def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+
+# Deux formulaires, un qui s'affiche si l'api est vide (ou supprimé)
+# L'autre qui n'affiche pas l'input.
+class FormbricksConfigChangeform(ModelForm):
+    class Meta:
+        model = FormbricksConfig
+        fields = ['api_host']
+
+class FormbricksConfigAddform(ModelForm):
+    class Meta:
+        model = FormbricksConfig
+        fields = ['api_key','api_host']
+
+@admin.register(FormbricksConfig, site=staff_admin_site)
+class FormbricksConfigAdmin(SingletonModelAdmin, ModelAdmin):
+    compressed_fields = True  # Default: False
+    warn_unsaved_form = True  # Default: False
+
+    form = FormbricksConfigChangeform
+    add_form = FormbricksConfigAddform
+
+    readonly_fields = ["has_key", ]
+
+    @display(description=_("Clé Api"), boolean=True)
+    def has_key(self, instance: FormbricksConfig):
+        return True if instance.api_key else False
+
+    def get_form(self, request, obj=None, **kwargs):
+        """ Si c'est un add, on modifie un peu le formulaire pour avoir un champs email """
+        defaults = {}
+        if not obj.api_key :
+            defaults['form'] = self.add_form
+        defaults.update(kwargs)
+        return super().get_form(request, obj, **defaults)
+
+    def save_model(self, request, obj:FormbricksConfig, form, change):
+        if change:
+            headers = {'x-api-key': obj.api_key}
+            check_api = requests.get(f'{obj.api_host}/api/v1/me', headers=headers)
+            if check_api.ok:
+                obj.set_api_key(obj.api_key)
+                messages.success(request, "Api OK")
+            else:
+                obj.api_key = None
+                messages.error(request, "Api not OK")
+
+        super().save_model(request, obj, form, change)
+
+
+    # Pour les boutons en haut de la vue changelist
+    # chaque decorateur @action génère une nouvelle route
+    actions_detail = ["test_api_formbricks", ]
+
+    @action(description=_("Tester l'api"),
+        url_path="test_api_formbricks",
+        permissions=["custom_actions_detail"])
+    def test_api_formbricks(self, request, object_id):
+        fbc = FormbricksConfig.get_solo()
+        api_host = fbc.api_host
+        headers = {'x-api-key': fbc.get_api_key()}
+        check_api = requests.get(f'{api_host}/api/v1/me', headers=headers)
+        if check_api.ok:
+            messages.success(request, "Api OK")
+        else:
+            messages.error(request, "Api not OK")
+        return redirect(request.META["HTTP_REFERER"])
+
+    def has_custom_actions_detail_permission(self, request, object_id):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    # def has_add_permission(self, request, obj=None):
+    #     return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+@admin.register(FormbricksForms, site=staff_admin_site)
+class FormbricksFormsAdmin(ModelAdmin):
+    compressed_fields = True  # Default: False
+    warn_unsaved_form = True  # Default: False
+
+    list_display = ['product','environmentId']
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
