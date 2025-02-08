@@ -1,26 +1,29 @@
-/** Theme switcher based on local store first, user preferences last */
-
-const query = window.matchMedia('(prefers-color-scheme: dark)')
-const target = document.querySelector('html')
-const toggle = document.querySelector('#darkThemeCheck')
-
-const refresh = ({ matches }) => {
+const refresh = (doc, toggle) => ({ matches }) => {
     let theme = localStorage.getItem('theme') || (matches ? 'dark' : 'light')
     
-    target.dataset.bsTheme = theme
+    doc.dataset.bsTheme = theme
     
     if (toggle) toggle.checked = theme === 'dark'
 }
 
-const update = ({ target: { checked }}) => {
+const update = doc => ({ target: { checked }}) => {
     let theme = checked ? 'dark' : 'light'
 
-    target.dataset.bsTheme = theme
+    doc.dataset.bsTheme = theme
 
     localStorage.setItem('theme', theme)
 }
 
-refresh(query)
-query.addEventListener('change', refresh)
+const init = () => {
+    const doc = document.querySelector('html')
+    const toggle = document.querySelector('#darkThemeCheck')
+    const query = window.matchMedia('(prefers-color-scheme: dark)')
 
-if (toggle) toggle.addEventListener('click', update)
+    refresh(doc, toggle)(query)
+
+    query.addEventListener('change', refresh(doc, toggle))
+
+    if (toggle) toggle.addEventListener('click', update(doc))
+}
+
+window.addEventListener('DOMContentLoaded', init)
