@@ -31,6 +31,7 @@
                         if (mutation.type === 'childList') {
                             if (mutation.removedNodes.length > 0 && mutation.target.id === 'fbjs') {
                                 console.log('Le formulaire a été complété ou fermé !');
+                                window.location.href = "{{ checkout_stripe }}";
                                 // Déclenchez votre événement ici
                             }
                         }

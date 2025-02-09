@@ -863,10 +863,13 @@ class MembershipMVT(viewsets.ViewSet):
             formbicks_form: FormbricksForms = membership_validator.price.product.formbricksform.first()
             formbricks_config = FormbricksConfig.get_solo()
             membership: Membership = membership_validator.membership
+            checkout_stripe = membership_validator.checkout_stripe_url
             context = {'form': {'apiHost': formbricks_config.api_host,
                                 'trigger_name': formbicks_form.trigger_name,
                                 'environmentId': formbicks_form.environmentId, },
-                       'membership': membership, }
+                       'membership': membership,
+                       'checkout_stripe': checkout_stripe,
+                       }
 
             return render(request, "reunion/views/membership/formbricks.html", context=context)
         #
