@@ -892,7 +892,7 @@ class MembershipMVT(viewsets.ViewSet):
                 for product in Product.objects.filter(categorie_article=Product.ADHESION, publish=True):
                     products.append(product)
 
-        messages.add_message(request, messages.SUCCESS, "coucou")
+        # messages.add_message(request, messages.SUCCESS, "coucou")
 
         template_context['products'] = products
         response = render(
