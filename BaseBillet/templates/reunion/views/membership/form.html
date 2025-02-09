@@ -1,6 +1,6 @@
 {% load i18n %}
-<form hx-post="/memberships/" hx-indicator="#tibillet-spinner" hx-target="">
-
+<form hx-post="/memberships/" hx-indicator="#tibillet-spinner" hx-target="#target_formbricks">
+    <div id="target_formbricks"></div>
     <input type="hidden" name="product" value="{{ product.uuid }}">
 
     <!-- prix -->
@@ -113,7 +113,6 @@
             {% endif %}
         </label>
     </div>
-    <span id="membership-cancel">survey</span>
 
     <div class="position-absolute bottom-0 start-0 end-0 p-3">
         <button id="membership-submit" type="submit" class="btn btn-primary w-100 mb-3">Confirmer</button>

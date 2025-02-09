@@ -1,27 +1,49 @@
-<div class="position-absolute bottom-0 start-0 end-0 p-3">
-    <span class="badge rounded-pill bg-warning text-dark">survey</span>
-</div>
+{#<div class="position-absolute bottom-0 start-0 end-0 p-3">#}
+{#    <span class="badge rounded-pill bg-warning text-dark">survey</span>#}
+{#</div>#}
 
 <!-- START Formbricks Surveys -->
 <script type="text/javascript">
-    !function () {
-        var t = document.createElement("script");
-        t.type = "text/javascript", t.async = !0, t.src = "https://app.formbricks.com/js/formbricks.umd.cjs";
-        var e = document.getElementsByTagName("script")[0];
-        e.parentNode.insertBefore(t, e), setTimeout(function () {
-            window.formbricks.init({
-                environmentId: "{{ form.environmentId }}",
-                apiHost: "{{ form.apiHost }}",
-                userId: "{{ membership.email }} {{ membership.uuid | slice:":4" }}",
-            });
-            window.formbricks.track("{{ form.trigger_name }}", {
-                hiddenFields: {
-                    email: "{{ membership.email }}",
-                    name: "{{ membership.member_name }}"
-                },
-            });
-        }, 500)
-    }();
+    if (window !== undefined) {
+        !function () {
+            var t = document.createElement("script");
+            t.type = "text/javascript", t.async = !0, t.src = "https://app.formbricks.com/js/formbricks.umd.cjs";
+            var e = document.getElementsByTagName("script")[0];
+            e.parentNode.insertBefore(t, e), setTimeout(function () {
+                window.formbricks.init({
+                    environmentId: "{{ form.environmentId }}",
+                    apiHost: "{{ form.apiHost }}",
+                    userId: "{{ membership.email }} {{ membership.uuid | slice:":4" }}",
+                });
+
+                window.formbricks.track("{{ form.trigger_name }}", {
+                    hiddenFields: {
+                        email: "{{ membership.email }}",
+                        name: "{{ membership.member_name }}",
+                        membership_uuid: "{{ membership.uuid }}",
+                        redirect_url: "https://lespass.tibillet.localhost/membership/{{ membership.redirect_uri }}/formbricks_return/"
+                    },
+                });
+
+                // Configuration de l'observateur pour surveiller les modifications du DOM
+                const observer = new MutationObserver((mutations) => {
+                    mutations.forEach((mutation) => {
+                        if (mutation.type === 'childList') {
+                            if (mutation.removedNodes.length > 0 && mutation.target.id === 'fbjs') {
+                                console.log('Le formulaire a été complété ou fermé !');
+                                // Déclenchez votre événement ici
+                            }
+                        }
+                    });
+                });
+
+                observer.observe(document.body, {childList: true, subtree: true, attributes: true});
+
+            }, 500)
+        }();
+    } else {
+        console.error("Window object not accessible to init Formbricks");
+    }
     // console.log('formbricks ok, on lance le track adhesion')
     // console.log('formbricks ok, on lance le track adhesion')
 
