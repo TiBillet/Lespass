@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load i18n static %}
 
 {# title gets picked up automatically by htmx when hx-target == body #}
 <title>{% block title %}{% translate 'Accueil' %}{% endblock %} | {{ config.organisation }}</title>
@@ -10,3 +10,9 @@
 </div>
 
 {% include "reunion/partials/footer.html" %}
+        
+{% include "reunion/partials/toasts.html" %}
+
+<!-- spinner -->
+{% include "reunion/loading.html" %}
+
