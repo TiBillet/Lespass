@@ -18,6 +18,10 @@
                         <input name="email" type="email" class="form-control" placeholder="adresse@exemple.fr" role="textbox" aria-label="Adresse mail de l'adhéranne" required>
                         <label for="email">Addresse mail</label>
                     </div>
+                    <div class="form-floating mb-3">
+                        <input name="emailConfirmation" type="email" class="form-control" placeholder="adresse@exemple.fr" role="textbox" aria-label="Confirmation de l'adresse email" required>
+                        <label for="emailConfirmation">Confirmation de l'email</label>
+                    </div>
                     {% include 'reunion/partials/field_errors.html' %}
                     
                     {% if config.need_name %}

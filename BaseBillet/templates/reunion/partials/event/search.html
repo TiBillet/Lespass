@@ -2,7 +2,7 @@
 <!-- search and filtering -->
 <form class="my-3" action=".">
     <div class="input-group input-group-lg">
-        {% comment %} HIDE: filtres de recherche
+        {% comment %} HIDE: panel filtres de recherche
         <button class="btn btn-outline-secondary position-relative" type="button" id="button-filters"
                 data-bs-toggle="offcanvas"
                 data-bs-target="#filterPanel" aria-controls="filterPanel">
@@ -11,17 +11,17 @@
                 <span class="visually-hidden">{% translate "Filtres actifs" %}</span>
             </span>
         </button>
-
-        {# TODO: il disparait ?#}
-        {% if tags %}
-            <div id="filterTags" class="btn-group">
-                {% for tag in tags %}
-                    <button class="btn btn-info d-none d-md-block" type="button" id="button-tag-{{ tag }}">{{ tag }}<i
-                            class="bi bi-x"></i></button>
-                {% endfor %}
-            </div>
-        {% endif %}
         {% endcomment %}
+
+        {% if tags %}
+        <div id="filterTags" class="btn-group">
+            {% for tag in tags %}
+            <a href="." class="btn btn-info d-none d-md-block py-3 rounded-0{% if forloop.first %} rounded-start{% endif %}" type="button" id="button-tag-{{ tag }}">
+                {{ tag }} <i class="bi bi-x"></i>
+            </a>
+            {% endfor %}
+        </div>
+        {% endif %}
 
         <div class="form-floating" id="search_form">
             <input type="text" class="form-control" id="search" placeholder="un évènement" name="search">

@@ -260,6 +260,12 @@ class ScanQrCode(viewsets.ViewSet):
             return HttpResponseClientRedirect(request.headers['Referer'])
 
         email = validator.validated_data['email']
+        emailConfirmation = validator.validated_data['emailConfirmation']
+
+        if not email == emailConfirmation:
+            messages.add_message(request, messages.ERROR, "emailConfirmation : L'email et sa confirmation sont différents. Une faute de frappe, peut-être ?")
+            return HttpResponseClientRedirect(request.headers['Referer'])
+            
         qrcode_uuid = validator.validated_data['qrcode_uuid']
 
         # Le mail est envoyé
