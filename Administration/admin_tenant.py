@@ -1253,18 +1253,52 @@ class TenantAdmin(ModelAdmin):
 
 
 ### Connect
+
+# Deux formulaires, un qui s'affiche si l'api est vide (ou supprimé)
+# L'autre qui n'affiche pas l'input.
+class GhostConfigChangeform(ModelForm):
+    class Meta:
+        model = GhostConfig
+        fields = ['ghost_url', 'ghost_last_log']
+
+class GhostConfigAddform(ModelForm):
+    class Meta:
+        model = GhostConfig
+        fields = ['ghost_url','ghost_key', 'ghost_last_log']
+
 @admin.register(GhostConfig, site=staff_admin_site)
 class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 
-    fields = [
-        "ghost_url",
-        "ghost_key",
-        "ghost_last_log",
-    ]
+    form = GhostConfigChangeform
+    add_form = GhostConfigAddform
 
-    readonly_fields = ["ghost_last_log", ]
+    readonly_fields = ["has_key", "ghost_last_log"]
+
+    @display(description=_("As key"), boolean=True)
+    def has_key(self, instance: GhostConfig):
+        return True if instance.ghost_key else False
+
+    def get_form(self, request, obj=None, **kwargs):
+        """ Si c'est un add, on modifie un peu le formulaire pour avoir un champs email """
+        defaults = {}
+        if not obj.ghost_key :
+            defaults['form'] = self.add_form
+        defaults.update(kwargs)
+        return super().get_form(request, obj, **defaults)
+
+    def save_model(self, request, obj:GhostConfig, form, change):
+        if change:
+            # headers = {'x-api-key': obj.api_key}
+            # check_api = requests.get(f'{obj.api_host}/api/v1/me', headers=headers)
+            obj.set_api_key(obj.ghost_key)
+            messages.success(request, "Api Key inserted")
+            # else:
+            #     obj.api_key = None
+            #     messages.error(request, "Api not OK")
+
+        super().save_model(request, obj, form, change)
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)

@@ -129,65 +129,71 @@ class PostalAddress(models.Model):
     """
     Modèle Django conforme à Schema.org pour une adresse postale avec coordonnées GPS.
     """
+    name = models.CharField(max_length=400,
+                            blank=True, null=True,
+                            verbose_name=_("Nom de l'adresse"),
+                            help_text=_("Donnez un nom à cette adresse")
+                            )
+
     street_address = models.TextField(
-        verbose_name="Adresse de la rue",
-        help_text="Le numéro de la rue, le nom de la rue, etc."
+        verbose_name=_("Adresse de la rue"),
+        help_text=_("Le numéro de la rue, le nom de la rue, etc.")
     )
     address_locality = models.CharField(
         max_length=255,
-        verbose_name="Localité",
-        help_text="La ville ou la localité."
+        verbose_name=_("Localité"),
+        help_text=_("La ville ou la localité.")
     )
     address_region = models.CharField(
         max_length=255,
         blank=True,
         null=True,
-        verbose_name="Région",
-        help_text="L'état, la province ou la région."
+        verbose_name=_("Région"),
+        help_text=_("L'état, la province ou la région.")
     )
     postal_code = models.CharField(
         max_length=20,
-        verbose_name="Code postal",
-        help_text="Le code postal ou code ZIP."
+        verbose_name=_("Code postal"),
+        help_text=_("Le code postal ou code ZIP.")
     )
     address_country = models.CharField(
         max_length=255,
-        verbose_name="Pays",
-        help_text="Le pays de l'adresse (en toutes lettres ou code ISO 3166-1 alpha-2)."
+        verbose_name=_("Pays"),
+        help_text=_("Le pays de l'adresse (en toutes lettres ou code ISO.")
     )
     latitude = models.DecimalField(
         max_digits=9,
         decimal_places=6,
         blank=True,
         null=True,
-        verbose_name="Latitude",
-        help_text="Coordonnée GPS : latitude."
+        verbose_name=_("Latitude"),
+        help_text=_("Coordonnée GPS : latitude.")
     )
     longitude = models.DecimalField(
         max_digits=9,
         decimal_places=6,
         blank=True,
         null=True,
-        verbose_name="Longitude",
-        help_text="Coordonnée GPS : longitude."
+        verbose_name=_("Longitude"),
+        help_text=_("Coordonnée GPS : longitude.")
     )
     comment = models.TextField(
         blank=True,
         null=True,
-        verbose_name="Commentaire",
-        help_text="Un commentaire sur l'adresse."
+        verbose_name=_("Commentaire"),
+        help_text=_("Un commentaire sur l'adresse.")
     )
     is_main = models.BooleanField(
         default=False,
-        verbose_name="Adresse principale",
+        verbose_name=_("Adresse principale"),
     )
 
     def __str__(self):
         return f"{self.street_address}, {self.address_locality}, {self.address_country}"
 
     class Meta:
-        verbose_name = "Adresse postale"
-        verbose_name_plural = "Adresses postales"
+        verbose_name = _("Adresse postale")
+        verbose_name_plural = _("Adresses postales")
 
 
 # class ExternalLink(models.Model):
@@ -1812,8 +1818,17 @@ class GhostConfig(SingletonModel):
     Méthode async celery : BaseBillet.tasks.send_to_ghost
     """
     ghost_url = models.URLField(blank=True, null=True)
-    ghost_key = models.CharField(max_length=200, blank=True, null=True)
+    ghost_key = models.CharField(max_length=400, blank=True, null=True)
     ghost_last_log = models.TextField(blank=True, null=True)
+
+    def get_api_key(self):
+        return fernet_decrypt(self.ghost_key) if self.ghost_key else None
+
+    def set_api_key(self, string):
+        self.ghost_key = fernet_encrypt(string)
+        self.save()
+        return True
+
 
 # class DokosConfig(SingletonModel):
 #     dokos_id = models.CharField(max_length=100, blank=True, null=True, editable=False)

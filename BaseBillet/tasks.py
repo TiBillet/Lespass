@@ -704,7 +704,7 @@ def send_to_ghost(membership_pk):
     # Et ici, tu as les cred' ghost à entrer dans l'admin.
     ghost_config = GhostConfig.get_solo()
     ghost_url = ghost_config.ghost_url
-    ghost_key = ghost_config.ghost_key
+    ghost_key = ghost_config.get_api_key()
 
     if ghost_url and ghost_key and email and name:
         ###################################
