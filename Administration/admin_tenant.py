@@ -8,6 +8,7 @@ from django import forms
 from django.db import models
 from django.contrib import admin
 from django.contrib import messages
+from django.db.models import Model
 from django.forms import ModelForm, TextInput, Form
 from django.http import HttpResponse, HttpRequest, HttpResponseRedirect
 from django.shortcuts import redirect
@@ -1309,6 +1310,8 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
     def has_change_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
+    def has_delete_permission(self, request: HttpRequest, obj: Model | None = None) -> bool:
+        return TenantAdminPermissionWithRequest(request)
 
 # Deux formulaires, un qui s'affiche si l'api est vide (ou supprimé)
 # L'autre qui n'affiche pas l'input.
