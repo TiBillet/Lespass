@@ -1,6 +1,12 @@
 {% load i18n %}
 {% load tibitags %}
 
+<p class="text-end mb-5">
+    <a href="#" target="_blank" rel="noopener noreferrer">
+        Flux RSS des évènements <i class="bi bi-box-arrow-up-right"></i>
+    </a>
+</p>
+
 {% for date_key, events in dated_events.items %}
     <h2 class="fs-5 p-3 text-dark" style="background: var(--mayaj-pons);">
         {{ date_key|date:'l j F'|capfirst }}
