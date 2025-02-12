@@ -25,21 +25,14 @@
                     },
                 });
 
-                // Configuration de l'observateur pour surveiller les modifications du DOM
-                const observer = new MutationObserver((mutations) => {
-                    mutations.forEach((mutation) => {
-                        if (mutation.type === 'childList') {
-                            if (mutation.removedNodes.length > 0 && mutation.target.id === 'fbjs') {
-                                console.log('Le formulaire a été complété ou fermé !');
-                                window.location.href = "{{ checkout_stripe }}";
-                                // Déclenchez votre événement ici
-                            }
-                        }
-                    });
+                window.addEventListener("message", function (event) {
+                    if (event.data === "formbricksSurveyCompleted") {
+                        console.log("Survey Completed");
+                        window.location.href = "{{ checkout_stripe }}";
+                    }
                 });
 
-                observer.observe(document.body, {childList: true, subtree: true, attributes: true});
-
+                
             }, 500)
         }();
     } else {
