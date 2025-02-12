@@ -160,20 +160,11 @@ def connexion(request):
             email = validator.validated_data['email']
             user = get_or_create_user(email=email, send_mail=True, force_mail=True)
 
-            # if settings.DEBUG:
-            #     login(request, user)
-            #     messages.add_message(request, messages.WARNING, "MODE DEBUG : login auto, Connexion ok.")
+            messages.add_message(request, messages.SUCCESS, _("To access your space, please validate\n"
+                                        "your email address. Don't forget to check your spam!"))
+            return HttpResponseClientRedirect(request.headers['Referer'])
 
-            context = {
-                "modal_message": {
-                    "type": "success",
-                    "title": "Information",
-                    "content": _("To access your space, please validate\n"
-                                 "your email address. Don't forget to check your spam!")
-                }
-            }
-            return render(request, "htmx/components/modal_message.html", context=context)
-
+        logger.error(validator.errors)
     messages.add_message(request, messages.WARNING, "Erreur de validation de l'email")
     return redirect('index')
 
@@ -263,9 +254,10 @@ class ScanQrCode(viewsets.ViewSet):
         emailConfirmation = validator.validated_data['emailConfirmation']
 
         if not email == emailConfirmation:
-            messages.add_message(request, messages.ERROR, "emailConfirmation : L'email et sa confirmation sont différents. Une faute de frappe, peut-être ?")
+            messages.add_message(request, messages.ERROR,
+                                 "emailConfirmation : L'email et sa confirmation sont différents. Une faute de frappe, peut-être ?")
             return HttpResponseClientRedirect(request.headers['Referer'])
-            
+
         qrcode_uuid = validator.validated_data['qrcode_uuid']
 
         # Le mail est envoyé
