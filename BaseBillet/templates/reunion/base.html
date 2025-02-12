@@ -42,33 +42,6 @@
 <!-- spinner -->
 {% include "reunion/loading.html" %}
 
-
-<!-- sweet alert -->
-<script src="{% static 'mvt_htmx/js/sweetalert2@11.js' %}"></script>
-<script>
-    document.body.addEventListener('htmx:afterRequest', function (evt) {
-        // Trouver l'élément qui a déclenché la requête
-        const triggeredElement = evt.detail.elt;
-
-        // Vérifier si cet élément a l'attribut data-swal="true"
-        if (triggeredElement.getAttribute('data-swal') === 'true') {
-
-            // Récupérer la réponse JSON du backend
-            const response = evt.detail.xhr.response;
-            const jsonresponse = JSON.parse(response);
-
-            Swal.fire({
-                icon: jsonresponse.icon,
-                title: jsonresponse.swal_title,
-                text: jsonresponse.swal_message,
-                confirmButtonText: 'OK'
-            });
-        }
-    });
-</script>
-<div id="alert-container" style="display: none"></div>
-
-
 </body>
 
 </html>

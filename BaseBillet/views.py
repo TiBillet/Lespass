@@ -828,18 +828,16 @@ class Badge(viewsets.ViewSet):
         user = request.user
         fedowAPI = FedowAPI()
         transaction = fedowAPI.badge.badge_in(user, product)
+        
+        messages.add_message(request, messages.SUCCESS, _(f"Arrivée enregistrée !"))
 
-        return JsonResponse({
-            'icon': 'success',
-            'swal_title': _('Badged !'),
-            'swal_message': _('Thank you for your visit!. You can see a summary in the “My Account” area.'),
-        })
+        return render(request, "reunion/partials/account/badge_switch.html", context={})
 
     @action(detail=False, methods=['GET'])
     def check_out(self, request: HttpRequest):
         template_context = get_context(request)
         fedowAPI = FedowAPI()
-        messages.add_message(request, messages.WARNING, _(f"Check OUT OK"))
+        messages.add_message(request, messages.SUCCESS, _(f"Départ enregistré !"))
         return HttpResponseClientRedirect(request.headers['Referer'])
 
     def get_permissions(self):
