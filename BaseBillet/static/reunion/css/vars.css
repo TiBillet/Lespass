@@ -19,4 +19,8 @@
     --motif-reyone: center / cover url(motif/reyone.svg);
     --motif-sevronbraz: url(motif/sevronbraz.svg);
     --motif-sevronkler: url(motif/sevronkler.svg);
+
+    --tibillet-spinner-width: 20rem;
+    --tibillet-spinner-height: 20rem;
+    --tibillet-spinner-borderWidth: 0.5em;
 }

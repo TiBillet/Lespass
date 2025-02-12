@@ -844,8 +844,6 @@ class MembershipMVT(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
     def create(self, request):
-        # import time
-        # time.sleep(50)
         logger.info(f"new membership : {request.data}")
         membership_validator = MembershipValidator(data=request.data, context={'request': request})
         if not membership_validator.is_valid():
