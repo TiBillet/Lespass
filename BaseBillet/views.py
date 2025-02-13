@@ -89,6 +89,7 @@ def get_context(request):
         "config": config,
         "meta_url": meta_url,
         "header": True,
+        # "tenant": connection.tenant,
         "mode_test": True if os.environ.get('TEST') == '1' else False,
         "main_nav": [
             {'name': 'event-list', 'url': '/event/', 'label': 'Agenda', 'icon': 'calendar-date'},
@@ -713,7 +714,7 @@ class EventMVT(viewsets.ViewSet):
             with tenant_context(tenant):
                 try:
                     event = Event.objects.prefetch_related('tag', 'postal_address', ).get(slug=slug)
-                    logger.info(f'trouvé')
+                    logger.info(f'tenant_retrieve event trouvé')
                     return event
                 except Event.DoesNotExist:
                     continue
@@ -721,13 +722,18 @@ class EventMVT(viewsets.ViewSet):
 
     def retrieve(self, request, pk=None):
         slug = pk
+
+        # Si False, alors le bouton reserver renvoi vers la page event du tenant.
+        event_in_this_tenant = False
         try:
             event = Event.objects.prefetch_related('tag', 'postal_address', ).get(slug=slug)
+            event_in_this_tenant = True
         except Event.DoesNotExist:
             event = self.tenant_retrieve(slug)
 
         template_context = get_context(request)
         template_context['event'] = event
+        template_context['event_in_this_tenant'] = event_in_this_tenant
         return render(request, "reunion/views/event/retrieve.html", context=template_context)
 
     # def create(self, request):
@@ -738,16 +744,17 @@ class EventMVT(viewsets.ViewSet):
         # Vérification que l'évent existe bien sur ce tenant.
         event = get_object_or_404(Event, slug=pk)
         logger.info(f"Event Reservation : {request.data}")
-
-        # Un validateur des données envoyées
         validator = ReservationValidator(data=request.data, context={'request': request})
-        if validator.is_valid():
-            return render(request, "reunion/views/event/reservation_ok.html", context={
-                "user": request.user,
-            })
 
-        logger.error(f"ReservationViewset CREATE ERROR : {validator.errors}")
-        return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
+        if not validator.is_valid():
+            logger.error(f"ReservationViewset CREATE ERROR : {validator.errors}")
+            for error in validator.errors:
+                messages.add_message(request, messages.ERROR, f"{validator.errors[error][0]}")
+            return HttpResponseClientRedirect(request.headers['Referer'])
+
+        return render(request, "reunion/views/event/reservation_ok.html", context={
+            "user": request.user,
+        })
 
     def get_permissions(self):
         if self.action in ['create']:

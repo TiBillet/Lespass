@@ -1,5 +1,5 @@
 {% extends base_template %}
-{% load tibitags %}
+{% load tibitags i18n %}
 
 {% block title %}{{ event.name }}{% endblock %}
 
@@ -53,12 +53,18 @@
       </button>
     </div>
     {% endif %}
-  
-    {% if event.products.count %}
+
+{#    Si l'évènement n'est pas de ce tenant, il provient d'une fédération, le bouton redigire vers la page du tenant.#}
+{#    # Todo : Garder l'user d'un dns à l'autre, et ouvrir le modal reserver dans le nouveau tenant #}
+    {% if not event_in_this_tenant %}
+    <a href="{{ event.full_url }}" class="btn btn-lg btn-primary d-block mb-5" role="button">
+        {% translate "Visiter la page du lieu" %}
+    </a>
+    {% elif event.products.count %}
     {% include 'reunion/partials/event/booking.html' %}
     {% else %}
     <a href="#" class="btn btn-lg btn-primary d-block mb-5 disabled" role="button" aria-disabled="true">
-        Entrée libre
+        {% translate "Entrée libre" %}
     </a>
     {% endif %}
   

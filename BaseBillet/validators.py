@@ -187,9 +187,9 @@ class ReservationValidator(serializers.Serializer):
             TODO: Que chaque billet possède un nom/prenom si le billet doit être nominatif
         """
         logger.info(f"validate : {attrs}")
+        event = self.event
         products_dict = self.products_dict
         user = self.user
-        event = self.event
         options = attrs.get('options')
         total_ticket_qty = 0
 
