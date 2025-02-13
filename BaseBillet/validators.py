@@ -107,43 +107,24 @@ class ReservationValidator(serializers.Serializer):
     options = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(), many=True, allow_null=True)
     datetime = serializers.DateTimeField(required=False)
 
-    @staticmethod
-    def extract_products_uuid(data):
+    def extract_products(self):
         """
         On vérifie ici :
             input dans template ressemble à ça : name="products[{{ product.uuid }}][{{ price.uuid }}]"
             les objets produit et prix existent bien en DB et a une quantité valide
         """
-        pattern = r'products\[(?P<product_uuid>[^\]]+)\]\[(?P<price_uuid>[^\]]+)\]'
+        # Rercher des produits potentiels
+        event = self.event
         products_dict = {}
-        for key, value in data.items():
-            if key.startswith('products['):
-                match = re.match(pattern, key)
-                if match:
-
-                    product_uuid = match.group('product_uuid')
-                    price_uuid = match.group('price_uuid')
-                    logger.info(f"match ! {product_uuid} {price_uuid}")
-                    if uuid.UUID(product_uuid) and uuid.UUID(price_uuid):
-                        product = get_object_or_404(Product, pk=product_uuid)
-                        if product_uuid not in products_dict:
-                            products_dict[product] = {}
-                        price = get_object_or_404(Price, pk=price_uuid)
-                        products_dict[product][price] = int(value)
-                    else:
-                        print(f"UUID invalide détecté : {product_uuid} ou {price_uuid}")
+        for product in event.products.all():
+            for price in product.prices.all():
+                # Un input possède l'uuid du prix ?
+                if self.initial_data.get(str(price.uuid)):
+                    qty = int(self.initial_data.get(str(price.uuid)))
+                    products_dict[product] = { price : qty }
 
         return products_dict
 
-    def to_internal_value(self, data):
-        """
-        Fonction qui s'execute avant le validate pour aller chercher les produits
-        Il ajoute les produits trouvé par extract_products_uuid dans le self
-        """
-        logger.info(f"to_internal_value : {data}")
-        internal_data = super().to_internal_value(data)
-        self.products_dict = self.extract_products_uuid(data)
-        return internal_data
 
     def validate_event(self, value):
         logger.info(f"validate event : {value}")
@@ -188,7 +169,7 @@ class ReservationValidator(serializers.Serializer):
         """
         logger.info(f"validate : {attrs}")
         event = self.event
-        products_dict = self.products_dict
+        products_dict = self.extract_products()
         user = self.user
         options = attrs.get('options')
         total_ticket_qty = 0
