@@ -1117,7 +1117,7 @@ class Tenant(viewsets.ViewSet):
         context['email_query_params'] = request.query_params.get('email') if request.query_params.get('email') else ""
         context['name_query_params'] = request.query_params.get('name') if request.query_params.get('name') else ""
         # import ipdb; ipdb.set_trace()
-        return render(request, "htmx/views/tenant/new.html", context=context)
+        return render(request, "reunion/views/register_tenant.html", context=context)
 
     @action(detail=False, methods=['POST'])
     def onboard_stripe(self, request):
