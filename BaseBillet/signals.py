@@ -29,12 +29,13 @@ def set_ligne_article_paid(old_instance, new_instance):
     # Type :
     old_instance: Paiement_stripe
     new_instance: Paiement_stripe
+    logger.info(f"    PRE_SAVE_TRANSITIONS PAIEMENT_STRIPE set_ligne_article_paid {new_instance}.")
 
-    logger.info(f"    SIGNAL PAIEMENT STRIPE set_ligne_article_paid {new_instance}.")
-    logger.info(f"        On passe toutes les lignes d'article non validées en payées !")
-
+    logger.info(f"        On passe toutes les lignes d'article non validées en PAID et save() :")
     lignes_article = new_instance.lignearticles.exclude(status=LigneArticle.VALID)
     for ligne_article in lignes_article:
+        # Chaque passage en PAID activera le pre_save triggers.LigneArticlePaid_ActionByCategorie
+        # # Si toutes les lignes sont validées, ça met le paiement stripe en valid via set_paiement_stripe_valid
         logger.info(f"            {ligne_article.pricesold} {ligne_article.status} to P")
         ligne_article.status = LigneArticle.PAID
         ligne_article.payment_method = PaymentMethod.STRIPE_NOFED
@@ -42,6 +43,7 @@ def set_ligne_article_paid(old_instance, new_instance):
 
     # s'il y a une réservation, on la met aussi en payée :
     if new_instance.reservation:
+        logger.info(f"        On passe la reservation en PAID et save() :")
         new_instance.reservation.status = Reservation.PAID
         new_instance.reservation.save()
     # except new_instance.reservation.RelatedObjectDoesNotExist:
@@ -98,6 +100,7 @@ def ligne_article_paid(old_instance: LigneArticle, new_instance: LigneArticle):
     logger.info(
         f"    SIGNAL LIGNE ARTICLE action_x_to_paid {old_instance.pricesold} new_instance status : {new_instance.status}")
 
+    # Si toutes les lignes sont validées, ça met le paiement stripe en valid.
     set_paiement_stripe_valid(old_instance, new_instance)
 
 
@@ -122,9 +125,8 @@ def reservation_paid(old_instance: Reservation, new_instance: Reservation):
     # On vérifie que le mail n'a pas déja été envoyé
     if not new_instance.mail_send:
         logger.info(f"    SIGNAL RESERVATION send_billet_to_mail {new_instance.status}")
-        # Envoie du mail
+        # Envoie du mail. Le succes du mail envoyé mettra la Reservation.VALID
         if new_instance.user_commande.email:
-            # import ipdb; ipdb.set_trace()
             base_url = f"https://{connection.tenant.get_primary_domain().domain}"
             task = ticket_celery_mailer.delay(new_instance.pk, base_url)
             # https://github.com/psf/requests/issues/5832
@@ -138,7 +140,7 @@ def set_paiement_valid(old_instance: Reservation, new_instance: Reservation):
     # On envoie les mails
     if new_instance.mail_send:
         logger.info(
-            f"    SIGNAL RESERVATION set_paiement_valid Mail envoyé {new_instance.mail_send},"
+            f"    SIGNAL RESERVATION set_paiement_valid : new_instance.mail_send = {new_instance.mail_send},"
             f" on valide les paiements payés")
         for paiement in new_instance.paiements.filter(status=Paiement_stripe.PAID):
             paiement.status = Paiement_stripe.VALID
@@ -239,7 +241,7 @@ PRE_SAVE_TRANSITIONS = {
         Reservation.PAID: {
             Reservation.PAID_ERROR: error_in_mail,
             Reservation.PAID: reservation_paid,
-            Reservation.VALID: set_paiement_valid,
+            Reservation.VALID: set_paiement_valid, # Celery passe la reservation a Valid si mail sended = True
             '_else_': error_regression,
         },
         Reservation.VALID: {

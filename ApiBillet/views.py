@@ -37,6 +37,7 @@ from PaiementStripe.views import new_entry_from_stripe_invoice
 from TiBillet import settings
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.utils import rsa_decrypt_string, rsa_encrypt_string, get_public_key, data_to_b64
+from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
 
@@ -752,6 +753,8 @@ def metatadata_valid(paiement_stripe_db: Paiement_stripe, checkout_session):
         return False
 
 
+# S'execute juste après un retour Webhook ou redirection une fois le paiement stripe effectué.
+# ex : BaseBillet.views.EventMVT.stripe_return
 def paiment_stripe_validator(request, paiement_stripe):
     if paiement_stripe.traitement_en_cours:
 
@@ -793,18 +796,20 @@ def paiment_stripe_validator(request, paiement_stripe):
                 status=status.HTTP_208_ALREADY_REPORTED
             )
 
-    # configuration = Configuration.get_solo()
-    # stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+    stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+    config = Configuration.get_solo()
 
-    # TODO a revoir avec le stripe connect
-    stripe.api_key = Configuration.get_solo().get_stripe_api()
+    # stripe.api_key = Configuration.get_solo().get_stripe_api()
 
     # SI c'est une source depuis INVOICE,
     # L'object vient d'être créé, on vérifie que la facture stripe
     # est payée et on met en VALID.
     if paiement_stripe.source == Paiement_stripe.INVOICE:
         paiement_stripe.traitement_en_cours = True
-        invoice = stripe.Invoice.retrieve(paiement_stripe.invoice_stripe)
+        invoice = stripe.Invoice.retrieve(
+            paiement_stripe.invoice_stripe,
+            stripe_account=config.get_stripe_connect_account()
+        )
 
         if invoice.status == 'paid':
             paiement_stripe.status = Paiement_stripe.PAID
@@ -825,15 +830,14 @@ def paiment_stripe_validator(request, paiement_stripe):
 
     # Sinon c'est un paiement stripe checkout
     elif paiement_stripe.status != Paiement_stripe.VALID:
-        config = Configuration.get_solo()
         checkout_session = stripe.checkout.Session.retrieve(
             paiement_stripe.checkout_session_id_stripe,
-            # stripe_account=config.get_stripe_connect_account()
+            stripe_account=config.get_stripe_connect_account()
         )
 
         paiement_stripe.customer_stripe = checkout_session.customer
 
-        # Vérifie que les metatada soient cohérentes. #NTUI !
+        # Vérifie que les metatada soient cohérentes : NTUI
         if metatadata_valid(paiement_stripe, checkout_session):
             if checkout_session.payment_status == "unpaid":
                 paiement_stripe.status = Paiement_stripe.PENDING
@@ -869,7 +873,7 @@ def paiment_stripe_validator(request, paiement_stripe):
                         paiement_stripe.subscription = checkout_session.subscription
                         subscription = stripe.Subscription.retrieve(
                             checkout_session.subscription,
-                            # stripe_account=config.get_stripe_connect_account()
+                            stripe_account=config.get_stripe_connect_account()
                         )
                         paiement_stripe.invoice_stripe = subscription.latest_invoice
 
@@ -890,50 +894,7 @@ def paiment_stripe_validator(request, paiement_stripe):
     # on vérifie le changement de status
     paiement_stripe.refresh_from_db()
 
-    # Paiement depuis QRCode carte
-    """
-    # on envoie au serveur cashless
-    if paiement_stripe.source == Paiement_stripe.QRCODE:
-        # Si le paiement est valide, c'est que les presave et postsave
-        # ont validé la réponse du serveur cashless pour les recharges
-        if paiement_stripe.status == Paiement_stripe.VALID:
-            lignes_articles = paiement_stripe.lignearticles.all()
-            # on boucle ici pour récuperer l'uuid de la carte.
-            for ligne_article in lignes_articles:
-                carte = ligne_article.carte
-                if carte:
-                    if request.method == 'GET':
-                        # On re-boucle pour récuperer les noms des articles vendus afin de les afficher sur le front
-                        for ligneArticle in lignes_articles:
-                            messages.success(request,
-                                             f"{ligneArticle.pricesold.price.product.name} : {ligneArticle.pricesold.price.name}")
 
-                        messages.success(request, f"Paiement validé. Merci !")
-
-                        return HttpResponseRedirect(f"/qr/{carte.uuid}#success")
-                    else:
-                        return Response(f'VALID', status=status.HTTP_200_OK)
-
-        elif paiement_stripe.status == Paiement_stripe.PAID:
-            for ligne_article in paiement_stripe.lignearticles.all():
-                if ligne_article.carte:
-                    messages.error(request,
-                                   f"Le paiement à bien été validé "
-                                   f"mais un problème est apparu avec votre carte cashless. "
-                                   f"Merci de contacter un responsable.")
-                    return HttpResponseRedirect(f"/qr/{ligne_article.carte.uuid}#erreurpaiement")
-
-        else:
-            # on boucle ici pour récuperer l'uuid de la carte.
-            for ligne_article in paiement_stripe.lignearticles.all():
-                if ligne_article.carte:
-                    messages.error(request,
-                                   f"Un problème de validation de paiement a été detecté. "
-                                   f"Merci de vérifier votre moyen de paiement et/ou contactez un responsable.")
-                    return HttpResponseRedirect(f"/qr/{ligne_article.carte.uuid}#erreurpaiement")
-
-
-    """
     # Derniere action : on crée et envoie les billets si besoin
     if paiement_stripe.source == Paiement_stripe.API_BILLETTERIE:
         if paiement_stripe.reservation:

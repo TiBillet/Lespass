@@ -25,7 +25,7 @@
     {% for product in event.products.all %}
         {% for price in product.prices.all %}
             <div class="mb-3">
-                <label for="booking-regular" class="form-label">{{ price.name }}</label>
+                <label for="booking-regular" class="form-label">{{ price.name }}{% if price.prix > 0 %} : {{ price.prix }}€{% endif %}</label>
                 <input type="number" step="1" min="0" max="{{ event.max_per_user }}" class="form-control"
                        id="price-{{ price.uuid }}"
                        value="1" {# todo: a virer en prod, pour dev #}

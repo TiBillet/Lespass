@@ -1336,7 +1336,7 @@ class Paiement_stripe(models.Model):
     checkout_session_id_stripe = models.CharField(max_length=80, blank=True, null=True)
     payment_intent_id = models.CharField(max_length=80, blank=True, null=True)
     metadata_stripe = JSONField(blank=True, null=True)
-    customer_stripe = models.CharField(max_length=20, blank=True, null=True)
+    customer_stripe = models.CharField(max_length=20, blank=True, null=True) # pas utile
     invoice_stripe = models.CharField(max_length=27, blank=True, null=True)
     subscription = models.CharField(max_length=28, blank=True, null=True)
 
@@ -1423,11 +1423,13 @@ class Paiement_stripe(models.Model):
         # Pas payé, on le met en attente
         if checkout_session.payment_status == "unpaid":
             self.status = Paiement_stripe.PENDING
+            # Si le paiement est expiré
+            if datetime.now().timestamp() > checkout_session.expires_at:
+                self.status = Paiement_stripe.EXPIRE
 
         elif checkout_session.payment_status == "paid":
             self.status = Paiement_stripe.PAID
             self.last_action = timezone.now()
-            # cela va déclancher des pre_save :
             self.traitement_en_cours = True
 
             # Dans le cas d'un nouvel abonnement
@@ -1442,12 +1444,24 @@ class Paiement_stripe(models.Model):
                     )
                     self.invoice_stripe = subscription.latest_invoice
 
-        # Si le paiement est expiré
-        elif datetime.now().timestamp() > checkout_session.expires_at:
-            self.status = Paiement_stripe.EXPIRE
+        else:
+            self.status = Paiement_stripe.CANCELED
 
+
+        # cela va déclencher des pre_save
+
+        # le .save() lance le process pre_save BaseBillet.models.send_to_cashless
+        # qui modifie le status de chaque ligne
+        # et envoie les informations au serveur cashless.
+
+        # si validé par le serveur cashless, alors la ligne sera VALID.
+        # Si toute les lignes sont VALID, le paiement_stripe sera aussi VALID
+        # grace au post_save BaseBillet.models.check_status_stripe
+
+        # Reservation.VALID lorsque le mail est envoyé et non en erreur
         self.save()
         return self.status
+
 
     class Meta:
         verbose_name = _('Paiement Stripe')

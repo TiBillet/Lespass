@@ -586,6 +586,7 @@ def ticket_celery_mailer(reservation_uuid: str, base_url):
                 logger.info(f"mail.sended : {mail.sended}")
 
                 if mail.sended:
+                    logger.info("reservation.mail_send & reservation.status = Reservation.VALID & reservation.save()")
                     reservation.mail_send = True
                     reservation.status = Reservation.VALID
                     reservation.save()

@@ -112,7 +112,9 @@ class LigneArticlePaid_ActionByCategorie:
 
     # Category BILLET
     def trigger_B(self):
-        logger.info(f"TRIGGER BILLET")
+        # Envoi de la vente à LaBoutik
+        logger.info(f"TRIGGER BILLET PAID -> envoi à LaBoutik")
+        laboutik_sended = send_sale_to_laboutik(self.ligne_article)
 
     # Category Free Reservation
     def trigger_F(self):

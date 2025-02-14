@@ -52,11 +52,19 @@ class TicketCreator():
         self.reservation = reservation
         self.user = reservation.user_commande
 
+        # La liste des objets a vendre pour la création du paiement stripe
+        self.list_line_article_sold = []
+
+        # Si checkout existe, on va demander le paiement en front.
+        # Sinon, on envoie la confirmation par mail
+        self.checkout_link = None
+        self.tickets = []
+
         for product, prices_dict in products_dict.items():
             product: Product
             trigger_name = f"method_{product.categorie_article}"
             trigger = getattr(self, trigger_name)
-            trigger(prices_dict)
+            self.tickets = trigger(prices_dict)
 
 
     # FREERES : réservation gratuite
@@ -99,6 +107,82 @@ class TicketCreator():
         reservation.save()
         return tickets
 
+    def method_B(self, prices_dict):
+        reservation: Reservation = self.reservation
+        tickets = []
+        for price_generique, qty in prices_dict.items():
+            price_generique: Price
+            qty: int
+
+            # Gerer les produits nominatifs ?
+            # product: Product = price_generique.product
+            # if product.nominative:
+            #     for customer in price_object.get('customers'):
+
+            event = reservation.event
+            # Création de l'objet article à vendre, avec la liaison event.
+            # On passe de prix générique (ex : Billet a 10€ a l'objet Billet pour evenement a 10€)
+            pricesold: PriceSold = get_or_create_price_sold(price_generique, event=event)
+
+            # les lignes articles pour la vente
+            line_article = LigneArticle.objects.create(
+                pricesold=pricesold,
+                amount=dec_to_int(pricesold.prix),
+                # pas d'objet reservation ?
+                qty=qty,
+            )
+            self.list_line_article_sold.append(line_article)
+
+            # Création des tickets en mode non payé
+            for i in range(int(qty)):
+                ticket = Ticket.objects.create(
+                    status=Ticket.CREATED, # not yet paid
+                    reservation=reservation,
+                    pricesold=pricesold,
+                    # first_name=customer.get('first_name'),
+                    # last_name=customer.get('last_name'),
+                )
+                tickets.append(ticket)
+
+        self.checkout_link = self.get_checkout_stripe()
+        return tickets
+
+    def get_checkout_stripe(self):
+        reservation: Reservation = self.reservation
+        tenant = connection.tenant
+        # Création du checkout stripe
+        metadata = {
+            'reservation': f'{reservation.uuid}',
+            'tenant': f'{tenant.uuid}',
+        }
+
+        # Création de l'objet paiement stripe en base de donnée
+        new_paiement_stripe = CreationPaiementStripe(
+            user=reservation.user_commande,
+            liste_ligne_article=self.list_line_article_sold,
+            metadata=metadata,
+            reservation=reservation,
+            source=Paiement_stripe.FRONT_BILLETTERIE,
+            success_url=f"stripe_return/",
+            cancel_url=f"stripe_return/",
+            absolute_domain=f"https://{tenant.get_primary_domain()}/event/",
+        )
+
+        if not new_paiement_stripe.is_valid():
+            raise serializers.ValidationError(_(f'checkout strip not valid'))
+
+        paiement_stripe: Paiement_stripe = new_paiement_stripe.paiement_stripe_db
+        paiement_stripe.lignearticles.all().update(status=LigneArticle.UNPAID)
+
+        reservation.tickets.all().update(status=Ticket.NOT_ACTIV)
+
+        reservation.paiement = paiement_stripe
+        reservation.status = Reservation.UNPAID
+        reservation.save()
+
+        print(f"get_checkout_stripe OK : {new_paiement_stripe.checkout_session.stripe_id}")
+        return new_paiement_stripe.checkout_session.url
+
 
 class ReservationValidator(serializers.Serializer):
     email = serializers.EmailField()
@@ -121,7 +205,13 @@ class ReservationValidator(serializers.Serializer):
                 # Un input possède l'uuid du prix ?
                 if self.initial_data.get(str(price.uuid)):
                     qty = int(self.initial_data.get(str(price.uuid)))
-                    products_dict[product] = { price : qty }
+
+                    if products_dict.get(product):
+                        # On ajoute le prix a la liste des articles choisi
+                        products_dict[product][price] = qty
+                    else :
+                        # Si le dict product n'existe pas :
+                        products_dict[product] = { price : qty }
 
         return products_dict
 
@@ -235,10 +325,14 @@ class ReservationValidator(serializers.Serializer):
         self.reservation = reservation
 
         # Fabrication de la reservation et des tickets en fonction du type de produit
-        tickets = TicketCreator(
+        self.tickets = TicketCreator(
             reservation=reservation,
             products_dict=products_dict,
         )
+
+        # On récupère le lien de paiement fabriqué dans le TicketCreator si besoin :
+        self.checkout_link = self.tickets.checkout_link if self.tickets.checkout_link else None
+
         return attrs
 
 
@@ -267,7 +361,7 @@ class MembershipValidator(serializers.Serializer):
         self.price = price
         return price
 
-    def checkout_stripe(self):
+    def get_checkout_stripe(self):
         # Fiche membre créée, si price payant, on crée le checkout stripe :
         membership: Membership = self.membership
         price: Price = membership.price
@@ -336,7 +430,7 @@ class MembershipValidator(serializers.Serializer):
         membership.save()
         self.membership = membership
         # Création du lien de paiement
-        self.checkout_stripe_url = self.checkout_stripe()
+        self.checkout_stripe_url = self.get_checkout_stripe()
 
         return attrs
 

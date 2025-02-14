@@ -100,6 +100,76 @@ def get_context(request):
     return context
 
 
+
+# S'execute juste après un retour Webhook ou redirection une fois le paiement stripe effectué.
+# ex : BaseBillet.views.EventMVT.stripe_return
+def paiement_stripe_reservation_validator(request, paiement_stripe):
+    reservation = paiement_stripe.reservation
+
+    #### PRE CHECK : On vérifie que le paiement n'a pas déja été traité :
+
+    # Le paiement est en cours de traitement,
+    # probablement pas le webhook POST qui arrive depuis Stripe avant le GET de redirection de l'user
+    if paiement_stripe.traitement_en_cours:
+        messages.success(request, _("Paiement validé. Création des billets et envoi par mail en cours."))
+        return paiement_stripe
+
+    # Déja été traité et il est en erreur.
+    if reservation.status == Reservation.PAID_ERROR:
+        messages.error(request, _("Paiement refusé."))
+        return False
+
+    # Déja traité et validé.
+    if (paiement_stripe.status == Paiement_stripe.VALID or
+            reservation.status == Reservation.VALID):
+        messages.success(request, _('Paiement validé. Billets envoyés par mail. Vous pouvez aussi retrouver vos billets dans votre espace "mon compte"'))
+        return paiement_stripe
+
+    #### END PRE CHECK
+
+    # Si c'est une source depuis INVOICE, c'est un paiement récurent automatique.
+    # L'object vient d'être créé, on vérifie que la facture stripe est payée et on met en VALID
+    # TODO: Que pour les webhook post stripe. A poser dans le model a coté de update_checkout_status ?
+    if paiement_stripe.source == Paiement_stripe.INVOICE:
+        paiement_stripe.traitement_en_cours = True
+        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+        invoice = stripe.Invoice.retrieve(
+            paiement_stripe.invoice_stripe,
+            stripe_account=Configuration.get_solo().get_stripe_connect_account()
+        )
+
+        if not invoice.status == 'paid':
+            logger.info(f"paiement_stripe.source == Paiement_stripe.INVOICE -> stripe invoice : {invoice.status} - paiement : {paiement_stripe.status}")
+            messages.error(request, _(f'stripe invoice : {invoice.status} - paiement : {paiement_stripe.status}'))
+            return False
+
+        paiement_stripe.status = Paiement_stripe.PAID
+        paiement_stripe.last_action = timezone.now()
+        paiement_stripe.traitement_en_cours = True
+        paiement_stripe.save()
+
+        logger.info("paiement_stripe.source == Paiement_stripe.INVOICE -> Paiement récurent et facture générée.")
+        messages.success(request, _("Paiement récurent et facture générée."))
+        return paiement_stripe
+
+    # C'est un paiement stripe checkout non traité, on tente de le valider
+    if paiement_stripe.status != Paiement_stripe.VALID:
+        checkout_status = paiement_stripe.update_checkout_status()
+        # on vérifie le changement de status
+        paiement_stripe.refresh_from_db()
+
+        logger.info("*" * 30)
+        logger.info(
+            f"{timezone.now()} - paiment_stripe_reservation_validator - checkout_status : {checkout_status}")
+        logger.info(
+            f"{timezone.now()} - paiment_stripe_reservation_validator - paiement_stripe.save() {paiement_stripe.status}")
+        logger.info("*" * 30)
+
+        messages.success(request, _('Paiement validé. Billets envoyés par mail. Vous pouvez aussi retrouver vos billets dans votre espace "mon compte"'))
+        return paiement_stripe
+
+    raise Exception('paiment_stripe_reservation_validator : aucune condition remplies ?')
+
 class Ticket_html_view(APIView):
     permission_classes = [AllowAny]
 
@@ -699,12 +769,12 @@ class EventMVT(viewsets.ViewSet):
 
     # La page get /
     def list(self, request: HttpRequest):
-        ctx = get_context(request)
+        context = get_context(request)
         tags = request.GET.getlist('tag')
         page = request.GET.get('page', 1)
-        ctx['dated_events'], ctx['paginated_info'] = self.get_federated_events(tags=tags, page=page)
+        context['dated_events'], context['paginated_info'] = self.get_federated_events(tags=tags, page=page)
         # On renvoie la page en entier
-        return render(request, "reunion/views/event/list.html", context=ctx)
+        return render(request, "reunion/views/event/list.html", context=context)
 
     # Recherche dans tout les tenant fédérés
     def tenant_retrieve(self, slug):
@@ -752,15 +822,54 @@ class EventMVT(viewsets.ViewSet):
                 messages.add_message(request, messages.ERROR, f"{validator.errors[error][0]}")
             return HttpResponseClientRedirect(request.headers['Referer'])
 
+        # SI on a un besoin de paiement, on redirige vers :
+        if validator.checkout_link :
+            logger.info("validator reservation OK, get checkout link -> redirect")
+            return HttpResponseClientRedirect(validator.checkout_link)
+
         return render(request, "reunion/views/event/reservation_ok.html", context={
             "user": request.user,
         })
 
+
+    @action(detail=True, methods=['GET'])
+    def stripe_return(self, request, pk, *args, **kwargs):
+        paiement_stripe = get_object_or_404(Paiement_stripe, uuid=pk)
+
+        # Si pas de reservation :
+        if not paiement_stripe.reservation:
+            raise Http404
+
+        paiement_stripe_refreshed = paiement_stripe_reservation_validator(request, paiement_stripe)
+        if not paiement_stripe:
+            logger.error(f"Stripe return paiment_stripe_reservation_validator")
+            return HttpResponseClientRedirect(request.headers['Referer'])
+
+
+        try:
+            if paiement_stripe_refreshed.status == Paiement_stripe.VALID:
+                messages.add_message(request, messages.SUCCESS,
+                                     _(f"Your subscription has been validated. You will receive a confirmation email. Thank you very much!"))
+            elif paiement_stripe_refreshed.status == Paiement_stripe.PENDING:
+                messages.add_message(request, messages.WARNING, _(f"Your payment is awaiting validation."))
+            else:
+                messages.add_message(request, messages.WARNING,
+                                     _(f"An error has occurred, please contact the administrator."))
+        except MessageFailure as e:
+            # Surement un test unitaire, les messages plantent a travers la Factory Request
+            pass
+        except Exception as e:
+            raise e
+
+        if request.user.is_authenticated:
+            return redirect('/my_account/my_reservations/')
+        return redirect('/event/')
+
     def get_permissions(self):
-        if self.action in ['create']:
-            permission_classes = [permissions.IsAuthenticated]
-        else:
-            permission_classes = [permissions.AllowAny]
+        # if self.action in ['create']:
+        #     permission_classes = [permissions.IsAuthenticated]
+        # else:
+        permission_classes = [permissions.AllowAny]
         return [permission() for permission in permission_classes]
 
 
