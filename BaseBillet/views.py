@@ -845,22 +845,6 @@ class EventMVT(viewsets.ViewSet):
             logger.error(f"Stripe return paiment_stripe_reservation_validator")
             return HttpResponseClientRedirect(request.headers['Referer'])
 
-
-        try:
-            if paiement_stripe_refreshed.status == Paiement_stripe.VALID:
-                messages.add_message(request, messages.SUCCESS,
-                                     _(f"Your subscription has been validated. You will receive a confirmation email. Thank you very much!"))
-            elif paiement_stripe_refreshed.status == Paiement_stripe.PENDING:
-                messages.add_message(request, messages.WARNING, _(f"Your payment is awaiting validation."))
-            else:
-                messages.add_message(request, messages.WARNING,
-                                     _(f"An error has occurred, please contact the administrator."))
-        except MessageFailure as e:
-            # Surement un test unitaire, les messages plantent a travers la Factory Request
-            pass
-        except Exception as e:
-            raise e
-
         if request.user.is_authenticated:
             return redirect('/my_account/my_reservations/')
         return redirect('/event/')
