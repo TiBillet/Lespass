@@ -1,5 +1,4 @@
 from django.urls import path, include
-from html5lib.treeadapters.sax import namespace
 from rest_framework import routers
 from BaseBillet import views as base_view
 
