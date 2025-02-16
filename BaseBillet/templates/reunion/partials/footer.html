@@ -74,7 +74,7 @@
         </ul>
       </div>  {% endcomment %}
 
-      {# tebillet info #}
+      {# tibillet info #}
       <div class="col-md">
         <h4>
           <svg class="align-baseline" width="90" height="20" fill="currentColor" viewBox="0 0 50.357453 11.821528"
@@ -89,21 +89,19 @@
         </h4>
         <p class="lead">La billetterie en ligne</p>
         <p>
-          TiBillet, c'est une boîte à outils d'orga collective : tirelire
-          digitale, caisse enregistreuse, billetterie en ligne, réseau local,
-          le tout libre et auto-hébergeable.
+            {% trans "TiBillet, c'est une boîte à outils d'orga collective : tirelire digitale, caisse enregistreuse, billetterie en ligne, réseau local, le tout libre et auto-hébergeable." %}
         </p>
         <p>
           <a href="/tenant/new" class="btn btn-primary d-block">
             <i class="bi bi-stars"></i>
-            Je crée un Lespass pour mon collectif
+            {% translate "Je crée un" %} <strong>Lespass</strong>{% translate "pour mon collectif" %}
           </a>
         </p>
         <ul class="nav flex-column">
-          <li class="nav-item"><a class="nav-link" href="#">TiBillet.org</a></li>
-          <li class="nav-item"><a class="nav-link" href="#">Documentation</a></li>
-          <li class="nav-item"><a class="nav-link" href="#">Mastodon</a></li>
-          <li class="nav-item"><a class="nav-link" href="#">Github</a></li>
+          <li class="nav-item"><a class="nav-link" href="https://tibillet.org">TiBillet.org</a></li>
+          <li class="nav-item"><a class="nav-link" href="https://tibillet.org/fr/docs/category/documentation-utilisateur/" target="_blank">{% trans "Documentation" %}</a></li>
+          <li class="nav-item"><a class="nav-link" href="https://pouet.chapril.org/@tibillet" target="_blank">Mastodon</a></li>
+          <li class="nav-item"><a class="nav-link" href="https://github.com/TiBillet/">Github</a></li>
         </ul>
       </div>
     </div>
