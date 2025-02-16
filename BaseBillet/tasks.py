@@ -31,6 +31,7 @@ from ApiBillet.serializers import LigneArticleSerializer
 from BaseBillet.models import Reservation, Ticket, Configuration, Membership, Webhook, Paiement_stripe, LigneArticle, \
     GhostConfig
 from Customers.models import Client
+from MetaBillet.models import WaitingConfiguration
 from TiBillet.celery import app
 from django.utils.translation import gettext_lazy as _
 
@@ -435,45 +436,27 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
         raise Exception
 
 
-"""
 @app.task
-def terminal_pairing_celery_mailer(term_user_email, subject=None):
-    logger.info(f'WORKDER CELERY app.task terminal_pairing_celery_mailer : {term_user_email}')
-    User = get_user_model()
-    terminal_user = User.objects.get(email=term_user_email, espece=TibilletUser.TYPE_TERM)
-    user_parent = terminal_user.user_parent()
-
-    token = TerminalPairingToken.objects.create(user=terminal_user, token=random.randint(100000, 999999))
-    logger.info(f'WORKDER CELERY app.task terminal_pairing_celery_mailer token: {token.token}')
-
-    if subject is None:
-        subject = f"Appairage du terminal {terminal_user.terminal_uuid} "
-
+def new_tenant_mailer(email:str, waiting_config_uuid:str):
     try:
+        # Génération du lien qui va créer la redirection vers l'url onboard
+        meta = Client.objects.filter(categorie=Client.META)[0]
+        meta_url = meta.get_primary_domain().domain
+        waiting_config = WaitingConfiguration.objects.get(uuid=waiting_config_uuid)
+        create_url_for_onboard_stripe = f"https://{meta_url}/tenant/{waiting_config_uuid}/onboard_stripe/"
+
         mail = CeleryMailerClass(
-            user_parent.email,
-            subject,
-            template='mails/pairing_terminal.html',
-            context={
-                'small_token': token.token,
-                'terminal_user': terminal_user
-            },
+            email,
+            _("TiBillet : Création d'un nouvel espace."),
+            template='reunion/emails/new_tenant.html',
+            context={'create_url_for_onboard_stripe': f'{create_url_for_onboard_stripe}'}
         )
-        try:
-            mail.send()
-            logger.info(f"mail.sended : {mail.sended}")
+        mail.send()
+        logger.info(f"mail.sended : {mail.sended}")
 
-        except smtplib.SMTPRecipientsRefused as e:
-            logger.error(f"ERROR {timezone.now()} Erreur envoie de mail pour appairage {user_parent.email} : {e}")
-            logger.error(f"mail.sended : {mail.sended}")
-            terminal_user.is_active = False
-            terminal_user.email_error = True
-            terminal_user.save()
-
-    except Exception as e:
-        logger.error(f"{timezone.now()} Erreur envoie de mail pour appairage {user_parent.email} : {e}")
-        raise Exception
-"""
+    except smtplib.SMTPRecipientsRefused as e:
+        logger.error(
+            f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour report_celery_mailer : {e}")
 
 
 @app.task

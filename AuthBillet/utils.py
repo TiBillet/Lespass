@@ -28,7 +28,6 @@ def get_client_ip(request):
 
 
 
-
 def sender_mail_connect(email, subject_mail=None):
     # Mail de confirmation de création de compte
     try :

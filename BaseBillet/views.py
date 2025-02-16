@@ -33,6 +33,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
 from Administration.admin_tenant import FormbricksConfigAddform
@@ -42,7 +43,7 @@ from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, Product, Event, Paiement_stripe, Membership, Reservation, \
     FormbricksConfig, FormbricksForms
-from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email
+from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, new_tenant_mailer
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
     ReservationValidator
 from Customers.models import Client, Domain
@@ -52,6 +53,12 @@ from fedow_connect.models import FedowConfig
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
+
+
+class SmallAnonRateThrottle(UserRateThrottle):
+    scope = 'smallanon'
+
+
 
 
 def encode_uid(pk):
@@ -1103,12 +1110,8 @@ class Tenant(viewsets.ViewSet):
 
         return render(request, "reunion/views/tenant/new_tenant.html", context=context)
 
-    def create(self, request: Request, *args, **kwargs):
-        messages.success(request, _("Merci ! Un email de bienvenue vous a été envoyé."))
-        return render(request, "reunion/views/tenant/thanks.html", context={})
-
-    @action(detail=False, methods=['POST'])
-    def onboard_stripe(self, request):
+    @action(detail=False, methods=['POST'],throttle_classes=[SmallAnonRateThrottle])
+    def create_tenant(self, request: Request, *args, **kwargs):
         new_tenant = TenantCreateValidator(data=request.data, context={'request': request})
         logger.info(new_tenant.initial_data)
         if not new_tenant.is_valid():
@@ -1116,34 +1119,53 @@ class Tenant(viewsets.ViewSet):
                 messages.add_message(request, messages.ERROR, f"{error} : {new_tenant.errors[error][0]}")
             return HttpResponseClientRedirect(request.headers['Referer'])
 
-        # Création du lien onboard stripe, qui va renvoyer une fois terminé vers onboard_stripe_return
+        # Création d'un objet waiting_configuration
+        validated_data = new_tenant.validated_data
+        waiting_configuration = WaitingConfiguration.objects.create(
+            organisation=validated_data['name'],
+            email=validated_data['email'],
+            laboutik_wanted=validated_data['laboutik'],
+            # id_acc_connect=id_acc_connect,
+            dns_choice=validated_data['dns_choice'],
+        )
+
+        # Envoi d'un mail pour vérifier le compte. Un lien vers stripe sera créé
+        new_tenant_mailer.delay(email=validated_data['email'], waiting_config_uuid=str(waiting_configuration.uuid))
+        return render(request, "reunion/views/tenant/thanks.html", context={})
+
+    @action(detail=True, methods=['GET'],throttle_classes=[SmallAnonRateThrottle])
+    def onboard_stripe(self, request, pk):
+        """
+        Requete provenant du mail envoyé lors d'un nouveau tenant
+        """
+        waiting_config = get_object_or_404(WaitingConfiguration, pk=pk)
+        meta = Client.objects.filter(categorie=Client.META)[0]
+        meta_url = meta.get_primary_domain().domain
+
         rootConf = RootConfiguration.get_solo()
         stripe.api_key = rootConf.get_stripe_api()
 
-        try:
-            # On indique le retour sur la page meta, le tenant n'est pas encore créé ici
-            config = Configuration.get_solo()
-            id_acc_connect = config.get_stripe_connect_account()
-            account_link = config.link_for_onboard_stripe(meta=True)
+        if not waiting_config.id_acc_connect:
 
-            # Mise en cache pendant 24h des infos name id_acc_connect et email
-            validated_data = new_tenant.validated_data
-            validated_data['id_acc_connect'] = f'{id_acc_connect}'
-
-            WaitingConfiguration.objects.create(
-                organisation=validated_data['name'],
-                email=validated_data['email'],
-                laboutik_wanted=validated_data['laboutik'],
-                id_acc_connect=id_acc_connect,
-                dns_choice=validated_data['dns_choice'],
+            acc_connect = stripe.Account.create(
+                type="standard",
+                country="FR",
             )
+            id_acc_connect = acc_connect.get('id')
+            waiting_config.id_acc_connect = id_acc_connect
+            waiting_config.save()
 
-            return HttpResponseClientRedirect(account_link)
 
-        except Exception as e:
-            logger.error(e)
-            messages.add_message(request, messages.ERROR, f"{e}")
-            return HttpResponseClientRedirect(request.headers['Referer'])
+        account_link = stripe.AccountLink.create(
+            account=waiting_config.id_acc_connect,
+            refresh_url=f"https://{meta_url}/tenant/{waiting_config.id_acc_connect}/onboard_stripe_return/",
+            return_url=f"https://{meta_url}/tenant/{waiting_config.id_acc_connect}/onboard_stripe_return/",
+            type="account_onboarding",
+        )
+
+        url_onboard = account_link.get('url')
+        return redirect(url_onboard)
+
 
     @action(detail=True, methods=['GET'])
     def onboard_stripe_return(self, request, pk):
@@ -1156,8 +1178,7 @@ class Tenant(viewsets.ViewSet):
         tenant: Client = connection.tenant
 
         if tenant.categorie != Client.META:
-            # Demande envoyée depuis l'admin : a retirer dans le futur lorsque tout le monde aura migré
-            return redirect('/adminBaseBillet/configuration/')
+            raise Http404
 
         # Si c'est un formulaire depuis META :
         if details_submitted:
@@ -1179,6 +1200,7 @@ class Tenant(viewsets.ViewSet):
                     'cgu': True,
                     'dns_choice': waiting_config.dns_choice,
                 })
+
                 if not validator.is_valid():
                     for error in validator.errors:
                         messages.add_message(request, messages.ERROR, f"{error} : {validator.errors[error][0]}")

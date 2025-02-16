@@ -6,7 +6,7 @@
     <div class="flex-fill">
         <div class="container-lg py-5">
             <form class="row" id="new-tenant"
-                  hx-post="/tenant/" hx-indicator="#tibillet-spinner"
+                  hx-post="/tenant/create_tenant/" hx-indicator="#tibillet-spinner"
                   hx-target="#new-tenant">
                 <div class="col-md-8 offset-md-2 col-xl-6 offset-xl-3">
                     <h1>{% trans "Créer une nouvelle instance" %}</h1>
@@ -23,13 +23,21 @@
                         <div class="form-floating mb-3">
                             <input name="email" type="email" class="form-control" placeholder="adresse@exemple.fr"
                                    role="textbox" aria-label="Adresse mail de l'admin" required
-                                   value="{% if email_query_params %}{{ email_query_params }}{% endif %}">
+                                    {% if user.is_authenticated %}
+                                   value="{{ user.email }}"
+                                    {% elif email_query_params %}
+                                   value="{{ email_query_params }}"
+                                    {% endif %}>
+
                             <label for="email">{% trans "Addresse mail" %}</label>
                         </div>
                         <div class="form-floating mb-3">
                             <input name="emailConfirmation" type="email" class="form-control"
                                    placeholder="adresse@exemple.fr" role="textbox"
-                                   aria-label="Confirmation de l'adresse email" required>
+                                   aria-label="Confirmation de l'adresse email" required
+                                    {% if user.is_authenticated %}
+                                   value="{{ user.email }}"
+                                    {% endif %}>
                             <label for="emailConfirmation">{% trans "Confirmation de l'email" %}</label>
                         </div>
                         {% include 'reunion/partials/field_errors.html' %}
@@ -41,7 +49,9 @@
                                 <div class="form-floating mb-3">
                                     <input name="name" type="text" class="form-control" placeholder="Jaz" role="textbox"
                                            aria-label="Prénom de l'adhéranne" required
-                                           {% if name_query_params %}value="{{ name_query_params }}"{% endif %}>
+                                            {% if name_query_params %}
+                                           value="{{ name_query_params }}"
+                                            {% endif %}>
                                     <label for="name">{% trans "Nom du collectif" %}</label>
                                 </div>
                             </div>

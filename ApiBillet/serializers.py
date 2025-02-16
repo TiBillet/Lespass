@@ -261,29 +261,7 @@ class ConfigurationSerializer(serializers.ModelSerializer):
 #     contribution_value = serializers.FloatField()
 
 
-def create_account_link_for_onboard(id_acc_connect=None):
-    rootConf = RootConfiguration.get_solo()
-    stripe.api_key = rootConf.get_stripe_api()
 
-    meta = Client.objects.filter(categorie=Client.META)[0]
-    meta_url = meta.get_primary_domain().domain
-
-    if not id_acc_connect:
-        acc_connect = stripe.Account.create(
-            type="standard",
-            country="FR",
-        )
-        id_acc_connect = acc_connect.get('id')
-
-    account_link = stripe.AccountLink.create(
-        account=id_acc_connect,
-        refresh_url=f"https://{meta_url}/onboard_stripe_return/{id_acc_connect}",
-        return_url=f"https://{meta_url}/onboard_stripe_return/{id_acc_connect}",
-        type="account_onboarding",
-    )
-
-    url_onboard = account_link.get('url')
-    return url_onboard
 
 
 # class CheckMailSerializer(serializers.Serializer):

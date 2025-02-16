@@ -44,7 +44,9 @@ class WaitingConfiguration(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=False)
     email = models.EmailField()
     organisation = models.CharField(db_index=True, max_length=50, verbose_name=_("Nom de l'organisation"))
+
     id_acc_connect = models.CharField(max_length=21, blank=True, null=True, verbose_name=_("Id stripe connect"))
+
     laboutik_wanted = models.BooleanField(default=False)
     dns_choice = models.CharField(max_length=200, blank=True, null=True, verbose_name=_("Choix du nom de domaine"))
 
@@ -111,7 +113,7 @@ class WaitingConfiguration(models.Model):
                         verbose_name='Background',
                         )
 
-    stripe_connect_account = models.CharField(max_length=21, blank=True, null=True)
+    # stripe_connect_account = models.CharField(max_length=21, blank=True, null=True)
 
     TZ_REUNION, TZ_PARIS = "Indian/Reunion", "Europe/Paris"
     TZ_CHOICES = [

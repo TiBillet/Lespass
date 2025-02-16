@@ -449,9 +449,8 @@ class Configuration(SingletonModel):
         return self.stripe_payouts_enabled
 
     def link_for_onboard_stripe(self):
+        # Doublon avec basebillet.views.create_account_link_for_onboard ?
         stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-        # Si lien demandé depuis la meta :
-        # le tenant n'existe pas encore, on utilise un retour sur la meta
         tenant = connection.tenant
         tenant_url = tenant.get_primary_domain().domain
 
