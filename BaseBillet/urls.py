@@ -41,7 +41,6 @@ urlpatterns = [
     # path("tenant/summary/", base_view.tenant_summary, name='tenant_summary'),
     # path('test_jinja/', base_view.test_jinja, name='test_jinja'),
     path('', base_view.index, name="index"),
-    path('', include((router.urls, 'basebillet'), namespace='basebillet')),
 ]
 
-# urlpatterns += router.urls
+urlpatterns += router.urls

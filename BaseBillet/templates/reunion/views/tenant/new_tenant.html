@@ -6,7 +6,7 @@
     <div class="flex-fill">
         <div class="container-lg py-5">
             <form class="row" id="new-tenant"
-                  hx-post="{% url 'basebillet:tenant-create' %}" hx-indicator="#tibillet-spinner"
+                  hx-post="/tenant/" hx-indicator="#tibillet-spinner"
                   hx-target="#new-tenant">
                 <div class="col-md-8 offset-md-2 col-xl-6 offset-xl-3">
                     <h1>{% trans "Créer une nouvelle instance" %}</h1>
