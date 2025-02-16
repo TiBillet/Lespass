@@ -437,6 +437,7 @@ class MembershipValidator(serializers.Serializer):
 
 class TenantCreateValidator(serializers.Serializer):
     email = serializers.EmailField()
+    emailConfirmation = serializers.EmailField()
     name = serializers.CharField(max_length=200)
     laboutik = serializers.BooleanField(required=True)
     cgu = serializers.BooleanField(required=True)

@@ -1095,13 +1095,17 @@ class Tenant(viewsets.ViewSet):
     # Tout le monde peut créer un tenant, sous reserve d'avoir validé son compte stripe
     permission_classes = [permissions.AllowAny, ]
 
-    @action(detail=False, methods=['GET'])
+    @action(detail=False, methods=['GET', 'POST'])
     def new(self, request: Request, *args, **kwargs):
         context = get_context(request)
         context['email_query_params'] = request.query_params.get('email') if request.query_params.get('email') else ""
         context['name_query_params'] = request.query_params.get('name') if request.query_params.get('name') else ""
-        # import ipdb; ipdb.set_trace()
-        return render(request, "reunion/views/new_tenant.html", context=context)
+
+        if request.method == 'POST':
+            messages.success(request, _("Merci ! Un email de bienvenue vous a été envoyé."))
+            return render(request, "reunion/views/tenant/thanks.html", context=context)
+
+        return render(request, "reunion/views/tenant/new_tenant.html", context=context)
 
     @action(detail=False, methods=['POST'])
     def onboard_stripe(self, request):

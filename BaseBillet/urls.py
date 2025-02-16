@@ -1,4 +1,5 @@
-from django.urls import path
+from django.urls import path, include
+from html5lib.treeadapters.sax import namespace
 from rest_framework import routers
 from BaseBillet import views as base_view
 
@@ -40,8 +41,8 @@ urlpatterns = [
     # path("tenant/informations/", base_view.tenant_informations, name='tenant_informations'),
     # path("tenant/summary/", base_view.tenant_summary, name='tenant_summary'),
     # path('test_jinja/', base_view.test_jinja, name='test_jinja'),
-
+    path('', include((router.urls, 'basebillet'), namespace='basebillet')),
     path('', base_view.index, name="index"),
 ]
 
-urlpatterns += router.urls
+# urlpatterns += router.urls

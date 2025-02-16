@@ -5,14 +5,19 @@
 {% block main %}
     <div class="flex-fill">
         <div class="container-lg py-5">
-            <form class="row">
+            <form class="row" id="new-tenant"
+                  hx-post="{% url 'basebillet:tenant-new' %}" hx-indicator="#tibillet-spinner"
+                  hx-target="#new-tenant">
                 <div class="col-md-8 offset-md-2 col-xl-6 offset-xl-3">
                     <h1>{% trans "Créer une nouvelle instance" %}</h1>
                     <p class="">
                         {% trans "Pour créer une instance " %}<strong>Lespass </strong>{% trans "et accéder aux outils qui me permettront de gérer mon collectif, il suffit de remplir le formulaire, puis de confirmer mon adresse email." %}
                     </p>
-                    <p class="mb-5">
+                    <p class="">
                         {% trans "Un email de confirmation vous sera envoyé pour vous inviter à créer et lier un compte " %}<strong>Stripe </strong> {% trans "pour recevoir les paiements." %}
+                    </p>
+                    <p class="mb-5">
+                        {% trans "Une fois votre compte vérifié, nous vous contacterons pour finaliser ensemble votre inscription et s'assurer que TiBillet répond bien à vos besoins :)" %}
                     </p>
                     <form id="linkform" role="form">
                         <div class="form-floating mb-3">
@@ -37,7 +42,7 @@
                                     <input name="name" type="text" class="form-control" placeholder="Jaz" role="textbox"
                                            aria-label="Prénom de l'adhéranne" required
                                            {% if name_query_params %}value="{{ name_query_params }}"{% endif %}>
-                                    <label for="name">Nom du collectif</label>
+                                    <label for="name">{% trans "Nom du collectif" %}</label>
                                 </div>
                             </div>
                         </div>
@@ -53,20 +58,21 @@
                         <div class="form-check form-switch mb-5">
                             <input class="form-check-input" type="checkbox" role="switch" name="cgu" id="cgu" required>
                             <label class="form-check-label" for="cgu">
-                                J'accepte <a href="https://tibillet.org/cgucgv/">les conditions d'utilisation</a>
+                                {% trans "J'accepte" %} <a
+                                    href="https://tibillet.org/cgucgv/">{% trans "les conditions d'utilisation" %}</a>
                             </label>
                         </div>
                         {% include 'reunion/partials/field_errors.html' %}
 
                         <p>
-                            Choix du nom de domaine.
+                            {% trans "Choix du nom de domaine." %}
                         </p>
                         <div class="d-flex flex-row justify-content-start align-items-start mb-5 has-validation">
                             <div class="form-check me-3">
                                 <input class="form-check-input" type="radio"
                                        name="dns_choice"
                                        id="options-radio-coop"
-                                       value="tibillet.coop">
+                                       value="tibillet.coop" checked="checked">
                                 <label class="custom-control-label ms-0"
                                        for="options-radio-coop">
                                     tibillet.coop
@@ -85,10 +91,8 @@
                         </div>
 
                         <input type="hidden" name="qrcode_uuid" value="{{ qrcode_uuid }}">
-                        <button type="button"
+                        <button type="submit"
                                 class="btn btn-primary w-100 mb-3 test-return-validate-link-card"
-                                hx-post="/tenant/onboard_stripe/"
-                                hx-indicator="#tibillet-spinner"
                         >{% translate "Confirmer" %}
                         </button>
                     </form>
