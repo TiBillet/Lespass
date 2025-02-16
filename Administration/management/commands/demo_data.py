@@ -343,7 +343,7 @@ class Command(BaseCommand):
                 )
 
                 tarif_adherant, created = Price.objects.get_or_create(
-                    name="Tarif Adhérant",
+                    name="Tarif Adhérent",
                     short_description="Plein tarif",
                     prix=10,
                     product=billet,
