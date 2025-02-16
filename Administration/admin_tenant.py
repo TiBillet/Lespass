@@ -321,6 +321,9 @@ class PriceInline(TabularInline):
     show_change_link = True
     tab = True
 
+    # Surcharger la méthode pour désactiver la suppression
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 @admin.register(Product, site=staff_admin_site)
 class ProductAdmin(ModelAdmin):
@@ -1044,6 +1047,7 @@ class TicketAdmin(ModelAdmin):
     #     EventFilter,
     # 'reservation__uuid'
     # )
+    list_filter = ["reservation__event", "status", "reservation__options"]
 
     search_fields = (
         'first_name',
@@ -1051,13 +1055,14 @@ class TicketAdmin(ModelAdmin):
         'reservation__user_commande__email'
     )
 
+    #TODO: Checker un vrai bouton avec Unfold admin
     def state(self, obj):
         if obj.status == Ticket.NOT_SCANNED:
             return format_html(
-                f'<a  href="{reverse("staff_admin:ticket-scann", args=[obj.pk])}" class="button">Valider</a>&nbsp;',
+                f'<button><a href="{reverse("staff_admin:ticket-scann", args=[obj.pk])}" class="button">Non scanné : Scanner le billet</a></button>&nbsp;',
             )
         elif obj.status == Ticket.SCANNED:
-            return 'Validé'
+            return 'Validé/Scanné'
         else:
             for choice in Reservation.TYPE_CHOICES:
                 if choice[0] == obj.reservation.status:
