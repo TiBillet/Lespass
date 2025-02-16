@@ -6,7 +6,7 @@
     <div class="flex-fill">
         <div class="container-lg py-5">
             <form class="row" id="new-tenant"
-                  hx-post="{% url 'basebillet:tenant-new' %}" hx-indicator="#tibillet-spinner"
+                  hx-post="{% url 'basebillet:tenant-create' %}" hx-indicator="#tibillet-spinner"
                   hx-target="#new-tenant">
                 <div class="col-md-8 offset-md-2 col-xl-6 offset-xl-3">
                     <h1>{% trans "Créer une nouvelle instance" %}</h1>
@@ -23,7 +23,7 @@
                         <div class="form-floating mb-3">
                             <input name="email" type="email" class="form-control" placeholder="adresse@exemple.fr"
                                    role="textbox" aria-label="Adresse mail de l'admin" required
-                                   {% if email_query_params %}value="{{ email_query_params }}"{% endif %}>
+                                   value="{% if email_query_params %}{{ email_query_params }}{% endif %}">
                             <label for="email">{% trans "Addresse mail" %}</label>
                         </div>
                         <div class="form-floating mb-3">

@@ -1101,11 +1101,11 @@ class Tenant(viewsets.ViewSet):
         context['email_query_params'] = request.query_params.get('email') if request.query_params.get('email') else ""
         context['name_query_params'] = request.query_params.get('name') if request.query_params.get('name') else ""
 
-        if request.method == 'POST':
-            messages.success(request, _("Merci ! Un email de bienvenue vous a été envoyé."))
-            return render(request, "reunion/views/tenant/thanks.html", context=context)
-
         return render(request, "reunion/views/tenant/new_tenant.html", context=context)
+
+    def create(self, request: Request, *args, **kwargs):
+        messages.success(request, _("Merci ! Un email de bienvenue vous a été envoyé."))
+        return render(request, "reunion/views/tenant/thanks.html", context={})
 
     @action(detail=False, methods=['POST'])
     def onboard_stripe(self, request):

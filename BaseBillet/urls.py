@@ -41,8 +41,8 @@ urlpatterns = [
     # path("tenant/informations/", base_view.tenant_informations, name='tenant_informations'),
     # path("tenant/summary/", base_view.tenant_summary, name='tenant_summary'),
     # path('test_jinja/', base_view.test_jinja, name='test_jinja'),
-    path('', include((router.urls, 'basebillet'), namespace='basebillet')),
     path('', base_view.index, name="index"),
+    path('', include((router.urls, 'basebillet'), namespace='basebillet')),
 ]
 
 # urlpatterns += router.urls
