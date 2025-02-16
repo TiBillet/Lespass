@@ -3,48 +3,52 @@
 {% load i18n %}
 
 {% block main %}
-<main class="container-lg py-5">
-    <h1>{% translate 'Adhérer au réseau' %}</h1>
+    <main class="container-lg py-5">
+        <h1>{% translate 'Adhérer au réseau' %}</h1>
 
-    <!-- subscription panel -->
-    <div class="offcanvas-start offcanvas" tabindex="-1" id="subscribePanel" aria-labelledby="subscribePanelLabel">
-        <div class="offcanvas-header">
-            <h5 class="offcanvas-title" id="subscribePanelLabel">{% translate 'Prendre une adhésion' %}</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% translate 'Fermer' %}"></button>
-        </div>
-        <div class="offcanvas-body" id="offcanvas-membership">
-        </div>
-    </div>
-
-    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-3 mb-5">
-        {% for product in products %}
-        <div class="col">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h3 class="card-title">{{ product.name }}</h3>
-                    <p class="card-text">{{ product.short_description }}</p>
-                    <p class="card-text">{{ product.long_description }}</p>
-                </div>
-                <div class="card-footer">
-                    <button
-                        class="btn btn-primary w-100 my-3"
-                        type="button"
-                        id="button-filters"
-                        hx-get="/memberships/{{ product.uuid }}" hx-swap="innerHTML" hx-target="#offcanvas-membership"
-
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#subscribePanel"
-                        aria-controls="subscribePanel">
-                        <i class="bi bi-plus"></i>
-                        {% translate 'Prendre une adhésion' %}
-                    </button>
-                </div>
+        <!-- subscription panel -->
+        <div class="offcanvas-start offcanvas" tabindex="-1" id="subscribePanel" aria-labelledby="subscribePanelLabel">
+            <div class="offcanvas-header">
+                <h5 class="offcanvas-title" id="subscribePanelLabel">{% translate 'Prendre une adhésion' %}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="offcanvas"
+                        aria-label="{% translate 'Fermer' %}"></button>
+            </div>
+            <div class="offcanvas-body" id="offcanvas-membership">
             </div>
         </div>
-        {% endfor %}
-    </div>
 
-</main>
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-3 mb-5">
+            {% for product in products %}
+                {% if product.publish %}
+                    <div class="col">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h3 class="card-title">{{ product.name }}</h3>
+                                <p class="card-text">{{ product.short_description }}</p>
+                                <p class="card-text">{{ product.long_description }}</p>
+                            </div>
+                            <div class="card-footer">
+                                <button
+                                        class="btn btn-primary w-100 my-3"
+                                        type="button"
+                                        id="button-filters"
+                                        hx-get="/memberships/{{ product.uuid }}" hx-swap="innerHTML"
+                                        hx-target="#offcanvas-membership"
+
+                                        data-bs-toggle="offcanvas"
+                                        data-bs-target="#subscribePanel"
+                                        aria-controls="subscribePanel">
+                                    <i class="bi bi-plus"></i>
+                                    {% translate 'Prendre une adhésion' %}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+
+    </main>
 
 
 
