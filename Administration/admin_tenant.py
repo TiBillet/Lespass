@@ -5,7 +5,7 @@ from typing import Any
 
 import requests
 from django import forms
-from django.db import models
+from django.db import models, connection
 from django.contrib import admin
 from django.contrib import messages
 from django.db.models import Model
@@ -26,7 +26,7 @@ from unfold.widgets import UnfoldAdminTextInputWidget, UnfoldAdminEmailInputWidg
 from unfold.contrib.forms.widgets import WysiwygWidget
 
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
-from AuthBillet.models import HumanUser
+from AuthBillet.models import HumanUser, TibilletUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
@@ -325,6 +325,7 @@ class PriceInline(TabularInline):
     def has_delete_permission(self, request, obj=None):
         return False
 
+
 @admin.register(Product, site=staff_admin_site)
 class ProductAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
@@ -463,6 +464,57 @@ class MembershipInline(TabularInline):
     #     return formset
 
 
+class is_tenant_admin(admin.SimpleListFilter):
+    # Human-readable title which will be displayed in the
+    # right admin sidebar just above the filter options.
+    title = _("Administrateur·ice")
+
+    # Parameter for the filter that will be used in the URL query.
+    parameter_name = "is_admin"
+
+    def lookups(self, request, model_admin):
+        """
+        Returns a list of tuples. The first element in each
+        tuple is the coded value for the option that will
+        appear in the URL query. The second element is the
+        human-readable name for the option that will appear
+        in the right sidebar.
+        """
+        return [
+            ("Y", _("Oui")),
+            ("N", _("Non")),
+        ]
+
+    def queryset(self, request, queryset):
+        """
+        Returns the filtered queryset based on the value
+        provided in the query string and retrievable via
+        `self.value()`.
+        """
+        # Compare the requested value (either '80s' or '90s')
+        # to decide how to filter the queryset.
+        tenant = connection.tenant
+
+        # return all([
+        #     connection.tenant in request.user.client_admin.all(),
+        #     request.user.is_staff,
+        #     request.user.is_active,
+        #     request.user.espece == TibilletUser.TYPE_HUM
+        # ])
+
+        if self.value() == "Y":
+            return queryset.filter(
+                client_admin__in=[connection.tenant],
+                is_staff=True,
+                is_active=True,
+                espece=TibilletUser.TYPE_HUM
+            ).distinct()
+        if self.value() == "N":
+            return queryset.exclude(
+                client_admin__in=[connection.tenant],
+            ).distinct()
+
+
 class MembershipValid(admin.SimpleListFilter):
     # Human-readable title which will be displayed in the
     # right admin sidebar just above the filter options.
@@ -497,19 +549,19 @@ class MembershipValid(admin.SimpleListFilter):
         # to decide how to filter the queryset.
         if self.value() == "Y":
             return queryset.filter(
-                membership__deadline__gte=timezone.localtime(),
+                memberships__deadline__gte=timezone.localtime(),
             ).distinct()
         if self.value() == "N":
             return queryset.filter(
-                membership__deadline__lte=timezone.localtime(),
+                memberships__deadline__lte=timezone.localtime(),
             ).distinct()
         if self.value() == "B":
             return queryset.filter(
-                membership__deadline__lte=timezone.localtime() + timedelta(weeks=2),
-                membership__deadline__gte=timezone.localtime(),
+                memberships__deadline__lte=timezone.localtime() + timedelta(weeks=2),
+                memberships__deadline__gte=timezone.localtime(),
             ).distinct()
         if self.value() == 'O':
-            return queryset.filter(membership__isnull=True).distinct()
+            return queryset.filter(memberships__isnull=True).distinct()
 
 
 # Tout les utilisateurs de type HUMAIN
@@ -547,6 +599,7 @@ class HumanUserAdmin(ModelAdmin):
         "is_active",
         "email_error",
         MembershipValid,
+        "is_staff",
         # "is_hidden",
         # ("salary", RangeNumericFilter),
         # ("status", ChoicesDropdownFilter),
@@ -915,7 +968,6 @@ class ReservationAdmin(ModelAdmin):
     def options_str(self, instance: Reservation):
         return " - ".join([option.name for option in instance.options.all()])
 
-
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
@@ -949,7 +1001,8 @@ class TicketAddAdmin(ModelForm):
     options_checkbox = forms.ModelMultipleChoiceField(
         # Uniquement les options qui sont utilisé dans les évènements futurs
         required=False,
-        queryset=OptionGenerale.objects.filter(options_checkbox__datetime__gte=timezone.localtime() - timedelta(days=1)),
+        queryset=OptionGenerale.objects.filter(
+            options_checkbox__datetime__gte=timezone.localtime() - timedelta(days=1)),
         widget=UnfoldAdminCheckboxSelectMultiple(),
         label=_("Options multiples"),
     )
@@ -979,7 +1032,6 @@ class TicketAddAdmin(ModelForm):
     def clean(self):
         return super().clean()
 
-
     def save(self, commit=True):
         cleaned_data = self.cleaned_data
         ticket: Ticket = self.instance
@@ -991,7 +1043,6 @@ class TicketAddAdmin(ModelForm):
         # Création de l'objet reservation avec l'user
         email = self.cleaned_data.pop('email')
         user = get_or_create_user(email)
-
 
         # Création de l'objet reservation
         pricesold: PriceSold = cleaned_data.pop('pricesold')
@@ -1010,6 +1061,7 @@ class TicketAddAdmin(ModelForm):
         # Le post save BaseBillet.signals.create_lignearticle_if_membership_created_on_admin s'executera
         # # Création de la ligne Article vendu qui envera à la caisse si besoin
         return super().save(commit=commit)
+
 
 class TicketChangeAdmin(ModelForm):
     class Meta:
@@ -1055,7 +1107,7 @@ class TicketAdmin(ModelAdmin):
         'reservation__user_commande__email'
     )
 
-    #TODO: Checker un vrai bouton avec Unfold admin
+    # TODO: Checker un vrai bouton avec Unfold admin
     def state(self, obj):
         if obj.status == Ticket.NOT_SCANNED:
             return format_html(
@@ -1267,10 +1319,12 @@ class GhostConfigChangeform(ModelForm):
         model = GhostConfig
         fields = ['ghost_url', 'ghost_last_log']
 
+
 class GhostConfigAddform(ModelForm):
     class Meta:
         model = GhostConfig
-        fields = ['ghost_url','ghost_key', 'ghost_last_log']
+        fields = ['ghost_url', 'ghost_key', 'ghost_last_log']
+
 
 @admin.register(GhostConfig, site=staff_admin_site)
 class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
@@ -1289,12 +1343,12 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
     def get_form(self, request, obj=None, **kwargs):
         """ Si c'est un add, on modifie un peu le formulaire pour avoir un champs email """
         defaults = {}
-        if not obj.ghost_key :
+        if not obj.ghost_key:
             defaults['form'] = self.add_form
         defaults.update(kwargs)
         return super().get_form(request, obj, **defaults)
 
-    def save_model(self, request, obj:GhostConfig, form, change):
+    def save_model(self, request, obj: GhostConfig, form, change):
         if change:
             # headers = {'x-api-key': obj.api_key}
             # check_api = requests.get(f'{obj.api_host}/api/v1/me', headers=headers)
@@ -1318,6 +1372,7 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
     def has_delete_permission(self, request: HttpRequest, obj: Model | None = None) -> bool:
         return TenantAdminPermissionWithRequest(request)
 
+
 # Deux formulaires, un qui s'affiche si l'api est vide (ou supprimé)
 # L'autre qui n'affiche pas l'input.
 class FormbricksConfigChangeform(ModelForm):
@@ -1325,10 +1380,12 @@ class FormbricksConfigChangeform(ModelForm):
         model = FormbricksConfig
         fields = ['api_host']
 
+
 class FormbricksConfigAddform(ModelForm):
     class Meta:
         model = FormbricksConfig
-        fields = ['api_key','api_host']
+        fields = ['api_key', 'api_host']
+
 
 @admin.register(FormbricksConfig, site=staff_admin_site)
 class FormbricksConfigAdmin(SingletonModelAdmin, ModelAdmin):
@@ -1347,12 +1404,12 @@ class FormbricksConfigAdmin(SingletonModelAdmin, ModelAdmin):
     def get_form(self, request, obj=None, **kwargs):
         """ Si c'est un add, on modifie un peu le formulaire pour avoir un champs email """
         defaults = {}
-        if not obj.api_key :
+        if not obj.api_key:
             defaults['form'] = self.add_form
         defaults.update(kwargs)
         return super().get_form(request, obj, **defaults)
 
-    def save_model(self, request, obj:FormbricksConfig, form, change):
+    def save_model(self, request, obj: FormbricksConfig, form, change):
         if change:
             headers = {'x-api-key': obj.api_key}
             check_api = requests.get(f'{obj.api_host}/api/v1/me', headers=headers)
@@ -1365,14 +1422,13 @@ class FormbricksConfigAdmin(SingletonModelAdmin, ModelAdmin):
 
         super().save_model(request, obj, form, change)
 
-
     # Pour les boutons en haut de la vue changelist
     # chaque decorateur @action génère une nouvelle route
     actions_detail = ["test_api_formbricks", ]
 
     @action(description=_("Tester l'api"),
-        url_path="test_api_formbricks",
-        permissions=["custom_actions_detail"])
+            url_path="test_api_formbricks",
+            permissions=["custom_actions_detail"])
     def test_api_formbricks(self, request, object_id):
         fbc = FormbricksConfig.get_solo()
         api_host = fbc.api_host
@@ -1399,12 +1455,14 @@ class FormbricksConfigAdmin(SingletonModelAdmin, ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
+
 @admin.register(FormbricksForms, site=staff_admin_site)
 class FormbricksFormsAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 
-    list_display = ['product','environmentId']
+    list_display = ['product', 'environmentId']
+
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 

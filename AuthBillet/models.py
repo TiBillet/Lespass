@@ -174,7 +174,7 @@ class TibilletUser(AbstractUser):
 
     def memberships_valid(self):
         count = 0
-        for m in self.membership.all():
+        for m in self.memberships.all():
             if m.is_valid():
                 count += 1
         return count
