@@ -107,8 +107,8 @@ class TibilletUser(AbstractUser):
 
     username = models.CharField(max_length=200, unique=True)  # same as email bu defaut
     email = models.EmailField(unique=True)  # changes email to unique and blank to false
-    email_error = models.BooleanField(default=False)
-    email_valid = models.BooleanField(default=False)
+    email_error = models.BooleanField(default=False, help_text=_("L'email de confirmation a été distribué ?"))
+    email_valid = models.BooleanField(default=False, help_text=_("L'email de confirmation OK ?"))
 
     rsa_key = models.OneToOneField(RsaKey, on_delete=models.SET_NULL, null=True, related_name='user')
     wallet = models.OneToOneField(Wallet, on_delete=models.SET_NULL, null=True, related_name='user')
@@ -203,10 +203,10 @@ class TibilletUser(AbstractUser):
     ##### END user terminaux ####
 
     def achat(self):
-        return " ".join([achat["schema_name"] for achat in self.client_achat.values("schema_name")])
+        return " - ".join([achat["name"] for achat in self.client_achat.values("name")])
 
     def administre(self):
-        return " ".join([admin["schema_name"] for admin in self.client_admin.values("schema_name")])
+        return " - ".join([admin["name"] for admin in self.client_admin.values("name")])
 
     def as_password(self):
         return bool(self.password)

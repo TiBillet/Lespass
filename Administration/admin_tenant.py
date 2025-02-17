@@ -473,35 +473,9 @@ class is_tenant_admin(admin.SimpleListFilter):
     parameter_name = "is_admin"
 
     def lookups(self, request, model_admin):
-        """
-        Returns a list of tuples. The first element in each
-        tuple is the coded value for the option that will
-        appear in the URL query. The second element is the
-        human-readable name for the option that will appear
-        in the right sidebar.
-        """
-        return [
-            ("Y", _("Oui")),
-            ("N", _("Non")),
-        ]
+        return [("Y", _("Oui")), ("N", _("Non"))]
 
     def queryset(self, request, queryset):
-        """
-        Returns the filtered queryset based on the value
-        provided in the query string and retrievable via
-        `self.value()`.
-        """
-        # Compare the requested value (either '80s' or '90s')
-        # to decide how to filter the queryset.
-        tenant = connection.tenant
-
-        # return all([
-        #     connection.tenant in request.user.client_admin.all(),
-        #     request.user.is_staff,
-        #     request.user.is_active,
-        #     request.user.espece == TibilletUser.TYPE_HUM
-        # ])
-
         if self.value() == "Y":
             return queryset.filter(
                 client_admin__in=[connection.tenant],
@@ -589,22 +563,58 @@ class HumanUserAdmin(ModelAdmin):
         ('Général', {
             'fields': [
                 'email',
-                'first_name',
-                'last_name',
+                ('first_name', 'last_name'),
+                "is_active",
+                ("email_valid", "email_error"),
+                "administre",
             ],
         }),
     ]
+    readonly_fields = ["email", "email_valid", "email_error", "administre", "achat", "client_source"]
 
     list_filter = [
         "is_active",
         "email_error",
         MembershipValid,
         "is_staff",
+        "email_valid",
+        "email_error",
         # "is_hidden",
         # ("salary", RangeNumericFilter),
         # ("status", ChoicesDropdownFilter),
         # ("created_at", RangeDateTimeFilter),
     ]
+
+    # Pour les bouton en haut de la vue change
+    # chaque decorateur @action génère une nouvelle route
+    actions_detail = ["set_admin", "remove_admin"]
+
+    @action(
+        description=_("Donner les droits d'admin"),
+        url_path="set_admin",
+        permissions=["custom_actions_detail"],
+    )
+    def set_admin(self, request, object_id):
+        user = HumanUser.objects.get(pk=object_id)
+        if all([user.email_valid, user.is_active]) and not user.email_error:
+            user.set_staff(connection.tenant)
+            messages.success(request,
+                             _(f"Un grand pouvoir implique de grandes responsabilités. {user.email} a été promu·e."))
+        else:
+            messages.error(request, _(f"Ne remplis pas les conditions : {user.email} doit avoir validé son email."))
+
+        return redirect(request.META["HTTP_REFERER"])
+
+    @action(
+        description=_("Retirer les droits d'admin"),
+        url_path="remove_admin",
+        permissions=["custom_actions_detail"],
+    )
+    def remove_admin(self, request, object_id):
+        user = HumanUser.objects.get(pk=object_id)
+        user.client_admin.remove(connection.tenant)
+        messages.success(request, _(f"{user.email} a été déchu·e de ses fonctions."))
+        return redirect(request.META["HTTP_REFERER"])
 
     # noinspection PyTypeChecker
     @display(description=_("Adhésions"), label={None: "danger", True: "success"})
@@ -618,6 +628,9 @@ class HumanUserAdmin(ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
     def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_custom_actions_detail_permission(self, request, object_id):
         return TenantAdminPermissionWithRequest(request)
 
 
