@@ -9,7 +9,7 @@ from django.db import models, connection
 from django.contrib import admin
 from django.contrib import messages
 from django.db.models import Model
-from django.forms import ModelForm, TextInput, Form
+from django.forms import ModelForm, TextInput, Form, modelformset_factory
 from django.http import HttpResponse, HttpRequest, HttpResponseRedirect
 from django.shortcuts import redirect
 from django.urls import reverse, re_path
@@ -30,7 +30,7 @@ from AuthBillet.models import HumanUser, TibilletUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
-    FormbricksConfig, FormbricksForms
+    FormbricksConfig, FormbricksForms, FederatedPlace
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
     webhook_membership
 from Customers.models import Client
@@ -44,8 +44,6 @@ class StaffAdminSite(UnfoldAdminSite):
 
 
 staff_admin_site = StaffAdminSite(name='staff_admin')
-
-""" Configuration UNFOLD """
 
 
 @admin.register(ExternalApiKey, site=staff_admin_site)
@@ -196,11 +194,11 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 # 'stripe_mode_test',
             ),
         }),
-        ('Fédération', {
-            'fields': (
-                'federated_with',
-            ),
-        }),
+        # ('Fédération', {
+        #     'fields': (
+        #         'federated_with',
+        #     ),
+        # }),
         # ('Options générales', {
         #     'fields': (
         #         'need_name',
@@ -1202,105 +1200,6 @@ class TicketAdmin(ModelAdmin):
     #     return future_events
 
 
-"""
-
-
-
-
-# class QuantitiesSoldAdmin(admin.ModelAdmin):
-#     list_display = (
-#         'price',
-#         'event',
-#         'qty',
-#     )
-# staff_admin_site.register(QuantitiesSold, QuantitiesSoldAdmin)
-
-
-
-
-class EventFilter(SimpleListFilter):
-    title = _('Évènement')
-    parameter_name = 'reservation__event__name'
-
-    def lookups(self, request, model_admin):
-        events = Event.objects.filter(
-            datetime__gt=(datetime.datetime.now() - datetime.timedelta(days=2)).date(),
-        )
-
-        tuples_list = []
-        for event in events:
-            if event.reservation.count() > 0:
-                t = (event.uuid, event.name.capitalize())
-                tuples_list.append(t)
-        return tuples_list
-
-    def queryset(self, request, queryset):
-        if not self.value():
-            return queryset
-        else:
-            return queryset.filter(reservation__event__uuid=self.value())
-
-
-def valider_ticket(modeladmin, request, queryset):
-    queryset.update(status=Ticket.SCANNED)
-
-
-valider_ticket.short_description = "Valider le/les tickets"
-
-
-
-
-
-# class ProductSoldAdmin(admin.ModelAdmin):
-#     list_display = (
-#         'product',
-#         'event',
-#         'img',
-#         'id_product_stripe',
-#     )
-#
-#
-# staff_admin_site.register(ProductSold, ProductSoldAdmin)
-#
-#
-# class PricesSoldAdmin(admin.ModelAdmin):
-#     list_display = (
-#         'productsold',
-#         'price',
-#         'qty_solded',
-#         'id_price_stripe',
-#     )
-#
-#
-# staff_admin_site.register(PriceSold, PricesSoldAdmin)
-
-
-
-staff_admin_site.register(Paiement_stripe, PaiementStripeAdmin)
-
-
-# class LigneArticleAdmin(admin.ModelAdmin):
-#     list_display = (
-#         'datetime',
-#         'pricesold',
-#         'qty',
-#         'carte',
-#         'status',
-#         'paiement_stripe',
-#         'status_stripe'
-#     )
-#     ordering = ('-datetime',)
-#
-#
-# staff_admin_site.register(LigneArticle, LigneArticleAdmin)
-
-
-def send_invoice(modeladmin, request, queryset):
-    pass
-
-def send_to_ghost(modeladmin, request, queryset):
-    pass
-"""
 
 
 @admin.register(Client, site=staff_admin_site)
@@ -1325,12 +1224,41 @@ class TenantAdmin(ModelAdmin):
 
 ### Connect
 
+@admin.register(FederatedPlace, site=staff_admin_site)
+class FederatedPlaceAdmin(ModelAdmin):
+    list_display = ["tenant", "str_tag_filter", "str_tag_exclude",]
+    fields = ["tenant", "tag_filter", "tag_exclude",]
+    autocomplete_fields = ["tenant", "tag_filter", "tag_exclude",]
+
+    @display(description=_("Tags filtrés"))
+    def str_tag_filter(self, instance: FederatedPlace):
+        return ", ".join([tag.name for tag in instance.tag_filter.all()])
+
+    @display(description=_("Tags exclus"))
+    def str_tag_exclude(self, instance: FederatedPlace):
+        return ", ".join([tag.name for tag in instance.tag_exclude.all()])
+
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+
 # Deux formulaires, un qui s'affiche si l'api est vide (ou supprimé)
 # L'autre qui n'affiche pas l'input.
 class GhostConfigChangeform(ModelForm):
     class Meta:
         model = GhostConfig
         fields = ['ghost_url', 'ghost_last_log']
+
 
 
 class GhostConfigAddform(ModelForm):

@@ -42,7 +42,7 @@ from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, Product, Event, Paiement_stripe, Membership, Reservation, \
-    FormbricksConfig, FormbricksForms
+    FormbricksConfig, FormbricksForms, FederatedPlace
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, new_tenant_mailer
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
     ReservationValidator
@@ -57,8 +57,6 @@ logger = logging.getLogger(__name__)
 
 class SmallAnonRateThrottle(UserRateThrottle):
     scope = 'smallanon'
-
-
 
 
 def encode_uid(pk):
@@ -107,7 +105,6 @@ def get_context(request):
     return context
 
 
-
 # S'execute juste après un retour Webhook ou redirection une fois le paiement stripe effectué.
 # ex : BaseBillet.views.EventMVT.stripe_return
 def paiement_stripe_reservation_validator(request, paiement_stripe):
@@ -129,7 +126,8 @@ def paiement_stripe_reservation_validator(request, paiement_stripe):
     # Déja traité et validé.
     if (paiement_stripe.status == Paiement_stripe.VALID or
             reservation.status == Reservation.VALID):
-        messages.success(request, _('Paiement validé. Billets envoyés par mail. Vous pouvez aussi retrouver vos billets dans votre espace "mon compte"'))
+        messages.success(request,
+                         _('Paiement validé. Billets envoyés par mail. Vous pouvez aussi retrouver vos billets dans votre espace "mon compte"'))
         return paiement_stripe
 
     #### END PRE CHECK
@@ -146,7 +144,8 @@ def paiement_stripe_reservation_validator(request, paiement_stripe):
         )
 
         if not invoice.status == 'paid':
-            logger.info(f"paiement_stripe.source == Paiement_stripe.INVOICE -> stripe invoice : {invoice.status} - paiement : {paiement_stripe.status}")
+            logger.info(
+                f"paiement_stripe.source == Paiement_stripe.INVOICE -> stripe invoice : {invoice.status} - paiement : {paiement_stripe.status}")
             messages.error(request, _(f'stripe invoice : {invoice.status} - paiement : {paiement_stripe.status}'))
             return False
 
@@ -172,10 +171,12 @@ def paiement_stripe_reservation_validator(request, paiement_stripe):
             f"{timezone.now()} - paiment_stripe_reservation_validator - paiement_stripe.save() {paiement_stripe.status}")
         logger.info("*" * 30)
 
-        messages.success(request, _('Paiement validé. Billets envoyés par mail. Vous pouvez aussi retrouver vos billets dans votre espace "mon compte"'))
+        messages.success(request,
+                         _('Paiement validé. Billets envoyés par mail. Vous pouvez aussi retrouver vos billets dans votre espace "mon compte"'))
         return paiement_stripe
 
     raise Exception('paiment_stripe_reservation_validator : aucune condition remplies ?')
+
 
 class Ticket_html_view(APIView):
     permission_classes = [AllowAny]
@@ -239,7 +240,7 @@ def connexion(request):
             user = get_or_create_user(email=email, send_mail=True, force_mail=True)
 
             messages.add_message(request, messages.SUCCESS, _("To access your space, please validate\n"
-                                        "your email address. Don't forget to check your spam!"))
+                                                              "your email address. Don't forget to check your spam!"))
             return HttpResponseClientRedirect(request.headers['Referer'])
 
         logger.error(validator.errors)
@@ -710,22 +711,40 @@ class EventMVT(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
     def get_federated_events(self, tags=None, search=None, page=1):
-        config = Configuration.get_solo()
         dated_events = {}
         paginated_info = {
             'page': page,
             'has_next': False,
             'has_previous': False,
         }
+
+        # Création d'un dictionnaire pour mélanger les objets FederatedPlace et la place actuelle.
+        tenants = [
+            {
+                "tenant":place.tenant,
+                "tag_filter":[tag.slug for tag in place.tag_exclude.all()],
+                "tag_exclude":[tag.slug for tag in place.tag_filter.all()],
+            }
+            for place in FederatedPlace.objects.all().prefetch_related("tag_filter","tag_exclude")
+        ]
+        tenants.append(
+            {
+                "tenant": connection.tenant,
+                "tag_filter": [],
+                "tag_exclude": [],
+            }
+        )
         # Récupération de tous les évènements de la fédération
-        tenants = [tenant for tenant in config.federated_with.all()]
-        tenants.append(connection.tenant)
-        for tenant in set(tenants):
-            with tenant_context(tenant):
+        for tenant in tenants:
+            with tenant_context(tenant['tenant']):
                 events = Event.objects.prefetch_related('tag', 'postal_address').filter(
                     published=True,
                     datetime__gte=timezone.localtime() - timedelta(days=1),
-                )  # On prend les évènement d'aujourd'hui
+                ).exclude(tag__slug__in=tenant['tag_filter'])  # On prend les évènement d'aujourd'hui
+
+                if len(tenant['tag_exclude']) > 0:
+                    events = events.filter(
+                        tag__slug__in=tenant['tag_exclude'])
                 if tags:
                     # Annotate et filter Pour avoir les events qui ont TOUS les tags
                     events = events.filter(
@@ -741,8 +760,8 @@ class EventMVT(viewsets.ViewSet):
                         Q(tag__name__icontains=search),
                     )
 
-                # Mécanisme de pagination : 10 évènements max par lieux ? A définir dans la config' ?
-                paginator = Paginator(events.order_by('datetime'), 3)
+                # Mécanisme de pagination : 10 évènements max par lieux ? À définir dans la config' ?
+                paginator = Paginator(events.order_by('datetime'), 50)
                 paginated_events = paginator.get_page(page)
                 paginated_info['page'] = page
                 paginated_info['has_next'] = paginated_events.has_next()
@@ -813,9 +832,6 @@ class EventMVT(viewsets.ViewSet):
         template_context['event_in_this_tenant'] = event_in_this_tenant
         return render(request, "reunion/views/event/retrieve.html", context=template_context)
 
-    # def create(self, request):
-    #     pass
-
     @action(detail=True, methods=['POST'])
     def reservation(self, request, pk):
         # Vérification que l'évent existe bien sur ce tenant.
@@ -830,14 +846,13 @@ class EventMVT(viewsets.ViewSet):
             return HttpResponseClientRedirect(request.headers['Referer'])
 
         # SI on a un besoin de paiement, on redirige vers :
-        if validator.checkout_link :
+        if validator.checkout_link:
             logger.info("validator reservation OK, get checkout link -> redirect")
             return HttpResponseClientRedirect(validator.checkout_link)
 
         return render(request, "reunion/views/event/reservation_ok.html", context={
             "user": request.user,
         })
-
 
     @action(detail=True, methods=['GET'])
     def stripe_return(self, request, pk, *args, **kwargs):
@@ -927,7 +942,7 @@ class Badge(viewsets.ViewSet):
         user = request.user
         fedowAPI = FedowAPI()
         transaction = fedowAPI.badge.badge_in(user, product)
-        
+
         messages.add_message(request, messages.SUCCESS, _(f"Arrivée enregistrée !"))
 
         return render(request, "reunion/partials/account/badge_switch.html", context={})
@@ -1110,7 +1125,7 @@ class Tenant(viewsets.ViewSet):
 
         return render(request, "reunion/views/tenant/new_tenant.html", context=context)
 
-    @action(detail=False, methods=['POST'],throttle_classes=[SmallAnonRateThrottle])
+    @action(detail=False, methods=['POST'], throttle_classes=[SmallAnonRateThrottle])
     def create_tenant(self, request: Request, *args, **kwargs):
         new_tenant = TenantCreateValidator(data=request.data, context={'request': request})
         logger.info(new_tenant.initial_data)
@@ -1133,7 +1148,7 @@ class Tenant(viewsets.ViewSet):
         new_tenant_mailer.delay(email=validated_data['email'], waiting_config_uuid=str(waiting_configuration.uuid))
         return render(request, "reunion/views/tenant/thanks.html", context={})
 
-    @action(detail=True, methods=['GET'],throttle_classes=[SmallAnonRateThrottle])
+    @action(detail=True, methods=['GET'], throttle_classes=[SmallAnonRateThrottle])
     def onboard_stripe(self, request, pk):
         """
         Requete provenant du mail envoyé lors d'un nouveau tenant
@@ -1146,7 +1161,6 @@ class Tenant(viewsets.ViewSet):
         stripe.api_key = rootConf.get_stripe_api()
 
         if not waiting_config.id_acc_connect:
-
             acc_connect = stripe.Account.create(
                 type="standard",
                 country="FR",
@@ -1154,7 +1168,6 @@ class Tenant(viewsets.ViewSet):
             id_acc_connect = acc_connect.get('id')
             waiting_config.id_acc_connect = id_acc_connect
             waiting_config.save()
-
 
         account_link = stripe.AccountLink.create(
             account=waiting_config.id_acc_connect,
@@ -1165,7 +1178,6 @@ class Tenant(viewsets.ViewSet):
 
         url_onboard = account_link.get('url')
         return redirect(url_onboard)
-
 
     @action(detail=True, methods=['GET'])
     def onboard_stripe_return(self, request, pk):
