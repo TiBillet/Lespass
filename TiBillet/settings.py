@@ -423,7 +423,7 @@ UNFOLD = {
             "models": ["AuthBillet.humanuser", "BaseBillet.membership"],
             "items": [
                 {
-                    "title": _("Tous.tes"),
+                    "title": _("Tous·tes"),
                     # "icon": "sports_motorsports",
                     "link": reverse_lazy("staff_admin:AuthBillet_humanuser_changelist"),
                 },
@@ -434,7 +434,7 @@ UNFOLD = {
                         request: f'{reverse_lazy("staff_admin:AuthBillet_humanuser_changelist")}?membership_valid=Y',
                 },
                 {
-                    "title": _("Utilisateur.ices sans adhésions"),
+                    "title": _("Utilisateur·ices sans adhésions"),
                     # "icon": "sports_motorsports",
                     "link": lambda
                         request: f'{reverse_lazy("staff_admin:AuthBillet_humanuser_changelist")}?membership_valid=O',
@@ -488,12 +488,12 @@ UNFOLD = {
                 ],
             },
             {
-                "title": _("Utilisateur.ices"),
+                "title": _("Utilisateur·ices"),
                 "separator": True,  # Top border
                 "collapsible": False,  # Collapsible group of links
                 "items": [
                     {
-                        "title": _("Comptes utilisateur.ices"),
+                        "title": _("Comptes utilisateur·ices"),
                         "icon": "person_add",  # Supported icon set: https://fonts.google.com/icons
                         "link": reverse_lazy("staff_admin:AuthBillet_humanuser_changelist"),
                         # "badge": "Administration.admin_tenant.badge_callback",
