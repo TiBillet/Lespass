@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load i18n tibitags %}
 <form id="reservation_form" hx-post="reservation/">
     <input type="hidden" name="event" value="{{ event.uuid }}">
 
@@ -29,11 +29,31 @@
                     <div class="mb-3">
                         <label for="booking-regular" class="form-label">
                             {{ price.name }}{% if price.prix > 0 %} : {{ price.prix }}€{% endif %}</label>
-                        <input type="number" step="1" min="0" max="{{ event.max_per_user }}" class="form-control"
-                               id="price-{{ price.uuid }}"
-                               value="1" {# todo: a virer en prod, pour dev #}
-                               name="{{ price.uuid }}">
+
+                        <!-- Adhésion obligatoire pour selectionner ce produit ! -->
+                        {% if price.adhesion_obligatoire %}
+                            {% if not user.is_authenticated %}
+                                {% trans "Connectez vous pour afficher ce produit." %}
+
+                            {% elif not user|is_membership:price.adhesion_obligatoire %}
+                                {% trans "Adhérez pour profiter de ce tarif." %}
+                            {% else %}
+                                <input type="number" step="1" min="0" max="{{ event.max_per_user }}"
+                                       class="form-control"
+                                       id="price-{{ price.uuid }}"
+                                       value="1" {# todo: a virer en prod, pour dev #}
+                                       name="{{ price.uuid }}">
+                            {% endif %}
+
+                        <!-- Adhésion non obligatoire -->
+                        {% else %}
+                            <input type="number" step="1" min="0" max="{{ event.max_per_user }}" class="form-control"
+                                   id="price-{{ price.uuid }}"
+                                   value="1" {# todo: a virer en prod, pour dev #}
+                                   name="{{ price.uuid }}">
+                        {% endif %}
                     </div>
+
                 {% endif %}
             {% endfor %}
         {% endif %}

@@ -66,6 +66,7 @@
                 <!-- prix -->
                 {% for price in product.prices.all %}
                     {% if price.adhesion_obligatoire != None %}
+                        
                         {% if user.is_authenticated == False %}
                             <!-- non connecté -->
                             <div class="d-flex mb-3 flex-column" role="group"

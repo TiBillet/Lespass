@@ -364,6 +364,5 @@ class Command(BaseCommand):
                 event_payant_nominatif_tarif_asso.products.add(billet)
                 event_payant_nominatif_tarif_asso.tag.add(world)
 
-
                 # TODO: Gratuit mais avec recharge cashless obligatoire
                 # TODO: Multi artiste

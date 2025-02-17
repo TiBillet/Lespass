@@ -1,7 +1,10 @@
 from datetime import datetime
+from itertools import product
 from random import randint
 
 from django import template
+
+from Administration.management.commands.demo_data import logger
 from fedow_connect.utils import dround as utils_dround
 
 register = template.Library()
@@ -38,20 +41,21 @@ def not_in_list(value, list):
     retour = value not in list.split(',')
     return retour
 
-# TODO: fonctionnel, juste vérifier/simplifier le code si-dessous
+
 @register.filter
-def is_membership(membership, product_name) -> bool:
-    retour = False
-    if len(membership) == 0:
-        return False
-    # une list
-    for adhesion in membership:
-        # un dictionnaire ordonné
-        for key, value in adhesion.items():
-            if key == 'product_name' and value == str(product_name):
-                retour = True
-                break
-    return retour
+def is_membership(user, membership_product) -> bool:
+    # Recherche d'une adhésion valide chez l'utilisateur
+    for membership in user.memberships.filter(
+        price__product=membership_product,
+        last_contribution__isnull=False,
+    ):
+        if membership.is_valid():
+            logger.info("Membership is valid !")
+            return True
+
+    return False
+
+
 
 @register.filter
 def first_eight(value):

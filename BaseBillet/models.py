@@ -1557,7 +1557,7 @@ class Membership(models.Model):
     # TODO: Passer en primary key lors de la migration V1
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
-                             related_name='membership', blank=True, null=True)
+                             related_name='memberships', blank=True, null=True)
     price = models.ForeignKey(Price, on_delete=models.PROTECT, related_name='membership',
                               verbose_name=_('Produit/Prix'),
                               null=True, blank=True)
@@ -1566,8 +1566,10 @@ class Membership(models.Model):
     card_number = models.CharField(max_length=16, null=True, blank=True)
 
     date_added = models.DateTimeField(auto_now_add=True)
-    first_contribution = models.DateTimeField(null=True, blank=True)
     last_contribution = models.DateTimeField(null=True, blank=True, verbose_name=_("Date"))
+
+    first_contribution = models.DateTimeField(null=True, blank=True) # encore utilisé ? On utilise last plutot ?
+
     last_action = models.DateTimeField(auto_now=True, verbose_name=_("Présence"))
     contribution_value = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True,
                                              verbose_name=_("Contribution"))

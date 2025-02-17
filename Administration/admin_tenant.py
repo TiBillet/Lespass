@@ -1043,7 +1043,7 @@ class TicketAdmin(ModelAdmin):
     # actions = [valider_ticket, ]
     ordering = ('-reservation__datetime',)
     # list_filter = [EventFilter, ]
-    # list_filter = (
+    # list_filter = (F
     #     EventFilter,
     # 'reservation__uuid'
     # )
