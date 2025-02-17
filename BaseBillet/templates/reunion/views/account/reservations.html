@@ -10,7 +10,7 @@
 <div class="card my-5">
     <div class="row g-0">
         <div class="col-md-4">
-            <img src="{{ resa.event.img|randImg }}" class="object-fit-cover w-100 h-100 rounded-start" alt="{{ resa.event.name }}">
+            {% include 'reunion/partials/picture.html' with img=resa.event.img alt=resa.event.name class='rounded-start' %}
         </div>
         <div class="col-md-8">
             <div class="card-body">

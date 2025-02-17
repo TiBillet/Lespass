@@ -6,11 +6,8 @@
 {% block main %}
 <main class="container-lg pb-5">
     <header class="mb-3">
-      <img style="background-color: var(--kouler-sousou); max-height: 33vh;"
-        src="{{ event.img|randImg }}"
-        class="d-block w-100 mb-3 object-fit-cover"
-        alt="{{ event.name }}">
-      <h1>
+      {% include 'reunion/partials/picture.html' with img=event.img alt=event.name style='max-height: 33vh' %}
+      <h1 class="mt-3">
         <small>
             {{ event.datetime|date:'l j F'|capfirst }} <br />
             {{ event.datetime|time:'H\hi' }} <br />

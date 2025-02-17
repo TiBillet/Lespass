@@ -1,0 +1,19 @@
+{% load tibitags %}
+
+{# img: StdImageField #}
+{# alt: string #}
+{# class: string|null #}
+{# style: string|null #}
+{# ratio: string|null #}
+<picture class="d-block h-100{% if ratio %} ratio ratio-{{ ratio }}{% endif %}">
+    <source srcset="{{ img.fhd.url }}" media="(min-width: 1920px), (min-height: 1920px)" />
+    <source srcset="{{ img.hdr.url }}" media="(min-width: 1280px), (min-height: 1280px)" />
+    <source srcset="{{ img.crop_hdr.url }}" media="(min-width: 960px), (min-height: 540px)" />
+    <source srcset="{{ img.med.url }}" media="(min-width: 480px), (min-height: 480px)" />
+    <source srcset="{{ img.crop.url }}" media="(min-width: 480px), (min-height: 270px)" />
+    <img
+        class="object-fit-cover w-100 h-100{% if class %} {{ class }}{% endif %}"
+        {% if style %}style="{{ style }}"{% endif %}
+        src="{{ img.thumbnail.url|randImg }}" alt="{{ alt }}"
+    />
+</picture>
