@@ -1,5 +1,5 @@
 {% load i18n %}
-<form hx-post="/memberships/" hx-indicator="#tibillet-spinner" hx-target="#target_formbricks">
+<form id="membership-form" hx-post="/memberships/" hx-target="#target_formbricks">
     <div id="target_formbricks"></div>
     <input type="hidden" name="product" value="{{ product.uuid }}">
 
