@@ -416,7 +416,14 @@ LOGGING = {
 
 UNFOLD = {
     "SITE_TITLE": "TiBillet",
-    "SITE_HEADER": "TiBillet Admin",
+    "SITE_HEADER": "TiBillet Lespass Admin",
+    "SITE_DROPDOWN": [
+        {
+            "icon": "diamond",
+            "title": _("My site"),
+            "link": "https://example.com",
+        },
+    ],
     "TABS": [
         {
             # Déclare dans quel affichage les tabs s'activent
@@ -594,6 +601,13 @@ UNFOLD = {
                 "separator": True,  # Top border
                 "collapsible": False,  # Collapsible group of links
                 "items": [
+                    {
+                        "title": _("Fédération"),
+                        "icon": "linked_services",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_federatedplace_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+                    },
                     {
                         "title": _("API Key"),
                         "icon": "api",  # Supported icon set: https://fonts.google.com/icons

@@ -1811,6 +1811,19 @@ class Webhook(models.Model):
     last_response = models.TextField(null=True, blank=True)
 
 
+class FederatedPlace(models.Model):
+    tenant = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="Place")
+    tag_filter = models.ManyToManyField(Tag, blank=True, related_name="filtred", verbose_name=_("Filtre de tags"), help_text=_("Si selectionnés, filtre uniquement ces tags"))
+    tag_exclude = models.ManyToManyField(Tag, blank=True, related_name="excluded", verbose_name=_("Tags exclus"), help_text=_("Ces tags sont exclus"))
+
+    class Meta:
+        verbose_name = _('Espace fédéré')
+        verbose_name_plural = _('Espaces fédérés')
+
+    def __str__(self):
+        return self.tenant.name
+
+
 class History(models.Model):
     """
     Track change on user profile, event or membership
@@ -1870,3 +1883,5 @@ class FormbricksConfig(SingletonModel):
         self.api_key = fernet_encrypt(string)
         self.save()
         return True
+
+
