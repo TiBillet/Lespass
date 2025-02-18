@@ -891,11 +891,10 @@ class LigneArticleAdmin(ModelAdmin):
 class EventChildrenInline(TabularInline):
     model = Event
     fk_name = 'parent'
-    verbose_name = _("Action")
+    verbose_name = _("Action") # Pour l'instant, les enfants sont forcément des Actions.
     hide_title = True
     fields = (
         'name',
-        # 'categorie',
         'datetime',
         'jauge_max',
         'valid_tickets_count',

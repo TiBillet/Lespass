@@ -6,63 +6,63 @@
 
 {% block account_page %}
 
-<section class="card border-top-0 rounded-top-0">
-    <div class="card-body">
-        <h1 class="card-title d-md-none">Tirelire</h1>
-        <p class="lead">
-            Ici je retrouve mon solde TiBillet et mes heures déclarées.
-            Certaines monnaies ou monnaie-temps peuvent n'être utilisables
-            qu'ailleurs.
-        </p>
-    </div>
-
-     <!-- refund panel -->
-     <div class="offcanvas-start offcanvas" tabindex="-1" id="refundPanel" aria-labelledby="refundPanelLabel">
-        <div class="offcanvas-header">
-            <h5 class="offcanvas-title" id="refundPanelLabel">Demander le remboursement</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    <section class="card border-top-0 rounded-top-0">
+        <div class="card-body">
+            <h1 class="card-title d-md-none">Tirelire</h1>
+            <p class="lead">
+                Ici je retrouve mon solde TiBillet et mes heures déclarées.
+                Certaines monnaies ou monnaie-temps peuvent n'être utilisables
+                qu'ailleurs.
+            </p>
         </div>
-        <div class="offcanvas-body">
-            <div class="alert  alert-primary" role="alert">
-                <h4>Pas de  panique ! Vous avez le temps…</h4>
-                <p>
-                    TiBillet fonctionne sur un principe de
-                    "<a href="https://tibillet.org/fr/docs/presentation/philosophie/">monnaie fondante</a>".
-                    Vous avez 14 mois après votre dernière utilisation du Pass pour récupérer le reste de
-                    crédits non utilisés. On vous renverra un mail un mois avant si
-                    vous avez oublié.
-                </p>
-                <p>
-                    Vous pouvez aussi en faire don au collectif
-                    qui vous a fourni la carte.
-                </p>
-                <p>
-                    Le Pass et votre compte, eux, sont
-                    valables à vie !
-                </p>
-            </div>
 
-            <div class="position-absolute bottom-0 start-0 end-0 p-3">
-                <p class="lead">
-                    {# TODO: montant remboursement #}
-                    Confirmer la demande de remboursement de 23 euros ?
-                </p>
-                
-                <a href="/my_account/refund_online/" class="btn btn-primary d-block mb-3">Confirmer</a>
-                {# TODO: lien don #}
-                <a href="." class="btn btn-secondary d-block mb-3">
-                    Faire don de ma tirelire à {{ config.organisation }}
-                </a>
-                <a href="." class="btn btn-danger d-block">Annuler</a>
+        <!-- refund panel -->
+        <div class="offcanvas-start offcanvas" tabindex="-1" id="refundPanel" aria-labelledby="refundPanelLabel">
+            <div class="offcanvas-header">
+                <h5 class="offcanvas-title" id="refundPanelLabel">Demander le remboursement</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+            </div>
+            <div class="offcanvas-body">
+                <div class="alert  alert-primary" role="alert">
+                    <h4>Pas de panique ! Vous avez le temps…</h4>
+                    <p>
+                        TiBillet fonctionne sur un principe de
+                        "<a href="https://tibillet.org/fr/docs/presentation/philosophie/">monnaie fondante</a>".
+                        Vous avez 14 mois après votre dernière utilisation du Pass pour récupérer le reste de
+                        crédits non utilisés. On vous renverra un mail un mois avant si
+                        vous avez oublié.
+                    </p>
+                    <p>
+                        Vous pouvez aussi en faire don au collectif
+                        qui vous a fourni la carte.
+                    </p>
+                    <p>
+                        Le Pass et votre compte, eux, sont
+                        valables à vie !
+                    </p>
+                </div>
+
+                <div class="position-absolute bottom-0 start-0 end-0 p-3">
+                    <p class="lead">
+                        {# TODO: montant remboursement #}
+                        Confirmer la demande de remboursement de 23 euros ?
+                    </p>
+
+                    <a href="/my_account/refund_online/" class="btn btn-primary d-block mb-3">Confirmer</a>
+                    {# TODO: lien don #}
+                    <a href="." class="btn btn-secondary d-block mb-3">
+                        Faire don de ma tirelire à {{ config.organisation }}
+                    </a>
+                    <a href="." class="btn btn-danger d-block">Annuler</a>
+                </div>
             </div>
         </div>
-    </div>
 
-    <div class="row g-0">
-        <div class="col-md bg-body-tertiary p-3">
-            <h3>Monnaies</h3>
+        <div class="row g-0">
+            <div class="col-md bg-body-tertiary p-3">
+                <h3>Monnaies</h3>
 
-            {% comment %} HIDE: total cumulé des sous utilisables dans le lieu, total global
+                {% comment %} HIDE: total cumulé des sous utilisables dans le lieu, total global
             <p class="lead">
                 {# TODO: total utilisable avec l'orga et total toutes instances #}
                 <strong>40,25</strong> tibillets utilisables avec
@@ -71,29 +71,27 @@
             </p>
             {% endcomment %}
 
-            <a href="#" hx-get="/my_account/refill_wallet" class="btn btn-primary d-block mb-3">
-                Recharger ma tirelire
-            </a>
-            <a href="#detail-monnaies" class="btn btn-secondary d-block mb-3 d-md-none">
-                Détail des monnaies
-            </a>
+                <a href="#" hx-get="/my_account/refill_wallet" hx-indicator="#tibillet-spinner"
+                   class="btn btn-primary d-block mb-3">
+                    {% trans "Recharger ma tirelire" %}
+                </a>
+                <a href="#detail-monnaies" class="btn btn-secondary d-block mb-3 d-md-none">
+                    {% trans "Détail des monnaies" %}
+                </a>
 
-            <button
-                class="btn btn-secondary w-100 mb-3"
-                type="button"
-                id="button-filters"
-                data-bs-toggle="offcanvas"
-                data-bs-target="#refundPanel"
-                aria-controls="refundPanel">
-                {# TODO: temps restant pour rembourser #}
-                Demander le remboursement (3 mois restants)
-            </button>
-            <p class="opacity-50 m-0">Seuls les tibillets sont remboursables en
-                ligne. Pour les monnaies locales, demandez directement à une
-                caisse de votre réseau local.</p>
-        </div>
+                <button class="btn btn-secondary w-100 mb-3"
+                        type="button"
+                        id="button-filters"
+                        data-bs-toggle="offcanvas"
+                        data-bs-target="#refundPanel"
+                        aria-controls="refundPanel">
+                    {# TODO: temps restant pour rembourser #}
+                    {% trans "Demander le remboursement (3 mois restants)" %}
+                </button>
+                <p class="opacity-50 m-0">{% trans "Seuls les TiBillets sont remboursables en ligne. Pour les monnaies locales, demandez directement sur place. " %}</p>
+            </div>
 
-        {% comment %} HIDE: monnaie-temps
+            {% comment %} HIDE: monnaie-temps
         <div class="col-md bg-body-tertiary p-3">
             <h3>Temps</h3>
             <p class="lead">
@@ -109,24 +107,24 @@
             </a>
         </div>
         {% endcomment %}
-    </div>
-</section>    
+        </div>
+    </section>
 
-<div class="row">
-    <div class="col-md">
-        <h2 class="pt-3" id="detail-monnaies">Détail des monnaies</h2>
-        
-        <div hx-get="/my_account/tokens_table/" hx-trigger="revealed" class="mt-4">
-            <span>{% translate "Loading tokens" %}</span>
-            <div class="d-flex justify-content-center align-items-center ">
-                <div class="spinner-border text-info"
-                     role="status"
-                ></div>
+    <div class="row">
+        <div class="col-md">
+            <h2 class="pt-3" id="detail-monnaies">Détail des monnaies</h2>
+
+            <div hx-get="/my_account/tokens_table/" hx-trigger="revealed" class="mt-4">
+                <span>{% translate "Loading tokens" %}</span>
+                <div class="d-flex justify-content-center align-items-center ">
+                    <div class="spinner-border text-info"
+                         role="status"
+                    ></div>
+                </div>
             </div>
         </div>
-    </div>
 
-    {% comment %} HIDE: monnaie temps
+        {% comment %} HIDE: monnaie temps
     <div class="col-md">
         <h2 class="pt-3" id="detail-heures">Détail du temps</h2>
         <table class="table">
@@ -158,17 +156,17 @@
         </table>
     </div>
     {% endcomment %}
-</div>
+    </div>
 
-<section id="transactionHistory">
-    <p class="py-3 text-center">
-        <a href="#" class="btn btn-outline-primary d-block d-sm-inline"
-            hx-get="/my_account/transactions_table/"
-            hx-target="#transactionHistory"
-            hx-swap="outerHTML">
-            Historique des transactions
-        </a>
-    </p>
-</section>
+    <section id="transactionHistory">
+        <p class="py-3 text-center">
+            <a href="#" class="btn btn-outline-primary d-block d-sm-inline"
+               hx-get="/my_account/transactions_table/"
+               hx-target="#transactionHistory"
+               hx-swap="outerHTML">
+                {% trans "Historique des transactions" %}
+            </a>
+        </p>
+    </section>
 
 {% endblock %}

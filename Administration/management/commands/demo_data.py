@@ -42,7 +42,7 @@ class Command(BaseCommand):
                 categorie=Client.SALLE_SPECTACLE,
             )
             Domain.objects.get_or_create(
-                domain=f'{slugify(name)}.tibillet.localhost',
+                domain=f'{slugify(name)}.{domain}',
                 tenant=tenant,
                 is_primary=True
             )

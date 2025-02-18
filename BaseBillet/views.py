@@ -1,7 +1,7 @@
 import logging
 import os
 import uuid
-from datetime import timedelta
+from datetime import timedelta, datetime
 from io import BytesIO
 from itertools import product
 
@@ -48,7 +48,7 @@ from BaseBillet.validators import LoginEmailValidator, MembershipValidator, Link
     ReservationValidator
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
-from fedow_connect.fedow_api import FedowAPI
+from fedow_connect.fedow_api import FedowAPI, AssetFedow
 from fedow_connect.models import FedowConfig
 from root_billet.models import RootConfiguration
 
@@ -565,25 +565,33 @@ class MyAccount(viewsets.ViewSet):
         fedowAPI = FedowAPI()
         wallet = fedowAPI.wallet.cached_retrieve_by_signature(request.user).validated_data
 
+
         # On retire les adhésions, on les affiche dans l'autre table
         tokens = [token for token in wallet.get('tokens') if token.get('asset_category') not in ['SUB', 'BDG']]
 
         # TODO: Factoriser avec tokens_table / membership_table
         for token in tokens:
+            names_of_place_federated = []
             # Recherche du logo du lieu d'origin de l'asset
             if token['asset']['place_origin']:
                 # L'asset fédéré n'a pas d'origin
                 place_uuid_origin = token['asset']['place_origin']['uuid']
-                token['asset']['logo'] = self.get_place_cached_info(place_uuid_origin).get('logo')
+                place_info = self.get_place_cached_info(place_uuid_origin)
+                token['asset']['logo'] = place_info.get('logo')
+                names_of_place_federated.append(place_info.get('organisation'))
             # Recherche des noms des lieux fédérés
-            names_of_place_federated = []
+
             for place_federated in token['asset']['place_uuid_federated_with']:
                 place = self.get_place_cached_info(place_federated)
                 if place:
                     names_of_place_federated.append(place.get('organisation'))
             token['asset']['names_of_place_federated'] = names_of_place_federated
 
-        # print(tokens)
+            # Recherche de la dernière action du token fédéré
+            # if token['asset']['category'] == 'FED':
+            #     last_federated_transaction: datetime = token['last_transaction']['datetime']
+
+        print(tokens)
 
         # On fait la liste des lieux fédérés pour les pastilles dans le tableau html
         context = {
