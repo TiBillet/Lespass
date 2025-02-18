@@ -53,4 +53,55 @@
             </div>
         </div>
     </div>
+    <div class="accordion-item">
+        <h2 class="accordion-header" id="book-now">
+          <button class="accordion-button text-dark"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#get-involved"
+            aria-expanded="true"
+            aria-controls="get-involved"
+            style="background: var(--mayaj-pons);">
+            Appel à volontaires
+          </button>
+        </h2>
+        <div id="get-involved" class="accordion-collapse collapse" data-bs-parent="#infoAccordion">
+          <div class="accordion-body">
+            <p class="mt-3">Nous cherchons des volontaires pour&nbsp;:</p>
+
+            <div class="list-group list-group-flush mb-3">
+                <div class="list-group-item">
+                    <input type="radio" class="btn-check" name="options-base" id="option6" autocomplete="off">
+                    <label class="btn w-100 text-start" for="option6">
+                        <i class="bi bi-person-plus-fill"></i> Entrée et consigne <small>(0/2)</small>
+                    </label>
+                </div>
+                <div class="list-group-item">
+                    <input type="radio" class="btn-check" name="options-base" id="option7" autocomplete="off" disabled>
+                    <label class="btn w-100 text-start" for="option7">
+                        <i class="bi bi-person-check-fill"></i> Service bar <small>(5/5)</small>
+                    </label>
+                </div>
+            </div>
+            <button class="btn btn-primary w-100 mb-5">
+                {% translate "Confirmer mon coup de main" %}
+            </button>
+  
+            <div class="alert alert-warning" role="alert">
+              <h4>
+                <i class="bi bi-exclamation-diamond-fill"></i>
+                Rappel
+              </h4>
+              Le collectif n'est ni votre patron·ne, ni votre ami·e ! Pour le
+              confort de toustes, proposez-vous seulement sur des postes qui vous
+              plaisent d'assurer, et n'hésitez pas à refuser des conditions qui
+              vous déplaisent. <a href="#">
+                Si vous vous sentez pris·e pour eun
+                employé·e, parlez-en au réseau local
+              </a>, c'est inacceptable.
+            </div>
+  
+          </div>
+        </div>
+      </div>
 </div>

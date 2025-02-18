@@ -3,6 +3,19 @@
 
 {% block title %}{{ event.name }}{% endblock %}
 
+{% block head %}
+<script>
+  // auto-scroll for volunteer accordion section
+  window.addEventListener('DOMContentLoaded', () => {
+    document
+      .getElementById("volunteerButton")
+      .addEventListener("click", ({ target }) => {
+        document.getElementById("get-involved").scrollIntoView()
+      })
+  })
+</script>
+{% endblock %}
+
 {% block main %}
 <main class="container-lg pb-5">
     <header class="mb-3">
@@ -54,16 +67,30 @@
 {#    Si l'évènement n'est pas de ce tenant, il provient d'une fédération, le bouton redigire vers la page du tenant.#}
 {#    # Todo : Garder l'user d'un dns à l'autre, et ouvrir le modal reserver dans le nouveau tenant #}
     {% if not event_in_this_tenant %}
-    <a href="{{ event.full_url }}" class="btn btn-lg btn-primary d-block mb-5" role="button">
-        {% translate "Visiter la page du lieu" %}
+    <a href="{{ event.full_url }}" class="btn btn-lg btn-primary d-block mt-3" role="button" target="_blank">
+        {% translate "Voir l'évènement sur le site diffuseur" %}
+        <i class="bi bi-box-arrow-up-right"></i>
     </a>
     {% elif event.products.count %}
     {% include 'reunion/partials/event/booking.html' %}
     {% else %}
-    <a href="#" class="btn btn-lg btn-primary d-block mb-5 disabled" role="button" aria-disabled="true">
+    <a href="#" class="btn btn-lg btn-primary d-block mt-3 disabled" role="button" aria-disabled="true">
         {% translate "Entrée libre" %}
     </a>
     {% endif %}
+
+    <p class="mt-2 mb-5 text-center">
+      <a
+        id="volunteerButton"
+        href="#get-involved"
+        data-bs-toggle="collapse"
+        data-bs-target="#get-involved"
+        aria-expanded="true"
+        aria-controls="get-involved">
+        {% translate "Donner un coup de main sur l'évènement ?" %}
+      </a>
+      {% translate "(5/7 personnes souhaitées)" %}
+    </p>
   
     {% include 'reunion/partials/event/accordion.html' %}
   

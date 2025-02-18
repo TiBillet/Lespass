@@ -1,14 +1,26 @@
 {% load i18n %}
 
 <!-- le bouton en fin de page -->
-<button
-        class="btn btn-lg btn-primary w-100 mb-5"
-        type="button"
-        data-bs-toggle="offcanvas"
-        data-bs-target="#bookingPanel"
-        aria-controls="bookingPanel">
-    {% translate 'Je réserve ma place' %}
-</button>
+<div class="row">
+    <div class="col-md">
+        {# TODO: easy resa toggle #}
+        <button
+                class="btn btn-lg btn-primary w-100 mt-3"
+                type="button">
+            {% translate 'Je réserve ma place' %}
+        </button>
+    </div>
+    <div class="col-md">
+        <button
+                class="btn btn-lg btn-secondary w-100 mt-3"
+                type="button"
+                data-bs-toggle="offcanvas"
+                data-bs-target="#bookingPanel"
+                aria-controls="bookingPanel">
+            {% translate "Plus d'options" %}
+        </button>
+    </div>
+</div>
 
 <!-- booking panel -->
 <div class="offcanvas-start offcanvas" tabindex="-1" id="bookingPanel" aria-labelledby="bookingPanelLabel">
