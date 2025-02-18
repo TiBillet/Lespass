@@ -891,11 +891,11 @@ class LigneArticleAdmin(ModelAdmin):
 class EventChildrenInline(TabularInline):
     model = Event
     fk_name = 'parent'
-    verbose_name = _("Enfant")
+    verbose_name = _("Action")
     hide_title = True
     fields = (
         'name',
-        'categorie',
+        # 'categorie',
         'datetime',
         'jauge_max',
         'valid_tickets_count',
@@ -974,10 +974,12 @@ class EventAdmin(ModelAdmin):
         'valid_tickets_count',
         'datetime',
     ]
+
     readonly_fields = (
         'valid_tickets_count',
     )
     search_fields = ['name']
+    list_filter = ['categorie', 'datetime']
     autocomplete_fields = [
         "products",
         "tag",

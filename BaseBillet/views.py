@@ -737,11 +737,12 @@ class EventMVT(viewsets.ViewSet):
         )
         # Récupération de tous les évènements de la fédération
         for tenant in tenants:
-            with tenant_context(tenant['tenant']):
+            with (tenant_context(tenant['tenant'])):
                 events = Event.objects.prefetch_related('tag', 'postal_address').filter(
                     published=True,
                     datetime__gte=timezone.localtime() - timedelta(days=1),
-                ).exclude(tag__slug__in=tenant['tag_filter'])  # On prend les évènement d'aujourd'hui
+                ).exclude(tag__slug__in=tenant['tag_filter'] # On prend les évènement d'aujourd'hui
+                          ).exclude(categorie=Event.ACTION)  # Les Actions sont affichés dans la page de l'evenement parent
 
                 if len(tenant['tag_exclude']) > 0:
                     events = events.filter(

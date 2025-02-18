@@ -921,6 +921,12 @@ class Event(models.Model):
         if not self.is_external:
             self.full_url = f"https://{connection.tenant.get_primary_domain().domain}/event/{self.slug}/"
 
+        # Si parent, on force la catégorie ACTION
+        if self.parent:
+            self.categorie = Event.ACTION
+            self.easy_reservation = True
+
+
         super().save(*args, **kwargs)
 
     def __str__(self):
