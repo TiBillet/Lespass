@@ -698,7 +698,7 @@ class Price(models.Model):
                                              related_name="adhesion_obligatoire",
                                              verbose_name=_("Adhésion obligatoire"),
                                              help_text=_(
-                                                 "Ce tarif n'est possible que si l'utilisateur.ices est adhérant.e à "),
+                                                 "Ce tarif n'est possible que si l'utilisateur·ices est adhérant.e à "),
                                              blank=True, null=True)
 
     NA, YEAR, MONTH, DAY, HOUR, CIVIL, SCHOLAR = 'N', 'Y', 'M', 'D', 'H', 'C', 'S'
@@ -751,7 +751,7 @@ class Event(models.Model):
     jauge_max = models.PositiveSmallIntegerField(default=50, verbose_name=_("Jauge maximale"))
     max_per_user = models.PositiveSmallIntegerField(default=10,
                                                     verbose_name=_(
-                                                        "Nombre de reservation maximales par utilisateur.ices"),
+                                                        "Nombre de reservation maximales par utilisateur·ices"),
                                                     help_text=_("ex : Un même email peut réserver plusieurs billets.")
                                                     )
 
@@ -799,12 +799,14 @@ class Event(models.Model):
     REUNION = "REU"
     CONFERENCE = "CON"
     RESTAURATION = "RES"
+    ACTION = "ACT"
     TYPE_CHOICES = [
         (CONCERT, _('Concert')),
         (FESTIVAL, _('Festival')),
         (REUNION, _('Réunion')),
         (CONFERENCE, _('Conférence')),
         (RESTAURATION, _('Restauration')),
+        (ACTION, _('Action')),
     ]
 
     categorie = models.CharField(max_length=3, choices=TYPE_CHOICES, default=CONCERT,
@@ -814,6 +816,19 @@ class Event(models.Model):
     #                                    help_text=_(
     #                                        "Selectionnez le jour de la semaine pour une récurence hebdomadaire. La date de l'évènement sera la date de fin de la récurence."),
     #                                    verbose_name=_("Jours de la semaine"))
+
+    # La relation parent / enfant
+    parent = models.ForeignKey(
+        'self',
+        null=True,
+        blank=True,
+        related_name='children',
+        on_delete=models.CASCADE
+    )
+
+    easy_reservation = models.BooleanField(default=False, verbose_name=_("Réservation facile"),
+                                           help_text=_("Mode réservation en un clic si user connecté."))
+
 
     booking = models.BooleanField(default=False, verbose_name=_("Mode restauration/booking"),
                                   help_text=_(
@@ -1868,6 +1883,12 @@ class FormbricksForms(models.Model):
     # Formulaire à l'achat d'une adhésion ou d'un billet d'evènement
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="formbricksform")
 
+    class Meta:
+        verbose_name = _('Formulaire')
+        verbose_name_plural = _('Formulaires')
+
+    def __str__(self):
+        return f"{self.product.name} : {self.trigger_name}"
 
 class FormbricksConfig(SingletonModel):
     """
@@ -1884,4 +1905,6 @@ class FormbricksConfig(SingletonModel):
         self.save()
         return True
 
-
+    class Meta:
+        verbose_name = _('Configuration Formbrick')
+        verbose_name_plural = _('Configurations Formbrick')

@@ -727,6 +727,7 @@ class EventMVT(viewsets.ViewSet):
             }
             for place in FederatedPlace.objects.all().prefetch_related("tag_filter","tag_exclude")
         ]
+        # Le tenant actuel
         tenants.append(
             {
                 "tenant": connection.tenant,

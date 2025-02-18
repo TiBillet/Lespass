@@ -2,6 +2,7 @@ import logging
 from datetime import timedelta
 from decimal import Decimal
 from typing import Any
+from unicodedata import category
 
 import requests
 from django import forms
@@ -252,14 +253,18 @@ class TagAdmin(ModelAdmin):
 
     _color.short_description = _("Couleur")
 
-    # def has_view_or_change_permission(self, request, obj=None):
-    #     return True
-    #
-    # def has_delete_permission(self, request, obj=None):
-    # return False
-    #
-    # def has_add_permission(self, request):
-    #     return False
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
 
 @admin.register(OptionGenerale, site=staff_admin_site)
@@ -883,6 +888,33 @@ class LigneArticleAdmin(ModelAdmin):
 ##### EVENT ADMIN
 
 
+class EventChildrenInline(TabularInline):
+    model = Event
+    fk_name = 'parent'
+    verbose_name = _("Enfant")
+    hide_title = True
+    fields = (
+        'name',
+        'categorie',
+        'datetime',
+        'jauge_max',
+        'valid_tickets_count',
+    )
+
+    # ordering_field = "weight"
+    # max_num = 1
+    extra = 0
+    show_change_link = True
+    tab = True
+
+    readonly_fields = (
+        'valid_tickets_count',
+    )
+    # Surcharger la méthode pour désactiver la suppression
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 class EventForm(ModelForm):
     # def save(self, commit=True):
     #     return super().save(commit)
@@ -903,10 +935,13 @@ class EventAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 
+    inlines = [EventChildrenInline, ]
+
     fieldsets = (
         (None, {
             'fields': (
                 'name',
+                'categorie',
                 'datetime',
                 'end_datetime',
                 'img',
@@ -925,7 +960,6 @@ class EventAdmin(ModelAdmin):
         }),
         ('Tags et formulaires', {
             'fields': (
-                'categorie',
                 'tag',
                 'options_radio',
                 'options_checkbox',
@@ -936,6 +970,7 @@ class EventAdmin(ModelAdmin):
 
     list_display = [
         'name',
+        'categorie',
         'valid_tickets_count',
         'datetime',
     ]
@@ -956,6 +991,10 @@ class EventAdmin(ModelAdmin):
         }
     }
 
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        # Les events action et les events children doivent s'afficher dans un inline
+        return queryset.exclude(categorie=Event.ACTION).exclude(parent__isnull=False)
 
 @admin.register(Reservation, site=staff_admin_site)
 class ReservationAdmin(ModelAdmin):
