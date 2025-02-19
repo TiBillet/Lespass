@@ -13,6 +13,7 @@ from django.db.models import Model
 from django.forms import ModelForm, TextInput, Form, modelformset_factory
 from django.http import HttpResponse, HttpRequest, HttpResponseRedirect
 from django.shortcuts import redirect
+from django.template.defaultfilters import slugify
 from django.urls import reverse, re_path
 from django.utils import timezone
 from django.utils.html import format_html
@@ -1444,6 +1445,12 @@ class FormbricksFormsAdmin(ModelAdmin):
     warn_unsaved_form = True  # Default: False
 
     list_display = ['product', 'environmentId']
+
+    def save_model(self, request, obj: FormbricksForms, form, change):
+        if obj.product:
+            messages.info(request, f"slug product_name : {slugify(obj.product.name)}")
+            for price in obj.product.prices.all():
+                messages.info(request, f"slug price_name : {slugify(price.name)}")
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
