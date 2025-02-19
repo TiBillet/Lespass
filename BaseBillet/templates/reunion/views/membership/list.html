@@ -3,7 +3,9 @@
 {% load i18n %}
 
 {% block head %}
-<script src="https://app.formbricks.com/js/formbricks.umd.cjs" async></script>
+{% if formbricks_api_host %}
+    <script src="{{ formbricks_api_host}}/js/formbricks.umd.cjs" async></script>
+{% endif %}
 <script src="{% static 'reunion/js/subscription-watcher.js' %}"></script>
 {% endblock %}
 

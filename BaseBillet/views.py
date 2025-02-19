@@ -56,6 +56,7 @@ logger = logging.getLogger(__name__)
 
 
 class SmallAnonRateThrottle(UserRateThrottle):
+    # Un throttle pour 10 requetes par jours uniquement
     scope = 'smallanon'
 
 
@@ -83,6 +84,9 @@ def get_context(request):
         meta_url = f"https://{meta.get_primary_domain().domain}"
         cache.set('meta_url', meta_url, 3600 * 24)
 
+    # Formbricks existe ?
+    formbricks_config = FormbricksConfig.get_solo()
+
     context = {
         "base_template": base_template,
         "embed": embed,
@@ -95,6 +99,7 @@ def get_context(request):
         "meta_url": meta_url,
         "header": True,
         # "tenant": connection.tenant,
+        "formbricks_api_host": formbricks_config.api_host,
         "mode_test": True if os.environ.get('TEST') == '1' else False,
         "main_nav": [
             {'name': 'event-list', 'url': '/event/', 'label': 'Agenda', 'icon': 'calendar-date'},
