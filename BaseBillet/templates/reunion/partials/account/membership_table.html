@@ -4,6 +4,7 @@
 {% for token in tokens %}
 <div class="col">
     <div class="card h-100">
+        {% include 'reunion/partials/picture.html' with img=token.img alt=token.name class='card-img-top' %}
         <div class="card-body">
             <h3 class="card-title">{{ token.name }} ({{ token.value | dround }})</h3>
             {# TODO: ppersonnes visées par l'abonnement #}
@@ -14,15 +15,9 @@
                     Valable pour
                     {{ token.asset.names_of_place_federated|join:", " }}
                 </li>
-                </ul>                
-            {# TODO: description de l'abonnement #}
-            <p class="card-text">
-                L'adhésion donne accès au Fusible (fablab, ateliers
-                bois et élec) et à l'Ampoule (café-concert, scène
-                musicale). L'atelier bois et géré à 80% par
-                l'association Chantefrein, adhésion séparée à prévoir
-                pour se servir des machines sur leurs créneaux.
-            </p>
+                </ul>
+            <p class="card-text">{{ token.short_description }}</p>
+            <p class="card-text">{{ token.long_description }}</p>
         </div>
         <div class="card-footer">
             <p>
