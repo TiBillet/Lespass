@@ -6,6 +6,14 @@
         userId: "{{ membership.email }} {{ membership.uuid | slice:':4' }}",
     });
 
+    console.log({
+        email: "{{ membership.email }}",
+        name: "{{ membership.member_name }}",
+        membership_uuid: "{{ membership.uuid }}",
+        product_name: "{{ membership.price.product.name|slugify }}",
+        price_name: "{{ membership.price.name|slugify }}",
+    })
+
     window.formbricks.track("{{ form.trigger_name }}", {
         hiddenFields: {
             email: "{{ membership.email }}",
@@ -25,7 +33,7 @@
 
     //hide offcanvas
     bootstrap.Offcanvas.getOrCreateInstance('#subscribePanel').hide()
-    
+
     // hide spinner
     document.getElementById('tibillet-spinner').style.display = 'none'
 </script>
