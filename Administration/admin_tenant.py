@@ -366,8 +366,9 @@ class PriceAdmin(ModelAdmin):
         'name',
         'product',
         'prix',
+        'free_price',
         'subscription_type',
-        'recurring_payment',
+        # 'recurring_payment',
         'publish',
         'adhesion_obligatoire',
     )
