@@ -1885,7 +1885,7 @@ class GhostConfig(SingletonModel):
 class FormbricksForms(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     environmentId = models.CharField(max_length=30, help_text="Id d'environnement du projet Formbricks")
-    trigger_name = models.CharField(max_length=30, help_text="Le nom du trigger qui va lancer le formulaire", unique=True)
+    trigger_name = models.CharField(max_length=30, help_text="Le nom du trigger qui va lancer le formulaire")
     # Formulaire à l'achat d'une adhésion ou d'un billet d'evènement
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="formbricksform")
 
