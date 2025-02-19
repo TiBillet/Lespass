@@ -1451,6 +1451,7 @@ class FormbricksFormsAdmin(ModelAdmin):
             messages.info(request, f"product_name : {slugify(obj.product.name)}")
             for price in obj.product.prices.all():
                 messages.info(request, f"price_name : {slugify(price.name)}")
+        super().save_model(request, obj, form, change)
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
