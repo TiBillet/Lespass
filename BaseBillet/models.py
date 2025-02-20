@@ -690,7 +690,7 @@ class Price(models.Model):
 
     stock = models.SmallIntegerField(blank=True, null=True)
     max_per_user = models.PositiveSmallIntegerField(default=10,
-                                                    verbose_name=_("Nombre de reservation maximum par utilisateur"),
+                                                    verbose_name=_("Nombre de reservation maximum par utilisateur·ices"),
                                                     help_text=_("ex : Un même email peut réserver plusieurs billets")
                                                     )
 
@@ -827,12 +827,11 @@ class Event(models.Model):
     )
 
     easy_reservation = models.BooleanField(default=False, verbose_name=_("Réservation facile"),
-                                           help_text=_("Mode réservation en un clic si user connecté."))
-
+                                           help_text=_("Mode réservation en un clic si utilisateur·ices connecté·e."))
 
     booking = models.BooleanField(default=False, verbose_name=_("Mode restauration/booking"),
                                   help_text=_(
-                                      "Si activé, l'évènement sera visible en haut de la page d'accueil, l'utilisateur pourra selectionner une date."))
+                                      "Si activé, l'évènement sera visible en haut de la page d'accueil, l'utilisateur·ices pourra selectionner une date."))
 
     def reservation_solo(self):
         if self.max_per_user == 1:

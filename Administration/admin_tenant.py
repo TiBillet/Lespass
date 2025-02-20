@@ -952,8 +952,9 @@ class EventAdmin(ModelAdmin):
                 'published',
             )
         }),
-        ('Produits', {
+        ('Réservations', {
             'fields': (
+                'easy_reservation',
                 'max_per_user',
                 'products',
             ),
