@@ -13,7 +13,7 @@ from django.contrib.auth import logout, login
 from django.contrib.messages import MessageFailure
 from django.core.cache import cache
 from django.db import connection
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Sum
 from django.http import HttpResponse, HttpRequest, Http404, HttpResponseRedirect, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.response import TemplateResponse
@@ -845,6 +845,13 @@ class EventMVT(viewsets.ViewSet):
         template_context = get_context(request)
         template_context['event'] = event
         template_context['event_in_this_tenant'] = event_in_this_tenant
+
+        # L'evènement possède des sous évènement.
+        # Pour l'instant : uniquement des ACTIONS
+        if event.children.exists():
+            template_context['action_total_jauge'] = event.children.all().aggregate(total_value=Sum('jauge_max'))['total_value'] or 0
+            template_context['inscrits'] = Ticket.objects.filter(reservation__event__parent=event).count()
+
         return render(request, "reunion/views/event/retrieve.html", context=template_context)
 
     @action(detail=True, methods=['POST'])
