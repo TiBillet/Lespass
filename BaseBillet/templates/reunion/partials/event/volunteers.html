@@ -21,9 +21,9 @@
                     {% for action in event.children.all %}
                         {% if not action.complet %}
                             <div class="d-flex">
-                                <input type="radio" class="form-check-input me-3" name="options-base" id="option6"
-                                       autocomplete="off">
-                                <label class="form-check-label flex-fill text-start" for="option6">
+                                <input type="radio" class="form-check-input me-3" name="action" id="{{ action.uuid }}"
+                                       autocomplete="off" value="{{ action.uuid }}">
+                                <label class="form-check-label flex-fill text-start" for="{{ action.uuid }}">
                                     {{ action.name }}
                                     <small>({{ action.valid_tickets_count }}/{{ action.jauge_max }})</small>
                                 </label>
@@ -37,9 +37,18 @@
                         {% endif %}
                     {% endfor %}
                 </div>
-                <button class="btn btn-primary w-100 mb-5" type="submit">
-                    {% translate "Confirmer mon coup de main" %}
-                </button>
+                {% if user.is_authenticated %}
+                    <button class="btn btn-primary w-100 mb-5" type="submit" hx-post="/event/{{ event.uuid }}/action_reservation/">
+                        {% translate "Confirmer mon coup de main" %}
+                    </button>
+                {% else %}
+                    <a class="btn btn-secondary w-100 mb-5"
+                            data-bs-toggle="offcanvas"
+                            data-bs-target="#loginPanel"
+                            aria-controls="loginPanel">
+                        {% translate "Merci de vous connecter et valider votre email avant." %}
+                    </a>
+                {% endif %}
             </form>
 
             <div class="alert alert-warning" role="alert">

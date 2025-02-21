@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 class TagValidator(serializers.Serializer):
     tags = serializers.PrimaryKeyRelatedField(source="slug", queryset=Tag.objects.all(), many=True)
 
+
 class LinkQrCodeValidator(serializers.Serializer):
     email = serializers.EmailField(required=True, allow_null=False)
     emailConfirmation = serializers.EmailField(required=True, allow_null=False)
@@ -47,7 +48,7 @@ class LoginEmailValidator(serializers.Serializer):
 
 class TicketCreator():
 
-    def __init__(self, reservation:Reservation, products_dict:dict):
+    def __init__(self, reservation: Reservation, products_dict: dict):
         self.products_dict = products_dict
         self.reservation = reservation
         self.user = reservation.user_commande
@@ -66,12 +67,29 @@ class TicketCreator():
             trigger = getattr(self, trigger_name)
             self.tickets = trigger(prices_dict)
 
+        # Methode Action : On a pas de produit
+        if reservation.event.categorie == Event.ACTION:
+            self.tickets = self.method_A()
+
+    # Methode ACTION
+    def method_A(self):
+        reservation: Reservation = self.reservation
+        #     import ipdb; ipdb.set_trace()
+        ticket = Ticket.objects.create(
+            status=Ticket.NOT_ACTIV,
+            reservation=reservation,
+            first_name=self.user.first_name,
+            last_name=self.user.last_name,
+        )
+        reservation.status = Reservation.FREERES_USERACTIV if reservation.user_commande.is_active else Reservation.FREERES
+        reservation.save()
+        return [ticket,]
 
     # FREERES : réservation gratuite
     def method_F(self, prices_dict):
         reservation: Reservation = self.reservation
-
         tickets = []
+
         for price, qty in prices_dict.items():
             price: Price
             qty: int
@@ -136,7 +154,7 @@ class TicketCreator():
             # Création des tickets en mode non payé
             for i in range(int(qty)):
                 ticket = Ticket.objects.create(
-                    status=Ticket.CREATED, # not yet paid
+                    status=Ticket.CREATED,  # not yet paid
                     reservation=reservation,
                     pricesold=pricesold,
                     # first_name=customer.get('first_name'),
@@ -187,8 +205,10 @@ class TicketCreator():
 class ReservationValidator(serializers.Serializer):
     email = serializers.EmailField()
     # to_mail = serializers.BooleanField(default=True, required=False)
-    event = serializers.PrimaryKeyRelatedField(queryset=Event.objects.filter(datetime__gte=timezone.now() - timedelta(days=1)))
-    options = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(), many=True, allow_null=True)
+    event = serializers.PrimaryKeyRelatedField(
+        queryset=Event.objects.filter(datetime__gte=timezone.now() - timedelta(days=1)))
+    options = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(), many=True, allow_null=True,
+                                                 required=False)
     datetime = serializers.DateTimeField(required=False)
 
     def extract_products(self):
@@ -209,12 +229,11 @@ class ReservationValidator(serializers.Serializer):
                     if products_dict.get(product):
                         # On ajoute le prix a la liste des articles choisi
                         products_dict[product][price] = qty
-                    else :
+                    else:
                         # Si le dict product n'existe pas :
-                        products_dict[product] = { price : qty }
+                        products_dict[product] = {price: qty}
 
         return products_dict
-
 
     def validate_event(self, value):
         logger.info(f"validate event : {value}")
@@ -229,11 +248,11 @@ class ReservationValidator(serializers.Serializer):
         request = self.context.get('request')
 
         if request.user.is_authenticated:
-            if request.user.email != value :
+            if request.user.email != value:
                 raise serializers.ValidationError(_(f"L'email ne correspond pas à l'utilisateur connecté."))
             user = request.user
 
-        else :
+        else:
             user = get_or_create_user(value)
 
         self.user = user
@@ -262,11 +281,14 @@ class ReservationValidator(serializers.Serializer):
         products_dict = self.extract_products()
         user = self.user
         options = attrs.get('options')
-        total_ticket_qty = 0
+
+        # Si c'est un event en mode resa en un clic
+        total_ticket_qty = 1 if event.easy_reservation else 0
 
         # existe au moins un billet pour la reservation ?
-        if not products_dict or len(products_dict) < 1 :
-            raise serializers.ValidationError(_(f'Pas de produits.'))
+        if not event.easy_reservation:
+            if not products_dict or len(products_dict) < 1:
+                raise serializers.ValidationError(_(f'Pas de produits.'))
 
         for product, price_dict in products_dict.items():
             # les produits sont prévu par l'évent ?
@@ -280,8 +302,16 @@ class ReservationValidator(serializers.Serializer):
                         _(f'Quantitée de réservations suppérieure au maximum autorisé pour ce tarif'))
                 total_ticket_qty += qty
 
+                # Check adhésion
+                if price.adhesion_obligatoire:
+                    membership_products = [membership.price.product for membership in
+                                           user.membership.all()]
+                    if price.adhesion_obligatoire not in membership_products:
+                        logger.warning(_(f"L'utilisateur n'est pas membre"))
+                        raise serializers.ValidationError(_(f"L'utilisateur n'est pas membre"))
+
         # existe au moins un ticket validable pour la reservation ?
-        if not total_ticket_qty > 0 :
+        if not total_ticket_qty > 0:
             raise serializers.ValidationError(_(f'Pas de ticket.'))
 
         # Vérification du max par user sur l'event
@@ -303,13 +333,6 @@ class ReservationValidator(serializers.Serializer):
         all_product_buy = [price.product for price in all_price_buy]
         for price_object in self.prices_list:
             price: Price = price_object['price']
-            if price.adhesion_obligatoire:
-                membership_products = [membership.price.product for membership in
-                                       self.user_commande.membership.all()]
-                if (price.adhesion_obligatoire not in membership_products
-                        and price.adhesion_obligatoire not in all_product_buy):
-                    logger.warning(_(f"L'utilisateur n'est pas membre"))
-                    raise serializers.ValidationError(_(f"L'utilisateur n'est pas membre"))
         """
 
         # On fabrique l'objet reservation
@@ -336,8 +359,6 @@ class ReservationValidator(serializers.Serializer):
         return attrs
 
 
-
-
 class MembershipValidator(serializers.Serializer):
     acknowledge = serializers.BooleanField()
     price = serializers.PrimaryKeyRelatedField(
@@ -349,7 +370,7 @@ class MembershipValidator(serializers.Serializer):
     lastname = serializers.CharField(max_length=200)
 
     options = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(), many=True,
-                                                          allow_null=True, required=False)
+                                                 allow_null=True, required=False)
 
     newsletter = serializers.BooleanField()
 
@@ -377,7 +398,7 @@ class MembershipValidator(serializers.Serializer):
         ligne_article_adhesion = LigneArticle.objects.create(
             pricesold=get_or_create_price_sold(price),
             membership=membership,
-            amount=int(price.prix*100),
+            amount=int(price.prix * 100),
             qty=1,
         )
 
@@ -425,7 +446,6 @@ class MembershipValidator(serializers.Serializer):
         options = attrs.get('options', [])
         if options:
             membership.option_generale.set(attrs['options'])
-
 
         membership.save()
         self.membership = membership

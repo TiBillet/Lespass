@@ -2,26 +2,25 @@
 
 <!-- le bouton en fin de page -->
 <div class="row">
-    {% if event.easy_reservation %} <!-- Le bouton reservation en un clic -->
-        <div class="col-md">
-            {# TODO: easy resa toggle #}
-            <button
-                    class="btn btn-lg btn-primary w-100 mt-3"
-                    type="button">
-                {% translate 'Je réserve ma place' %}
-            </button>
-        </div>
-        <div class="col-md">
-            <button
-                    class="btn btn-lg btn-secondary w-100 mt-3"
-                    type="button"
-                    data-bs-toggle="offcanvas"
-                    data-bs-target="#bookingPanel"
-                    aria-controls="bookingPanel">
-                {% translate "Plus d'options" %}
-            </button>
-        </div>
-    {% else %}
+{#    {% if event.easy_reservation and user.is_authenticated %} <!-- Le bouton reservation en un clic -->#}
+{#        <div class="col-md">#}
+{#            <button hx-get="/event/{{ event.pk }}/easy_reservation/"#}
+{#                    class="btn btn-lg btn-primary w-100 mt-3"#}
+{#                    type="button">#}
+{#                {% translate 'Je réserve ma place' %}#}
+{#            </button>#}
+{#        </div>#}
+{#        <div class="col-md">#}
+{#            <button#}
+{#                    class="btn btn-lg btn-secondary w-100 mt-3"#}
+{#                    type="button"#}
+{#                    data-bs-toggle="offcanvas"#}
+{#                    data-bs-target="#bookingPanel"#}
+{#                    aria-controls="bookingPanel">#}
+{#                {% translate "Plus d'options" %}#}
+{#            </button>#}
+{#        </div>#}
+{#    {% else %}#}
         <div class="col-md">
             <button
                     class="btn btn-lg btn-primary w-100 mt-3"
@@ -32,7 +31,7 @@
                 {% translate "Je réserve une ou plusieurs places" %}
             </button>
         </div>
-    {% endif %}
+{#    {% endif %}#}
 </div>
 
 <!-- booking panel -->

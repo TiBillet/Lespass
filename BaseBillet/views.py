@@ -4,6 +4,8 @@ import uuid
 from datetime import timedelta, datetime
 from io import BytesIO
 from itertools import product
+from unicodedata import category
+from wsgiref.validate import validator
 
 import barcode
 import segno
@@ -29,7 +31,7 @@ from django_htmx.http import HttpResponseClientRedirect
 
 from rest_framework import viewsets, permissions, status
 from rest_framework.authentication import SessionAuthentication
-from rest_framework.decorators import action
+from rest_framework.decorators import action, throttle_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -853,6 +855,35 @@ class EventMVT(viewsets.ViewSet):
             template_context['inscrits'] = Ticket.objects.filter(reservation__event__parent=event).count()
 
         return render(request, "reunion/views/event/retrieve.html", context=template_context)
+
+    @action(detail=True, methods=['POST'], permission_classes=[permissions.IsAuthenticated])
+    def action_reservation(self, request, pk=None):
+        event = get_object_or_404(Event, pk=pk)
+
+        user = request.user
+        action = get_object_or_404(Event, pk=request.data.get('action'), categorie=Event.ACTION)
+
+        if Ticket.objects.filter(reservation__user_commande=user, reservation__event__in=event.children.all()).exists():
+            messages.add_message(request, messages.ERROR, _("Vous avez déjà confirmé votre présence sur une action lors de cet évènement."))
+            return HttpResponseClientRedirect(request.headers['Referer'])
+
+        if not user:
+            messages.add_message(request, messages.ERROR, _("Merci de vous connecter d'abord."))
+            return HttpResponseClientRedirect(request.headers['Referer'])
+
+        validator = ReservationValidator(data={
+            "email":user.email,
+            "event":action.pk,
+        }, context={'request': request})
+
+        if not validator.is_valid():
+            logger.error(f"ReservationViewset CREATE ERROR : {validator.errors}")
+            for error in validator.errors:
+                messages.add_message(request, messages.ERROR, f"{validator.errors[error][0]}")
+            return HttpResponseClientRedirect(request.headers['Referer'])
+
+        messages.add_message(request, messages.SUCCESS, _("Merci ! Vous allez recevoir un mail de validation."))
+        return HttpResponseClientRedirect(request.headers['Referer'])
 
     @action(detail=True, methods=['POST'])
     def reservation(self, request, pk):

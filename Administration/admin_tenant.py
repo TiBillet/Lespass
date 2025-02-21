@@ -954,7 +954,7 @@ class EventAdmin(ModelAdmin):
         }),
         ('Réservations', {
             'fields': (
-                'easy_reservation',
+                # 'easy_reservation',
                 'max_per_user',
                 'products',
             ),
@@ -1143,7 +1143,18 @@ class TicketAdmin(ModelAdmin):
         'event',
         'options',
         'state',
+        'reservation__datetime',
     ]
+
+    @admin.display(ordering='reservation__datetime', description='Réservé le')
+    def reservation__datetime(self, obj):
+        return obj.reservation.datetime
+
+    @admin.display(ordering='reservation__event', description='Évènement')
+    def event(self, obj):
+        if obj.reservation.event.parent :
+            return f"{obj.reservation.event.parent} -> {obj.reservation.event}"
+        return obj.reservation.event
 
     # list_editable = ['status',]
     # actions = [valider_ticket, ]

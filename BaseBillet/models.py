@@ -1267,7 +1267,7 @@ class Ticket(models.Model):
 
     reservation = models.ForeignKey(Reservation, on_delete=models.CASCADE, related_name="tickets")
 
-    pricesold = models.ForeignKey(PriceSold, on_delete=models.CASCADE)
+    pricesold = models.ForeignKey(PriceSold, on_delete=models.CASCADE, blank=True, null=True)
 
     CREATED, NOT_ACTIV, NOT_SCANNED, SCANNED = 'C', 'N', 'K', 'S'
     SCAN_CHOICES = [
