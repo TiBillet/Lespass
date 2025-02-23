@@ -301,8 +301,8 @@ def create_ticket_pdf(ticket: Ticket):
     }
 
     # template_name = 'report/report.html'
-    # template_name = 'ticket/ticket.html'
-    template_name = 'ticket/ticket_V2.html'
+    template_name = 'ticket/ticket.html'
+    # template_name = 'ticket/ticket_V2.html'
 
     # template_name = 'ticket/example_flight_ticket.html'
     font_config = FontConfiguration()
