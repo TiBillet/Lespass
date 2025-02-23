@@ -12,12 +12,14 @@ from django.contrib import messages
 from django.db.models import Model
 from django.forms import ModelForm, TextInput, Form, modelformset_factory
 from django.http import HttpResponse, HttpRequest, HttpResponseRedirect
-from django.shortcuts import redirect
+from django.shortcuts import redirect, get_object_or_404
 from django.template.defaultfilters import slugify
 from django.urls import reverse, re_path
 from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
+from rest_framework import status
+from rest_framework.response import Response
 from rest_framework_api_key.models import APIKey
 from solo.admin import SingletonModelAdmin
 from unfold.admin import ModelAdmin, TabularInline
@@ -34,7 +36,7 @@ from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Pai
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
     FormbricksConfig, FormbricksForms, FederatedPlace
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
-    webhook_membership
+    webhook_membership, create_ticket_pdf
 from Customers.models import Client
 from fedow_connect.utils import dround
 
@@ -1137,7 +1139,7 @@ class TicketAdmin(ModelAdmin):
     add_form = TicketAddAdmin
 
     list_display = [
-        'reservations',
+        'ticket',
         'first_name',
         'last_name',
         'event',
@@ -1167,6 +1169,7 @@ class TicketAdmin(ModelAdmin):
     list_filter = ["reservation__event", "status", "reservation__options"]
 
     search_fields = (
+        'uuid',
         'first_name',
         'last_name',
         'reservation__user_commande__email'
@@ -1214,16 +1217,26 @@ class TicketAdmin(ModelAdmin):
             reverse("staff_admin:BaseBillet_ticket_changelist")
         )
 
-    def reservations(self, obj):
-        return format_html(
-            '<a  '
-            f'href="{reverse("staff_admin:BaseBillet_ticket_changelist")}?reservation__uuid={obj.reservation.pk}">'
-            f'{obj.reservation}'
-            f'</a>&nbsp;'
-        )
 
-    reservations.short_description = 'Reservations'
-    reservations.allow_tags = True
+    @display(description=_("Ticket n°"))
+    def ticket(self, instance: Ticket):
+        return f"{instance.reservation.user_commande.email} {str(instance.uuid)[:8]}"
+
+    actions_detail = ["get_pdf", ]
+    @action(description=_("PDF"),
+            url_path="ticket_pdf",
+            permissions=["custom_actions_detail"])
+    def get_pdf(self, request, object_id):
+        ticket = get_object_or_404(Ticket, uuid=object_id)
+
+        VALID_TICKET_FOR_PDF = [Ticket.NOT_SCANNED, Ticket.SCANNED]
+        if ticket.status not in VALID_TICKET_FOR_PDF:
+            return Response('Ticket non valide', status=status.HTTP_403_FORBIDDEN)
+
+        pdf_binary = create_ticket_pdf(ticket)
+        response = HttpResponse(pdf_binary, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{ticket.pdf_filename()}"'
+        return response
 
     def get_form(self, request, obj=None, **kwargs):
         """ Si c'est un add, on modifie le formulaire"""
@@ -1232,6 +1245,9 @@ class TicketAdmin(ModelAdmin):
             defaults['form'] = self.add_form
         defaults.update(kwargs)
         return super().get_form(request, obj, **defaults)
+
+    def has_custom_actions_detail_permission(self, request, object_id):
+        return TenantAdminPermissionWithRequest(request)
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
