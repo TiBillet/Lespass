@@ -1586,8 +1586,8 @@ class Membership(models.Model):
     card_number = models.CharField(max_length=16, null=True, blank=True)
 
     date_added = models.DateTimeField(auto_now_add=True)
-    last_contribution = models.DateTimeField(null=True, blank=True, verbose_name=_("Date"))
 
+    last_contribution = models.DateTimeField(null=True, blank=True, verbose_name=_("Date"))
     first_contribution = models.DateTimeField(null=True, blank=True) # encore utilisé ? On utilise last plutot ?
 
     last_action = models.DateTimeField(auto_now=True, verbose_name=_("Présence"))

@@ -334,16 +334,6 @@ class PriceInline(TabularInline):
     form = PriceInlineChangeForm
     # hide_title = True
 
-    # fields = (
-    #     'name',
-    #     'product',
-    #     'prix',
-    #     # 'adhesion_obligatoire',
-    #     'subscription_type',
-    #     # 'recurring_payment',
-    #     'publish',
-    # )
-
     # ordering_field = "weight"
     # max_num = 1
     extra = 0

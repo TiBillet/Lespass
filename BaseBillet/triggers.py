@@ -32,7 +32,7 @@ def update_membership_state_after_stripe_paiement(ligne_article):
         contribution = dround(checkout_session['amount_total'])
         membership.contribution_value = contribution
 
-    membership.last_contribution = timezone.now().date()
+    membership.last_contribution = timezone.now()
     membership.stripe_paiement.add(paiement_stripe)
 
     if paiement_stripe.invoice_stripe:

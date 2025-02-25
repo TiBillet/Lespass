@@ -39,7 +39,7 @@ from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
 from Administration.admin_tenant import FormbricksConfigAddform
-from AuthBillet.models import TibilletUser, Wallet
+from AuthBillet.models import TibilletUser, Wallet, HumanUser
 from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
@@ -633,43 +633,49 @@ class MyAccount(viewsets.ViewSet):
     @action(detail=False, methods=['GET'])
     def membership(self, request: HttpRequest) -> HttpResponse:
         context = get_context(request)
-        context['account_tab'] = 'memberships'
-        return render(request, "reunion/views/account/memberships.html", context=context)
-
-    @action(detail=False, methods=['GET'])
-    def membership_table(self, request):
-        config = Configuration.get_solo()
-        fedowAPI = FedowAPI()
-        wallet = fedowAPI.wallet.cached_retrieve_by_signature(request.user).validated_data
-        # On ne garde que les adhésions
-        tokens = [token for token in wallet.get('tokens') if token.get('asset_category') == 'SUB']
-
-        # TODO: Factoriser avec tokens_table / membership_table
-        for token in tokens:
-            # Recherche du logo du lieu d'origin de l'asset
-            if token['asset']['place_origin']:
-                # L'asset fédéré n'a pas d'origin
-                place_uuid_origin = token['asset']['place_origin']['uuid']
-                token['asset']['logo'] = self.get_place_cached_info(place_uuid_origin).get('logo')
-            # Recherche des noms des lieux fédérés
-            names_of_place_federated = []
-            for place_federated in token['asset']['place_uuid_federated_with']:
-                place = self.get_place_cached_info(place_federated)
-                if place:
-                    names_of_place_federated.append(place.get('organisation'))
-            token['asset']['names_of_place_federated'] = names_of_place_federated
-
-        #TODO: Utiliser le tenant et non plus fedow
-        memberships = request.user.memberships.all()
+        user: TibilletUser = request.user
+        memberships : Membership = user.memberships.filter(last_contribution__isnull=False)
         for membership in memberships:
             membership.get_deadline()
 
-        context = {
-            'memberships': memberships,
-            'config': config,
-            'tokens': tokens,
-        }
-        return render(request, "reunion/partials/account/membership_table.html", context=context)
+        context['account_tab'] = 'memberships'
+        context['memberships'] = memberships
+        return render(request, "reunion/views/account/memberships.html", context=context)
+
+    # @action(detail=False, methods=['GET'])
+    # def membership_table(self, request):
+    #     config = Configuration.get_solo()
+    #     fedowAPI = FedowAPI()
+    #     wallet = fedowAPI.wallet.cached_retrieve_by_signature(request.user).validated_data
+    #     # On ne garde que les adhésions
+    #     tokens = [token for token in wallet.get('tokens') if token.get('asset_category') == 'SUB']
+    #
+    #     # TODO: Factoriser avec tokens_table / membership_table
+    #     for token in tokens:
+    #         # Recherche du logo du lieu d'origin de l'asset
+    #         if token['asset']['place_origin']:
+    #             # L'asset fédéré n'a pas d'origin
+    #             place_uuid_origin = token['asset']['place_origin']['uuid']
+    #             token['asset']['logo'] = self.get_place_cached_info(place_uuid_origin).get('logo')
+    #         # Recherche des noms des lieux fédérés
+    #         names_of_place_federated = []
+    #         for place_federated in token['asset']['place_uuid_federated_with']:
+    #             place = self.get_place_cached_info(place_federated)
+    #             if place:
+    #                 names_of_place_federated.append(place.get('organisation'))
+    #         token['asset']['names_of_place_federated'] = names_of_place_federated
+    #
+    #     #TODO: Utiliser le tenant et non plus fedow
+    #     memberships = request.user.memberships.all()
+    #     for membership in memberships:
+    #         membership.get_deadline()
+    #
+    #     context = {
+    #         'memberships': memberships,
+    #         'config': config,
+    #         'tokens': tokens,
+    #     }
+    #     return render(request, "reunion/partials/account/membership_table.html", context=context)
 
     @action(detail=False, methods=['GET'])
     def card(self, request: HttpRequest) -> HttpResponse:
