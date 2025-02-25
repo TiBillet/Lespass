@@ -310,9 +310,8 @@ class ReservationValidator(serializers.Serializer):
 
                 # Check adhésion
                 if price.adhesion_obligatoire:
-                    membership_products = [membership.price.product for membership in
-                                           user.membership.all()]
-                    if price.adhesion_obligatoire not in membership_products:
+                    valid_membership = False
+                    if not user.memberships.filter(price__product=price.adhesion_obligatoire, deadline__gte=timezone.now()).exists():
                         logger.warning(_(f"L'utilisateur n'est pas membre"))
                         raise serializers.ValidationError(_(f"L'utilisateur n'est pas membre"))
 

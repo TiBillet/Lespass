@@ -659,7 +659,13 @@ class MyAccount(viewsets.ViewSet):
                     names_of_place_federated.append(place.get('organisation'))
             token['asset']['names_of_place_federated'] = names_of_place_federated
 
+        #TODO: Utiliser le tenant et non plus fedow
+        memberships = request.user.memberships.all()
+        for membership in memberships:
+            membership.get_deadline()
+
         context = {
+            'memberships': memberships,
             'config': config,
             'tokens': tokens,
         }

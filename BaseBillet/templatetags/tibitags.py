@@ -3,6 +3,7 @@ from itertools import product
 from random import randint
 
 from django import template
+from django.utils import timezone
 
 from Administration.management.commands.demo_data import logger
 from fedow_connect.utils import dround as utils_dround
@@ -45,15 +46,8 @@ def not_in_list(value, list):
 @register.filter
 def is_membership(user, membership_product) -> bool:
     # Recherche d'une adhésion valide chez l'utilisateur
-    for membership in user.memberships.filter(
-        price__product=membership_product,
-        last_contribution__isnull=False,
-    ):
-        if membership.is_valid():
-            logger.info("Membership is valid !")
-            return True
-
-    return False
+    # import ipdb; ipdb.set_trace()
+    return user.memberships.filter(price__product=membership_product, deadline__gte=timezone.now()).exists()
 
 
 

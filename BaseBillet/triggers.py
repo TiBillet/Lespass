@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 def update_membership_state_after_stripe_paiement(ligne_article):
     paiement_stripe = ligne_article.paiement_stripe
-    membership = paiement_stripe.membership.first()
+    membership: Membership = paiement_stripe.membership.first()
 
     price: Price = ligne_article.pricesold.price
     membership.contribution_value = ligne_article.pricesold.prix
@@ -43,6 +43,8 @@ def update_membership_state_after_stripe_paiement(ligne_article):
         membership.status = Membership.AUTO
 
     membership.save()
+    # Mise à jour de la deadline
+    membership.set_deadline()
     logger.info(f"    update_membership_state_after_paiement : Mise à jour de la fiche membre OK")
     return membership
 

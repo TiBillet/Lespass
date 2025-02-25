@@ -1,20 +1,20 @@
 {% load i18n tibitags static %}
-<form id="reservation_form" hx-post="reservation/">
+<form id="reservation_form" hx-post="reservation/" hx-indicator="#tibillet-spinner">
     <input type="hidden" name="event" value="{{ event.uuid }}">
 
     {% if user.is_anonymous %}
         <div class="mb-3">
-            <label for="booking-email" class="form-label">Email</label>
+            <label for="booking-email" class="form-label">{% trans "Email" %}</label>
             <input type="email" name="email" class="form-control" id="booking-email">
         </div>
         <div class="mb-3">
-            <label for="booking-confirm" class="form-label">Confirmez votre email</label>
+            <label for="booking-confirm" class="form-label">{% trans "Confirmez votre email" %}</label>
             <input type="email" name="email-confirm" class="form-control" id="booking-confirm">
         </div>
         <p><code>{{ user.email }}</code></p>
     {% elif user.is_active %}
         <div class="mb-3">
-            <label for="booking-email" class="form-label">Email</label>
+            <label for="booking-email" class="form-label">{% trans "Email" %}</label>
             <input type="email" class="form-control" id="booking-email" name="email" value="{{ user.email }}"
                    readonly>
         </div>

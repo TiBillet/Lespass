@@ -72,6 +72,9 @@ class Membership_fwh(viewsets.ViewSet):
         )
         new_membership.fedow_transactions.add(transaction)
 
+        # On rajoute la deadline en fonction du prix choisi :
+        new_membership.set_deadline()
+
         return Response(status=status.HTTP_201_CREATED)
 
 

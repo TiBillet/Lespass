@@ -307,19 +307,42 @@ class ProductAdminCustomForm(ModelForm):
         return cleaned_data
 
 
+
+class PriceInlineChangeForm(ModelForm):
+    # Le formulaire pour changer une adhésion
+    class Meta:
+        model = Price
+        fields = (
+            'name',
+            'product',
+            'prix',
+            'free_price',
+            'subscription_type',
+            'publish',
+        )
+
+    def clean_prix(self):
+        cleaned_data = self.cleaned_data
+        prix = cleaned_data.get('prix')
+        if prix < 1 :
+            raise forms.ValidationError(_("Un tarif ne peux être inférieur à 1€"), code="invalid")
+        return prix
+
 class PriceInline(TabularInline):
     model = Price
     fk_name = 'product'
+    form = PriceInlineChangeForm
     # hide_title = True
-    fields = (
-        'name',
-        'product',
-        'prix',
-        # 'adhesion_obligatoire',
-        'subscription_type',
-        # 'recurring_payment',
-        'publish',
-    )
+
+    # fields = (
+    #     'name',
+    #     'product',
+    #     'prix',
+    #     # 'adhesion_obligatoire',
+    #     'subscription_type',
+    #     # 'recurring_payment',
+    #     'publish',
+    # )
 
     # ordering_field = "weight"
     # max_num = 1
@@ -363,47 +386,54 @@ class ProductAdmin(ModelAdmin):
         return False
 
     def has_add_permission(self, request):
-        return True
+        return TenantAdminPermissionWithRequest(request)
 
     def has_change_permission(self, request, obj=None):
-        return True
+        return TenantAdminPermissionWithRequest(request)
 
     def has_view_permission(self, request, obj=None):
-        return True
+        return TenantAdminPermissionWithRequest(request)
+
+
+class PriceChangeForm(ModelForm):
+    # Le formulaire pour changer une adhésion
+    class Meta:
+        model = Price
+        fields = (
+            'name',
+            'product',
+            'prix',
+            'free_price',
+            'subscription_type',
+            'publish',
+            'adhesion_obligatoire',
+        )
+
+    def clean_prix(self):
+        cleaned_data = self.cleaned_data
+        prix = cleaned_data.get('prix')
+        if prix < 1 :
+            raise forms.ValidationError(_("Un tarif ne peux être inférieur à 1€"), code="invalid")
+        return prix
+
 
 @admin.register(Price, site=staff_admin_site)
 class PriceAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
-
-    fields = (
-        'name',
-        'product',
-        'prix',
-        'free_price',
-        'subscription_type',
-        # 'recurring_payment',
-        'publish',
-        'adhesion_obligatoire',
-    )
-
-    # def has_view_or_change_permission(self, request, obj=None):
-    #     return True
-    #
-    # def has_add_permission(self, request):
-    #     return True
+    form = PriceChangeForm
 
     def has_delete_permission(self, request, obj=None):
         return False
 
     def has_add_permission(self, request):
-        return True
+        return TenantAdminPermissionWithRequest(request)
 
     def has_change_permission(self, request, obj=None):
-        return True
+        return TenantAdminPermissionWithRequest(request)
 
     def has_view_permission(self, request, obj=None):
-        return True
+        return TenantAdminPermissionWithRequest(request)
 
 
 @admin.register(Paiement_stripe, site=staff_admin_site)
@@ -708,13 +738,13 @@ class MembershipAddForm(ModelForm):
         cleaned_data = self.cleaned_data
         if cleaned_data.get("contribution"):
             if cleaned_data.get("contribution") > 0 and cleaned_data.get("payment_method") == PaymentMethod.FREE:
-                raise forms.ValidationError(_("Merci de renseigner un moyen de paiement si la contribution est > 0"))
+                raise forms.ValidationError(_("Merci de renseigner un moyen de paiement si la contribution est > 0"), code="invalid")
 
         if cleaned_data.get("payment_method") != PaymentMethod.FREE:
             if not cleaned_data.get("contribution"):
-                raise forms.ValidationError(_("Merci de renseigner un montant."))
+                raise forms.ValidationError(_("Merci de renseigner un montant."), code="invalid")
             if not cleaned_data.get("contribution") > 0:
-                raise forms.ValidationError(_("Merci de renseigner un montant positif."))
+                raise forms.ValidationError(_("Merci de renseigner un montant positif."), code="invalid")
 
         return cleaned_data
 
