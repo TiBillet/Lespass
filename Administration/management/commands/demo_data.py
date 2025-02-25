@@ -267,7 +267,6 @@ class Command(BaseCommand):
                     name="Reservation gratuite",
                     short_description="Reservation gratuite",
                     categorie_article=Product.FREERES,
-                    easy_reservation=True,
                     nominative=False,
                 )
 
