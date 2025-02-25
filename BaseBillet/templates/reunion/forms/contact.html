@@ -1,19 +1,21 @@
-<form>
+{% load i18n %}
+<form hx-post="/home/contact/">
     <div class="form-floating mb-3">
-        <input type="email" class="form-control" id="email" placeholder="mon@email.fr">
-        <label for="email">E-mail de contact</label>
-        <p>Nous vous répondrons à cette adresse.</p>
+        <input type="email" class="form-control" id="email" placeholder="mon@email.fr" required
+        {% if user.is_authenticated %}value="{{ user.email }}"{% endif %}>
+        <label for="email">{% trans "E-mail de contact" %}</label>
+        <p>{% trans "Nous vous répondrons à cette adresse." %}</p>
     </div>
     <div class="form-floating mb-3">
-        <input type="text" class="form-control" id="subject" placeholder="Mon sujet">
-        <label for="subject">Sujet du contact</label>
+        <input type="text" class="form-control" id="subject" placeholder="Mon sujet" required {% if user.is_authenticated %}value="{{ user.email }}"{% endif %}>
+        <label for="subject">{% trans "Sujet du contact" %}</label>
     </div>
     <div class="mb-3">
-        <label for="message" class="form-label">Message</label>
-        <textarea class="form-control" id="message" rows="3"></textarea>
+        <label for="message" class="form-label">{% trans "Message" %}</label>
+        <textarea class="form-control" id="message" rows="3" required {% if user.is_authenticated %}value="{{ user.email }}"{% endif %}></textarea>
     </div>
     <div class="position-absolute bottom-0 start-0 end-0 p-3">
-        <a href="." class="btn btn-primary d-block mb-3">Envoyer</a>
-        <a href="." class="btn btn-danger d-block">Annuler</a>
+        <button type="submit" class="btn btn-primary d-block mb-3 w-100">{% trans "Envoyer" %}</button>
+        <a href="." class="btn btn-danger d-block">{% trans "Annuler" %}</a>
     </div>
 </form>

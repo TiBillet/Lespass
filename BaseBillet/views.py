@@ -714,12 +714,30 @@ class MyAccount(viewsets.ViewSet):
         return redirect('/my_account/')
 
 
+
 @require_GET
 def index(request):
     # On redirige vers la page d'adhésion en attendant que les events soient disponibles
-    tenant: Client = connection.tenant
+    # tenant: Client = connection.tenant
     template_context = get_context(request)
     return render(request, "reunion/views/home.html", context=template_context)
+
+
+
+class HomeViewset(viewsets.ViewSet):
+    authentication_classes = [SessionAuthentication, ]
+
+    @action(detail=False, methods=['POST'])
+    def contact(self, request):
+        logger.info(request.data)
+        pass
+
+    def get_permissions(self):
+        # if self.action in ['create']:
+        #     permission_classes = [permissions.IsAuthenticated]
+        # else:
+        permission_classes = [permissions.AllowAny]
+        return [permission() for permission in permission_classes]
 
 
 class EventMVT(viewsets.ViewSet):

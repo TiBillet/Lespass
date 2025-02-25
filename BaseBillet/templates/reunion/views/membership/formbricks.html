@@ -10,8 +10,11 @@
         email: "{{ membership.email }}",
         name: "{{ membership.member_name }}",
         membership_uuid: "{{ membership.uuid }}",
-        product_name: "{{ membership.price.product.name|slugify }}",
-        price_name: "{{ membership.price.name|slugify }}",
+        product_name: "{{ membership.price.product.name }}",
+        price_name: "{{ membership.price.name }}",
+        product_slug: "{{ membership.price.product.name|slugify }}",
+        price_slug: "{{ membership.price.name|slugify }}",
+        price_amount: "{{ membership.price.prix }}",
     })
 
     window.formbricks.track("{{ form.trigger_name }}", {
