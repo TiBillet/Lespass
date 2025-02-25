@@ -21,6 +21,8 @@
             membership_uuid: "{{ membership.uuid }}",
             product_name: "{{ membership.price.product.name|slugify }}",
             price_name: "{{ membership.price.name|slugify }}",
+            product_slug: "{{ membership.price.product.name }}",
+            price_slug: "{{ membership.price.name }}",
         },
     });
 
