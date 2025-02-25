@@ -1018,8 +1018,8 @@ class Badge(viewsets.ViewSet):
 class MembershipMVT(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
-    def get_federated_products(self, tags=None, search=None, page=1):
-        pass
+    # def get_federated_products(self, tags=None, search=None, page=1):
+    #     pass
 
     def create(self, request):
         logger.info(f"new membership : {request.data}")
@@ -1055,23 +1055,22 @@ class MembershipMVT(viewsets.ViewSet):
 
     def list(self, request: HttpRequest):
         template_context = get_context(request)
-        config = template_context['config']
 
         # Récupération de tout les produits adhésions de la fédération
-        tenants = [tenant for tenant in config.federated_with.all()]
-        self_tenant = connection.tenant
-        if self_tenant not in tenants:
-            tenants.append(connection.tenant)
-
-        products = []
-        for tenant in tenants:
-            with tenant_context(tenant):
-                for product in Product.objects.filter(categorie_article=Product.ADHESION, publish=True).prefetch_related('tag'):
-                    products.append(product)
+        # config = template_context['config']
+        # tenants = [tenant for tenant in config.federated_with.all()]
+        # self_tenant = connection.tenant
+        # if self_tenant not in tenants:
+        #     tenants.append(connection.tenant)
+        # products = []
+        # for tenant in tenants:
+        #     with tenant_context(tenant):
+        #         for product in Product.objects.filter(categorie_article=Product.ADHESION, publish=True).prefetch_related('tag'):
+        #             products.append(product)
 
         # messages.add_message(request, messages.SUCCESS, "coucou")
 
-        template_context['products'] = products
+        template_context['products'] = Product.objects.filter(categorie_article=Product.ADHESION, publish=True).prefetch_related('tag')
         response = render(
             request, "reunion/views/membership/list.html",
             context=template_context,
