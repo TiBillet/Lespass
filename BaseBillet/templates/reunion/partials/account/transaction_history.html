@@ -1,45 +1,45 @@
 {% load tibitags %}
 {% load humanize i18n %}
 
-<h2 class="pt-3">Historique des transactions</h2>
+<h2 class="pt-3">{% trans "Historique des transactions" %}</h2>
 <div class="table-responsive">
     <table class="table">
         <thead>
-            <th>Montant</th>
-            <th>Action</th>
-            <th>Chemin</th>
-            <th>Date</th>
+        <th>{% trans "Montant" %}</th>
+        <th>{% trans "Action" %}</th>
+        <th>{% trans "Chemin" %}</th>
+        <th>{% trans "Date" %}</th>
         </thead>
         <tbody>
 
-            {% for tr in transactions %}
+        {% for tr in transactions %}
             <tr class="test-return-{{ tr.serialized_asset.name | slugify }}-{{ tr.amount | dround | slugify }}-content">
                 <td>
                     <strong>{{ tr.amount | dround }}</strong>
-                    {% if token.asset.is_stripe_primary %}
-                    TiBillet
+                    {% if tr.serialized_asset.is_stripe_primary %}
+                        TiBillet
                     {% else %}
-                    {{ token.name }}
-                    ({{ token.asset.place_origin }})
+                        {{ tr.serialized_asset.name }}
+                        ({{ tr.serialized_asset.place_origin.name }})
                     {% endif %}
                 </td>
                 <td>{{ tr.get_action_display }}</td>
                 <td>
                     {% if tr.serialized_sender.uuid == user.wallet.uuid %}
-                    {% translate "Myself" %}
+                        {% translate "Myself" %}
                     {% else %}
-                    {{ tr.serialized_sender.get_name }}
+                        {{ tr.serialized_sender.get_name }}
                     {% endif %}
                     <i class="bi bi-arrow-right"></i>
                     {% if tr.serialized_receiver.uuid == user.wallet.uuid %}
-                    {% translate "Myself" %}
+                        {% translate "Myself" %}
                     {% else %}
-                    {{ tr.serialized_receiver.get_name }}
+                        {{ tr.serialized_receiver.get_name }}
                     {% endif %}
                 </td>
                 <td>{{ tr.datetime }}</td>
             </tr>
-            {% endfor %}
+        {% endfor %}
         </tbody>
     </table>
 </div>

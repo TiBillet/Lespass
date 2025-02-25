@@ -161,7 +161,7 @@
     <section id="transactionHistory">
         <p class="py-3 text-center">
             <a href="#" class="btn btn-outline-primary d-block d-sm-inline"
-               hx-get="/my_account/transactions_table/"
+               hx-get="/my_account/transactions_table/" hx-indicator="#tibillet-spinner"
                hx-target="#transactionHistory"
                hx-swap="outerHTML">
                 {% trans "Historique des transactions" %}
