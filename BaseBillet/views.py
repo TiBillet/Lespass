@@ -1018,6 +1018,9 @@ class Badge(viewsets.ViewSet):
 class MembershipMVT(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
+    def get_federated_products(self, tags=None, search=None, page=1):
+        pass
+
     def create(self, request):
         logger.info(f"new membership : {request.data}")
         membership_validator = MembershipValidator(data=request.data, context={'request': request})
