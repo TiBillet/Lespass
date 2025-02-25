@@ -28,6 +28,12 @@ from root_billet.models import RootConfiguration
 logger = logging.getLogger(__name__)
 
 
+class ContactValidator(serializers.Serializer):
+    email = serializers.EmailField()
+    subject = serializers.CharField()
+    message = serializers.CharField()
+
+
 class TagValidator(serializers.Serializer):
     tags = serializers.PrimaryKeyRelatedField(source="slug", queryset=Tag.objects.all(), many=True)
 

@@ -49,7 +49,7 @@ def decode_uid(pk):
 class CeleryMailerClass():
 
     def __init__(self,
-                 email: str,
+                 email: str or list,
                  title: str,
                  text=None,
                  html=None,
@@ -65,9 +65,11 @@ class CeleryMailerClass():
         self.context = context
         self.attached_files = attached_files
         self.sended = None
-
+        self.return_email = os.environ.get('DEFAULT_FROM_EMAIL', os.environ['EMAIL_HOST_USER'])
         if template and context:
             self.html = render_to_string(template, context=context)
+        else :
+            self.html = self.text
 
     def config_valid(self):
         EMAIL_HOST = os.environ.get('EMAIL_HOST')
@@ -75,7 +77,6 @@ class CeleryMailerClass():
 
         # Adresse d'envoi peut/doit être différente du login du serveur mail.
         # Error si ni DEFAULT ni HOST
-        self.return_email = os.environ.get('DEFAULT_FROM_EMAIL', os.environ['EMAIL_HOST_USER'])
 
         if all([
             EMAIL_HOST,
@@ -83,7 +84,7 @@ class CeleryMailerClass():
             # Not required for local server
             # EMAIL_HOST_USER,
             # EMAIL_HOST_PASSWORD,
-            self.return_email,
+            self.return_email, # return email
             self.title,
             self.email,
         ]):
@@ -96,13 +97,14 @@ class CeleryMailerClass():
         # import ipdb; ipdb.set_trace()
 
         if self.html and self.config_valid():
+            to = self.email if type(self.email) is list else [self.email,]
 
             logger.info(f'  WORKDER CELERY : send_mail - {self.title}')
             mail = EmailMultiAlternatives(
                 self.title,
                 self.text,
                 self.return_email,
-                [self.email, ],
+                to,
                 headers={"List-Unsubscribe": f"<mailto: {self.return_email}?subject=unsubscribe>"},
             )
             mail.attach_alternative(self.html, "text/html")
@@ -351,6 +353,24 @@ def redirect_post_webhook_stripe_from_public(url, data):
     )
     logger.info(redirect_to_tenant.content)
 
+
+@app.task
+def contact_mailer(sender, subject, message):
+    configuration = Configuration.get_solo()
+    mail = CeleryMailerClass(
+        email=[sender, configuration.email],
+        title=subject,
+        text=message,
+        template='emails/contact_email.html',
+        context={
+            "organisation": configuration.organisation,
+            "sender" : sender,
+            "subject": subject,
+            "message" : message,
+        }
+    )
+    mail.send()
+    logger.info(f"mail.sended : {mail.sended}")
 
 @app.task
 def connexion_celery_mailer(user_email, base_url, title=None, template=None):

@@ -45,9 +45,10 @@ from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, Product, Event, Paiement_stripe, Membership, Reservation, \
     FormbricksConfig, FormbricksForms, FederatedPlace
-from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, new_tenant_mailer
+from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, new_tenant_mailer, \
+    contact_mailer
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
-    ReservationValidator
+    ReservationValidator, ContactValidator
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from fedow_connect.fedow_api import FedowAPI, AssetFedow
@@ -572,7 +573,6 @@ class MyAccount(viewsets.ViewSet):
         fedowAPI = FedowAPI()
         wallet = fedowAPI.wallet.cached_retrieve_by_signature(request.user).validated_data
 
-
         # On retire les adhésions, on les affiche dans l'autre table
         tokens = [token for token in wallet.get('tokens') if token.get('asset_category') not in ['SUB', 'BDG']]
 
@@ -714,7 +714,6 @@ class MyAccount(viewsets.ViewSet):
         return redirect('/my_account/')
 
 
-
 @require_GET
 def index(request):
     # On redirige vers la page d'adhésion en attendant que les events soient disponibles
@@ -723,14 +722,26 @@ def index(request):
     return render(request, "reunion/views/home.html", context=template_context)
 
 
-
 class HomeViewset(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
     @action(detail=False, methods=['POST'])
     def contact(self, request):
         logger.info(request.data)
-        pass
+        validator = ContactValidator(data=request.data, context={'request': request})
+        if not validator.is_valid():
+            for error in validator.errors:
+                messages.add_message(request, messages.ERROR, f"{error} : {validator.errors[error][0]}")
+            return HttpResponseClientRedirect(request.headers['Referer'])
+
+        contact_mailer.delay(
+            sender=validator.validated_data['email'],
+            subject=validator.validated_data['subject'],
+            message=validator.validated_data['message'],
+        )
+
+        messages.add_message(request, messages.SUCCESS, _("Message envoyé. Vous êtes en copie, Merci !"))
+        return HttpResponseClientRedirect(request.headers['Referer'])
 
     def get_permissions(self):
         # if self.action in ['create']:
@@ -754,11 +765,11 @@ class EventMVT(viewsets.ViewSet):
         # Création d'un dictionnaire pour mélanger les objets FederatedPlace et la place actuelle.
         tenants = [
             {
-                "tenant":place.tenant,
-                "tag_filter":[tag.slug for tag in place.tag_exclude.all()],
-                "tag_exclude":[tag.slug for tag in place.tag_filter.all()],
+                "tenant": place.tenant,
+                "tag_filter": [tag.slug for tag in place.tag_exclude.all()],
+                "tag_exclude": [tag.slug for tag in place.tag_filter.all()],
             }
-            for place in FederatedPlace.objects.all().prefetch_related("tag_filter","tag_exclude")
+            for place in FederatedPlace.objects.all().prefetch_related("tag_filter", "tag_exclude")
         ]
         # Le tenant actuel
         tenants.append(
@@ -774,8 +785,9 @@ class EventMVT(viewsets.ViewSet):
                 events = Event.objects.prefetch_related('tag', 'postal_address').filter(
                     published=True,
                     datetime__gte=timezone.localtime() - timedelta(days=1),
-                ).exclude(tag__slug__in=tenant['tag_filter'] # On prend les évènement d'aujourd'hui
-                          ).exclude(categorie=Event.ACTION)  # Les Actions sont affichés dans la page de l'evenement parent
+                ).exclude(tag__slug__in=tenant['tag_filter']  # On prend les évènement d'aujourd'hui
+                          ).exclude(
+                    categorie=Event.ACTION)  # Les Actions sont affichés dans la page de l'evenement parent
 
                 if len(tenant['tag_exclude']) > 0:
                     events = events.filter(
@@ -869,7 +881,8 @@ class EventMVT(viewsets.ViewSet):
         # L'evènement possède des sous évènement.
         # Pour l'instant : uniquement des ACTIONS
         if event.children.exists():
-            template_context['action_total_jauge'] = event.children.all().aggregate(total_value=Sum('jauge_max'))['total_value'] or 0
+            template_context['action_total_jauge'] = event.children.all().aggregate(total_value=Sum('jauge_max'))[
+                                                         'total_value'] or 0
             template_context['inscrits'] = Ticket.objects.filter(reservation__event__parent=event).count()
 
         return render(request, "reunion/views/event/retrieve.html", context=template_context)
@@ -882,7 +895,8 @@ class EventMVT(viewsets.ViewSet):
         action = get_object_or_404(Event, pk=request.data.get('action'), categorie=Event.ACTION)
 
         if Ticket.objects.filter(reservation__user_commande=user, reservation__event__in=event.children.all()).exists():
-            messages.add_message(request, messages.ERROR, _("Vous avez déjà confirmé votre présence sur une action lors de cet évènement."))
+            messages.add_message(request, messages.ERROR,
+                                 _("Vous avez déjà confirmé votre présence sur une action lors de cet évènement."))
             return HttpResponseClientRedirect(request.headers['Referer'])
 
         if not user:
@@ -890,8 +904,8 @@ class EventMVT(viewsets.ViewSet):
             return HttpResponseClientRedirect(request.headers['Referer'])
 
         validator = ReservationValidator(data={
-            "email":user.email,
-            "event":action.pk,
+            "email": user.email,
+            "event": action.pk,
         }, context={'request': request})
 
         if not validator.is_valid():
@@ -1088,7 +1102,8 @@ class MembershipMVT(viewsets.ViewSet):
 
         # messages.add_message(request, messages.SUCCESS, "coucou")
 
-        template_context['products'] = Product.objects.filter(categorie_article=Product.ADHESION, publish=True).prefetch_related('tag')
+        template_context['products'] = Product.objects.filter(categorie_article=Product.ADHESION,
+                                                              publish=True).prefetch_related('tag')
         response = render(
             request, "reunion/views/membership/list.html",
             context=template_context,
