@@ -1056,11 +1056,14 @@ class MembershipMVT(viewsets.ViewSet):
 
         # Récupération de tout les produits adhésions de la fédération
         tenants = [tenant for tenant in config.federated_with.all()]
-        tenants.append(connection.tenant)
+        self_tenant = connection.tenant
+        if self_tenant not in tenants:
+            tenants.append(connection.tenant)
+
         products = []
         for tenant in tenants:
             with tenant_context(tenant):
-                for product in Product.objects.filter(categorie_article=Product.ADHESION, publish=True):
+                for product in Product.objects.filter(categorie_article=Product.ADHESION, publish=True).prefetch_related('tag'):
                     products.append(product)
 
         # messages.add_message(request, messages.SUCCESS, "coucou")
