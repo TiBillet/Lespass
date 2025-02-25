@@ -317,7 +317,7 @@ class PriceInline(TabularInline):
         'prix',
         # 'adhesion_obligatoire',
         'subscription_type',
-        'recurring_payment',
+        # 'recurring_payment',
         'publish',
     )
 
@@ -350,7 +350,7 @@ class ProductAdmin(ModelAdmin):
     autocomplete_fields = [
         "option_generale_radio", "option_generale_checkbox",
     ]
-
+    list_filter = ['publish', 'categorie_article']
     search_fields = ['name']
 
     def get_queryset(self, request):
@@ -359,6 +359,17 @@ class ProductAdmin(ModelAdmin):
         qs = super().get_queryset(request)
         return qs.exclude(categorie_article__in=[Product.RECHARGE_CASHLESS, Product.DON]).exclude(archive=True)
 
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_add_permission(self, request):
+        return True
+
+    def has_change_permission(self, request, obj=None):
+        return True
+
+    def has_view_permission(self, request, obj=None):
+        return True
 
 @admin.register(Price, site=staff_admin_site)
 class PriceAdmin(ModelAdmin):
@@ -384,6 +395,15 @@ class PriceAdmin(ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+    def has_add_permission(self, request):
+        return True
+
+    def has_change_permission(self, request, obj=None):
+        return True
+
+    def has_view_permission(self, request, obj=None):
+        return True
 
 
 @admin.register(Paiement_stripe, site=staff_admin_site)
