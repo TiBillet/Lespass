@@ -46,7 +46,7 @@ from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, Product, Event, Paiement_stripe, Membership, Reservation, \
     FormbricksConfig, FormbricksForms, FederatedPlace
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, new_tenant_mailer, \
-    contact_mailer
+    contact_mailer, new_tenant_after_stripe_mailer
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
     ReservationValidator, ContactValidator
 from Customers.models import Client, Domain
@@ -1332,6 +1332,7 @@ class Tenant(viewsets.ViewSet):
         email_stripe = info_stripe['email']
         waiting_config = WaitingConfiguration.objects.get(id_acc_connect=id_acc_connect)
 
+        # Envoie du mail aux superadmins
         new_tenant_after_stripe_mailer.delay(waiting_config.pk)
 
 
