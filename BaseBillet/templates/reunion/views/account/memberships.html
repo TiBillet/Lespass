@@ -17,13 +17,6 @@
         </div>
     </section>
 
-        {#    <span>{% translate "Loading tokens" %}</span>#}
-        {#    <div class="d-flex justify-content-center align-items-center ">#}
-        {#        <div class="spinner-border text-info"#}
-        {#                role="status"#}
-        {#        ></div>#}
-        {#    </div>#}
-
     <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-3 mb-5">
         {% for membership in memberships %}
             <div class="col">
@@ -37,8 +30,13 @@
                             <li class="list-group-item">Émis par <strong>{{ config.organisation }}</strong></li>
                             <li class="list-group-item">Valable pour {{ config.organisation }}</li>
                         </ul>
-{#                        <p class="card-text">{{ membership.price.product.short_description }}</p>#}
-                        <p class="card-text">{{ membership.price.product.long_description }}</p>
+
+                        {% if membership.long_description %}
+                        <p class="card-text">{{ membership.long_description }}</p>
+                        {% endif %}
+                        {% elif membership.short_description %}
+                        <p class="card-text">{{ membership.short_description }}</p>
+                        {% endif %}
                     </div>
                     <div class="card-footer">
                         <p>
