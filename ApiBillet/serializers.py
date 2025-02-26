@@ -11,10 +11,9 @@ from django_tenants.utils import tenant_context
 from rest_framework import serializers
 from rest_framework.generics import get_object_or_404
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, Paiement_stripe, \
-    PriceSold, ProductSold, Artist_on_event, OptionGenerale, Tag, Weekday
+    PriceSold, ProductSold, Artist_on_event, OptionGenerale, Tag
 from Customers.models import Client
 from PaiementStripe.views import CreationPaiementStripe
-from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
 

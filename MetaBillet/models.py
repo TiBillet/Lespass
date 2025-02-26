@@ -1,11 +1,9 @@
-from django.utils.text import slugify
 from uuid import uuid4
+
+from django.db import models
+from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
-
-from django.db import models, connection
-
 # Create your models here.
-from solo.models import SingletonModel
 from stdimage import StdImageField, JPEGField
 from stdimage.validators import MaxSizeValidator, MinSizeValidator
 
@@ -179,6 +177,9 @@ class WaitingConfiguration(models.Model):
     categorie = models.CharField(max_length=3, choices=CATEGORIE_CHOICES, default=SALLE_SPECTACLE,
                                          verbose_name=_("Categorie"))
 
+    created = models.BooleanField(default=False)
+    tenant = models.ForeignKey(Client, on_delete=models.CASCADE, verbose_name=_('Tenant'), related_name='waiting_config', blank=True, null=True)
+
     def save(self, *args, **kwargs):
         '''
         Transforme le nom en slug si vide, pour en faire une url lisible
@@ -186,6 +187,16 @@ class WaitingConfiguration(models.Model):
         if not self.slug:
             self.slug = slugify(f"{self.organisation}")
         super().save(*args, **kwargs)
+
+    def create_tenant(self):
+        from BaseBillet.validators import TenantCreateValidator
+        tenant = TenantCreateValidator.create_tenant(self)
+        self.created = True
+        self.tenant = tenant
+        self.save()
+
+    def __str__(self):
+        return f"{self.organisation} - {self.email} -> {self.slug}"
 
     class Meta:
         verbose_name = _('Paramètres')

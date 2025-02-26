@@ -2,10 +2,9 @@
 
 import logging
 import uuid
-from uuid import uuid4
 from datetime import timedelta, datetime
 from decimal import Decimal
-from django.utils.html import format_html
+from uuid import uuid4
 
 import requests
 import stripe
@@ -19,10 +18,11 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.html import format_html
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 from django_tenants.postgresql_backend.base import FakeTenant
-from django_tenants.utils import tenant_context, schema_context
+from django_tenants.utils import tenant_context
 from rest_framework_api_key.models import APIKey
 from solo.models import SingletonModel
 from stdimage import StdImageField
@@ -32,7 +32,6 @@ from stripe import InvalidRequestError
 import AuthBillet.models
 from AuthBillet.models import HumanUser
 from Customers.models import Client
-from MetaBillet.models import EventDirectory, ProductDirectory
 from QrcodeCashless.models import CarteCashless
 from TiBillet import settings
 from fedow_connect.utils import dround
@@ -982,18 +981,18 @@ class Artist_on_event(models.Model):
         with tenant_context(self.artist):
             return Configuration.get_solo()
 
-
-@receiver(post_save, sender=Artist_on_event)
-def event_productsold_create(sender, instance: Artist_on_event, created, **kwargs):
-    place = connection.tenant
-    artist = instance.artist
-    with schema_context('public'):
-        event_directory, created = EventDirectory.objects.get_or_create(
-            datetime=instance.datetime,
-            event_uuid=instance.event.uuid,
-            place=place,
-            artist=artist,
-        )
+#
+# @receiver(post_save, sender=Artist_on_event)
+# def event_productsold_create(sender, instance: Artist_on_event, created, **kwargs):
+#     place = connection.tenant
+#     artist = instance.artist
+#     with schema_context('public'):
+#         event_directory, created = EventDirectory.objects.get_or_create(
+#             datetime=instance.datetime,
+#             event_uuid=instance.event.uuid,
+#             place=place,
+#             artist=artist,
+#         )
 
 
 class ProductSold(models.Model):
@@ -1061,12 +1060,12 @@ class ProductSold(models.Model):
 
         # On répertorie tout les produit pour savoir lequel incrémenter en cas de stripe webhook
         # Non utile en test
-        if type(connection.tenant) != FakeTenant:
-            with schema_context('public'):
-                product_directory, created = ProductDirectory.objects.get_or_create(
-                    place=client,
-                    product_sold_stripe_id=product.id,
-                )
+        # if type(connection.tenant) != FakeTenant:
+        #     with schema_context('public'):
+        #         product_directory, created = ProductDirectory.objects.get_or_create(
+        #             place=client,
+        #             product_sold_stripe_id=product.id,
+        #         )
 
         self.save()
         return self.id_product_stripe

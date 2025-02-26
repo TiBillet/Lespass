@@ -2,12 +2,8 @@ import logging
 
 from django.contrib.auth import get_user_model
 from django.db import connection
-from django.shortcuts import get_object_or_404
-from rest_framework.viewsets import ViewSet
-from rest_framework_api_key.models import APIKey, AbstractAPIKey
 
 from AuthBillet.models import TibilletUser
-from BaseBillet.models import ExternalApiKey
 from BaseBillet.tasks import connexion_celery_mailer
 
 logger = logging.getLogger(__name__)

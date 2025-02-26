@@ -82,8 +82,8 @@ SHARED_APPS = (
     "unfold",  # before django.contrib.admin
     "unfold.contrib.filters",  # optional, if special filters are needed
     "unfold.contrib.forms",  # optional, if special form elements are needed
-    # "unfold.contrib.inlines",  # optional, if special inlines are needed
-    # "unfold.contrib.import_export",  # optional, if django-import-export package is used
+    "unfold.contrib.inlines",  # optional, if special inlines are needed
+    "unfold.contrib.import_export",  # optional, if django-import-export package is used
     # "unfold.contrib.guardian",  # optional, if django-guardian package is used
     # "unfold.contrib.simple_history",  # optional, if django-simple-history package is used
 
@@ -337,14 +337,14 @@ CHANNEL_LAYERS = {
 # COMMUNECTER SSO oauth2
 # -------------------------------------/
 OAUTH_URL_WHITELISTS = []
-OAUTH_CLIENT_NAME = 'communecter'
+OAUTH_CLIENT_NAME = os.environ.get('OAUTH_NAME')
 OAUTH_CLIENT = {
-    'name': 'communecter',
-    'client_id': os.environ.get('COMMUNECTER_SSO_CLIENTID'),
-    'client_secret': os.environ.get('COMMUNECTER_SSO_SECRET'),
-    'access_token_url': 'https://sso.communecter.org/oauth/token',
-    'authorize_url': 'https://sso.communecter.org/oauth/authorize',
-    'api_base_url': 'https://sso.communecter.org/oauth',
+    'name': os.environ.get('OAUTH_NAME'),
+    'client_id': os.environ.get('OAUTH_CLIENT_ID'),
+    'client_secret': os.environ.get('OAUTH_CLIENT_SECRET'),
+    'access_token_url': os.environ.get('OAUTH_ACCESS_TOKEN_URL'),
+    'authorize_url': os.environ.get('OAUTH_AUTHORIZE_URL'),
+    'api_base_url': os.environ.get('OAUTH_BASE_URL'),
     'redirect_uri': 'https://www.tibillet.org/api/user/oauth',
     'client_kwargs': {
         'scope': 'openid profile email',
@@ -353,12 +353,6 @@ OAUTH_CLIENT = {
     'userinfo_endpoint': 'user',
 }
 OAUTH_COOKIE_SESSION_ID = 'sso_session_id'
-
-# -------------------------------------/
-# LLM
-# -------------------------------------/
-
-OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 
 # -------------------------------------/
 # LOGGING

@@ -28,5 +28,6 @@ class Command(BaseCommand):
                 email=options['email'].lower(),
                 dns_choice=dns_choice,
             )
+            # waiting_config.new_tenant()
             TenantCreateValidator.create_tenant(waiting_config)
         logger.info('Tenant created: %s', waiting_config)
