@@ -472,7 +472,7 @@ def new_tenant_mailer(waiting_config_uuid: str):
         mail = CeleryMailerClass(
             waiting_config.email,
             _("TiBillet : Création d'un nouvel espace."),
-            template='reunion/views/tenant/emails/after_onboard_stripe_for_superadmin.html',
+            template='reunion/views/tenant/emails/onboard_stripe.html',
             context={
                 'create_url_for_onboard_stripe': f'{create_url_for_onboard_stripe}',
                 'waiting_config': waiting_config,
@@ -496,7 +496,7 @@ def new_tenant_after_stripe_mailer(waiting_config_uuid: str):
         mail = CeleryMailerClass(
             super_admin_root,
             _(f"{WaitingConfiguration.organisation} & TiBillet : Demande de création d'un nouvel espace. Action d'admin ROOT demandée"),
-            template='reunion/tenant/emails/after_onboard_stripe_for_superadmin.html',
+            template='reunion/views/tenant/emails/after_onboard_stripe_for_superadmin.html',
             context={
                 'waiting_config': waiting_config,
             }
