@@ -172,8 +172,10 @@ if DEBUG:
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        # 'DIRS': [],
+        'DIRS': [BASE_DIR / "Administration/templates"], # Pour le dashboard d'admin unfold
         'APP_DIRS': True,
+
         'OPTIONS': {
             'context_processors': [
                 'django.template.context_processors.debug',
@@ -409,6 +411,10 @@ LOGGING = {
 }
 
 UNFOLD = {
+    # "ENVIRONMENT_TITLE_PREFIX": "sample_app.environment_title_prefix_callback",  # environment name prefix in title tag
+    "ENVIRONMENT": "Administration.admin_tenant.environment_callback",  # environment name in header
+    "DASHBOARD_CALLBACK": "Administration.admin_tenant.dashboard_callback",
+
     "SITE_TITLE": "TiBillet",
     "SITE_HEADER": "TiBillet Lespass Admin",
     "SITE_DROPDOWN": [
@@ -473,11 +479,17 @@ UNFOLD = {
         "show_search": True,  # Search in applications and models names
         "show_all_applications": True,  # Dropdown with all applications and models
         "navigation": [
+
             {
                 "title": _("Informations générales"),
                 "separator": True,  # Top border
                 "collapsible": False,  # Collapsible group of links
                 "items": [
+                    {
+                        "title": _("Dashboard"),
+                        "icon": "dashboard",
+                        "link": reverse_lazy("admin:index"),
+                    },
                     {
                         "title": _("Configuration"),
                         "icon": "manufacturing",  # Supported icon set: https://fonts.google.com/icons

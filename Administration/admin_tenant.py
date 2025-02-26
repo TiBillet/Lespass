@@ -6,6 +6,7 @@ from unicodedata import category
 
 import requests
 from django import forms
+from django.conf import settings
 from django.db import models, connection
 from django.contrib import admin
 from django.contrib import messages
@@ -1533,3 +1534,19 @@ class FormbricksFormsAdmin(ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
+
+
+
+### UNFOLD ADMIN
+def environment_callback(request):
+    if settings.DEBUG:
+        return [_("Development"), "primary"]
+
+    return [_("Production"), "primary"]
+
+def dashboard_callback(request, context):
+    context.update({
+        "custom_variable": "value",
+    })
+
+    return context
