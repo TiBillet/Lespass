@@ -31,29 +31,26 @@
                             <li class="list-group-item">Valable pour {{ config.organisation }}</li>
                         </ul>
 
-                        {% if membership.long_description %}
-                        <p class="card-text">{{ membership.long_description }}</p>
-                        {% endif %}
-                        {% elif membership.short_description %}
-                        <p class="card-text">{{ membership.short_description }}</p>
+                        {% if membership.price.product.long_description %}
+                            <p class="card-text">{{ membership.price.product.long_description }}</p>
+                        {% elif membership.price.product.short_description %}
+                            <p class="card-text">{{ membership.price.product.short_description }}</p>
                         {% endif %}
                     </div>
                     <div class="card-footer">
                         <p>
-                            <strong>Adhésion</strong> démarrée le
-                            {{ membership.last_contribution }}
+                            <strong>{% trans "Adhésion" %}</strong> {% trans "démarrée le" %} {{ membership.last_contribution }}
                         </p>
                         <p>
-                            <strong>Valide</strong> : {{ membership.get_deadline }}
+                            <strong>{% trans "Valide" %}</strong> : {{ membership.get_deadline }}
                         </p>
-                        {# TODO: actions renouvellement et résiliation #}
-                        {# TODO: date de fin ou durée restante ? #}
                         <a href="/memberships/" class="btn btn-primary d-block mb-3">
-                            Renouveler {{ membership.get_deadline | naturaltime }}
+                            {% trans "Renouveler" %} {{ membership.get_deadline | naturaltime }}
                         </a>
-{#                        <a href="#" class="btn btn-danger d-block mb-3">#}
-{#                            Résilier l'adhésion#}
-{#                        </a>#}
+                        {# TODO: actions renouvellement et résiliation #}
+                        {#                        <a href="#" class="btn btn-danger d-block mb-3">#}
+                        {#                            Résilier l'adhésion#}
+                        {#                        </a>#}
                     </div>
                 </div>
             </div>
