@@ -6,18 +6,20 @@
     <div class="flex-fill">
         <div class="container-lg py-5">
             <form class="row" id="new-tenant"
-                  hx-post="/tenant/create_tenant/" hx-indicator="#tibillet-spinner"
+                  hx-post="/tenant/create_waiting_configuration/" hx-indicator="#tibillet-spinner"
                   hx-target="#new-tenant">
                 <div class="col-md-8 offset-md-2 col-xl-6 offset-xl-3">
                     <h1>{% trans "Créer une nouvelle instance" %}</h1>
                     <p class="">
-                        {% trans "Pour créer une instance " %}<strong>Lespass </strong>{% trans "et accéder aux outils qui me permettront de gérer mon collectif, il suffit de remplir le formulaire, puis de confirmer mon adresse email." %}
+                        {% trans "Pour créer une instance " %}<strong>Lespass, </strong>{% trans "il suffit de remplir ce formulaire. " %}
+                    <p class="">
+                        {% trans "Un email de bienvenue vous sera envoyé." %}
                     </p>
                     <p class="">
-                        {% trans "Un email de confirmation vous sera envoyé pour vous inviter à créer et lier un compte " %}<strong>Stripe </strong> {% trans "pour recevoir les paiements." %}
+                        {% trans "Vous trouverez dans cet email un lien d'invitation à créer et lier un compte " %}<strong>Stripe </strong> {% trans "pour recevoir des paiements." %}
                     </p>
                     <p class="mb-5">
-                        {% trans "Une fois votre compte vérifié, nous vous contacterons pour finaliser ensemble votre inscription et s'assurer que TiBillet répond bien à vos besoins :)" %}
+                        {% trans "Une fois votre compte vérifié (par un·e vrai humain·e), nous vous contacterons (pendant un jour ouvré) pour finaliser votre inscription." %}
                     </p>
                     <form id="linkform" role="form">
                         <div class="form-floating mb-3">
@@ -41,7 +43,11 @@
                             <label for="emailConfirmation">{% trans "Confirmation de l'email" %}</label>
                         </div>
                         {% include 'reunion/partials/field_errors.html' %}
-                        <p class="form-text">{% trans "Le mail sera utilisé pour " %}<strong>{% trans "le compte d'administration" %}</strong>{% trans " de l'instance." %}
+                        <p class="form-text">
+                            {% trans "Le mail sera utilisé pour " %}<strong>{% trans "le compte d'administration" %}</strong>{% trans " de l'instance." %}
+                        </p>
+                        <p class="form-text">
+                            <strong>{% trans "Il doit celui d'une personne occupant un poste à responsabilité et le même que celui que vous renseignerez sur Stripe." %}</strong>
                         </p>
 
                         <div class="row">
@@ -62,14 +68,17 @@
                             <input class="form-check-input" type="checkbox" role="switch" name="laboutik" id="laboutik">
                             <label class="form-check-label" for="laboutik">
                                 {% trans "Je veux utiliser " %}<a
-                                    href="https://tibillet.org/fr/docs/category/caisse-enregistreuse/">{% trans "une caisse enregistreuse LaBoutik" %}</a>
+                                    href="https://tibillet.org/fr/docs/presentation/demonstration/#caisse-enregistreuse--cashless--httpslaboutikdemotibilletorg">{% trans "une caisse enregistreuse LaBoutik" %}</a>
                             </label>
                         </div>
                         <div class="form-check form-switch mb-5">
                             <input class="form-check-input" type="checkbox" role="switch" name="cgu" id="cgu" required>
                             <label class="form-check-label" for="cgu">
                                 {% trans "J'accepte" %} <a
-                                    href="https://tibillet.org/cgucgv/">{% trans "les conditions d'utilisation" %}</a>
+                                    href="https://tibillet.org/cgucgv/"
+                                    target="_blank">{% trans "les conditions d'utilisation" %}</a> {% translate "facile à lire et à comprendre" %}
+                                !
+
                             </label>
                         </div>
                         {% include 'reunion/partials/field_errors.html' %}

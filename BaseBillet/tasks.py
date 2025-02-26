@@ -68,7 +68,7 @@ class CeleryMailerClass():
         self.return_email = os.environ.get('DEFAULT_FROM_EMAIL', os.environ['EMAIL_HOST_USER'])
         if template and context:
             self.html = render_to_string(template, context=context)
-        else :
+        else:
             self.html = self.text
 
     def config_valid(self):
@@ -84,7 +84,7 @@ class CeleryMailerClass():
             # Not required for local server
             # EMAIL_HOST_USER,
             # EMAIL_HOST_PASSWORD,
-            self.return_email, # return email
+            self.return_email,  # return email
             self.title,
             self.email,
         ]):
@@ -97,7 +97,7 @@ class CeleryMailerClass():
         # import ipdb; ipdb.set_trace()
 
         if self.html and self.config_valid():
-            to = self.email if type(self.email) is list else [self.email,]
+            to = self.email if type(self.email) is list else [self.email, ]
 
             logger.info(f'  WORKDER CELERY : send_mail - {self.title}')
             mail = EmailMultiAlternatives(
@@ -364,13 +364,14 @@ def contact_mailer(sender, subject, message):
         template='emails/contact_email.html',
         context={
             "organisation": configuration.organisation,
-            "sender" : sender,
+            "sender": sender,
             "subject": subject,
-            "message" : message,
+            "message": message,
         }
     )
     mail.send()
     logger.info(f"mail.sended : {mail.sended}")
+
 
 @app.task
 def connexion_celery_mailer(user_email, base_url, title=None, template=None):
@@ -459,19 +460,22 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
 
 
 @app.task
-def new_tenant_mailer(email:str, waiting_config_uuid:str):
+def new_tenant_mailer(waiting_config_uuid: str):
     try:
         # Génération du lien qui va créer la redirection vers l'url onboard
-        meta = Client.objects.filter(categorie=Client.META)[0]
-        meta_url = meta.get_primary_domain().domain
+        tenant = connection.tenant
+        tenant_url = tenant.get_primary_domain().domain
         waiting_config = WaitingConfiguration.objects.get(uuid=waiting_config_uuid)
-        create_url_for_onboard_stripe = f"https://{meta_url}/tenant/{waiting_config_uuid}/onboard_stripe/"
+        create_url_for_onboard_stripe = f"https://{tenant_url}/tenant/{waiting_config_uuid}/onboard_stripe/"
 
         mail = CeleryMailerClass(
-            email,
+            waiting_config.email,
             _("TiBillet : Création d'un nouvel espace."),
-            template='reunion/emails/new_tenant.html',
-            context={'create_url_for_onboard_stripe': f'{create_url_for_onboard_stripe}'}
+            template='reunion/tenant/emails/onboard_stripe.html',
+            context={
+                'create_url_for_onboard_stripe': f'{create_url_for_onboard_stripe}',
+                'waiting_config': waiting_config,
+            }
         )
         mail.send()
         logger.info(f"mail.sended : {mail.sended}")
@@ -479,6 +483,34 @@ def new_tenant_mailer(email:str, waiting_config_uuid:str):
     except smtplib.SMTPRecipientsRefused as e:
         logger.error(
             f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour report_celery_mailer : {e}")
+        raise e
+
+@app.task
+def new_tenant_after_stripe_mailer(waiting_config_uuid: str):
+    try:
+        # Génération du lien qui va créer la redirection vers l'url onboard
+        tenant = connection.tenant
+        tenant_url = tenant.get_primary_domain().domain
+        waiting_config = WaitingConfiguration.objects.get(uuid=waiting_config_uuid)
+        create_url_for_onboard_stripe = f"https://{tenant_url}/tenant/{waiting_config_uuid}/onboard_stripe/"
+
+        mail = CeleryMailerClass(
+            waiting_config.email,
+            _("TiBillet : Création d'un nouvel espace."),
+            template='reunion/tenant/emails/after_onboard_stripe.html',
+            context={
+                'create_url_for_onboard_stripe': f'{create_url_for_onboard_stripe}',
+                'waiting_config': waiting_config,
+            }
+        )
+        mail.send()
+        logger.info(f"mail.sended : {mail.sended}")
+
+    except smtplib.SMTPRecipientsRefused as e:
+        logger.error(
+            f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour report_celery_mailer : {e}")
+        raise e
+
 
 
 @app.task
@@ -621,7 +653,7 @@ def webhook_reservation(reservation_pk, solo_webhook_pk=None):
     webhooks = []
     if solo_webhook_pk:
         webhooks.append(Webhook.objects.get(pk=solo_webhook_pk))
-    else :
+    else:
         webhooks = Webhook.objects.filter(event=Webhook.RESERVATION_V, active=True)
 
     if len(webhooks) > 0:
@@ -647,7 +679,6 @@ def webhook_reservation(reservation_pk, solo_webhook_pk=None):
             webhook.save()
 
 
-
 @app.task
 def webhook_membership(membership_pk, solo_webhook_pk=None):
     logger.info(f"webhook_membership : {membership_pk}")
@@ -656,7 +687,7 @@ def webhook_membership(membership_pk, solo_webhook_pk=None):
     webhooks = []
     if solo_webhook_pk:
         webhooks.append(Webhook.objects.get(pk=solo_webhook_pk))
-    else :
+    else:
         webhooks = Webhook.objects.filter(event=Webhook.MEMBERSHIP_V, active=True)
 
     if len(webhooks) > 0:
@@ -682,7 +713,8 @@ def webhook_membership(membership_pk, solo_webhook_pk=None):
         # Si plusieurs webhook :
         for webhook in webhooks:
             try:
-                response = requests.request("POST", webhook.url, json=return_body, timeout=2, verify=bool(not settings.DEBUG))
+                response = requests.request("POST", webhook.url, json=return_body, timeout=2,
+                                            verify=bool(not settings.DEBUG))
                 webhook.last_response = f"{timezone.now()} - status code {response.status_code} - {response.content}"
                 if not response.ok:
                     logger.error(f"webhook_membership ERROR : {membership_pk} {timezone.now()} {response.content}")
@@ -767,7 +799,8 @@ def send_to_ghost(membership_pk):
                 }
 
                 # Ajouter le nouveau membre à l'instance Ghost
-                response = requests.post(ghost_url + "/ghost/api/admin/members/", json=member_data, headers=headers, timeout=2)
+                response = requests.post(ghost_url + "/ghost/api/admin/members/", json=member_data, headers=headers,
+                                         timeout=2)
 
                 # Vérifier que la réponse de l'API est valide
                 if response.status_code == 201:
