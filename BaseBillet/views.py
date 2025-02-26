@@ -1332,8 +1332,9 @@ class Tenant(viewsets.ViewSet):
         email_stripe = info_stripe['email']
         waiting_config = WaitingConfiguration.objects.get(id_acc_connect=id_acc_connect)
 
-        # TODO: Tester de faire ça en async / celery
-        # new_tenant = validator.create_tenant(waiting_config) https://agenda.tibillet.localhost/tenant/acct_1QwiGhCZz4WyjC1K/onboard_stripe_return/
+        new_tenant_after_stripe_mailer.delay(waiting_config.pk)
+
+
         context = get_context(request)
         context["details_submitted"] = details_submitted
         context["email_valid"] = True if waiting_config.email == email_stripe else False

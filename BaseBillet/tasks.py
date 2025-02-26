@@ -28,6 +28,7 @@ from weasyprint import HTML, CSS
 from weasyprint.text.fonts import FontConfiguration
 
 from ApiBillet.serializers import LigneArticleSerializer
+from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, Ticket, Configuration, Membership, Webhook, Paiement_stripe, LigneArticle, \
     GhostConfig
 from Customers.models import Client
@@ -471,7 +472,7 @@ def new_tenant_mailer(waiting_config_uuid: str):
         mail = CeleryMailerClass(
             waiting_config.email,
             _("TiBillet : Création d'un nouvel espace."),
-            template='reunion/tenant/emails/onboard_stripe.html',
+            template='reunion/views/tenant/emails/after_onboard_stripe_for_superadmin.html',
             context={
                 'create_url_for_onboard_stripe': f'{create_url_for_onboard_stripe}',
                 'waiting_config': waiting_config,
@@ -487,19 +488,16 @@ def new_tenant_mailer(waiting_config_uuid: str):
 
 @app.task
 def new_tenant_after_stripe_mailer(waiting_config_uuid: str):
+    # Mail qui prévient l'administrateur ROOT de l'instance TiBillet qu'un nouveau tenant souhaite se créer.
     try:
         # Génération du lien qui va créer la redirection vers l'url onboard
-        tenant = connection.tenant
-        tenant_url = tenant.get_primary_domain().domain
         waiting_config = WaitingConfiguration.objects.get(uuid=waiting_config_uuid)
-        create_url_for_onboard_stripe = f"https://{tenant_url}/tenant/{waiting_config_uuid}/onboard_stripe/"
-
+        super_admin_root = [user.email for user in TibilletUser.objects.filter(is_superuser=True)]
         mail = CeleryMailerClass(
-            waiting_config.email,
-            _("TiBillet : Création d'un nouvel espace."),
-            template='reunion/tenant/emails/after_onboard_stripe.html',
+            super_admin_root,
+            _(f"{WaitingConfiguration.organisation} & TiBillet : Demande de création d'un nouvel espace. Action d'admin ROOT demandée"),
+            template='reunion/tenant/emails/after_onboard_stripe_for_superadmin.html',
             context={
-                'create_url_for_onboard_stripe': f'{create_url_for_onboard_stripe}',
                 'waiting_config': waiting_config,
             }
         )
