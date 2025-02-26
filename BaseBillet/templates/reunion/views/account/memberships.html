@@ -30,11 +30,10 @@
                             <li class="list-group-item">Émis par <strong>{{ config.organisation }}</strong></li>
                             <li class="list-group-item">Valable pour {{ config.organisation }}</li>
                         </ul>
-
-                        {% if membership.price.product.long_description %}
-                            <p class="card-text">{{ membership.price.product.long_description }}</p>
-                        {% elif membership.price.product.short_description %}
-                            <p class="card-text">{{ membership.price.product.short_description }}</p>
+                        {% if membership.long_description %}
+                        <p class="card-text">{{ membership.long_description }}</p>
+                        {% elif membership.short_description %}
+                        <p class="card-text">{{ membership.short_description }}</p>
                         {% endif %}
                     </div>
                     <div class="card-footer">
