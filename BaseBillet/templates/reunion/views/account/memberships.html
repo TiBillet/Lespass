@@ -19,52 +19,72 @@
 
     <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-3 mb-5">
         {% for is_valid, list_membership in memberships_dict.items %}
-            {% if is_valid %}
-                {% for membership in list_membership %}
+            {% for membership in list_membership %}
 
-                    <div class="col">
-                        <div class="card h-100">
-                            {% include 'reunion/partials/picture.html' with img=token.img alt=token.name class='card-img-top' %}
-                            <div class="card-body">
-                                <h3 class="card-title">{{ membership.price.product.name }} {{ membership.price.name }}</h3>
-                                <h4>
-                                    <i class="bi bi-person-badge"></i>{{ membership.first_name }} {{ membership.last_name }}
-                                </h4>
-                                <ul class="list-group list-group-flush">
-                                    <li class="list-group-item">Émis par <strong>{{ membership.origin }}</strong></li>
-                                    <li class="list-group-item">Valable pour {{ membership.origin }}</li>
-                                </ul>
+                <div class="col{% if not is_valid %} d-flex flex-column justify-content-between{% endif %}">
+                    <div class="card{% if is_valid %} h-100{% else %} opacity-50 flex-grow-1{% endif %}">
+                        {% include 'reunion/partials/picture.html' with img=token.img alt=token.name class='card-img-top' %}
+                        <div class="card-body">
+                            <h3 class="card-title">
+                                {{ membership.price.product.name }} {{ membership.price.name|lower }}
+                            </h3>
+                            <h4>
+                                de {{ membership.first_name }} {{ membership.last_name }}
+                            </h4>
+                            <ul class="list-group list-group-flush my-3">
+                                {# <li class="list-group-item px-0">Émis par <strong>{{ membership.origin }}</strong></li> #}
+                                {# <li class="list-group-item px-0">Valable pour {{ membership.origin }}</li> #}
+                                <li class="list-group-item px-0">
+                                    Du {{ membership.last_contribution|date }}
+                                    au {{ membership.get_deadline|date }}
+                                </li>
+                                <li class="list-group-item px-0">
+                                    Émis par <strong>{{ membership.origin }}</strong>
+                                </li>
+                                <li class="list-group-item px-0">
+                                    {% for option in membership.option_generale.all %}
+                                    <span class="btn btn-info btn-sm mb-1">
+                                        {{ option.name }}
+                                    </span>
+                                    {% endfor %}
+                                </li>
+                            </ul>
 
-                                {% if membership.price.product.long_description %}
-                                    <p class="card-text">{{ membership.price.product.long_description }}</p>
-                                {% elif membership.price.product.short_description %}
-                                    <p class="card-text">{{ membership.price.product.short_description }}</p>
-                                {% endif %}
-                            </div>
-                            <div class="card-footer">
-                                <p>
-                                    <strong>{% trans "Adhésion" %}</strong> {% trans "démarrée le" %} {{ membership.last_contribution }}
-                                </p>
-                                <p>
-                                    <strong>{% trans "Valide" %}</strong> : {{ membership.get_deadline }}
-                                </p>
-                                <a href="/memberships/" class="btn btn-primary d-block mb-3">
-                                    {% trans "Renouveler" %} {{ membership.get_deadline | naturaltime }}
-                                </a>
-                                {# TODO: actions renouvellement et résiliation #}
-                                {#                        <a href="#" class="btn btn-danger d-block mb-3">#}
-                                {#                            Résilier l'adhésion#}
-                                {#                        </a>#}
-                            </div>
+                            {% if membership.price.product.long_description %}
+                                <p class="card-text">{{ membership.price.product.long_description }}</p>
+                            {% elif membership.price.product.short_description %}
+                                <p class="card-text">{{ membership.price.product.short_description }}</p>
+                            {% endif %}
+                        </div>
+                        {% if is_valid %}
+                        <div class="card-footer">
+                            <p class="mt-3">
+                                {% trans 'Il vous reste' %} {{ membership.get_deadline | naturaltime }}
+                            </p>
+                            <a href="/memberships/" class="btn btn-primary d-block mb-3">
+                                {% trans "Renouveler" %}
+                            </a>
+                            {# TODO: actions renouvellement et résiliation #}
+                            {#                        <a href="#" class="btn btn-danger d-block mb-3">#}
+                            {#                            Résilier l'adhésion#}
+                            {#                        </a>#}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% if not is_valid %}
+                    <div class="card mt-3 border-warning">
+                        <div class="card-footer">
+                            <p class="mt-3">
+                                {% trans 'Expiré' %} {{ membership.get_deadline | naturaltime }}
+                            </p>
+                            <a href="/memberships/" class="btn btn-primary d-block mb-3">
+                                {% trans "Renouveler" %}
+                            </a>
                         </div>
                     </div>
-                {% endfor %}
-            {% else %}
-                {% for membership in list_membership %} <!-- les adhésions non valide -->
-                    Hop, va renouveler ! <!-- Tu peux tester des adhésion non valide en changeant l'objet deadline dans l'admin / adhésion -->
-                    
-                {% endfor %}
-            {% endif %}
+                    {% endif %}
+                </div>
+            {% endfor %}
         {% endfor %}
     </div>
 
