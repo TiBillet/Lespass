@@ -3,7 +3,11 @@
 <nav class="navbar navbar-expand-xl bg-body">
     <div class="container-lg justify-content-between">
       <a class="navbar-brand flex-grow-1" href="/" hx-get="/" hx-target="body" hx-push-url="true">
+        {% if config.logo %}
+        {% include 'reunion/partials/picture.html' with img=config.logo alt=config.organisation style='max-width: 6rem' %}
+        {% else %}
         {{ config.organisation }}
+        {% endif %}
       </a>
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainMenu"
         aria-controls="mainMenu" aria-expanded="false" aria-label="Ouvrir le menu">
