@@ -1,120 +1,123 @@
 {% load i18n %}
-<form id="membership-form" hx-post="/memberships/" hx-target="#target_formbricks">
-    <div id="target_formbricks"></div>
-    <input type="hidden" name="product" value="{{ product.uuid }}">
-
-    <!-- prix -->
-    <div class="d-flex flex-row justify-content-start align-items-start mb-3 has-validation">
-        {% for price in product.prices.all %}
-            {% if price.publish %}
+<form id="membership-form" hx-post="/memberships/" hx-target="#target_formbricks"
+    class="d-flex flex-column justify-content-between h-100">
+    <div>
+        <div id="target_formbricks"></div>
+        <input type="hidden" name="product" value="{{ product.uuid }}">
+    
+        <!-- prix -->
+        <div class="d-flex flex-row justify-content-start align-items-start mb-3 has-validation">
+            {% for price in product.prices.all %}
+                {% if price.publish %}
+                    <div class="form-check me-3">
+                        <input id="price-{{ price.uuid }}" class="form-check-input" type="radio" name="price"
+                               value="{{ price.uuid }}" required>
+                        <label class="custom-control-label" for="price-{{ price.uuid }}">
+                            {% if price.free_price %}
+                                {{ price.name }}
+                            {% else %}
+                                {{ price.name }} - {{ price.prix }}€
+                            {% endif %}
+                        </label>
+                    </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    
+        {% if user.is_anonymous %}
+            <div class="form-floating mb-3">
+                <input name="email" type="email" class="form-control" placeholder="adresse@exemple.fr" role="textbox"
+                       aria-label="Adresse mail de l'adhéranne" required>
+                <label for="email">{% translate 'Adresse email' %}</label>
+            </div>
+    
+            <div class="form-floating mb-3">
+                <input name="confirm-email" type="email" class="form-control" placeholder="adresse@exemple.fr"
+                       role="textbox"
+                       aria-label="Adresse mail de l'adhéranne" required>
+                <label for="confirm-email">{% translate 'Confirmez votre email' %}</label>
+            </div>
+        {% elif user.is_active %}
+            <div class="form-floating mb-3">
+                <input name="email" type="email" class="form-control" placeholder="adresse@exemple.fr" role="textbox"
+                       aria-label="Adresse mail de l'adhéranne" value="{{ user.email }}" readonly>
+                <label for="email">{% translate 'Votre email :' %}</label>
+            </div>
+        {% else %}
+            <p><code>{% translate "Vous n'avez pas validé votre email. Merci de vérifier dans vos spams :)" %}</code></p>
+        {% endif %}
+    
+    
+    
+        <div class="form-floating mb-3">
+            <input name="firstname" type="text" class="form-control" placeholder="{% translate 'Prénom' %}"
+                   role="textbox"
+                   aria-label="Prénom de l'adhéranne" required>
+            <label for="firstname">{% translate 'Prénom' %}</label>
+        </div>
+        <div class="form-floating mb-3">
+            <input name="lastname" type="text" class="form-control"
+                   placeholder="{% translate 'Nom de famille ou structure' %}" role="textbox"
+                   aria-label="Nom de famille ou affiliation de l'adhéranne" required>
+            <label for="lastname">{% translate 'Nom de famille ou structure' %}</label>
+        </div>
+    
+        <!-- options radio -->
+        <div class="d-flex flex-row justify-content-start align-items-start mb-3 has-validation">
+            {% for option in product.option_generale_radio.all %}
                 <div class="form-check me-3">
-                    <input id="price-{{ price.uuid }}" class="form-check-input" type="radio" name="price"
-                           value="{{ price.uuid }}" required>
-                    <label class="custom-control-label" for="price-{{ price.uuid }}">
-                        {% if price.free_price %}
-                            {{ price.name }}
-                        {% else %}
-                            {{ price.name }} - {{ price.prix }}€
-                        {% endif %}
+                    <input class="form-check-input" type="radio"
+                           name="options"
+                           id="options-radio-{{ option.uuid }}"
+                           value="{{ option.uuid }}">
+                    <label class="custom-control-label text-darkms-0"
+                           for="options-radio-{{ option.uuid }}">
+                        {{ option.name }}
                     </label>
                 </div>
-            {% endif %}
-        {% endfor %}
-    </div>
-
-    {% if user.is_anonymous %}
-        <div class="form-floating mb-3">
-            <input name="email" type="email" class="form-control" placeholder="adresse@exemple.fr" role="textbox"
-                   aria-label="Adresse mail de l'adhéranne" required>
-            <label for="email">{% translate 'Adresse email' %}</label>
+            {% endfor %}
         </div>
-
-        <div class="form-floating mb-3">
-            <input name="confirm-email" type="email" class="form-control" placeholder="adresse@exemple.fr"
-                   role="textbox"
-                   aria-label="Adresse mail de l'adhéranne" required>
-            <label for="confirm-email">{% translate 'Confirmez votre email' %}</label>
-        </div>
-    {% elif user.is_active %}
-        <div class="form-floating mb-3">
-            <input name="email" type="email" class="form-control" placeholder="adresse@exemple.fr" role="textbox"
-                   aria-label="Adresse mail de l'adhéranne" value="{{ user.email }}" readonly>
-            <label for="email">{% translate 'Votre email :' %}</label>
-        </div>
-    {% else %}
-        <p><code>{% translate "Vous n'avez pas validé votre email. Merci de vérifier dans vos spams :)" %}</code></p>
-    {% endif %}
-
-
-
-    <div class="form-floating mb-3">
-        <input name="firstname" type="text" class="form-control" placeholder="{% translate 'Prénom' %}"
-               role="textbox"
-               aria-label="Prénom de l'adhéranne" required>
-        <label for="firstname">{% translate 'Prénom' %}</label>
-    </div>
-    <div class="form-floating mb-3">
-        <input name="lastname" type="text" class="form-control"
-               placeholder="{% translate 'Nom de famille ou structure' %}" role="textbox"
-               aria-label="Nom de famille ou affiliation de l'adhéranne" required>
-        <label for="lastname">{% translate 'Nom de famille ou structure' %}</label>
-    </div>
-
-    <!-- options radio -->
-    <div class="d-flex flex-row justify-content-start align-items-start mb-3 has-validation">
-        {% for option in product.option_generale_radio.all %}
-            <div class="form-check me-3">
-                <input class="form-check-input" type="radio"
-                       name="options"
-                       id="options-radio-{{ option.uuid }}"
-                       value="{{ option.uuid }}">
-                <label class="custom-control-label text-darkms-0"
-                       for="options-radio-{{ option.uuid }}">
+    
+        <!-- options checkbox -->
+        {% for option in product.option_generale_checkbox.all %}
+            <div class="form-check form-switch mb-3">
+                <input name="options" class="form-check-input" type="checkbox" role="switch"
+                       id="checkbox-{{ option.uuid }}" value="{{ option.uuid }}">
+                <label class="form-check-label" for="checkbox-{{ option.uuid }}">
                     {{ option.name }}
                 </label>
             </div>
         {% endfor %}
-    </div>
-
-    <!-- options checkbox -->
-    {% for option in product.option_generale_checkbox.all %}
+    
+    
         <div class="form-check form-switch mb-3">
-            <input name="options" class="form-check-input" type="checkbox" role="switch"
-                   id="checkbox-{{ option.uuid }}" value="{{ option.uuid }}">
-            <label class="form-check-label" for="checkbox-{{ option.uuid }}">
-                {{ option.name }}
+            <input class="form-check-input" type="checkbox" role="switch" id="acknowledge" name="acknowledge" required>
+    
+            <label class="form-check-label" for="acknowledge">
+                <span>{% translate "I accept the " %}</span>
+                {% if product.categorie_article == 'A' %}
+                    <span>
+                                        {% if product.legal_link != None %}
+                                            <a class="text-info" href="{{ product.legal_link }}" target="_blank">
+                                            {% translate "association rules and regulations." %}
+                                        </a>
+                                        {% else %}
+                                            {% translate "association rules and regulations." %}
+                                        {% endif %}
+                                        </span>
+                {% else %}
+                    {% if product.legal_link != None %}
+                        <a class="text-info" href="{{ product.legal_link }}"
+                           target="_blank">{% translate "Terms and conditions." %}</a>
+                    {% else %}
+                        <span>{% translate "terms and conditions." %}</span>
+                    {% endif %}
+                {% endif %}
             </label>
         </div>
-    {% endfor %}
-
-
-    <div class="form-check form-switch mb-3">
-        <input class="form-check-input" type="checkbox" role="switch" id="acknowledge" name="acknowledge" required>
-
-        <label class="form-check-label" for="acknowledge">
-            <span>{% translate "I accept the " %}</span>
-            {% if product.categorie_article == 'A' %}
-                <span>
-                                    {% if product.legal_link != None %}
-                                        <a class="text-info" href="{{ product.legal_link }}" target="_blank">
-                                        {% translate "association rules and regulations." %}
-                                    </a>
-                                    {% else %}
-                                        {% translate "association rules and regulations." %}
-                                    {% endif %}
-                                    </span>
-            {% else %}
-                {% if product.legal_link != None %}
-                    <a class="text-info" href="{{ product.legal_link }}"
-                       target="_blank">{% translate "Terms and conditions." %}</a>
-                {% else %}
-                    <span>{% translate "terms and conditions." %}</span>
-                {% endif %}
-            {% endif %}
-        </label>
     </div>
 
-    <div class="position-absolute bottom-0 start-0 end-0 p-3">
+    <div class="p-3">
         <button id="membership-submit" type="submit" class="btn btn-primary w-100 mb-3">Confirmer</button>
         <a href="." class="btn btn-danger d-block">Annuler</a>
     </div>
