@@ -5,17 +5,14 @@
 <main class="container-lg my-5">
     <div class="clearfix">
         <h1 class="display-1">{{ config.organisation }}</h1>
-        <img
-            style="background-color: var(--kouler-piton)"
-            src="{{ ''|randImg }}"
-            class="img-fluid float-md-start d-none d-md-block w-25 rounded me-3 mb-2"
-            alt="..."
-        />
+        <div class="float-md-start d-none d-md-block w-25 me-3 mb-2">
+            {% include 'reunion/partials/picture.html' with img=config.img alt=config.organisation class='img-fluid rounded' %}
+        </div>
         <p class="lead">{{ config.short_description }}</p>
         <p>{{ config.long_description }}</p>
     </div>
 
-    <h2 class="my-4">Sur cet espace vous retrouverez</h2>
+    <h2 class="mt-5 mb-4">Sur cet espace vous retrouverez</h2>
 
     <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
         <div class="col d-flex flex-column position-relative">
