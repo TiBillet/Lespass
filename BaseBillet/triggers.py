@@ -1,8 +1,10 @@
 import logging
 
 import stripe
+from django.db import connection
 from django.utils import timezone
 
+from AuthBillet.models import TibilletUser
 from BaseBillet.models import LigneArticle, Product, Membership, Price, Configuration
 from BaseBillet.tasks import send_to_ghost, send_membership_invoice_to_email, send_sale_to_laboutik, webhook_membership
 from BaseBillet.templatetags.tibitags import dround
@@ -43,8 +45,7 @@ def update_membership_state_after_stripe_paiement(ligne_article):
         membership.status = Membership.AUTO
 
     membership.save()
-    # Mise à jour de la deadline
-    membership.set_deadline()
+
     logger.info(f"    update_membership_state_after_paiement : Mise à jour de la fiche membre OK")
     return membership
 
@@ -141,6 +142,12 @@ class LigneArticlePaid_ActionByCategorie:
         # Refresh en cas de prix libre, le prix est mis à jour par le update membership.
         if ligne_article.paiement_stripe:
             membership: Membership = update_membership_state_after_stripe_paiement(ligne_article)
+
+        # Mise à jour de la deadline
+        membership.set_deadline()
+        # On lie le tenant à l'user, pour qu'iel soit visible dans l'admin et que les adéhsion et reservations soient visible dans my_account
+        user: TibilletUser = membership.user
+        user.client_achat.add(connection.tenant)
 
         email_sended = send_membership_invoice_to_email(membership)
 

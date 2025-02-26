@@ -769,6 +769,7 @@ class MembershipChangeForm(ModelForm):
             'last_name',
             'first_name',
             'option_generale',
+            'deadline',
             'commentaire',
         )
 

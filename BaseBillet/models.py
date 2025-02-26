@@ -633,6 +633,9 @@ class Product(models.Model):
         }
         return self_category_map.get(self.categorie_article, None)
 
+    def origin(self):
+        return connection.tenant
+
     def __str__(self):
         return f"{self.name}"
 

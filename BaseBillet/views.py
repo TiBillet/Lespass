@@ -633,13 +633,27 @@ class MyAccount(viewsets.ViewSet):
     @action(detail=False, methods=['GET'])
     def membership(self, request: HttpRequest) -> HttpResponse:
         context = get_context(request)
-        user: TibilletUser = request.user
-        memberships : Membership = user.memberships.filter(last_contribution__isnull=False)
-        for membership in memberships:
-            membership.get_deadline()
+        context['account_tab'] = 'memberships' # l'onglet de la page admin
+        user : TibilletUser = request.user
 
-        context['account_tab'] = 'memberships'
-        context['memberships'] = memberships
+        # Classement par valid / not valid
+        memberships_dict = { True: [], False: [] }
+
+        for tenant in user.client_achat.all():
+            with tenant_context(tenant):
+                memberships = Membership.objects.filter(
+                    last_contribution__isnull=False,
+                    user=user,
+                ).select_related('price', 'price__product').prefetch_related("option_generale").order_by('deadline')
+
+                for membership in memberships:
+                    membership.origin = Configuration.get_solo().organisation
+                    if membership.is_valid() :
+                        memberships_dict[True].append(membership)
+                    else :
+                        memberships_dict[False].append(membership)
+
+        context['memberships_dict'] = memberships_dict
         return render(request, "reunion/views/account/memberships.html", context=context)
 
     # @action(detail=False, methods=['GET'])
