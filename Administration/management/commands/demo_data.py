@@ -84,6 +84,7 @@ class Command(BaseCommand):
                 config.federated_with.add(tenant2)
 
                 postal_address = PostalAddress.objects.create(
+                    name=fake.street_name(),
                     street_address=fake.street_address(),
                     address_locality=fake.city(),
                     address_region=fake.region(),

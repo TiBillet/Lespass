@@ -35,7 +35,7 @@ from AuthBillet.models import HumanUser, TibilletUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
-    FormbricksConfig, FormbricksForms, FederatedPlace
+    FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
     webhook_membership, create_ticket_pdf
 from Customers.models import Client
@@ -184,7 +184,8 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 'long_description',
                 'img',
                 'logo',
-                'adress',
+                'postal_address',
+                # 'adress',
                 'phone',
                 'email',
                 'site_web',
@@ -974,6 +975,37 @@ class EventForm(ModelForm):
         self.fields['jauge_max'].initial = 454
 
 
+
+@admin.register(PostalAddress, site=staff_admin_site)
+class PostalAddressAdmin(ModelAdmin):
+    compressed_fields = True  # Default: False
+    warn_unsaved_form = True  # Default: False
+
+    list_display = [
+        "name",
+        "street_address",
+        "address_locality",
+        "address_region",
+        "postal_code",
+        "address_country",
+        "latitude",
+        "longitude",
+        "comment",
+        "is_main",
+    ]
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
 @admin.register(Event, site=staff_admin_site)
 class EventAdmin(ModelAdmin):
     form = EventForm
@@ -993,6 +1025,7 @@ class EventAdmin(ModelAdmin):
                 'short_description',
                 'long_description',
                 'jauge_max',
+                'postal_address',
                 'published',
             )
         }),
@@ -1043,6 +1076,20 @@ class EventAdmin(ModelAdmin):
         queryset = super().get_queryset(request)
         # Les events action et les events children doivent s'afficher dans un inline
         return queryset.exclude(categorie=Event.ACTION).exclude(parent__isnull=False)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 
 @admin.register(Reservation, site=staff_admin_site)
 class ReservationAdmin(ModelAdmin):
