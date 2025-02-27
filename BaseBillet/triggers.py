@@ -145,10 +145,18 @@ class LigneArticlePaid_ActionByCategorie:
 
         # Mise à jour de la deadline
         membership.set_deadline()
+
         # On lie le tenant à l'user, pour qu'iel soit visible dans l'admin et que les adéhsion et reservations soient visible dans my_account
         user: TibilletUser = membership.user
         user.client_achat.add(connection.tenant)
 
+        # Si l'user n'a pas de nom/prenom, on lui colle celui de l'adhésion
+        if not user.first_name or not user.last_name:
+            user.first_name = membership.first_name if not user.first_name else user.first_name
+            user.last_name = membership.last_name if not user.last_name else user.last_name
+            user.save()
+
+        # C'est parti pour l'envoi dans les mails !
         email_sended = send_membership_invoice_to_email(membership)
 
         # Si la personne accepte la newsletter :
