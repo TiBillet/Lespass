@@ -47,11 +47,11 @@
                             {% trans "Confirmer la demande de remboursement ?" %}
                         </p>
 
-                        <button type="button" class="btn btn-primary d-block w-100 mb-3" data-bs-dismiss="offcanvas" aria-label="Close" hx-get="/my_account/refund_online/">{% trans "Confirmer" %}</button>
+                        <button type="button" class="btn btn-primary d-block w-100 mb-3"
+                                data-bs-dismiss="offcanvas" aria-label="Close"
+                                hx-get="/my_account/refund_online/" hx-indicator="#tibillet-spinner">{% trans "Confirmer" %}</button>
                         {# TODO: lien don #}
-                        <a href="." class="btn btn-secondary d-block mb-3">
-                            {% trans "Faire don de ma tirelire à" %} {{ config.organisation }}
-                        </a>
+                        <button type="button" class="btn btn-secondary d-block w-100 mb-3" data-bs-dismiss="offcanvas" aria-label="Close">{% trans "Faire don de ma tirelire à" %} {{ config.organisation }}</button>
                         <button type="button" class="btn btn-danger d-block w-100" data-bs-dismiss="offcanvas" aria-label="Close">{% trans "Annuler" %}</button>
                     </div>
                 </div>

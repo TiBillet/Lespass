@@ -67,15 +67,13 @@
                         <span class="d-none d-lg-inline">Préférences</span>
                     </a>
                 </li>
-                {% if profile.admin_this_tenant %}
-                    {% if user.email_valid %}
-                        <li class="nav-item">
-                            <a class="nav-link link-danger" href="/admin/" target="_blank">
-                                <i class="bi bi-key-fill"></i>
-                                <span class="d-none d-lg-inline">Administration</span>
-                            </a>
-                        </li>
-                    {% endif %}
+                {% if profile.admin_this_tenant and user.email_valid and user.is_active %}
+                    <li class="nav-item">
+                        <a class="nav-link link-danger" href="/admin/" target="_blank">
+                            <i class="bi bi-key-fill"></i>
+                            <span class="d-none d-lg-inline">Administration</span>
+                        </a>
+                    </li>
                 {% endif %}
                 <li class="nav-item">
                     <a class="nav-link link-secondary" href="/deconnexion/">
