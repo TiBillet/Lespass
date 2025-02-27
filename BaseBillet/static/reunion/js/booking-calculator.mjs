@@ -32,13 +32,15 @@ const updateTotal = (orders, totalAmount, totalPrice) => _ => {
     totalPrice.textContent = (tp / 100).toLocaleString('fr-FR')
 }
 
-const watchBookingForm = () => {
+export const init = () => {
     const totalAmount = document.querySelector('.js-total-amount')
     const totalPrice = document.querySelector('.js-total-price')
-    const orders = [...document.querySelectorAll('.js-order')].map(el => ({
-        price: el.querySelector('.js-order-price'),
-        amount: el.querySelector('.js-order-amount')
-    }))
+    const orders = [...document.querySelectorAll('.js-order')]
+        .map(el => ({
+            price: el.querySelector('.js-order-price'),
+            amount: el.querySelector('.js-order-amount')
+        }))
+        .filter(({ amount }) => amount !== null )
     
     orders.forEach(({ amount }) => {
         amount.addEventListener('change', updateTotal(orders, totalAmount, totalPrice))

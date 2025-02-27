@@ -38,7 +38,7 @@ const update = doc => ({ target: { checked }}) => {
 /**
  * Initialisation du thème.
  */
-const init = () => {
+export const init = () => {
     const doc = document.querySelector('html')
     const toggle = document.querySelector('#darkThemeCheck')
     const query = window.matchMedia('(prefers-color-scheme: dark)')
@@ -52,5 +52,3 @@ const init = () => {
     // si page des préférences on écoute la checkbox
     if (toggle) toggle.addEventListener('click', update(doc))
 }
-
-window.addEventListener('DOMContentLoaded', init)

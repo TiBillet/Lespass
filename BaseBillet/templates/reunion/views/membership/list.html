@@ -2,11 +2,12 @@
 {% load tibitags static %}
 {% load i18n %}
 
-{% block head %}
-{% if formbricks_api_host %}
-    <script src="{{ formbricks_api_host}}/js/formbricks.umd.cjs" async></script>
-{% endif %}
-<script src="{% static 'reunion/js/subscription-watcher.js' %}"></script>
+{% block scripts %}
+<script type="module">
+    import * as SubscriptionWatcher from '{% static "reunion/js/subscription-watcher.mjs" %}'
+
+    SubscriptionWatcher.init()
+</script>
 {% endblock %}
 
 {% block main %}
