@@ -806,8 +806,14 @@ class MembershipAdmin(ModelAdmin):
         # 'commentaire',
     )
 
+    list_filter = ['price__product', 'last_contribution', 'deadline', ]
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.filter(last_contribution__isnone=False)
+
     ### FORMULAIRES
     autocomplete_fields = ['option_generale', ]
+
 
     def get_form(self, request, obj=None, **kwargs):
         """ Si c'est un add, on modifie un peu le formulaire pour avoir un champs email """

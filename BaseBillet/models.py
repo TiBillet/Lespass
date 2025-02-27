@@ -1589,7 +1589,7 @@ class Membership(models.Model):
 
     date_added = models.DateTimeField(auto_now_add=True)
 
-    last_contribution = models.DateTimeField(null=True, blank=True, verbose_name=_("Date"))
+    last_contribution = models.DateTimeField(null=True, blank=True, verbose_name=_("Date du paiement"))
     first_contribution = models.DateTimeField(null=True, blank=True) # encore utilisé ? On utilise last plutot ?
 
     last_action = models.DateTimeField(auto_now=True, verbose_name=_("Présence"))

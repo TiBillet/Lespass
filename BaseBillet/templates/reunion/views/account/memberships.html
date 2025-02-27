@@ -59,7 +59,7 @@
                         {% if is_valid %}
                         <div class="card-footer">
                             <p class="mt-3">
-                                {% trans 'Il vous reste' %} {{ membership.get_deadline | naturaltime }}
+                                {% trans 'Expire' %} {{ membership.get_deadline | naturaltime }}
                             </p>
                             <a href="/memberships/" class="btn btn-primary d-block mb-3">
                                 {% trans "Renouveler" %}
