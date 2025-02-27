@@ -19,44 +19,40 @@
         <!-- refund panel -->
         <div class="offcanvas-start offcanvas" tabindex="-1" id="refundPanel" aria-labelledby="refundPanelLabel">
             <div class="offcanvas-header">
-                <h5 class="offcanvas-title" id="refundPanelLabel">Demander le remboursement</h5>
+                <h5 class="offcanvas-title" id="refundPanelLabel">{% trans "Demander le remboursement" %}</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
             </div>
             <div class="offcanvas-body">
                 <div class="d-flex flex-column justify-content-between h-100">
                     <div>
                         <div class="alert  alert-primary" role="alert">
-                            <h4>Pas de panique ! Vous avez le temps…</h4>
+                            <h4>{% trans "Pas de panique ! Vous avez le temps…" %}</h4>
                             <p>
-                                TiBillet fonctionne sur un principe de
-                                "<a href="https://tibillet.org/fr/docs/presentation/philosophie/">monnaie fondante</a>".
-                                Vous avez 14 mois après votre dernière utilisation du Pass pour récupérer le reste de
-                                crédits non utilisés. On vous renverra un mail un mois avant si
-                                vous avez oublié.
+                                {% trans "TiBillet fonctionne sur un principe de" %}
+                                "<a href="https://tibillet.org/fr/docs/presentation/philosophie/">{% trans "monnaie fondante" %}</a>".
+                                {% trans "Vous avez 14 mois après votre dernière utilisation pour récupérer le reste de crédits non utilisés. On vous renverra un mail un mois avant si vous avez oublié." %}
                             </p>
                             <p>
-                                Vous pouvez aussi en faire don au collectif
-                                qui vous a fourni la carte.
+                                {% trans "Vous pouvez aussi en faire don au collectif qui vous a fourni la carte." %}
                             </p>
                             <p>
-                                Le Pass et votre compte, eux, sont
-                                valables à vie !
+                                {% trans "Votre carte et votre compte sont valables à vie et peuvent être utilisés dans tout les lieux du réseau !" %}
                             </p>
                         </div>
                     </div>
-    
+
                     <div class="p-3">
                         <p class="lead">
                             {# TODO: montant remboursement #}
-                            Confirmer la demande de remboursement de 23 euros ?
+                            {% trans "Confirmer la demande de remboursement ?" %}
                         </p>
-    
-                        <a href="/my_account/refund_online/" class="btn btn-primary d-block mb-3">Confirmer</a>
+
+                        <button type="button" class="btn btn-primary d-block w-100 mb-3" data-bs-dismiss="offcanvas" aria-label="Close" hx-get="/my_account/refund_online/">{% trans "Confirmer" %}</button>
                         {# TODO: lien don #}
                         <a href="." class="btn btn-secondary d-block mb-3">
-                            Faire don de ma tirelire à {{ config.organisation }}
+                            {% trans "Faire don de ma tirelire à" %} {{ config.organisation }}
                         </a>
-                        <a href="." class="btn btn-danger d-block">Annuler</a>
+                        <button type="button" class="btn btn-danger d-block w-100" data-bs-dismiss="offcanvas" aria-label="Close">{% trans "Annuler" %}</button>
                     </div>
                 </div>
             </div>
@@ -64,7 +60,7 @@
 
         <div class="row g-0">
             <div class="col-md bg-body-tertiary p-3">
-                <h3>Monnaies</h3>
+                <h3>{% trans "Monnaies" %}</h3>
 
                 {% comment %} HIDE: total cumulé des sous utilisables dans le lieu, total global
             <p class="lead">
@@ -90,7 +86,7 @@
                         data-bs-target="#refundPanel"
                         aria-controls="refundPanel">
                     {# TODO: temps restant pour rembourser #}
-                    {% trans "Demander le remboursement (3 mois restants)" %}
+                    {% trans "Demander le remboursement" %}
                 </button>
                 <p class="opacity-50 m-0">{% trans "Seuls les TiBillets sont remboursables en ligne. Pour les monnaies locales, demandez directement sur place. " %}</p>
             </div>

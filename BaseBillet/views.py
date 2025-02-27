@@ -261,7 +261,7 @@ def emailconfirmation(request, token):
     return redirect('index')
 
 
-class ScanQrCode(viewsets.ViewSet):
+class ScanQrCode(viewsets.ViewSet): # /qr
     authentication_classes = [SessionAuthentication, ]
 
     def retrieve(self, request, pk=None):
@@ -334,20 +334,13 @@ class ScanQrCode(viewsets.ViewSet):
         validator = LinkQrCodeValidator(data=request.POST.dict())
         if not validator.is_valid():
             for error in validator.errors:
+                logger.error(f"{error} : {validator.errors[error][0]}")
                 messages.add_message(request, messages.ERROR, f"{error} : {validator.errors[error][0]}")
             return HttpResponseClientRedirect(request.headers['Referer'])
 
-        email = validator.validated_data['email']
-        emailConfirmation = validator.validated_data['emailConfirmation']
-
-        if not email == emailConfirmation:
-            messages.add_message(request, messages.ERROR,
-                                 "emailConfirmation : L'email et sa confirmation sont différents. Une faute de frappe, peut-être ?")
-            return HttpResponseClientRedirect(request.headers['Referer'])
-
-        qrcode_uuid = validator.validated_data['qrcode_uuid']
 
         # Le mail est envoyé
+        email = validator.validated_data['email']
         user: TibilletUser = get_or_create_user(email)
         # import ipdb; ipdb.set_trace()
         if not user:
@@ -381,6 +374,7 @@ class ScanQrCode(viewsets.ViewSet):
                 return HttpResponseClientRedirect(request.headers['Referer'])
 
         # Opération de fusion entre la carte liée au qrcode et le wallet de l'user :
+        qrcode_uuid = validator.validated_data['qrcode_uuid']
         linked_serialized_card = fedowAPI.NFCcard.linkwallet_cardqrcode(user=user, qrcode_uuid=qrcode_uuid)
         if not linked_serialized_card:
             messages.add_message(request, messages.ERROR, _("Not valid"))
@@ -500,17 +494,16 @@ class MyAccount(viewsets.ViewSet):
                                  _(f"Votre tirelire fédérée est déja vide."))
             return HttpResponseClientRedirect('/my_account/')
 
-        # TODO: Mettre ça dans retour depuis un lien envoyé par email :
         status_code, result = fedowAPI.wallet.refund_fed_by_signature(user)
         if status_code == 202:
             # On clear le cache du wallet
             cache.delete(f"wallet_user_{user.wallet.uuid}")
-            messages.add_message(request, messages.INFO,
-                                 _("Un email vous a été envoyé pour finaliser votre remboursement. Merci de regarder dans vos spams si vous ne l'avez pas reçu !"))
+            messages.add_message(request, messages.SUCCESS,
+                                 _("Un remboursement a été effectué sur le compte bancaire ayant servi au paiement en ligne. Merci !"))
             return HttpResponseClientRedirect('/my_account/')
         else:
             messages.add_message(request, messages.WARNING,
-                                 _(f"Toutes nos excuses, il semble qu'un traitement manuel est nécéssaire pour votre remboursement. Vous pouvez aller à l'acceuil de votre lieux, ou contacter un administrateur : contact@tibillet.re"))
+                                 _(f"Toutes nos excuses, il semble qu'un traitement manuel soit nécéssaire pour votre remboursement. Vous pouvez aller à l'acceuil de votre lieux, ou contacter : contact@tibillet.re"))
             return HttpResponseClientRedirect('/my_account/')
 
     @staticmethod

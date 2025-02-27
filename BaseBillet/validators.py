@@ -47,6 +47,13 @@ class LinkQrCodeValidator(serializers.Serializer):
     cgu = serializers.BooleanField(required=True, allow_null=False)
     qrcode_uuid = serializers.UUIDField()
 
+    def validate(self, attrs):
+        email = attrs['email']
+        emailConfirmation = attrs['emailConfirmation']
+        if emailConfirmation != email:
+            logger.error(_(f"emailConfirmation : L'email et sa confirmation sont différents. Une faute de frappe, peut-être ?"))
+            raise serializers.ValidationError(_(f"emailConfirmation : L'email et sa confirmation sont différents. Une faute de frappe, peut-être ?"))
+        return attrs
 
 class LoginEmailValidator(serializers.Serializer):
     email = serializers.EmailField()

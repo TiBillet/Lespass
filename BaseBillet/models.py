@@ -1769,7 +1769,7 @@ class ExternalApiKey(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL,
                              on_delete=models.CASCADE,
                              blank=True, null=True,
-                             help_text=_("Utilisateur qui a créé cette clé.")
+                             help_text=_("Utilisateur·ice qui a créé cette clé.")
                              )
 
     key = models.OneToOneField(APIKey,
