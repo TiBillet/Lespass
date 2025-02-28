@@ -30,13 +30,17 @@ from stdimage.validators import MaxSizeValidator, MinSizeValidator
 from stripe import InvalidRequestError
 
 import AuthBillet.models
-from AuthBillet.models import HumanUser
+from AuthBillet.models import HumanUser, RsaKey
 from Customers.models import Client
 from QrcodeCashless.models import CarteCashless
 from TiBillet import settings
-from fedow_connect.utils import dround
+from fedow_connect.utils import dround, sign_message, verify_signature, data_to_b64, sign_utf8_string
 from root_billet.models import RootConfiguration
 from root_billet.utils import fernet_decrypt, fernet_encrypt
+
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 logger = logging.getLogger(__name__)
 
@@ -227,7 +231,7 @@ class Carrousel(models.Model):
     # publish = models.BooleanField(default=True, verbose_name=_("Publier"))
     on_event_list_page = models.BooleanField(default=True, verbose_name=_("Publier sur la page des évènements"))
     link = models.URLField(blank=True, null=True, verbose_name=_("URL de lien"))
-    order = models.PositiveSmallIntegerField(verbose_name=_("Ordre d'apparition"), default=1000,)
+    order = models.PositiveSmallIntegerField(verbose_name=_("Ordre d'apparition"), default=1000, )
 
     def __str__(self):
         return self.name
@@ -714,7 +718,8 @@ class Price(models.Model):
 
     stock = models.SmallIntegerField(blank=True, null=True)
     max_per_user = models.PositiveSmallIntegerField(default=10,
-                                                    verbose_name=_("Nombre de reservation maximum par utilisateur·ices"),
+                                                    verbose_name=_(
+                                                        "Nombre de reservation maximum par utilisateur·ices"),
                                                     help_text=_("ex : Un même email peut réserver plusieurs billets")
                                                     )
 
@@ -818,7 +823,8 @@ class Event(models.Model):
                         delete_orphans=True, verbose_name=_("Image principale")
                         )
 
-    carrousel = models.ManyToManyField(Carrousel, blank=True, verbose_name=_("Carrousel d'images"), related_name='events')
+    carrousel = models.ManyToManyField(Carrousel, blank=True, verbose_name=_("Carrousel d'images"),
+                                       related_name='events')
 
     CONCERT = "LIV"
     FESTIVAL = "FES"
@@ -858,6 +864,37 @@ class Event(models.Model):
     booking = models.BooleanField(default=False, verbose_name=_("Mode restauration/booking"),
                                   help_text=_(
                                       "Si activé, l'évènement sera visible en haut de la page d'accueil, l'utilisateur·ices pourra selectionner une date."))
+
+
+    """ Pour signer les tickets """
+    rsa_key = models.OneToOneField(RsaKey, on_delete=models.SET_NULL, null=True, related_name='event')
+
+    def get_private_key(self):
+        if not self.rsa_key:
+            self.rsa_key = RsaKey.generate()
+            self.save()
+
+        private_key = serialization.load_pem_private_key(
+            self.rsa_key.private_pem.encode('utf-8'),
+            password=settings.SECRET_KEY.encode('utf-8'),
+        )
+        return private_key
+
+    def get_public_pem(self):
+        if not self.rsa_key:
+            self.rsa_key = RsaKey.generate()
+            self.save()
+        return self.rsa_key.public_pem
+
+    def get_public_key(self):
+        # Charger la clé publique au format PEM
+        public_key = serialization.load_pem_public_key(
+            self.get_public_pem().encode('utf-8'),
+            backend=default_backend()
+        )
+        return public_key
+
+    """ END Pour signer les tickets """
 
     def reservation_solo(self):
         if self.max_per_user == 1:
@@ -951,7 +988,6 @@ class Event(models.Model):
             self.categorie = Event.ACTION
             self.easy_reservation = True
 
-
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -1004,6 +1040,7 @@ class Artist_on_event(models.Model):
     def configuration(self):
         with tenant_context(self.artist):
             return Configuration.get_solo()
+
 
 #
 # @receiver(post_save, sender=Artist_on_event)
@@ -1359,6 +1396,25 @@ class Ticket(models.Model):
     def options(self):
         return " - ".join([option.name for option in self.reservation.options.all()])
 
+    def qrcode(self):
+        qrcode_data = data_to_b64({'uuid':str(self.uuid),})
+        signature = sign_message(
+            qrcode_data,
+            self.reservation.event.get_private_key(),
+        ).decode('utf-8')
+
+        # Ici, on s'autovérifie :
+        # Assert volontaire. Si non effectué en prod, ce n'est pas grave.
+        # logger.debug("_post verify_signature start")
+        if not verify_signature(self.reservation.event.get_public_key(),
+                                qrcode_data,
+                                signature):
+            raise Exception("Signature auto verification failed")
+
+        return f"{qrcode_data.decode('utf8')}:{signature}"
+
+
+
     class Meta:
         verbose_name = _('Billet')
         verbose_name_plural = _('Billets')
@@ -1381,7 +1437,7 @@ class Paiement_stripe(models.Model):
     checkout_session_id_stripe = models.CharField(max_length=80, blank=True, null=True)
     payment_intent_id = models.CharField(max_length=80, blank=True, null=True)
     metadata_stripe = JSONField(blank=True, null=True)
-    customer_stripe = models.CharField(max_length=20, blank=True, null=True) # pas utile
+    customer_stripe = models.CharField(max_length=20, blank=True, null=True)  # pas utile
     invoice_stripe = models.CharField(max_length=27, blank=True, null=True)
     subscription = models.CharField(max_length=28, blank=True, null=True)
 
@@ -1492,7 +1548,6 @@ class Paiement_stripe(models.Model):
         else:
             self.status = Paiement_stripe.CANCELED
 
-
         # cela va déclencher des pre_save
 
         # le .save() lance le process pre_save BaseBillet.models.send_to_cashless
@@ -1506,7 +1561,6 @@ class Paiement_stripe(models.Model):
         # Reservation.VALID lorsque le mail est envoyé et non en erreur
         self.save()
         return self.status
-
 
     class Meta:
         verbose_name = _('Paiement Stripe')
@@ -1614,7 +1668,7 @@ class Membership(models.Model):
     date_added = models.DateTimeField(auto_now_add=True)
 
     last_contribution = models.DateTimeField(null=True, blank=True, verbose_name=_("Date du paiement"))
-    first_contribution = models.DateTimeField(null=True, blank=True) # encore utilisé ? On utilise last plutot ?
+    first_contribution = models.DateTimeField(null=True, blank=True)  # encore utilisé ? On utilise last plutot ?
 
     last_action = models.DateTimeField(auto_now=True, verbose_name=_("Présence"))
     contribution_value = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True,
@@ -1763,7 +1817,7 @@ class Membership(models.Model):
             return "Anonymous"
 
 
-#TODO: dans le futur, gérer les fédération comme cela ?
+# TODO: dans le futur, gérer les fédération comme cela ?
 """
 class Federation(models.Model):
     '''
@@ -1859,8 +1913,10 @@ class Webhook(models.Model):
 
 class FederatedPlace(models.Model):
     tenant = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="Place")
-    tag_filter = models.ManyToManyField(Tag, blank=True, related_name="filtred", verbose_name=_("Filtre de tags"), help_text=_("Si selectionnés, filtre uniquement ces tags"))
-    tag_exclude = models.ManyToManyField(Tag, blank=True, related_name="excluded", verbose_name=_("Tags exclus"), help_text=_("Ces tags sont exclus"))
+    tag_filter = models.ManyToManyField(Tag, blank=True, related_name="filtred", verbose_name=_("Filtre de tags"),
+                                        help_text=_("Si selectionnés, filtre uniquement ces tags"))
+    tag_exclude = models.ManyToManyField(Tag, blank=True, related_name="excluded", verbose_name=_("Tags exclus"),
+                                         help_text=_("Ces tags sont exclus"))
 
     class Meta:
         verbose_name = _('Espace fédéré')
@@ -1920,6 +1976,7 @@ class FormbricksForms(models.Model):
 
     def __str__(self):
         return f"{self.product.name} : {self.trigger_name}"
+
 
 class FormbricksConfig(SingletonModel):
     """

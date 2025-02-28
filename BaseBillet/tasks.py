@@ -288,6 +288,7 @@ def create_ticket_pdf(ticket: Ticket):
     buffer_svg = BytesIO()
     qr.save(buffer_svg, kind='svg', scale=8)
 
+
     # Pour faire le barcode
     CODE128 = barcode.get_barcode_class('code128')
     bar_svg = BytesIO()
