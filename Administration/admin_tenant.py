@@ -835,7 +835,7 @@ class MembershipAdmin(ModelAdmin):
         'price',
         'contribution_value',
         'options',
-        'date_added',
+        'last_contribution',
         'deadline',
         'is_valid',
         'status',
@@ -843,9 +843,10 @@ class MembershipAdmin(ModelAdmin):
     )
 
     list_filter = ['price__product', 'last_contribution', 'deadline', ]
-    # def get_queryset(self, request):
-    #     qs = super().get_queryset(request)
-    #     return qs.filter(last_contribution__isnone=False)
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.filter(last_contribution__isnull=False)
 
     ### FORMULAIRES
     autocomplete_fields = ['option_generale', ]
