@@ -202,7 +202,7 @@ def context_for_membership_email(membership: "Membership"):
 
     image_url = "https://tibillet.org/fr/img/design/logo-couleur.svg"
     if hasattr(config.img, 'med'):
-        image_url = config.img.med.url
+        image_url = f"https://{domain}{config.img.med.url}"
 
     context = {
         'username': membership.member_name(),
