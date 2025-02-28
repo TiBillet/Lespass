@@ -243,6 +243,7 @@ class CarrouselAdmin(ModelAdmin):
     warn_unsaved_form = True  # Default: False
 
     list_display = ('name', 'on_event_list_page', 'events_names')
+    list_editable = ('on_event_list_page',)
 
     search_fields = ('name',)
 
