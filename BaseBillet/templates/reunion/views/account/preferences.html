@@ -57,11 +57,14 @@
         </div>
     </div>
 
-    <p>
-        <a href="#" class="btn btn-secondary">Télécharger mes données</a>
-    </p>
-
-    <p>
-        <a href="#" class="btn btn-danger">Supprimer mon compte</a>
-    </p>
+    {% comment %} HIDE: voir la loi pour les données à télécharger, pas grave si c'est un json crade par ex
+    <div class="row mt-5">
+        <div class="col-md">
+            <a href="#" class="btn btn-secondary d-block mb-4">Télécharger mes données</a>
+        </div>
+        <div class="col-md">
+            <a href="#" class="btn btn-danger d-block">Supprimer mon compte</a>
+        </div>
+    </div>
+    {% endcomment %}
 {% endblock %}
