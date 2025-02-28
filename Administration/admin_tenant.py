@@ -12,6 +12,7 @@ from django.contrib import admin
 from django.contrib import messages
 from django.db.models import Model
 from django.forms import ModelForm, TextInput, Form, modelformset_factory
+from django.forms.utils import ErrorList
 from django.http import HttpResponse, HttpRequest, HttpResponseRedirect
 from django.shortcuts import redirect, get_object_or_404
 from django.template.defaultfilters import slugify
@@ -309,30 +310,6 @@ class OptionGeneraleAdmin(ModelAdmin):
     )
 
 
-class ProductAdminCustomForm(ModelForm):
-    class Meta:
-        model = Product
-        fields = (
-            'name',
-            'categorie_article',
-            'nominative',
-            'short_description',
-            'long_description',
-            'img',
-            'poids',
-            "option_generale_radio",
-            "option_generale_checkbox",
-            "legal_link",
-            'publish',
-            'archive',
-        )
-
-    def clean(self):
-        cleaned_data = self.cleaned_data
-        categorie = cleaned_data.get('categorie_article')
-        if categorie == Product.NONE:
-            raise forms.ValidationError(_("Merci de renseigner une catégorie pour cet article."))
-        return cleaned_data
 
 
 class PriceInlineChangeForm(ModelForm):
@@ -364,7 +341,6 @@ class PriceInlineChangeForm(ModelForm):
                 raise forms.ValidationError(_("Un tarif d'adhésion doit avoir une durée d'abonnement"), code="invalid")
         return subscription_type
 
-
 class PriceInline(TabularInline):
     model = Price
     fk_name = 'product'
@@ -380,6 +356,43 @@ class PriceInline(TabularInline):
     # Surcharger la méthode pour désactiver la suppression
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+class ProductAdminCustomForm(ModelForm):
+    class Meta:
+        model = Product
+        fields = (
+            'name',
+            'categorie_article',
+            'nominative',
+            'short_description',
+            'long_description',
+            'img',
+            'poids',
+            "option_generale_radio",
+            "option_generale_checkbox",
+            "legal_link",
+            'publish',
+            'archive',
+        )
+
+    def clean_categorie_article(self):
+        cleaned_data = self.cleaned_data
+        categorie = cleaned_data.get('categorie_article')
+        if categorie == Product.NONE:
+            raise forms.ValidationError(_("Merci de renseigner une catégorie pour cet article."))
+        return categorie
+
+
+    def clean(self):
+        cleaned_data = self.cleaned_data
+        # récupération du dictionnaire data pour vérifier qu'on a bien au moin un tarif dans le inline :
+        try :
+            if int(self.data.getlist('prices-TOTAL_FORMS')[0]) > 0:
+                return cleaned_data
+            raise forms.ValidationError(_("Merci de renseigner au moins un tarif pour ce produit."))
+        except Exception as e:
+            raise forms.ValidationError(_("Merci de renseigner au moins un tarif pour ce produit."))
 
 
 @admin.register(Product, site=staff_admin_site)
@@ -408,6 +421,7 @@ class ProductAdmin(ModelAdmin):
         # Pas besoin de les afficher, ils se créent automatiquement.
         qs = super().get_queryset(request)
         return qs.exclude(categorie_article__in=[Product.RECHARGE_CASHLESS, Product.DON]).exclude(archive=True)
+
 
     def has_delete_permission(self, request, obj=None):
         return False
