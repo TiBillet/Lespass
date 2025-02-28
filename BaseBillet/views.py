@@ -262,7 +262,7 @@ def emailconfirmation(request, token):
     return redirect('index')
 
 
-class ScanQrCode(viewsets.ViewSet): # /qr
+class ScanQrCode(viewsets.ViewSet):  # /qr
     authentication_classes = [SessionAuthentication, ]
 
     def retrieve(self, request, pk=None):
@@ -338,7 +338,6 @@ class ScanQrCode(viewsets.ViewSet): # /qr
                 logger.error(f"{error} : {validator.errors[error][0]}")
                 messages.add_message(request, messages.ERROR, f"{error} : {validator.errors[error][0]}")
             return HttpResponseClientRedirect(request.headers['Referer'])
-
 
         # Le mail est envoyé
         email = validator.validated_data['email']
@@ -416,7 +415,6 @@ class MyAccount(viewsets.ViewSet):
                                  _("Please validate your email to access all the features of your profile area."))
 
         return render(request, "reunion/views/account/balance.html", context=template_context)
-
 
     @action(detail=False, methods=['GET'])
     def wallet(self, request: HttpRequest) -> HttpResponse:
@@ -597,13 +595,13 @@ class MyAccount(viewsets.ViewSet):
     @action(detail=False, methods=['GET'])
     def membership(self, request: HttpRequest) -> HttpResponse:
         context = get_context(request)
-        context['account_tab'] = 'memberships' # l'onglet de la page admin
-        user : TibilletUser = request.user
+        context['account_tab'] = 'memberships'  # l'onglet de la page admin
+        user: TibilletUser = request.user
 
         # Classement par valid / not valid
         # On utilise des booléans pour que sur le template, on fasse for is_valid, membership_list in memberships_dict.items.
         # On peut alors conditionner simplement sur le if is_valid :)
-        memberships_dict = { True: [], False: [] }
+        memberships_dict = {True: [], False: []}
 
         for tenant in user.client_achat.all():
             with tenant_context(tenant):
@@ -614,9 +612,9 @@ class MyAccount(viewsets.ViewSet):
 
                 for membership in memberships:
                     membership.origin = Configuration.get_solo().organisation
-                    if membership.is_valid() :
+                    if membership.is_valid():
                         memberships_dict[True].append(membership)
-                    else :
+                    else:
                         memberships_dict[False].append(membership)
 
         context['memberships_dict'] = memberships_dict
@@ -773,8 +771,12 @@ class EventMVT(viewsets.ViewSet):
         )
         # Récupération de tous les évènements de la fédération
         for tenant in tenants:
-            with (tenant_context(tenant['tenant'])):
-                events = Event.objects.prefetch_related('tag', 'postal_address').filter(
+            with ((tenant_context(tenant['tenant']))):
+                events = Event.objects.select_related(
+                    'postal_address',
+                ).prefetch_related(
+                    'tag', 'products', 'products__prices',
+                ).filter(
                     published=True,
                     datetime__gte=timezone.localtime() - timedelta(days=1),
                 ).exclude(tag__slug__in=tenant['tag_filter']  # On prend les évènement d'aujourd'hui
@@ -848,7 +850,19 @@ class EventMVT(viewsets.ViewSet):
             logger.info(f'on test avec {tenant.name}')
             with tenant_context(tenant):
                 try:
-                    event = Event.objects.prefetch_related('tag', 'postal_address', ).get(slug=slug)
+                    event = Event.objects.select_related('postal_address', ).prefetch_related('tag', 'products',
+                                                                                              'products__prices').get(
+                        slug=slug)
+
+                    # Récupération des prix
+                    tarifs = [price.prix for product in event.products.all() for price in product.prices.all()]
+                    # Calcul des prix min et max
+                    event.price_min = min(tarifs) if tarifs else None
+                    event.price_max = max(tarifs) if tarifs else None
+                    # Vérification de l'existence d'un prix libre
+                    event.free_price = any(
+                        price.free_price for product in event.products.all() for price in product.prices.all())
+
                     logger.info(f'tenant_retrieve event trouvé')
                     return event
                 except Event.DoesNotExist:
@@ -861,15 +875,26 @@ class EventMVT(viewsets.ViewSet):
         # Si False, alors le bouton reserver renvoi vers la page event du tenant.
         event_in_this_tenant = False
         try:
-            event = Event.objects.prefetch_related('tag', 'postal_address', ).get(slug=slug)
+            event = Event.objects.select_related('postal_address', ).prefetch_related('tag', 'products',
+                                                                                      'products__prices').get(slug=slug)
+            # Récupération des prix
+            tarifs = [price.prix for product in event.products.all() for price in product.prices.all()]
+            # Calcul des prix min et max
+            event.price_min = min(tarifs) if tarifs else None
+            event.price_max = max(tarifs) if tarifs else None
+            # Vérification de l'existence d'un prix libre
+            event.free_price = any(
+                price.free_price for product in event.products.all() for price in product.prices.all())
+
             event_in_this_tenant = True
+
         except Event.DoesNotExist:
+            # L'évent n'est pas
             event = self.tenant_retrieve(slug)
 
         template_context = get_context(request)
         template_context['event'] = event
         template_context['event_in_this_tenant'] = event_in_this_tenant
-
 
         # L'evènement possède des sous évènement.
         # Pour l'instant : uniquement des ACTIONS
@@ -1286,10 +1311,10 @@ class Tenant(viewsets.ViewSet):
         stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
         # Récupération des info lié au lieu via sont id account connect
 
-        try :
+        try:
             info_stripe = stripe.Account.retrieve(id_acc_connect)
             details_submitted = info_stripe.details_submitted
-        except Exception as e :
+        except Exception as e:
             logger.error(f"onboard_stripe_return. id_acc_connect : {id_acc_connect}, erreur stripe : {e}")
             raise Http404
 
@@ -1299,7 +1324,6 @@ class Tenant(viewsets.ViewSet):
 
         # Envoie du mail aux superadmins
         new_tenant_after_stripe_mailer.delay(waiting_config.pk)
-
 
         context = get_context(request)
         context["details_submitted"] = details_submitted
