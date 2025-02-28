@@ -1010,7 +1010,7 @@ class PostalAddressAdmin(ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
     def has_delete_permission(self, request, obj=None):
-        return False
+        return TenantAdminPermissionWithRequest(request)
 
 @admin.register(Event, site=staff_admin_site)
 class EventAdmin(ModelAdmin):
