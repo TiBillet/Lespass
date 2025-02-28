@@ -1,16 +1,16 @@
 {% load i18n %}
 {% load tibitags %}
 
-<div id="eventCarousel" class="carousel slide" data-bs-ride="carousel">
-    <div class="carousel-inner" style="max-height: 33vh;">
-        {% for element in carrousel_event_list %}
-            {% if element.link %}
-            <a href="{{ element.link }}" target="_blank" class="carousel-item{% if forloop.first %} active{% endif %}">
-                {% include 'reunion/partials/picture.html' with img=element.img alt=element.name style='max-height: 33vh' %}
+<div id="eventCarousel" class="carousel slide"{% if auto|default:true %} data-bs-ride="carousel"{% endif %}>
+    <div class="carousel-inner" style="max-height: {{ max_height|default:'33vh' }};">
+        {% for slide in carousel %}
+            {% if slide.link %}
+            <a href="{{ slide.link }}" target="_blank" class="carousel-item{% if forloop.first %} active{% endif %}">
+                {% include 'reunion/partials/picture.html' with img=slide.img alt=slide.name style='max-height: 33vh' %}
             </a>
             {% else %}
             <div class="carousel-item{% if forloop.first %} active{% endif %}">
-                {% include 'reunion/partials/picture.html' with img=element.img alt=element.name style='max-height: 33vh' %}
+                {% include 'reunion/partials/picture.html' with img=slide.img alt=slide.name style='max-height: 33vh' %}
             </div>
             {% endif %}
         {% endfor %}

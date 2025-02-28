@@ -29,7 +29,7 @@
                     {% if price.publish %}
                         <div class="mb-3 js-order">
                             <label for="amount-{{ price.uuid }}" class="form-label">
-                                <strong>{{ price.name }}</strong>{% if price.prix > 0 %}&nbsp;:
+                                <strong>{{ price.name }}</strong>{% if not price.free_price and price.prix > 0 %}&nbsp;:
                                 <span class="js-order-price">{{ price.prix }}</span>&nbsp;€
                                 {% endif %}
                             </label>
@@ -85,11 +85,12 @@
             </div>
         {% endfor %}
         <h4>
-            Total&nbsp;: <span class="js-total-amount">0</span> place(s) pour
-            <span class="fs-5 badge bg-secondary-subtle mb-md-0"><span class="js-total-price">0,00</span>&nbsp;€</span>
+            Total&nbsp;: <span class="js-total-amount">0</span>{% if not event.free_price %} place(s) pour
+            <span class="fs-5 badge bg-secondary-subtle mb-md-0"><span class="js-total-price">1,00</span>&nbsp;€</span>
+            {% endif %}
         </h4>
         <p>
-            Jauge maximale de {{ event.jauge_max }} personnes et un nombre de
+            Jauge maximale de {{ event.jauge_max }} personnes et nombre de
             billets limité à <span class="js-max-amount">{{ event.max_per_user }}</span> par réservation.
         </p>
     </div>
