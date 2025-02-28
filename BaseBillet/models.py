@@ -226,10 +226,6 @@ class Carrousel(models.Model):
     # publish = models.BooleanField(default=True, verbose_name=_("Publier"))
     on_event_list_page = models.BooleanField(default=True, verbose_name=_("Publier sur la page des évènements"))
 
-    def events_names(self):
-        return ", ".join([event.name for event in self.events.all()])
-
-
     def __str__(self):
         return self.name
 

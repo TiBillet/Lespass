@@ -246,6 +246,10 @@ class CarrouselAdmin(ModelAdmin):
 
     search_fields = ('name',)
 
+    @display(description=_("Présent dans les évènements"))
+    def events_names(self, instance: Carrousel):
+        return ", ".join([event.name for event in instance.events.all()])
+
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
