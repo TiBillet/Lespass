@@ -30,10 +30,14 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         # START MIGRATE AND INSTALL BEFORE THIS SCRIPT
         sub = os.environ['SUB']
+        tenant1 = Client.objects.get(name=sub)
+        tenant1.name = "Le Tiers-Lustre"
+        
+        tenant1.save()
 
-        # Fabrication d'un tenant pour de la fédération
+        # Fabrication d'un deuxième tenant pour de la fédération
         with schema_context('public'):
-            name = "L'intérupteur"
+            name = "Chantefrein"
             domain = os.getenv("DOMAIN")
             tenant, created = Client.objects.get_or_create(
                 schema_name=slugify(name),
@@ -52,8 +56,8 @@ class Command(BaseCommand):
             user.is_staff = True
             user.save()
 
-        tenant1 = Client.objects.get(name=sub)
-        tenant2 = Client.objects.get(name="L'intérupteur")
+        tenant2 = Client.objects.get(name="Chantefrein")
+
         for tenant in [tenant1, tenant2]:
             with tenant_context(tenant):
                 fake = Faker('fr_FR')
@@ -63,12 +67,13 @@ class Command(BaseCommand):
 
                 config = Configuration.get_solo()
                 config.organisation = tenant.name
-                config.short_description = f"Les scènes de {tenant.name} : un espace de démonstration."
+                config.short_description = f"Instance de démonstration  du collectif imaginaire « {tenant.name} »."
                 config.long_description = (
-                    "Vous trouverez ici un exemple de plusieurs types d'évènements, d'adhésions et d'abonnements."
-                    "\nGratuit, payant, avec prix préférentiels."
-                    "\nAbonnement mensuels récurents ou adhésion annuelle."
-                    "\nAinsi qu'une badgeuse pour la gestion d'accès d'un co working.")
+                    "Bienvenue sur Lespass, la plateforme en ligne de TiBillet."
+                    "\nVous trouverez ici des exemples d'évènements à réserver et d'adhésions à prendre."
+                    "Vous pouvez choisir entre tarifs gratuits, payants, en prix libre ou soumis à adhésion."
+                    "Les adhésions peuvent être mensuelles ou annuelles, ponctuelles ou réccurentes."
+                    "\nEnfin, vous avez en démonstration une badgeuse pour la gestion d'accès d'un espace de co-working.")
                 config.tva_number = fake.bban()[:20]
                 config.siren = fake.siret()[:20]
                 config.phone = fake.phone_number()[:20]
@@ -113,7 +118,7 @@ class Command(BaseCommand):
                 )
 
                 vege, created = OptionGenerale.objects.get_or_create(
-                    name="Vegetarien",
+                    name="Végétarien·ne",
                     description="Je suis végé",
                 )
 
@@ -131,7 +136,7 @@ class Command(BaseCommand):
 
                 terasse, created = OptionGenerale.objects.get_or_create(
                     name="Terrasse",
-                    description="Une table en terasse",
+                    description="Une table en terrasse",
                 )
 
                 interieur, created = OptionGenerale.objects.get_or_create(
@@ -141,15 +146,15 @@ class Command(BaseCommand):
 
                 terasse, created = OptionGenerale.objects.get_or_create(
                     name="Terrasse",
-                    description="Une table en terasse",
+                    description="Une table en terrasse",
                 )
 
                 ### MEMBERSHIP ###
 
                 adhesion_asso, created = Product.objects.get_or_create(
-                    name=f"Adhésion {tenant.name}",
-                    short_description=f"Adhérez à l'association {tenant.name}",
-                    long_description="Vous pouvez prendre une adhésion en une seule fois, ou payer tout les mois.",
+                    name=f"Adhésion ({tenant.name})",
+                    short_description=f"Adhérez au collectif {tenant.name}",
+                    long_description="Vous pouvez prendre une adhésion en une seule fois, ou payer tous les mois.",
                     categorie_article=Product.ADHESION,
                 )
                 adhesion_asso.option_generale_checkbox.add(option_membre_actif)
@@ -182,9 +187,9 @@ class Command(BaseCommand):
                 )
 
                 amap, created = Product.objects.get_or_create(
-                    name=f"Panier AMAP {tenant.name}",
-                    short_description=f"Adhésion au panier de l'AMAP {tenant.name}",
-                    long_description="Association pour le maintient d'une agriculture paysanne, recevez un panier par semaine.",
+                    name=f"Panier AMAP ({tenant.name})",
+                    short_description=f"Adhésion au panier de l'AMAP partenaire {tenant.name}",
+                    long_description="Association pour le maintien d'une agriculture paysanne. Recevez un panier chaque semaine.",
                     categorie_article=Product.ADHESION,
 
                 )
@@ -193,8 +198,8 @@ class Command(BaseCommand):
 
                 amap_annuelle, created = Price.objects.get_or_create(
                     product=amap,
-                    name="Annuel",
-                    short_description="Adhésion annuel",
+                    name="Annuelle",
+                    short_description="Adhésion annuelle",
                     prix='400',
                     recurring_payment=False,
                     subscription_type=Price.YEAR,
@@ -202,7 +207,7 @@ class Command(BaseCommand):
 
                 amap_mensuelle_recurente, created = Price.objects.get_or_create(
                     product=amap,
-                    name="Mensuel",
+                    name="Mensuelle",
                     short_description="Adhésion récurente",
                     prix='40',
                     recurring_payment=True,
@@ -212,9 +217,9 @@ class Command(BaseCommand):
                 ### BADGEUSE ###
 
                 badgeuse_cowork, created = Product.objects.get_or_create(
-                    name=f"Badgeuse Co-Working {tenant.name}",
-                    short_description="Badger l'acces au co working",
-                    long_description="Venez pointer votre présence.",
+                    name=f"Badgeuse co-working ({tenant.name})",
+                    short_description="Accès à l'espace de co-working.",
+                    long_description="Merci de pointer à chaque entrée ET sortie même pour un passage rapide. Les adhérent·es bénéficient de 3h gratuites par semaine.",
                     categorie_article=Product.BADGE,
                 )
 
@@ -245,7 +250,7 @@ class Command(BaseCommand):
                 ### EVENTS ###
                 rock, created = Tag.objects.get_or_create(name='Rock')
                 jazz, created = Tag.objects.get_or_create(name='Jazz')
-                world, created = Tag.objects.get_or_create(name='World Music')
+                world, created = Tag.objects.get_or_create(name='EDM')
                 gratuit, created = Tag.objects.get_or_create(name='Gratuit')
                 entree_libre, created = Tag.objects.get_or_create(name='Entrée libre')
 
@@ -265,8 +270,8 @@ class Command(BaseCommand):
                 ### GRATUIT MAIS AVEC RESERVATION OBLIGATOIRE ###
 
                 free_resa, created = Product.objects.get_or_create(
-                    name="Reservation gratuite",
-                    short_description="Reservation gratuite",
+                    name="Réservation gratuite",
+                    short_description="Réservation gratuite",
                     categorie_article=Product.FREERES,
                     nominative=False,
                 )
@@ -279,12 +284,12 @@ class Command(BaseCommand):
                 )
 
                 event_gratuit_avec_free_resa, created = Event.objects.get_or_create(
-                    name=f"{fake.word().capitalize()} : Gratuit avec reservation",
+                    name=f"{fake.word().capitalize()} : Gratuit avec réservation",
                     datetime=fake.future_datetime('+7d'),
                     jauge_max=200,
                     max_per_user=4,
-                    short_description="Attention, places limités, pensez à réserver !",
-                    long_description="Un évènement gratuit, avec une jauge maximale de 200 personnes et un nombre de billet limités à 4 par reservation."
+                    short_description="Attention, places limitées, pensez à réserver !",
+                    long_description="Un évènement gratuit, avec une jauge maximale de 200 personnes et un nombre de billets limité à 4 par réservation."
                                      "\nBillets non nominatifs.",
                     categorie=Event.CONCERT,
                     postal_address=postal_address,
@@ -297,8 +302,8 @@ class Command(BaseCommand):
                 ### PAYANT AVEC PRIX LIBRE ###
 
                 free_price_resa, created = Product.objects.get_or_create(
-                    name="Reservation à prix libre",
-                    short_description="Reservation à prix libre",
+                    name="Réservation à prix libre",
+                    short_description="Réservation à prix libre",
                     categorie_article=Product.BILLET,
                     nominative=False,
                 )
@@ -317,8 +322,8 @@ class Command(BaseCommand):
                     datetime=fake.future_datetime('+7d'),
                     jauge_max=200,
                     max_per_user=4,
-                    short_description="Attention, places limités, pensez à réserver !",
-                    long_description="Un évènement gratuit, avec une jauge maximale de 200 personnes et un nombre de billet limités à 4 par reservation."
+                    short_description="Attention, places limitées, pensez à réserver !",
+                    long_description="Un évènement gratuit, avec une jauge maximale de 200 personnes et un nombre de billets limité à 4 par réservation."
                                      "\nBillets non nominatifs.",
                     categorie=Event.CONCERT,
                     postal_address=postal_address,
@@ -344,8 +349,8 @@ class Command(BaseCommand):
                 )
 
                 tarif_adherant, created = Price.objects.get_or_create(
-                    name="Tarif Adhérent",
-                    short_description="Plein tarif",
+                    name="Tarif adhérent",
+                    short_description="Tarif adhérent",
                     prix=10,
                     product=billet,
                     adhesion_obligatoire=adhesion_asso,
@@ -356,8 +361,8 @@ class Command(BaseCommand):
                     datetime=fake.future_datetime('+7d'),
                     jauge_max=600,
                     max_per_user=10,
-                    short_description="Spectacle payant avec tarif préférentiel pour les adhérants à l'association",
-                    long_description="Jauge maximale de 600 personnes et un nombre de billet limités à 10 par reservation."
+                    short_description="Spectacle payant avec tarif préférentiel pour les adhérents à l'association.",
+                    long_description="Jauge maximale de 600 personnes et nombre de billets limité à 10 par réservation."
                                      "\nBillets nominatifs.",
                     categorie=Event.CONCERT,
                     postal_address=postal_address,
