@@ -27,12 +27,26 @@
     font-style: normal;
 }
 
+/* playwrite-is */
+@font-face {
+	font-family: Playwrite IS;
+	font-style: normal;
+	font-weight: 100 400;
+	font-stretch: 100%;
+	src: url('../font/playwrite-is/playwrite-is.woff2') format("woff2");
+	font-display: swap;
+}
+
 a {
     color: inherit;
 }
 
 body {
     font-family: luciole, sans-serif;
+}
+
+.display-1 {
+    font-family: Playwrite IS, serif;
 }
 
 .navbar {
@@ -43,7 +57,7 @@ body {
         font-size: var(--bs-badge-font-size);
     }
 
-    .nav-link {
+    .nav-link, .navbar-brand {
         font: 20px staatliches, sans-serif;
     }
 }
