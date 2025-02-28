@@ -8,7 +8,7 @@ const showSpinner = spinner => () => {
 }
 
 
-const init = () => {
+export const init = () => {
     document.querySelectorAll('.js-membership-form-btn').forEach(btn => {
         btn.addEventListener('htmx:afterRequest', _ => {
 
@@ -19,5 +19,3 @@ const init = () => {
         })
     })
 }
-
-window.addEventListener('DOMContentLoaded', init)

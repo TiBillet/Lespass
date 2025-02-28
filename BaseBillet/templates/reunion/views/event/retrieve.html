@@ -3,18 +3,15 @@
 
 {% block title %}{{ event.name }}{% endblock %}
 
-{% block head %}
+{% block scripts %}
     <script>
         // auto-scroll for volunteer accordion section
-        window.addEventListener('DOMContentLoaded', () => {
-            document
-                .getElementById("volunteerButton")
-                .addEventListener("click", ({target}) => {
-                    document.getElementById("get-involved").scrollIntoView()
-                })
+       document
+            .getElementById("volunteerButton")
+            ?.addEventListener("click", ({target}) => {
+                document.getElementById("get-involved").scrollIntoView()
         })
     </script>
-    <script src="{% static 'reunion/js/booking-calculator.js' %}"></script>
 {% endblock %}
 
 {% block main %}

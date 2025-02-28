@@ -100,6 +100,8 @@
     </div>
 </form>
 
-<script>
-    watchBookingForm()
+<script type="module">
+    import * as BookingCalculator from '{% static "reunion/js/booking-calculator.mjs" %}'
+
+    BookingCalculator.init()
 </script>

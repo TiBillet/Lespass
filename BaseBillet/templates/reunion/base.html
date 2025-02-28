@@ -16,11 +16,19 @@
     <link rel="stylesheet" href="{% static 'reunion/css/vars.css' %}">
     <link rel="stylesheet" href="{% static 'reunion/css/tibillet.css' %}">
 
-    <script type="module" async src="{% static 'reunion/js/theme-switcher.js' %}"></script>
+    <script src="{% static 'reunion/js/bootstrap.bundle.min.5.3.3.js' %}"
+        integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+        crossorigin="anonymous"></script>
     <script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
     <script src="{% static 'mvt_htmx/js/loading-states.js' %}"></script>
+    {% if formbricks_api_host %}
+    <script src="{{ formbricks_api_host}}/js/formbricks.umd.cjs" async></script>
+    {% endif %}
+    <script type="module" async>
+        import * as ThemeSwitcher from '{% static "reunion/js/theme-switcher.mjs" %}'
 
-    {% block head %}{% endblock head %}
+        ThemeSwitcher.init()
+    </script>
 </head>
 
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' class="min-vh-100 d-flex flex-column">
@@ -33,15 +41,13 @@
 
 {% include "reunion/partials/footer.html" %}
 
-<script src="{% static 'reunion/js/bootstrap.bundle.min.5.3.3.js' %}"
-        integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
-        crossorigin="anonymous"></script>
 
 {% include "reunion/partials/toasts.html" %}
 
 <!-- spinner -->
 {% include "reunion/loading.html" %}
 
-</body>
+{% block scripts %}{% endblock scripts %}
 
+</body>
 </html>
