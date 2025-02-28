@@ -242,7 +242,7 @@ class CarrouselAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 
-    list_display = ('name', 'on_event_list_page')
+    list_display = ('name', 'on_event_list_page', 'events_names')
 
     search_fields = ('name',)
 
