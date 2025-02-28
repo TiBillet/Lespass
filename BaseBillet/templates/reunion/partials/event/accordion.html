@@ -18,7 +18,7 @@
                 <div class="accordion-body px-0">
                     <p>{{ event.long_description | safe }}</p>
 
-                    {% if event.carrousel %}
+                    {% if event.carrousel.all %}
                     <div class="my-5">
                         {% include 'reunion/partials/event/carousel.html' with carousel=event.carrousel.all max_height='25vh' auto=false %}
                     </div>
