@@ -200,10 +200,15 @@ def context_for_membership_email(membership: "Membership"):
     config = Configuration.get_solo()
     domain = connection.tenant.get_primary_domain().domain
 
+    image_url = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    if hasattr(config.img, 'med'):
+        image_url = config.img.med.url
+
     context = {
         'username': membership.member_name(),
         'now': timezone.now(),
         'title': f"{config.organisation} : {membership.price.product.name}",
+        'image_url': image_url,
         'objet': _("Confirmation email"),
         'sub_title': _("Welcome aboard !"),
         'main_text': _(
@@ -544,7 +549,7 @@ def report_celery_mailer(data_report_list: list):
 
 @app.task
 def send_email_generique(context: dict = None, email: str = None, attached_files: dict = None):
-    template_name = "mails/email_generique.html"
+    template_name = "emails/email_generique.html"
     try:
         if not context:
             context = {

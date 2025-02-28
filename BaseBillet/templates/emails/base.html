@@ -1,0 +1,362 @@
+{% load humanize %}
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+        "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><!--[if gte mso 9]>
+    <xml>
+        <o:OfficeDocumentSettings>
+            <o:AllowPNG/>
+            <o:PixelsPerInch>96</o:PixelsPerInch>
+        </o:OfficeDocumentSettings>
+    </xml><![endif]-->
+    <meta content="text/html; charset=UTF-8" http-equiv="Content-Type"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>{{ title }}</title>
+    <style>
+        a {
+            outline: none;
+            color: #009058;
+            text-decoration: underline;
+        }
+
+        a:hover {
+            text-decoration: none !important;
+        }
+
+        .h-u a {
+            text-decoration: none;
+        }
+
+        .h-u a:hover {
+            text-decoration: underline !important;
+        }
+
+        a[x-apple-data-detectors] {
+            color: inherit !important;
+            text-decoration: none !important;
+        }
+
+        a[href^="tel"]:hover {
+            text-decoration: none !important;
+        }
+
+        .active-i a:hover,
+        .active-t:hover {
+            opacity: 0.8;
+        }
+
+        .active-i a,
+        .active-t {
+            transition: all 0.3s ease;
+        }
+
+        a img {
+            border: none;
+        }
+
+        b, strong {
+            font-weight: 700;
+        }
+
+        p {
+            margin: 0;
+        }
+
+        th {
+            padding: 0;
+        }
+
+        table td {
+            mso-line-height-rule: exactly;
+            border-spacing: 0px !important;
+        }
+
+        table, table tr, table td {
+            border-spacing: 0px !important;
+            padding: 0px
+        }
+
+        .ns span, .ns a {
+            color: inherit !important;
+            text-decoration: none !important;
+            border: none !important;
+        }
+
+        ul {
+            Margin: 0 0 0 20px;
+            padding: 0;
+        }
+
+        .tpl-content {
+            padding: 0 !important;
+        }
+
+        .cke_show_borders {
+            background: #e4e4e4 !important;
+        }
+
+        .tpl-repeatmovewrap > .tpl-repeatmove {
+            top: -15px !important;
+        }
+
+        .l-white a {
+            color: #fff;
+        }
+
+        .btn {
+            mso-padding-alt: 16px 10px;
+        }
+
+        .btn a {
+            color: #fff;
+            text-decoration: none;
+            display: block;
+            padding: 16px 10px;
+            font-weight: bold;
+        }
+
+        .wi-100p img {
+            width: 100% !important;
+            height: auto !important;
+        }
+
+        .wi-438px {
+            width: 438px;
+        }
+
+        .appstore {
+            width: 135px !important;
+            height: 40px !important;
+        }
+
+        .android {
+            width: 135px !important;
+            height: 40px !important;
+        }
+
+        .browser {
+            height: 40px !important;
+        }
+
+        .stores_table {
+            float: left;
+        }
+
+        .stores_table img {
+            height: 40px !important;
+            width: auto !important;
+        }
+
+        @media only screen and (max-width: 375px) and (min-width: 374px) {
+            .gmail-fix {
+                min-width: 374px !important;
+            }
+        }
+
+        @media only screen and (max-width: 414px) and (min-width: 413px) {
+            .gmail-fix {
+                min-width: 413px !important;
+            }
+        }
+
+        @media only screen and (max-width: 665px) {
+            .w-100p {
+                width: 100% !important;
+            }
+
+            .tflex {
+                display: block !important;
+                width: 100% !important;
+                box-sizing: border-box !important;
+            }
+
+            .ta-c {
+                text-align: center !important;
+            }
+
+            .w-26 {
+                width: 26px !important;
+            }
+
+            .w-78 {
+                width: 78px !important;
+            }
+
+            .w-104 {
+                width: 104px !important;
+            }
+
+            .w-108 {
+                width: 108px !important;
+            }
+
+            .wi-100p img {
+                width: 108px !important;
+                height: auto !important;
+            }
+
+            .wi-438px {
+                max-width: 360px;
+                width: auto;
+            }
+
+            .plr-24 {
+                padding-left: 24px !important;
+                padding-right: 24px !important;
+            }
+
+            .ptb-32 {
+                padding-top: 40px !important;
+            }
+
+            .pt-26 {
+                padding-top: 33px !important;
+            }
+
+            .pt-28 {
+                padding-top: 28px !important;
+            }
+
+            .pb-33 {
+                padding-bottom: 33px !important;
+            }
+
+            .pb-38 {
+                padding-bottom: 38px !important;
+            }
+
+            .pb-45 {
+                padding-bottom: 32px !important;
+            }
+
+            .pb-59 {
+                padding-bottom: 59px !important;
+            }
+
+            .td_content {
+                padding: 44px 16px 57px !important;
+            }
+
+            .browser-desktop {
+                display: none;
+                width: 0px;
+                max-height: 0px;
+                overflow: hidden;
+                height: 0;
+                font-size: 0;
+                max-height: 0;
+                line-height: 0;
+                margin: 0 auto;
+            }
+
+            .browser-mobile {
+                display: block;
+                height: 100%;
+                max-height: 100%;
+                padding-top: 16px;
+            }
+
+            .appstore {
+                width: auto !important;
+                height: 32px !important;
+            }
+
+            .android {
+                width: auto !important;
+                height: 32px !important;
+            }
+
+            .stores_table {
+                width: 100%;
+                margin: 16px 0 0 0 !important;
+            }
+
+            .stores_table img {
+                width: 140px !important;
+                height: auto !important;
+            }
+        }</style>
+</head>
+<body style="background:#f9f9f7; margin:0; padding:0; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%;">
+<table cellpadding="0" cellspacing="0" class="gmail-fix" style="background:#f9f9f7; min-width:320px;" width="100%">
+    <tr>
+        <td style="padding:0 24px;">
+            <table align="center" cellpadding="0" cellspacing="0" class="w-100p"
+                   style="max-width:600px; margin:0 auto;"
+                   width="600">
+                <tr>
+                    <td class="pt-26 pb-38" style="padding:52px 0 40px;">
+                        <table cellpadding="0" cellspacing="0" width="100%">
+                            <tr>
+                                <th align="left" class="tflex" style="vertical-align:top;" width="131">
+                                    <table align="center" cellpadding="0" cellspacing="0" class="w-78"
+                                           style="margin:0 auto;">
+                                        <tr>
+                                            <td align="center" class="wi-100p"><img alt="Logo TiBillet"
+                                                                                    src="{{ image_url }}"
+                                                                                    style="width:131px; font:20px/20px Arial, Helvetica, sans-serif; color:#7a69e6; vertical-align:top;"
+                                                                                    width="131"/>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </th>
+                                <th class="tflex" height="14" width="10"></th>
+                                <th align="left" class="tflex" style="vertical-align:top;">
+                                    <table cellpadding="0" cellspacing="0" width="100%">
+                                        <tr>
+                                            <td align="right" class="ta-c"
+                                                style="padding-top:10px; font:bold 12px/14px Arial, Helvetica, sans-serif; color:#1d1d1b; text-transform:uppercase;">
+                                                <span style="display:inline-block; vertical-align:1px"></span>{{ objet }}<span
+                                                    class="preheader"
+                                                    style="color:transparent;display:none;height:0;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;visibility:hidden;width:0;">&nbsp;|&nbsp;</span>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td align="right" class="ta-c"
+                                                style="padding-top:2px; font: 10px/12px Arial, Helvetica, sans-serif; color:#70706d;">
+                                                {{ now }}
+                                                <span class="preheader"
+                                                      style="color:transparent;display:none;height:0;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;visibility:hidden;width:0;">&nbsp;|&nbsp;</span>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </th>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                {% block content %}
+                {% endblock %}
+                <tr>
+                    <td class="pb-45" style="padding:0 0 32px;"></td>
+                </tr>
+                <tr>
+                    <td>
+                        <table align="center" cellpadding="0" cellspacing="0" class="wi-438px"
+                               style="margin:0 auto;padding: 0 0 59px;">
+                            <tr>
+                                <td align="center"
+                                    style="padding:0 0 33px; font:12px/14px Arial, Helvetica, sans-serif; color:#70706d;">
+                                    <span class="hide-mobile">Vous pouvez gérer vos notifications dans les paramètres de votre compte</span><span
+                                        class="hide-mobile">&nbsp;&bull;&nbsp;</span><a
+                                        href="https://tibillet.org/"
+                                        style="color:#70706d; text-decoration:underline;">FAQ</a></td>
+                            </tr>
+                            <tr>
+                                <td style="padding:0 0 0px; font:13px/16px Arial, Helvetica, sans-serif; color:#1d1d1b;">
+                                    <a href="https://tibillet.org">TiBillet</a> est une solution libre et open
+                                    source
+                                    développée par la <a href="https://codecommun.coop">Coopérative Code Commun</a>.
+                                    Si
+                                    vous avez des remarques ou des idées, n'hésitez pas à nous en parler, on adore ça ;)
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+</html>

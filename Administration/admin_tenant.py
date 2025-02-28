@@ -310,8 +310,6 @@ class OptionGeneraleAdmin(ModelAdmin):
     )
 
 
-
-
 class PriceInlineChangeForm(ModelForm):
     # Le formulaire pour changer une adhésion
     class Meta:
@@ -340,6 +338,7 @@ class PriceInlineChangeForm(ModelForm):
             if subscription_type == Price.NA:
                 raise forms.ValidationError(_("Un tarif d'adhésion doit avoir une durée d'abonnement"), code="invalid")
         return subscription_type
+
 
 class PriceInline(TabularInline):
     model = Price
@@ -383,11 +382,10 @@ class ProductAdminCustomForm(ModelForm):
             raise forms.ValidationError(_("Merci de renseigner une catégorie pour cet article."))
         return categorie
 
-
     def clean(self):
         cleaned_data = self.cleaned_data
         # récupération du dictionnaire data pour vérifier qu'on a bien au moin un tarif dans le inline :
-        try :
+        try:
             if int(self.data.getlist('prices-TOTAL_FORMS')[0]) > 0:
                 return cleaned_data
             raise forms.ValidationError(_("Merci de renseigner au moins un tarif pour ce produit."))
@@ -421,7 +419,6 @@ class ProductAdmin(ModelAdmin):
         # Pas besoin de les afficher, ils se créent automatiquement.
         qs = super().get_queryset(request)
         return qs.exclude(categorie_article__in=[Product.RECHARGE_CASHLESS, Product.DON]).exclude(archive=True)
-
 
     def has_delete_permission(self, request, obj=None):
         return False
