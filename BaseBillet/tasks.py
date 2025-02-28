@@ -198,8 +198,8 @@ def create_membership_invoice_pdf(membership: Membership):
 
 def context_for_membership_email(membership: "Membership"):
     config = Configuration.get_solo()
-    domain = connection.tenant.get_primary_domain().domain
 
+    domain = connection.tenant.get_primary_domain().domain
     image_url = "https://tibillet.org/fr/img/design/logo-couleur.svg"
     if hasattr(config.img, 'med'):
         image_url = f"https://{domain}{config.img.med.url}"
@@ -413,10 +413,9 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
     if not organisation:
         organisation = "TiBillet"
 
-    domain = connection.tenant.get_primary_domain().domain
     image_url = "https://tibillet.org/fr/img/design/logo-couleur.svg"
     if hasattr(config.img, 'med'):
-        image_url = f"https://{domain}{config.img.med.url}"
+        image_url = f"{base_url}{config.img.med.url}"
 
     logger.info(f'connection.tenant.schema_name != "public" : {connection.tenant.schema_name}')
     logger.info(f'    {organisation}')
@@ -586,10 +585,19 @@ def send_email_generique(context: dict = None, email: str = None, attached_files
 
 
 @app.task
-def ticket_celery_mailer(reservation_uuid: str, base_url):
+def ticket_celery_mailer(reservation_uuid: str):
     logger.info(f'      WORKDER CELERY app.task ticket_celery_mailer : {reservation_uuid}')
     config = Configuration.get_solo()
     reservation = Reservation.objects.get(pk=reservation_uuid)
+
+    domain = connection.tenant.get_primary_domain().domain
+    image_url_place = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    image_url_event = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    if hasattr(config.img, 'med'):
+        image_url_place = f"https://{domain}{config.img.med.url}"
+    if reservation.event:
+        if reservation.event.img:
+            image_url_event = f"https://{domain}{reservation.event.img.med.url}"
 
     if not reservation.to_mail:
         reservation.status = Reservation.PAID_NOMAIL
@@ -605,11 +613,12 @@ def ticket_celery_mailer(reservation_uuid: str, base_url):
             mail = CeleryMailerClass(
                 reservation.user_commande.email,
                 f"Votre reservation pour {config.organisation}",
-                template='mails/buy_confirmation.html',
+                template='emails/buy_confirmation.html',
                 context={
                     'config': config,
                     'reservation': reservation,
-                    'base_url': base_url
+                    'image_url_place': image_url_place,
+                    'image_url_event': image_url_event,
                 },
                 attached_files=attached_files,
             )

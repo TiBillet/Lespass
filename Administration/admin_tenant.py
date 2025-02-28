@@ -38,7 +38,7 @@ from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Pai
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
     FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
-    webhook_membership, create_ticket_pdf
+    webhook_membership, create_ticket_pdf, ticket_celery_mailer
 from Customers.models import Client
 from fedow_connect.utils import dround
 
@@ -1173,6 +1173,24 @@ class ReservationAdmin(ModelAdmin):
     @display(description=_("Options"))
     def options_str(self, instance: Reservation):
         return " - ".join([option.name for option in instance.options.all()])
+
+    actions_detail = ["send_ticket_to_mail", ]
+    @action(
+        description=_("Renvoyer les billets par mail"),
+        url_path="send_ticket_to_mail",
+        permissions=["custom_actions_detail"],
+    )
+    def send_ticket_to_mail(self, request, object_id):
+        reservation = Reservation.objects.get(pk=object_id)
+        ticket_celery_mailer.delay(reservation.pk)
+        messages.success(
+            request,
+            _(f"Billets envoyée sur {reservation.user_commande.email}"),
+        )
+        return redirect(request.META["HTTP_REFERER"])
+
+    def has_custom_actions_detail_permission(self, request, object_id):
+        return TenantAdminPermissionWithRequest(request)
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)

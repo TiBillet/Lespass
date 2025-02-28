@@ -127,8 +127,7 @@ def reservation_paid(old_instance: Reservation, new_instance: Reservation):
         logger.info(f"    SIGNAL RESERVATION send_billet_to_mail {new_instance.status}")
         # Envoie du mail. Le succes du mail envoyé mettra la Reservation.VALID
         if new_instance.user_commande.email:
-            base_url = f"https://{connection.tenant.get_primary_domain().domain}"
-            task = ticket_celery_mailer.delay(new_instance.pk, base_url)
+            ticket_celery_mailer.delay(new_instance.pk)
             # https://github.com/psf/requests/issues/5832
     else:
         logger.info(
