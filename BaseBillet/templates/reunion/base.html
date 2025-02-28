@@ -10,6 +10,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <title>{% block title %}{% translate 'Accueil' %}{% endblock %} | {{ config.organisation }}</title>
 
+    <link rel="preload" as="style" href="{% static 'reunion/css/tibillet.css' %}">
+    <link rel="preload" as="script" href="{% static 'reunion/js/theme-switcher.mjs' %}">
+
     <link rel="icon" type="image/png" href="{% static 'reunion/img/favicon.png' %}">
     <link href="{% static 'reunion/css/bootstrap.min.5.3.3.css' %}" rel="stylesheet"
           integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
@@ -24,7 +27,7 @@
     {% if formbricks_api_host %}
     <script src="{{ formbricks_api_host}}/js/formbricks.umd.cjs" async></script>
     {% endif %}
-    <script type="module" async>
+    <script type="module">
         import * as ThemeSwitcher from '{% static "reunion/js/theme-switcher.mjs" %}'
 
         ThemeSwitcher.init()
