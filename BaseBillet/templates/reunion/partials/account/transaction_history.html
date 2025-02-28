@@ -17,24 +17,29 @@
                 <td>
                     <strong>{{ tr.amount | dround }}</strong>
                     {% if tr.serialized_asset.is_stripe_primary %}
-                        TiBillet
+                    TiBillets
                     {% else %}
-                        {{ tr.serialized_asset.name }}
-                        ({{ tr.serialized_asset.place_origin.name }})
+                    {{ tr.serialized_asset.name }}
                     {% endif %}
                 </td>
                 <td>{{ tr.get_action_display }}</td>
                 <td>
                     {% if tr.serialized_sender.uuid == user.wallet.uuid %}
-                        {% translate "Myself" %}
+                    {% translate "Tirelire" %}
+                    {% elif tr.serialized_sender.get_name == 'Primary Wallet' %}
+                    {% trans 'Plateforme Lespass' %}
                     {% else %}
-                        {{ tr.serialized_sender.get_name }}
+                    {% trans 'Caisse LaBoutik' %}
+                    {#{ tr.serialized_sender.get_name }#}
                     {% endif %}
                     <i class="bi bi-arrow-right"></i>
                     {% if tr.serialized_receiver.uuid == user.wallet.uuid %}
-                        {% translate "Myself" %}
+                    {% translate "Tirelire" %}
+                    {% elif tr.serialized_sender.get_name == 'Primary Wallet' %}
+                    {% trans 'Plateforme Lespass' %}
                     {% else %}
-                        {{ tr.serialized_receiver.get_name }}
+                    {% trans 'Caisse LaBoutik' %}
+                    {#{ tr.serialized_receiver.get_name }#}
                     {% endif %}
                 </td>
                 <td>{{ tr.datetime }}</td>
