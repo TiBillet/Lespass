@@ -6,9 +6,11 @@
 
 {% block main %}
 <!-- slideshow -->
+ {% if carrousel_event_list|length > 0 %}
 <header class="container-lg">
     {% include "reunion/partials/event/carousel.html" %}
 </header>
+{% endif %}
 
 <!-- search bar and filtering -->
 <section class="container-lg p-3 sticky-top bg-body" style="height: fit-content;">

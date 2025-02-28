@@ -4,7 +4,7 @@
     <div class="carousel-inner" style="max-height: 33vh;">
         {% for element in carrousel_event_list %}
             <div class="carousel-item active">
-                {% include 'reunion/partials/picture.html' with img=element.img %}
+                {% include 'reunion/partials/picture.html' with img=element.img alt=element.name style='max-height: 33vh' %}
             </div>
         {% endfor %}
     </div>
