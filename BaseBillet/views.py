@@ -104,7 +104,7 @@ def get_context(request):
         # "tenant": connection.tenant,
         "formbricks_api_host": formbricks_config.api_host,
         "mode_test": True if os.environ.get('TEST') == '1' else False,
-        "carrousel_event_list": Carrousel.objects.filter(on_event_list_page=True),
+        "carrousel_event_list": Carrousel.objects.filter(on_event_list_page=True).order_by('order'),
         "main_nav": [
             {'name': 'event-list', 'url': '/event/', 'label': 'Agenda', 'icon': 'calendar-date'},
             {'name': 'memberships_mvt', 'url': '/memberships/', 'label': 'Adhérer', 'icon': 'person-badge'},
@@ -869,6 +869,7 @@ class EventMVT(viewsets.ViewSet):
         template_context = get_context(request)
         template_context['event'] = event
         template_context['event_in_this_tenant'] = event_in_this_tenant
+
 
         # L'evènement possède des sous évènement.
         # Pour l'instant : uniquement des ACTIONS

@@ -227,6 +227,7 @@ class Carrousel(models.Model):
     # publish = models.BooleanField(default=True, verbose_name=_("Publier"))
     on_event_list_page = models.BooleanField(default=True, verbose_name=_("Publier sur la page des évènements"))
     link = models.URLField(blank=True, null=True, verbose_name=_("URL de lien"))
+    order = models.PositiveSmallIntegerField(verbose_name=_("Ordre d'apparition"), default=1000,)
 
     def __str__(self):
         return self.name
