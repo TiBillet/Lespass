@@ -44,7 +44,7 @@ from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, Product, Event, Paiement_stripe, Membership, Reservation, \
-    FormbricksConfig, FormbricksForms, FederatedPlace
+    FormbricksConfig, FormbricksForms, FederatedPlace, Carrousel
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, new_tenant_mailer, \
     contact_mailer, new_tenant_after_stripe_mailer
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
@@ -104,6 +104,7 @@ def get_context(request):
         # "tenant": connection.tenant,
         "formbricks_api_host": formbricks_config.api_host,
         "mode_test": True if os.environ.get('TEST') == '1' else False,
+        "carrousel_event_list": Carrousel.objects.filter(on_event_list_page=True),
         "main_nav": [
             {'name': 'event-list', 'url': '/event/', 'label': 'Agenda', 'icon': 'calendar-date'},
             {'name': 'memberships_mvt', 'url': '/memberships/', 'label': 'Adhérer', 'icon': 'person-badge'},

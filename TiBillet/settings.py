@@ -489,6 +489,7 @@ UNFOLD = {
                         "title": _("Dashboard"),
                         "icon": "dashboard",
                         "link": reverse_lazy("admin:index"),
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
                     },
                     {
                         "title": _("Configuration"),
@@ -496,6 +497,12 @@ UNFOLD = {
                         "link": reverse_lazy("staff_admin:BaseBillet_configuration_changelist"),
                         # "badge": "Administration.admin_tenant.badge_callback",
                         # "permission": lambda request: request.user.is_staff,
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+                    },
+                    {
+                        "title": _("Carrousel"),
+                        "icon": "photo_library",
+                        "link": reverse_lazy("staff_admin:BaseBillet_carrousel_changelist"),
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
                     },
                 ],

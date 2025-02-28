@@ -35,7 +35,7 @@ from AuthBillet.models import HumanUser, TibilletUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
-    FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress
+    FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
     webhook_membership, create_ticket_pdf
 from Customers.models import Client
@@ -237,6 +237,28 @@ class TagForm(ModelForm):
         }
 
 
+@admin.register(Carrousel, site=staff_admin_site)
+class CarrouselAdmin(ModelAdmin):
+    compressed_fields = True  # Default: False
+    warn_unsaved_form = True  # Default: False
+
+    list_display = ('name', 'on_event_list_page')
+
+    search_fields = ('name',)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+
 @admin.register(Tag, site=staff_admin_site)
 class TagAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
@@ -257,7 +279,6 @@ class TagAdmin(ModelAdmin):
             obj.color, )
 
     _color.short_description = _("Couleur")
-
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
@@ -309,7 +330,6 @@ class ProductAdminCustomForm(ModelForm):
         return cleaned_data
 
 
-
 class PriceInlineChangeForm(ModelForm):
     # Le formulaire pour changer une adhésion
     class Meta:
@@ -326,9 +346,10 @@ class PriceInlineChangeForm(ModelForm):
     def clean_prix(self):
         cleaned_data = self.cleaned_data
         prix = cleaned_data.get('prix')
-        if prix < 1 :
+        if prix < 1:
             raise forms.ValidationError(_("Un tarif ne peux être inférieur à 1€"), code="invalid")
         return prix
+
 
 class PriceInline(TabularInline):
     model = Price
@@ -404,7 +425,7 @@ class PriceChangeForm(ModelForm):
     def clean_prix(self):
         cleaned_data = self.cleaned_data
         prix = cleaned_data.get('prix')
-        if prix < 1 :
+        if prix < 1:
             raise forms.ValidationError(_("Un tarif ne peux être inférieur à 1€"), code="invalid")
         return prix
 
@@ -730,7 +751,8 @@ class MembershipAddForm(ModelForm):
         cleaned_data = self.cleaned_data
         if cleaned_data.get("contribution"):
             if cleaned_data.get("contribution") > 0 and cleaned_data.get("payment_method") == PaymentMethod.FREE:
-                raise forms.ValidationError(_("Merci de renseigner un moyen de paiement si la contribution est > 0"), code="invalid")
+                raise forms.ValidationError(_("Merci de renseigner un moyen de paiement si la contribution est > 0"),
+                                            code="invalid")
 
         if cleaned_data.get("payment_method") != PaymentMethod.FREE:
             if not cleaned_data.get("contribution"):
@@ -813,7 +835,6 @@ class MembershipAdmin(ModelAdmin):
 
     ### FORMULAIRES
     autocomplete_fields = ['option_generale', ]
-
 
     def get_form(self, request, obj=None, **kwargs):
         """ Si c'est un add, on modifie un peu le formulaire pour avoir un champs email """
@@ -938,50 +959,6 @@ class LigneArticleAdmin(ModelAdmin):
         return False
 
 
-##### EVENT ADMIN
-
-
-class EventChildrenInline(TabularInline):
-    model = Event
-    fk_name = 'parent'
-    verbose_name = _("Action") # Pour l'instant, les enfants sont forcément des Actions.
-    hide_title = True
-    fields = (
-        'name',
-        'datetime',
-        'jauge_max',
-        'valid_tickets_count',
-    )
-
-    # ordering_field = "weight"
-    # max_num = 1
-    extra = 0
-    show_change_link = True
-    tab = True
-
-    readonly_fields = (
-        'valid_tickets_count',
-    )
-    # Surcharger la méthode pour désactiver la suppression
-    def has_delete_permission(self, request, obj=None):
-        return False
-
-
-class EventForm(ModelForm):
-    # def save(self, commit=True):
-    #     return super().save(commit)
-
-    # def clean(self):
-    #     return super().clean()
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # On mets la valeur de la jauge réglée dans la config par default
-        config = Configuration.get_solo()
-        self.fields['jauge_max'].initial = 454
-
-
-
 @admin.register(PostalAddress, site=staff_admin_site)
 class PostalAddressAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
@@ -1012,6 +989,51 @@ class PostalAddressAdmin(ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
+
+##### EVENT ADMIN
+
+
+class EventChildrenInline(TabularInline):
+    model = Event
+    fk_name = 'parent'
+    verbose_name = _("Action")  # Pour l'instant, les enfants sont forcément des Actions.
+    hide_title = True
+    fields = (
+        'name',
+        'datetime',
+        'jauge_max',
+        'valid_tickets_count',
+    )
+
+    # ordering_field = "weight"
+    # max_num = 1
+    extra = 0
+    show_change_link = True
+    tab = True
+
+    readonly_fields = (
+        'valid_tickets_count',
+    )
+
+    # Surcharger la méthode pour désactiver la suppression
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class EventForm(ModelForm):
+    # def save(self, commit=True):
+    #     return super().save(commit)
+
+    # def clean(self):
+    #     return super().clean()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # On mets la valeur de la jauge réglée dans la config par default
+        config = Configuration.get_solo()
+        self.fields['jauge_max'].initial = 454
+
+
 @admin.register(Event, site=staff_admin_site)
 class EventAdmin(ModelAdmin):
     form = EventForm
@@ -1028,6 +1050,7 @@ class EventAdmin(ModelAdmin):
                 'datetime',
                 'end_datetime',
                 'img',
+                'carrousel',
                 'short_description',
                 'long_description',
                 'jauge_max',
@@ -1051,6 +1074,12 @@ class EventAdmin(ModelAdmin):
             ),
             "classes": ["tab"],
         }),
+        # ("Carrousel d'image", {
+        #     'fields': (
+        #         'carrousel',
+        #     ),
+        #     "classes": ["tab"],
+        # }),
     )
 
     list_display = [
@@ -1070,6 +1099,7 @@ class EventAdmin(ModelAdmin):
         "tag",
         "options_radio",
         "options_checkbox",
+        "carrousel",
     ]
 
     formfield_overrides = {
@@ -1094,7 +1124,6 @@ class EventAdmin(ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
-
 
 
 @admin.register(Reservation, site=staff_admin_site)
@@ -1249,7 +1278,7 @@ class TicketAdmin(ModelAdmin):
 
     @admin.display(ordering='reservation__event', description='Évènement')
     def event(self, obj):
-        if obj.reservation.event.parent :
+        if obj.reservation.event.parent:
             return f"{obj.reservation.event.parent} -> {obj.reservation.event}"
         return obj.reservation.event
 
@@ -1312,12 +1341,12 @@ class TicketAdmin(ModelAdmin):
             reverse("staff_admin:BaseBillet_ticket_changelist")
         )
 
-
     @display(description=_("Ticket n°"))
     def ticket(self, instance: Ticket):
         return f"{instance.reservation.user_commande.email} {str(instance.uuid)[:8]}"
 
     actions_detail = ["get_pdf", ]
+
     @action(description=_("PDF"),
             url_path="ticket_pdf",
             permissions=["custom_actions_detail"])
@@ -1365,8 +1394,6 @@ class TicketAdmin(ModelAdmin):
     #     return future_events
 
 
-
-
 @admin.register(Client, site=staff_admin_site)
 class TenantAdmin(ModelAdmin):
     # Doit être référencé pour le champs autocomplete_fields federated_with de configuration
@@ -1391,9 +1418,9 @@ class TenantAdmin(ModelAdmin):
 
 @admin.register(FederatedPlace, site=staff_admin_site)
 class FederatedPlaceAdmin(ModelAdmin):
-    list_display = ["tenant", "str_tag_filter", "str_tag_exclude",]
-    fields = ["tenant", "tag_filter", "tag_exclude",]
-    autocomplete_fields = ["tenant", "tag_filter", "tag_exclude",]
+    list_display = ["tenant", "str_tag_filter", "str_tag_exclude", ]
+    fields = ["tenant", "tag_filter", "tag_exclude", ]
+    autocomplete_fields = ["tenant", "tag_filter", "tag_exclude", ]
 
     @display(description=_("Tags filtrés"))
     def str_tag_filter(self, instance: FederatedPlace):
@@ -1402,7 +1429,6 @@ class FederatedPlaceAdmin(ModelAdmin):
     @display(description=_("Tags exclus"))
     def str_tag_exclude(self, instance: FederatedPlace):
         return ", ".join([tag.name for tag in instance.tag_exclude.all()])
-
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
@@ -1423,7 +1449,6 @@ class GhostConfigChangeform(ModelForm):
     class Meta:
         model = GhostConfig
         fields = ['ghost_url', 'ghost_last_log']
-
 
 
 class GhostConfigAddform(ModelForm):
@@ -1589,13 +1614,13 @@ class FormbricksFormsAdmin(ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
 
-
 ### UNFOLD ADMIN
 def environment_callback(request):
     if settings.DEBUG:
         return [_("Development"), "primary"]
 
     return [_("Production"), "primary"]
+
 
 def dashboard_callback(request, context):
     context.update({

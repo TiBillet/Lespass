@@ -211,6 +211,29 @@ def poids_option_generale(sender, instance: OptionGenerale, created, **kwargs):
         instance.save()
 
 
+class Carrousel(models.Model):
+    name = models.CharField(max_length=50, verbose_name=_("Nom de l'image"))
+    img = StdImageField(upload_to='images/',
+                        validators=[MinSizeValidator(720, 135)],
+                        variations={
+                            'fhd': (1920, 1920),
+                            'hdr': (720, 720),
+                            'med': (480, 480),
+                        },
+                        delete_orphans=True,
+                        verbose_name=_('Fichier image'),
+                        )
+    # publish = models.BooleanField(default=True, verbose_name=_("Publier"))
+    on_event_list_page = models.BooleanField(default=True, verbose_name=_("Publier sur la page des évènements"))
+
+    def events(self):
+        return ", ".join([event.name for event in self.events.all()])
+
+
+    def __str__(self):
+        return self.name
+
+
 class Configuration(SingletonModel):
     def uuid(self):
         return connection.tenant.pk
@@ -793,8 +816,10 @@ class Event(models.Model):
                             'crop_hdr': (960, 540, True),
                             'crop': (480, 270, True),
                         },
-                        delete_orphans=True, verbose_name=_("Image")
+                        delete_orphans=True, verbose_name=_("Image principale")
                         )
+
+    carrousel = models.ManyToManyField(Carrousel, blank=True, verbose_name=_("Carrousel d'images"), related_name='events')
 
     CONCERT = "LIV"
     FESTIVAL = "FES"

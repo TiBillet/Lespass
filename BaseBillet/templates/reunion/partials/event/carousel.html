@@ -2,15 +2,11 @@
 {% load tibitags %}
 <div id="eventCarousel" class="carousel slide">
     <div class="carousel-inner" style="max-height: 33vh;">
-    <div class="carousel-item active">
-        {% include 'reunion/partials/picture.html' %}
-    </div>
-    <div class="carousel-item">
-        {% include 'reunion/partials/picture.html' %}
-    </div>
-    <div class="carousel-item">
-        {% include 'reunion/partials/picture.html' %}
-    </div>
+        {% for element in carrousel_event_list %}
+            <div class="carousel-item active">
+                {% include 'reunion/partials/picture.html' with img=element.img %}
+            </div>
+        {% endfor %}
     </div>
     <button class="carousel-control-prev" type="button" data-bs-target="#eventCarousel" data-bs-slide="prev">
         <span class="carousel-control-prev-icon" aria-hidden="true"></span>
