@@ -406,34 +406,26 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
 
     connexion_url = f"{base_url}/emailconfirmation/{token}"
     logger.info("connexion_celery_mailer -> connection.tenant.schema_name : {connection.tenant.schema_name}")
-    if connection.tenant.schema_name != "public":
-        config = Configuration.get_solo()
-        organisation = config.organisation
+    config = Configuration.get_solo()
+    organisation = config.organisation
 
-        # Premier mail ou config non renseignée, on mets TiBIllet
-        if not organisation:
-            organisation = "TiBillet"
-
-        img_orga = ""
-        if config.img:
-            img_orga = config.img.med
-
-        logger.info(f'connection.tenant.schema_name != "public" : {connection.tenant.schema_name}')
-        logger.info(f'    {organisation}')
-        logger.info(f'    {img_orga}')
-    else:
+    # Premier mail ou config non renseignée, on mets TiBIllet
+    if not organisation:
         organisation = "TiBillet"
-        img_orga = "Logo_Tibillet_Noir_Ombre_600px.png"
-        meta = Client.objects.filter(categorie=Client.META).first()
-        meta_domain = f"https://{meta.get_primary_domain().domain}"
-        connexion_url = f"{meta_domain}/emailconfirmation/{token}"
-        logger.info(f'connection.tenant.schema_name == "public" : {connection.tenant.schema_name}')
+
+    domain = connection.tenant.get_primary_domain().domain
+    image_url = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    if hasattr(config.img, 'med'):
+        image_url = f"https://{domain}{config.img.med.url}"
+
+    logger.info(f'connection.tenant.schema_name != "public" : {connection.tenant.schema_name}')
+    logger.info(f'    {organisation}')
 
     # Internal SMTP and html template
     if title is None:
         title = f"{organisation} : Confirmez votre email et connectez vous !"
     if template is None:
-        template = 'mails/connexion.html'
+        template = 'emails/connexion.html'
 
     logger.info(f'    title : {title}')
 
@@ -444,7 +436,7 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
             template=template,
             context={
                 'organisation': organisation,
-                'url_image': img_orga,
+                'image_url': image_url,
                 'connexion_url': connexion_url,
                 'base_url': base_url,
             },
