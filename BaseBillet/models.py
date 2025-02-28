@@ -223,8 +223,10 @@ class Carrousel(models.Model):
                         delete_orphans=True,
                         verbose_name=_('Fichier image'),
                         )
+
     # publish = models.BooleanField(default=True, verbose_name=_("Publier"))
     on_event_list_page = models.BooleanField(default=True, verbose_name=_("Publier sur la page des évènements"))
+    link = models.URLField(blank=True, null=True, verbose_name=_("URL de lien"))
 
     def __str__(self):
         return self.name
