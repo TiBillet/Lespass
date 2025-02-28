@@ -29,7 +29,9 @@ const updateTotal = (orders, totalAmount, totalPrice) => _ => {
     })
 
     totalAmount.textContent = ta
-    totalPrice.textContent = (tp / 100).toLocaleString('fr-FR')
+
+    if (totalPrice)
+        totalPrice.textContent = (tp / 100).toLocaleString('fr-FR')
 }
 
 export const init = () => {

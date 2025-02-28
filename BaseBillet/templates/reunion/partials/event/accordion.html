@@ -15,8 +15,14 @@
                 </button>
             </h2>
             <div id="schedule" class="accordion-collapse collapse show" data-bs-parent="#infoAccordion">
-                <div class="accordion-body">
+                <div class="accordion-body px-0">
                     <p>{{ event.long_description | safe }}</p>
+
+                    {% if event.carrousel %}
+                    <div class="my-5">
+                        {% include 'reunion/partials/event/carousel.html' with carousel=event.carrousel.all max_height='25vh' auto=false %}
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -34,7 +40,7 @@
             </button>
         </h2>
         <div id="timeAndPlace" class="accordion-collapse collapse" data-bs-parent="#infoAccordion">
-            <div class="accordion-body">
+            <div class="accordion-body px-0">
                 <ul class="list-group list-group-horizontal-xl w-100">
                     <li class="list-group-item border-start-0 border-end-0 rounded-0 px-0 py-3 p-xl-5">
                         <i class="bi bi-calendar-check me-3"></i>

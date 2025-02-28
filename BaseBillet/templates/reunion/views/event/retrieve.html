@@ -30,43 +30,11 @@
         <!-- tags -->
         <p>
             {% for tag  in event.tag.all %}
-                <span class="badge text-bg-info me-1">{{ tag }}</span>
+                <span class="badge text-bg-info p-2 me-1 fs-6 fw-medium">{{ tag }}</span>
             {% endfor %}
         </p>
 
         <p class="lead">{{ event.short_description }}</p>
-
-        {% if event.gallery %}
-            {# TODO: currently does not exist in Event model but part of design. add image gallery? #}
-            <div id="eventCarousel" class="carousel slide mb-3">
-                <div class="carousel-inner" style="max-height: 33vh;">
-                    <div class="carousel-item active">
-                        <img style="background-color: var(--kouler-kari)" src="../../assets/motif/sevronkler.svg"
-                             class="d-inline-block w-50"
-                             alt="..."><img style="background-color: var(--kouler-losean)"
-                                            src="../../assets/motif/sevronkler.svg" class="d-inline-block w-50"
-                                            alt="...">
-                    </div>
-                    <div class="carousel-item">
-                        <img style="background-color: var(--kouler-letsi)" src="../../assets/motif/sevronkler.svg"
-                             class="d-inline-block w-50"
-                             alt="..."><img style="background-color: var(--kouler-piton)"
-                                            src="../../assets/motif/sevronkler.svg" class="d-inline-block w-50"
-                                            alt="...">
-                    </div>
-                </div>
-                <button class="carousel-control-prev" type="button" data-bs-target="#eventCarousel"
-                        data-bs-slide="prev">
-                    <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-                    <span class="visually-hidden">Previous</span>
-                </button>
-                <button class="carousel-control-next" type="button" data-bs-target="#eventCarousel"
-                        data-bs-slide="next">
-                    <span class="carousel-control-next-icon" aria-hidden="true"></span>
-                    <span class="visually-hidden">Next</span>
-                </button>
-            </div>
-        {% endif %}
 
         {#    Si l'évènement n'est pas de ce tenant, il provient d'une fédération, le bouton redigire vers la page du tenant.#}
         {#    # Todo : Garder l'user d'un dns à l'autre, et ouvrir le modal reserver dans le nouveau tenant #}
