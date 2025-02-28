@@ -71,8 +71,8 @@ class Command(BaseCommand):
                 config.long_description = (
                     "Bienvenue sur Lespass, la plateforme en ligne de TiBillet."
                     "\nVous trouverez ici des exemples d'évènements à réserver et d'adhésions à prendre."
-                    "Vous pouvez choisir entre tarifs gratuits, payants, en prix libre ou soumis à adhésion."
-                    "Les adhésions peuvent être mensuelles ou annuelles, ponctuelles ou réccurentes."
+                    " Vous pouvez choisir entre tarifs gratuits, payants, en prix libre ou soumis à adhésion."
+                    " Les adhésions peuvent être mensuelles ou annuelles, ponctuelles ou réccurentes."
                     "\nEnfin, vous avez en démonstration une badgeuse pour la gestion d'accès d'un espace de co-working.")
                 config.tva_number = fake.bban()[:20]
                 config.siren = fake.siret()[:20]
