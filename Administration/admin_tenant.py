@@ -355,6 +355,15 @@ class PriceInlineChangeForm(ModelForm):
             raise forms.ValidationError(_("Un tarif ne peux être inférieur à 1€"), code="invalid")
         return prix
 
+    def clean_subscription_type(self):
+        cleaned_data = self.cleaned_data
+        product: Product = cleaned_data.get('product')
+        subscription_type = cleaned_data.get('subscription_type')
+        if product.categorie_article == Product.ADHESION:
+            if subscription_type == Price.NA:
+                raise forms.ValidationError(_("Un tarif d'adhésion doit avoir une durée d'abonnement"), code="invalid")
+        return subscription_type
+
 
 class PriceInline(TabularInline):
     model = Price
@@ -784,7 +793,7 @@ class MembershipAddForm(ModelForm):
         # Mise à jour des dates de contribution :
         self.instance.first_contribution = timezone.localtime()
         self.instance.last_contribution = timezone.localtime()
-
+        # self.instance.set_deadline()
         # Le post save BaseBillet.signals.create_lignearticle_if_membership_created_on_admin s'executera
         # # Création de la ligne Article vendu qui envera à la caisse si besoin
         return super().save(commit=commit)

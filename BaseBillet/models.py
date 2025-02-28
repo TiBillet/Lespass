@@ -694,9 +694,9 @@ class Price(models.Model):
 
     publish = models.BooleanField(default=True, verbose_name=_("Publier"))
 
-    NA, DIX, VINGT, HUITCINQ, DEUXDEUX = 'NA', 'DX', 'VG', 'HC', 'DD'
+    TNA, DIX, VINGT, HUITCINQ, DEUXDEUX = 'NA', 'DX', 'VG', 'HC', 'DD'
     TVA_CHOICES = [
-        (NA, _('Non applicable')),
+        (TNA, _('Non applicable')),
         (DIX, _("10 %")),
         (VINGT, _('20 %')),
         (HUITCINQ, _('8.5 %')),
@@ -705,7 +705,7 @@ class Price(models.Model):
 
     vat = models.CharField(max_length=2,
                            choices=TVA_CHOICES,
-                           default=NA,
+                           default=TNA,
                            verbose_name=_("Taux TVA"),
                            )
 
