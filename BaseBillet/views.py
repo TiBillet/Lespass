@@ -799,7 +799,7 @@ class EventMVT(viewsets.ViewSet):
                     )
 
                 # Mécanisme de pagination : 10 évènements max par lieux ? À définir dans la config' ?
-                paginator = Paginator(events.order_by('datetime'), 50)
+                paginator = Paginator(events.order_by('datetime').distinct(), 50)
                 paginated_events = paginator.get_page(page)
                 paginated_info['page'] = page
                 paginated_info['has_next'] = paginated_events.has_next()
