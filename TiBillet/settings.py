@@ -425,8 +425,8 @@ UNFOLD = {
     "SITE_DROPDOWN": [
         {
             "icon": "diamond",
-            "title": _("My site"),
-            "link": "https://example.com",
+            "title": _("TiBillet / Lespass"),
+            "link": "https://tibillet.org",
         },
     ],
     "TABS": [

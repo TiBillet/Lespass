@@ -1068,7 +1068,7 @@ class PostalAddressAdmin(ModelAdmin):
 class EventChildrenInline(TabularInline):
     model = Event
     fk_name = 'parent'
-    verbose_name = _("Action")  # Pour l'instant, les enfants sont forcément des Actions.
+    verbose_name = _("Volontariat")  # Pour l'instant, les enfants sont forcément des Actions.
     hide_title = True
     fields = (
         'name',
