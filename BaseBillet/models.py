@@ -838,7 +838,7 @@ class Event(models.Model):
         (REUNION, _('Réunion')),
         (CONFERENCE, _('Conférence')),
         (RESTAURATION, _('Restauration')),
-        (ACTION, _('Action')),
+        (ACTION, _('Volontariat')),
     ]
 
     categorie = models.CharField(max_length=3, choices=TYPE_CHOICES, default=CONCERT,
