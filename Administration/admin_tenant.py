@@ -377,7 +377,7 @@ class ProductAdminCustomForm(ModelForm):
         fields = (
             'name',
             'categorie_article',
-            'nominative',
+            # 'nominative',
             'short_description',
             'long_description',
             'img',
