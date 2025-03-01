@@ -5,7 +5,7 @@
         <div class="row">
 
             {# main nav #}
-            <div class="col-md pb-5 pb-md-0">
+            <div class="col-sm-4 col-md-3 pb-5 pb-md-0">
                 <h4>{{ config.organisation }}</h4>
                 <ul class="nav flex-column">
                     {% for item in main_nav %}
@@ -16,6 +16,15 @@
                             </a>
                         </li>
                     {% endfor %}
+                    <li class="nav-item">
+                        <a class="nav-link"
+                            href="#"
+                            data-bs-toggle="offcanvas"
+                            data-bs-target="#contactPanel"
+                            aria-controls="contactPanel">
+                            {% translate 'Aide et contact' %}
+                        </a>
+                    </li>
                 </ul>
                 <hr>
                 <ul class="nav">
@@ -38,42 +47,42 @@
             </div>
 
             {% comment %} network members
-      <div class="col-md pb-5 pb-md-0">
-        <h4>Le réseau local</h4>
-        <ul class="nav flex-column">
-          <li class="nav-item"><a class="nav-link icon-link" href="#">
-            <i class="bi bi-arrow-right"></i>
-            Association Chantefrein
-          </a></li>
-          <li class="nav-item"><a class="nav-link icon-link" href="#">
-            <i class="bi bi-arrow-right"></i>
-            Bonnie Market
-          </a></li>
-          <li class="nav-item"><a class="nav-link icon-link" href="#">
-            <i class="bi bi-arrow-right"></i>
-            Danzavec'
-          </a></li>
-          <li class="nav-item"><a class="nav-link icon-link" href="#">
-            <i class="bi bi-arrow-right"></i>
-            Le Sel de la Vie
-          </a></li>
-          <li class="nav-item"><a class="nav-link icon-link link-secondary $agenda_link_class" href="#">
-            <i class="bi bi-crosshair"></i>
-            Le Tiers-Lustre
-          </a></li>
-          <li class="nav-item"><a class="nav-link icon-link" href="#">
-            <i class="bi bi-arrow-right"></i>
-            Philosoniques, musiques électroniques et conférences
-          </a></li>
-          <li class="nav-item"><a class="nav-link icon-link" href="#">
-            <i class="bi bi-arrow-right"></i>
-            Sand Witch Sandwich
-          </a></li>
-        </ul>
-      </div>  {% endcomment %}
+            <div class="col-md pb-5 pb-md-0">
+                <h4>Le réseau local</h4>
+                <ul class="nav flex-column">
+                <li class="nav-item"><a class="nav-link icon-link" href="#">
+                    <i class="bi bi-arrow-right"></i>
+                    Association Chantefrein
+                </a></li>
+                <li class="nav-item"><a class="nav-link icon-link" href="#">
+                    <i class="bi bi-arrow-right"></i>
+                    Bonnie Market
+                </a></li>
+                <li class="nav-item"><a class="nav-link icon-link" href="#">
+                    <i class="bi bi-arrow-right"></i>
+                    Danzavec'
+                </a></li>
+                <li class="nav-item"><a class="nav-link icon-link" href="#">
+                    <i class="bi bi-arrow-right"></i>
+                    Le Sel de la Vie
+                </a></li>
+                <li class="nav-item"><a class="nav-link icon-link link-secondary $agenda_link_class" href="#">
+                    <i class="bi bi-crosshair"></i>
+                    Le Tiers-Lustre
+                </a></li>
+                <li class="nav-item"><a class="nav-link icon-link" href="#">
+                    <i class="bi bi-arrow-right"></i>
+                    Philosoniques, musiques électroniques et conférences
+                </a></li>
+                <li class="nav-item"><a class="nav-link icon-link" href="#">
+                    <i class="bi bi-arrow-right"></i>
+                    Sand Witch Sandwich
+                </a></li>
+                </ul>
+            </div>  {% endcomment %}
 
             {# tibillet info #}
-            <div class="col-md">
+            <div class="col-sm">
                 <h4>
                     <svg class="align-baseline" width="90" height="20" fill="currentColor"
                          viewBox="0 0 50.357453 11.821528"
@@ -87,26 +96,33 @@
                     <span class="visually-hidden">TiBillet</span> / Lespass
                 </h4>
                 <p class="lead">{% trans "Adhésion, agenda et billetterie fédérés." %}</p>
-                <p>
-                    {% trans "TiBillet, c'est une boîte à outils d'organisation collective : tirelire digitale, caisse enregistreuse, billetterie en ligne, adhésion associative, réseau local, le tout libre et auto-hébergeable." %}
-                </p>
-                <p>
-                    <a href="/tenant/new" class="btn btn-primary d-block">
-                        <i class="bi bi-stars"></i>
-                        {% translate "Je crée un espace pour mon collectif" %}
-                    </a>
-                </p>
-                <ul class="nav flex-column">
-                    <li class="nav-item"><a class="nav-link" href="https://tibillet.org"
-                                            target="_blank">TiBillet.org</a></li>
-                    <li class="nav-item"><a class="nav-link"
-                                            href="https://tibillet.org/fr/docs/category/documentation-utilisateur/"
-                                            target="_blank">{% trans "Documentation" %}</a></li>
-                    <li class="nav-item"><a class="nav-link" href="https://pouet.chapril.org/@tibillet" target="_blank">Mastodon</a>
-                    </li>
-                    <li class="nav-item"><a class="nav-link" href="https://github.com/TiBillet/"
-                                            target="_blank">Github</a></li>
-                </ul>
+                <hr />
+                <div class="row">
+                    <div class="col-md">
+                        <p>
+                            {% trans "TiBillet, c'est une boîte à outils d'organisation collective : tirelire digitale, caisse enregistreuse, billetterie en ligne, adhésion associative, réseau local, le tout libre et auto-hébergeable." %}
+                        </p>
+                        <p>
+                            <a href="/tenant/new" class="btn btn-primary d-block">
+                                <i class="bi bi-stars"></i>
+                                {% translate "Je crée un espace pour mon collectif" %}
+                            </a>
+                        </p>
+                    </div>
+                    <div class="col-md-4 col-lg-3">
+                        <ul class="nav flex-column">
+                            <li class="nav-item"><a class="nav-link" href="https://tibillet.org"
+                                                    target="_blank">TiBillet.org</a></li>
+                            <li class="nav-item"><a class="nav-link"
+                                                    href="https://tibillet.org/fr/docs/category/documentation-utilisateur/"
+                                                    target="_blank">{% trans "Documentation" %}</a></li>
+                            <li class="nav-item"><a class="nav-link" href="https://pouet.chapril.org/@tibillet" target="_blank">Mastodon</a>
+                            </li>
+                            <li class="nav-item"><a class="nav-link" href="https://github.com/TiBillet/"
+                                                    target="_blank">Github</a></li>
+                        </ul>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

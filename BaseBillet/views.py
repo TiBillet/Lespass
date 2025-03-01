@@ -107,7 +107,7 @@ def get_context(request):
         "carrousel_event_list": Carrousel.objects.filter(on_event_list_page=True).order_by('order'),
         "main_nav": [
             {'name': 'event-list', 'url': '/event/', 'label': 'Agenda', 'icon': 'calendar-date'},
-            {'name': 'memberships_mvt', 'url': '/memberships/', 'label': 'Adhérer', 'icon': 'person-badge'},
+            {'name': 'memberships_mvt', 'url': '/memberships/', 'label': 'Adhésions', 'icon': 'person-badge'},
             # {'name': 'network', 'url': '/network/', 'label': 'Réseau local', 'icon': 'arrow-repeat'},
         ]
     }

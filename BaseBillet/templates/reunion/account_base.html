@@ -16,7 +16,7 @@
             <div class="alert alert-warning mb-5" role="alert">
                 {% translate "Confirmez votre e-mail pour accéder à toutes les fonctionnalités." %}<br/>
                 <a aria-label="{% translate "Resend validation email" %}"
-                   href=""
+                   href="#"
                    hx-get="/my_account/resend_activation_email/">
                     {% translate "Resend validation email" %}
                 </a>
@@ -24,61 +24,61 @@
         {% endif %}
 
         <div class="overflow-x-scroll">
-            <ul class="nav nav-tabs mb-0 flex-nowrap text-center">
+            <ul class="nav nav-tabs mb-0 flex-nowrap text-center align-items-end">
                 <li class="nav-item">
                     <a class="nav-link{% if account_tab == 'balance' %} active" aria-current="page{% endif %}"
                        href="/my_account/">
-                        <i class="bi bi-piggy-bank-fill"></i>
-                        <span class="d-none d-lg-inline">Tirelire</span>
+                        <i class="bi bi-piggy-bank-fill fs-4"></i>
+                        <span class="d-none d-lg-block">Ma tirelire</span>
                     </a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link{% if account_tab == 'memberships' %} active" aria-current="page{% endif %}"
                        href="/my_account/membership/">
-                        <i class="bi bi-person-badge-fill"></i>
-                        <span class="d-none d-lg-inline">Adhésions</span>
+                        <i class="bi bi-person-badge-fill fs-4"></i>
+                        <span class="d-none d-lg-block">Mes adhésions</span>
                     </a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link{% if account_tab == 'reservations' %} active" aria-current="page{% endif %}"
                        href="/my_account/my_reservations/">
-                        <i class="bi bi-ticket-perforated-fill"></i>
-                        <span class="d-none d-lg-inline">Réservations</span>
+                        <i class="bi bi-ticket-perforated-fill fs-4"></i>
+                        <span class="d-none d-lg-block">Mes réservations</span>
                     </a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link{% if account_tab == 'punchclock' %} active" aria-current="page{% endif %}"
                        href="/badge/">
-                        <i class="bi bi-stopwatch-fill"></i>
-                        <span class="d-none d-lg-inline">Badgeuse</span>
+                        <i class="bi bi-stopwatch-fill fs-4"></i>
+                        <span class="d-none d-lg-block">Badgeuse</span>
                     </a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link{% if account_tab == 'card' %} active" aria-current="page{% endif %}"
                        href="/my_account/card/">
-                        <i class="bi bi-postcard-fill"></i>
-                        <span class="d-none d-lg-inline">Carte</span>
+                        <i class="bi bi-postcard-fill fs-4"></i>
+                        <span class="d-none d-lg-block">Ma carte</span>
                     </a>
                 </li>
                 <li class="nav-item me-auto">
                     <a class="nav-link{% if account_tab == 'profile' %} active" aria-current="page{% endif %}"
                        href="/my_account/profile/">
-                        <i class="bi bi-gear-fill"></i>
-                        <span class="d-none d-lg-inline">Préférences</span>
+                        <i class="bi bi-gear-fill fs-4"></i>
+                        <span class="d-none d-lg-block">Mes préférences</span>
                     </a>
                 </li>
                 {% if profile.admin_this_tenant and user.email_valid and user.is_active %}
                     <li class="nav-item">
                         <a class="nav-link link-danger" href="/admin/" target="_blank">
-                            <i class="bi bi-key-fill"></i>
-                            <span class="d-none d-lg-inline">Administration</span>
+                            <i class="bi bi-key-fill fs-4"></i>
+                            <span class="d-none d-lg-block">Administration</span>
                         </a>
                     </li>
                 {% endif %}
                 <li class="nav-item">
                     <a class="nav-link link-secondary" href="/deconnexion/">
-                        <i class="bi bi-box-arrow-right"></i>
-                        <span class="d-none d-lg-inline">Me déconnecter</span>
+                        <i class="bi bi-box-arrow-right fs-4"></i>
+                        <span class="d-none d-lg-block">Me déconnecter</span>
                     </a>
                 </li>
             </ul>
