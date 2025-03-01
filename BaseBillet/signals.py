@@ -321,7 +321,7 @@ def price_if_free_set_t_1(sender, instance: Price, **kwargs):
     if instance.free_price:
         # Quantité unitaire pour caisse enregistreuse
         instance.prix=1
-
+        instance.max_per_user=1
 
 @receiver(post_save, sender=Membership)
 def create_lignearticle_if_membership_created_on_admin(sender, instance: Membership, created, **kwargs):
