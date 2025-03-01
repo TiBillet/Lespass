@@ -104,7 +104,6 @@ class Command(BaseCommand):
                 config.save()
 
                 ### LINK TO FEDOW
-                # TODO: a faire dans la création de nouveau tenant, connection fedow obligatoire et check admin wallet
                 ## Liaison tenant avec Fedow
                 fedowAPI = FedowAPI()
                 # La première création de l'instance FedowAPI génère un nouveau lieu coté Fedow s'il n'existe pas.

@@ -9,26 +9,24 @@
     {# TODO: vue et route pour les préférences #}
     <section class="card border-top-0 rounded-top-0">
         <div class="card-body">
-            <h1 class="card-title d-md-none">Préférences</h1>
-            <p class="lead">
-                Ici je peux modifier mes préférences, mettre à jour mes données
-                personnelles et supprimer mon compte.
+            <h1 class="card-title d-md-none">{% trans "Préférences" %}</h1>
+            <p class="lead">{% trans "Ici je peux modifier mes préférences, mettre à jour mes données personnelles et supprimer mon compte." %}
             </p>
         </div>
     </section>
 
-    <h2 class="pt-3">Personnalisation</h2>
+    <h2 class="pt-3">{% trans "Personnalisation" %}</h2>
 
     <div class="mb-3">
         <div class="form-check form-switch">
             <input class="form-check-input" type="checkbox" role="switch" id="darkThemeCheck">
             <label class="form-check-label" for="darkThemeCheck">
-                Thème sombre
+                {% trans "Thème sombre" %}
             </label>
         </div>
     </div>
 
-    <h2 class="pt-3">Données</h2>
+    <h2 class="pt-3">{% trans "Données" %}</h2>
 
     <div class="mb-3">
         <label for="first_name" class="form-label">{% trans "Mon prénom" %}</label>

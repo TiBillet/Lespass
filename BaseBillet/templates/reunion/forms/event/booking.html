@@ -47,7 +47,6 @@
                                 <input type="number" step="1" min="0" max="{{ event.max_per_user }}"
                                     class="form-control js-order-amount"
                                     id="amount-{{ price.uuid }}"
-                                    value="1" {# todo: a virer en prod, pour dev #}
                                     name="{{ price.uuid }}">
                                 {% endif %}
                             <!-- Adhésion non obligatoire -->
@@ -55,7 +54,6 @@
                                 <input type="number" step="1" min="0" max="{{ event.max_per_user }}"
                                     class="form-control js-order-amount"
                                     id="amount-{{ price.uuid }}"
-                                    value="1" {# todo: a virer en prod, pour dev #}
                                     name="{{ price.uuid }}">
                             {% endif %}
                         </div>

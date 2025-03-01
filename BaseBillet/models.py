@@ -1651,7 +1651,6 @@ class LigneArticle(models.Model):
 
 
 class Membership(models.Model):
-    # TODO: Passer en primary key lors de la migration V1
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
                              related_name='memberships', blank=True, null=True)
@@ -1820,27 +1819,6 @@ class Membership(models.Model):
             return "Anonymous"
 
 
-# TODO: dans le futur, gérer les fédération comme cela ?
-"""
-class Federation(models.Model):
-    '''
-    Chaque ligne correspond à un lieu.
-    On affiche les évènements et les adhésiosn de la fédération
-    tag filter = que ces tags
-    tag exlcuse = retirer les tags
-    '''
-    place = models.ForeignKey(Client,
-                              verbose_name=_("Lieu"),
-                              related_name="federations", help_text=_(
-            "Lieu avec qui nous partageons les évènements et les adhésions"))
-
-    tag_filter = models.ManyToManyField(Tag, blank=True,
-                                        help_text=_("Uniquement ces tags si selectionné")
-                                        )
-    tag_exclude = models.ManyToManyField(Tag, blank=True,
-                                        help_text=_("Ces tags sont exclus"))
-
-"""
 
 
 #### MODEL POUR INTEROP ####
