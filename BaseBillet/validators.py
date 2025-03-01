@@ -1,33 +1,374 @@
+import logging
 import os
+import re
+import uuid
+from datetime import timedelta
+from decimal import Decimal
+from itertools import product
 
 import stripe
 from django.db import connection
+from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 from django_tenants.utils import tenant_context, schema_context
 from rest_framework import serializers
+from rest_framework.generics import get_object_or_404
 
-from ApiBillet.serializers import get_or_create_price_sold
+from ApiBillet.serializers import get_or_create_price_sold, dec_to_int, create_ticket
 from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
-from BaseBillet.models import Price, Product, OptionGenerale, Membership, Paiement_stripe, LigneArticle
+from BaseBillet.models import Price, Product, OptionGenerale, Membership, Paiement_stripe, LigneArticle, Tag, Event, \
+    Reservation, PriceSold, Ticket, ProductSold
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from PaiementStripe.views import CreationPaiementStripe
 from root_billet.models import RootConfiguration
 
+logger = logging.getLogger(__name__)
+
+
+class ContactValidator(serializers.Serializer):
+    email = serializers.EmailField()
+    subject = serializers.CharField()
+    message = serializers.CharField()
+
+
+class TagValidator(serializers.Serializer):
+    tags = serializers.PrimaryKeyRelatedField(source="slug", queryset=Tag.objects.all(), many=True)
+
 
 class LinkQrCodeValidator(serializers.Serializer):
     email = serializers.EmailField(required=True, allow_null=False)
+    emailConfirmation = serializers.EmailField(required=True, allow_null=False)
     firstname = serializers.CharField(max_length=500, required=False, allow_blank=True)
     lastname = serializers.CharField(max_length=500, required=False, allow_blank=True)
     # data=request.POST.dict() in the controler for boolean
     cgu = serializers.BooleanField(required=True, allow_null=False)
     qrcode_uuid = serializers.UUIDField()
 
+    def validate(self, attrs):
+        email = attrs['email']
+        emailConfirmation = attrs['emailConfirmation']
+        if emailConfirmation != email:
+            logger.error(_(f"emailConfirmation : L'email et sa confirmation sont différents. Une faute de frappe, peut-être ?"))
+            raise serializers.ValidationError(_(f"emailConfirmation : L'email et sa confirmation sont différents. Une faute de frappe, peut-être ?"))
+        return attrs
 
 class LoginEmailValidator(serializers.Serializer):
     email = serializers.EmailField()
+
+
+class TicketCreator():
+
+    def __init__(self, reservation: Reservation, products_dict: dict):
+        self.products_dict = products_dict
+        self.reservation = reservation
+        self.user = reservation.user_commande
+
+        # La liste des objets a vendre pour la création du paiement stripe
+        self.list_line_article_sold = []
+
+        # Si checkout existe, on va demander le paiement en front.
+        # Sinon, on envoie la confirmation par mail
+        self.checkout_link = None
+        self.tickets = []
+
+        for product, prices_dict in products_dict.items():
+            product: Product
+            trigger_name = f"method_{product.categorie_article}"
+            trigger = getattr(self, trigger_name)
+            self.tickets = trigger(prices_dict)
+
+        # Methode Action : On a pas de produit
+        if reservation.event.categorie == Event.ACTION:
+            self.tickets = self.method_A()
+
+    # Methode ACTION
+    def method_A(self):
+        reservation: Reservation = self.reservation
+        #     import ipdb; ipdb.set_trace()
+        ticket = Ticket.objects.create(
+            status=Ticket.NOT_ACTIV,
+            reservation=reservation,
+            first_name=self.user.first_name,
+            last_name=self.user.last_name,
+        )
+        reservation.status = Reservation.FREERES_USERACTIV if reservation.user_commande.is_active else Reservation.FREERES
+        reservation.save()
+        return [ticket,]
+
+    # FREERES : réservation gratuite
+    def method_F(self, prices_dict):
+        reservation: Reservation = self.reservation
+        tickets = []
+
+        for price, qty in prices_dict.items():
+            price: Price
+            qty: int
+
+            # Recherche ou création du produit vendu
+            # On est sur une reservation gratuite, on va pas chercher de paiement
+            productsold, created = ProductSold.objects.get_or_create(
+                event=reservation.event,
+                product=price.product
+            )
+            pricesold, created = PriceSold.objects.get_or_create(
+                productsold=productsold,
+                prix=price.prix,
+                price=price,
+            )
+
+            # Fabrication d'un ticket par qty
+            # Dans la méthode reservation gratuite, le ticket est créé non pas en non payé mais en non actif
+            # Il sera actif une fois le mail de l'user vérifié
+            # La fonctione presave du fichier BaseBillet.signals
+            # mettra à jour le statut de la réservation et enverra le billet dés validation de l'email
+            for i in range(int(qty)):
+                ticket = Ticket.objects.create(
+                    status=Ticket.NOT_ACTIV,
+                    reservation=reservation,
+                    pricesold=pricesold,
+                    # first_name=customer.get('first_name'),
+                    # last_name=customer.get('last_name'),
+                )
+                tickets.append(ticket)
+
+        reservation.status = Reservation.FREERES_USERACTIV if reservation.user_commande.is_active else Reservation.FREERES
+        reservation.save()
+        return tickets
+
+    def method_B(self, prices_dict):
+        reservation: Reservation = self.reservation
+        tickets = []
+        for price_generique, qty in prices_dict.items():
+            price_generique: Price
+            qty: int
+
+            # Gerer les produits nominatifs ?
+            # product: Product = price_generique.product
+            # if product.nominative:
+            #     for customer in price_object.get('customers'):
+
+            event = reservation.event
+            # Création de l'objet article à vendre, avec la liaison event.
+            # On passe de prix générique (ex : Billet a 10€ a l'objet Billet pour evenement a 10€)
+            pricesold: PriceSold = get_or_create_price_sold(price_generique, event=event)
+
+            # les lignes articles pour la vente
+            line_article = LigneArticle.objects.create(
+                pricesold=pricesold,
+                amount=dec_to_int(pricesold.prix),
+                # pas d'objet reservation ?
+                qty=qty,
+            )
+            self.list_line_article_sold.append(line_article)
+
+            # Création des tickets en mode non payé
+            for i in range(int(qty)):
+                ticket = Ticket.objects.create(
+                    status=Ticket.CREATED,  # not yet paid
+                    reservation=reservation,
+                    pricesold=pricesold,
+                    # first_name=customer.get('first_name'),
+                    # last_name=customer.get('last_name'),
+                )
+                tickets.append(ticket)
+
+        self.checkout_link = self.get_checkout_stripe()
+        return tickets
+
+    def get_checkout_stripe(self):
+        reservation: Reservation = self.reservation
+        tenant = connection.tenant
+        # Création du checkout stripe
+        metadata = {
+            'reservation': f'{reservation.uuid}',
+            'tenant': f'{tenant.uuid}',
+        }
+
+        # Création de l'objet paiement stripe en base de donnée
+        new_paiement_stripe = CreationPaiementStripe(
+            user=reservation.user_commande,
+            liste_ligne_article=self.list_line_article_sold,
+            metadata=metadata,
+            reservation=reservation,
+            source=Paiement_stripe.FRONT_BILLETTERIE,
+            success_url=f"stripe_return/",
+            cancel_url=f"stripe_return/",
+            absolute_domain=f"https://{tenant.get_primary_domain()}/event/",
+        )
+
+        if not new_paiement_stripe.is_valid():
+            raise serializers.ValidationError(_(f'checkout strip not valid'))
+
+        paiement_stripe: Paiement_stripe = new_paiement_stripe.paiement_stripe_db
+        paiement_stripe.lignearticles.all().update(status=LigneArticle.UNPAID)
+
+        reservation.tickets.all().update(status=Ticket.NOT_ACTIV)
+
+        reservation.paiement = paiement_stripe
+        reservation.status = Reservation.UNPAID
+        reservation.save()
+
+        print(f"get_checkout_stripe OK : {new_paiement_stripe.checkout_session.stripe_id}")
+        return new_paiement_stripe.checkout_session.url
+
+
+class ReservationValidator(serializers.Serializer):
+    email = serializers.EmailField()
+    # to_mail = serializers.BooleanField(default=True, required=False)
+    event = serializers.PrimaryKeyRelatedField(
+        queryset=Event.objects.filter(datetime__gte=timezone.now() - timedelta(days=1)))
+    options = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(), many=True, allow_null=True,
+                                                 required=False)
+    datetime = serializers.DateTimeField(required=False)
+
+    def extract_products(self):
+        """
+        On vérifie ici :
+            input dans template ressemble à ça : name="products[{{ product.uuid }}][{{ price.uuid }}]"
+            les objets produit et prix existent bien en DB et a une quantité valide
+        """
+        # Rercher des produits potentiels
+        event = self.event
+        products_dict = {}
+        for product in event.products.all():
+            for price in product.prices.all():
+                # Un input possède l'uuid du prix ?
+                if self.initial_data.get(str(price.uuid)):
+                    qty = int(self.initial_data.get(str(price.uuid)))
+
+                    if products_dict.get(product):
+                        # On ajoute le prix a la liste des articles choisi
+                        products_dict[product][price] = qty
+                    else:
+                        # Si le dict product n'existe pas :
+                        products_dict[product] = {price: qty}
+
+        return products_dict
+
+    def validate_event(self, value):
+        logger.info(f"validate event : {value}")
+        self.event: Event = value
+        if self.event.complet():
+            raise serializers.ValidationError(_(f'Jauge atteinte : Evenement complet.'))
+        return value
+
+    def validate_email(self, value):
+        logger.info(f"validate email : {value}")
+        # On vérifie que l'utilisateur connecté et l'email correspondent bien.
+        request = self.context.get('request')
+
+        if request.user.is_authenticated:
+            if request.user.email != value:
+                raise serializers.ValidationError(_(f"L'email ne correspond pas à l'utilisateur connecté."))
+            user = request.user
+
+        else:
+            user = get_or_create_user(value)
+
+        self.user = user
+        return value
+
+    def validate_options(self, value):
+        # On check que les options sont bien dans l'event original.
+        event: Event = self.event
+        if value:
+            for option in value:
+                option: OptionGenerale
+                if option not in list(set(event.options_checkbox.all()) | set(event.options_radio.all())):
+                    raise serializers.ValidationError(_(f'Option {option.name} non disponible dans event'))
+        return value
+
+    def validate(self, attrs):
+        """
+        On vérifie ici :
+            Qu'il existe au moins un billet pour la reservation.
+            Que les produits sont prévu par l'évent
+            Que chaque maximum par user est respecté
+            TODO: Que chaque billet possède un nom/prenom si le billet doit être nominatif
+        """
+        logger.info(f"validate : {attrs}")
+        event = self.event
+        products_dict = self.extract_products()
+        user = self.user
+        options = attrs.get('options')
+
+        # Si c'est un event en mode resa en un clic
+        total_ticket_qty = 1 if event.easy_reservation else 0
+
+        # existe au moins un billet pour la reservation ?
+        if not event.easy_reservation:
+            if not products_dict or len(products_dict) < 1:
+                raise serializers.ValidationError(_(f'Pas de produits.'))
+
+        for product, price_dict in products_dict.items():
+            # les produits sont prévu par l'évent ?
+            if product not in event.products.all():
+                raise serializers.ValidationError(_(f'Produit non valide.'))
+
+            # chaque maximum par user est respecté ?
+            for price, qty in price_dict.items():
+                if qty > price.max_per_user:
+                    raise serializers.ValidationError(
+                        _(f'Quantitée de réservations suppérieure au maximum autorisé pour ce tarif'))
+                total_ticket_qty += qty
+
+                # Check adhésion
+                if price.adhesion_obligatoire:
+                    valid_membership = False
+                    if not user.memberships.filter(price__product=price.adhesion_obligatoire, deadline__gte=timezone.now()).exists():
+                        logger.warning(_(f"L'utilisateur n'est pas membre"))
+                        raise serializers.ValidationError(_(f"L'utilisateur n'est pas membre"))
+
+        # existe au moins un ticket validable pour la reservation ?
+        if not total_ticket_qty > 0:
+            raise serializers.ValidationError(_(f'Pas de ticket.'))
+
+        # Vérification du max par user sur l'event
+        if total_ticket_qty > event.max_per_user:
+            raise serializers.ValidationError(_(f'Quantitée de réservations suppérieure au maximum autorisé'))
+
+        # Vérification de la jauge
+        valid_tickets_count = event.valid_tickets_count()
+        if valid_tickets_count + total_ticket_qty > event.jauge_max:
+            remains = event.jauge_max - valid_tickets_count
+            raise serializers.ValidationError(_(f'Il ne reste que {remains} places disponibles'))
+
+        """
+        TODO: Verifier l'adhésion
+        # si un tarif à une adhésion obligatoire, on confirme que :
+        # Soit l'utilisateur est membre,
+        # Soit il paye l'adhésion en même temps que le billet :
+        all_price_buy = [price_object['price'] for price_object in self.prices_list]
+        all_product_buy = [price.product for price in all_price_buy]
+        for price_object in self.prices_list:
+            price: Price = price_object['price']
+        """
+
+        # On fabrique l'objet reservation
+        reservation = Reservation.objects.create(
+            user_commande=user,
+            event=event,
+        )
+
+        if options:
+            for option in options:
+                reservation.options.add(option)
+
+        self.reservation = reservation
+
+        # Fabrication de la reservation et des tickets en fonction du type de produit
+        self.tickets = TicketCreator(
+            reservation=reservation,
+            products_dict=products_dict,
+        )
+
+        # On récupère le lien de paiement fabriqué dans le TicketCreator si besoin :
+        self.checkout_link = self.tickets.checkout_link if self.tickets.checkout_link else None
+
+        return attrs
 
 
 class MembershipValidator(serializers.Serializer):
@@ -37,14 +378,11 @@ class MembershipValidator(serializers.Serializer):
     )
 
     email = serializers.EmailField()
-    first_name = serializers.CharField(max_length=200)
-    last_name = serializers.CharField(max_length=200)
+    firstname = serializers.CharField(max_length=200)
+    lastname = serializers.CharField(max_length=200)
 
-    options_checkbox = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(), many=True,
-                                                          allow_null=True, required=False)
-
-    option_radio = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(),
-                                                      allow_null=True, required=False)
+    options = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(), many=True,
+                                                 allow_null=True, required=False)
 
     newsletter = serializers.BooleanField()
 
@@ -56,8 +394,7 @@ class MembershipValidator(serializers.Serializer):
         self.price = price
         return price
 
-
-    def checkout_stripe(self):
+    def get_checkout_stripe(self):
         # Fiche membre créée, si price payant, on crée le checkout stripe :
         membership: Membership = self.membership
         price: Price = membership.price
@@ -70,9 +407,10 @@ class MembershipValidator(serializers.Serializer):
             'membership': f"{membership.pk}",
             'user': f"{user.pk}",
         }
-
         ligne_article_adhesion = LigneArticle.objects.create(
             pricesold=get_or_create_price_sold(price),
+            membership=membership,
+            amount=int(price.prix * 100),
             qty=1,
         )
 
@@ -110,29 +448,28 @@ class MembershipValidator(serializers.Serializer):
             price=self.price
         )
 
-        membership.first_name = attrs['first_name']
-        membership.last_name = attrs['last_name']
+        membership.first_name = attrs['firstname']
+        membership.last_name = attrs['lastname']
 
         # Sur le form, on coche pour NE PAS recevoir la news
-        membership.newsletter = not attrs['newsletter']
+        membership.newsletter = not attrs.get('newsletter')
 
         # Set remplace les options existantes, accepte les listes
-        if 'options_checkbox' in attrs:
-            membership.option_generale.set(attrs['options_checkbox'])
-        # Add ajoute sans toucher aux précédentes
-        if 'option_radio' in attrs:
-            membership.option_generale.add(attrs['option_radio'])
+        options = attrs.get('options', [])
+        if options:
+            membership.option_generale.set(attrs['options'])
 
         membership.save()
         self.membership = membership
         # Création du lien de paiement
-        self.checkout_stripe_url = self.checkout_stripe()
+        self.checkout_stripe_url = self.get_checkout_stripe()
 
         return attrs
 
 
 class TenantCreateValidator(serializers.Serializer):
     email = serializers.EmailField()
+    emailConfirmation = serializers.EmailField()
     name = serializers.CharField(max_length=200)
     laboutik = serializers.BooleanField(required=True)
     cgu = serializers.BooleanField(required=True)

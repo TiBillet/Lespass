@@ -1,0 +1,74 @@
+{# TODO: replace demo fields with fields that make sense for the Event model, then htmx it #}
+<form class="d-flex flex-column justify-content-between h-100">
+    <div>
+        <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" role="switch" id="flexSwitchCheckDefault" checked>
+            <label class="form-check-label" for="flexSwitchCheckDefault">Date de départ</label>
+        </div>
+        <input id="startDate" class="form-control mb-3" type="date" />
+        <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" role="switch" id="flexSwitchCheckOff1">
+            <label class="form-check-label" for="flexSwitchCheckOff1">Date de fin</label>
+        </div>
+        <label for="maxPrice" class="form-label mb-0">Prix maximal</label>
+        <input type="range" class="form-range" list="tickmarks" id="maxPrice">
+        <datalist id="tickmarks">
+            <option value="0" label="gratuit"></option>
+            <option value="5"></option>
+            <option value="10"></option>
+            <option value="20"></option>
+            <option value="30"></option>
+            <option value="50"></option>
+            <option value="75"></option>
+            <option value="100" label="tous"></option>
+        </datalist>
+        <label class="form-label" for="genreSelector">Genre musical</label>
+        <select class="form-select mb-3" id="genreSelector" multiple aria-label="Floating label select example">
+            <option selected>Tous</option>
+            <option value="blues">Blues</option>
+            <option value="eclectique">Éclectique</option>
+            <option value="electro">Électro</option>
+            <option value="folk">Folk</option>
+            <option value="hardcore">Hardcore</option>
+            <option value="jazz">Jazz</option>
+            <option value="noise">Noise</option>
+            <option value="punk">Punk</option>
+            <option value="rap">Rap</option>
+            <option value="rock">Rock</option>
+            <option value="shoegaze">Shoegaze</option>
+            <option value="techno">Techno</option>
+        </select>
+        <div class="form-floating mb-3">
+            <input list="locationData" type="text" class="form-control" id="floatingInput" placeholder="Tous">
+            <label for="floatingInput">Lieu</label>
+        </div>
+        <datalist id="locationData">
+            <option value="coxx">Coxx</option>
+            <option value="place-des-beaux-arts">Place des Beaux-Arts</option>
+            <option value="secret-place">Secret place</option>
+        </datalist>
+        
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" value="" id="checkPMR">
+            <label class="form-check-label" for="checkPMR">
+                Accès PMR
+            </label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" value="" id="checkSubs" checked>
+            <label class="form-check-label" for="checkSubs">
+                Sous-titres
+            </label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" value="" id="checkComCopies" checked>
+            <label class="form-check-label" for="checkComCopies">
+                Tarif solidaire
+            </label>
+        </div>
+    </div>
+    <div class="p-3">
+        <a href="." class="btn btn-primary d-block mb-3">Valider</a>
+        <a href="." class="btn btn-danger d-block">Effacer</a>
+    </div>
+</form>

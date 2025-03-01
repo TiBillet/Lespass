@@ -44,7 +44,7 @@
         {% endif %}
         
     
-        <a href="{% url 'event' event.slug %}">
+        <a href="{% url 'event-detail' event.slug %}">
             <div class="btn btn-outline-primary tibillet-outline-primary btn-sm" role="button"
                  aria-label="Réserver {{ event.slug }}">
                 {% if event.products.first == None %}

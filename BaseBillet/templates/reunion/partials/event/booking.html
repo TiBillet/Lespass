@@ -1,0 +1,47 @@
+{% load i18n %}
+
+<!-- le bouton en fin de page -->
+<div class="row">
+{#    {% if event.easy_reservation and user.is_authenticated %} <!-- Le bouton reservation en un clic -->#}
+{#        <div class="col-md">#}
+{#            <button hx-get="/event/{{ event.pk }}/easy_reservation/"#}
+{#                    class="btn btn-lg btn-primary w-100 mt-3"#}
+{#                    type="button">#}
+{#                {% translate 'Je réserve ma place' %}#}
+{#            </button>#}
+{#        </div>#}
+{#        <div class="col-md">#}
+{#            <button#}
+{#                    class="btn btn-lg btn-secondary w-100 mt-3"#}
+{#                    type="button"#}
+{#                    data-bs-toggle="offcanvas"#}
+{#                    data-bs-target="#bookingPanel"#}
+{#                    aria-controls="bookingPanel">#}
+{#                {% translate "Plus d'options" %}#}
+{#            </button>#}
+{#        </div>#}
+{#    {% else %}#}
+        <div class="col-md">
+            <button
+                    class="btn btn-lg btn-primary w-100 mt-3"
+                    type="button"
+                    data-bs-toggle="offcanvas"
+                    data-bs-target="#bookingPanel"
+                    aria-controls="bookingPanel">
+                {% translate "Je réserve une ou plusieurs places" %}
+            </button>
+        </div>
+{#    {% endif %}#}
+</div>
+
+<!-- booking panel -->
+<div class="offcanvas-start offcanvas" tabindex="-1" id="bookingPanel" aria-labelledby="bookingPanelLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="bookingPanelLabel">{% translate 'Je réserve ma place' %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+        {# TODO: load all forms through htmx? #}
+        {% include 'reunion/forms/event/booking.html' %}
+    </div>
+</div>

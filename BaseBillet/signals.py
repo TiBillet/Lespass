@@ -1,4 +1,3 @@
-from django.db import connection
 import logging
 
 from django.db import connection
@@ -6,10 +5,12 @@ from django.db.models import Q
 from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
 
+from ApiBillet.serializers import get_or_create_price_sold
 from AuthBillet.models import TibilletUser
-from BaseBillet.models import Reservation, LigneArticle, Ticket, Paiement_stripe, Product, PriceSold, Price
+from BaseBillet.models import Reservation, LigneArticle, Ticket, Paiement_stripe, Product, Price, \
+    PaymentMethod, Membership, SaleOrigin
 from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation
-from BaseBillet.triggers import ActionArticlePaidByCategorie
+from BaseBillet.triggers import LigneArticlePaid_ActionByCategorie
 from fedow_connect.fedow_api import AssetFedow
 from fedow_connect.models import FedowConfig
 
@@ -28,18 +29,21 @@ def set_ligne_article_paid(old_instance, new_instance):
     # Type :
     old_instance: Paiement_stripe
     new_instance: Paiement_stripe
+    logger.info(f"    PRE_SAVE_TRANSITIONS PAIEMENT_STRIPE set_ligne_article_paid {new_instance}.")
 
-    logger.info(f"    SIGNAL PAIEMENT STRIPE set_ligne_article_paid {new_instance}.")
-    logger.info(f"        On passe toutes les lignes d'article non validées en payées !")
-
+    logger.info(f"        On passe toutes les lignes d'article non validées en PAID et save() :")
     lignes_article = new_instance.lignearticles.exclude(status=LigneArticle.VALID)
     for ligne_article in lignes_article:
+        # Chaque passage en PAID activera le pre_save triggers.LigneArticlePaid_ActionByCategorie
+        # # Si toutes les lignes sont validées, ça met le paiement stripe en valid via set_paiement_stripe_valid
         logger.info(f"            {ligne_article.pricesold} {ligne_article.status} to P")
         ligne_article.status = LigneArticle.PAID
+        ligne_article.payment_method = PaymentMethod.STRIPE_NOFED
         ligne_article.save()
 
     # s'il y a une réservation, on la met aussi en payée :
     if new_instance.reservation:
+        logger.info(f"        On passe la reservation en PAID et save() :")
         new_instance.reservation.status = Reservation.PAID
         new_instance.reservation.save()
     # except new_instance.reservation.RelatedObjectDoesNotExist:
@@ -89,15 +93,14 @@ def set_paiement_stripe_valid(old_instance: LigneArticle, new_instance: LigneArt
 
 
 
-def action_x_to_paid(old_instance: LigneArticle, new_instance: LigneArticle):
-    # Fonction qui passe les artcle de payé en validé, en fonction de sa catégorie
-    ActionArticlePaidByCategorie(new_instance)
-
-    # logger.info(
-    #     f"    SIGNAL LIGNE ARTICLE check_paid {old_instance.pricesold} new_instance status : {new_instance.status}")
-
+def ligne_article_paid(old_instance: LigneArticle, new_instance: LigneArticle):
+    # MACHINE A ETAT pour les ventes, activé lorsque LigneArticle passe à PAID
+    # Actions qui se lancent en fonction de la catégorie d'article ( adhésion, don, reservation, etc ... )
+    LigneArticlePaid_ActionByCategorie(new_instance)
     logger.info(
         f"    SIGNAL LIGNE ARTICLE action_x_to_paid {old_instance.pricesold} new_instance status : {new_instance.status}")
+
+    # Si toutes les lignes sont validées, ça met le paiement stripe en valid.
     set_paiement_stripe_valid(old_instance, new_instance)
 
 
@@ -105,7 +108,8 @@ def action_x_to_paid(old_instance: LigneArticle, new_instance: LigneArticle):
 
 # @receiver(post_save, sender=Reservation)
 # def send_billet_to_mail(sender, instance: Reservation, **kwargs):
-def send_billet_to_mail(old_instance: Reservation, new_instance: Reservation):
+def reservation_paid(old_instance: Reservation, new_instance: Reservation):
+
     # On check les webhooks
     webhook_reservation.delay(new_instance.pk)
 
@@ -118,16 +122,12 @@ def send_billet_to_mail(old_instance: Reservation, new_instance: Reservation):
             ticket.status = Ticket.NOT_SCANNED
             ticket.save()
 
-    # import ipdb; ipdb.set_trace()
-
     # On vérifie que le mail n'a pas déja été envoyé
     if not new_instance.mail_send:
         logger.info(f"    SIGNAL RESERVATION send_billet_to_mail {new_instance.status}")
-
+        # Envoie du mail. Le succes du mail envoyé mettra la Reservation.VALID
         if new_instance.user_commande.email:
-            # import ipdb; ipdb.set_trace()
-            base_url = f"https://{connection.tenant.get_primary_domain().domain}"
-            task = ticket_celery_mailer.delay(new_instance.pk, base_url)
+            ticket_celery_mailer.delay(new_instance.pk)
             # https://github.com/psf/requests/issues/5832
     else:
         logger.info(
@@ -139,7 +139,7 @@ def set_paiement_valid(old_instance: Reservation, new_instance: Reservation):
     # On envoie les mails
     if new_instance.mail_send:
         logger.info(
-            f"    SIGNAL RESERVATION set_paiement_valid Mail envoyé {new_instance.mail_send},"
+            f"    SIGNAL RESERVATION set_paiement_valid : new_instance.mail_send = {new_instance.mail_send},"
             f" on valide les paiements payés")
         for paiement in new_instance.paiements.filter(status=Paiement_stripe.PAID):
             paiement.status = Paiement_stripe.VALID
@@ -208,13 +208,13 @@ PRE_SAVE_TRANSITIONS = {
 
     'LIGNEARTICLE': {
         LigneArticle.CREATED: {
-            LigneArticle.PAID: action_x_to_paid,
+            LigneArticle.PAID: ligne_article_paid,
         },
         LigneArticle.UNPAID: {
-            LigneArticle.PAID: action_x_to_paid,
+            LigneArticle.PAID: ligne_article_paid,
         },
         LigneArticle.PAID: {
-            LigneArticle.PAID: action_x_to_paid,
+            LigneArticle.PAID: ligne_article_paid,
             LigneArticle.VALID: set_paiement_stripe_valid,
             '_else_': error_regression,
         },
@@ -225,22 +225,22 @@ PRE_SAVE_TRANSITIONS = {
 
     'RESERVATION': {
         Reservation.CREATED: {
-            Reservation.PAID: send_billet_to_mail,
-            Reservation.FREERES_USERACTIV: send_billet_to_mail,
+            Reservation.PAID: reservation_paid,
+            Reservation.FREERES_USERACTIV: reservation_paid,
         },
         Reservation.FREERES: {
-            Reservation.FREERES_USERACTIV: send_billet_to_mail,
+            Reservation.FREERES_USERACTIV: reservation_paid,
         },
         Reservation.FREERES_USERACTIV: {
-            Reservation.FREERES_USERACTIV: send_billet_to_mail,
+            Reservation.FREERES_USERACTIV: reservation_paid,
         },
         Reservation.UNPAID: {
-            Reservation.PAID: send_billet_to_mail,
+            Reservation.PAID: reservation_paid,
         },
         Reservation.PAID: {
             Reservation.PAID_ERROR: error_in_mail,
-            Reservation.PAID: send_billet_to_mail,
-            Reservation.VALID: set_paiement_valid,
+            Reservation.PAID: reservation_paid,
+            Reservation.VALID: set_paiement_valid, # Celery passe la reservation a Valid si mail sended = True
             '_else_': error_regression,
         },
         Reservation.VALID: {
@@ -256,6 +256,7 @@ PRE_SAVE_TRANSITIONS = {
 }
 
 
+# MACHINE A ETAT
 # Pour tout les modèls qui possèdent un système de status choice
 @receiver(pre_save)
 def pre_save_signal_status(sender, instance, **kwargs):
@@ -320,3 +321,50 @@ def price_if_free_set_t_1(sender, instance: Price, **kwargs):
     if instance.free_price:
         # Quantité unitaire pour caisse enregistreuse
         instance.prix=1
+
+
+@receiver(post_save, sender=Membership)
+def create_lignearticle_if_membership_created_on_admin(sender, instance: Membership, created, **kwargs):
+    membership: Membership = instance
+    # Pour une nouvelle adhésion réalisée sur l'admin et non offerte, une vente est enregitrée.
+    if created and membership.status == Membership.ADMIN:
+        logger.info(f"create_lignearticle_if_membership_created_on_admin {instance} {created}")
+
+        vente = LigneArticle.objects.create(
+            pricesold=get_or_create_price_sold(membership.price),
+            qty=1,
+            membership=membership,
+            amount=int(membership.contribution_value*100),
+            payment_method=membership.payment_method,
+            status=LigneArticle.CREATED,
+        )
+
+        # On lance les post_save et triggers associés au adhésions en passant en PAID
+        # Envoie a la boutik, Fedow, webhook, etc ...
+        vente.status = LigneArticle.PAID
+        vente.save()
+
+
+
+@receiver(post_save, sender=Ticket)
+def create_lignearticle_if_ticket_created_on_admin(sender, instance: Ticket, created, **kwargs):
+    ticket: Ticket = instance
+    # Pour une nouvelle adhésion réalisée sur l'admin et non offerte, une vente est enregitrée.
+    if created and ticket.sale_origin == SaleOrigin.ADMIN:
+        logger.info(f"create_lignearticle_if_ticket_created_on_admin {instance} {created}")
+
+        vente = LigneArticle.objects.create(
+            pricesold=ticket.pricesold,
+            qty=1,
+            amount=int(ticket.pricesold.prix*100),
+            payment_method=ticket.payment_method,
+            status=LigneArticle.CREATED,
+        )
+
+        # import ipdb; ipdb.set_trace()
+
+        # On lance les post_save et triggers associés au adhésions en passant en PAID
+        # Envoie a la boutik, Fedow, webhook, etc ...
+        vente.status = LigneArticle.PAID
+        vente.save()
+

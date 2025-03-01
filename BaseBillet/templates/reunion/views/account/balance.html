@@ -1,0 +1,177 @@
+{% extends 'reunion/account_base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% translate 'Tirelire' %}{% endblock %}
+
+{% block account_page %}
+
+    <section class="card border-top-0 rounded-top-0 mb-3">
+        <div class="card-body">
+            <h1 class="card-title d-md-none">Tirelire</h1>
+            <p class="lead">
+                Ici je retrouve mon solde TiBillet et mes heures déclarées.
+                Certaines monnaies ou monnaie-temps peuvent n'être utilisables
+                qu'ailleurs.
+            </p>
+        </div>
+
+        <!-- refund panel -->
+        <div class="offcanvas-start offcanvas" tabindex="-1" id="refundPanel" aria-labelledby="refundPanelLabel">
+            <div class="offcanvas-header">
+                <h5 class="offcanvas-title" id="refundPanelLabel">{% trans "Demander le remboursement" %}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+            </div>
+            <div class="offcanvas-body">
+                <div class="d-flex flex-column justify-content-between h-100">
+                    <div>
+                        <div class="alert  alert-primary" role="alert">
+                            <h4>{% trans "Pas de panique ! Vous avez le temps…" %}</h4>
+                            <p>
+                                {% trans "TiBillet fonctionne sur un principe de" %}
+                                "<a href="https://tibillet.org/fr/docs/presentation/philosophie/">{% trans "monnaie fondante" %}</a>".
+                                {% trans "Vous avez 14 mois après votre dernière utilisation pour récupérer le reste de crédits non utilisés. On vous renverra un mail un mois avant si vous avez oublié." %}
+                            </p>
+                            <p>
+                                {% trans "Vous pourrez aussi bientôt en faire don au collectif qui vous a fourni la carte." %}
+                            </p>
+                            <p>
+                                {% trans "Votre carte et votre compte sont valables à vie et peuvent être utilisés dans tout les lieux du réseau !" %}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="p-3">
+                        <p class="lead">
+                            {# TODO: montant remboursement #}
+                            {% trans "Confirmer la demande de remboursement ?" %}
+                        </p>
+
+                        <button type="button" class="btn btn-primary d-block w-100 mb-3"
+                                data-bs-dismiss="offcanvas" aria-label="Close"
+                                hx-get="/my_account/refund_online/" hx-indicator="#tibillet-spinner">{% trans "Confirmer" %}</button>
+                        {# TODO: lien don #}
+                        <button disabled type="button" class="btn btn-secondary d-block w-100 mb-3" {# data-bs-dismiss="offcanvas" aria-label="Close" #}>
+                            {% trans "Faire don de ma tirelire<br /> au collectif" %} {{ config.organisation }}
+                        </button>
+                        <p class="alert alert-warning">
+                            Le don aux collectifs est en développement, il arrive bientôt !
+                        </p>
+                        <button type="button" class="btn btn-danger d-block w-100" data-bs-dismiss="offcanvas" aria-label="Close">{% trans "Annuler" %}</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-0">
+            <div class="col-md bg-body-tertiary p-3">
+                <h3>{% trans "Monnaies" %}</h3>
+
+                {% comment %} HIDE: total cumulé des sous utilisables dans le lieu, total global
+            <p class="lead">
+                {# TODO: total utilisable avec l'orga et total toutes instances #}
+                <strong>40,25</strong> tibillets utilisables avec
+                <em>{{ config.organisation }}</em> <br />
+                <span class="opacity-50"><strong>80,25</strong> tibillets en tout</span>
+            </p>
+            {% endcomment %}
+
+                <a href="#" hx-get="/my_account/refill_wallet" hx-indicator="#tibillet-spinner"
+                   class="btn btn-primary d-block mb-3">
+                    {% trans "Recharger ma tirelire" %}
+                </a>
+                <a href="#detail-monnaies" class="btn btn-secondary d-block mb-3 d-md-none">
+                    {% trans "Détail des monnaies" %}
+                </a>
+
+                <button class="btn btn-secondary w-100 mb-3"
+                        type="button"
+                        id="button-filters"
+                        data-bs-toggle="offcanvas"
+                        data-bs-target="#refundPanel"
+                        aria-controls="refundPanel">
+                    {# TODO: temps restant pour rembourser #}
+                    {% trans "Demander le remboursement" %}
+                </button>
+                <p class="opacity-50 m-0">{% trans "Seuls les TiBillets sont remboursables en ligne. Pour les monnaies locales, demandez directement sur place. " %}</p>
+            </div>
+
+            {% comment %} HIDE: monnaie-temps
+        <div class="col-md bg-body-tertiary p-3">
+            <h3>Temps</h3>
+            <p class="lead">
+                <strong>03:30</strong> heures échangeables avec
+                <em>Le Tiers Lustre</em> <br />
+                <span class="opacity-50"><strong>07:00</strong> heures en tout</span>
+            </p>
+            <a href="#" class="btn btn-primary d-block mb-3">
+                Déclarer des heures
+            </a>
+            <a href="#detail-heures" class="btn btn-secondary d-block d-md-none">
+                Détail du temps
+            </a>
+        </div>
+        {% endcomment %}
+        </div>
+    </section>
+
+    <div class="row">
+        <div class="col-md">
+            <h2 class="pt-3" id="detail-monnaies">Détail des monnaies</h2>
+
+            <div hx-get="/my_account/tokens_table/" hx-trigger="revealed" class="mt-4">
+                <span>{% translate "Loading tokens" %}</span>
+                <div class="d-flex justify-content-center align-items-center ">
+                    <div class="spinner-border text-info"
+                         role="status"
+                    ></div>
+                </div>
+            </div>
+        </div>
+
+        {% comment %} HIDE: monnaie temps
+    <div class="col-md">
+        <h2 class="pt-3" id="detail-heures">Détail du temps</h2>
+        <table class="table">
+            <thead>
+                <th>Solde</th>
+                <th>Réseau concerné</th>
+                <th>Dernière transaction</th>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <strong>03:30</strong>
+                        Heures Lumière
+                    </td>
+                    <td>
+                        <a href="../reseau/">Un Pour Touche</a>
+                    </td>
+                    <td>07/04/24</td>
+                </tr>
+                <tr class="opacity-50">
+                    <td>
+                        <strong>03:30</strong>
+                        Bûchages
+                    </td>
+                    <td>Les Assos du Bois</td>
+                    <td>12/03/23</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endcomment %}
+    </div>
+
+    <section id="transactionHistory">
+        <p class="py-3 text-center">
+            <a href="#" class="btn btn-outline-primary d-block d-sm-inline"
+               hx-get="/my_account/transactions_table/" hx-indicator="#tibillet-spinner"
+               hx-target="#transactionHistory"
+               hx-swap="outerHTML">
+                {% trans "Historique des transactions" %}
+            </a>
+        </p>
+    </section>
+
+{% endblock %}

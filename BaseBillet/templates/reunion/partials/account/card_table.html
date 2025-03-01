@@ -1,0 +1,47 @@
+{% load tibitags %}
+{% load humanize i18n %}
+
+{% for card in cards %}
+    <table class="table">
+        <thead>
+        <tr>
+            <th>{% trans "Numéro de carte" %}</th>
+            <th>{% trans "Origine" %}</th>
+            <th>{% trans "Gen" %}</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr>
+            <td>{{ card.number_printed }}</td>
+            <td>{{ card.origin.place.name }}</td>
+            <td>{{ card.origin.generation }}</td>
+        </tr>
+        </tbody>
+    </table>
+    {% if user.email_valid and user.is_active %}
+
+        <div class="row">
+        <div class="col-md">
+            <button type="submit" class="btn btn-primary w-100 mb-3 mb-md-0"
+                    role="button"
+                    aria-label="valider formulaire adhésion"
+                    hx-get="/my_account/{{ card.number_printed }}/lost_my_card/"
+                    hx-indicator="#tibillet-spinner">
+                {% translate "I LOST MY CARD NUMBER" %} {{ card.number_printed }}
+            </button>
+        </div>
+    {% else %}
+        {% trans "Merci de valider votre email pour déclarer votre carte perdue." %}
+    {% endif %}
+
+{% comment %} HIDE: dissociation de carte
+    <div class="col-md">
+        {# TODO: route dissociation par carte ? #}
+        <a href="#" class="btn btn-danger d-block">
+            Dissocier la carte
+        </a>
+        <p>La carte redeviendra éphémère, non liée à une adresse mail </p>
+    </div>
+{% endcomment %}
+</div>
+{% endfor %}

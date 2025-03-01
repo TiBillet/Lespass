@@ -1,78 +1,28 @@
-import uuid
+import logging
 from uuid import uuid4
+
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from django.conf import settings
 from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractUser, Group
-from django.db import connection
-from django.db import models
+from django.db import models, connection
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from rest_framework import permissions
 
 from Customers.models import Client
 
+logger = logging.getLogger(__name__)
 
-class RootPermission(permissions.BasePermission):
-    message = 'No root'
+"""
+Ici sont déclaré les modèles utilisateurs
+L'idée est de séparer les users terminaux (caisse enregistreuse, scanneur de billet) 
+des users humains (adhérants, administrateurs, participants, etc ...)
 
-    def has_permission(self, request, view):
-        if request.user.client_source.categorie == Client.ROOT:
-            return request.user.is_superuser
-        return False
-
-
-# Mis à l'extérieur pour pouvoir être utilisé
-# tout seul dans les class view de Django sans RESTframework
-def TenantAdminPermissionWithRequest(request):
-    if request.user.is_authenticated:
-        return any([
-            all([
-                connection.tenant in request.user.client_admin.all(),
-                request.user.is_staff,
-                request.user.is_active,
-                request.user.espece == TibilletUser.TYPE_HUM
-            ]),
-            # Pour l'user ROOT qui peut tout faire
-            all([
-                request.user.client_source.categorie == Client.ROOT,
-                request.user.is_superuser,
-            ]),
-        ])
-    else:
-        return False
-
-
-class TenantAdminPermission(permissions.BasePermission):
-    message = 'No admin in tenant'
-
-    def has_permission(self, request, view):
-        return TenantAdminPermissionWithRequest(request)
-
-
-class TerminalScanPermission(permissions.BasePermission):
-    message = "Termnal must be validated by an admin"
-
-    def has_permission(self, request, view):
-        if request.user.is_authenticated:
-            return any([
-                all([
-                    connection.tenant in request.user.client_admin.all(),
-                    request.user.is_active,
-                    request.user.user_parent().is_staff,
-                    request.user.espece == TibilletUser.TYPE_TERM
-                ]),
-                # Pour l'user ROOT qui peut tout faire
-                all([
-                    request.user.client_source.categorie == Client.ROOT,
-                    request.user.is_superuser,
-                ]),
-            ])
-        else:
-            return False
-
+Dans une stack multi tenant, il est aussi utile de savoir d'ou vient l'utilisateur 
+Par exemple pour lui donner des droits admin a un ou plusieurs lieux
+"""
 
 class TibilletManager(BaseUserManager):
     def _create_user(self, email, password, **extra_fields):
@@ -155,24 +105,24 @@ class Wallet(models.Model):
 class TibilletUser(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
 
-    username = models.CharField(max_length=200, unique=True) # same as email bu defaut
+    username = models.CharField(max_length=200, unique=True)  # same as email bu defaut
     email = models.EmailField(unique=True)  # changes email to unique and blank to false
-    email_error = models.BooleanField(default=False)
-    email_valid = models.BooleanField(default=False)
+    email_error = models.BooleanField(default=False, help_text=_("L'email de confirmation a été distribué ?"))
+    email_valid = models.BooleanField(default=False, help_text=_("L'email de confirmation OK ?"))
 
     rsa_key = models.OneToOneField(RsaKey, on_delete=models.SET_NULL, null=True, related_name='user')
     wallet = models.OneToOneField(Wallet, on_delete=models.SET_NULL, null=True, related_name='user')
 
-    first_name = models.CharField(max_length=200, null=True, blank=True)
-    last_name = models.CharField(max_length=200, null=True, blank=True)
+    first_name = models.CharField(max_length=200, null=True, blank=True, verbose_name=_('Prenom'))
+    last_name = models.CharField(max_length=200, null=True, blank=True, verbose_name=_('Nom'))
 
-    phone = models.CharField(max_length=20, null=True, blank=True)
+    phone = models.CharField(max_length=20, null=True, blank=True, verbose_name=_('Téléphone'))
 
-    last_see = models.DateTimeField(auto_now=True)
+    last_see = models.DateTimeField(auto_now=True, verbose_name=_('Dernière connexion'))
     accept_newsletter = models.BooleanField(
         default=True, verbose_name=_("J'accepte de recevoir la newsletter"))
-    postal_code = models.IntegerField(null=True, blank=True)
-    birth_date = models.DateField(null=True, blank=True)
+    postal_code = models.IntegerField(null=True, blank=True, verbose_name=_('Code postal'))
+    birth_date = models.DateField(null=True, blank=True, verbose_name=_('Date de naissance'))
 
     # can_create_tenantcan_create_tenant = models.BooleanField(default=False, verbose_name=_("Peux créer des tenants"))
 
@@ -220,6 +170,15 @@ class TibilletUser(AbstractUser):
     last_know_ip = models.GenericIPAddressField(blank=True, null=True)
     last_know_user_agent = models.CharField(max_length=500, blank=True, null=True)
 
+    ### ADHESIONS ###
+
+    def memberships_valid(self):
+        count = 0
+        for m in self.memberships.all():
+            if m.is_valid():
+                count += 1
+        return count
+
     ##### Pour les user terminaux ####
 
     user_parent_pk = models.UUIDField(
@@ -244,15 +203,17 @@ class TibilletUser(AbstractUser):
     ##### END user terminaux ####
 
     def achat(self):
-        return " ".join([achat["schema_name"] for achat in self.client_achat.values("schema_name")])
+        return " - ".join([achat["name"] for achat in self.client_achat.values("name")])
 
     def administre(self):
-        return " ".join([admin["schema_name"] for admin in self.client_admin.values("schema_name")])
+        return " - ".join([admin["name"] for admin in self.client_admin.values("name")])
 
     def as_password(self):
         return bool(self.password)
 
-    def set_staff(self, tenant):
+    def set_staff(self, tenant=None):
+        if not tenant:
+            tenant = connection.tenant
         self.client_admin.add(tenant)
         self.is_staff = True
         self.groups.add(Group.objects.get(name="staff"))
@@ -322,8 +283,8 @@ class HumanUserManager(TibilletManager):
 
     def get_queryset(self):
         return super().get_queryset().filter(espece=TibilletUser.TYPE_HUM,
-                                             is_staff=False,
-                                             is_superuser=False,
+                                             # is_staff=False,
+                                             # is_superuser=False,
                                              client_achat__pk__in=[connection.tenant.pk, ],
                                              )
 
@@ -342,8 +303,8 @@ class HumanUser(TibilletUser):
 
         self.espece = TibilletUser.TYPE_HUM
 
-        self.is_staff = False
-        self.is_superuser = False
+        # self.is_staff = False
+        # self.is_superuser = False
         self.email = self.email.lower()
 
         super().save(*args, **kwargs)

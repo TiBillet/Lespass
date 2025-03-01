@@ -1,0 +1,25 @@
+{% load unfold i18n %}
+
+<div class="bg-base-50 border border-base-200 border-dashed flex flex-col gap-4 p-6 rounded dark:bg-white/[.02] dark:border-base-700 lg:flex-row lg:items-center">
+    <div class="flex flex-col">
+        <h2 class="block font-semibold text-font-important-light text-base dark:text-font-important-dark">
+            {% trans "Are you looking for a custom dashboard?" %}
+        </h2>
+
+        <p class="leading-relaxed max-w-3xl mt-2">
+            {% trans "Did you decide to start using TiBillet but you need help? Feel free to get in touch for consulting, priority support on specific tickets or development services." %}
+        </p>
+    </div>
+
+    <div class="lg:ml-auto">
+        {% component "unfold/components/flex.html" with class="flex-col gap-4 lg:flex-row" %}
+            {% component "unfold/components/button.html" with href="mailto:contact@tibillet.re" %}
+                {% trans "Book a call with the Team" %}
+            {% endcomponent %}
+
+            {% component "unfold/components/button.html" with href="https://tibillet.org/" variant="default" %}
+                {% trans "I'm good with docs" %}
+            {% endcomponent %}
+        {% endcomponent %}
+    </div>
+</div>

@@ -1,0 +1,70 @@
+{% extends base_template %}
+{% load tibitags i18n static %}
+
+{% block title %}{{ event.name }}{% endblock %}
+
+{% block scripts %}
+    <script>
+        // auto-scroll for volunteer accordion section
+       document
+            .getElementById("volunteerButton")
+            ?.addEventListener("click", ({target}) => {
+                document.getElementById("get-involved").scrollIntoView()
+        })
+    </script>
+{% endblock %}
+
+{% block main %}
+    <main class="container-lg pb-5">
+        <header class="mb-3">
+            {% include 'reunion/partials/picture.html' with img=event.img alt=event.name style='max-height: 33vh' %}
+            <h1 class="mt-3">
+                <small>
+                    {{ event.datetime|date:'l j F'|capfirst }} <br/>
+                    {{ event.datetime|time:'H\hi' }} <br/>
+                </small>
+                {{ event.name }}
+            </h1>
+        </header>
+
+        <!-- tags -->
+        <p>
+            {% for tag  in event.tag.all %}
+                <span class="badge text-bg-info p-2 me-1 fs-6 fw-medium">{{ tag }}</span>
+            {% endfor %}
+        </p>
+
+        <p class="lead">{{ event.short_description }}</p>
+
+        {#    Si l'évènement n'est pas de ce tenant, il provient d'une fédération, le bouton redigire vers la page du tenant.#}
+        {#    # Todo : Garder l'user d'un dns à l'autre, et ouvrir le modal reserver dans le nouveau tenant #}
+        {% if not event_in_this_tenant %}
+            <a href="{{ event.full_url }}" class="btn btn-lg btn-primary d-block mt-3" role="button" target="_blank">
+                {% translate "Voir l'évènement sur le site diffuseur" %}
+                <i class="bi bi-box-arrow-up-right"></i>
+            </a>
+        {% elif event.products.count %}
+            {% include 'reunion/partials/event/booking.html' %}
+        {% else %}
+            <a href="#" class="btn btn-lg btn-primary d-block mt-3 disabled" role="button" aria-disabled="true">
+                {% translate "Entrée libre" %}
+            </a>
+        {% endif %}
+
+        {% if action_total_jauge %}
+            <p class="mt-2 mb-5 text-center">
+                <a id="volunteerButton"
+                   href="#get-involved"
+                   data-bs-toggle="collapse"
+                   data-bs-target="#get-involved"
+                   aria-expanded="true"
+                   aria-controls="get-involved">
+                    {% translate "On cherche des volontaires" %}</a>&nbsp;:
+                <span> ({{ inscrits }}/{{ action_total_jauge }} {% translate "personnes souhaitées" %})</span>
+            </p>
+        {% endif %}
+
+        {% include 'reunion/partials/event/accordion.html' %}
+
+    </main>
+{% endblock %}

@@ -1,0 +1,68 @@
+{% extends 'reunion/account_base.html' %}
+{% load static %}
+{% load tibitags %}
+{% load humanize i18n %}
+
+{% block title %}{% translate 'Préférences' %}{% endblock %}
+
+{% block account_page %}
+    {# TODO: vue et route pour les préférences #}
+    <section class="card border-top-0 rounded-top-0">
+        <div class="card-body">
+            <h1 class="card-title d-md-none">{% trans "Préférences" %}</h1>
+            <p class="lead">{% trans "Ici je peux modifier mes préférences, mettre à jour mes données personnelles et supprimer mon compte." %}
+            </p>
+        </div>
+    </section>
+
+    <h2 class="pt-3">{% trans "Personnalisation" %}</h2>
+
+    <div class="mb-3">
+        <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" role="switch" id="darkThemeCheck">
+            <label class="form-check-label" for="darkThemeCheck">
+                {% trans "Thème sombre" %}
+            </label>
+        </div>
+    </div>
+
+    <h2 class="pt-3">{% trans "Données" %}</h2>
+
+    <div class="mb-3">
+        <label for="first_name" class="form-label">{% trans "Mon prénom" %}</label>
+        <div class="input-group mb-3">
+            <input type="text" class="form-control" id="first_name" placeholder="nom@exemple.fr"
+                   value="{{ user.first_name }}"/>
+            <button class="btn btn-secondary" type="button" id="button-addon2">{% trans "Mettre à jour" %}</button>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label for="last_name" class="form-label">{% trans "Mon nom" %}</label>
+        <div class="input-group mb-3">
+            <input type="text" class="form-control" id="last_name" placeholder="nom@exemple.fr"
+                   value="{{ user.last_name }}"/>
+            <button class="btn btn-secondary" type="button" id="button-addon2">{% trans "Mettre à jour" %}</button>
+        </div>
+    </div>
+    
+    <div class="mb-3">
+        <label for="recoveryEmail" class="form-label">{% trans "Mon adresse email" %}</label>
+        <div class="input-group mb-3">
+            <input type="email" class="form-control" id="recoveryEmail" placeholder="nom@exemple.fr"
+                   value="{{ user.email }}"/>
+            <button class="btn btn-secondary" type="button" id="button-addon2">{% trans "Mettre à jour" %}</button>
+        </div>
+    </div>
+
+    {% comment %} HIDE: voir la loi pour les données à télécharger, pas grave si c'est un json crade par ex
+    <div class="row mt-5">
+        <div class="col-md">
+            <a href="#" class="btn btn-secondary d-block mb-4">Télécharger mes données</a>
+        </div>
+        <div class="col-md">
+            <a href="#" class="btn btn-danger d-block">Supprimer mon compte</a>
+        </div>
+    </div>
+    {% endcomment %}
+{% endblock %}

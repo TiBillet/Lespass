@@ -1,0 +1,19 @@
+{% load i18n static %}
+
+{# title gets picked up automatically by htmx when hx-target == body #}
+<title>{% block title %}{% translate 'Accueil' %}{% endblock %} | {{ config.organisation }}</title>
+
+{% include "reunion/partials/navbar.html" %}
+
+<div class="flex-fill">
+  {% block main %}{% endblock main %}
+</div>
+
+{% include "reunion/partials/footer.html" %}
+        
+{% include "reunion/partials/toasts.html" %}
+
+<!-- spinner -->
+{% include "reunion/loading.html" %}
+
+{% block scripts %}{% endblock scripts %}

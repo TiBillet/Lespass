@@ -1,0 +1,26 @@
+{% load i18n %}
+{% load tibitags %}
+
+<div id="eventCarousel" class="carousel slide"{% if auto|default:true %} data-bs-ride="carousel"{% endif %}>
+    <div class="carousel-inner" style="max-height: {{ max_height|default:'33vh' }};">
+        {% for slide in carousel %}
+            {% if slide.link %}
+            <a href="{{ slide.link }}" target="_blank" class="carousel-item{% if forloop.first %} active{% endif %}">
+                {% include 'reunion/partials/picture.html' with img=slide.img alt=slide.name style='max-height: 33vh' %}
+            </a>
+            {% else %}
+            <div class="carousel-item{% if forloop.first %} active{% endif %}">
+                {% include 'reunion/partials/picture.html' with img=slide.img alt=slide.name style='max-height: 33vh' %}
+            </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+    <button class="carousel-control-prev" type="button" data-bs-target="#eventCarousel" data-bs-slide="prev">
+        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+        <span class="visually-hidden">{% translate 'Précédent' %}</span>
+    </button>
+    <button class="carousel-control-next" type="button" data-bs-target="#eventCarousel" data-bs-slide="next">
+        <span class="carousel-control-next-icon" aria-hidden="true"></span>
+        <span class="visually-hidden">{% translate 'Suivant' %}</span>
+    </button>
+</div>

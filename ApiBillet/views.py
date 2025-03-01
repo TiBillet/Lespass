@@ -1,86 +1,104 @@
 # Create your views here.
 
-import decimal
 import json
 import logging
 from datetime import datetime, timedelta
 
 import pytz
-import requests
 import stripe
 from cryptography.fernet import Fernet
-from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.db import connection
-from django.http import HttpResponseRedirect, Http404, HttpResponse
+from django.http import Http404, HttpResponse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django.views import View
 from django_tenants.utils import schema_context, tenant_context
 from rest_framework import viewsets, permissions, status
-from rest_framework.decorators import permission_classes
+from rest_framework.decorators import permission_classes, action
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
+from rest_framework.viewsets import ViewSet
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
     ReservationValidator, ConfigurationSerializer, EventCreateSerializer, TicketSerializer, \
-    OptionsSerializer,  ProductCreateSerializer
-from AuthBillet.models import TenantAdminPermission, TibilletUser, TenantAdminPermissionWithRequest
-from AuthBillet.utils import user_apikey_valid
+    OptionsSerializer, ProductCreateSerializer, EmailSerializer
+from ApiBillet.permissions import TenantAdminApiPermission, TibilletUser, get_apikey_valid
+from AuthBillet.models import HumanUser
+from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe, \
     OptionGenerale, Membership
-from BaseBillet.tasks import create_ticket_pdf, report_to_pdf, report_celery_mailer
+from BaseBillet.tasks import create_ticket_pdf
 from Customers.models import Client
 from MetaBillet.models import EventDirectory, ProductDirectory
 from PaiementStripe.views import new_entry_from_stripe_invoice
 from TiBillet import settings
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.utils import rsa_decrypt_string, rsa_encrypt_string, get_public_key, data_to_b64
+from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
 
 
-class DecimalEncoder(json.JSONEncoder):
-    def default(self, o):
-        if isinstance(o, decimal.Decimal):
-            return str(o)
-        return super(DecimalEncoder, self).default(o)
+# class DecimalEncoder(json.JSONEncoder):
+#     def default(self, o):
+#         if isinstance(o, decimal.Decimal):
+#             return str(o)
+#         return super(DecimalEncoder, self).default(o)
 
 
-# Refactor for get_permission
-# Si c'est list/retrieve -> pour tout le monde
-# Sinon, on vérifie la clé api
-def get_permission_Api_LR_Any(self):
-    # Si c'est une auth avec APIKEY,
-    # on vérifie avec notre propre moteur
-    # Si l'user est rendu, la clé est valide
-    user_api = user_apikey_valid(self)
-    if user_api:
-        permission_classes = []
-        self.request.user = user_api
 
-    elif self.action in ['list', 'retrieve']:
+def get_permission_Api_LR_Any_CU_Admin(self: ViewSet):
+    # Si c'est list/retrieve -> pour tout le monde
+    # Pour le reste, c'est clé API + admin tenant
+    if self.action in ['list', 'retrieve']:
+        # Tout le monde peut list et retrieve
         permission_classes = [permissions.AllowAny]
     else:
-        permission_classes = [TenantAdminPermission]
+        api_key = get_apikey_valid(self)
+        user = api_key.user if api_key else None
+        if not user:
+            return False
+
+        # user doit être admin dans tenant
+        self.request.user = user
+        permission_classes = [TenantAdminApiPermission]
 
     return [permission() for permission in permission_classes]
 
 
-def get_permission_Api_LR_Admin(self):
-    user_api = user_apikey_valid(self)
-    if user_api:
-        permission_classes = []
-        self.request.user = user_api
+def get_permission_Api_LR_Admin_CU_Any(self: ViewSet):
+    # Si c'est list/retrieve -> clé API + admin tenant
+    # Pour le reste, c'est tout le monde
+    if self.action in ['list', 'retrieve']:
 
-    elif self.action in ['list', 'retrieve']:
-        permission_classes = [TenantAdminPermission]
+        api_key = get_apikey_valid(self)
+        user = api_key.user if api_key else None
+        if not user:
+            return Http404
+        # user doit être admin dans tenant
+        self.request.user = user
+        permission_classes = [TenantAdminApiPermission]
+
     else:
         permission_classes = [permissions.AllowAny]
     return [permission() for permission in permission_classes]
 
+def get_permission_Api_ALL_Admin(self: ViewSet):
+    # clé API + admin tenant pour tout
+    api_key = get_apikey_valid(self)
+    user = api_key.user if api_key else None
+    if not user:
+        return Http404
+    # user doit être admin dans tenant
+    self.request.user = user
+    permission_classes = [TenantAdminApiPermission]
+    return [permission() for permission in permission_classes]
+
+
+### END GET PERMISSION ###
 
 class TarifBilletViewSet(viewsets.ViewSet):
 
@@ -97,7 +115,7 @@ class TarifBilletViewSet(viewsets.ViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_permissions(self):
-        return get_permission_Api_LR_Any(self)
+        return get_permission_Api_LR_Any_CU_Admin(self)
 
 
 class ProductViewSet(viewsets.ViewSet):
@@ -132,7 +150,7 @@ class ProductViewSet(viewsets.ViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_permissions(self):
-        return get_permission_Api_LR_Any(self)
+        return get_permission_Api_LR_Any_CU_Admin(self)
 
 
 class TenantViewSet(viewsets.ViewSet):
@@ -170,7 +188,7 @@ class TenantViewSet(viewsets.ViewSet):
             permission_classes = [permissions.AllowAny]
             return [permission() for permission in permission_classes]
         else:
-            return get_permission_Api_LR_Any(self)
+            return get_permission_Api_LR_Any_CU_Admin(self)
         # permission_classes = [permissions.AllowAny]
 
 
@@ -196,7 +214,7 @@ class HereViewSet(viewsets.ViewSet):
         return Response(dict_return)
 
     def get_permissions(self):
-        return get_permission_Api_LR_Any(self)
+        return get_permission_Api_LR_Any_CU_Admin(self)
 
 
 class EventsSlugViewSet(viewsets.ViewSet):
@@ -214,7 +232,7 @@ class EventsSlugViewSet(viewsets.ViewSet):
         return Response(serializer.data)
 
     def get_permissions(self):
-        return get_permission_Api_LR_Any(self)
+        return get_permission_Api_LR_Any_CU_Admin(self)
 
 
 class EventsViewSet(viewsets.ViewSet):
@@ -307,7 +325,7 @@ class EventsViewSet(viewsets.ViewSet):
         return Response(('deleted'), status=status.HTTP_200_OK)
 
     def get_permissions(self):
-        return get_permission_Api_LR_Any(self)
+        return get_permission_Api_LR_Any_CU_Admin(self)
 
 
 """
@@ -413,9 +431,7 @@ class ReservationViewset(viewsets.ViewSet):
         return Response(serializer.data)
 
     def create(self, request):
-        # import ipdb; ipdb.set_trace()
         logger.info(f"ReservationViewset CREATE : {request.data}")
-
         validator = ReservationValidator(data=request.data, context={'request': request})
         if validator.is_valid():
             return Response(validator.data, status=status.HTTP_201_CREATED)
@@ -424,7 +440,8 @@ class ReservationViewset(viewsets.ViewSet):
         return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_permissions(self):
-        return get_permission_Api_LR_Admin(self)
+        # Tout le monde peut reserver (create), mais seul les admins peuvent lister
+        return get_permission_Api_LR_Admin_CU_Any(self)
 
 
 class OptionTicket(viewsets.ViewSet):
@@ -445,7 +462,7 @@ class OptionTicket(viewsets.ViewSet):
         return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_permissions(self):
-        return get_permission_Api_LR_Any(self)
+        return get_permission_Api_LR_Any_CU_Admin(self)
 
 
 def borne_temps_4h():
@@ -491,7 +508,7 @@ class CancelSubscription(APIView):
         return Response('Pas de renouvellement automatique sur cette adhésion.', status=status.HTTP_406_NOT_ACCEPTABLE)
 
 
-@permission_classes([TenantAdminPermission])
+@permission_classes([TenantAdminApiPermission])
 class Gauge(APIView):
 
     # API pour avoir l'état de la jauge (GAUGE in inglishe) et des billets scannés.
@@ -514,6 +531,9 @@ class Gauge(APIView):
 
 
 class TicketViewset(viewsets.ViewSet):
+    # Vérifie la clé API et que l'user de la clé est admin du tenant
+    permission_classes = [TenantAdminApiPermission]
+
     def list(self, request):
         debut_jour, lendemain_quatre_heure = borne_temps_4h()
 
@@ -532,168 +552,6 @@ class TicketViewset(viewsets.ViewSet):
         serializer = TicketSerializer(ticket)
         return Response(serializer.data)
 
-    def get_permissions(self):
-        return get_permission_Api_LR_Admin(self)
-
-
-"""
-def maj_membership_from_cashless(user: TibilletUser, data: dict):
-    '''
-    On met à jour la carte de membre si le cashless à des données plus récentes.
-
-    '''
-    logger.info('maj_membership_from_cashless')
-    try:
-        # Il n'y est sensé y avoir qu'un seul objet produit qui puisse être envoyé au cashless
-        produit_adhesion = Product.objects.get(send_to_cashless=True)
-
-        # On va chercher la carte membership
-        deadline_billetterie = None
-        membership = Membership.objects.filter(
-            user=user,
-            price__product=produit_adhesion
-        ).first()
-
-        if membership:
-            deadline_billetterie = membership.deadline()
-        else:
-            prices_adhesion = produit_adhesion.prices.all()
-            price: Price = prices_adhesion.get(prix=float(data.get('cotisation')))
-            logger.info(f'Pas de membreship, on la crée avec la data du cashless :')
-            logger.info(f'{data}')
-            membership = Membership.objects.create(
-                user=user,
-                first_name=data.get('prenom'),
-                last_name=data.get('name'),
-                newsletter=bool(data.get('demarchage')),
-                price=price
-            )
-
-        date_inscription = data.get('date_inscription')
-        if date_inscription:
-            deadline_cashless = datetime.strptime(data.get('prochaine_echeance'), '%Y-%m-%d').date()
-            if deadline_billetterie:
-                if deadline_billetterie >= deadline_cashless:
-                    logger.info('Adhésion associative syncho avec le cashless.')
-                    return membership
-
-            logger.info(f'Adhésion associative {produit_adhesion} non syncho avec le cashless. On mets à jour.')
-
-            membership.date_added = dateutil.parser.parse(data.get('date_ajout'))
-            membership.first_contribution = datetime.strptime(data.get('date_inscription'), '%Y-%m-%d').date()
-            membership.last_contribution = datetime.strptime(data.get('date_derniere_cotisation'), '%Y-%m-%d').date()
-            membership.contribution_value = float(data.get('cotisation'))
-            membership.save()
-
-            return membership
-
-    except Exception as e:
-        logger.error(f'maj_membership_from_cashless ERROR : {e}')
-        return None
-
-def request_for_data_cashless(user: TibilletUser):
-    if user.email_error or not user.email:
-        return {'erreur': f"user.email_error {user.email_error}"}
-
-    configuration = Configuration.get_solo()
-    if configuration.server_cashless and configuration.key_cashless:
-        try:
-            verify = True
-            if settings.DEBUG:
-                verify = False
-
-            response = requests.request("POST",
-                                        f"{configuration.server_cashless}/api/membre_check",
-                                        headers={"Authorization": f"Api-Key {configuration.key_cashless}"},
-                                        data={"email": user.email},
-                                        verify=verify)
-
-            if response.status_code != 200:
-                return {'erreur': f"{response.status_code} : {response.text}"}
-
-            data = json.loads(response.content)
-            if data.get('a_jour_cotisation'):
-                membership = maj_membership_from_cashless(user, data)
-            return data
-
-        except Exception as e:
-            return {'erreur': f"{e}"}
-
-    return {'erreur': f"pas de configuration server_cashless"}
-"""
-
-
-# class MembershipViewset(viewsets.ViewSet):
-#
-#     def create(self, request):
-#         logger.info(f"MembershipViewset reçue -> go MembreValidator")
-#
-#         # Test pour option :
-#         # request.data['options'] = ['1ff89201-edfa-4839-80d8-a5f98737f970',]
-#
-#         # TODO: Pourquoi deux serializers ?
-#         membre_validator = MembreValidator(data=request.data, context={'request': request})
-#         if membre_validator.is_valid():
-#             adhesion_validator = NewAdhesionValidator(data=request.data, context={'request': request})
-#             if adhesion_validator.is_valid():
-#                 return Response(adhesion_validator.data, status=status.HTTP_201_CREATED)
-#
-#             logger.error(f'adhesion_validator.errors : {adhesion_validator.errors}')
-#             return Response(adhesion_validator.errors, status=status.HTTP_400_BAD_REQUEST)
-#
-#         logger.error(f'membre_validator.errors : {membre_validator.errors}')
-#         return Response(membre_validator.errors, status=status.HTTP_400_BAD_REQUEST)
-#
-#     def get_permissions(self):
-#         if self.action in ['create', 'retrieve']:
-#             permission_classes = [permissions.AllowAny]
-#         else:
-#             permission_classes = [TenantAdminPermission]
-#
-#         return [permission() for permission in permission_classes]
-
-
-class ZReportPDF(View):
-    def get(self, request, pk_uuid):
-        logger.info(f"ZReportPDF user : {request.user}")
-        if not TenantAdminPermissionWithRequest(request):
-            return HttpResponse(f"403", content_type='application/json')
-
-        configuration = Configuration.get_solo()
-        if configuration.server_cashless and configuration.key_cashless:
-            try:
-                response = requests.request("GET",
-                                            f"{configuration.server_cashless}/rapport/TicketZapi/{pk_uuid}",
-                                            headers={"Authorization": f"Api-Key {configuration.key_cashless}"},
-                                            verify=bool(not settings.DEBUG), )
-
-                if response.status_code == 200:
-                    data = json.loads(response.content)
-
-                    date = data['start_date']
-                    structure = data['structure']
-                    # import ipdb; ipdb.set_trace()
-
-                    logger.info(f"ZReportPDF data : {data}")
-                    logger.info(f"  On envoie le mail")
-                    report_celery_mailer.delay([data, ])
-
-                    pdf_binary = report_to_pdf(data)
-                    response = HttpResponse(pdf_binary, content_type='application/pdf')
-                    response['Content-Disposition'] = f'attachment; filename="{structure}-TicketZ-{date}.pdf"'
-                    return response
-
-                    # return HttpResponse(json.dumps(data), content_type='application/json')
-                    # return Response(data, status=status.HTTP_200_OK)
-
-            except Exception as e:
-                logger.info(f"ZReportPDF erreur {e}")
-                raise e
-
-            logger.info(f"ZReportPDF erreur {response.status_code} : {response.text}")
-            return HttpResponse(f"{response.status_code}", content_type='application/json')
-
-        # return {'erreur': f"pas de configuration server_cashless"}
 
 
 class TicketPdf(APIView):
@@ -733,6 +591,8 @@ def metatadata_valid(paiement_stripe_db: Paiement_stripe, checkout_session):
         return False
 
 
+# S'execute juste après un retour Webhook ou redirection une fois le paiement stripe effectué.
+# ex : BaseBillet.views.EventMVT.stripe_return
 def paiment_stripe_validator(request, paiement_stripe):
     if paiement_stripe.traitement_en_cours:
 
@@ -774,16 +634,20 @@ def paiment_stripe_validator(request, paiement_stripe):
                 status=status.HTTP_208_ALREADY_REPORTED
             )
 
-    # configuration = Configuration.get_solo()
-    # stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-    stripe.api_key = Configuration.get_solo().get_stripe_api()
+    stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+    config = Configuration.get_solo()
+
+    # stripe.api_key = Configuration.get_solo().get_stripe_api()
 
     # SI c'est une source depuis INVOICE,
     # L'object vient d'être créé, on vérifie que la facture stripe
     # est payée et on met en VALID.
     if paiement_stripe.source == Paiement_stripe.INVOICE:
         paiement_stripe.traitement_en_cours = True
-        invoice = stripe.Invoice.retrieve(paiement_stripe.invoice_stripe)
+        invoice = stripe.Invoice.retrieve(
+            paiement_stripe.invoice_stripe,
+            stripe_account=config.get_stripe_connect_account()
+        )
 
         if invoice.status == 'paid':
             paiement_stripe.status = Paiement_stripe.PAID
@@ -804,15 +668,14 @@ def paiment_stripe_validator(request, paiement_stripe):
 
     # Sinon c'est un paiement stripe checkout
     elif paiement_stripe.status != Paiement_stripe.VALID:
-        config = Configuration.get_solo()
         checkout_session = stripe.checkout.Session.retrieve(
             paiement_stripe.checkout_session_id_stripe,
-            # stripe_account=config.get_stripe_connect_account()
+            stripe_account=config.get_stripe_connect_account()
         )
 
         paiement_stripe.customer_stripe = checkout_session.customer
 
-        # Vérifie que les metatada soient cohérentes. #NTUI !
+        # Vérifie que les metatada soient cohérentes : NTUI
         if metatadata_valid(paiement_stripe, checkout_session):
             if checkout_session.payment_status == "unpaid":
                 paiement_stripe.status = Paiement_stripe.PENDING
@@ -848,7 +711,7 @@ def paiment_stripe_validator(request, paiement_stripe):
                         paiement_stripe.subscription = checkout_session.subscription
                         subscription = stripe.Subscription.retrieve(
                             checkout_session.subscription,
-                            # stripe_account=config.get_stripe_connect_account()
+                            stripe_account=config.get_stripe_connect_account()
                         )
                         paiement_stripe.invoice_stripe = subscription.latest_invoice
 
@@ -869,50 +732,7 @@ def paiment_stripe_validator(request, paiement_stripe):
     # on vérifie le changement de status
     paiement_stripe.refresh_from_db()
 
-    # Paiement depuis QRCode carte
-    """
-    # on envoie au serveur cashless
-    if paiement_stripe.source == Paiement_stripe.QRCODE:
-        # Si le paiement est valide, c'est que les presave et postsave
-        # ont validé la réponse du serveur cashless pour les recharges
-        if paiement_stripe.status == Paiement_stripe.VALID:
-            lignes_articles = paiement_stripe.lignearticles.all()
-            # on boucle ici pour récuperer l'uuid de la carte.
-            for ligne_article in lignes_articles:
-                carte = ligne_article.carte
-                if carte:
-                    if request.method == 'GET':
-                        # On re-boucle pour récuperer les noms des articles vendus afin de les afficher sur le front
-                        for ligneArticle in lignes_articles:
-                            messages.success(request,
-                                             f"{ligneArticle.pricesold.price.product.name} : {ligneArticle.pricesold.price.name}")
 
-                        messages.success(request, f"Paiement validé. Merci !")
-
-                        return HttpResponseRedirect(f"/qr/{carte.uuid}#success")
-                    else:
-                        return Response(f'VALID', status=status.HTTP_200_OK)
-
-        elif paiement_stripe.status == Paiement_stripe.PAID:
-            for ligne_article in paiement_stripe.lignearticles.all():
-                if ligne_article.carte:
-                    messages.error(request,
-                                   f"Le paiement à bien été validé "
-                                   f"mais un problème est apparu avec votre carte cashless. "
-                                   f"Merci de contacter un responsable.")
-                    return HttpResponseRedirect(f"/qr/{ligne_article.carte.uuid}#erreurpaiement")
-
-        else:
-            # on boucle ici pour récuperer l'uuid de la carte.
-            for ligne_article in paiement_stripe.lignearticles.all():
-                if ligne_article.carte:
-                    messages.error(request,
-                                   f"Un problème de validation de paiement a été detecté. "
-                                   f"Merci de vérifier votre moyen de paiement et/ou contactez un responsable.")
-                    return HttpResponseRedirect(f"/qr/{ligne_article.carte.uuid}#erreurpaiement")
-
-
-    """
     # Derniere action : on crée et envoie les billets si besoin
     if paiement_stripe.source == Paiement_stripe.API_BILLETTERIE:
         if paiement_stripe.reservation:
@@ -993,11 +813,7 @@ class Get_user_pub_pem(APIView):
         User = get_user_model()
         user: TibilletUser = get_object_or_404(User, email=f"{request.data['email']}")
         if connection.tenant not in user.client_admin.all():
-            # Pour les ancienne instances, a virer apres les grandes migrations :
-            if settings.DEBUG:
-                user.client_admin.add(connection.tenant)
-            else:
-                return Response(status=status.HTTP_401_UNAUTHORIZED)
+            return Response(status=status.HTTP_401_UNAUTHORIZED)
 
         data = {
             'public_pem': f"{user.get_public_pem()}",
@@ -1074,6 +890,38 @@ class Onboard_laboutik(APIView):
 # class Onboard(APIView):
 #     def get(self, request):
 #         return Response(f"{create_account_link_for_onboard()}", status=status.HTTP_202_ACCEPTED)
+
+
+# api check wallet
+class Wallet(viewsets.ViewSet):
+
+    @action(detail=False, methods=['POST'], throttle_classes=[UserRateThrottle], permission_classes=[TenantAdminApiPermission])
+    def get_stripe_checkout_with_email(self, request):
+        # Création d'un lien de paiement pour une recharge Stripe.
+        # Peut être réalisée par n'importe qui. Valide du moment qu'il y a paiement.
+        serializer = EmailSerializer(data=request.data)
+        if not serializer.is_valid():
+            # success_url = request.data.get('success_url')
+            # cancel_url = request.data.get('cancel_url')
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        email = serializer.validated_data['email']
+        user: "HumanUser" = get_or_create_user(email)
+        if not user :
+            return Response(f"User not valid", status=status.HTTP_406_NOT_ACCEPTABLE)
+
+        fedowAPI = FedowAPI()
+        stripe_checkout_url = fedowAPI.wallet.get_federated_token_refill_checkout(user)
+        if stripe_checkout_url:
+            # Envoi du lien
+            data = {
+                "stripe_checkout_url": f"{stripe_checkout_url}"
+            }
+            return Response(data=data, status=status.HTTP_201_CREATED)
+
+        return Response(status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+
 
 
 @permission_classes([permissions.AllowAny])

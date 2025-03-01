@@ -1,0 +1,38 @@
+{% extends base_template %}
+{% load tibitags i18n %}
+
+{% block main %}
+    <main class="container-lg my-5">
+        {% if not details_submitted %}
+            <p class="">
+                {% trans "Nous avons bien reçu votre demande de création d'espace" %} :
+            </p>
+            <p class="">
+                {% trans "Vous ne semblez pas avoir terminé la création de compte Stripe." %}
+            </p>
+            <p class="">
+                {% trans "Vous pouvez utiliser le même lien présent dans l'email de bienvenue pour compléter la procédure." %}
+            </p>
+        {% elif not email_valid %}
+            <p class="">
+                {% trans "Nous avons bien reçu votre demande de création d'espace" %} :
+            </p>
+            <p class="">
+                {% trans "L'email renseigné sur Stripe ne semble pas correspondre à l'email d'administration."%}
+            </p>
+            <p class="">
+                {% trans "Merci de relancer une procédure avec le même email." %}
+            </p>
+        {% else %}
+            <p class="">
+                {% trans "Nous avons bien reçu votre demande de création d'espace" %}.
+            </p>
+            <p class="">
+                {% trans "Une fois votre compte vérifié par nos soins, nous vous contacterons (pendant un jour ouvré) pour finaliser votre inscription." %}
+            </p>
+            <p class="">
+                {% trans "Merci et bienvenue dans notre aventure coopérative !" %}
+            </p>
+        {% endif %}
+    </main>
+{% endblock %}

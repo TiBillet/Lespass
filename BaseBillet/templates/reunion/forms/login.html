@@ -1,0 +1,55 @@
+{% load static i18n %}
+<form id="loginForm"
+      hx-post="/connexion/" hx-target="body"
+      hx-swap="innerHTML">
+    <h4>{% trans "Avec un email" %}</h4>
+    <div class="form-floating mb-3">
+        <input type="email" class="form-control" id="loginEmail" placeholder="mon@email.fr" name="email" required>
+        <label for="loginEmail">{% trans "Mon e-mail" %}</label>
+        <p class="mt-3">{% trans "Pas besoin de mot de passe, un e-mail sera envoyé pour validation." %}</p>
+        <button type="submit" class="btn btn-primary d-block w-100">{% trans "Valider" %}</button>
+    </div>
+    {#    <h4 class="mt-5">#}
+    {#        Avec mon compte#}
+    {#        <img src="{% static '/mvt_htmx/images/communecterLogo_31x28.png' %}" class="communecter-logo"#}
+    {#            alt="logo communecter">#}
+    {#        Communecter#}
+    {#    </h4>#}
+    {#    <div class="form-floating mb-3">#}
+    {#        <a href="." onclick="location.href = '/api/user/requestoauth/';" class="btn btn-primary d-block">#}
+    {#            Valider#}
+    {#        </a>#}
+    {#    </div>#}
+</form>
+
+<script>
+    function validateLoginEmail(evt) {
+        // const error = 0
+        const input = document.querySelector('#loginEmail')
+        let value = input.value
+        const re = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$/
+        if (value.match(re) === null) {
+            evt.preventDefault()
+            evt.stopPropagation()
+            // input en mode invalid
+            input.parentNode.classList.remove('is-valid')
+            input.parentNode.classList.add('is-invalid')
+            // focus le input confirme email
+            input.focus()
+        } else {
+            input.parentNode.classList.remove('is-invalid')
+            input.parentNode.classList.add('is-valid')
+        }
+    }
+
+    function closePanel(id, delay) {
+        const element = document.querySelector(id)
+        const panel = bootstrap.Offcanvas.getInstance(element)
+
+        // effacer le modal login une fois la requête finie
+        window.setTimeout(() => {
+            panel.hide()
+        }, delay)
+    }
+
+</script>

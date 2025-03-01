@@ -13,7 +13,7 @@ from Customers.models import Client
 
 class LatestEntriesEvent(Feed):
     description = "Derniers évènements créés"
-    base_url = "https://www.tibilet.re"
+    base_url = "https://www.tibilet.coop"
 
     def link(self):
         link = "/rss/latest/feed/"
@@ -23,7 +23,7 @@ class LatestEntriesEvent(Feed):
                     link = f"https://{connection.tenant.get_primary_domain().domain}/rss/latest/feed/"
                     self.base_url = f"https://{connection.tenant.get_primary_domain().domain}"
         except AttributeError:
-            link = "https://www.tibillet.re/rss/latest/feed/"
+            link = "https://www.tibillet.coop/rss/latest/feed/"
 
         return link
 
@@ -34,18 +34,18 @@ class LatestEntriesEvent(Feed):
             if connection.tenant:
                 if connection.tenant.categorie != Client.ROOT:
                     config = Configuration.get_solo()
-                    name_orga = f"{config.organisation} : "
+                    name_orga = f"{config.organisation}"
         except AttributeError:
             name_orga = ""
 
-        return f"{name_orga}Derniers évènements créés"
+        return f"{name_orga} : Derniers évènements créés"
 
     def items(self):
         """
 
         :return: list
         """
-        return Event.objects.order_by('-created')[:5]
+        return Event.objects.order_by('-created')[:20]
 
     def item_title(self, item: Event):
         return f"{item.name} : {item.datetime.strftime('%D %R')}"

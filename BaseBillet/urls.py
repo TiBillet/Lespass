@@ -1,6 +1,5 @@
 from django.urls import path, include
 from rest_framework import routers
-
 from BaseBillet import views as base_view
 
 router = routers.DefaultRouter()
@@ -10,19 +9,22 @@ router.register(r'tenant', base_view.Tenant, basename='tenant')
 
 router.register(r'my_account', base_view.MyAccount, basename='my_account')
 router.register(r'qr', base_view.ScanQrCode, basename='scan_qrcode')
+router.register(r'event', base_view.EventMVT, basename='event')
+router.register(r'home', base_view.HomeViewset, basename='home')
+
 
 urlpatterns = [
 
     path('ticket/<uuid:pk_uuid>/', base_view.Ticket_html_view.as_view()),
-    path('event/<slug:slug>/', base_view.event, name='event'),
+    # path('event/<slug:slug>/', base_view.event, name='event'),
 
-    path("validate_event/", base_view.validate_event, name='validate_event'),
-    path('create_event/', base_view.create_event, name='create_event'),
-    path('wiz_event/date/', base_view.event_date, name='event_date'),
-    path('wiz_event/presentation/', base_view.event_presentation, name='event_presentation'),
-    path('wiz_event/products/', base_view.event_products, name='event_products'),
-    path('home/', base_view.home, name='home'),
-    path('agenda/', base_view.agenda, name='agenda'),
+    # path("validate_event/", base_view.validate_event, name='validate_event'),
+    # path('create_event/', base_view.create_event, name='create_event'),
+    # path('wiz_event/date/', base_view.event_date, name='event_date'),
+    # path('wiz_event/presentation/', base_view.event_presentation, name='event_presentation'),
+    # path('wiz_event/products/', base_view.event_products, name='event_products'),
+    # path('home/', base_view.index, name='home'),
+    # path('agenda/', base_view.agenda, name='agenda'),
 
     # path("my_account/", base_view.my_account, name='my_account'),
     # path("my_account/wallet/", base_view.my_account_wallet, name='my_account_wallet'),
@@ -39,8 +41,7 @@ urlpatterns = [
     # path("tenant/informations/", base_view.tenant_informations, name='tenant_informations'),
     # path("tenant/summary/", base_view.tenant_summary, name='tenant_summary'),
     # path('test_jinja/', base_view.test_jinja, name='test_jinja'),
-
-    path('', base_view.home, name="index"),
+    path('', base_view.index, name="index"),
 ]
 
 urlpatterns += router.urls

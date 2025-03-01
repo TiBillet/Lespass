@@ -1,0 +1,325 @@
+<html lang="fr">
+
+<head>
+    <meta charset="utf-8">
+    <title>Ticket</title>
+    <meta name="description" content="{{ ticket.reservation.event.name }}">
+    <style>
+        @font-face {
+            font-family: Libre Barcode;
+            src: url(librebarcode128-regular.ttf);
+        }
+
+        @font-face {
+            font-family: Barlow Condensed;
+            src: url(barlowcondensed-regular.otf);
+        }
+
+        @font-face {
+            font-family: Barlow Condensed;
+            font-weight: 300;
+            src: url(barlowcondensed-light.otf);
+        }
+
+        @font-face {
+            font-family: Barlow Condensed;
+            font-weight: 700;
+            src: url(barlowcondensed-bold.otf);
+        }
+
+        @page {
+            margin: 0;
+            size: landscape;
+        }
+
+        html {
+            align-content: center;
+            align-items: center;
+            background: #fff;
+            display: flex;
+            font-family: Barlow Condensed, sans-serif;
+            height: 100%;
+            justify-content: center;
+        }
+
+        body {
+            background: #e0e1e3;
+
+            box-sizing: border-box;
+            color: #2A3239;
+            display: flex;
+            flex-wrap: wrap;
+            max-height: 25cm;
+            justify-content: space-between;
+            margin: 0;
+            width: 26cm;
+            padding: 0.5cm;
+            border-radius: 8pt;
+        }
+
+        section {
+            box-sizing: border-box;
+        }
+
+        dl {
+            columns: 4;
+            text-align: center;
+        }
+
+        dt {
+            font-size: 9pt;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        dd {
+            margin-left: 0;
+        }
+
+        ul {
+            align-items: center;
+            display: flex;
+            list-style: none;
+            margin: 0;
+            padding-left: 0;
+        }
+
+        li {
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        #informations {
+            flex: 1;
+            padding: 0;
+            position: relative;
+            width: 25cm;
+        }
+
+        #informations h1 {
+            display: inline-block;
+            font-size: 2.5em;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin: 10pt;
+            margin-top: 5pt;
+        }
+
+        #informations #name {
+            margin-left: 1cm;
+        }
+
+        #informations #destination {
+            position: absolute;
+            right: 1cm;
+        }
+
+        #informations dl {
+            background: #2A3239;
+            color: #fff;
+            margin: 0;
+            padding: 1cm 0;
+        }
+
+        #informations dd {
+            border-left: 1pt solid #fff;
+            font-size: 35pt;
+        }
+
+        #informations dd:first-of-type {
+            border-left: 0;
+        }
+
+        #informations ul {
+            margin-left: 1cm;
+        }
+
+        #informations li {
+            font-weight: 300;
+            padding: 0.15cm;
+        }
+
+        #informations li:first-of-type {
+            background: #2A3239;
+            border-radius: 4pt;
+            color: #fff;
+        }
+
+        #informations li:last-of-type {
+            font-family: Libre Barcode, cursive;
+            color: black;
+            font-size: 25pt;
+            margin-left: auto;
+            padding-right: 1cm;
+            padding-top: 0.5cm;
+        }
+
+        #ticket {
+            border-left: 1pt dashed #2A3239;
+            display: flex;
+            flex-direction: column;
+            height: 8cm;
+            justify-content: space-around;
+            padding: 0 1cm;
+        }
+
+        #ticket h2 {
+            font-weight: 300;
+            margin: 0;
+            text-transform: uppercase;
+        }
+
+        #ticket p {
+            font-family: Libre Barcode, cursive;
+            font-size: 25pt;
+            margin: 0;
+            text-align: center;
+        }
+
+        #ticket dl {
+            margin: 0;
+        }
+
+        #ticket li {
+            margin: 0 0.25cm;
+        }
+
+        /* hack defred */
+        section .head_ticket {
+
+            background: #2A3239;
+            color: #FAFAFA;
+            font-weight: bolder;
+            text-align: center;
+            border-radius: 8pt;
+            /*! width: 20cm; */
+        }
+
+        section .block_ticket {
+            display: flex;
+            flex-direction: row;
+            width: 25cm;
+        }
+
+        section .qrcode_ticket {
+            display: flex;
+            flex-direction: column;
+            font-size: 1.2em;
+            /*! padding: 1vh; */
+            width: 5cm;
+            margin-top: 6pt;
+            justify-content: space-between;
+        }
+
+        section .qrcode_ticket img {
+            width: inherit;
+        }
+
+
+        section .ticket {
+            display: flex;
+            flex-direction: column;
+            font-size: 1.2em;
+            /*! padding: 1vh; */
+            width: 20.75cm;
+            margin-top: 6pt;
+            justify-content: space-between;
+            margin-left: 0.5cm;
+        }
+
+
+        section .infos_ticket {
+            display: flex;
+            width: 20.75cm;
+            padding: 4pt 0 6pt;
+            font-size: 1.5em;
+            justify-content: space-between;
+            background: #B6CADB;
+            border-radius: 8pt;
+            /*! align-items: unset; */
+        }
+
+        section .date_ticket {
+            font-weight: bolder;
+        }
+
+        section .venue_ticket {
+            margin-left: 8pt;
+        }
+
+        section .name_ticket {
+            margin-right: 8pt;
+        }
+
+        section .detail_ticket {
+            display: flex;
+            flex-direction: row;
+            font-size: 1.3em;
+            width: 20.75cm;
+            justify-content: space-between;
+            /*! padding: 8pt 0; */
+        }
+
+        section .detail_ticket div {
+            width: 25%;
+            margin: 0 6pt 0 0;
+            border: 1px solid #B6CADB;
+            padding: 4pt 6pt;
+            border-radius: 8pt;
+            /*! word-break: break-all; */
+            background: #FAFAFA;
+        }
+
+        section .detail_ticket .options_ticket {
+
+            margin-right: 0;
+        }
+
+        section .email_ticket {
+            font-size: 1.2em;
+            margin-left: 0pt;
+            width: 20.75cm;
+        }
+    </style>
+</head>
+
+<body>
+<section id="informations">
+    <div class="head_ticket">
+        <h1>{{ ticket.reservation.event.name }}</h1>
+    </div>
+    <div class="block_ticket">
+        <div class="qrcode_ticket">
+            <div>{{ img_svg | safe }}</div>
+            {#    <div>{{ bar_svg | safe }}</div>#}
+        </div>
+        <div class="ticket">
+            <div class="infos_ticket">
+                <div class="venue_ticket">Lieux : {{ config.organisation }}</div>
+                <div class="date_ticket">{{ ticket.reservation.event.datetime }}</div>
+                <div class="name_ticket">{{ ticket.first_name }} {{ ticket.last_name }}</div>
+            </div>
+            <div class="detail_ticket">
+                <div class="price_ticket">Prix :<br><b>{{ ticket.pricesold }} €</b></div>
+                <!-- {% if ticket.seat == "L" %}
+                    <div class="place_ticket"><br><b>Placement libre</b></div>
+                    {% else %} -->
+                    <div class="place_ticket">Siège :<br><b>{{ ticket.seat }}</b></div>
+                    <!-- {% endif %} -->
+                <div class="number_ticket">N° de billet
+                    :<br><b>{{ ticket.status }}-{{ ticket.numero_uuid }}-{{ ticket.seat }}</b></div>
+                <!-- {% if ticket.reservation.options.all|length > 0 %} -->
+                    <div class="options_ticket">Options :
+                    <!-- {% for option in ticket.reservation.options.all %} -->
+                        <br><b>- {{ option.name }}</b>
+                        <!-- {% endfor %} -->
+                    <!-- {% endif %} -->
+                </div>
+            </div>
+            <div class="email_ticket">Email de réservation : <b>{{ ticket.reservation.user_commande.email }}</b></div>
+        </div>
+    </div>
+</section>
+</body>
+
+</html>

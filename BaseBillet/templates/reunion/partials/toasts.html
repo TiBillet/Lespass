@@ -1,0 +1,41 @@
+<div id="toastContainer" class="toast-container position-fixed bottom-0 end-0 p-3">
+    {% if messages %}
+    {% for message in messages %}
+    <div class="toast show"
+        {% if message.tags == 'error' %} role="alert" aria-live="assertive" {% else %} role="status" aria-live="polite"  {% endif %}
+        id="tibillet-toast-{{ nessage.uuid }}" aria-atomic="true">
+
+        {% if message.tags == 'success' %}
+        <div class="d-flex flex-row justify-content-between toast-header rounded-top text-bg-success">
+            Validation
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        {% elif message.tags == 'info' %}
+        <div class="d-flex flex-row justify-content-between toast-header rounded-top text-bg-info">
+            Information
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        {% elif message.tags == 'warning' %}
+        <div class="d-flex flex-row justify-content-between toast-header rounded-top text-bg-warning">
+            Attention
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        {% elif message.tags == 'error' %}
+        <div class="d-flex flex-row justify-content-between toast-header rounded-top text-bg-danger">
+            Erreur
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        {% elif message.tags == 'debug' %}
+        <div class="d-flex flex-row justify-content-between toast-header rounded-top text-bg-secondary">
+            Débug
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        {% endif %}
+        <hr class="horizontal dark m-0">
+        <div class="toast-body">
+            {{ message }}
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+</div>

@@ -1,0 +1,15 @@
+<div>
+    <span>Bonjour !</span>
+</div>
+<div>
+    <p>Vous souhaitez créer un nouvel espace TiBillet pour le collectif {{ waiting_config.organisation }}, Merci !</p>
+    <p>Pour finaliser votre compte, nous avons besoin d'un compte stripe pour vous envoyer les sous de vos ventes
+        :-)</p>
+    <p>Merci de compléter le formulaire qui vous sera proposé via le lien ci dessous. Une fois votre compte validé par
+        Stripe, nous prendrons contact avec vous pour finaliser votre espace.</p>
+    <p>D'ici la, n'hésitez pas à venir discuter avec nous par <a href="mailto:contact@tibillet.re">email</a> ou sur <a
+            href="https://discord.gg/7FJvtYx">Discord</a> ou <a href="https://matrix.to/#/#tibillet:tiers-lieux.org">Matrix</a>
+        ou <a href="https://pouet.chapril.org/@tibillet">Mastodon</a>.</p>
+    <p>Bon voyage parmi nous !</p>
+    <p><a href="{{ create_url_for_onboard_stripe }}">-> Valider sa demande et continuer sur Stripe <-</a></p>
+</div>

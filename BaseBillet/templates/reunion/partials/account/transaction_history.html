@@ -1,0 +1,50 @@
+{% load tibitags %}
+{% load humanize i18n %}
+
+<h2 class="pt-3">{% trans "Historique des transactions" %}</h2>
+<div class="table-responsive">
+    <table class="table">
+        <thead>
+        <th>{% trans "Montant" %}</th>
+        <th>{% trans "Action" %}</th>
+        <th>{% trans "Chemin" %}</th>
+        <th>{% trans "Date" %}</th>
+        </thead>
+        <tbody>
+
+        {% for tr in transactions %}
+            <tr class="test-return-{{ tr.serialized_asset.name | slugify }}-{{ tr.amount | dround | slugify }}-content">
+                <td>
+                    <strong>{{ tr.amount | dround }}</strong>
+                    {% if tr.serialized_asset.is_stripe_primary %}
+                    TiBillets
+                    {% else %}
+                    {{ tr.serialized_asset.name }}
+                    {% endif %}
+                </td>
+                <td>{{ tr.get_action_display }}</td>
+                <td>
+                    {% if tr.serialized_sender.uuid == user.wallet.uuid %}
+                    {% translate "Tirelire" %}
+                    {% elif tr.serialized_sender.get_name == 'Primary Wallet' %}
+                    {% trans 'Plateforme Lespass' %}
+                    {% else %}
+                    {% trans 'Caisse LaBoutik' %}
+                    {#{ tr.serialized_sender.get_name }#}
+                    {% endif %}
+                    <i class="bi bi-arrow-right"></i>
+                    {% if tr.serialized_receiver.uuid == user.wallet.uuid %}
+                    {% translate "Tirelire" %}
+                    {% elif tr.serialized_sender.get_name == 'Primary Wallet' %}
+                    {% trans 'Plateforme Lespass' %}
+                    {% else %}
+                    {% trans 'Caisse LaBoutik' %}
+                    {#{ tr.serialized_receiver.get_name }#}
+                    {% endif %}
+                </td>
+                <td>{{ tr.datetime }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>

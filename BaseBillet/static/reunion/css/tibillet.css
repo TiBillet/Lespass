@@ -1,0 +1,74 @@
+@font-face {
+    font-family: 'luciole';
+    src: url('../font/luciole/luciole.woff2') format('woff2');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'luciole';
+    src: url('../font/luciole/luciole-bold.woff2') format('woff2');
+    font-weight: bold;
+    font-style: normal;
+}
+
+/* 
+@font-face {
+    font-family: 'luciole';
+    src: url('../font/luciole/luciole-italic.woff2') format('woff2');
+    font-weight: italic;
+    font-style: normal; */
+/* } */
+
+@font-face {
+    font-family: 'staatliches';
+    src: url('../font/staatliches/staatliches.woff2') format('woff2');
+    font-weight: normal;
+    font-style: normal;
+}
+
+/* playwrite-is */
+@font-face {
+	font-family: Playwrite IS;
+	font-style: normal;
+	font-weight: 100 400;
+	font-stretch: 100%;
+	src: url('../font/playwrite-is/playwrite-is.woff2') format("woff2");
+	font-display: swap;
+}
+
+a {
+    color: inherit;
+}
+
+body {
+    font-family: luciole, sans-serif;
+}
+
+.display-1 {
+    font-family: Playwrite IS, serif;
+}
+
+.navbar {
+    padding-block: 20px;
+    
+    .badge {
+        font-family: luciole, sans-serif;
+        font-size: var(--bs-badge-font-size);
+    }
+
+    .nav-link, .navbar-brand {
+        font: 20px staatliches, sans-serif;
+    }
+}
+
+.table th, .table td {
+	padding: 1rem;
+	background: none;
+}
+
+@media (min-width: 768px) {
+    .event-tags {
+        max-width: 50%;
+    }
+}

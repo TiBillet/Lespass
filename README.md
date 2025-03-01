@@ -10,7 +10,6 @@
 
 ![](Presentation/ticketing_demo.jpg)
 
-
 ### EN : Introduction
 
 TiBillet is a FLOSS solution for payment, associative membership, online booking and ticketing, time and local currency

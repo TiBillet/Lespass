@@ -1,0 +1,122 @@
+{% extends base_template %}
+{% load i18n %}
+{% load tibitags %}
+
+{% block main %}
+    <div class="flex-fill">
+        <div class="container-lg py-5">
+            <form class="row" id="new-tenant"
+                  hx-post="/tenant/create_waiting_configuration/" hx-indicator="#tibillet-spinner"
+                  hx-target="#new-tenant">
+                <div class="col-md-8 offset-md-2 col-xl-6 offset-xl-3">
+                    <h1>{% trans "Créer une nouvelle instance" %}</h1>
+                    <p class="">
+                        {% trans "Pour créer une instance " %}<strong>Lespass, </strong>{% trans "il suffit de remplir ce formulaire. " %}
+                    <p class="">
+                        {% trans "Un email de bienvenue vous sera envoyé." %}
+                    </p>
+                    <p class="">
+                        {% trans "Vous trouverez dans cet email un lien d'invitation à créer et lier un compte " %}<strong>Stripe </strong> {% trans "pour recevoir des paiements." %}
+                    </p>
+                    <p class="mb-5">
+                        {% trans "Une fois votre compte vérifié par nos soins, nous vous contacterons (pendant un jour ouvré) pour finaliser votre inscription." %}
+                    </p>
+                    <form id="linkform" role="form">
+                        <div class="form-floating mb-3">
+                            <input name="email" type="email" class="form-control" placeholder="adresse@exemple.fr"
+                                   role="textbox" aria-label="Adresse mail de l'admin" required
+                                    {% if user.is_authenticated %}
+                                   value="{{ user.email }}"
+                                    {% elif email_query_params %}
+                                   value="{{ email_query_params }}"
+                                    {% endif %}>
+
+                            <label for="email">{% trans "Adresse email" %}</label>
+                        </div>
+                        <div class="form-floating mb-3">
+                            <input name="emailConfirmation" type="email" class="form-control"
+                                   placeholder="adresse@exemple.fr" role="textbox"
+                                   aria-label="Confirmation de l'adresse email" required
+                                    {% if user.is_authenticated %}
+                                   value="{{ user.email }}"
+                                    {% endif %}>
+                            <label for="emailConfirmation">{% trans "Confirmation de l'email" %}</label>
+                        </div>
+                        {% include 'reunion/partials/field_errors.html' %}
+                        <p class="form-text">
+                            {% trans "Le mail sera utilisé pour " %}<strong>{% trans "le compte d'administration" %}</strong>{% trans " de l'instance." %}
+                        </p>
+                        <p class="form-text">
+                            <strong>{% trans "Il doit celui d'une personne occupant un poste à responsabilité et le même que celui que vous renseignerez sur Stripe." %}</strong>
+                        </p>
+
+                        <div class="row">
+                            <div class="col">
+                                <div class="form-floating mb-3">
+                                    <input name="name" type="text" class="form-control" placeholder="Jaz" role="textbox"
+                                           aria-label="Prénom de l'adhéranne" required
+                                            {% if name_query_params %}
+                                           value="{{ name_query_params }}"
+                                            {% endif %}>
+                                    <label for="name">{% trans "Nom du collectif" %}</label>
+                                </div>
+                            </div>
+                        </div>
+                        {% include 'reunion/partials/field_errors.html' %}
+
+                        <div class="form-check form-switch mt-5 mb-3">
+                            <input class="form-check-input" type="checkbox" role="switch" name="laboutik" id="laboutik">
+                            <label class="form-check-label" for="laboutik">
+                                {% trans "Je veux utiliser " %}<a
+                                    href="https://tibillet.org/fr/docs/presentation/demonstration/#caisse-enregistreuse--cashless--httpslaboutikdemotibilletorg">{% trans "une caisse enregistreuse LaBoutik" %}</a>
+                            </label>
+                        </div>
+                        <div class="form-check form-switch mb-5">
+                            <input class="form-check-input" type="checkbox" role="switch" name="cgu" id="cgu" required>
+                            <label class="form-check-label" for="cgu">
+                                {% trans "J'accepte" %} <a
+                                    href="https://tibillet.org/cgucgv/"
+                                    target="_blank">{% trans "les conditions d'utilisation" %}</a> {% translate "facile à lire et à comprendre" %}
+                                !
+
+                            </label>
+                        </div>
+                        {% include 'reunion/partials/field_errors.html' %}
+
+                        <p>
+                            {% trans "Choix du nom de domaine." %}
+                        </p>
+                        <div class="d-flex flex-row justify-content-start align-items-start mb-5 has-validation">
+                            <div class="form-check me-3">
+                                <input class="form-check-input" type="radio"
+                                       name="dns_choice"
+                                       id="options-radio-coop"
+                                       value="tibillet.coop" checked="checked">
+                                <label class="custom-control-label ms-0"
+                                       for="options-radio-coop">
+                                    tibillet.coop
+                                </label>
+                            </div>
+                            <div class="form-check me-3">
+                                <input class="form-check-input" type="radio"
+                                       name="dns_choice"
+                                       id="options-radio-re"
+                                       value="tibillet.re">
+                                <label class="custom-control-label ms-0"
+                                       for="options-radio-re">
+                                    tibillet.re
+                                </label>
+                            </div>
+                        </div>
+
+                        <input type="hidden" name="qrcode_uuid" value="{{ qrcode_uuid }}">
+                        <button type="submit"
+                                class="btn btn-primary w-100 mb-3 test-return-validate-link-card"
+                        >{% translate "Confirmer" %}
+                        </button>
+                    </form>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}

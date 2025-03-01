@@ -1,7 +1,11 @@
 from datetime import datetime
+from itertools import product
 from random import randint
 
 from django import template
+from django.utils import timezone
+
+from Administration.management.commands.demo_data import logger
 from fedow_connect.utils import dround as utils_dround
 
 register = template.Library()
@@ -38,20 +42,14 @@ def not_in_list(value, list):
     retour = value not in list.split(',')
     return retour
 
-# TODO: fonctionnel, juste vérifier/simplifier le code si-dessous
+
 @register.filter
-def is_membership(membership, product_name) -> bool:
-    retour = False
-    if len(membership) == 0:
-        return False
-    # une list
-    for adhesion in membership:
-        # un dictionnaire ordonné
-        for key, value in adhesion.items():
-            if key == 'product_name' and value == str(product_name):
-                retour = True
-                break
-    return retour
+def is_membership(user, membership_product) -> bool:
+    # Recherche d'une adhésion valide chez l'utilisateur
+    # import ipdb; ipdb.set_trace()
+    return user.memberships.filter(price__product=membership_product, deadline__gte=timezone.now()).exists()
+
+
 
 @register.filter
 def first_eight(value):
@@ -68,7 +66,7 @@ def from_iso_to_date(value):
 @register.filter
 def randImg(value):
     if not value :
-        return f"/static/images/404-{randint(1,9)}.jpg"
+        return f"/static/images/404-{randint(1,12)}.jpg"
     return value
 
 @register.filter

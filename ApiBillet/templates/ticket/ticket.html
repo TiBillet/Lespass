@@ -8,11 +8,21 @@
 <body>
 <section id="informations">
 
+    {% if ticket.reservation.event.parent %}
+        <h1>{{ ticket.reservation.event.parent.name }}</h1>
+    {% endif %}
     <h1>{{ ticket.reservation.event.name }}</h1>
     <h2>Lieux : {{ config.organisation }}</h2>
     <h2>{{ ticket.reservation.event.datetime }}</h2>
-    <h3>{{ ticket.first_name }} {{ ticket.last_name }}</h3>
-    <h4>Prix : {{ ticket.pricesold }} €</h4>
+
+    {% if ticket.first_name %}
+        <h3>{{ ticket.first_name }} {% if ticket.last_name %}{{ ticket.last_name }}{% endif %}</h3>
+    {% endif %}
+
+    {% if ticket.pricesold %}
+        <h4>Prix : {{ ticket.pricesold }} €</h4>
+    {% endif %}
+
     {% if ticket.seat == "L" %}
         <h4>Placement libre</h4>
     {% else %}

@@ -1,0 +1,65 @@
+{% load i18n %}
+<div class="accordion-item">
+    <h2 class="accordion-header" id="book-now">
+        <button class="accordion-button text-dark"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#get-involved"
+                aria-expanded="true"
+                aria-controls="get-involved"
+                style="background: var(--mayaj-pons);">
+            {% trans "Appel à volontaires" %}
+
+        </button>
+    </h2>
+    <div id="get-involved" class="accordion-collapse collapse" data-bs-parent="#infoAccordion">
+        <div class="accordion-body px-0">
+            <p class="mt-3">{% trans "Nous cherchons des volontaires pour :" %}</p>
+            <form>
+
+                <div class="mb-3">
+                    {% for action in event.children.all %}
+                        {% if not action.complet %}
+                            <div class="d-flex">
+                                <input type="radio" class="form-check-input me-3" name="action" id="{{ action.uuid }}"
+                                       autocomplete="off" value="{{ action.uuid }}">
+                                <label class="form-check-label flex-fill text-start" for="{{ action.uuid }}">
+                                    {{ action.name }}
+                                    <small>({{ action.valid_tickets_count }}/{{ action.jauge_max }})</small>
+                                </label>
+                            </div>
+                            <hr/>
+                        {% else %}
+                            <div class="bg-success p-3">
+                                {{ action.name }}
+                                <small>({{ action.valid_tickets_count }}/{{ action.jauge_max }})</small>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+                {% if user.is_authenticated %}
+                    <button class="btn btn-primary w-100 mb-5" type="submit" hx-post="/event/{{ event.uuid }}/action_reservation/">
+                        {% translate "Confirmer mon coup de main" %}
+                    </button>
+                {% else %}
+                    <a class="btn btn-secondary w-100 mb-5"
+                            data-bs-toggle="offcanvas"
+                            data-bs-target="#loginPanel"
+                            aria-controls="loginPanel">
+                        {% translate "Merci de vous connecter et valider votre email avant." %}
+                    </a>
+                {% endif %}
+            </form>
+
+            <div class="alert alert-warning" role="alert">
+                <h4>
+                    <i class="bi bi-exclamation-diamond-fill"></i>
+                    {% trans "Rappel" %}
+                </h4>
+                {% trans "Le collectif n'est ni votre patron·ne, ni votre ami·e ! Pour le confort de toustes, proposez-vous seulement sur des postes qui vous plaisent d'assurer, et n'hésitez pas à refuser des conditions qui vous déplaisent." %}
+                {% trans "Si vous vous sentez pris·e pour un·e employé·e, parlez-en au réseau local, c'est inacceptable." %}
+            </div>
+
+        </div>
+    </div>
+</div>

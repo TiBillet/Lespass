@@ -16,18 +16,25 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 # from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import EmailMultiAlternatives
+from django.core.serializers.json import DjangoJSONEncoder
 from django.core.signing import Signer, TimestampSigner
 from django.db import connection
 from django.template.loader import render_to_string, get_template
 from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.text import slugify
 from weasyprint import HTML, CSS
 from weasyprint.text.fonts import FontConfiguration
 
-from BaseBillet.models import Reservation, Ticket, Configuration, Membership, Webhook, Paiement_stripe
+from ApiBillet.serializers import LigneArticleSerializer
+from AuthBillet.models import TibilletUser
+from BaseBillet.models import Reservation, Ticket, Configuration, Membership, Webhook, Paiement_stripe, LigneArticle, \
+    GhostConfig
 from Customers.models import Client
+from MetaBillet.models import WaitingConfiguration
 from TiBillet.celery import app
+from django.utils.translation import gettext_lazy as _
 
 logger = logging.getLogger(__name__)
 
@@ -35,13 +42,15 @@ logger = logging.getLogger(__name__)
 def encode_uid(pk):
     return force_str(urlsafe_base64_encode(force_bytes(pk)))
 
+
 def decode_uid(pk):
     return force_str(urlsafe_base64_decode(pk))
+
 
 class CeleryMailerClass():
 
     def __init__(self,
-                 email: str,
+                 email: str or list,
                  title: str,
                  text=None,
                  html=None,
@@ -57,9 +66,11 @@ class CeleryMailerClass():
         self.context = context
         self.attached_files = attached_files
         self.sended = None
-
+        self.return_email = os.environ.get('DEFAULT_FROM_EMAIL', os.environ['EMAIL_HOST_USER'])
         if template and context:
             self.html = render_to_string(template, context=context)
+        else:
+            self.html = self.text
 
     def config_valid(self):
         EMAIL_HOST = os.environ.get('EMAIL_HOST')
@@ -67,7 +78,6 @@ class CeleryMailerClass():
 
         # Adresse d'envoi peut/doit être différente du login du serveur mail.
         # Error si ni DEFAULT ni HOST
-        self.return_email = os.environ.get('DEFAULT_FROM_EMAIL', os.environ['EMAIL_HOST_USER'])
 
         if all([
             EMAIL_HOST,
@@ -75,7 +85,7 @@ class CeleryMailerClass():
             # Not required for local server
             # EMAIL_HOST_USER,
             # EMAIL_HOST_PASSWORD,
-            self.return_email,
+            self.return_email,  # return email
             self.title,
             self.email,
         ]):
@@ -88,13 +98,14 @@ class CeleryMailerClass():
         # import ipdb; ipdb.set_trace()
 
         if self.html and self.config_valid():
+            to = self.email if type(self.email) is list else [self.email, ]
 
             logger.info(f'  WORKDER CELERY : send_mail - {self.title}')
             mail = EmailMultiAlternatives(
                 self.title,
                 self.text,
                 self.return_email,
-                [self.email, ],
+                to,
                 headers={"List-Unsubscribe": f"<mailto: {self.return_email}?subject=unsubscribe>"},
             )
             mail.attach_alternative(self.html, "text/html")
@@ -133,27 +144,28 @@ def report_to_pdf(report):
     return pdf_binary
 
 
-def create_invoice_pdf(paiement_stripe: Paiement_stripe):
+def create_membership_invoice_pdf(membership: Membership):
     config = Configuration.get_solo()
     template_name = 'invoice/invoice.html'
     font_config = FontConfiguration()
     template = get_template(template_name)
-    user = paiement_stripe.user
-    membership = paiement_stripe.membership.first()
+
+    user = membership.user
 
     context = {
         'config': config,
-        'paiement': paiement_stripe,
+        'paiement': membership.stripe_paiement.first(),
         'membership': membership,
         'email': user.email,
     }
+
     html = template.render(context)
 
     css = CSS(string=
               '''
                 @font-face {
                   font-family: BeStrong;
-                  src: url(file:///DjangoFiles/ApiBillet/templates/invoice/BeStrongRegular.otf);
+                  src: url(file:///DjangoFiles/BaseBillet/static/polices/Playwrite_IS/PlaywriteIS-VariableFont_wght.ttf);
                 }
                 @font-face {
                   font-family: Libre Barcode;
@@ -184,42 +196,101 @@ def create_invoice_pdf(paiement_stripe: Paiement_stripe):
     return pdf_binary
 
 
+def context_for_membership_email(membership: "Membership"):
+    config = Configuration.get_solo()
+
+    domain = connection.tenant.get_primary_domain().domain
+    image_url = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    if hasattr(config.img, 'med'):
+        image_url = f"https://{domain}{config.img.med.url}"
+
+    context = {
+        'username': membership.member_name(),
+        'now': timezone.now(),
+        'title': f"{config.organisation} : {membership.price.product.name}",
+        'image_url': image_url,
+        'objet': _("Confirmation email"),
+        'sub_title': _("Welcome aboard !"),
+        'main_text': _(
+            _(f"Votre paiement pour {membership.price.product.name} a bien été reçu.")),
+        # 'main_text_2': _("Si vous pensez que cette demande est main_text_2, vous n'avez rien a faire de plus :)"),
+        # 'main_text_3': _("Dans le cas contraire, vous pouvez main_text_3. Merci de contacter l'équipe d'administration via : contact@tibillet.re au moindre doute."),
+        'table_info': {
+            _('Reçu pour'): f'{membership.member_name()}',
+            _('Article'): f'{membership.price.product.name} - {membership.price.name}',
+            _('Contribution'): f'{membership.contribution_value}',
+            _('Date'): f'{membership.last_contribution}',
+            _('Valable jusque'): f'{membership.get_deadline()}',
+        },
+        'button_color': "#009058",
+        'button': {
+            'text': _('RECUPERER UNE FACTURE'),
+            'url': f'https://{domain}/memberships/{membership.pk}/invoice/',
+        },
+        'next_text_1': _("If you receive this email in error, please contact the TiBillet team."),
+        # 'next_text_2': "next_text_2",
+        'end_text': _('See you soon, and bon voyage.'),
+        'signature': _("Marvin, the TiBillet robot"),
+    }
+    # Ajout des options str si il y en a :
+    if membership.option_generale.count() > 0:
+        context['table_info']['Options'] = f"{membership.options()}"
+    return context
+
+
+def send_membership_invoice_to_email(membership: "Membership"):
+    user = membership.user
+    # Mails de confirmation qui contient un lien vers la facture :
+    logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation par email")
+    send_email_generique(
+        context=context_for_membership_email(membership),
+        email=f"{user.email}",
+    )
+    logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation par email DELAY")
+    return True
+
+
+def send_sale_to_laboutik(ligne_article):
+    config = Configuration.get_solo()
+    if config.check_serveur_cashless():
+        serialized_ligne_article = LigneArticleSerializer(ligne_article).data
+        json_data = json.dumps(serialized_ligne_article, cls=DjangoJSONEncoder)
+
+        # Lancer ça dans un celery avec retry
+        celery_post_request.delay(
+            url=f'{config.server_cashless}/api/salefromlespass',
+            data=json_data,
+            headers={
+                "Authorization": f"Api-Key {config.key_cashless}",
+                "Content-type": "application/json",
+            },
+        )
+    else:
+        logger.warning(f"No serveur cashless on config. Membership not sended")
+
+
 def create_ticket_pdf(ticket: Ticket):
     # logger_weasy = logging.getLogger("weasyprint")
     # logger_weasy.addHandler(logging.NullHandler())
     # logger_weasy.setLevel(50)  # Only show errors, use 50
-    #
     # PROGRESS_LOGGER = logging.getLogger('weasyprint.progress')
     # PROGRESS_LOGGER.addHandler(logging.NullHandler())
     # PROGRESS_LOGGER.setLevel(50)  # Only show errors, use 50
 
     # Pour faire le qrcode
-    qr = segno.make(f"{ticket.uuid}", micro=False)
+    qr = segno.make(f"{ticket.qrcode()}", micro=False)
     buffer_svg = BytesIO()
-    qr.save(buffer_svg, kind='svg', scale=8)
-
-    # Pour faire le barcode
-    CODE128 = barcode.get_barcode_class('code128')
-    bar_svg = BytesIO()
-    bar_secret = encode_uid(f"{ticket.uuid}".split('-')[4])
-    bar = CODE128(f"{bar_secret}")
-    options = {
-        'module_height': 30,
-        'module_width': 0.6,
-        'font_size': 10,
-    }
-    bar.write(bar_svg, options=options)
+    qr.save(buffer_svg, kind='svg', scale=6)
 
     context = {
         'ticket': ticket,
         'config': Configuration.get_solo(),
         'img_svg': buffer_svg.getvalue().decode('utf-8'),
-        'bar_svg': bar_svg.getvalue().decode('utf-8'),
-        # 'bar_svg64': base64.b64encode(bar_svg.getvalue()).decode('utf-8'),
     }
 
-    # template_name = 'report/report.html'
     template_name = 'ticket/ticket.html'
+    # template_name = 'ticket/ticket_V2.html'
+
     # template_name = 'ticket/example_flight_ticket.html'
     font_config = FontConfiguration()
     template = get_template(template_name)
@@ -269,6 +340,25 @@ def redirect_post_webhook_stripe_from_public(url, data):
 
 
 @app.task
+def contact_mailer(sender, subject, message):
+    configuration = Configuration.get_solo()
+    mail = CeleryMailerClass(
+        email=[sender, configuration.email],
+        title=subject,
+        text=message,
+        template='emails/contact_email.html',
+        context={
+            "organisation": configuration.organisation,
+            "sender": sender,
+            "subject": subject,
+            "message": message,
+        }
+    )
+    mail.send()
+    logger.info(f"mail.sended : {mail.sended}")
+
+
+@app.task
 def connexion_celery_mailer(user_email, base_url, title=None, template=None):
     """
 
@@ -295,34 +385,25 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
 
     connexion_url = f"{base_url}/emailconfirmation/{token}"
     logger.info("connexion_celery_mailer -> connection.tenant.schema_name : {connection.tenant.schema_name}")
-    if connection.tenant.schema_name != "public":
-        config = Configuration.get_solo()
-        organisation = config.organisation
+    config = Configuration.get_solo()
+    organisation = config.organisation
 
-        # Premier mail ou config non renseignée, on mets TiBIllet
-        if not organisation:
-            organisation = "TiBillet"
-
-        img_orga = ""
-        if config.img:
-            img_orga = config.img.med
-
-        logger.info(f'connection.tenant.schema_name != "public" : {connection.tenant.schema_name}')
-        logger.info(f'    {organisation}')
-        logger.info(f'    {img_orga}')
-    else:
+    # Premier mail ou config non renseignée, on mets TiBIllet
+    if not organisation:
         organisation = "TiBillet"
-        img_orga = "Logo_Tibillet_Noir_Ombre_600px.png"
-        meta = Client.objects.filter(categorie=Client.META).first()
-        meta_domain = f"https://{meta.get_primary_domain().domain}"
-        connexion_url = f"{meta_domain}/emailconfirmation/{token}"
-        logger.info(f'connection.tenant.schema_name == "public" : {connection.tenant.schema_name}')
+
+    image_url = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    if hasattr(config.img, 'med'):
+        image_url = f"{base_url}{config.img.med.url}"
+
+    logger.info(f'connection.tenant.schema_name != "public" : {connection.tenant.schema_name}')
+    logger.info(f'    {organisation}')
 
     # Internal SMTP and html template
     if title is None:
         title = f"{organisation} : Confirmez votre email et connectez vous !"
     if template is None:
-        template = 'mails/connexion.html'
+        template = 'emails/connexion.html'
 
     logger.info(f'    title : {title}')
 
@@ -333,7 +414,7 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
             template=template,
             context={
                 'organisation': organisation,
-                'url_image': img_orga,
+                'image_url': image_url,
                 'connexion_url': connexion_url,
                 'base_url': base_url,
             },
@@ -354,45 +435,55 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
         raise Exception
 
 
-"""
 @app.task
-def terminal_pairing_celery_mailer(term_user_email, subject=None):
-    logger.info(f'WORKDER CELERY app.task terminal_pairing_celery_mailer : {term_user_email}')
-    User = get_user_model()
-    terminal_user = User.objects.get(email=term_user_email, espece=TibilletUser.TYPE_TERM)
-    user_parent = terminal_user.user_parent()
-
-    token = TerminalPairingToken.objects.create(user=terminal_user, token=random.randint(100000, 999999))
-    logger.info(f'WORKDER CELERY app.task terminal_pairing_celery_mailer token: {token.token}')
-
-    if subject is None:
-        subject = f"Appairage du terminal {terminal_user.terminal_uuid} "
-
+def new_tenant_mailer(waiting_config_uuid: str):
     try:
+        # Génération du lien qui va créer la redirection vers l'url onboard
+        tenant = connection.tenant
+        tenant_url = tenant.get_primary_domain().domain
+        waiting_config = WaitingConfiguration.objects.get(uuid=waiting_config_uuid)
+        create_url_for_onboard_stripe = f"https://{tenant_url}/tenant/{waiting_config_uuid}/onboard_stripe/"
+
         mail = CeleryMailerClass(
-            user_parent.email,
-            subject,
-            template='mails/pairing_terminal.html',
+            waiting_config.email,
+            _("TiBillet : Création d'un nouvel espace."),
+            template='reunion/views/tenant/emails/onboard_stripe.html',
             context={
-                'small_token': token.token,
-                'terminal_user': terminal_user
-            },
+                'create_url_for_onboard_stripe': f'{create_url_for_onboard_stripe}',
+                'waiting_config': waiting_config,
+            }
         )
-        try:
-            mail.send()
-            logger.info(f"mail.sended : {mail.sended}")
+        mail.send()
+        logger.info(f"mail.sended : {mail.sended}")
 
-        except smtplib.SMTPRecipientsRefused as e:
-            logger.error(f"ERROR {timezone.now()} Erreur envoie de mail pour appairage {user_parent.email} : {e}")
-            logger.error(f"mail.sended : {mail.sended}")
-            terminal_user.is_active = False
-            terminal_user.email_error = True
-            terminal_user.save()
+    except smtplib.SMTPRecipientsRefused as e:
+        logger.error(
+            f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour report_celery_mailer : {e}")
+        raise e
 
-    except Exception as e:
-        logger.error(f"{timezone.now()} Erreur envoie de mail pour appairage {user_parent.email} : {e}")
-        raise Exception
-"""
+@app.task
+def new_tenant_after_stripe_mailer(waiting_config_uuid: str):
+    # Mail qui prévient l'administrateur ROOT de l'instance TiBillet qu'un nouveau tenant souhaite se créer.
+    try:
+        # Génération du lien qui va créer la redirection vers l'url onboard
+        waiting_config = WaitingConfiguration.objects.get(uuid=waiting_config_uuid)
+        super_admin_root = [user.email for user in TibilletUser.objects.filter(is_superuser=True)]
+        mail = CeleryMailerClass(
+            super_admin_root,
+            _(f"{WaitingConfiguration.organisation} & TiBillet : Demande de création d'un nouvel espace. Action d'admin ROOT demandée"),
+            template='reunion/views/tenant/emails/after_onboard_stripe_for_superadmin.html',
+            context={
+                'waiting_config': waiting_config,
+            }
+        )
+        mail.send()
+        logger.info(f"mail.sended : {mail.sended}")
+
+    except smtplib.SMTPRecipientsRefused as e:
+        logger.error(
+            f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour report_celery_mailer : {e}")
+        raise e
+
 
 
 @app.task
@@ -428,7 +519,7 @@ def report_celery_mailer(data_report_list: list):
 
 @app.task
 def send_email_generique(context: dict = None, email: str = None, attached_files: dict = None):
-    template_name = "mails/email_generique.html"
+    template_name = "emails/email_generique.html"
     try:
         if not context:
             context = {
@@ -473,10 +564,19 @@ def send_email_generique(context: dict = None, email: str = None, attached_files
 
 
 @app.task
-def ticket_celery_mailer(reservation_uuid: str, base_url):
+def ticket_celery_mailer(reservation_uuid: str):
     logger.info(f'      WORKDER CELERY app.task ticket_celery_mailer : {reservation_uuid}')
     config = Configuration.get_solo()
     reservation = Reservation.objects.get(pk=reservation_uuid)
+
+    domain = connection.tenant.get_primary_domain().domain
+    image_url_place = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    image_url_event = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    if hasattr(config.img, 'med'):
+        image_url_place = f"https://{domain}{config.img.med.url}"
+    if reservation.event:
+        if reservation.event.img:
+            image_url_event = f"https://{domain}{reservation.event.img.med.url}"
 
     if not reservation.to_mail:
         reservation.status = Reservation.PAID_NOMAIL
@@ -492,11 +592,12 @@ def ticket_celery_mailer(reservation_uuid: str, base_url):
             mail = CeleryMailerClass(
                 reservation.user_commande.email,
                 f"Votre reservation pour {config.organisation}",
-                template='mails/buy_confirmation.html',
+                template='emails/buy_confirmation.html',
                 context={
                     'config': config,
                     'reservation': reservation,
-                    'base_url': base_url
+                    'image_url_place': image_url_place,
+                    'image_url_event': image_url_event,
                 },
                 attached_files=attached_files,
             )
@@ -505,6 +606,7 @@ def ticket_celery_mailer(reservation_uuid: str, base_url):
                 logger.info(f"mail.sended : {mail.sended}")
 
                 if mail.sended:
+                    logger.info("reservation.mail_send & reservation.status = Reservation.VALID & reservation.save()")
                     reservation.mail_send = True
                     reservation.status = Reservation.VALID
                     reservation.save()
@@ -526,81 +628,18 @@ def ticket_celery_mailer(reservation_uuid: str, base_url):
             raise Exception
 
 
-"""
 @app.task
-def send_membership_to_cashless(data):
-    configuration = Configuration.get_solo()
-    if not configuration.server_cashless or not configuration.key_cashless:
-        logger.error(f'Pas de configuration cashless')
-        raise Exception(f'Fonction send_membership_to_cashless : Pas de configuration cashless')
+def webhook_reservation(reservation_pk, solo_webhook_pk=None):
+    logger.info(f"webhook_reservation : {reservation_pk}")
 
-    ligne_article = LigneArticle.objects.get(pk=data.get('ligne_article_pk'))
-    user = ligne_article.paiement_stripe.user
+    # On lance tous les webhook ou juste un seul ?
+    webhooks = []
+    if solo_webhook_pk:
+        webhooks.append(Webhook.objects.get(pk=solo_webhook_pk))
+    else:
+        webhooks = Webhook.objects.filter(event=Webhook.RESERVATION_V, active=True)
 
-    price_obj = ligne_article.pricesold.price
-    price_decimal = ligne_article.pricesold.prix
-
-    # Si c'est un price avec un don intégré (comme une adhésion récurente)
-    # On garde 1€ pour l'instance
-    if ligne_article.pricesold.gift:
-        price_decimal += -1
-
-    membre = Membership.objects.get(user=user, price=price_obj)
-
-    if not membre.first_contribution:
-        membre.first_contribution = timezone.now().date()
-
-    membre.last_contribution = timezone.now().date()
-    membre.contribution_value = price_decimal
-    membre.save()
-
-    data = {
-        "email": membre.email(),
-        "adhesion": price_decimal,
-        "uuid_commande": ligne_article.paiement_stripe.uuid,
-        "first_name": membre.first_name,
-        "last_name": membre.last_name,
-        "phone": membre.phone,
-        "postal_code": membre.postal_code,
-        "birth_date": membre.birth_date,
-    }
-
-    try:
-
-        sess = requests.Session()
-        r = sess.post(
-            f'{configuration.server_cashless}/api/membership',
-            headers={
-                'Authorization': f'Api-Key {configuration.key_cashless}'
-            },
-            data=data,
-            verify=bool(not settings.DEBUG),
-        )
-
-        sess.close()
-        logger.info(
-            f"        demande au serveur cashless pour {data}. réponse : {r.status_code} ")
-
-        if r.status_code in [200, 201, 202]:
-            ligne_article.status = LigneArticle.VALID
-        else:
-            logger.error(
-                f"erreur réponse serveur cashless {r.status_code} {r.text}")
-
-    except ConnectionError as e:
-        logger.error(
-            f"ConnectionError serveur cashless {configuration.server_cashless} : {e}")
-
-    except Exception as e:
-        raise Exception(f'Exception request send_membership_to_cashless {type(e)} : {e} ')
-"""
-
-
-@app.task
-def webhook_reservation(reservation_pk):
-    logger.info(f"webhook_reservation : {reservation_pk} {timezone.now()} info")
-    webhooks = Webhook.objects.filter(event=Webhook.RESERVATION_V)
-    if webhooks.count() > 0:
+    if len(webhooks) > 0:
         reservation = Reservation.objects.get(pk=reservation_pk)
         json = {
             "object": "reservation",
@@ -611,11 +650,62 @@ def webhook_reservation(reservation_pk):
 
         for webhook in webhooks:
             try:
-                response = requests.request("POST", webhook.url, data=json, timeout=2)
-                webhook.last_response = f"{timezone.now()} - status code {response.status_code} - {response.text}"
+                response = requests.request("POST", webhook.url, data=json, timeout=2, verify=bool(not settings.DEBUG))
+                webhook.last_response = f"{timezone.now()} - status code {response.status_code} - {response.content}"
+                if not response.ok:
+                    logger.error(f"webhook_reservation ERROR : {reservation_pk} {timezone.now()} {response.content}")
+                    webhook.active = False
             except Exception as e:
                 logger.error(f"webhook_reservation ERROR : {reservation_pk} {timezone.now()} {e}")
                 webhook.last_response = f"{timezone.now()} - {e}"
+                webhook.active = False
+            webhook.save()
+
+
+@app.task
+def webhook_membership(membership_pk, solo_webhook_pk=None):
+    logger.info(f"webhook_membership : {membership_pk}")
+
+    # On lance tous les webhook ou juste un seul ?
+    webhooks = []
+    if solo_webhook_pk:
+        webhooks.append(Webhook.objects.get(pk=solo_webhook_pk))
+    else:
+        webhooks = Webhook.objects.filter(event=Webhook.MEMBERSHIP_V, active=True)
+
+    if len(webhooks) > 0:
+        membership = Membership.objects.get(pk=membership_pk)
+        configuration = Configuration.get_solo()
+        # TODO: remplacer par un choix de champs sur l'admin
+        return_body = {
+            "object": "membership",
+            "pk": str(membership.pk),
+            "uuid": f"{membership.uuid}",
+            "state": str(membership.status),
+            "datetime": str(membership.date_added),
+            "email": str(membership.email()),
+            "first_name": str(membership.first_name),
+            "last_name": str(membership.last_name),
+            "pseudo": str(membership.pseudo),
+            "price": str(membership.price_name()),
+            # "user_id": str(membership.user.id), # Utile ?
+            "organisation": f"{configuration.organisation}",
+            "organisation_id": f"{configuration.uuid}",
+        }
+
+        # Si plusieurs webhook :
+        for webhook in webhooks:
+            try:
+                response = requests.request("POST", webhook.url, json=return_body, timeout=2,
+                                            verify=bool(not settings.DEBUG))
+                webhook.last_response = f"{timezone.now()} - status code {response.status_code} - {response.content}"
+                if not response.ok:
+                    logger.error(f"webhook_membership ERROR : {membership_pk} {timezone.now()} {response.content}")
+                    webhook.active = False
+            except Exception as e:
+                logger.error(f"webhook_membership ERROR : {membership_pk} {timezone.now()} {e}")
+                webhook.last_response = f"{timezone.now()} - {e}"
+                webhook.active = False
             webhook.save()
 
 
@@ -626,16 +716,16 @@ def send_to_ghost(membership_pk):
     # Email du compte :
     user = membership.user
     email = user.email
-    name = f"{membership.first_name} {membership.last_name}"
+    name = f"{membership.first_name.capitalize()} {membership.last_name.capitalize()}"
 
     # Si tu as besoin du produit adhésion, tu peux utiliser les deux variables ci-dessous.
     # Le model est BaseBillet/models.py
     # product: Product = trigger.ligne_article.pricesold.productsold.product
 
     # Et ici, tu as les cred' ghost à entrer dans l'admin.
-    config = Configuration.get_solo()
-    ghost_url = config.ghost_url
-    ghost_key = config.ghost_key
+    ghost_config = GhostConfig.get_solo()
+    ghost_url = ghost_config.ghost_url
+    ghost_key = ghost_config.get_api_key()
 
     if ghost_url and ghost_key and email and name:
         ###################################
@@ -673,7 +763,7 @@ def send_to_ghost(membership_pk):
         response = requests.get(ghost_url + "/ghost/api/admin/members/", params=filter, headers=headers)
 
         # Vérifier que la réponse de l'API est valide
-        if response.status_code == 200:
+        if response.ok:
             # Décoder la réponse JSON
             j = response.json()
             members = j['members']
@@ -692,7 +782,8 @@ def send_to_ghost(membership_pk):
                 }
 
                 # Ajouter le nouveau membre à l'instance Ghost
-                response = requests.post(ghost_url + "/ghost/api/admin/members/", json=member_data, headers=headers)
+                response = requests.post(ghost_url + "/ghost/api/admin/members/", json=member_data, headers=headers,
+                                         timeout=2)
 
                 # Vérifier que la réponse de l'API est valide
                 if response.status_code == 201:
@@ -710,11 +801,10 @@ def send_to_ghost(membership_pk):
 
         # On met à jour les logs pour debug
         try:
-            config.ghost_last_log = f"{timezone.now()} : {response.text}"
-            config.save()
+            ghost_config.ghost_last_log = f"{timezone.now()} : {response.text}"
+            ghost_config.save()
         except Exception as e:
             logger.error(f"Erreur lors de la mise à jour du log : {e}")
-
 
 
 # @app.task
@@ -722,7 +812,7 @@ def send_to_ghost(membership_pk):
 def celery_post_request(self, url, headers, data):
     # Le max de temps entre deux retries : 24 heures
     MAX_RETRY_TIME = 86400  # 24 * 60 * 60 seconds = 24 h
-    try :
+    try:
         logger.info(f"start celery_post_request to {url}")
         response = requests.post(
             f'{url}',

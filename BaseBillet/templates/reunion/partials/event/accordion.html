@@ -1,0 +1,65 @@
+{% load i18n %}
+<!-- info sections -->
+<div class="accordion accordion-flush mb-3 mt-5" id="infoAccordion">
+    {% if event.long_description %}
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button text-dark"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#schedule"
+                        aria-expanded="true"
+                        aria-controls="schedule"
+                        style="background: var(--mayaj-pons);">
+                    {% translate "Programme" %}
+                </button>
+            </h2>
+            <div id="schedule" class="accordion-collapse collapse show" data-bs-parent="#infoAccordion">
+                <div class="accordion-body px-0">
+                    <p>{{ event.long_description | safe }}</p>
+
+                    {% if event.carrousel.all %}
+                    <div class="my-5">
+                        {% include 'reunion/partials/event/carousel.html' with carousel=event.carrousel.all max_height='25vh' auto=false %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    {% endif %}
+    <div class="accordion-item">
+        <h2 class="accordion-header">
+            <button class="accordion-button collapsed text-dark"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#timeAndPlace"
+                    aria-expanded="false"
+                    aria-controls="timeAndPlace"
+                    style="background: var(--mayaj-pons);">
+                {% translate "Heure et lieu" %}
+            </button>
+        </h2>
+        <div id="timeAndPlace" class="accordion-collapse collapse" data-bs-parent="#infoAccordion">
+            <div class="accordion-body px-0">
+                <ul class="list-group list-group-horizontal-xl w-100">
+                    <li class="list-group-item border-start-0 border-end-0 rounded-0 px-0 py-3 p-xl-5">
+                        <i class="bi bi-calendar-check me-3"></i>
+                        {{ event.datetime|date:'j F Y, H:i' }}
+                    </li>
+                    <li class="list-group-item border-start-0 border-end-0 px-0 py-3 p-xl-5">
+                        <i class="bi bi-geo-alt-fill me-3"></i>
+                        {{ event.postal_address.street_address }}<br/>
+                        {{ event.postal_address.postal_code }} {{ event.postal_address.address_locality }}
+                    </li>
+                    <li class="list-group-item border-start-0 border-end-0 rounded-0 px-0 py-3 p-xl-5 flex-fill">
+                        <i class="bi bi-bus-front-fill me-3"></i>
+                        {{ event.postal_address.comment }}
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% if event.children.exists %}
+        {% include 'reunion/partials/event/volunteers.html' %}
+    {% endif %}
+</div>

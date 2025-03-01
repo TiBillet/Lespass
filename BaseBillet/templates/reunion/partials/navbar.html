@@ -1,0 +1,85 @@
+{% load i18n %}
+
+<nav class="navbar navbar-expand-xl bg-body">
+    <div class="container-lg justify-content-between">
+      <a class="navbar-brand flex-grow-1" href="/" hx-get="/" hx-target="body" hx-push-url="true">
+        {% if config.logo %}
+        {% include 'reunion/partials/picture.html' with img=config.logo alt=config.organisation style='max-width: 6rem' %}
+        {% else %}
+        {{ config.organisation }}
+        {% endif %}
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainMenu"
+        aria-controls="mainMenu" aria-expanded="false" aria-label="Ouvrir le menu">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="mainMenu">
+
+        <ul class="navbar-nav me-auto">
+          {% for item in main_nav %}
+          <li class="nav-item">
+            <a class="nav-link{% if url_name == item.name %} active" aria-current="page{% endif %}"
+                href="{{ item.url }}" hx-get="{{ item.url }}" hx-target="body" hx-push-url="true">
+              <i class="bi bi-{{ item.icon }}"></i>
+              {% translate item.label %}
+            </a>
+          </li>
+          {% endfor %}
+          <li class="nav-item">
+            <a class="nav-link"
+                href=""
+                data-bs-toggle="offcanvas"
+                data-bs-target="#contactPanel"
+                aria-controls="contactPanel">
+              <i class="bi bi-question-lg"></i>
+              {% translate 'Aide et contact' %}
+            </a>
+          </li>
+        </ul>
+
+        <div class="navbar-nav d-flex mb-0">
+          <div class="nav-item">
+            {% if user.is_authenticated == False %}
+            <button
+                class="nav-link"
+                data-bs-toggle="offcanvas"
+                data-bs-target="#loginPanel"
+                aria-controls="loginPanel">
+                {% translate 'Me connecter' %}
+            </button>
+            {% else %}
+              <a class="nav-link" href="/my_account/" hx-get="/my_account/" hx-target="body" hx-push-url="true">
+                <i class="bi bi-person-circle"></i>
+                {% translate 'Mon compte' %}
+              </a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- contact panel -->
+  <div class="offcanvas-start offcanvas" tabindex="-1" id="contactPanel" aria-labelledby="contactPanelLabel">
+      <div class="offcanvas-header">
+          <h5 class="offcanvas-title" id="contactPanelLabel">{% translate 'Aide et contact' %}</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% translate 'Fermer' %}"></button>
+      </div>
+      <div class="offcanvas-body">
+          {# TODO: load all forms through htmx? #}
+          {% include 'reunion/forms/contact.html' %}
+      </div>
+  </div>
+
+  <!-- login panel -->
+  <div class="offcanvas-start offcanvas" tabindex="-1" id="loginPanel" aria-labelledby="loginPanelLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="loginPanelLabel">{% translate 'Connexion' %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% translate 'Fermer' %}"></button>
+    </div>
+    <div class="offcanvas-body">
+        {# TODO: load all forms through htmx? #}
+        {% include 'reunion/forms/login.html' %}
+    </div>
+  </div>
+

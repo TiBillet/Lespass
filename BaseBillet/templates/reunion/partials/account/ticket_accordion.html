@@ -1,0 +1,80 @@
+{% load static %}
+{% load tibitags %}
+{% load humanize i18n %}
+
+<div class="accordion accordion-flush" id="resa{{ resa.uuid }}Accordion">
+    {% for ticket in resa.tickets.all %}
+        <div class="accordion-item">
+            <h4 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#ticket{{ ticket.uuid }}Details" aria-expanded="false"
+                        aria-controls="ticket{{ ticket.uuid }}Details">
+                    Ticket {{ ticket.numero_uuid|upper }}
+                </button>
+            </h4>
+            <div id="ticket{{ ticket.uuid }}Details" class="accordion-collapse collapse"
+                 data-bs-parent="#resa{{ resa.uuid }}Accordion">
+                <div class="accordion-body">
+                    <table class="table">
+                        <tbody>
+                        <tr>
+                            <th>{% trans "Numéro" %}</th>
+                            <td>
+                                {{ ticket.numero_uuid|upper }}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>{% trans "Réservation" %}</th>
+                            <td>
+                                {{ ticket.pricesold.price.product.name }}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>{% trans "Nom du Tarif" %}</th>
+                            <td>
+                                {{ ticket.pricesold.price.name }}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>{% trans "Montant" %}</th>
+                            <td>
+                                {{ ticket.pricesold.prix }}&nbsp;€
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>{% trans "Titulaire" %}</th>
+                            <td>
+                                {% if not ticket.first_name and not ticket.last_name %}
+                                    {% translate "Anonyme" %}
+                                {% else %}
+                                    {{ ticket.first_name }} {{ ticket.last_name }}
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>{% trans "Statut" %}</th>
+                            <td>{{ ticket.get_status_display }}</td>
+                        </tr>
+{#                        <tr>#}
+{#                            <th>QrCode</th>#}
+{#                            <td>{{ ticket.qrcode }}</td>#}
+{#                        </tr>#}
+                        </tbody>
+                    </table>
+                    <div class="row">
+                        <div class="col-sm">
+                            <a href="/ticket/{{ ticket.uuid }}/" target="_blank" class="btn btn-primary w-100 mt-3">
+                                {% translate "Voir le billet" %}
+                            </a>
+                        </div>
+                        <div class="col-sm">
+                            <button class="btn btn-danger w-100 mt-3">
+                                {% translate "Annuler le billet" %}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+</div>

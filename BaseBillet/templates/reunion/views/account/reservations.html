@@ -1,0 +1,49 @@
+{% extends 'reunion/account_base.html' %}
+{% load static %}
+{% load tibitags %}
+{% load humanize i18n %}
+
+{% block title %}{% translate 'Réservations' %}{% endblock %}
+
+{% block account_page %}
+{% for resa in reservations %}
+<div class="card my-5">
+    <div class="row g-0">
+        <div class="col-md-4">
+            {% include 'reunion/partials/picture.html' with img=resa.event.img alt=resa.event.name class='rounded-start' %}
+        </div>
+        <div class="col-md-8">
+            <div class="card-body">
+                <h3 class="card-title">
+                    <small>
+                        {{ resa.event.datetime|date:'l j F'|capfirst }} <br />
+                        {{ resa.event.datetime|time:'H\hi' }} <br />
+                    </small>
+                    {{ resa.event.name }}
+                    <a href="{{ resa.event.full_url }}" target="_blank">
+                        <i class="bi bi-box-arrow-up-right"></i>
+                        <span class="visually-hidden">Page de l'évènement</span>
+                    </a>
+                </h3>
+                <div class="card-text hstack gap-3 mb-3">
+                    <div class="p-2">{{ resa.tickets.all|length }} places</div>
+                    <div class="vr"></div>
+                    <div class="p-2">{{ resa.total_paid }}€</div>
+                    <div class="vr"></div>
+                    <div class="p-2">{{ resa.get_status_display }}</div>
+                </div>
+                {% comment %}
+                TODO: options, j'attends de les voir pour savoir comment les afficher
+                {% if resa.options.all %}
+                    {% for option in resa.options.all %} {{ option.name }} {% endfor %}
+                {% endif %}
+                {% endcomment %}
+                <div class="card-footer p-0">
+                    {% include 'reunion/partials/account/ticket_accordion.html' %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}

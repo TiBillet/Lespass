@@ -1,0 +1,106 @@
+{% load i18n tibitags static %}
+<form id="reservation_form" hx-post="reservation/" hx-indicator="#tibillet-spinner" class="d-flex flex-column justify-content-between h-100">
+    <div>
+        <input type="hidden" name="event" value="{{ event.uuid }}">
+        {% if user.is_anonymous %}
+            <div class="mb-3">
+                <label for="booking-email" class="form-label">{% trans "Email" %}</label>
+                <input type="email" name="email" class="form-control" id="booking-email">
+            </div>
+            <div class="mb-3">
+                <label for="booking-confirm" class="form-label">{% trans "Confirmez votre email" %}</label>
+                <input type="email" name="email-confirm" class="form-control" id="booking-confirm">
+            </div>
+            <p><code>{{ user.email }}</code></p>
+        {% elif user.is_active %}
+            <div class="mb-3">
+                <label for="booking-email" class="form-label">{% trans "Email" %}</label>
+                <input type="email" class="form-control" id="booking-email" name="email" value="{{ user.email }}"
+                       readonly>
+            </div>
+        {% else %}
+        <div class="alert alert-danger" role="alert">
+            {% translate "Vous n'avez pas validé votre email. Merci de vérifier dans vos spams :)" %}
+        </div>
+        {% endif %}
+        {% for product in event.products.all %}
+            {% if product.publish %}
+                {% for price in product.prices.all %}
+                    {% if price.publish %}
+                        <div class="mb-3 js-order">
+                            <label for="amount-{{ price.uuid }}" class="form-label">
+                                <strong>{{ price.name }}</strong>{% if not price.free_price and price.prix > 0 %}&nbsp;:
+                                <span class="js-order-price">{{ price.prix }}</span>&nbsp;€
+                                {% endif %}
+                            </label>
+                            <!-- Adhésion obligatoire pour selectionner ce produit ! -->
+                            {% if price.adhesion_obligatoire %}
+                                {% if not user.is_authenticated %}
+                                <div class="alert alert-danger" role="alert">
+                                    {% trans "Connectez vous pour afficher ce produit." %}
+                                </div>
+                                {% elif not user|is_membership:price.adhesion_obligatoire %}
+                                <div class="alert alert-danger" role="alert">
+                                    {% trans "Adhérez pour profiter de ce tarif." %}
+                                </div>
+                                {% else %}
+                                <input type="number" step="1" min="0" max="{{ event.max_per_user }}"
+                                    class="form-control js-order-amount"
+                                    id="amount-{{ price.uuid }}"
+                                    name="{{ price.uuid }}">
+                                {% endif %}
+                            <!-- Adhésion non obligatoire -->
+                            {% else %}
+                                <input type="number" step="1" min="0" max="{{ event.max_per_user }}"
+                                    class="form-control js-order-amount"
+                                    id="amount-{{ price.uuid }}"
+                                    name="{{ price.uuid }}">
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+        {% endfor %}
+        {% for option in event.options_radio.all %}
+            <div class="d-flex flex-row justify-content-start align-items-start mb-3 has-validation">
+                <div class="form-check me-3">
+                    <input id="option-radio-{{ option.uuid }}" name="options"
+                           class="form-check-input" type="radio" value="{{ option.uuid }}"
+                           required>
+                    <label class="custom-control-label" for="option-radio-{{ option.uuid }}">
+                        {{ option.name }}
+                    </label>
+                </div>
+            </div>
+        {% endfor %}
+        {% for option in event.options_checkbox.all %}
+            <div class="form-check form-switch mb-3">
+                <input class="form-check-input" type="checkbox" role="switch" id="option-checkbox-{{ option.uuid }}"
+                       name="options" value="{{ option.uuid }}">
+                <label class="form-check-label" for="option-checkbox-{{ option.uuid }}">
+                    {{ option.name }}
+                </label>
+            </div>
+        {% endfor %}
+        <h4>
+            Total&nbsp;: <span class="js-total-amount">0</span>{% if not event.free_price %} place(s) pour
+            <span class="fs-5 badge bg-secondary-subtle mb-md-0"><span class="js-total-price">1,00</span>&nbsp;€</span>
+            {% endif %}
+        </h4>
+        <p>
+            Jauge maximale de {{ event.jauge_max }} personnes et nombre de
+            billets limité à <span class="js-max-amount">{{ event.max_per_user }}</span> par réservation.
+        </p>
+    </div>
+
+    <div class="p-3">
+        <button type="submit" class="btn btn-primary w-100 mb-3">Confirmer la réservation</button>
+        <a href="." class="btn btn-danger d-block">Annuler</a>
+    </div>
+</form>
+
+<script type="module">
+    import * as BookingCalculator from '{% static "reunion/js/booking-calculator.mjs" %}'
+
+    BookingCalculator.init()
+</script>

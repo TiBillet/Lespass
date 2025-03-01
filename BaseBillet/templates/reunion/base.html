@@ -1,0 +1,56 @@
+{% load static %}
+{% load i18n %}
+{% get_current_language as LANGUAGE_CODE %}
+
+<!doctype html>
+<html lang="{{ LANGUAGE_CODE }}">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>{% block title %}{% translate 'Accueil' %}{% endblock %} | {{ config.organisation }}</title>
+
+    <link rel="preload" as="style" href="{% static 'reunion/css/tibillet.css' %}">
+    <link rel="preload" as="script" href="{% static 'reunion/js/theme-switcher.mjs' %}">
+
+    <link rel="icon" type="image/png" href="{% static 'reunion/img/favicon.png' %}">
+    <link href="{% static 'reunion/css/bootstrap.min.5.3.3.css' %}" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <link rel="stylesheet" href="{% static 'reunion/css/vars.css' %}">
+    <link rel="stylesheet" href="{% static 'reunion/css/tibillet.css' %}">
+
+    <script src="{% static 'reunion/js/bootstrap.bundle.min.5.3.3.js' %}"
+        integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+        crossorigin="anonymous"></script>
+    <script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
+    <script src="{% static 'mvt_htmx/js/loading-states.js' %}"></script>
+    {% if formbricks_api_host %}
+    <script src="{{ formbricks_api_host}}/js/formbricks.umd.cjs" async></script>
+    {% endif %}
+    <script type="module">
+        import * as ThemeSwitcher from '{% static "reunion/js/theme-switcher.mjs" %}'
+
+        ThemeSwitcher.init()
+    </script>
+</head>
+
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' class="min-vh-100 d-flex flex-column">
+
+{% include "reunion/partials/navbar.html" %}
+
+<div class="flex-fill d-flex flex-column">
+    {% block main %}{% endblock main %}
+</div>
+
+{% include "reunion/partials/footer.html" %}
+
+
+{% include "reunion/partials/toasts.html" %}
+
+<!-- spinner -->
+{% include "reunion/loading.html" %}
+
+{% block scripts %}{% endblock scripts %}
+
+</body>
+</html>
