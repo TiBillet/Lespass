@@ -1,5 +1,5 @@
 {% extends base_template %}
-{% load tibitags %}
+{% load tibitags i18n %}
 
 {% block main %}
 <div class="home-bg py-5 flex-fill">
@@ -13,14 +13,14 @@
                     <a class="btn btn-lg btn-primary d-block my-3"
                         href="/event/" hx-get="/event/" hx-target="body" hx-push-url="true">
                         <i class="bi bi-calendar-date"></i>
-                        Agenda
+                        {% trans "Agenda" %}
                     </a>
                 </div>
                 <div class="col-md">
                     <a class="btn btn-lg btn-primary d-block my-3"
                         href="/memberships/" hx-get="/memberships/" hx-target="body" hx-push-url="true">
                         <i class="bi bi-person-badge"></i>
-                        Adhésions
+                        {% trans "Adhésions" %}
                     </a>
                 </div>
                 {% comment %} HIDE: page fédération
