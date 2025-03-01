@@ -865,7 +865,6 @@ class Event(models.Model):
                                   help_text=_(
                                       "Si activé, l'évènement sera visible en haut de la page d'accueil, l'utilisateur·ices pourra selectionner une date."))
 
-
     """ Pour signer les tickets """
     rsa_key = models.OneToOneField(RsaKey, on_delete=models.SET_NULL, null=True, related_name='event')
 
@@ -1397,7 +1396,7 @@ class Ticket(models.Model):
         return " - ".join([option.name for option in self.reservation.options.all()])
 
     def qrcode(self):
-        qrcode_data = data_to_b64({'uuid':str(self.uuid),})
+        qrcode_data = data_to_b64({'uuid': str(self.uuid), })
         signature = sign_message(
             qrcode_data,
             self.reservation.event.get_private_key(),
@@ -1412,8 +1411,6 @@ class Ticket(models.Model):
             raise Exception("Signature auto verification failed")
 
         return f"{qrcode_data.decode('utf8')}:{signature}"
-
-
 
     class Meta:
         verbose_name = _('Billet')
