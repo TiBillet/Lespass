@@ -42,12 +42,18 @@
                     <div class="vr"></div>
                     <div class="p-2">{{ resa.get_status_display }}</div>
                 </div>
-                {% comment %}
-                TODO: options, j'attends de les voir pour savoir comment les afficher
-                {% if resa.options.all %}
-                    {% for option in resa.options.all %} {{ option.name }} {% endfor %}
+                {% if resa.options.all|length > 0 %}
+                <p>
+                    {% for option in resa.options.all %}
+                    <span class="badge text-bg-info p-2 me-1 mb-1 fs-6 fw-medium">
+                        {{ option.name }}
+                    </span>
+                    {% if not forloop.last %}
+                    <span class="visually-hidden">/</span>
+                    {% endif %}
+                    {% endfor %}
+                </p>
                 {% endif %}
-                {% endcomment %}
                 <div class="card-footer p-0">
                     {% include 'reunion/partials/account/ticket_accordion.html' %}
                 </div>
