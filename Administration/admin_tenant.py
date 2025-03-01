@@ -20,16 +20,22 @@ from django.urls import reverse, re_path
 from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
+from import_export import resources
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework_api_key.models import APIKey
 from solo.admin import SingletonModelAdmin
+
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.decorators import display, action
 from unfold.sites import UnfoldAdminSite
 from unfold.widgets import UnfoldAdminTextInputWidget, UnfoldAdminEmailInputWidget, UnfoldAdminSelectWidget, \
     UnfoldAdminSelectMultipleWidget, UnfoldAdminRadioSelectWidget, UnfoldAdminCheckboxSelectMultiple
 from unfold.contrib.forms.widgets import WysiwygWidget
+
+from import_export.admin import ImportExportModelAdmin, ExportActionModelAdmin
+from unfold.contrib.import_export.forms import ExportForm, ImportForm, SelectableFieldsExportForm
+
 
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
 from AuthBillet.models import HumanUser, TibilletUser
@@ -491,6 +497,8 @@ class PaiementStripeAdmin(ModelAdmin):
     )
     readonly_fields = list_display
     ordering = ('-order_date',)
+    search_fields = ('user__email','order_date' )
+    list_filter = ('status', 'order_date', )
 
     def has_delete_permission(self, request, obj=None):
         # return request.user.is_superuser
@@ -731,6 +739,26 @@ class HumanUserAdmin(ModelAdmin):
 
 ### ADHESION
 
+class MembershipResource(resources.ModelResource):
+    class Meta:
+        model = Membership
+        fields = (
+            'email',
+            'member_name',
+            'price_name',
+            'product_name',
+            'last_contribution',
+            'contribution_value',
+            'payment_method',
+            'options',
+            'is_valid',
+            'deadline',
+            'status',
+        )
+        export_order = ('last_contribution', )
+
+
+
 class MembershipAddForm(ModelForm):
     # Un formulaire d'email qui va générer les action get_or_create_user
     email = forms.EmailField(
@@ -830,9 +858,11 @@ def adhesion_badge_callback(request):
 
 
 @admin.register(Membership, site=staff_admin_site)
-class MembershipAdmin(ModelAdmin):
+class MembershipAdmin(ModelAdmin, ExportActionModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
+
+    export_form_class = ExportForm
 
     # Formulaire de modification
     form = MembershipChangeForm
@@ -853,6 +883,8 @@ class MembershipAdmin(ModelAdmin):
         # 'commentaire',
     )
 
+    ordering = ('-date_added',)
+    search_fields = ('user__email', 'user__first_name', 'user__last_name', 'card_number', 'last_contribution')
     list_filter = ['price__product', 'last_contribution', 'deadline', ]
 
     def get_queryset(self, request):
@@ -870,8 +902,7 @@ class MembershipAdmin(ModelAdmin):
         defaults.update(kwargs)
         return super().get_form(request, obj, **defaults)
 
-    ordering = ('-date_added',)
-    search_fields = ('user__email', 'user__first_name', 'user__last_name', 'card_number')
+
 
     # Pour les bouton en haut de la vue change
     # chaque decorateur @action génère une nouvelle route
