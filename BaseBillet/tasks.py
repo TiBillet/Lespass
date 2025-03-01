@@ -290,22 +290,22 @@ def create_ticket_pdf(ticket: Ticket):
 
 
     # Pour faire le barcode
-    CODE128 = barcode.get_barcode_class('code128')
-    bar_svg = BytesIO()
-    bar_secret = encode_uid(f"{ticket.uuid}".split('-')[4])
-    bar = CODE128(f"{bar_secret}")
-    options = {
-        'module_height': 30,
-        'module_width': 0.6,
-        'font_size': 10,
-    }
-    bar.write(bar_svg, options=options)
+    # CODE128 = barcode.get_barcode_class('code128')
+    # bar_svg = BytesIO()
+    # bar_secret = encode_uid(f"{ticket.uuid}".split('-')[4])
+    # bar = CODE128(f"{bar_secret}")
+    # options = {
+    #     'module_height': 30,
+    #     'module_width': 0.6,
+    #     'font_size': 10,
+    # }
+    # bar.write(bar_svg, options=options)
 
     context = {
         'ticket': ticket,
         'config': Configuration.get_solo(),
         'img_svg': buffer_svg.getvalue().decode('utf-8'),
-        'bar_svg': bar_svg.getvalue().decode('utf-8'),
+        # 'bar_svg': bar_svg.getvalue().decode('utf-8'),
         # 'bar_svg64': base64.b64encode(bar_svg.getvalue()).decode('utf-8'),
     }
 
