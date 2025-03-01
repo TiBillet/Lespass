@@ -35,16 +35,20 @@
                 {% endif %}
             </div>
             <div id="badge-{{ badge.pk }}" class="card-footer pt-3">
+                <p class="alert alert-warning">
+                    La badgeuse est en développement, elle arrive bientôt !
+                </p>
                 <div class="form-check form-switch mb-3">
                     <input
                         class="form-check-input"
                         aria-label="check-in {{ badge.name }}"
-                        hx-get="/badge/{{ badge.uuid }}/badge_in/" hx-trigger="click"
-                        hx-target="#badge-{{ badge.pk }}" hx-swap="innerHTML"
-                        data-loading-delay="1000"
-                        hx-indicator="#tibillet-spinner"
+                        {# hx-get="/badge/{{ badge.uuid }}/badge_in/" hx-trigger="click" #}
+                        {# hx-target="#badge-{{ badge.pk }}" hx-swap="innerHTML" #}
+                        {# data-loading-delay="1000" #}
+                        {# hx-indicator="#tibillet-spinner" #}
                         type="checkbox" role="switch" id="badgeOut"
-                        autocomplete="off">
+                        autocomplete="off"
+                        disabled>
                     <label class="form-check-label" for="badgeOut">
                         {% translate "Badger mon arrivée" %}
                     </label>

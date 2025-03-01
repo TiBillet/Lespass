@@ -33,7 +33,7 @@
                                 {% trans "Vous avez 14 mois après votre dernière utilisation pour récupérer le reste de crédits non utilisés. On vous renverra un mail un mois avant si vous avez oublié." %}
                             </p>
                             <p>
-                                {% trans "Vous pouvez aussi en faire don au collectif qui vous a fourni la carte." %}
+                                {% trans "Vous pourrez aussi bientôt en faire don au collectif qui vous a fourni la carte." %}
                             </p>
                             <p>
                                 {% trans "Votre carte et votre compte sont valables à vie et peuvent être utilisés dans tout les lieux du réseau !" %}
@@ -51,7 +51,12 @@
                                 data-bs-dismiss="offcanvas" aria-label="Close"
                                 hx-get="/my_account/refund_online/" hx-indicator="#tibillet-spinner">{% trans "Confirmer" %}</button>
                         {# TODO: lien don #}
-                        <button type="button" class="btn btn-secondary d-block w-100 mb-3" data-bs-dismiss="offcanvas" aria-label="Close">{% trans "Faire don de ma tirelire à" %} {{ config.organisation }}</button>
+                        <button disabled type="button" class="btn btn-secondary d-block w-100 mb-3" {# data-bs-dismiss="offcanvas" aria-label="Close" #}>
+                            {% trans "Faire don de ma tirelire<br /> au collectif" %} {{ config.organisation }}
+                        </button>
+                        <p class="alert alert-warning">
+                            Le don aux collectifs est en développement, il arrive bientôt !
+                        </p>
                         <button type="button" class="btn btn-danger d-block w-100" data-bs-dismiss="offcanvas" aria-label="Close">{% trans "Annuler" %}</button>
                     </div>
                 </div>
