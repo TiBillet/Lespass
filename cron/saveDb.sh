@@ -9,7 +9,7 @@ export DOMAIN=$DOMAIN
 
 export PGPASSWORD=$POSTGRES_PASSWORD
 export PGUSER=$POSTGRES_USER
-export PGHOST=$POSTGRES_HOST
+export PGHOST=lespass_postgres
 
 # borg init --encryption=repokey-blake2 .
 # borg init --encryption=repokey-blake2 /Backup/borg
