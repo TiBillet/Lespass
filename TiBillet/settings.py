@@ -80,10 +80,10 @@ SHARED_APPS = (
     'Customers',  # you must list the app where your tenant model resides in
 
     "unfold",  # before django.contrib.admin
+    "unfold.contrib.import_export",  # optional, if django-import-export package is used
     "unfold.contrib.filters",  # optional, if special filters are needed
     "unfold.contrib.forms",  # optional, if special form elements are needed
     "unfold.contrib.inlines",  # optional, if special inlines are needed
-    "unfold.contrib.import_export",  # optional, if django-import-export package is used
     # "unfold.contrib.guardian",  # optional, if django-guardian package is used
     # "unfold.contrib.simple_history",  # optional, if django-simple-history package is used
 
@@ -114,6 +114,7 @@ SHARED_APPS = (
     'stdimage',
     'corsheaders',
     'django_htmx',
+    'import_export',
 )
 
 if DEBUG:
@@ -173,7 +174,7 @@ TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         # 'DIRS': [],
-        'DIRS': [BASE_DIR / "Administration/templates"], # Pour le dashboard d'admin unfold
+        'DIRS': [BASE_DIR / "Administration/templates"],  # Pour le dashboard d'admin unfold
         'APP_DIRS': True,
 
         'OPTIONS': {
@@ -402,6 +403,10 @@ LOGGING = {
             'maxBytes': 1024 * 1024 * 100,  # 100 mb
             'filters': ['tenant_context'],
         },
+    },
+    "import_export": {
+        "handlers": ["console", "logfile"],
+        "level": "INFO",
     },
     'root': {
         'level': 'INFO',
