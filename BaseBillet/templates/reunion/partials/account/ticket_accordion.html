@@ -18,31 +18,31 @@
                     <table class="table">
                         <tbody>
                         <tr>
-                            <th>Numéro</th>
+                            <th>{% trans "Numéro" %}</th>
                             <td>
                                 {{ ticket.numero_uuid|upper }}
                             </td>
                         </tr>
                         <tr>
-                            <th>Réservation</th>
+                            <th>{% trans "Réservation" %}</th>
                             <td>
                                 {{ ticket.pricesold.price.product.name }}
                             </td>
                         </tr>
                         <tr>
-                            <th>Tarif</th>
+                            <th>{% trans "Nom du Tarif" %}</th>
                             <td>
                                 {{ ticket.pricesold.price.name }}
                             </td>
                         </tr>
                         <tr>
-                            <th>Prix</th>
+                            <th>{% trans "Montant" %}</th>
                             <td>
                                 {{ ticket.pricesold.prix }}&nbsp;€
                             </td>
                         </tr>
                         <tr>
-                            <th>Titulaire</th>
+                            <th>{% trans "Titulaire" %}</th>
                             <td>
                                 {% if not ticket.first_name and not ticket.last_name %}
                                     {% translate "Anonyme" %}
@@ -52,7 +52,7 @@
                             </td>
                         </tr>
                         <tr>
-                            <th>Statut</th>
+                            <th>{% trans "Statut" %}</th>
                             <td>{{ ticket.get_status_display }}</td>
                         </tr>
 {#                        <tr>#}
