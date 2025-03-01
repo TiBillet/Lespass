@@ -195,7 +195,7 @@ class Ticket_html_view(APIView):
         qr = segno.make(f"{ticket.qrcode()}", micro=False)
 
         buffer_svg = BytesIO()
-        qr.save(buffer_svg, kind="svg", scale=6)
+        qr.save(buffer_svg, kind="svg", scale=4.5)
 
         # CODE128 = barcode.get_barcode_class("code128")
         # buffer_barcode_SVG = BytesIO()
