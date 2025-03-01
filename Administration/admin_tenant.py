@@ -1204,7 +1204,8 @@ class ReservationAdmin(ModelAdmin):
         'total_paid',
     )
     # readonly_fields = list_display
-    search_fields = ['event__name', 'user_commande__email', 'options__name']
+    search_fields = ['event__name', 'user_commande__email', 'options__name', 'datetime']
+    list_filter = ['event', 'event__categorie', 'datetime', 'status', 'options']
 
     @display(description=_("Nbrs billets"))
     def tickets_count(self, instance: Reservation):
