@@ -1802,7 +1802,13 @@ class Membership(models.Model):
         return None
 
     def options(self):
-        return ", ".join([option.name for option in self.option_generale.all()])
+        return " - ".join([option.name for option in self.option_generale.all()])
+
+    def payment_method_name(self):
+        return self.get_payment_method_display()
+
+    def status_name(self):
+        return self.get_status_display()
 
     def __str__(self):
         if self.pseudo:

@@ -20,7 +20,7 @@ from django.urls import reverse, re_path
 from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
-from import_export import resources
+from import_export.fields import Field
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework_api_key.models import APIKey
@@ -33,7 +33,9 @@ from unfold.widgets import UnfoldAdminTextInputWidget, UnfoldAdminEmailInputWidg
     UnfoldAdminSelectMultipleWidget, UnfoldAdminRadioSelectWidget, UnfoldAdminCheckboxSelectMultiple
 from unfold.contrib.forms.widgets import WysiwygWidget
 
+from import_export import resources
 from import_export.admin import ImportExportModelAdmin, ExportActionModelAdmin
+
 from unfold.contrib.import_export.forms import ExportForm, ImportForm, SelectableFieldsExportForm
 
 
@@ -740,20 +742,26 @@ class HumanUserAdmin(ModelAdmin):
 ### ADHESION
 
 class MembershipResource(resources.ModelResource):
+    member_name = Field(attribute='member_name', column_name='member_name')
+    email = Field(attribute='email', column_name='email')
+    payment_method_name = Field(attribute='payment_method_name', column_name='payment_method_name')
+    options = Field(attribute='options', column_name='options')
+    status_name = Field(attribute='status_name', column_name='status_name')
+
     class Meta:
         model = Membership
         fields = (
+            'last_contribution',
             'email',
             'member_name',
-            'price_name',
-            'product_name',
-            'last_contribution',
+            'price__product__name',
+            'price__name',
             'contribution_value',
-            'payment_method',
+            'payment_method_name',
             'options',
             'is_valid',
             'deadline',
-            'status',
+            'status_name',
         )
         export_order = ('last_contribution', )
 
@@ -862,6 +870,7 @@ class MembershipAdmin(ModelAdmin, ExportActionModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 
+    resource_classes = [MembershipResource]
     export_form_class = ExportForm
 
     # Formulaire de modification
