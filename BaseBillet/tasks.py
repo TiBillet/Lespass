@@ -284,7 +284,7 @@ def create_ticket_pdf(ticket: Ticket):
     # PROGRESS_LOGGER.setLevel(50)  # Only show errors, use 50
 
     # Pour faire le qrcode
-    qr = segno.make(f"{ticket.uuid}", micro=False)
+    qr = segno.make(f"{ticket.qrcode()}", micro=False)
     buffer_svg = BytesIO()
     qr.save(buffer_svg, kind='svg', scale=8)
 
