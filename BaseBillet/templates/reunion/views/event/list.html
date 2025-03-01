@@ -8,7 +8,7 @@
 <!-- slideshow -->
  {% if carrousel_event_list|length > 0 %}
 <header class="container-lg">
-    {% include "reunion/partials/event/carousel.html" %}
+    {% include "reunion/partials/event/carousel.html" with carousel=carrousel_event_list %}
 </header>
 {% endif %}
 
