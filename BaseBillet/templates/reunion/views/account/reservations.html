@@ -6,6 +6,16 @@
 {% block title %}{% translate 'Réservations' %}{% endblock %}
 
 {% block account_page %}
+
+<div class="offcanvas offcanvas-start text-bg-light" tabindex="-1"
+    id="ticketPanel" aria-labelledby="ticketPanelLabel" data-bs-theme="light">
+    <div class="offcanvas-header justify-content-between">
+      <h5 class="offcanvas-title" id="ticketPanelLabel">Ticket</h5>
+      <button type="button" class="btn" data-bs-dismiss="ticketPanel" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div id="ticketPanelBody" class="offcanvas-body"></div>
+</div>
+
 {% for resa in reservations %}
 <div class="card my-5">
     <div class="row g-0">

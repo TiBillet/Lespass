@@ -20,7 +20,7 @@
                         <tr>
                             <th>{% trans "Numéro" %}</th>
                             <td>
-                                {{ ticket.numero_uuid|upper }}
+                                {{ ticket.status }}-{{ ticket.numero_uuid }}-{{ ticket.seat }}
                             </td>
                         </tr>
                         <tr>
@@ -42,6 +42,16 @@
                             </td>
                         </tr>
                         <tr>
+                            <th>{% trans "Placement" %}</th>
+                            <td>
+                                {% if ticket.seat == 'L' %}
+                                {% trans "Libre" %}
+                                {% else %}
+                                {% trans "Siège" %} {{ ticket.seat }}
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
                             <th>{% trans "Titulaire" %}</th>
                             <td>
                                 {% if not ticket.first_name and not ticket.last_name %}
@@ -52,15 +62,27 @@
                             </td>
                         </tr>
                         <tr>
+                            <th>{% trans "Email" %}</th>
+                            <td>
+                                {{ ticket.reservation.user_commande.email }}
+                            </td>
+                        </tr>
+                        <tr>
                             <th>{% trans "Statut" %}</th>
                             <td>{{ ticket.get_status_display }}</td>
                         </tr>
-{#                        <tr>#}
-{#                            <th>QrCode</th>#}
-{#                            <td>{{ ticket.qrcode }}</td>#}
-{#                        </tr>#}
                         </tbody>
                     </table>
+                    <button
+                        class="btn btn-primary w-100 mt-3" type="button"
+                        hx-get="/ticket/{{ ticket.uuid }}/" hx-swap="innerHTML"
+                        hx-target="#ticketPanelBody"
+                        data-bs-toggle="offcanvas"
+                        data-bs-target="#ticketPanel"
+                        aria-controls="ticketPanel">
+                        {% translate "Voir le billet" %}
+                    </button>
+                    {% comment %}
                     <div class="row">
                         <div class="col-sm">
                             <a href="/ticket/{{ ticket.uuid }}/" target="_blank" class="btn btn-primary w-100 mt-3">
@@ -73,6 +95,7 @@
                             </button>
                         </div>
                     </div>
+                    {% endcomment %}
                 </div>
             </div>
         </div>
