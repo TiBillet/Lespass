@@ -226,6 +226,12 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
     readonly_fields = ['onboard_stripe', ]
     autocomplete_fields = ['federated_with', ]
 
+    formfield_overrides = {
+        models.TextField: {
+            "widget": WysiwygWidget,
+        }
+    }
+
     def save_model(self, request, obj, form, change):
         obj: Configuration
         if obj.server_cashless and obj.key_cashless:
