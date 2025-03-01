@@ -9,7 +9,7 @@
                 <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                         data-bs-target="#ticket{{ ticket.uuid }}Details" aria-expanded="false"
                         aria-controls="ticket{{ ticket.uuid }}Details">
-                    Ticket {{ ticket.numero_uuid|upper }}
+                    Ticket {{ ticket.status }}-{{ ticket.numero_uuid|upper }}-{{ ticket.seat }}
                 </button>
             </h4>
             <div id="ticket{{ ticket.uuid }}Details" class="accordion-collapse collapse"
@@ -20,7 +20,7 @@
                         <tr>
                             <th>{% trans "Numéro" %}</th>
                             <td>
-                                {{ ticket.status }}-{{ ticket.numero_uuid }}-{{ ticket.seat }}
+                                {{ ticket.status }}-{{ ticket.numero_uuid|upper }}-{{ ticket.seat }}
                             </td>
                         </tr>
                         <tr>
