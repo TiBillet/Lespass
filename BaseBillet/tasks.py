@@ -240,16 +240,11 @@ def context_for_membership_email(membership: "Membership"):
 
 def send_membership_invoice_to_email(membership: "Membership"):
     user = membership.user
-    paiement_stripe = membership.stripe_paiement.first()
-
-    # Mails de confirmation et facture en PJ :
+    # Mails de confirmation qui contient un lien vers la facture :
     logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation par email")
     send_email_generique(
         context=context_for_membership_email(membership),
         email=f"{user.email}",
-        # attached_files={
-        #     f'{slugify(membership.member_name())}_{slugify(paiement_stripe.invoice_number())}_tibillet_invoice.pdf':
-        #         create_membership_invoice_pdf(membership)},
     )
     logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation par email DELAY")
     return True
@@ -278,7 +273,6 @@ def create_ticket_pdf(ticket: Ticket):
     # logger_weasy = logging.getLogger("weasyprint")
     # logger_weasy.addHandler(logging.NullHandler())
     # logger_weasy.setLevel(50)  # Only show errors, use 50
-    #
     # PROGRESS_LOGGER = logging.getLogger('weasyprint.progress')
     # PROGRESS_LOGGER.addHandler(logging.NullHandler())
     # PROGRESS_LOGGER.setLevel(50)  # Only show errors, use 50
@@ -288,28 +282,12 @@ def create_ticket_pdf(ticket: Ticket):
     buffer_svg = BytesIO()
     qr.save(buffer_svg, kind='svg', scale=8)
 
-
-    # Pour faire le barcode
-    # CODE128 = barcode.get_barcode_class('code128')
-    # bar_svg = BytesIO()
-    # bar_secret = encode_uid(f"{ticket.uuid}".split('-')[4])
-    # bar = CODE128(f"{bar_secret}")
-    # options = {
-    #     'module_height': 30,
-    #     'module_width': 0.6,
-    #     'font_size': 10,
-    # }
-    # bar.write(bar_svg, options=options)
-
     context = {
         'ticket': ticket,
         'config': Configuration.get_solo(),
         'img_svg': buffer_svg.getvalue().decode('utf-8'),
-        # 'bar_svg': bar_svg.getvalue().decode('utf-8'),
-        # 'bar_svg64': base64.b64encode(bar_svg.getvalue()).decode('utf-8'),
     }
 
-    # template_name = 'report/report.html'
     template_name = 'ticket/ticket.html'
     # template_name = 'ticket/ticket_V2.html'
 
