@@ -1274,8 +1274,7 @@ class Tenant(viewsets.ViewSet):
         id_acc_connect = pk
         # La clé du compte principal stripe connect
         stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-        # Récupération des info lié au lieu via sont id account connect
-
+        # Récupération des info lié au lieu via sont id account connec
         try:
             info_stripe = stripe.Account.retrieve(id_acc_connect)
             details_submitted = info_stripe.details_submitted
