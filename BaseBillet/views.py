@@ -1285,7 +1285,13 @@ class Tenant(viewsets.ViewSet):
 
         # Vérification de l'email
         email_stripe = info_stripe['email']
-        waiting_config = WaitingConfiguration.objects.get(id_acc_connect=id_acc_connect)
+        try :
+            waiting_config = WaitingConfiguration.objects.get(id_acc_connect=id_acc_connect)
+        except Exception as e:
+            logger.info("Pas de waiting config car le lien a été généré depuis l'admin. (post V1)")
+            return HttpResponse(_("Votre demande a bien été enregistrée. Merci de contacter un administrateur pour finaliser votre espace."))
+        waiting_config.onboard_stripe_finished = True
+        waiting_config.save()
 
         # Envoie du mail aux superadmins
         new_tenant_after_stripe_mailer.delay(waiting_config.pk)

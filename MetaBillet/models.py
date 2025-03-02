@@ -1,6 +1,7 @@
 from uuid import uuid4
 
 from django.db import models
+from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 # Create your models here.
@@ -177,6 +178,8 @@ class WaitingConfiguration(models.Model):
     categorie = models.CharField(max_length=3, choices=CATEGORIE_CHOICES, default=SALLE_SPECTACLE,
                                          verbose_name=_("Categorie"))
 
+    datetime = models.DateTimeField(auto_now_add=True)
+    onboard_stripe_finished = models.BooleanField(default=False)
     created = models.BooleanField(default=False)
     tenant = models.ForeignKey(Client, on_delete=models.CASCADE, verbose_name=_('Tenant'), related_name='waiting_config', blank=True, null=True)
 
