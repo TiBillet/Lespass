@@ -5,7 +5,7 @@ from django.db import connection
 from django.utils import timezone
 
 from AuthBillet.models import TibilletUser
-from BaseBillet.models import LigneArticle, Product, Membership, Price, Configuration
+from BaseBillet.models import LigneArticle, Product, Membership, Price, Configuration, Paiement_stripe
 from BaseBillet.tasks import send_to_ghost, send_membership_invoice_to_email, send_sale_to_laboutik, webhook_membership
 from BaseBillet.templatetags.tibitags import dround
 from fedow_connect.fedow_api import FedowAPI
@@ -13,6 +13,23 @@ from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
 
+
+def update_sale_if_free_price(ligne_article):
+    price: Price = ligne_article.pricesold.price
+    paiement_stripe: Paiement_stripe = ligne_article.paiement_stripe
+
+    if price.free_price:
+        # Le montant a été entré dans stripe, on ne l'a pas entré à la création
+        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+        # recherche du checkout
+        checkout_session = stripe.checkout.Session.retrieve(
+            paiement_stripe.checkout_session_id_stripe,
+            stripe_account=Configuration.get_solo().get_stripe_connect_account()
+        )
+        # Mise à jour du montant
+        ligne_article.amount = checkout_session['amount_total']
+
+    return ligne_article
 
 def update_membership_state_after_stripe_paiement(ligne_article):
     paiement_stripe = ligne_article.paiement_stripe
@@ -117,6 +134,7 @@ class LigneArticlePaid_ActionByCategorie:
     def trigger_B(self):
         # Envoi de la vente à LaBoutik
         logger.info(f"TRIGGER BILLET PAID -> envoi à LaBoutik")
+        self.ligne_article = update_sale_if_free_price(self.ligne_article)
         laboutik_sended = send_sale_to_laboutik(self.ligne_article)
 
     # Category Free Reservation
