@@ -3,6 +3,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework import permissions
 from rest_framework.viewsets import ViewSet
 from rest_framework_api_key.models import AbstractAPIKey, APIKey
+from urllib3 import request
 
 from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_client_ip
@@ -47,16 +48,10 @@ def get_apikey_valid(view: ViewSet) -> AbstractAPIKey or None:
 
 ### PERMISSIONS pour les routes avec clé API ###
 
-"""
 # Pas utilisé
-class RootPermission(permissions.BasePermission):
-    message = 'No root'
-
-    def has_permission(self, request, view):
-        if request.user.client_source.categorie == Client.ROOT:
-            return request.user.is_superuser
-        return False
-"""
+def RootPermissionWithRequest(request):
+    user: TibilletUser = request.user
+    return all([user.is_authenticated, user.is_superuser])
 
 
 # Mis à l'extérieur pour pouvoir être utilisé tout seul sans RESTframework

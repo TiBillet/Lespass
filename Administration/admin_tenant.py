@@ -39,7 +39,7 @@ from import_export.admin import ImportExportModelAdmin, ExportActionModelAdmin
 from unfold.contrib.import_export.forms import ExportForm, ImportForm, SelectableFieldsExportForm
 
 
-from ApiBillet.permissions import TenantAdminPermissionWithRequest
+from ApiBillet.permissions import TenantAdminPermissionWithRequest, RootPermissionWithRequest
 from AuthBillet.models import HumanUser, TibilletUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
@@ -48,6 +48,7 @@ from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Pai
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
     webhook_membership, create_ticket_pdf, ticket_celery_mailer
 from Customers.models import Client
+from MetaBillet.models import WaitingConfiguration
 from fedow_connect.utils import dround
 
 logger = logging.getLogger(__name__)
@@ -1706,6 +1707,67 @@ class FormbricksFormsAdmin(ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
 
+@admin.register(WaitingConfiguration, site=staff_admin_site)
+class WaitingConfigAdmin(ModelAdmin):
+    compressed_fields = True  # Default: False
+    warn_unsaved_form = True  # Default: False
+
+    list_display = (
+        "organisation",
+        "email",
+        "datetime",
+        "laboutik_wanted",
+        "id_acc_connect",
+        "onboard_stripe_finished",
+        "created",
+    )
+
+    fields = list_display
+    readonly_fields = (
+        "id_acc_connect", "datetime", "onboard_stripe_finished", "created",
+    )
+
+    ordering = ('created', 'onboard_stripe_finished', 'datetime')
+
+    list_filter = ["datetime", "created", "onboard_stripe_finished"]
+    search_fields = ["email", "organisation", "datetime"]
+
+    actions_detail = ["create_tenant", ]
+    @action(description=_("Créer le tenant"),
+            url_path="create_tenant",
+            permissions=["custom_actions_detail"])
+    def create_tenant(self, request, object_id):
+        wc = WaitingConfiguration.objects.get(pk=object_id)
+        if wc.onboard_stripe_finished and wc.id_acc_connect:
+            wc.create_tenant()
+            messages.add_message(
+                request, messages.SUCCESS,
+                _(f"Le tenant a bien été créé. Un mail d'invitation a été envoyé à {wc.email}")
+            )
+        else :
+            messages.add_message(
+                request, messages.WARNING,
+                _(f"L'organisation n'a pas terminé la procédure de création de compte Stripe")
+            )
+        return redirect(request.META["HTTP_REFERER"])
+
+    def has_custom_actions_detail_permission(self, request, object_id):
+        return RootPermissionWithRequest(request)
+
+
+    def has_view_permission(self, request, obj=None):
+        return RootPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return RootPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return RootPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return RootPermissionWithRequest(request)
+
+
 ### UNFOLD ADMIN
 def environment_callback(request):
     if settings.DEBUG:
@@ -1720,3 +1782,5 @@ def dashboard_callback(request, context):
     })
 
     return context
+
+

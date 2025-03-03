@@ -671,6 +671,20 @@ UNFOLD = {
                     # },
                 ],
             },
+            {
+                "title": _("Root Configuration"),
+                "separator": True,  # Top border
+                "collapsible": False,  # Collapsible group of links
+                "items": [
+                    {
+                        "title": _("Waiting Configuration"),
+                        "icon": "linked_services",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:MetaBillet_waitingconfiguration_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.RootPermissionWithRequest"
+                    },
+                ],
+            },
         ],
     },
 }
