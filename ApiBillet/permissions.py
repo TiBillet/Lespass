@@ -66,7 +66,7 @@ def TenantAdminPermissionWithRequest(request):
                 request.user.is_active,
                 request.user.espece == TibilletUser.TYPE_HUM
             ])
-    return False
+    return request.user.is_superuser # le super user peut
 
 
 class TenantAdminApiPermission(permissions.BasePermission):
