@@ -11,7 +11,7 @@
     <title>{% block title %}{% translate 'Accueil' %}{% endblock %} | {{ config.organisation }}</title>
 
     <link rel="preload" as="style" href="{% static 'reunion/css/tibillet.css' %}">
-    <link rel="preload" as="script" href="{% static 'reunion/js/theme-switcher.mjs' %}">
+    <link rel="modulepreload" href="{% static 'reunion/js/theme-switcher.mjs' %}">
 
     <link rel="icon" type="image/png" href="{% static 'reunion/img/favicon.png' %}">
     <link href="{% static 'reunion/css/bootstrap.min.5.3.3.css' %}" rel="stylesheet"

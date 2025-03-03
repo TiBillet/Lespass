@@ -458,8 +458,23 @@ class Configuration(SingletonModel):
         return RootConfiguration.get_solo().get_stripe_api()
 
     def get_stripe_connect_account(self):
-        # Test ou pas test ?
-        return self.stripe_connect_account_test if self.stripe_mode_test else self.stripe_connect_account
+        # Si la procédure a déja été démmaré, le numero stripe connect a déja été créé.
+        # Sinon, on en cherche un nouveau
+        id_acc_connect = self.stripe_connect_account_test if self.stripe_mode_test else self.stripe_connect_account
+        if not id_acc_connect:
+            logger.info('création du id_acc_connect')
+            stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+            acc_connect = stripe.Account.create(
+                type="standard",
+                country="FR",
+            )
+            id_acc_connect = acc_connect.get('id')
+            if self.stripe_mode_test:
+                self.stripe_connect_account_test = id_acc_connect
+            else :
+                self.stripe_connect_account = id_acc_connect
+            self.save()
+        return id_acc_connect
 
     # Vérifie que le compte stripe connect soit valide et accepte les paiements.
     def check_stripe_payouts(self):
@@ -478,17 +493,6 @@ class Configuration(SingletonModel):
         stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
         tenant = connection.tenant
         tenant_url = tenant.get_primary_domain().domain
-
-        # Si la procédure a déja été démmaré, le numero stripe connect a déja été créé.
-        # Sinon, on en cherche un nouveau
-        if not self.get_stripe_connect_account():
-            acc_connect = stripe.Account.create(
-                type="standard",
-                country="FR",
-            )
-            id_acc_connect = acc_connect.get('id')
-            self.stripe_connect_account = id_acc_connect
-            self.save()
 
         url_onboard_stripe = stripe.AccountLink.create(
             account=self.get_stripe_connect_account(),

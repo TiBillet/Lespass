@@ -44,14 +44,14 @@
                                     {% trans "Adhérez pour profiter de ce tarif." %}
                                 </div>
                                 {% else %}
-                                <input type="number" step="1" min="0" max="{{ event.max_per_user }}"
+                                <input type="number" step="1" min="0" max="{% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% else %}{{ price.max_per_user }}{% endif %}"
                                     class="form-control js-order-amount"
                                     id="amount-{{ price.uuid }}"
                                     name="{{ price.uuid }}">
                                 {% endif %}
                             <!-- Adhésion non obligatoire -->
                             {% else %}
-                                <input type="number" step="1" min="0" max="{{ event.max_per_user }}"
+                                <input type="number" step="1" min="0" max="{% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% else %}{{ price.max_per_user }}{% endif %}"
                                     class="form-control js-order-amount"
                                     id="amount-{{ price.uuid }}"
                                     name="{{ price.uuid }}">
@@ -83,7 +83,9 @@
             </div>
         {% endfor %}
         <h4>
-            Total&nbsp;: <span class="js-total-amount">0</span>{% if not event.free_price %} place(s) pour
+            Total&nbsp;: <span class="js-total-amount">0</span> place(s)
+            {% if event.free_price %}à prix libre
+            {% else %}pour
             <span class="fs-5 badge bg-secondary-subtle mb-md-0"><span class="js-total-price">1,00</span>&nbsp;€</span>
             {% endif %}
         </h4>

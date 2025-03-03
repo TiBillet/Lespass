@@ -215,6 +215,7 @@ class TibilletUser(AbstractUser):
         if not tenant:
             tenant = connection.tenant
         self.client_admin.add(tenant)
+        self.client_achat.add(tenant)
         self.is_staff = True
         self.groups.add(Group.objects.get(name="staff"))
         self.save()

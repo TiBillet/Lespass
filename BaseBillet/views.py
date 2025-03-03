@@ -195,7 +195,7 @@ class Ticket_html_view(APIView):
         qr = segno.make(f"{ticket.qrcode()}", micro=False)
 
         buffer_svg = BytesIO()
-        qr.save(buffer_svg, kind="svg", scale=6)
+        qr.save(buffer_svg, kind="svg", scale=4.5)
 
         # CODE128 = barcode.get_barcode_class("code128")
         # buffer_barcode_SVG = BytesIO()
@@ -1274,8 +1274,7 @@ class Tenant(viewsets.ViewSet):
         id_acc_connect = pk
         # La clé du compte principal stripe connect
         stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-        # Récupération des info lié au lieu via sont id account connect
-
+        # Récupération des info lié au lieu via sont id account connec
         try:
             info_stripe = stripe.Account.retrieve(id_acc_connect)
             details_submitted = info_stripe.details_submitted
@@ -1285,7 +1284,13 @@ class Tenant(viewsets.ViewSet):
 
         # Vérification de l'email
         email_stripe = info_stripe['email']
-        waiting_config = WaitingConfiguration.objects.get(id_acc_connect=id_acc_connect)
+        try :
+            waiting_config = WaitingConfiguration.objects.get(id_acc_connect=id_acc_connect)
+        except Exception as e:
+            logger.info("Pas de waiting config car le lien a été généré depuis l'admin. (post V1)")
+            return HttpResponse(_("Votre demande a bien été enregistrée. Merci de contacter un administrateur pour finaliser votre espace."))
+        waiting_config.onboard_stripe_finished = True
+        waiting_config.save()
 
         # Envoie du mail aux superadmins
         new_tenant_after_stripe_mailer.delay(waiting_config.pk)

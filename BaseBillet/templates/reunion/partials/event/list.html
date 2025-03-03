@@ -34,6 +34,8 @@
         {% if not forloop.last %}
             <hr/>{% endif %}
     {% endfor %}
+{% empty %}
+{% trans 'Aucun résultat pour cette recherche.' %}
 {% endfor %}
 
 {% if paginated_info.has_next %}
