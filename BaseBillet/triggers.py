@@ -125,15 +125,19 @@ class LigneArticlePaid_ActionByCategorie:
             logger.error(f"category_trigger {self.categorie.upper()} ERROR : {exc} - {type(exc)}")
 
     # Category DON
-    def trigger_D(self):
+    # def trigger_D(self):
         # On a besoin de valider la ligne article pour que le paiement soit validé
-        self.ligne_article.status = LigneArticle.VALID
-        logger.info(f"TRIGGER DON")
+        # self.ligne_article = update_sale_if_free_price(self.ligne_article)
+        # self.ligne_article.status = LigneArticle.VALID
+        # logger.info(f"TRIGGER DON")
 
     # Category BILLET
     def trigger_B(self):
         # Envoi de la vente à LaBoutik
         logger.info(f"TRIGGER BILLET PAID -> envoi à LaBoutik")
+
+
+
         self.ligne_article = update_sale_if_free_price(self.ligne_article)
         laboutik_sended = send_sale_to_laboutik(self.ligne_article)
 

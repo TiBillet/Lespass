@@ -525,10 +525,12 @@ class TenantCreateValidator(serializers.Serializer):
             config.slug = slugify(name)
             config.email = user.email
 
-            rootConf = RootConfiguration.get_solo()
-            config.stripe_mode_test = rootConf.stripe_mode_test
 
             if waiting_config.id_acc_connect:
+                rootConf = RootConfiguration.get_solo()
+                stripe.api_key = rootConf.get_stripe_api()
+                config.stripe_mode_test = rootConf.stripe_mode_test
+
                 info_stripe = stripe.Account.retrieve(waiting_config.id_acc_connect)
                 config.site_web = info_stripe.business_profile.url
                 config.phone = info_stripe.business_profile.support_phone
