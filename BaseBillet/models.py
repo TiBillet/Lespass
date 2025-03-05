@@ -507,16 +507,20 @@ class Configuration(SingletonModel):
         return url_onboard_stripe.url
 
     def onboard_stripe(self):
-        # on vérifie que le compte soit toujours lié et qu'il peut recevoir des paiements :
-        if not self.stripe_payouts_enabled:
-            if not self.check_stripe_payouts():
-                logger.info("onboard_stripe")
-                # if self.check_stripe_payouts():
-                #     return "Stripe connected"
-                url_onboard_stripe = self.link_for_onboard_stripe()
-                msg = _('Link your stripe account to accept payment')
-                return format_html(f"<a href='{url_onboard_stripe}'>{msg}</a>")
-        return "Stripe connected"
+        try :
+            # on vérifie que le compte soit toujours lié et qu'il peut recevoir des paiements :
+            if not self.stripe_payouts_enabled:
+                if not self.check_stripe_payouts():
+                    logger.info("onboard_stripe")
+                    # if self.check_stripe_payouts():
+                    #     return "Stripe connected"
+                    url_onboard_stripe = self.link_for_onboard_stripe()
+                    msg = _('Link your stripe account to accept payment')
+                    return format_html(f"<a href='{url_onboard_stripe}'>{msg}</a>")
+            return "Stripe connected"
+        except Exception as e:
+            logger.error(f"Erreur stripe, check admin")
+            return format_html(f"<p>Erreur stripe, check admin</p>")
 
     def clean_product_stripe_id(self):
         ProductSold.objects.all().update(id_product_stripe=None)
