@@ -371,6 +371,14 @@ class PriceInline(TabularInline):
     def has_delete_permission(self, request, obj=None):
         return False
 
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
 class ProductAdminCustomForm(ModelForm):
     class Meta:
@@ -556,6 +564,9 @@ class MembershipInline(TabularInline):
 
     def has_add_permission(self, request, obj=None):
         return False  # Autoriser l'ajout
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
     # def formfield_for_foreignkey(self, db_field, request=None, **kwargs):
     #     if db_field.name == "price":  # Filtre sur le champ ForeignKey "prix"
@@ -1093,6 +1104,14 @@ class EventChildrenInline(TabularInline):
     def has_delete_permission(self, request, obj=None):
         return False
 
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
 class EventForm(ModelForm):
     # def save(self, commit=True):
@@ -1727,7 +1746,7 @@ class WaitingConfigAdmin(ModelAdmin):
         "id_acc_connect", "datetime", "onboard_stripe_finished", "created",
     )
 
-    ordering = ('created', 'onboard_stripe_finished', 'datetime')
+    ordering = ('datetime',)
 
     list_filter = ["datetime", "created", "onboard_stripe_finished"]
     search_fields = ["email", "organisation", "datetime"]

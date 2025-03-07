@@ -406,6 +406,8 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
         template = 'emails/connexion.html'
 
     logger.info(f'    title : {title}')
+    if settings.DEBUG:
+        logger.info(f"{connexion_url}")
 
     try:
         mail = CeleryMailerClass(
