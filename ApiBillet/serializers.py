@@ -584,7 +584,7 @@ class EventSerializer(serializers.ModelSerializer):
     # tag = TagSerializer(many=True)
     # recurrent = WeekdaySerializer(many=True)
     # Mappage des champs du modèle aux propriétés de Schema.org
-    name = serializers.CharField(source='name', read_only=True)
+    name = serializers.CharField(read_only=True)
     startDate = serializers.DateTimeField(source='datetime', read_only=True)
     endDate = serializers.DateTimeField(source='end_datetime', read_only=True)
     disambiguatingDescription = serializers.CharField(source='short_description', read_only=True)
@@ -597,12 +597,12 @@ class EventSerializer(serializers.ModelSerializer):
     # organizer = serializers.SerializerMethodField()
     # image = serializers.SerializerMethodField()
 
-    def get_schema_eventStatus(self, obj):
+    def get_eventStatus(self, obj):
         if obj.published:
             return "https://schema.org/EventScheduled"
         return "https://schema.org/EventCancelled"
 
-    def get_schema_publicKeyPem(self, obj):
+    def get_publicKeyPem(self, obj):
         return obj.get_public_pem()
 
     class Meta:

@@ -236,6 +236,7 @@ class EventsSlugViewSet(viewsets.ViewSet):
 
 
 class EventsViewSet(viewsets.ViewSet):
+    permission_classes = [permissions.AllowAny]
 
     def list(self, request):
         events = Event.objects.filter(published=True).order_by('-datetime')
@@ -273,10 +274,10 @@ class EventsViewSet(viewsets.ViewSet):
         event = get_object_or_404(queryset, pk=pk)
         event.delete()
         return Response(('deleted'), status=status.HTTP_200_OK)
-    """
 
     def get_permissions(self):
         return get_permission_Api_LR_Any_CU_Admin(self)
+    """
 
 
 """
