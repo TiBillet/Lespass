@@ -577,12 +577,33 @@ class EventCreateSerializer(serializers.Serializer):
 
 
 class EventSerializer(serializers.ModelSerializer):
-    products = ProductSerializer(many=True)
-    options_radio = OptionsSerializer(many=True)
-    options_checkbox = OptionsSerializer(many=True)
-    artists = Artist_on_eventSerializer(many=True)
-    tag = TagSerializer(many=True)
+    # products = ProductSerializer(many=True)
+    # options_radio = OptionsSerializer(many=True)
+    # options_checkbox = OptionsSerializer(many=True)
+    # artists = Artist_on_eventSerializer(many=True)
+    # tag = TagSerializer(many=True)
     # recurrent = WeekdaySerializer(many=True)
+    # Mappage des champs du modèle aux propriétés de Schema.org
+    name = serializers.CharField(source='name', read_only=True)
+    startDate = serializers.DateTimeField(source='datetime', read_only=True)
+    endDate = serializers.DateTimeField(source='end_datetime', read_only=True)
+    disambiguatingDescription = serializers.CharField(source='short_description', read_only=True)
+    description = serializers.CharField(source='long_description', read_only=True)
+    url = serializers.URLField(source='full_url', read_only=True)
+    eventStatus = serializers.SerializerMethodField()
+    publicKeyPem = serializers.SerializerMethodField()
+    # location = serializers.SerializerMethodField()
+    # offers = serializers.SerializerMethodField()
+    # organizer = serializers.SerializerMethodField()
+    # image = serializers.SerializerMethodField()
+
+    def get_schema_eventStatus(self, obj):
+        if obj.published:
+            return "https://schema.org/EventScheduled"
+        return "https://schema.org/EventCancelled"
+
+    def get_schema_publicKeyPem(self, obj):
+        return obj.get_public_pem()
 
     class Meta:
         model = Event
@@ -590,83 +611,26 @@ class EventSerializer(serializers.ModelSerializer):
             'uuid',
             'name',
             'slug',
-            'short_description',
-            'long_description',
-            'categorie',
-            'tag',
-            'is_external',
-            'url_external',
-            'datetime',
-            'products',
-            'options_radio',
-            'options_checkbox',
-            'img_variations',
-            'reservations',
-            'complet',
-            'artists',
-            'minimum_cashless_required',
-            'max_per_user',
-            'reservation_solo',
-            'recurrent',
-            'booking',
+            'startDate',
+            'endDate',
+            'disambiguatingDescription',
+            'description',
+            'url',
+            'eventStatus',
+            'publicKeyPem',
         ]
-        read_only_fields = ['uuid', 'reservations']
-        depth = 1
 
-    def validate(self, attrs):
-        products = self.initial_data.getlist('products')
-
-        if products:
-            self.products_to_db = []
-            for product in products:
-                self.products_to_db.append(get_object_or_404(Product, uuid=product))
-            return super().validate(attrs)
-        else:
-            raise serializers.ValidationError(_('products doit être un json valide'))
-
-    def save(self, **kwargs):
-        instance = super().save(**kwargs)
-        instance.products.clear()
-        for product in self.products_to_db:
-            instance.products.add(product)
-        return instance
 
     def to_representation(self, instance):
-        article_payant = False
-        reservation_free = True
-        for product in instance.products.all():
-            if product.categorie_article == Product.BILLET:
-                reservation_free = False
-            for price in product.prices.all():
-                if price.prix > 0:
-                    article_payant = True
-
-        if article_payant:
-            gift_product, created = Product.objects.get_or_create(categorie_article=Product.DON,
-                                                                  name="Don pour la coopérative")
-            gift_price, created = Price.objects.get_or_create(product=gift_product, prix=1, name="Coopérative TiBillet")
-            instance.products.add(gift_product)
-
-        # if instance.recharge_cashless :
-        #     recharge_suspendue, created = Product.objects.get_or_create(categorie_article=Product.RECHARGE_SUSPENDUE, name="Recharge cashless")
-        #     recharge_suspendue_price, created = Price.objects.get_or_create(product=recharge_suspendue, prix=1, name="charge")
-        #     instance.products.add(recharge_suspendue)
-
-        # if reservation_free:
-        #     free_reservation, created = Product.objects.get_or_create(categorie_article=Product.FREERES,
-        #                                                               name="Reservation")
-        #     free_reservation_price, created = Price.objects.get_or_create(product=free_reservation, prix=0,
-        #                                                                   name="gratuite")
-        #     instance.products.add(free_reservation)
-
+        # Appel de la méthode parente pour obtenir la représentation par défaut
         representation = super().to_representation(instance)
 
-        representation['next_datetime'] = [date_time.isoformat() for date_time in instance.next_datetime()]
-
-        representation['url'] = f"https://{connection.tenant.get_primary_domain().domain}/event/{instance.slug}/"
-        representation['place'] = Configuration.get_solo().organisation
-
-        return representation
+        # Ajout du contexte et du type au niveau supérieur
+        return {
+            "@context": "https://schema.org",
+            "@type": "Event",
+            **representation
+        }
 
 
 class ReservationSerializer(serializers.ModelSerializer):

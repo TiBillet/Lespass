@@ -1746,7 +1746,7 @@ class WaitingConfigAdmin(ModelAdmin):
         "id_acc_connect", "datetime", "onboard_stripe_finished", "created",
     )
 
-    ordering = ('datetime',)
+    ordering = ('-datetime',)
 
     list_filter = ["datetime", "created", "onboard_stripe_finished"]
     search_fields = ["email", "organisation", "datetime"]

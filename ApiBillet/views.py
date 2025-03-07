@@ -238,66 +238,16 @@ class EventsSlugViewSet(viewsets.ViewSet):
 class EventsViewSet(viewsets.ViewSet):
 
     def list(self, request):
-        tenant: Client = connection.tenant
-        four_hour_before_now = datetime.now().date() - timedelta(hours=4)
-
-        production_places = [Client.SALLE_SPECTACLE, Client.FESTIVAL]
-        if tenant.categorie in production_places:
-            queryset = Event.objects.filter(
-                published=True,
-                datetime__gte=four_hour_before_now,
-            ).order_by('datetime')
-            events_serialized = EventSerializer(queryset, many=True, context={'request': request})
-            return Response(events_serialized.data)
-
-        elif tenant.categorie == Client.ARTISTE:
-            artist = tenant
-            directory = {}
-            events_serialized_data = []
-            with schema_context('public'):
-                events_from_public_directory = EventDirectory.objects.filter(
-                    datetime__gte=four_hour_before_now,
-                    artist=artist
-                )
-                for event in events_from_public_directory:
-                    if directory.get(event.place):
-                        directory[event.place].append(event.event_uuid)
-                    else:
-                        directory[event.place] = []
-                        directory[event.place].append(event.event_uuid)
-
-            for place in directory:
-                with tenant_context(place):
-                    queryset = Event.objects.filter(
-                        published=True,
-                        uuid__in=directory[place],
-                    )
-                    events_serialized = EventSerializer(queryset, many=True, context={'request': request})
-                    for data in events_serialized.data:
-                        events_serialized_data.append(data)
-
-            return Response(events_serialized_data)
-
-        elif tenant.categorie == Client.META:
-            events_serialized_data = []
-            tenants = Client.objects.filter(categorie=Client.SALLE_SPECTACLE)
-            for other_tenant in tenants:
-                with tenant_context(other_tenant):
-                    queryset = Event.objects.filter(
-                        published=True,
-                        datetime__gte=four_hour_before_now
-                    ).order_by('datetime')
-                    events_serialized = EventSerializer(queryset, many=True, context={'request': request})
-                    for data in events_serialized.data:
-                        events_serialized_data.append(data)
-            return Response(events_serialized_data)
+        events = Event.objects.filter(published=True).order_by('-datetime')
+        serializer = EventSerializer(events, many=True)
+        return Response(serializer.data)
 
     def retrieve(self, request, pk=None):
-        queryset = Event.objects.all().order_by('-datetime')
-        event = get_object_or_404(queryset, pk=pk)
+        event = get_object_or_404(Event, pk=pk)
         serializer = EventSerializer(event)
         return Response(serializer.data)
 
+    """
     def create(self, request):
         serializer_create = EventCreateSerializer(data=request.data)
         if serializer_create.is_valid():
@@ -323,6 +273,7 @@ class EventsViewSet(viewsets.ViewSet):
         event = get_object_or_404(queryset, pk=pk)
         event.delete()
         return Response(('deleted'), status=status.HTTP_200_OK)
+    """
 
     def get_permissions(self):
         return get_permission_Api_LR_Any_CU_Admin(self)
