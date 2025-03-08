@@ -489,6 +489,22 @@ class ProductAdmin(ModelAdmin):
     list_filter = ['publish', 'categorie_article']
     search_fields = ['name']
 
+    # Pour les bouton en haut de la vue change
+    # chaque decorateur @action génère une nouvelle route
+    actions_row = ["archive",]
+
+    @action(
+        description=_("Archiver"),
+        url_path="archive",
+        permissions=["changelist_row_action"],
+    )
+    def archive(self, request, object_id):
+        obj = get_object_or_404(Product, pk=object_id)
+        obj.archive = True
+        obj.save()
+        messages.success(request, _(f"{obj.name} Archivé"))
+        return redirect(request.META["HTTP_REFERER"])
+
     def get_queryset(self, request):
         # On retire les recharges cashless et l'article Don
         # Pas besoin de les afficher, ils se créent automatiquement.
@@ -509,6 +525,9 @@ class ProductAdmin(ModelAdmin):
                 Product.FREERES,
             ])
         return queryset, use_distinct
+
+    def has_changelist_row_action_permission(self, request: HttpRequest, *args, **kwargs):
+        return TenantAdminPermissionWithRequest(request)
 
     def has_delete_permission(self, request, obj=None):
         return False

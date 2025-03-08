@@ -635,7 +635,7 @@ class Product(models.Model):
         # (RECHARGE_FEDERATED, _('Recharge suspendue')),
         # (VETEMENT, _('Vetement')),
         # (MERCH, _('Merchandasing')),
-        (ADHESION, _('Abonnement et/ou adhésion associative')),
+        (ADHESION, _('Abonnement/Adhésion')),
         (BADGE, _('Badgeuse')),
         # (DON, _('Don')),
         (FREERES, _('Reservation gratuite')),
