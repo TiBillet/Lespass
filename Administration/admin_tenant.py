@@ -565,6 +565,17 @@ class PriceChangeForm(ModelForm):
         return prix
 
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Filtrage des produits : uniquement des produits adhésions.
+        # Possible facilement car Foreign Key (voir get_search_results dans ProductAdmin)
+        self.fields['adhesion_obligatoire'].queryset = Product.objects.filter(
+            categorie_article=Product.ADHESION,
+            archive=False,
+        )
+
+
 @admin.register(Price, site=staff_admin_site)
 class PriceAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
