@@ -584,7 +584,7 @@ class Product(models.Model):
     long_description = models.TextField(blank=True, null=True, verbose_name=_("Description longue"))
 
     publish = models.BooleanField(default=True, verbose_name=_("Publier"))
-    poids = models.PositiveSmallIntegerField(default=0, verbose_name=_("Poids"),
+    poids = models.PositiveSmallIntegerField(default=0, verbose_name=_("Ordre"),
                                              help_text="Ordre d'apparition du plus leger au plus lourd")
 
     tag = models.ManyToManyField(Tag, blank=True, related_name="produit_tags")

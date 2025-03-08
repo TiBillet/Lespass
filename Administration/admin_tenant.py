@@ -478,11 +478,11 @@ class ProductAdmin(ModelAdmin):
     list_display = (
         'name',
         'img',
-        'poids',
         'categorie_article',
         'publish',
+        'poids',
     )
-    ordering = ("poids",)
+    ordering = ("categorie_article", "poids",)
     autocomplete_fields = [
         "option_generale_radio", "option_generale_checkbox",
     ]
