@@ -5,6 +5,7 @@ from typing import Any
 from unicodedata import category
 
 import requests
+import unfold.widgets
 from django import forms
 from django.conf import settings
 from django.db import models, connection
@@ -493,6 +494,18 @@ class ProductAdmin(ModelAdmin):
         # Pas besoin de les afficher, ils se créent automatiquement.
         qs = super().get_queryset(request)
         return qs.exclude(categorie_article__in=[Product.RECHARGE_CASHLESS, Product.DON]).exclude(archive=True)
+
+
+    def get_search_results(self, request, queryset, search_term):
+        """
+        Pour la recherche de produit dans la page Event.
+        On est sur un Many2Many, il faut bidouiller la réponde de ce coté
+        Le but est que cela n'affiche dans le auto complete fields que les catégories Billets
+        """
+        queryset, use_distinct = super().get_search_results(request, queryset, search_term)
+        if "event" in request.headers['Referer']:
+            queryset = queryset.filter(categorie_article=Product.BILLET)
+        return queryset, use_distinct
 
     def has_delete_permission(self, request, obj=None):
         return False
@@ -1173,16 +1186,18 @@ class EventChildrenInline(TabularInline):
         return TenantAdminPermissionWithRequest(request)
 
 class EventForm(ModelForm):
-    # def save(self, commit=True):
-    #     return super().save(commit)
-
-    # def clean(self):
-    #     return super().clean()
+    class Meta:
+        model = Event
+        fields = '__all__'
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # On mets la valeur de la jauge réglée dans la config par default
+
+        # Filtrage des produit : uniquement des billets
+        self.fields['products'].queryset = Product.objects.filter(categorie_article=Product.BILLET)
+
         try :
+            # On mets la valeur de la jauge réglée dans la config par default
             config = Configuration.get_solo()
             self.fields['jauge_max'].initial = config.jauge_max
         except Exception as e:
@@ -1249,15 +1264,21 @@ class EventAdmin(ModelAdmin):
     readonly_fields = (
         'valid_tickets_count',
     )
+
     search_fields = ['name']
     list_filter = ['categorie', 'datetime']
+
     autocomplete_fields = [
-        "products",
         "tag",
         "options_radio",
         "options_checkbox",
         "carrousel",
+
+        # Le autocomplete fields + many2many ne permet pas de filtrage facile
+        # Pour afficher que les produits de type billet, regarder le get_search_results dans ProductAdmin
+        "products",
     ]
+
 
     formfield_overrides = {
         models.TextField: {
