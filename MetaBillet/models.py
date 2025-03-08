@@ -10,15 +10,6 @@ from stdimage.validators import MaxSizeValidator, MinSizeValidator
 
 from Customers.models import Client
 
-'''
-# Besoin du model de config pour email celery génral
-class Configuration(SingletonModel):
-    def uuid(self):
-        return connection.tenant.pk
-
-    email = models.EmailField(default="contact@tibillet.re")
-'''
-
 
 class EventDirectory(models.Model):
     datetime = models.DateTimeField()

@@ -121,6 +121,18 @@ class ExternalApiKeyAdmin(ModelAdmin):
             obj.user = request.user
         super().save_model(request, obj, form, change)
 
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
 
 @admin.register(Webhook, site=staff_admin_site)
 class WebhookAdmin(ModelAdmin):
@@ -179,6 +191,17 @@ class WebhookAdmin(ModelAdmin):
     def has_custom_actions_detail_permission(self, request, object_id):
         return TenantAdminPermissionWithRequest(request)
 
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
 ########################################################################
 @admin.register(Configuration, site=staff_admin_site)
@@ -215,14 +238,14 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
         #         'federated_with',
         #     ),
         # }),
-        # ('Options générales', {
-        #     'fields': (
+        ('Options générales', {
+            'fields': (
         #         'need_name',
-        #         'jauge_max',
-        #         'option_generale_radio',
-        #         'option_generale_checkbox',
-        #     ),
-        # }),
+                'jauge_max',
+                # 'option_generale_radio',
+                # 'option_generale_checkbox',
+            ),
+        }),
     )
     readonly_fields = ['onboard_stripe', ]
     autocomplete_fields = ['federated_with', ]
@@ -242,6 +265,20 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 messages.add_message(request, messages.ERROR, "Cashless server OFFLINE or BAD KEY")
 
         super().save_model(request, obj, form, change)
+
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
 
 
 class TagForm(ModelForm):
@@ -324,6 +361,18 @@ class OptionGeneraleAdmin(ModelAdmin):
         'poids',
     )
 
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
 
 class PriceInlineChangeForm(ModelForm):
     # Le formulaire pour changer une adhésion
@@ -341,8 +390,8 @@ class PriceInlineChangeForm(ModelForm):
     def clean_prix(self):
         cleaned_data = self.cleaned_data
         prix = cleaned_data.get('prix')
-        if prix < 1:
-            raise forms.ValidationError(_("Un tarif ne peux être inférieur à 1€"), code="invalid")
+        if 0 < prix < 1:
+            raise forms.ValidationError(_("Un tarif ne peux être entre 0 et 1€"), code="invalid")
         return prix
 
     def clean_subscription_type(self):
@@ -353,6 +402,7 @@ class PriceInlineChangeForm(ModelForm):
             if subscription_type == Price.NA:
                 raise forms.ValidationError(_("Un tarif d'adhésion doit avoir une durée d'abonnement"), code="invalid")
         return subscription_type
+
 
 
 class PriceInline(TabularInline):
@@ -379,6 +429,7 @@ class PriceInline(TabularInline):
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
+
 
 class ProductAdminCustomForm(ModelForm):
     class Meta:
@@ -474,8 +525,8 @@ class PriceChangeForm(ModelForm):
     def clean_prix(self):
         cleaned_data = self.cleaned_data
         prix = cleaned_data.get('prix')
-        if prix < 1:
-            raise forms.ValidationError(_("Un tarif ne peux être inférieur à 1€"), code="invalid")
+        if 0 < prix < 1:
+            raise forms.ValidationError(_("Un tarif ne peux être entre 0 et 1€"), code="invalid")
         return prix
 
 
@@ -754,8 +805,16 @@ class HumanUserAdmin(ModelAdmin):
     def has_change_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_add_permission(self, request, obj=None):
+        return False  # Autoriser l'ajout
+
     def has_custom_actions_detail_permission(self, request, object_id):
         return TenantAdminPermissionWithRequest(request)
+
+
 
 
 ### ADHESION
@@ -1123,8 +1182,13 @@ class EventForm(ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # On mets la valeur de la jauge réglée dans la config par default
-        config = Configuration.get_solo()
-        self.fields['jauge_max'].initial = 454
+        try :
+            config = Configuration.get_solo()
+            self.fields['jauge_max'].initial = config.jauge_max
+        except Exception as e:
+            logger.error(f"set gauge max error : {e}")
+            pass
+
 
 
 @admin.register(Event, site=staff_admin_site)
