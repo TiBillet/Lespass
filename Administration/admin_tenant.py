@@ -504,7 +504,10 @@ class ProductAdmin(ModelAdmin):
         """
         queryset, use_distinct = super().get_search_results(request, queryset, search_term)
         if "event" in request.headers['Referer']:
-            queryset = queryset.filter(categorie_article=Product.BILLET)
+            queryset = queryset.filter(categorie_article__in=[
+                Product.BILLET,
+                Product.FREERES,
+            ])
         return queryset, use_distinct
 
     def has_delete_permission(self, request, obj=None):
@@ -1193,9 +1196,6 @@ class EventForm(ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # Filtrage des produit : uniquement des billets
-        self.fields['products'].queryset = Product.objects.filter(categorie_article=Product.BILLET)
-
         try :
             # On mets la valeur de la jauge réglée dans la config par default
             config = Configuration.get_solo()
@@ -1275,7 +1275,7 @@ class EventAdmin(ModelAdmin):
         "carrousel",
 
         # Le autocomplete fields + many2many ne permet pas de filtrage facile
-        # Pour afficher que les produits de type billet, regarder le get_search_results dans ProductAdmin
+        # Pour filter les produits de type billet, regarder le get_search_results dans ProductAdmin
         "products",
     ]
 
