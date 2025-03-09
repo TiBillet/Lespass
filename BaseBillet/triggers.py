@@ -19,6 +19,7 @@ def update_sale_if_free_price(ligne_article):
     paiement_stripe: Paiement_stripe = ligne_article.paiement_stripe
 
     if price.free_price:
+        logger.info("    START update_sale_if_free_price : mise à jour de la valeur ligne_article.amount")
         # Le montant a été entré dans stripe, on ne l'a pas entré à la création
         stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
         # recherche du checkout
@@ -28,6 +29,7 @@ def update_sale_if_free_price(ligne_article):
         )
         # Mise à jour du montant
         ligne_article.amount = checkout_session['amount_total']
+        logger.info(f"    END update_sale_if_free_price. ligne_article.amount = {checkout_session['amount_total']}")
 
     return ligne_article
 
@@ -93,7 +95,7 @@ def update_membership_state_after_stripe_paiement(ligne_article):
 
 # MACHINE A ETAT pour les ventes, activé lorsque LigneArticle passe à PAID
 # Actions qui se lancent en fonction de la catégorie d'article ( adhésion, don, reservation, etc ... )
-class LigneArticlePaid_ActionByCategorie:
+class TRIGGER_LigneArticlePaid_ActionByCategorie:
     """
     Trigged action by categorie when Article is PAID
     """
@@ -101,6 +103,7 @@ class LigneArticlePaid_ActionByCategorie:
     def __init__(self, ligne_article: LigneArticle):
         self.ligne_article = ligne_article
 
+        # Si le product sold a été créé sans copier la catégorie originale
         self.categorie = self.ligne_article.pricesold.productsold.categorie_article
         if self.categorie == Product.NONE:
             self.categorie = self.ligne_article.pricesold.productsold.product.categorie_article
@@ -115,10 +118,11 @@ class LigneArticlePaid_ActionByCategorie:
         try:
             # on met en majuscule et on rajoute _ au début du nom de la catégorie.
             trigger_name = f"_{self.categorie.upper()}"
-            logger.info(
-                f"category_trigger launched - ligne_article : {self.ligne_article} - trigger_name : {trigger_name}")
+            logger.info(f"\nSTART TRIGGER_LigneArticlePaid_ActionByCategorie : {self.ligne_article} - trigger_name : {trigger_name}")
             trigger = getattr(self, f"trigger{trigger_name}")
             trigger()
+            logger.info(f"END TRIGGER_LigneArticlePaid_ActionByCategorie\n")
+
         except AttributeError as exc:
             logger.info(f"Pas de trigger pour la categorie {self.categorie} - ERROR : {exc} - {type(exc)}")
         except Exception as exc:
@@ -134,28 +138,32 @@ class LigneArticlePaid_ActionByCategorie:
     # Category BILLET
     def trigger_B(self):
         # Envoi de la vente à LaBoutik
-        logger.info(f"TRIGGER BILLET PAID -> envoi à LaBoutik")
-
-
-
+        logger.info(f"    START TRIGGER_B BILLET PAID -> update_sale_if_free_price?")
         self.ligne_article = update_sale_if_free_price(self.ligne_article)
-        laboutik_sended = send_sale_to_laboutik(self.ligne_article)
+
+        logger.info(f"        TRIGGER_B BILLET PAID -> envoi à LaBoutik?")
+        send_sale_to_laboutik(self.ligne_article)
+
+        logger.info(f"        TRIGGER_B BILLET PAID -> set ligne_article VALID (no save)")
+        self.ligne_article.status = LigneArticle.VALID
+
+        logger.info(f"    END TRIGGER_A BILLET PAID\n")
 
     # Category Free Reservation
-    def trigger_F(self):
-        logger.info(f"TRIGGER FREE RESERVATION")
+    # def trigger_F(self):
+    #     logger.info(f"TRIGGER FREE RESERVATION")
 
     # Category RECHARGE_CASHLESS
-    def trigger_R(self):
-        logger.info(f"TRIGGER RECHARGE_CASHLESS")
+    # def trigger_R(self):
+    #     logger.info(f"TRIGGER RECHARGE_CASHLESS")
 
     # Category RECHARGE_FEDERATED
-    def trigger_S(self):
-        logger.info(f"TRIGGER RECHARGE_FEDERATED")
+    # def trigger_S(self):
+    #     logger.info(f"TRIGGER RECHARGE_FEDERATED")
 
     # Categorie ADHESION
     def trigger_A(self):
-        logger.info(f"TRIGGER ADHESION PAID")
+        logger.info(f"    START TRIGGER_A ADHESION PAID")
 
         # On va chercher l'article vendu et l'adhésion associéé
         ligne_article: LigneArticle = self.ligne_article
@@ -185,20 +193,23 @@ class LigneArticlePaid_ActionByCategorie:
         if membership.newsletter:
             send_to_ghost.delay(membership.pk)
 
-        logger.info(f"TRIGGER ADHESION PAID -> envoi à Fedow")
+        logger.info(f"    TRIGGER_A ADHESION PAID -> envoi à Fedow")
         # L'adhésion possède désormais une transaction fedow associé
         # Attention, réalise membership.save()
         fedowAPI = FedowAPI()
         serialized_transaction = fedowAPI.membership.create(membership=membership)
 
+
         # Envoi de la vente à LaBoutik
-        logger.info(f"TRIGGER ADHESION PAID -> envoi à LaBoutik")
-        laboutik_sended = send_sale_to_laboutik(self.ligne_article)
+        logger.info(f"    TRIGGER_A ADHESION PAID -> envoi à LaBoutik?")
+        send_sale_to_laboutik(self.ligne_article)
 
         # Envoi des webhooks
         webhook_membership(membership.pk)
 
         # Si tout est passé plus haut, on VALID La ligne :
         # Tout ceci se déroule dans un pre_save signal.pre_save_signal_status()
-        logger.info(f"TRIGGER ADHESION PAID -> set VALID")
+        logger.info(f"    TRIGGER_A ADHESION PAID -> set ligne_article VALID")
         self.ligne_article.status = LigneArticle.VALID
+
+        logger.info(f"END    TRIGGER_A ADHESION PAID\n")

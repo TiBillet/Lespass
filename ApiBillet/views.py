@@ -18,12 +18,12 @@ from rest_framework.decorators import permission_classes, action
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
+# from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
 from rest_framework.viewsets import ViewSet
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
-    ReservationValidator, ConfigurationSerializer, EventCreateSerializer, TicketSerializer, \
+    ReservationValidator, ConfigurationSerializer, TicketSerializer, \
     OptionsSerializer, ProductCreateSerializer, EmailSerializer
 from ApiBillet.permissions import TenantAdminApiPermission, TibilletUser, get_apikey_valid
 from AuthBillet.models import HumanUser
@@ -32,7 +32,7 @@ from BaseBillet.models import Event, Price, Product, Reservation, Configuration,
     OptionGenerale, Membership
 from BaseBillet.tasks import create_ticket_pdf
 from Customers.models import Client
-from MetaBillet.models import EventDirectory, ProductDirectory
+from MetaBillet.models import ProductDirectory
 from PaiementStripe.views import new_entry_from_stripe_invoice
 from TiBillet import settings
 from fedow_connect.fedow_api import FedowAPI
@@ -847,7 +847,7 @@ class Onboard_laboutik(APIView):
 # api check wallet
 class Wallet(viewsets.ViewSet):
 
-    @action(detail=False, methods=['POST'], throttle_classes=[UserRateThrottle], permission_classes=[TenantAdminApiPermission])
+    @action(detail=False, methods=['POST'], permission_classes=[TenantAdminApiPermission])
     def get_stripe_checkout_with_email(self, request):
         # Création d'un lien de paiement pour une recharge Stripe.
         # Peut être réalisée par n'importe qui. Valide du moment qu'il y a paiement.

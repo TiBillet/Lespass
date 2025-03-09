@@ -10,7 +10,7 @@ from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, LigneArticle, Ticket, Paiement_stripe, Product, Price, \
     PaymentMethod, Membership, SaleOrigin
 from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation
-from BaseBillet.triggers import LigneArticlePaid_ActionByCategorie
+from BaseBillet.triggers import TRIGGER_LigneArticlePaid_ActionByCategorie
 from fedow_connect.fedow_api import AssetFedow
 from fedow_connect.models import FedowConfig
 
@@ -25,28 +25,28 @@ logger = logging.getLogger(__name__)
 ######################## SIGNAL PAIEMENT STRIPE ########################
 
 
-def set_ligne_article_paid(old_instance, new_instance):
+def set_ligne_article_paid(old_instance: Paiement_stripe, new_instance: Paiement_stripe):
     # Type :
-    old_instance: Paiement_stripe
-    new_instance: Paiement_stripe
-    logger.info(f"    PRE_SAVE_TRANSITIONS PAIEMENT_STRIPE set_ligne_article_paid {new_instance}.")
+    logger.info(f"    START PAIEMENT_STRIPE set_ligne_article_paid {new_instance} -> {old_instance.status} to {new_instance.status}")
 
-    logger.info(f"        On passe toutes les lignes d'article non validées en PAID et save() :")
+    logger.info(f"        On passe toutes les ligne_article non validées en PAID et save() :")
     lignes_article = new_instance.lignearticles.exclude(status=LigneArticle.VALID)
     for ligne_article in lignes_article:
         # Chaque passage en PAID activera le pre_save triggers.LigneArticlePaid_ActionByCategorie
         # # Si toutes les lignes sont validées, ça met le paiement stripe en valid via set_paiement_stripe_valid
-        logger.info(f"            {ligne_article.pricesold} {ligne_article.status} to P")
-        ligne_article.status = LigneArticle.PAID
         ligne_article.payment_method = PaymentMethod.STRIPE_NOFED
+        logger.info(f"            {ligne_article.pricesold} {ligne_article.status} to {LigneArticle.PAID} : save()")
+        ligne_article.status = LigneArticle.PAID
         ligne_article.save()
 
     # s'il y a une réservation, on la met aussi en payée :
     if new_instance.reservation:
-        logger.info(f"        On passe la reservation en PAID et save() :")
+        logger.info(f"        PAIEMENT_STRIPE set_ligne_article_paid : Toutes les ligne_article on été passé en {LigneArticle.PAID} et on été save()")
+        logger.info(f"        On passe la reservation en PAID et save()")
         new_instance.reservation.status = Reservation.PAID
         new_instance.reservation.save()
-    # except new_instance.reservation.RelatedObjectDoesNotExist:
+
+    logger.info(f"    END PAIEMENT_STRIPE set_ligne_article_paid\n")
 
 
 def expire_paiement_stripe(old_instance, new_instance):
@@ -65,12 +65,10 @@ def valide_stripe_paiement(old_instance, new_instance):
 # @receiver(post_save, sender=LigneArticle)
 
 def set_paiement_stripe_valid(old_instance: LigneArticle, new_instance: LigneArticle):
+    logger.info(f"    START SIGNAL LIGNE_ARTICLE set_paiement_stripe_valid {old_instance.status} to {new_instance.status}")
     if new_instance.status == LigneArticle.VALID:
         # Si paiement stripe :
         if new_instance.paiement_stripe:
-            logger.info(
-                f"    SIGNAL LIGNE ARTICLE set_paiement_stripe_valid {new_instance.pricesold}. "
-                f"On test si toute les lignes sont validées")
 
             # On exclut l'instance en cours, car elle n'est pas encore validée en DB : on est sur du signal pre_save
             # on teste ici : Si toutes les autres lignes sont valides et que celle ci l'est aussi.
@@ -80,25 +78,28 @@ def set_paiement_stripe_valid(old_instance: LigneArticle, new_instance: LigneArt
                 uuid=new_instance.uuid)
 
             # Si toutes les lignes du même panier sont validés
+            logger.info(f"        On test si toute les autres lignes sont validées : {len(lignes_meme_panier) == len(lignes_meme_panier_valide)}")
             if len(lignes_meme_panier) == len(lignes_meme_panier_valide):
                 # on passe le status du paiement stripe en VALID
                 logger.info(
-                    f"         paiement stripe {new_instance.paiement_stripe} {new_instance.paiement_stripe.status} à VALID")
+                    f"         OK ! Toute les lignes sont valides, on passe le paiement_stripe {new_instance.paiement_stripe} de {new_instance.paiement_stripe.status} à {Paiement_stripe.VALID}")
                 new_instance.paiement_stripe.status = Paiement_stripe.VALID
+                logger.info(f"        paiement_stripe traitement_en_cours = False")
                 new_instance.paiement_stripe.traitement_en_cours = False
                 new_instance.paiement_stripe.save()
             else:
                 logger.info(
-                    f"         len(lignes_meme_panier) {len(lignes_meme_panier)} != len(lignes_meme_panier_valide) {len(lignes_meme_panier_valide)} ")
+                    f"         PAS OK, il doit y avoir d'autres lignes à valider : {len(lignes_meme_panier)} != {len(lignes_meme_panier_valide)}")
 
+    logger.info(f"    END SIGNAL LIGNE_ARTICLE set_paiement_stripe_valid {old_instance.status} to {new_instance.status}\n")
 
 
 def ligne_article_paid(old_instance: LigneArticle, new_instance: LigneArticle):
     # MACHINE A ETAT pour les ventes, activé lorsque LigneArticle passe à PAID
     # Actions qui se lancent en fonction de la catégorie d'article ( adhésion, don, reservation, etc ... )
-    LigneArticlePaid_ActionByCategorie(new_instance)
     logger.info(
-        f"    SIGNAL LIGNE ARTICLE action_x_to_paid {old_instance.pricesold} new_instance status : {new_instance.status}")
+        f"    LIGNE ARTICLE ligne_article_paid {new_instance} -> {old_instance.status} to {new_instance.status}")
+    TRIGGER_LigneArticlePaid_ActionByCategorie(new_instance)
 
     # Si toutes les lignes sont validées, ça met le paiement stripe en valid.
     set_paiement_stripe_valid(old_instance, new_instance)
@@ -109,42 +110,48 @@ def ligne_article_paid(old_instance: LigneArticle, new_instance: LigneArticle):
 # @receiver(post_save, sender=Reservation)
 # def send_billet_to_mail(sender, instance: Reservation, **kwargs):
 def reservation_paid(old_instance: Reservation, new_instance: Reservation):
+    # Toutes les ligne_article on été passé, cela déclanche le reservation status PAID et le SAVE
+    logger.info(f"    START SIGNAL RESERVATION reservation_paid {old_instance.status} to {new_instance.status}")
 
-    # On check les webhooks
+    logger.info(f"        Check webhook send")
     webhook_reservation.delay(new_instance.pk)
 
-    # On active les tickets
+    logger.info(f"        On active les tickets")
     if new_instance.tickets:
         # On prend aussi ceux qui sont déja activé ( avec les Q() )
-        # pour pouvoir les envoyer par mail en cas de nouvelle demande
+        # pour pouvoir les envoyer par mail en cas de nouvelle demandes
         for ticket in new_instance.tickets.filter(Q(status=Ticket.NOT_ACTIV) | Q(status=Ticket.NOT_SCANNED)):
-            logger.info(f'signal_reservation, activation des tickets {ticket} NOT_SCANNED')
+            logger.info(f'         {ticket} : {ticket.status} to {ticket.NOT_SCANNED} && save()')
             ticket.status = Ticket.NOT_SCANNED
             ticket.save()
 
     # On vérifie que le mail n'a pas déja été envoyé
     if not new_instance.mail_send:
-        logger.info(f"    SIGNAL RESERVATION send_billet_to_mail {new_instance.status}")
         # Envoie du mail. Le succes du mail envoyé mettra la Reservation.VALID
         if new_instance.user_commande.email:
-            ticket_celery_mailer.delay(new_instance.pk)
-            # https://github.com/psf/requests/issues/5832
+            logger.info(f"         Envoie du mail via celery à {new_instance.user_commande.email}. Celery passera la Reservation à VALID")
+            ticket_celery_mailer.delay(new_instance.pk) # met la Reservation à VALID si mail envoyé
+
     else:
-        logger.info(
-            f"    SIGNAL RESERVATION mail déja envoyé {new_instance} : {new_instance.mail_send} - status : {new_instance.status}")
+        # Dans quel cas cela arrive ? TODO: checker ?
+        logger.info(f"         mail déja envoyé : {new_instance.mail_send}")
+        # Le mail a déja été envoyé
         set_paiement_valid(old_instance, new_instance)
+
+    logger.info(f"    END SIGNAL RESERVATION reservation_paid\n")
 
 
 def set_paiement_valid(old_instance: Reservation, new_instance: Reservation):
-    # On envoie les mails
+    logger.info(f"    START SIGNAL RESERVATION set_paiement_valid {old_instance.status} to {new_instance.status}")
+
     if new_instance.mail_send:
-        logger.info(
-            f"    SIGNAL RESERVATION set_paiement_valid : new_instance.mail_send = {new_instance.mail_send},"
-            f" on valide les paiements payés")
+        logger.info(f"        Le mail a déja été envoyé, on valide les paiements payés")
         for paiement in new_instance.paiements.filter(status=Paiement_stripe.PAID):
             paiement.status = Paiement_stripe.VALID
             paiement.traitement_en_cours = False
             paiement.save()
+
+    logger.info(f"    END SIGNAL RESERVATION set_paiement_valid\n")
 
 
 def error_in_mail(old_instance: Reservation, new_instance: Reservation):
@@ -275,7 +282,7 @@ def pre_save_signal_status(sender, instance, **kwargs):
                 old_instance.status = getattr(old_instance, CALLABLE_STATUS_MODEL.get(sender_str))
                 new_instance.status = getattr(new_instance, CALLABLE_STATUS_MODEL.get(sender_str))
 
-            logger.info(f"dict_transition {sender_str} {new_instance} : {old_instance.status} to {new_instance.status}")
+            logger.info(f"\nSTART pre_save_signal_status {sender_str} {new_instance} : {old_instance.status} to {new_instance.status}\n")
 
             transitions = dict_transition.get(old_instance.status, None)
             if transitions:

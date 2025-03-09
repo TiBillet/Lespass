@@ -42,7 +42,6 @@ class CreationPaiementStripe():
 
         self.metadata = metadata
         self.metadata_json = json.dumps(self.metadata)
-        self.total = self._total()
 
         # Construction du retour :
         self.absolute_domain = absolute_domain
@@ -66,12 +65,6 @@ class CreationPaiementStripe():
         if not self.invoice:
             self.checkout_session = self._checkout_session()
 
-    def _total(self):
-        total = 0
-        for ligne in self.liste_ligne_article:
-            total += Decimal(ligne.qty) * Decimal(ligne.pricesold.prix)
-        return total
-
     def _stripe_api_key(self):
         # La clé root comme clé par default pour tout paiement.
         api_key = RootConfiguration.get_solo().get_stripe_api()
@@ -83,7 +76,6 @@ class CreationPaiementStripe():
     def _send_paiement_stripe_in_db(self):
         dict_paiement = {
             'user': self.user,
-            'total': self.total,
             'metadata_stripe': self.metadata_json,
             'reservation': self.reservation,
             'source': self.source,

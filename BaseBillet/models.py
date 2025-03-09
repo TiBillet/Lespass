@@ -11,7 +11,7 @@ import stripe
 from dateutil.relativedelta import relativedelta
 from django.db import connection
 from django.db import models
-from django.db.models import JSONField, SET_NULL
+from django.db.models import JSONField, SET_NULL, Sum
 # Create your models here.
 from django.db.models import Q
 from django.db.models.signals import post_save
@@ -471,7 +471,7 @@ class Configuration(SingletonModel):
             id_acc_connect = acc_connect.get('id')
             if self.stripe_mode_test:
                 self.stripe_connect_account_test = id_acc_connect
-            else :
+            else:
                 self.stripe_connect_account = id_acc_connect
             self.save()
         return id_acc_connect
@@ -507,7 +507,7 @@ class Configuration(SingletonModel):
         return url_onboard_stripe.url
 
     def onboard_stripe(self):
-        try :
+        try:
             # on vérifie que le compte soit toujours lié et qu'il peut recevoir des paiements :
             if not self.stripe_payouts_enabled:
                 if not self.check_stripe_payouts():
@@ -1006,13 +1006,13 @@ class Event(models.Model):
         verbose_name = _('Evenement')
         verbose_name_plural = _('Evenements')
 
-
+"""
 @receiver(post_save, sender=Event)
 def add_to_public_event_directory(sender, instance: Event, created, **kwargs):
-    """
+    '''
     Vérifie que le priceSold est créé pour chaque price de chaque product présent dans l'évènement
     L'objet PriceSold est nécéssaire pour la création d'un ticket.
-    """
+    '''
     for product in instance.products.all():
         # On va chercher le stripe id du product
         productsold, created = ProductSold.objects.get_or_create(
@@ -1037,6 +1037,7 @@ def add_to_public_event_directory(sender, instance: Event, created, **kwargs):
             if created:
                 pricesold.get_id_price_stripe()
             logger.info(f"pricesold {pricesold.price.name} created : {created} - {pricesold.get_id_price_stripe()}")
+"""
 
 
 class Artist_on_event(models.Model):
@@ -1164,14 +1165,16 @@ class PriceSold(models.Model):
 
     def __str__(self):
         if self.productsold.event:
-            return f"{self.productsold.event.name} - {self.price.name} - {self.prix}€"
-        return self.price.name
+            str_name = f"{self.productsold.event.name} - {self.price.name}"
+        else:
+            str_name = self.price.name
 
-    def get_id_price_stripe(self,
-                            force=False,
-                            stripe_key=None,
-                            ):
+        if not self.price.free_price :
+            str_name += f" - {self.price.prix}€"
+        return str_name
 
+    def get_id_price_stripe(self, force=False):
+        logger.info("get_id_price_stripe")
         if self.id_price_stripe and not force:
             return self.id_price_stripe
 
@@ -1303,7 +1306,7 @@ class Reservation(models.Model):
         total_paid = 0
         for ligne_article in self.articles_paid():
             ligne_article: LigneArticle
-            total_paid += ligne_article.pricesold.price.prix * ligne_article.qty
+            total_paid += dround(ligne_article.amount * ligne_article.qty)
         return total_paid
 
     def __str__(self):
@@ -1490,9 +1493,13 @@ class Paiement_stripe(models.Model):
     source = models.CharField(max_length=1, choices=SOURCE_CHOICES, default=API_BILLETTERIE,
                               verbose_name="Source de la commande")
 
-    total = models.FloatField(default=0)
+
 
     fedow_transactions = models.ManyToManyField(FedowTransaction, blank=True, related_name="paiement_stripe")
+
+    # total = models.FloatField(default=0)
+    def total(self):
+        return dround(self.lignearticles.all().aggregate(Sum('amount'))['amount__sum']) or 0
 
     def uuid_8(self):
         return f"{self.uuid}".partition('-')[0]
@@ -1507,7 +1514,7 @@ class Paiement_stripe(models.Model):
     def articles(self):
         return " - ".join(
             [
-                f"{ligne.pricesold.productsold.product.name} {ligne.pricesold.price.name} {ligne.qty * ligne.pricesold.price.prix}€"
+                f"{ligne.pricesold.productsold.product.name} / {ligne.pricesold.price.name} / {dround(ligne.qty * ligne.amount)}€"
                 for ligne in self.lignearticles.all()])
 
     def get_checkout_session(self):
@@ -1609,9 +1616,16 @@ class LigneArticle(models.Model):
     class Meta:
         ordering = ('-datetime',)
 
+    def uuid_8(self):
+        return f"{self.uuid}".partition('-')[0]
+
+    def __str__(self):
+        return self.uuid_8()
+
     def total(self) -> int:
-        # Mise à jour de amount en cas de paiement stripe ( a virer après les migration ? )
-        if self.amount == 0 and self.paiement_stripe:
+        # Mise à jour de amount en cas de paiement stripe pour prix libre ( a virer après les migration ? )
+        if self.amount == 0 and self.paiement_stripe and self.pricesold.price.free_price :
+            logger.info("Total 0 ? free price ? update_amount()")
             self.update_amount()
         return self.amount * self.qty
 
@@ -1825,8 +1839,6 @@ class Membership(models.Model):
             return f"{self.user}"
         else:
             return "Anonymous"
-
-
 
 
 #### MODEL POUR INTEROP ####

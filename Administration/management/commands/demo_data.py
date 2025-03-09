@@ -322,7 +322,7 @@ class Command(BaseCommand):
                     jauge_max=200,
                     max_per_user=4,
                     short_description="Attention, places limitées, pensez à réserver !",
-                    long_description="Un évènement gratuit, avec une jauge maximale de 200 personnes et un nombre de billets limité à 4 par réservation."
+                    long_description="Un évènement à prix libre, avec une jauge maximale de 200 personnes et un nombre de billets limité à 1 par réservation."
                                      "\nBillets non nominatifs.",
                     categorie=Event.CONCERT,
                     postal_address=postal_address,

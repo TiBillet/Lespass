@@ -600,15 +600,15 @@ class PaiementStripeAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
 
     list_display = (
-        'uuid_8',
         'user',
-        'total',
         'order_date',
         'status',
         # 'traitement_en_cours',
         # 'source_traitement',
         'source',
         'articles',
+        'total',
+        'uuid_8',
     )
     readonly_fields = list_display
     ordering = ('-order_date',)

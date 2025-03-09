@@ -1,22 +1,19 @@
 import logging
 import os
 import uuid
-from datetime import timedelta, datetime
+from datetime import timedelta
 from io import BytesIO
-from itertools import product
-from unicodedata import category
-from wsgiref.validate import validator
 
-import barcode
 import segno
 import stripe
 from django.contrib import messages
 from django.contrib.auth import logout, login
 from django.contrib.messages import MessageFailure
 from django.core.cache import cache
+from django.core.paginator import Paginator
 from django.db import connection
 from django.db.models import Count, Q, Sum
-from django.http import HttpResponse, HttpRequest, Http404, HttpResponseRedirect, JsonResponse
+from django.http import HttpResponse, HttpRequest, Http404, HttpResponseRedirect
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.response import TemplateResponse
 from django.utils import timezone
@@ -24,22 +21,18 @@ from django.utils.encoding import force_str, force_bytes
 from django.utils.http import urlsafe_base64_encode
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_GET
-from django_tenants.utils import tenant_context
-from django.core.paginator import Paginator
-
 from django_htmx.http import HttpResponseClientRedirect
-
+from django_tenants.utils import tenant_context
 from rest_framework import viewsets, permissions, status
 from rest_framework.authentication import SessionAuthentication
-from rest_framework.decorators import action, throttle_classes
+from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
-from rest_framework.throttling import UserRateThrottle
+# from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
-from Administration.admin_tenant import FormbricksConfigAddform
-from AuthBillet.models import TibilletUser, Wallet, HumanUser
+from AuthBillet.models import TibilletUser, Wallet
 from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
@@ -51,16 +44,17 @@ from BaseBillet.validators import LoginEmailValidator, MembershipValidator, Link
     ReservationValidator, ContactValidator
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
-from fedow_connect.fedow_api import FedowAPI, AssetFedow
+from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
 
-
+"""
 class SmallAnonRateThrottle(UserRateThrottle):
     # Un throttle pour 10 requetes par jours uniquement
     scope = 'smallanon'
+"""
 
 
 def encode_uid(pk):
@@ -1202,7 +1196,7 @@ class Tenant(viewsets.ViewSet):
 
         return render(request, "reunion/views/tenant/new_tenant.html", context=context)
 
-    @action(detail=False, methods=['POST'], throttle_classes=[SmallAnonRateThrottle])
+    @action(detail=False, methods=['POST'])
     def create_waiting_configuration(self, request: Request, *args, **kwargs):
         """
         Reception du formulaire de création de nouveau tenant
@@ -1230,7 +1224,7 @@ class Tenant(viewsets.ViewSet):
         new_tenant_mailer.delay(waiting_config_uuid=str(waiting_configuration.uuid))
         return render(request, "reunion/views/tenant/create_waiting_configuration_THANKS.html", context={})
 
-    @action(detail=True, methods=['GET'], throttle_classes=[SmallAnonRateThrottle])
+    @action(detail=True, methods=['GET'])
     def onboard_stripe(self, request, pk):
         """
         Requete provenant du mail envoyé après la création d'une configuration en attente

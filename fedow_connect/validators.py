@@ -41,7 +41,7 @@ class AssetValidator(serializers.Serializer):
         (TIME, _("Monnaie temps")),
         (FIDELITY, _("Points de fidélité")),
         (BADGE, _("Badgeuse/Pointeuse")),
-        (SUBSCRIPTION, _('Adhésion ou abonnement')),
+        (SUBSCRIPTION, _('Adhésion/Abonnement')),
     ]
 
     category = serializers.ChoiceField(choices=CATEGORIES)
