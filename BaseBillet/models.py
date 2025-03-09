@@ -1360,6 +1360,12 @@ class Ticket(models.Model):
     payment_method = models.CharField(max_length=2, choices=PaymentMethod.choices, blank=True, null=True,
                                       verbose_name=_("Moyen de paiement"))
 
+    def paid(self):
+        if self.pricesold.price.free_price:
+            return self.reservation.total_paid()
+        return self.pricesold.price.prix
+        # return 666
+
     def pdf_filename(self):
         first_name = f"{self.first_name.upper()}" if self.first_name else ""
         last_name = f"{self.last_name.upper()}" if self.last_name else ""
