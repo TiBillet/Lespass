@@ -48,13 +48,13 @@ logger = logging.getLogger(__name__)
 # TODO, plus utile, a retirer et utiler un choice
 class Weekday(models.Model):
     WEEK = [
-        (0, _('Lundi')),
-        (1, _('Mardi')),
-        (2, _('Mercredi')),
-        (3, _('Jeudi')),
-        (4, _('Vendredi')),
-        (5, _('Samedi')),
-        (6, _('Dimanche')),
+        (0, _('Monday')),
+        (1, _('Tuesday')),
+        (2, _('Wednesday')),
+        (3, _('Thursday')),
+        (4, _('Friday')),
+        (5, _('Saturday')),
+        (6, _('Sunday')),
     ]
     day = models.IntegerField(choices=WEEK, unique=True)
 
@@ -63,20 +63,20 @@ class Weekday(models.Model):
 
 
 class SaleOrigin(models.TextChoices):
-    LESPASS = "LP", _("En ligne")
-    LABOUTIK = "LB", _("Caisse")
+    LESPASS = "LP", _("Online")
+    LABOUTIK = "LB", _("Register")
     ADMIN = "AD", _("Administration")
-    EXTERNAL = "EX", _("Extérieur")
+    EXTERNAL = "EX", _("External")
 
 
 class PaymentMethod(models.TextChoices):
-    FREE = "NA", _("Aucun : offert")
-    CC = "CC", _("Carte bancaire : TPE")
-    CASH = "CA", _("Espèce")
-    CHEQUE = "CH", _("Cheque bancaire")
-    STRIPE_FED = "SF", _("En ligne : Stripe fédéré")
-    STRIPE_NOFED = "SN", _("En ligne : Stripe account")
-    STRIPE_RECURENT = "SR", _("Paiement récurent : Stripe account")
+    FREE = "NA", _("Offered")
+    CC = "CC", _("Credit card: POS terminal")
+    CASH = "CA", _("Cash")
+    CHEQUE = "CH", _("Check")
+    STRIPE_FED = "SF", _("Online: federated Stripe")
+    STRIPE_NOFED = "SN", _("Online: Stripe account")
+    STRIPE_RECURENT = "SR", _("Recurring: Stripe account")
 
     @classmethod
     def online(cls):
@@ -97,9 +97,9 @@ class PaymentMethod(models.TextChoices):
 
 class Tag(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid4)
-    name = models.CharField(max_length=50, verbose_name=_("Nom du tag"))
-    slug = models.CharField(max_length=50, verbose_name=_("slug du tag"), db_index=True)
-    color = models.CharField(max_length=7, verbose_name=_("Couleur du tag"), default="#000000")
+    name = models.CharField(max_length=50, verbose_name=_("Tag name"))
+    slug = models.CharField(max_length=50, verbose_name=_("Tag slug"), db_index=True)
+    color = models.CharField(max_length=7, verbose_name=_("Tag color"), default="#000000")
 
     def __str__(self):
         return self.name
@@ -117,7 +117,7 @@ class OptionGenerale(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
     name = models.CharField(max_length=30, unique=True)
     description = models.CharField(max_length=250, blank=True, null=True)
-    poids = models.PositiveIntegerField(default=0, verbose_name=_("Poids"), db_index=True)
+    poids = models.PositiveIntegerField(default=0, verbose_name=_("Weight"), db_index=True)
 
     def __str__(self):
         return self.name
@@ -134,35 +134,35 @@ class PostalAddress(models.Model):
     """
     name = models.CharField(max_length=400,
                             blank=True, null=True,
-                            verbose_name=_("Nom de l'adresse"),
-                            help_text=_("Donnez un nom à cette adresse")
+                            verbose_name=_("Address name"),
+                            help_text=_("It will help with finding it quickly later.")
                             )
 
     street_address = models.TextField(
-        verbose_name=_("Adresse de la rue"),
-        help_text=_("Le numéro de la rue, le nom de la rue, etc.")
+        verbose_name=_("Street address"),
+        help_text=_("Street number, name, etc.")
     )
     address_locality = models.CharField(
         max_length=255,
-        verbose_name=_("Localité"),
-        help_text=_("La ville ou la localité.")
+        verbose_name=_("Locality"),
+        help_text=_("Town or city name.")
     )
     address_region = models.CharField(
         max_length=255,
         blank=True,
         null=True,
-        verbose_name=_("Région"),
-        help_text=_("L'état, la province ou la région.")
+        verbose_name=_("Region"),
+        help_text=_("State, province or region.")
     )
     postal_code = models.CharField(
         max_length=20,
-        verbose_name=_("Code postal"),
-        help_text=_("Le code postal ou code ZIP.")
+        verbose_name=_("Zip code"),
+        help_text=_("Postcode or zip code.")
     )
     address_country = models.CharField(
         max_length=255,
-        verbose_name=_("Pays"),
-        help_text=_("Le pays de l'adresse (en toutes lettres ou code ISO.")
+        verbose_name=_("Country"),
+        help_text=_("Full name or ISO code.")
     )
     latitude = models.DecimalField(
         max_digits=9,
@@ -170,7 +170,7 @@ class PostalAddress(models.Model):
         blank=True,
         null=True,
         verbose_name=_("Latitude"),
-        help_text=_("Coordonnée GPS : latitude.")
+        help_text=_("GPS coordinate: latitude.")
     )
     longitude = models.DecimalField(
         max_digits=9,
@@ -178,25 +178,25 @@ class PostalAddress(models.Model):
         blank=True,
         null=True,
         verbose_name=_("Longitude"),
-        help_text=_("Coordonnée GPS : longitude.")
+        help_text=_("GPS coordinate: longitude.")
     )
     comment = models.TextField(
         blank=True,
         null=True,
-        verbose_name=_("Commentaire"),
-        help_text=_("Un commentaire sur l'adresse.")
+        verbose_name=_("Comment"),
+        help_text=_("Comment about the address.")
     )
     is_main = models.BooleanField(
         default=False,
-        verbose_name=_("Adresse principale"),
+        verbose_name=_("Main address"),
     )
 
     def __str__(self):
         return f"{self.street_address}, {self.address_locality}, {self.address_country}"
 
     class Meta:
-        verbose_name = _("Adresse postale")
-        verbose_name_plural = _("Adresses postales")
+        verbose_name = _("Postal address")
+        verbose_name_plural = _("Postal addresses")
 
 
 # class ExternalLink(models.Model):
@@ -216,7 +216,7 @@ def poids_option_generale(sender, instance: OptionGenerale, created, **kwargs):
 
 
 class Carrousel(models.Model):
-    name = models.CharField(max_length=50, verbose_name=_("Nom de l'image"))
+    name = models.CharField(max_length=50, verbose_name=_("Slide name"))
     img = StdImageField(upload_to='images/',
                         validators=[MinSizeValidator(720, 135)],
                         variations={
@@ -225,13 +225,13 @@ class Carrousel(models.Model):
                             'med': (480, 480),
                         },
                         delete_orphans=True,
-                        verbose_name=_('Fichier image'),
+                        verbose_name=_('Image file'),
                         )
 
     # publish = models.BooleanField(default=True, verbose_name=_("Publier"))
-    on_event_list_page = models.BooleanField(default=True, verbose_name=_("Publier sur la page des évènements"))
-    link = models.URLField(blank=True, null=True, verbose_name=_("URL de lien"))
-    order = models.PositiveSmallIntegerField(verbose_name=_("Ordre d'apparition"), default=1000, )
+    on_event_list_page = models.BooleanField(default=True, verbose_name=_("Add to event list carousel"))
+    link = models.URLField(blank=True, null=True, verbose_name=_("Link URL"))
+    order = models.PositiveSmallIntegerField(verbose_name=_("Weight"), default=1000, )
 
     def __str__(self):
         return self.name
@@ -241,26 +241,26 @@ class Configuration(SingletonModel):
     def uuid(self):
         return connection.tenant.pk
 
-    organisation = models.CharField(db_index=True, max_length=50, verbose_name=_("Nom de l'organisation"))
+    organisation = models.CharField(db_index=True, max_length=50, verbose_name=_("Collective name"))
 
     slug = models.SlugField(max_length=50, default="")
 
-    short_description = models.CharField(max_length=250, verbose_name=_("Description courte"), blank=True, null=True)
-    long_description = models.TextField(blank=True, null=True, verbose_name=_("Description longue"))
+    short_description = models.CharField(max_length=250, verbose_name=_("Short description"), blank=True, null=True)
+    long_description = models.TextField(blank=True, null=True, verbose_name=_("Long description"))
 
     postal_address = models.ForeignKey(PostalAddress, on_delete=SET_NULL, blank=True, null=True)
 
-    adress = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Adresse"))
-    postal_code = models.IntegerField(blank=True, null=True, verbose_name=_("Code postal"))
-    city = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Ville"))
-    tva_number = models.CharField(max_length=20, blank=True, null=True, verbose_name=_("Numéro de TVA"))
-    siren = models.CharField(max_length=20, blank=True, null=True, verbose_name=_("Numéro de SIREN"))
+    adress = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Address"))
+    postal_code = models.IntegerField(blank=True, null=True, verbose_name=_("Zip code"))
+    city = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("City"))
+    tva_number = models.CharField(max_length=20, blank=True, null=True, verbose_name=_("VAT number"))
+    siren = models.CharField(max_length=20, blank=True, null=True, verbose_name=_("SIREN number"))
 
-    phone = models.CharField(max_length=20, verbose_name=_("Téléphone"))
+    phone = models.CharField(max_length=20, verbose_name=_("Phone number"))
     email = models.EmailField()
 
     site_web = models.URLField(blank=True, null=True)
-    legal_documents = models.URLField(blank=True, null=True, verbose_name=_('Statuts associatif'))
+    legal_documents = models.URLField(blank=True, null=True, verbose_name=_('Terms and conditions document'))
 
     twitter = models.URLField(blank=True, null=True)
     facebook = models.URLField(blank=True, null=True)
@@ -276,7 +276,7 @@ class Configuration(SingletonModel):
                                 'thumbnail': (150, 90),
                             },
                             delete_orphans=True,
-                            verbose_name=_('Carte géographique')
+                            verbose_name=_('Geographical map image')
                             )
 
     carte_restaurant = StdImageField(upload_to='images/',
@@ -289,7 +289,7 @@ class Configuration(SingletonModel):
                                          'thumbnail': (150, 90),
                                      },
                                      delete_orphans=True,
-                                     verbose_name=_('Carte du restaurant')
+                                     verbose_name=_('Restaurant menu image')
                                      )
 
     img = StdImageField(upload_to='images/',
@@ -361,7 +361,7 @@ class Configuration(SingletonModel):
     ######### OPTION GENERALES #########
     """
 
-    jauge_max = models.PositiveSmallIntegerField(default=50, verbose_name=_("Jauge maximale"))
+    jauge_max = models.PositiveSmallIntegerField(default=50, verbose_name=_("Maximum capacity"))
 
     option_generale_radio = models.ManyToManyField(OptionGenerale,
                                                    blank=True,
@@ -371,7 +371,7 @@ class Configuration(SingletonModel):
                                                       blank=True,
                                                       related_name="checkbox")
 
-    need_name = models.BooleanField(default=True, verbose_name=_("Nom requis lors du scan qrcode"))
+    need_name = models.BooleanField(default=True, verbose_name=_("Users have to give a first and last name at registration."))
 
     """
     ######### CASHLESS #########
@@ -381,20 +381,20 @@ class Configuration(SingletonModel):
         max_length=300,
         blank=True,
         null=True,
-        verbose_name=_("Adresse du serveur Cashless")
+        verbose_name=_("Cashless server URL")
     )
 
     key_cashless = models.CharField(
         max_length=41,
         blank=True,
         null=True,
-        verbose_name=_("Clé d'API du serveur cashless")
+        verbose_name=_("Cashless server API key")
     )
 
     laboutik_public_pem = models.CharField(max_length=512, editable=False, null=True, blank=True)
 
     def check_serveur_cashless(self):
-        logger.info(f"On check le serveur cashless. Adresse : {self.server_cashless}")
+        logger.info(f"Checking cashless server... URL: {self.server_cashless}")
         if self.server_cashless and self.key_cashless:
             sess = requests.Session()
             try:
@@ -429,14 +429,14 @@ class Configuration(SingletonModel):
         max_length=300,
         blank=True,
         null=True,
-        verbose_name=_("Adresse du serveur fedow")
+        verbose_name=_("Fedow server URL")
     )
 
     key_fedow = models.CharField(
         max_length=41,
         blank=True,
         null=True,
-        verbose_name=_("Clé d'API du serveur fedow")
+        verbose_name=_("Fedow server API")
     )
 
     """
@@ -517,10 +517,10 @@ class Configuration(SingletonModel):
                     url_onboard_stripe = self.link_for_onboard_stripe()
                     msg = _('Link your stripe account to accept payment')
                     return format_html(f"<a href='{url_onboard_stripe}'>{msg}</a>")
-            return "Stripe connected"
+            return _("Stripe connected")
         except Exception as e:
-            logger.error(f"Erreur stripe, check admin")
-            return format_html(f"<p>Erreur stripe, check admin</p>")
+            logger.error(_("Stripe error, check admin"))
+            return format_html("<p>" + _("Stripe error, check admin") + "</p>")
 
     def clean_product_stripe_id(self):
         ProductSold.objects.all().update(id_product_stripe=None)
@@ -531,10 +531,12 @@ class Configuration(SingletonModel):
     ### FEDERATION
     """
 
-    federated_with = models.ManyToManyField(Client, blank=True,
-                                            verbose_name=_("Fédéré avec"),
-                                            related_name="federated_with", help_text=_(
-            "Affiche les évènements et les adhésions des structures fédérées."))
+    federated_with = models.ManyToManyField(Client,
+        blank=True,
+        verbose_name=_("Federated with"),
+        related_name="federated_with",
+        help_text=_(
+            "Displays events and subscription of the federated collectives."))
 
     """
     ### TVA ###
@@ -566,47 +568,47 @@ class Configuration(SingletonModel):
         super().save(*args, **kwargs)
 
     class Meta:
-        verbose_name = _('Paramètres')
-        verbose_name_plural = _('Paramètres')
+        verbose_name = _('Settings')
+        verbose_name_plural = _('Settings')
 
     def __str__(self):
         if self.organisation:
-            return f"Paramètres de {self.organisation}"
-        return f"Paramètres"
+            return _("Settings for ") + self.organisation
+        return _('Settings')
 
 
 class Product(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
 
-    name = models.CharField(max_length=500, verbose_name=_("Nom"))
+    name = models.CharField(max_length=500, verbose_name=_("Name"))
 
-    short_description = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Description courte"))
-    long_description = models.TextField(blank=True, null=True, verbose_name=_("Description longue"))
+    short_description = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Short description"))
+    long_description = models.TextField(blank=True, null=True, verbose_name=_("Long description"))
 
-    publish = models.BooleanField(default=True, verbose_name=_("Publier"))
-    poids = models.PositiveSmallIntegerField(default=0, verbose_name=_("Poids"),
-                                             help_text="Ordre d'apparition du plus leger au plus lourd")
+    publish = models.BooleanField(default=True, verbose_name=_("Publish"))
+    poids = models.PositiveSmallIntegerField(default=0, verbose_name=_("Weight"),
+                                             help_text="Products are ordered lightest first.")
 
     tag = models.ManyToManyField(Tag, blank=True, related_name="produit_tags")
 
     option_generale_radio = models.ManyToManyField(OptionGenerale,
                                                    blank=True,
                                                    related_name="produits_radio",
-                                                   verbose_name=_("Option choix unique"),
+                                                   verbose_name=_("Single choice menu"),
                                                    help_text=_(
-                                                       "Peux choisir entre une seule des options selectionnés."))
+                                                       "Only one choice can be selected at order time."))
 
     option_generale_checkbox = models.ManyToManyField(OptionGenerale,
                                                       blank=True,
                                                       related_name="produits_checkbox",
-                                                      verbose_name=_("Option choix multiple"),
+                                                      verbose_name=_("Multiple choice menu"),
                                                       help_text=_(
-                                                          "Peux choisir plusieurs options selectionnés."))
+                                                          "Any number of choices can be selected at order time."))
 
     # TODO: doublon ?
     terms_and_conditions_document = models.URLField(blank=True, null=True)
-    legal_link = models.URLField(blank=True, null=True, verbose_name=_("Lien vers mentions légales"),
-                                 help_text=_("Non obligatoire"))
+    legal_link = models.URLField(blank=True, null=True, verbose_name=_("Terms and conditions link"),
+                                 help_text=_("Not required."))
 
     img = StdImageField(upload_to='images/',
                         null=True, blank=True,
@@ -620,7 +622,7 @@ class Product(models.Model):
                             'crop': (480, 270, True),
                         },
                         delete_orphans=True,
-                        verbose_name=_('Image du produit'),
+                        verbose_name=_('Product image'),
                         )
 
     NONE, BILLET, PACK, RECHARGE_CASHLESS = 'N', 'B', 'P', 'R'
@@ -628,29 +630,29 @@ class Product(models.Model):
     DON, FREERES, NEED_VALIDATION = 'D', 'F', 'V'
 
     CATEGORIE_ARTICLE_CHOICES = [
-        (NONE, _('Selectionnez une catégorie')),
-        (BILLET, _('Billet pour reservation payante')),
+        (NONE, _('Select a category')),
+        (FREERES, _('Free booking')),
+        (BILLET, _('Non-free booking')),
         # (PACK, _("Pack d'objets")),
         # (RECHARGE_CASHLESS, _('Recharge cashless')),
         # (RECHARGE_FEDERATED, _('Recharge suspendue')),
         # (VETEMENT, _('Vetement')),
         # (MERCH, _('Merchandasing')),
-        (ADHESION, _('Abonnement et/ou adhésion associative')),
-        (BADGE, _('Badgeuse')),
+        (ADHESION, _('Subscription or membership')),
+        (BADGE, _('Punchclock')),
         # (DON, _('Don')),
-        (FREERES, _('Reservation gratuite')),
         # (NEED_VALIDATION, _('Nécessite une validation manuelle'))
     ]
 
     categorie_article = models.CharField(max_length=3, choices=CATEGORIE_ARTICLE_CHOICES, default=NONE,
-                                         verbose_name=_("Type de produit"))
+                                         verbose_name=_("Product type"))
 
     nominative = models.BooleanField(default=False,
-                                     verbose_name=_("Nominatif"),
-                                     help_text=_("Nom/Prenom obligatoire par billet si plusieurs réservation."),
+                                     verbose_name=_("Named booking"),
+                                     help_text=_("Intended recipient's first and last names required for each ticket."),
                                      )
 
-    archive = models.BooleanField(default=False, verbose_name=_("Archiver"))
+    archive = models.BooleanField(default=False, verbose_name=_("Archive"))
 
     # TODO: A retirer, plus utilisé ?
     # send_to_cashless = models.BooleanField(default=False,
@@ -674,8 +676,8 @@ class Product(models.Model):
 
     class Meta:
         ordering = ('poids',)
-        verbose_name = _('Produit')
-        verbose_name_plural = _('Produits')
+        verbose_name = _('Product')
+        verbose_name_plural = _('Products')
         unique_together = ('categorie_article', 'name')
 
 
@@ -697,17 +699,17 @@ Il vérifie l'existante du produit Adhésion et Badge dans Fedow et le créé si
 
 class Price(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
-    product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="prices", verbose_name=_("Produit"))
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="prices", verbose_name=_("Product"))
 
     short_description = models.CharField(max_length=250, blank=True, null=True)
     long_description = models.TextField(blank=True, null=True)
 
-    name = models.CharField(max_length=50, verbose_name=_("Précisez le nom du Tarif"))
-    prix = models.DecimalField(max_digits=6, decimal_places=2, verbose_name=_("Prix"))
-    free_price = models.BooleanField(default=False, verbose_name=_("Prix libre"),
-                                     help_text=_("Si coché, le prix sera demandé sur la page de paiement stripe"))
+    name = models.CharField(max_length=50, verbose_name=_("Rate name"))
+    prix = models.DecimalField(max_digits=6, decimal_places=2, verbose_name=_("Price"))
+    free_price = models.BooleanField(default=False, verbose_name=_("Open price"),
+                                     help_text=_("The amount will be asked on the Stripe checkout page."))
 
-    publish = models.BooleanField(default=True, verbose_name=_("Publier"))
+    publish = models.BooleanField(default=True, verbose_name=_("Publish"))
 
     TNA, DIX, VINGT, HUITCINQ, DEUXDEUX = 'NA', 'DX', 'VG', 'HC', 'DD'
     TVA_CHOICES = [
@@ -721,44 +723,44 @@ class Price(models.Model):
     vat = models.CharField(max_length=2,
                            choices=TVA_CHOICES,
                            default=TNA,
-                           verbose_name=_("Taux TVA"),
+                           verbose_name=_("VAT rate"),
                            )
 
     stock = models.SmallIntegerField(blank=True, null=True)
-    max_per_user = models.PositiveSmallIntegerField(default=10,
-                                                    verbose_name=_(
-                                                        "Nombre de reservation maximum par utilisateur·ices"),
-                                                    help_text=_("ex : Un même email peut réserver plusieurs billets")
-                                                    )
+    max_per_user = models.PositiveSmallIntegerField(
+        default=10,
+        verbose_name=_("Maximum orders per user"),
+        help_text=_("The same email can be used for multiple orders.")
+        )
 
     adhesion_obligatoire = models.ForeignKey(Product, on_delete=models.PROTECT,
                                              related_name="adhesion_obligatoire",
-                                             verbose_name=_("Adhésion obligatoire"),
+                                             verbose_name=_("Subscription required"),
                                              help_text=_(
-                                                 "Ce tarif n'est possible que si l'utilisateur·ices est adhérant.e à "),
+                                                 "Rate available to suscribers only: "),
                                              blank=True, null=True)
 
     NA, YEAR, MONTH, DAY, HOUR, CIVIL, SCHOLAR = 'N', 'Y', 'M', 'D', 'H', 'C', 'S'
     SUB_CHOICES = [
         (NA, _('Non applicable')),
-        (HOUR, _('1 Heure')),
-        (MONTH, _('30 Jours')),
-        (DAY, _('1 Jour')),
-        (YEAR, _("365 Jours")),
-        (CIVIL, _('Civile : 1er Janvier')),
-        (SCHOLAR, _('Scolaire : 1er septembre')),
+        (HOUR, _('1 hour')),
+        (DAY, _('1 day')),
+        (MONTH, _('30 days')),
+        (YEAR, _("365 days")),
+        (CIVIL, _('Calendar year : 1st of January')),
+        (SCHOLAR, _('School year: 1st of September')),
     ]
 
     subscription_type = models.CharField(max_length=1,
                                          choices=SUB_CHOICES,
                                          default=NA,
-                                         verbose_name=_("durée d'abonnement"),
+                                         verbose_name=_("Subscription duration"),
                                          )
 
     recurring_payment = models.BooleanField(default=False,
-                                            verbose_name="Paiement récurrent",
-                                            help_text="Paiement récurrent avec Stripe, "
-                                                      "Ne peux être utilisé avec un autre article dans le même panier",
+                                            verbose_name="Monthly fee",
+                                            help_text="Monthly payment through Stripe, "
+                                                      "limited to one product at checkout.",
                                             )
 
     # def range_max(self):
@@ -770,52 +772,52 @@ class Price(models.Model):
     class Meta:
         unique_together = ('name', 'product')
         ordering = ('prix',)
-        verbose_name = _('Tarif')
-        verbose_name_plural = _('Tarifs')
+        verbose_name = _('Rate')
+        verbose_name_plural = _('Rates')
 
 
 class Event(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
 
-    name = models.CharField(max_length=200, verbose_name=_("Nom de l'évènement"))
+    name = models.CharField(max_length=200, verbose_name=_("Event name"))
     slug = models.SlugField(unique=True, db_index=True, blank=True, null=True, max_length=250)
 
-    datetime = models.DateTimeField(verbose_name=_("Date de début"))
-    end_datetime = models.DateTimeField(blank=True, null=True, verbose_name=_("Date de fin"),
-                                        help_text=_("Non obligatoire"))
+    datetime = models.DateTimeField(verbose_name=_("Event start"))
+    end_datetime = models.DateTimeField(blank=True, null=True, verbose_name=_("Event end"),
+                                        help_text=_("Second date / time optional"))
 
     created = models.DateTimeField(auto_now=True)
-    jauge_max = models.PositiveSmallIntegerField(default=50, verbose_name=_("Jauge maximale"))
+    jauge_max = models.PositiveSmallIntegerField(default=50, verbose_name=_("Maximum capacity"))
     max_per_user = models.PositiveSmallIntegerField(default=10,
                                                     verbose_name=_(
-                                                        "Nombre de reservation maximales par utilisateur·ices"),
-                                                    help_text=_("ex : Un même email peut réserver plusieurs billets.")
+                                                        "Maximum bookings per user"),
+                                                    help_text=_("The same email can be used for multiple tickets.")
                                                     )
 
     postal_address = models.ForeignKey(PostalAddress, on_delete=SET_NULL, blank=True, null=True)
 
-    short_description = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Description courte"))
-    long_description = models.TextField(blank=True, null=True, verbose_name=_("Description longue"))
+    short_description = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Short description"))
+    long_description = models.TextField(blank=True, null=True, verbose_name=_("Long description"))
 
-    is_external = models.BooleanField(default=False, verbose_name=_("Billetterie/Reservation externe"), help_text=_(
-        "Si l'évènement est géré par une autre billetterie ou un autre site de réservation. Ex : Un event Facebook"))
+    is_external = models.BooleanField(default=False, verbose_name=_("External event"), help_text=_(
+        "The event is handled outside of this platform (ex: Facebook event)."))
     full_url = models.URLField(blank=True, null=True)
 
-    published = models.BooleanField(default=True, verbose_name=_("Publier"))
+    published = models.BooleanField(default=True, verbose_name=_("Publish"))
 
-    products = models.ManyToManyField(Product, blank=True, verbose_name=_("Produits"))
+    products = models.ManyToManyField(Product, blank=True, verbose_name=_("Products"))
 
     tag = models.ManyToManyField(Tag, blank=True, related_name="events", verbose_name=_("Tags"))
 
     options_radio = models.ManyToManyField(OptionGenerale, blank=True, related_name="options_radio",
-                                           verbose_name="Option choix unique")
+                                           verbose_name="Single choice menu")
     options_checkbox = models.ManyToManyField(OptionGenerale, blank=True, related_name="options_checkbox",
-                                              verbose_name="Options choix multiple")
+                                              verbose_name="Multiple choice menu")
 
     # cashless = models.BooleanField(default=False, verbose_name="Proposer la recharge cashless")
     minimum_cashless_required = models.SmallIntegerField(default=0,
                                                          verbose_name=_(
-                                                             "Montant obligatoire minimum de la recharge cashless"))
+                                                             "Minimum valie of cashless refill"))
 
     img = StdImageField(upload_to='images/',
                         validators=[MaxSizeValidator(1920, 1920)],
@@ -828,10 +830,10 @@ class Event(models.Model):
                             'crop_hdr': (960, 540, True),
                             'crop': (480, 270, True),
                         },
-                        delete_orphans=True, verbose_name=_("Image principale")
+                        delete_orphans=True, verbose_name=_("Main image")
                         )
 
-    carrousel = models.ManyToManyField(Carrousel, blank=True, verbose_name=_("Carrousel d'images"),
+    carrousel = models.ManyToManyField(Carrousel, blank=True, verbose_name=_("Carousel slides"),
                                        related_name='events')
 
     CONCERT = "LIV"
@@ -843,14 +845,14 @@ class Event(models.Model):
     TYPE_CHOICES = [
         (CONCERT, _('Concert')),
         (FESTIVAL, _('Festival')),
-        (REUNION, _('Réunion')),
-        (CONFERENCE, _('Conférence')),
+        (REUNION, _('Meeting')),
+        (CONFERENCE, _('Conference')),
         (RESTAURATION, _('Restauration')),
-        (ACTION, _('Volontariat')),
+        (ACTION, _('Volunteering')),
     ]
 
     categorie = models.CharField(max_length=3, choices=TYPE_CHOICES, default=CONCERT,
-                                 verbose_name=_("Catégorie d'évènement"))
+                                 verbose_name=_("Event category"))
 
     # recurrent = models.ManyToManyField(Weekday, blank=True,
     #                                    help_text=_(
@@ -866,12 +868,12 @@ class Event(models.Model):
         on_delete=models.CASCADE
     )
 
-    easy_reservation = models.BooleanField(default=False, verbose_name=_("Réservation facile"),
-                                           help_text=_("Mode réservation en un clic si utilisateur·ices connecté·e."))
+    easy_reservation = models.BooleanField(default=False, verbose_name=_("Quick booking"),
+                                           help_text=_("One-click booking for logged-in user."))
 
-    booking = models.BooleanField(default=False, verbose_name=_("Mode restauration/booking"),
+    booking = models.BooleanField(default=False, verbose_name=_("Restaurant mode / scheduler"),
                                   help_text=_(
-                                      "Si activé, l'évènement sera visible en haut de la page d'accueil, l'utilisateur·ices pourra selectionner une date."))
+                                      "The event will be visible at the top of the home page, allowing the user to book a specific date."))
 
     """ Pour signer les tickets """
     rsa_key = models.OneToOneField(RsaKey, on_delete=models.SET_NULL, null=True, related_name='event')
@@ -1003,8 +1005,8 @@ class Event(models.Model):
     class Meta:
         unique_together = ('name', 'datetime')
         ordering = ('datetime',)
-        verbose_name = _('Evenement')
-        verbose_name_plural = _('Evenements')
+        verbose_name = _('Event')
+        verbose_name_plural = _('Events')
 
 
 @receiver(post_save, sender=Event)
@@ -1072,7 +1074,7 @@ class ProductSold(models.Model):
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
 
     categorie_article = models.CharField(max_length=3, choices=Product.CATEGORIE_ARTICLE_CHOICES, default=Product.NONE,
-                                         verbose_name=_("Type de produit"))
+                                         verbose_name=_("Product type"))
 
     def __str__(self):
         return self.product.name
@@ -1153,7 +1155,7 @@ class PriceSold(models.Model):
 
     id_price_stripe = models.CharField(max_length=30, null=True, blank=True)
 
-    productsold = models.ForeignKey(ProductSold, on_delete=models.PROTECT, verbose_name=_("Produit"))
+    productsold = models.ForeignKey(ProductSold, on_delete=models.PROTECT, verbose_name=_("Product"))
     price = models.ForeignKey(Price, on_delete=models.PROTECT)
 
     # TODO: A virer, inutile ici, c'est ligne article qui comptabilise les qty
@@ -1251,19 +1253,19 @@ class Reservation(models.Model):
 
     CANCELED, CREATED, UNPAID, FREERES, FREERES_USERACTIV, PAID, PAID_ERROR, PAID_NOMAIL, VALID, = 'C', 'R', 'U', 'F', 'FA', 'P', 'PE', 'PN', 'V'
     TYPE_CHOICES = [
-        (CANCELED, _('Annulée')),
-        (CREATED, _('Crée')),
-        (UNPAID, _('Non payée')),
-        (FREERES, _('Mail non vérifié')),
-        (FREERES_USERACTIV, _('Mail user vérifié')),
-        (PAID, _('Payée')),
-        (PAID_ERROR, _('Payée mais mail non valide')),
-        (PAID_NOMAIL, _('Payée mais mail non envoyé')),
-        (VALID, _('Validée')),
+        (CANCELED, _('Cancelled')),
+        (CREATED, _('Created')),
+        (UNPAID, _('Payment still pending')),
+        (FREERES, _('Email verification still pending')),
+        (FREERES_USERACTIV, _('Email verified')),
+        (PAID, _('Payment confirmed')),
+        (PAID_ERROR, _('Payment confirmed but invalid email')),
+        (PAID_NOMAIL, _('Payment confirmed but email not sent')),
+        (VALID, _('Confirmed')),
     ]
 
     status = models.CharField(max_length=3, choices=TYPE_CHOICES, default=CREATED,
-                              verbose_name=_("Status de la réservation"))
+                              verbose_name=_("Order status"))
 
     # Doit-on envoyer le ticket par mail ?
     to_mail = models.BooleanField(default=True)
@@ -1341,21 +1343,21 @@ class Ticket(models.Model):
 
     CREATED, NOT_ACTIV, NOT_SCANNED, SCANNED = 'C', 'N', 'K', 'S'
     SCAN_CHOICES = [
-        (CREATED, _('Crée')),
-        (NOT_ACTIV, _('Non actif')),
-        (NOT_SCANNED, _('Non scanné')),
-        (SCANNED, _('scanné')),
+        (CREATED, _('Created')),
+        (NOT_ACTIV, _('Inactive')),
+        (NOT_SCANNED, _('Not scanned')),
+        (SCANNED, _('Scanned')),
     ]
 
     status = models.CharField(max_length=1, choices=SCAN_CHOICES, default=CREATED,
-                              verbose_name=_("Status du scan"))
+                              verbose_name=_("Scanning status"))
 
     seat = models.CharField(max_length=20, default=_('L'))
 
     sale_origin = models.CharField(max_length=2, choices=SaleOrigin.choices, default=SaleOrigin.LESPASS,
-                                   verbose_name=_("Origine du paiement"))
+                                   verbose_name=_("Payment source"))
     payment_method = models.CharField(max_length=2, choices=PaymentMethod.choices, blank=True, null=True,
-                                      verbose_name=_("Moyen de paiement"))
+                                      verbose_name=_("Payment method"))
 
     def pdf_filename(self):
         first_name = f"{self.first_name.upper()}" if self.first_name else ""
@@ -1387,14 +1389,14 @@ class Ticket(models.Model):
         return self.reservation.event
 
     event.allow_tags = True
-    event.short_description = 'Évènement'
+    event.short_description = _('Event')
     event.admin_order_field = 'reservation__event'
 
     def datetime(self):
         return self.reservation.datetime
 
     datetime.allow_tags = True
-    datetime.short_description = 'Date de reservation'
+    datetime.short_description = _('Booking date')
     datetime.admin_order_field = 'reservation__datetime'
 
     def numero_uuid(self):
@@ -1416,13 +1418,13 @@ class Ticket(models.Model):
         if not verify_signature(self.reservation.event.get_public_key(),
                                 qrcode_data,
                                 signature):
-            raise Exception("Signature auto verification failed")
+            raise Exception("Signature self-check failed")
 
         return f"{qrcode_data.decode('utf8')}:{signature}"
 
     class Meta:
-        verbose_name = _('Billet')
-        verbose_name_plural = _('Billets')
+        verbose_name = _('Ticket')
+        verbose_name_plural = _('Tickets')
 
 
 class FedowTransaction(models.Model):
@@ -1446,49 +1448,49 @@ class Paiement_stripe(models.Model):
     invoice_stripe = models.CharField(max_length=27, blank=True, null=True)
     subscription = models.CharField(max_length=28, blank=True, null=True)
 
-    order_date = models.DateTimeField(auto_now_add=True, verbose_name="Date")
+    order_date = models.DateTimeField(auto_now_add=True, verbose_name="Order date")
     last_action = models.DateTimeField(auto_now=True)
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, blank=True, null=True)
 
     NON, OPEN, PENDING, EXPIRE, PAID, VALID, NOTSYNC, CANCELED = 'N', 'O', 'W', 'E', 'P', 'V', 'S', 'C'
     STATUS_CHOICES = (
-        (NON, 'Lien de paiement non créé'),
-        (OPEN, 'Envoyée a Stripe'),
-        (PENDING, 'En attente de paiement'),
-        (EXPIRE, 'Expiré'),
-        (PAID, 'Payée'),
-        (VALID, 'Payée et validée'),  # envoyé sur serveur cashless
-        (NOTSYNC, 'Payée mais problème de synchro cashless'),  # envoyé sur serveur cashless qui retourne une erreur
-        (CANCELED, 'Annulée'),
+        (NON, 'Payment link not generated'),
+        (OPEN, 'Sent to Stripe'),
+        (PENDING, 'Waiting for payment'),
+        (EXPIRE, 'Expired'),
+        (PAID, 'Paid for'),
+        (VALID, 'Paid and confirmed'),  # envoyé sur serveur cashless
+        (NOTSYNC, 'Paid but issues with Stripe sync'),  # envoyé sur serveur cashless qui retourne une erreur
+        (CANCELED, 'Cancelled'),
     )
-    status = models.CharField(max_length=1, choices=STATUS_CHOICES, default=NON, verbose_name="Statut de la commande")
+    status = models.CharField(max_length=1, choices=STATUS_CHOICES, default=NON, verbose_name="Order status")
 
     traitement_en_cours = models.BooleanField(default=False)
     NA, WEBHOOK, GET, WEBHOOK_INVOICE = 'N', 'W', 'G', 'I'
 
     SOURCE_CHOICES = (
-        (NA, _('Pas de traitement en cours')),
-        (WEBHOOK, _('Depuis webhook stripe')),
-        (GET, _('Depuis Get')),
-        (WEBHOOK_INVOICE, _('Depuis webhook invoice')),
+        (NA, _('No processing ongoing')),
+        (WEBHOOK, _('From Stripe webhook')),
+        (GET, _('From Get')),
+        (WEBHOOK_INVOICE, _('From invoice webhook')),
     )
     source_traitement = models.CharField(max_length=1, choices=SOURCE_CHOICES, default=NA,
-                                         verbose_name="Source du traitement")
+                                         verbose_name="Processing origin")
 
     reservation = models.ForeignKey(Reservation, on_delete=models.PROTECT, blank=True, null=True,
                                     related_name="paiements")
 
     QRCODE, API_BILLETTERIE, FRONT_BILLETTERIE, INVOICE = 'Q', 'B', 'F', 'I'
     SOURCE_CHOICES = (
-        (QRCODE, _('Depuis scan QR-Code')),
-        (API_BILLETTERIE, _('Depuis API')),
-        (FRONT_BILLETTERIE, _('Depuis billetterie')),
-        (INVOICE, _('Depuis invoice')),
+        (QRCODE, _('From QR code scan')),
+        (API_BILLETTERIE, _('From API')),
+        (FRONT_BILLETTERIE, _('From ticketing app')),
+        (INVOICE, _('From invoice')),
 
     )
     source = models.CharField(max_length=1, choices=SOURCE_CHOICES, default=API_BILLETTERIE,
-                              verbose_name="Source de la commande")
+                              verbose_name="Order source")
 
     total = models.FloatField(default=0)
 
@@ -1568,8 +1570,8 @@ class Paiement_stripe(models.Model):
         return self.status
 
     class Meta:
-        verbose_name = _('Paiement Stripe')
-        verbose_name_plural = _('Paiements Stripe')
+        verbose_name = _('Stripe payment')
+        verbose_name_plural = _('Stripe payments')
 
 
 class LigneArticle(models.Model):
@@ -1577,34 +1579,34 @@ class LigneArticle(models.Model):
     datetime = models.DateTimeField(auto_now_add=True)
 
     # L'objet price sold. Contient l'id Stripe
-    pricesold = models.ForeignKey(PriceSold, on_delete=models.CASCADE, verbose_name=_("Article vendu"))
+    pricesold = models.ForeignKey(PriceSold, on_delete=models.CASCADE, verbose_name=_("Product sold"))
 
     qty = models.SmallIntegerField()
-    amount = models.IntegerField(default=0, verbose_name=_("Montant"))  # Centimes en entier (50.10€ = 5010)
-    vat = models.DecimalField(max_digits=4, decimal_places=2, default=0, verbose_name=_("TVA"))
+    amount = models.IntegerField(default=0, verbose_name=_("Value"))  # Centimes en entier (50.10€ = 5010)
+    vat = models.DecimalField(max_digits=4, decimal_places=2, default=0, verbose_name=_("VAT"))
 
     carte = models.ForeignKey(CarteCashless, on_delete=models.PROTECT, blank=True, null=True)
 
     paiement_stripe = models.ForeignKey(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True,
                                         related_name="lignearticles")
     membership = models.ForeignKey("Membership", on_delete=models.PROTECT, blank=True, null=True,
-                                   verbose_name=_("Adhésion associée"), related_name="lignearticles")
+                                   verbose_name=_("Linked subscription"), related_name="lignearticles")
 
     payment_method = models.CharField(max_length=2, choices=PaymentMethod.choices, blank=True, null=True,
-                                      verbose_name=_("Moyen de paiement"))
+                                      verbose_name=_("Payment method"))
 
     CANCELED, CREATED, UNPAID, PAID, FREERES, VALID, = 'C', 'O', 'U', 'P', 'F', 'V'
     TYPE_CHOICES = [
-        (CANCELED, _('Annulée')),
-        (CREATED, _('Non envoyé en paiement')),
-        (UNPAID, _('Non payée')),
-        (FREERES, _('Reservation gratuite')),
-        (PAID, _('Payée & non validée')),
-        (VALID, _('Validée')),
+        (CANCELED, _('Cancelled')),
+        (CREATED, _('Not sent to payment')),
+        (UNPAID, _('Not paid')),
+        (FREERES, _('Free booking')),
+        (PAID, _('Paid but not confirmed')),
+        (VALID, _('Confirmed')),
     ]
 
     status = models.CharField(max_length=3, choices=TYPE_CHOICES, default=CREATED,
-                              verbose_name=_("Status de ligne article"))
+                              verbose_name=_("Product entry status"))
 
     class Meta:
         ordering = ('-datetime',)
@@ -1663,7 +1665,7 @@ class Membership(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
                              related_name='memberships', blank=True, null=True)
     price = models.ForeignKey(Price, on_delete=models.PROTECT, related_name='membership',
-                              verbose_name=_('Produit/Prix'),
+                              verbose_name=_('Product / price'),
                               null=True, blank=True)
 
     asset_fedow = models.UUIDField(null=True, blank=True)
@@ -1671,34 +1673,34 @@ class Membership(models.Model):
 
     date_added = models.DateTimeField(auto_now_add=True)
 
-    last_contribution = models.DateTimeField(null=True, blank=True, verbose_name=_("Date du paiement"))
+    last_contribution = models.DateTimeField(null=True, blank=True, verbose_name=_("Payment date"))
     first_contribution = models.DateTimeField(null=True, blank=True)  # encore utilisé ? On utilise last plutot ?
 
-    last_action = models.DateTimeField(auto_now=True, verbose_name=_("Présence"))
+    last_action = models.DateTimeField(auto_now=True, verbose_name=_("Presence"))
     contribution_value = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True,
                                              verbose_name=_("Contribution"))
     payment_method = models.CharField(max_length=2, choices=PaymentMethod.choices, blank=True, null=True,
-                                      verbose_name=_("Moyen de paiement"))
+                                      verbose_name=_("Payment method"))
 
-    deadline = models.DateTimeField(null=True, blank=True, verbose_name=("Fin d'adhésion"))
+    deadline = models.DateTimeField(null=True, blank=True, verbose_name=("Subscription end"))
 
     first_name = models.CharField(
         db_index=True,
         max_length=200,
-        verbose_name=_("Prénom"),
+        verbose_name=_("First name"),
         null=True, blank=True
     )
 
     last_name = models.CharField(
         max_length=200,
-        verbose_name=_("Nom"),
+        verbose_name=_("Last name"),
         null=True, blank=True
     )
 
     pseudo = models.CharField(max_length=50, null=True, blank=True)
 
     newsletter = models.BooleanField(
-        default=True, verbose_name=_("J'accepte de recevoir la newsletter de l'association"))
+        default=True, verbose_name=_("I want to receive the collective's newsletter."))
     postal_code = models.IntegerField(null=True, blank=True)
     birth_date = models.DateField(null=True, blank=True)
     phone = models.CharField(max_length=20, null=True, blank=True)
@@ -1706,14 +1708,14 @@ class Membership(models.Model):
 
     CANCELED, AUTO, ONCE, ADMIN = 'C', 'A', 'O', 'D'
     STATUS_CHOICES = [
-        (ADMIN, _("Enregistré via l'administration")),
-        (ONCE, _('Paiement unique en ligne')),
-        (AUTO, _('Renouvellement automatique')),
-        (CANCELED, _('Annulée')),
+        (ADMIN, _("Saved through the admin")),
+        (ONCE, _('Single online payment')),
+        (AUTO, _('Automatic renewal')),
+        (CANCELED, _('Cancelled')),
     ]
 
     status = models.CharField(max_length=1, choices=STATUS_CHOICES, default=ONCE,
-                              verbose_name=_("Origine"))
+                              verbose_name=_("Origin"))
 
     option_generale = models.ManyToManyField(OptionGenerale,
                                              blank=True,
@@ -1734,16 +1736,16 @@ class Membership(models.Model):
 
     class Meta:
         # unique_together = ('user', 'price')
-        verbose_name = _('Adhésion')
-        verbose_name_plural = _('Adhésions')
+        verbose_name = _('Subscription')
+        verbose_name_plural = _('Subscriptions')
 
     def email(self):
         self.user: "HumanUser"
         if self.user:
             return str(self.user.email).lower()
         if self.card_number:
-            return f'Anonyme - {self.card_number}'
-        return f'Anonyme'
+            return _('Anonymous ')+ self.card_number
+        return f'Anonymous'
 
     def member_name(self):
         if self.pseudo:
@@ -1836,7 +1838,7 @@ class ExternalApiKey(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL,
                              on_delete=models.CASCADE,
                              blank=True, null=True,
-                             help_text=_("Utilisateur·ice qui a créé cette clé.")
+                             help_text=_("User who created this key.")
                              )
 
     key = models.OneToOneField(APIKey,
@@ -1844,13 +1846,13 @@ class ExternalApiKey(models.Model):
                                blank=True, null=True,
                                related_name="api_key",
                                help_text=_(
-                                   "Validez l'enregistrement pour faire apparaitre la clé. Elle n'apparaitra qu'à la création.")
+                                   "Confirm to generate key. It will not appear before.")
                                )
 
     ip = models.GenericIPAddressField(
         blank=True, null=True,
         verbose_name=_("Ip source"),
-        help_text=_("Si non renseignée, la clé api fonctionnera depuis n'importe quelle ip.")
+        help_text=_("API key works with any IP unless specified.")
     )
 
     created = models.DateTimeField(auto_now=True)
@@ -1858,11 +1860,11 @@ class ExternalApiKey(models.Model):
     # read = models.BooleanField(default=True, verbose_name=_("Lecture"))
 
     # Droit des routes API (nom de variable doit être le basename de la route url vers le viewset)
-    event = models.BooleanField(default=False, verbose_name=_("Évènements"))
-    product = models.BooleanField(default=False, verbose_name=_("Produits"))
+    event = models.BooleanField(default=False, verbose_name=_("Events"))
+    product = models.BooleanField(default=False, verbose_name=_("Products"))
 
-    reservation = models.BooleanField(default=False, verbose_name=_("Reservations"))
-    ticket = models.BooleanField(default=False, verbose_name=_("Billets"))
+    reservation = models.BooleanField(default=False, verbose_name=_("Bookings"))
+    ticket = models.BooleanField(default=False, verbose_name=_("Tickets"))
 
     wallet = models.BooleanField(default=False, verbose_name=_("Wallets"))
 
@@ -1891,25 +1893,25 @@ class Webhook(models.Model):
 
     RESERVATION_V, MEMBERSHIP_V = "RV", "MV"
     EVENT_CHOICES = [
-        (MEMBERSHIP_V, _('Adhésion validée')),
-        (RESERVATION_V, _('Réservation validée')),
+        (MEMBERSHIP_V, _('Confirmed subscription')),
+        (RESERVATION_V, _('Confirmed booking')),
     ]
 
     event = models.CharField(max_length=2, choices=EVENT_CHOICES, default=RESERVATION_V,
-                             verbose_name=_("Évènement"))
+                             verbose_name=_("Event"))
     last_response = models.TextField(null=True, blank=True)
 
 
 class FederatedPlace(models.Model):
-    tenant = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="Place")
-    tag_filter = models.ManyToManyField(Tag, blank=True, related_name="filtred", verbose_name=_("Filtre de tags"),
-                                        help_text=_("Si selectionnés, filtre uniquement ces tags"))
-    tag_exclude = models.ManyToManyField(Tag, blank=True, related_name="excluded", verbose_name=_("Tags exclus"),
-                                         help_text=_("Ces tags sont exclus"))
+    tenant = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="Collective")
+    tag_filter = models.ManyToManyField(Tag, blank=True, related_name="filtred", verbose_name=_("Tag filters"),
+                                        help_text=_("Show only these tags."))
+    tag_exclude = models.ManyToManyField(Tag, blank=True, related_name="excluded", verbose_name=_("Excluded tags"),
+                                         help_text=_("Don't thow those tags."))
 
     class Meta:
-        verbose_name = _('Espace fédéré')
-        verbose_name_plural = _('Espaces fédérés')
+        verbose_name = _('Federated space')
+        verbose_name_plural = _('Federated spaces')
 
     def __str__(self):
         return self.tenant.name
@@ -1954,14 +1956,14 @@ class GhostConfig(SingletonModel):
 
 class FormbricksForms(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    environmentId = models.CharField(max_length=30, help_text="Id d'environnement du projet Formbricks")
-    trigger_name = models.CharField(max_length=30, help_text="Le nom du trigger qui va lancer le formulaire")
+    environmentId = models.CharField(max_length=30, help_text="Formbricks environment ID")
+    trigger_name = models.CharField(max_length=30, help_text="Form trigger name")
     # Formulaire à l'achat d'une adhésion ou d'un billet d'evènement
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="formbricksform")
 
     class Meta:
-        verbose_name = _('Formulaire')
-        verbose_name_plural = _('Formulaires')
+        verbose_name = _('Formbricks form')
+        verbose_name_plural = _('Formbricks forms')
 
     def __str__(self):
         return f"{self.product.name} : {self.trigger_name}"
@@ -1983,5 +1985,5 @@ class FormbricksConfig(SingletonModel):
         return True
 
     class Meta:
-        verbose_name = _('Configuration Formbrick')
-        verbose_name_plural = _('Configurations Formbrick')
+        verbose_name = _('Formbrick settings')
+        verbose_name_plural = _('Formbrick settings')

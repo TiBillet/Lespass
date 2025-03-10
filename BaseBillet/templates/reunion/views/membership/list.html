@@ -12,14 +12,14 @@
 
 {% block main %}
 <main class="container-lg py-5">
-    <h1>{% translate 'Adhérer au réseau' %}</h1>
+    <h1>{% translate 'Local subscriptions' %}</h1>
 
     <!-- subscription panel -->
     <div class="offcanvas-start offcanvas" tabindex="-1" id="subscribePanel" aria-labelledby="subscribePanelLabel">
         <div class="offcanvas-header">
-            <h5 class="offcanvas-title" id="subscribePanelLabel">{% translate 'Prendre une adhésion' %}</h5>
+            <h5 class="offcanvas-title" id="subscribePanelLabel">{% translate 'Subscribe' %}</h5>
             <button type="button" class="btn-close" data-bs-dismiss="offcanvas"
-                    aria-label="{% translate 'Fermer' %}"></button>
+                    aria-label="{% translate 'Close' %}"></button>
         </div>
         <div class="offcanvas-body" id="offcanvas-membership">
         </div>
@@ -50,7 +50,7 @@
                                     data-bs-target="#subscribePanel"
                                     aria-controls="subscribePanel">
                                 <i class="bi bi-plus"></i>
-                                {% translate 'Prendre une adhésion' %}
+                                {% translate 'Subscribe' %}
                             </button>
                         </div>
                     </div>

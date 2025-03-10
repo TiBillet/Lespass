@@ -8,13 +8,13 @@
                 aria-expanded="true"
                 aria-controls="get-involved"
                 style="background: var(--mayaj-pons);">
-            {% trans "Appel à volontaires" %}
+            {% trans "Looking for volunteers" %}
 
         </button>
     </h2>
     <div id="get-involved" class="accordion-collapse collapse" data-bs-parent="#infoAccordion">
         <div class="accordion-body px-0">
-            <p class="mt-3">{% trans "Nous cherchons des volontaires pour :" %}</p>
+            <p class="mt-3">{% trans "We are looking for volunteers to help with:" %}</p>
             <form>
 
                 <div class="mb-3">
@@ -39,14 +39,14 @@
                 </div>
                 {% if user.is_authenticated %}
                     <button class="btn btn-primary w-100 mb-5" type="submit" hx-post="/event/{{ event.uuid }}/action_reservation/">
-                        {% translate "Confirmer mon coup de main" %}
+                        {% translate "Apply" %}
                     </button>
                 {% else %}
                     <a class="btn btn-secondary w-100 mb-5"
                             data-bs-toggle="offcanvas"
                             data-bs-target="#loginPanel"
                             aria-controls="loginPanel">
-                        {% translate "Merci de vous connecter et valider votre email avant." %}
+                        {% translate "Login (and confirm your email address) to apply" %}
                     </a>
                 {% endif %}
             </form>
@@ -54,10 +54,10 @@
             <div class="alert alert-warning" role="alert">
                 <h4>
                     <i class="bi bi-exclamation-diamond-fill"></i>
-                    {% trans "Rappel" %}
+                    {% trans "Reminder" %}
                 </h4>
-                {% trans "Le collectif n'est ni votre patron·ne, ni votre ami·e ! Pour le confort de toustes, proposez-vous seulement sur des postes qui vous plaisent d'assurer, et n'hésitez pas à refuser des conditions qui vous déplaisent." %}
-                {% trans "Si vous vous sentez pris·e pour un·e employé·e, parlez-en au réseau local, c'est inacceptable." %}
+                {% trans "The collectide isn't your boss or your friend! For the comfort of everyone involved, only apply to help with things you find rewarding, and refuse any condition that makes you uneasy." %}
+                {% trans "If you feel mistaken for an employee, speak to your friends and your collective federation: it should never happen." %}
             </div>
 
         </div>

@@ -24,8 +24,8 @@
         {% endif %}
 
         <div class="form-floating" id="search_form">
-            <input type="text" class="form-control" id="search" placeholder="un évènement" name="search">
-            <label for="exampleFormControlInput1" class="form-label"> {% translate "Je recherche…" %} </label>
+            <input type="text" class="form-control" id="search" placeholder="{% trans 'an event, a artist, a location…' %}" name="search">
+            <label for="exampleFormControlInput1" class="form-label"> {% translate "I'm looking for" %} </label>
         </div>
 
         <button class="btn btn-outline-primary" id="submit_event_search" type="submit"
@@ -39,8 +39,8 @@
 <!-- filtering panel -->
 <div class="offcanvas-start offcanvas" tabindex="-1" id="filterPanel" aria-labelledby="filterPanelLabel">
     <div class="offcanvas-header">
-        <h5 class="offcanvas-title" id="filterPanelLabel">{% translate "Filtres" %}</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        <h5 class="offcanvas-title" id="filterPanelLabel">{% translate "Search filters" %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% trans 'Close' %}"></button>
     </div>
     <div class="offcanvas-body">
         {# TODO: load all forms through htmx? #}

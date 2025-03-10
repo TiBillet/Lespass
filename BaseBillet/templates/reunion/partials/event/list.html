@@ -2,8 +2,8 @@
 {% load tibitags %}
 
 <p class="text-end mb-5">
-    <a href="/rss/latest/feed/" target="_blank" rel="noopener noreferrer" aria-label="Flux RSS des évènements">
-        <i class="bi bi-rss-fill"></i> {% trans "Flux RSS des évènements" %}
+    <a href="/rss/latest/feed/" target="_blank" rel="noopener noreferrer" aria-label="{% trans 'Event feed' %}">
+        <i class="bi bi-rss-fill"></i> {% trans "Event feed" %}
     </a>
 </p>
 
@@ -35,7 +35,7 @@
             <hr/>{% endif %}
     {% endfor %}
 {% empty %}
-{% trans 'Aucun résultat pour cette recherche.' %}
+{% trans 'No results for this search.' %}
 {% endfor %}
 
 {% if paginated_info.has_next %}
@@ -44,7 +44,9 @@
         <a class="btn btn-outline-primary d-block d-sm-inline"
            hx-boost="true" hx-post="/event/partial_list/?page={{ paginated_info.page | add:1 }}"
            hx-include="#search_form" hx-target="#paginator" hx-swap="outerHTML">
-            {% translate "Plus d'évènements" %}
+            {% translate "Load more events" %}
         </a>
     </p>
+{% else %}
+<div class="mb-5"></div>
 {% endif %}

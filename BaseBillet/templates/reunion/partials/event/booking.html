@@ -28,7 +28,7 @@
                     data-bs-toggle="offcanvas"
                     data-bs-target="#bookingPanel"
                     aria-controls="bookingPanel">
-                {% translate "Je réserve une ou plusieurs places" %}
+                {% translate "I want to book one or more seats" %}
             </button>
         </div>
 {#    {% endif %}#}
@@ -37,8 +37,8 @@
 <!-- booking panel -->
 <div class="offcanvas-start offcanvas" tabindex="-1" id="bookingPanel" aria-labelledby="bookingPanelLabel">
     <div class="offcanvas-header">
-        <h5 class="offcanvas-title" id="bookingPanelLabel">{% translate 'Je réserve ma place' %}</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        <h5 class="offcanvas-title" id="bookingPanelLabel">{% translate 'Request booking' %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% trans 'Close' %}"></button>
     </div>
     <div class="offcanvas-body">
         {# TODO: load all forms through htmx? #}

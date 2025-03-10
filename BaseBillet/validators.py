@@ -51,8 +51,8 @@ class LinkQrCodeValidator(serializers.Serializer):
         email = attrs['email']
         emailConfirmation = attrs['emailConfirmation']
         if emailConfirmation != email:
-            logger.error(_(f"emailConfirmation : L'email et sa confirmation sont différents. Une faute de frappe, peut-être ?"))
-            raise serializers.ValidationError(_(f"emailConfirmation : L'email et sa confirmation sont différents. Une faute de frappe, peut-être ?"))
+            logger.error(_(f"Email confirmation failed: the email and its confirmation are different. A typo, maybe?"))
+            raise serializers.ValidationError(_(f"Email confirmation failed: the email and its confirmation are different. A typo, maybe?"))
         return attrs
 
 class LoginEmailValidator(serializers.Serializer):
@@ -252,7 +252,7 @@ class ReservationValidator(serializers.Serializer):
         logger.info(f"validate event : {value}")
         self.event: Event = value
         if self.event.complet():
-            raise serializers.ValidationError(_(f'Jauge atteinte : Evenement complet.'))
+            raise serializers.ValidationError(_(f'Max capacity reached: event full.'))
         return value
 
     def validate_email(self, value):
@@ -262,7 +262,7 @@ class ReservationValidator(serializers.Serializer):
 
         if request.user.is_authenticated:
             if request.user.email != value:
-                raise serializers.ValidationError(_(f"L'email ne correspond pas à l'utilisateur connecté."))
+                raise serializers.ValidationError(_(f"Email does not match logged-in user."))
             user = request.user
 
         else:
@@ -278,7 +278,7 @@ class ReservationValidator(serializers.Serializer):
             for option in value:
                 option: OptionGenerale
                 if option not in list(set(event.options_checkbox.all()) | set(event.options_radio.all())):
-                    raise serializers.ValidationError(_(f'Option {option.name} non disponible dans event'))
+                    raise serializers.ValidationError(_(f'Option {option.name} unavailable for event'))
         return value
 
     def validate(self, attrs):
@@ -301,40 +301,40 @@ class ReservationValidator(serializers.Serializer):
         # existe au moins un billet pour la reservation ?
         if not event.easy_reservation:
             if not products_dict or len(products_dict) < 1:
-                raise serializers.ValidationError(_(f'Pas de produits.'))
+                raise serializers.ValidationError(_(f'No products.'))
 
         for product, price_dict in products_dict.items():
             # les produits sont prévu par l'évent ?
             if product not in event.products.all():
-                raise serializers.ValidationError(_(f'Produit non valide.'))
+                raise serializers.ValidationError(_(f'Invalid product.'))
 
             # chaque maximum par user est respecté ?
             for price, qty in price_dict.items():
                 if qty > price.max_per_user:
                     raise serializers.ValidationError(
-                        _(f'Quantitée de réservations suppérieure au maximum autorisé pour ce tarif'))
+                        _(f'Bookings exceed capacity for this rate.'))
                 total_ticket_qty += qty
 
                 # Check adhésion
                 if price.adhesion_obligatoire:
                     valid_membership = False
                     if not user.memberships.filter(price__product=price.adhesion_obligatoire, deadline__gte=timezone.now()).exists():
-                        logger.warning(_(f"L'utilisateur n'est pas membre"))
-                        raise serializers.ValidationError(_(f"L'utilisateur n'est pas membre"))
+                        logger.warning(_(f"User is not subscribed."))
+                        raise serializers.ValidationError(_(f"User is not subscribed."))
 
         # existe au moins un ticket validable pour la reservation ?
         if not total_ticket_qty > 0:
-            raise serializers.ValidationError(_(f'Pas de ticket.'))
+            raise serializers.ValidationError(_(f'No ticket.'))
 
         # Vérification du max par user sur l'event
         if total_ticket_qty > event.max_per_user:
-            raise serializers.ValidationError(_(f'Quantitée de réservations suppérieure au maximum autorisé'))
+            raise serializers.ValidationError(_(f'Order quantity surpasses maximum allowed per user.'))
 
         # Vérification de la jauge
         valid_tickets_count = event.valid_tickets_count()
         if valid_tickets_count + total_ticket_qty > event.jauge_max:
             remains = event.jauge_max - valid_tickets_count
-            raise serializers.ValidationError(_(f'Il ne reste que {remains} places disponibles'))
+            raise serializers.ValidationError(_(f'There are only {remains} remaining tickets.'))
 
         """
         TODO: Verifier l'adhésion
@@ -483,7 +483,7 @@ class TenantCreateValidator(serializers.Serializer):
     def validate_name(self, value):
         try:
             Client.objects.get(schema_name=slugify(value))
-            raise serializers.ValidationError(_('Tenant name exist'))
+            raise serializers.ValidationError(_('Tenant name already exist.'))
         except Client.DoesNotExist:
             return value
 
@@ -544,7 +544,7 @@ class TenantCreateValidator(serializers.Serializer):
             from fedow_connect.models import FedowConfig
             FedowAPI()
             if not FedowConfig.get_solo().can_fedow():
-                raise Exception('Erreur on install : can_fedow = False')
+                raise Exception('Error on install : can_fedow = False')
 
             # Envoie du mail de connection et validation
             get_or_create_user(admin_email, force_mail=True)
