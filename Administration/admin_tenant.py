@@ -39,7 +39,6 @@ from import_export.admin import ImportExportModelAdmin, ExportActionModelAdmin
 
 from unfold.contrib.import_export.forms import ExportForm, ImportForm, SelectableFieldsExportForm
 
-
 from ApiBillet.permissions import TenantAdminPermissionWithRequest, RootPermissionWithRequest
 from AuthBillet.models import HumanUser, TibilletUser
 from AuthBillet.utils import get_or_create_user
@@ -204,6 +203,7 @@ class WebhookAdmin(ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
+
 ########################################################################
 @admin.register(Configuration, site=staff_admin_site)
 class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
@@ -228,7 +228,7 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
         }),
         ('Options générales', {
             'fields': (
-        #         'need_name',
+                #         'need_name',
                 'fuseau_horaire',
                 'jauge_max',
                 'membership_menu_name',
@@ -266,7 +266,6 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
 
         super().save_model(request, obj, form, change)
 
-
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
@@ -278,7 +277,6 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
-
 
 
 class TagForm(ModelForm):
@@ -404,7 +402,6 @@ class PriceInlineChangeForm(ModelForm):
         return subscription_type
 
 
-
 class PriceInline(TabularInline):
     model = Price
     fk_name = 'product'
@@ -490,7 +487,7 @@ class ProductAdmin(ModelAdmin):
 
     # Pour les bouton en haut de la vue change
     # chaque decorateur @action génère une nouvelle route
-    actions_row = ["archive",]
+    actions_row = ["archive", ]
 
     @action(
         description=_("Archiver"),
@@ -510,7 +507,6 @@ class ProductAdmin(ModelAdmin):
         qs = super().get_queryset(request)
         return qs.exclude(categorie_article__in=[Product.RECHARGE_CASHLESS, Product.DON]).exclude(archive=True)
 
-
     def get_search_results(self, request, queryset, search_term):
         """
         Pour la recherche de produit dans la page Event.
@@ -518,11 +514,12 @@ class ProductAdmin(ModelAdmin):
         Le but est que cela n'affiche dans le auto complete fields que les catégories Billets
         """
         queryset, use_distinct = super().get_search_results(request, queryset, search_term)
-        if "event" in request.headers['Referer']:
-            queryset = queryset.filter(categorie_article__in=[
-                Product.BILLET,
-                Product.FREERES,
-            ])
+        if request.headers.get('Referer'):
+            if "event" in request.headers['Referer']:
+                queryset = queryset.filter(categorie_article__in=[
+                    Product.BILLET,
+                    Product.FREERES,
+                ])
         return queryset, use_distinct
 
     def has_changelist_row_action_permission(self, request: HttpRequest, *args, **kwargs):
@@ -562,7 +559,6 @@ class PriceChangeForm(ModelForm):
         if 0 < prix < 1:
             raise forms.ValidationError(_("Un tarif ne peux être entre 0 et 1€"), code="invalid")
         return prix
-
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -611,8 +607,8 @@ class PaiementStripeAdmin(ModelAdmin):
     )
     readonly_fields = list_display
     ordering = ('-order_date',)
-    search_fields = ('user__email','order_date' )
-    list_filter = ('status', 'order_date', )
+    search_fields = ('user__email', 'order_date')
+    list_filter = ('status', 'order_date',)
 
     def has_delete_permission(self, request, obj=None):
         # return request.user.is_superuser
@@ -860,8 +856,6 @@ class HumanUserAdmin(ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
 
-
-
 ### ADHESION
 
 class MembershipResource(resources.ModelResource):
@@ -886,8 +880,7 @@ class MembershipResource(resources.ModelResource):
             'deadline',
             'status_name',
         )
-        export_order = ('last_contribution', )
-
+        export_order = ('last_contribution',)
 
 
 class MembershipAddForm(ModelForm):
@@ -1033,8 +1026,6 @@ class MembershipAdmin(ModelAdmin, ExportActionModelAdmin):
             defaults['form'] = self.add_form
         defaults.update(kwargs)
         return super().get_form(request, obj, **defaults)
-
-
 
     # Pour les bouton en haut de la vue change
     # chaque decorateur @action génère une nouvelle route
@@ -1217,6 +1208,7 @@ class EventChildrenInline(TabularInline):
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
+
 class EventForm(ModelForm):
     class Meta:
         model = Event
@@ -1225,14 +1217,13 @@ class EventForm(ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        try :
+        try:
             # On mets la valeur de la jauge réglée dans la config par default
             config = Configuration.get_solo()
             self.fields['jauge_max'].initial = config.jauge_max
         except Exception as e:
             logger.error(f"set gauge max error : {e}")
             pass
-
 
 
 @admin.register(Event, site=staff_admin_site)
@@ -1308,7 +1299,6 @@ class EventAdmin(ModelAdmin):
         "products",
     ]
 
-
     formfield_overrides = {
         models.TextField: {
             "widget": WysiwygWidget,
@@ -1357,6 +1347,7 @@ class ReservationAdmin(ModelAdmin):
         return " - ".join([option.name for option in instance.options.all()])
 
     actions_detail = ["send_ticket_to_mail", ]
+
     @action(
         description=_("Renvoyer les billets par mail"),
         url_path="send_ticket_to_mail",
@@ -1866,6 +1857,7 @@ class WaitingConfigAdmin(ModelAdmin):
     search_fields = ["email", "organisation", "datetime"]
 
     actions_detail = ["create_tenant", ]
+
     @action(description=_("Créer le tenant"),
             url_path="create_tenant",
             permissions=["custom_actions_detail"])
@@ -1877,7 +1869,7 @@ class WaitingConfigAdmin(ModelAdmin):
                 request, messages.SUCCESS,
                 _(f"Le tenant a bien été créé. Un mail d'invitation a été envoyé à {wc.email}")
             )
-        else :
+        else:
             messages.add_message(
                 request, messages.WARNING,
                 _(f"L'organisation n'a pas terminé la procédure de création de compte Stripe")
@@ -1886,7 +1878,6 @@ class WaitingConfigAdmin(ModelAdmin):
 
     def has_custom_actions_detail_permission(self, request, object_id):
         return RootPermissionWithRequest(request)
-
 
     def has_view_permission(self, request, obj=None):
         return RootPermissionWithRequest(request)
@@ -1915,5 +1906,3 @@ def dashboard_callback(request, context):
     })
 
     return context
-
-
