@@ -1367,9 +1367,11 @@ class Ticket(models.Model):
                                       verbose_name=_("Moyen de paiement"))
 
     def paid(self):
-        if self.pricesold.price.free_price:
-            return self.reservation.total_paid()
-        return self.pricesold.price.prix
+        if self.pricesold:
+            if self.pricesold.price.free_price:
+                return self.reservation.total_paid()
+            return self.pricesold.price.prix
+        return 0
         # return 666
 
     def pdf_filename(self):
