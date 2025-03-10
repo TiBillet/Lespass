@@ -300,7 +300,7 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
                 logger.info("Wallet ephemere, on demande le mail")
                 template_context = get_context(request)
                 template_context['qrcode_uuid'] = qrcode_uuid
-                # On logout l'user au cas ou on scanne les carte a la suite.
+                # Logout au cas où on scanne les cartes à la suite.
                 logout(request)
                 return render(request, "reunion/views/register.html", context=template_context)
 
@@ -335,7 +335,7 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
 
         # Le mail est envoyé
         email = validator.validated_data['email']
-        user: TibilletUser = get_or_create_user(email)
+        user: TibilletUser = get_or_create_user(email, force_mail=True)
         # import ipdb; ipdb.set_trace()
         if not user:
             # Le mail n'est pas validé par django (example.org?)
@@ -348,6 +348,9 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
             user.last_name = validator.data.get('lastname')
         if validator.data.get('firstname') and not user.first_name:
             user.first_name = validator.data.get('firstname')
+
+        # On retire le mail valid : impose la vérification du mail en cas de nouvelle carte
+        user.email_valid = False
         user.save()
 
         fedowAPI = FedowAPI()
