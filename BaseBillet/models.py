@@ -377,6 +377,7 @@ class Configuration(SingletonModel):
 
     membership_menu_name = models.CharField(max_length=200, default=_("Adhésions"), verbose_name=_("Nom du menu adhésion"))
     event_menu_name = models.CharField(max_length=200, default=_("Agenda"), verbose_name=_("Nom du menu agenda"))
+    allow_concurrent_bookings = models.BooleanField(default=True, verbose_name=_("Allow concurrent bookings"), help_text=_("Les évenements doivent avoir un début et une fin pour être comparés."))
 
     """
     ######### CASHLESS #########

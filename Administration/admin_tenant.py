@@ -166,7 +166,7 @@ class WebhookAdmin(ModelAdmin):
         # Lancement d'un test de webhook :
         webhook = Webhook.objects.get(pk=object_id)
         try:
-            if webhook.event == Webhook.MEMBERSHIP:
+            if webhook.event == Webhook.MEMBERSHIP_V:
                 # On va chercher le membership le plus récent
                 membership = Membership.objects.filter(contribution_value__isnull=False).first()
                 webhook_membership(membership.pk, solo_webhook_pk=object_id)
@@ -226,18 +226,6 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 # 'map_img',
             )
         }),
-        ('Stripe', {
-            'fields': (
-                # 'vat_taxe',
-                'onboard_stripe',
-                # 'stripe_mode_test',
-            ),
-        }),
-        # ('Fédération', {
-        #     'fields': (
-        #         'federated_with',
-        #     ),
-        # }),
         ('Options générales', {
             'fields': (
         #         'need_name',
@@ -245,11 +233,20 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 'jauge_max',
                 'membership_menu_name',
                 'event_menu_name',
+                'allow_concurrent_bookings',
                 # 'option_generale_radio',
                 # 'option_generale_checkbox',
             ),
         }),
+        ('Stripe', {
+            'fields': (
+                # 'vat_taxe',
+                'onboard_stripe',
+                # 'stripe_mode_test',
+            ),
+        }),
     )
+
     readonly_fields = ['onboard_stripe', ]
     autocomplete_fields = ['federated_with', ]
 
