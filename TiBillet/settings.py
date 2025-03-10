@@ -421,11 +421,11 @@ UNFOLD = {
     "DASHBOARD_CALLBACK": "Administration.admin_tenant.dashboard_callback",
 
     "SITE_TITLE": "TiBillet",
-    "SITE_HEADER": "TiBillet Lespass Admin",
+    "SITE_HEADER": _("TiBillet / Lèspass admin panel"),
     "SITE_DROPDOWN": [
         {
             "icon": "diamond",
-            "title": _("TiBillet / Lespass"),
+            "title": _("TiBillet / Lèspass"),
             "link": "https://tibillet.org",
         },
     ],
@@ -435,24 +435,24 @@ UNFOLD = {
             "models": ["AuthBillet.humanuser", "BaseBillet.membership"],
             "items": [
                 {
-                    "title": _("Tous·tes"),
+                    "title": _("All"),
                     # "icon": "sports_motorsports",
                     "link": reverse_lazy("staff_admin:AuthBillet_humanuser_changelist"),
                 },
                 {
-                    "title": _("Adhésion à jours"),
+                    "title": _("Active subscriptions"),
                     # "icon": "sports_motorsports",
                     "link": lambda
                         request: f'{reverse_lazy("staff_admin:AuthBillet_humanuser_changelist")}?membership_valid=Y',
                 },
                 {
-                    "title": _("Utilisateur·ices sans adhésions"),
+                    "title": _("Non-suscribed members"),
                     # "icon": "sports_motorsports",
                     "link": lambda
                         request: f'{reverse_lazy("staff_admin:AuthBillet_humanuser_changelist")}?membership_valid=O',
                 },
                 {
-                    "title": _("Adhésions"),
+                    "title": _("Subscriptions"),
                     # "icon": "precision_manufacturing",
                     "link": reverse_lazy("staff_admin:BaseBillet_membership_changelist"),
                 },
@@ -468,12 +468,12 @@ UNFOLD = {
             "models": ["BaseBillet.formbricksconfig", "BaseBillet.formbricksforms"],
             "items": [
                 {
-                    "title": _("Formulaires"),
+                    "title": _("Forms"),
                     # "icon": "sports_motorsports",
                     "link": reverse_lazy("staff_admin:BaseBillet_formbricksforms_changelist"),
                 },
                 {
-                    "title": _("Configuration"),
+                    "title": _("Settings"),
                     # "icon": "precision_manufacturing",
                     "link": reverse_lazy("staff_admin:BaseBillet_formbricksconfig_changelist"),
                 },
@@ -486,7 +486,7 @@ UNFOLD = {
         "navigation": [
 
             {
-                "title": _("Informations générales"),
+                "title": _("Global information"),
                 "separator": True,  # Top border
                 "collapsible": False,  # Collapsible group of links
                 "items": [
@@ -497,7 +497,7 @@ UNFOLD = {
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
                     },
                     {
-                        "title": _("Configuration"),
+                        "title": _("Settings"),
                         "icon": "manufacturing",  # Supported icon set: https://fonts.google.com/icons
                         "link": reverse_lazy("staff_admin:BaseBillet_configuration_changelist"),
                         # "badge": "Administration.admin_tenant.badge_callback",
@@ -505,7 +505,7 @@ UNFOLD = {
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
                     },
                     {
-                        "title": _("Carrousel"),
+                        "title": _("Carousel"),
                         "icon": "photo_library",
                         "link": reverse_lazy("staff_admin:BaseBillet_carrousel_changelist"),
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
@@ -513,19 +513,19 @@ UNFOLD = {
                 ],
             },
             {
-                "title": _("Utilisateur·ices"),
+                "title": _("Users"),
                 "separator": True,  # Top border
                 "collapsible": False,  # Collapsible group of links
                 "items": [
                     {
-                        "title": _("Comptes utilisateur·ices"),
+                        "title": _("User accounts"),
                         "icon": "person_add",  # Supported icon set: https://fonts.google.com/icons
                         "link": reverse_lazy("staff_admin:AuthBillet_humanuser_changelist"),
                         # "badge": "Administration.admin_tenant.badge_callback",
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
                     },
                     {
-                        "title": _("Adhésions"),
+                        "title": _("Subscriptions"),
                         "icon": "card_membership",  # Supported icon set: https://fonts.google.com/icons
                         "link": reverse_lazy("staff_admin:BaseBillet_membership_changelist"),
                         "badge": "Administration.admin_tenant.adhesion_badge_callback",
@@ -534,12 +534,12 @@ UNFOLD = {
                 ],
             },
             {
-                "title": _("Produits"),
+                "title": _("Products"),
                 "separator": True,  # Top border
                 "collapsible": False,  # Collapsible group of links
                 "items": [
                     {
-                        "title": _("Produits"),
+                        "title": _("Products"),
                         "icon": "storefront",  # Supported icon set: https://fonts.google.com/icons
                         "link": reverse_lazy("staff_admin:BaseBillet_product_changelist"),
                         # "badge": "Administration.admin_tenant.badge_callback",
@@ -565,33 +565,33 @@ UNFOLD = {
                 ],
             },
             {
-                "title": _("Évènementiel"),
+                "title": _("Ticketing"),
                 "separator": True,  # Top border
                 "collapsible": False,  # Collapsible group of links
                 "items": [
                     {
-                        "title": _("Adresses"),
+                        "title": _("Addresses"),
                         "icon": "signpost",  # Supported icon set: https://fonts.google.com/icons
                         "link": reverse_lazy("staff_admin:BaseBillet_postaladdress_changelist"),
                         # "badge": "Administration.admin_tenant.badge_callback",
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest",
                     },
                     {
-                        "title": _("Evènements"),
+                        "title": _("Events"),
                         "icon": "event",  # Supported icon set: https://fonts.google.com/icons
                         "link": reverse_lazy("staff_admin:BaseBillet_event_changelist"),
                         # "badge": "Administration.admin_tenant.badge_callback",
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest",
                     },
                     {
-                        "title": _("Réservations"),
+                        "title": _("Bookings"),
                         "icon": "event_upcoming",  # Supported icon set: https://fonts.google.com/icons
                         "link": reverse_lazy("staff_admin:BaseBillet_reservation_changelist"),
                         # "badge": "Administration.admin_tenant.badge_callback",
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest",
                     },
                     {
-                        "title": _("Billets"),
+                        "title": _("Tickets"),
                         "icon": "confirmation_number",  # Supported icon set: https://fonts.google.com/icons
                         "link": reverse_lazy("staff_admin:BaseBillet_ticket_changelist"),
                         # "badge": "Administration.admin_tenant.badge_callback",
@@ -600,19 +600,19 @@ UNFOLD = {
                 ],
             },
             {
-                "title": _("Ventes"),
+                "title": _("Sales"),
                 "separator": True,  # Top border
                 "collapsible": False,  # Collapsible group of links
                 "items": [
                     {
-                        "title": _("Ventes"),
+                        "title": _("Entries"),
                         "icon": "receipt_long",  # Supported icon set: https://fonts.google.com/icons
                         "link": reverse_lazy("staff_admin:BaseBillet_lignearticle_changelist"),
                         # "badge": "Administration.admin_tenant.badge_callback",
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
                     },
                     {
-                        "title": _("Paiements stripe"),
+                        "title": _("Stripe payments"),
                         "icon": "price_change",  # Supported icon set: https://fonts.google.com/icons
                         "link": reverse_lazy("staff_admin:BaseBillet_paiement_stripe_changelist"),
                         # "badge": "Administration.admin_tenant.badge_callback",
@@ -622,12 +622,12 @@ UNFOLD = {
                 ],
             },
             {
-                "title": _("Connect'"),
+                "title": _("Network"),
                 "separator": True,  # Top border
                 "collapsible": False,  # Collapsible group of links
                 "items": [
                     {
-                        "title": _("Fédération"),
+                        "title": _("Federation"),
                         "icon": "linked_services",  # Supported icon set: https://fonts.google.com/icons
                         "link": reverse_lazy("staff_admin:BaseBillet_federatedplace_changelist"),
                         # "badge": "Administration.admin_tenant.badge_callback",

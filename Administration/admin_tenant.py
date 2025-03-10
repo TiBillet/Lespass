@@ -110,7 +110,7 @@ class ExternalApiKeyAdmin(ModelAdmin):
             messages.add_message(
                 request,
                 messages.SUCCESS,
-                _(f"Copiez bien la clé suivante et mettez la en lieu sur ! Elle n'est pas enregistrée sur nos serveurs et ne sera affichée qu'une seule fois ici :")
+                _(f"Copy this key and save it somewhere safe! It will not be saved on our servers and can only be displayed this one time.")
             )
             messages.add_message(
                 request,
@@ -166,7 +166,7 @@ class WebhookAdmin(ModelAdmin):
 
             messages.info(
                 request,
-                _(f"{webhook.last_response}"),
+                f"{webhook.last_response}",
             )
             return redirect(request.META["HTTP_REFERER"])
 
@@ -237,9 +237,9 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
         obj: Configuration
         if obj.server_cashless and obj.key_cashless:
             if obj.check_serveur_cashless():
-                messages.add_message(request, messages.INFO, f"Cashless server ONLINE")
+                messages.add_message(request, messages.INFO, _(f"Cashless server ONLINE"))
             else:
-                messages.add_message(request, messages.ERROR, "Cashless server OFFLINE or BAD KEY")
+                messages.add_message(request, messages.ERROR, _("Cashless server OFFLINE or BAD KEY"))
 
         super().save_model(request, obj, form, change)
 
@@ -263,7 +263,7 @@ class CarrouselAdmin(ModelAdmin):
 
     search_fields = ('name',)
 
-    @display(description=_("Présent dans les évènements"))
+    @display(description=_("Included in events"))
     def events_names(self, instance: Carrousel):
         return ", ".join([event.name for event in instance.events.all()])
 
@@ -299,7 +299,7 @@ class TagAdmin(ModelAdmin):
             '<div style="width: 20px; height: 20px; background-color: {}; border: 1px solid #000;"></div>',
             obj.color, )
 
-    _color.short_description = _("Couleur")
+    _color.short_description = _("Color")
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
@@ -342,7 +342,7 @@ class PriceInlineChangeForm(ModelForm):
         cleaned_data = self.cleaned_data
         prix = cleaned_data.get('prix')
         if prix < 1:
-            raise forms.ValidationError(_("Un tarif ne peux être inférieur à 1€"), code="invalid")
+            raise forms.ValidationError(_("A rate cannot go below 1€"), code="invalid")
         return prix
 
     def clean_subscription_type(self):
@@ -351,7 +351,7 @@ class PriceInlineChangeForm(ModelForm):
         subscription_type = cleaned_data.get('subscription_type')
         if product.categorie_article == Product.ADHESION:
             if subscription_type == Price.NA:
-                raise forms.ValidationError(_("Un tarif d'adhésion doit avoir une durée d'abonnement"), code="invalid")
+                raise forms.ValidationError(_("A subscription must have a duration"), code="invalid")
         return subscription_type
 
 
@@ -394,7 +394,7 @@ class ProductAdminCustomForm(ModelForm):
         cleaned_data = self.cleaned_data
         categorie = cleaned_data.get('categorie_article')
         if categorie == Product.NONE:
-            raise forms.ValidationError(_("Merci de renseigner une catégorie pour cet article."))
+            raise forms.ValidationError(_("Please add at least one category to this product."))
         return categorie
 
     def clean(self):
@@ -403,9 +403,9 @@ class ProductAdminCustomForm(ModelForm):
         try:
             if int(self.data.getlist('prices-TOTAL_FORMS')[0]) > 0:
                 return cleaned_data
-            raise forms.ValidationError(_("Merci de renseigner au moins un tarif pour ce produit."))
+            raise forms.ValidationError(_("Please add at least one rate to this product."))
         except Exception as e:
-            raise forms.ValidationError(_("Merci de renseigner au moins un tarif pour ce produit."))
+            raise forms.ValidationError(_("Please add at least one rate to this product."))
 
 
 @admin.register(Product, site=staff_admin_site)
@@ -467,7 +467,7 @@ class PriceChangeForm(ModelForm):
         cleaned_data = self.cleaned_data
         prix = cleaned_data.get('prix')
         if prix < 1:
-            raise forms.ValidationError(_("Un tarif ne peux être inférieur à 1€"), code="invalid")
+            raise forms.ValidationError(_("A rate cannot go below 1€"), code="invalid")
         return prix
 
 
@@ -586,7 +586,7 @@ class is_tenant_admin(admin.SimpleListFilter):
     parameter_name = "is_admin"
 
     def lookups(self, request, model_admin):
-        return [("Y", _("Oui")), ("N", _("Non"))]
+        return [("Y", _("Yes")), ("N", _("No"))]
 
     def queryset(self, request, queryset):
         if self.value() == "Y":
@@ -605,7 +605,7 @@ class is_tenant_admin(admin.SimpleListFilter):
 class MembershipValid(admin.SimpleListFilter):
     # Human-readable title which will be displayed in the
     # right admin sidebar just above the filter options.
-    title = _("Adhésion valide")
+    title = _("Valid subscription")
 
     # Parameter for the filter that will be used in the URL query.
     parameter_name = "membership_valid"
@@ -619,10 +619,10 @@ class MembershipValid(admin.SimpleListFilter):
         in the right sidebar.
         """
         return [
-            ("Y", _("Oui")),
-            ("N", _("Non")),
-            ("B", _("Expire bientôt (2 semaines)")),
-            ("O", _("Aucune adhésion prise")),
+            ("Y", _("Yes")),
+            ("N", _("No")),
+            ("B", _("Expires soon (2 weeks)")),
+            ("O", _("No subscription")),
 
         ]
 
@@ -703,7 +703,7 @@ class HumanUserAdmin(ModelAdmin):
     actions_detail = ["set_admin", "remove_admin"]
 
     @action(
-        description=_("Donner les droits d'admin"),
+        description=_("Give admin rights"),
         url_path="set_admin",
         permissions=["custom_actions_detail"],
     )
@@ -712,30 +712,30 @@ class HumanUserAdmin(ModelAdmin):
         if all([user.email_valid, user.is_active]) and not user.email_error:
             user.set_staff(connection.tenant)
             messages.success(request,
-                             _(f"Un grand pouvoir implique de grandes responsabilités. {user.email} a été promu·e."))
+                             _(f"With great power comes great responsibilities. {user.email} has been promoted to admin."))
         else:
-            messages.error(request, _(f"Ne remplis pas les conditions : {user.email} doit avoir validé son email."))
+            messages.error(request, _(f"Does not fulfill condition: {user.email} needs to confirm their email."))
 
         return redirect(request.META["HTTP_REFERER"])
 
     @action(
-        description=_("Retirer les droits d'admin"),
+        description=_("Strip admin rights"),
         url_path="remove_admin",
         permissions=["custom_actions_detail"],
     )
     def remove_admin(self, request, object_id):
         user = HumanUser.objects.get(pk=object_id)
         user.client_admin.remove(connection.tenant)
-        messages.success(request, _(f"{user.email} a été déchu·e de ses fonctions."))
+        messages.success(request, _(f"{user.email} has been demoted."))
         return redirect(request.META["HTTP_REFERER"])
 
     # noinspection PyTypeChecker
-    @display(description=_("Adhésions"), label={None: "danger", True: "success"})
+    @display(description=_("Subscriptions"), label={None: "danger", True: "success"})
     def display_memberships_valid(self, instance: HumanUser):
         count = instance.memberships_valid()
         if count > 0:
-            return True, f"Valide : {count}"
-        return None, _("Aucune")
+            return True, f"Valid: {count}"
+        return None, _("None")
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
@@ -787,24 +787,24 @@ class MembershipAddForm(ModelForm):
     price = forms.ModelChoiceField(
         queryset=Price.objects.filter(product__categorie_article=Product.ADHESION),
         # Remplis le champ select avec les objets Price
-        empty_label=_("Sélectionnez une adhésion"),  # Texte affiché par défaut
+        empty_label=_("Select an subscription"),  # Texte affiché par défaut
         required=True,
         widget=UnfoldAdminSelectWidget(),
-        label=_("Adhésion")
+        label=_("Subscriptions")
     )
 
     # Fabrication au cas ou = 0
     contribution = forms.FloatField(
         required=False,
         widget=UnfoldAdminTextInputWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
-        label=_("Cotisation"),
+        label=_("Contribution"),
     )
 
     payment_method = forms.ChoiceField(
         required=False,
         choices=PaymentMethod.not_online(),  # on retire les choix stripe
         widget=UnfoldAdminSelectWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
-        label=_("Moyen de paiement"),
+        label=_("Payment method"),
     )
 
     class Meta:
@@ -820,14 +820,14 @@ class MembershipAddForm(ModelForm):
         cleaned_data = self.cleaned_data
         if cleaned_data.get("contribution"):
             if cleaned_data.get("contribution") > 0 and cleaned_data.get("payment_method") == PaymentMethod.FREE:
-                raise forms.ValidationError(_("Merci de renseigner un moyen de paiement si la contribution est > 0"),
+                raise forms.ValidationError(_("Please add a payment method for the contribution."),
                                             code="invalid")
 
         if cleaned_data.get("payment_method") != PaymentMethod.FREE:
             if not cleaned_data.get("contribution"):
-                raise forms.ValidationError(_("Merci de renseigner un montant."), code="invalid")
+                raise forms.ValidationError(_("Please fill in the value of the contribution."), code="invalid")
             if not cleaned_data.get("contribution") > 0:
-                raise forms.ValidationError(_("Merci de renseigner un montant positif."), code="invalid")
+                raise forms.ValidationError(_("Please fill in a positive value of the contribution."), code="invalid")
 
         return cleaned_data
 
@@ -926,7 +926,7 @@ class MembershipAdmin(ModelAdmin, ExportActionModelAdmin):
     actions_detail = ["send_invoice", "get_invoice"]
 
     @action(
-        description=_("Envoyer une facture par mail"),
+        description=_("Send an invoice through email"),
         url_path="send_invoice",
         permissions=["custom_actions_detail"],
     )
@@ -935,12 +935,12 @@ class MembershipAdmin(ModelAdmin, ExportActionModelAdmin):
         send_membership_invoice_to_email(membership)
         messages.success(
             request,
-            _(f"Facture envoyée sur {membership.user.email}"),
+            _(f"Invoice sent to {membership.user.email}"),
         )
         return redirect(request.META["HTTP_REFERER"])
 
     @action(
-        description=_("Générer une facture"),
+        description=_("Build an invoice"),
         url_path="get_invoice",
         permissions=["custom_actions_detail"],
     )
@@ -1000,7 +1000,7 @@ class LigneArticleAdmin(ModelAdmin):
         queryset = super().get_queryset(request)
         return queryset.select_related('pricesold__productsold')
 
-    @display(description=_("Montant"))
+    @display(description=_("Value"))
     def amount_decimal(self, obj):
         return dround(obj.amount)
 
@@ -1008,7 +1008,7 @@ class LigneArticleAdmin(ModelAdmin):
     def total_decimal(self, obj):
         return dround(obj.total())
 
-    @display(description=_("Produit"))
+    @display(description=_("Product"))
     def productsold(self, obj):
         return f"{obj.pricesold.productsold} - {obj.pricesold}"
 
@@ -1070,7 +1070,7 @@ class PostalAddressAdmin(ModelAdmin):
 class EventChildrenInline(TabularInline):
     model = Event
     fk_name = 'parent'
-    verbose_name = _("Volontariat")  # Pour l'instant, les enfants sont forcément des Actions.
+    verbose_name = _("Volunteering")  # Pour l'instant, les enfants sont forcément des Actions.
     hide_title = True
     fields = (
         'name',
@@ -1132,7 +1132,7 @@ class EventAdmin(ModelAdmin):
                 'published',
             )
         }),
-        ('Réservations', {
+        ('Bookings', {
             'fields': (
                 # 'easy_reservation',
                 'max_per_user',
@@ -1140,7 +1140,7 @@ class EventAdmin(ModelAdmin):
             ),
             "classes": ["tab"],
         }),
-        ('Tags et formulaires', {
+        ('Tags and forms', {
             'fields': (
                 'tag',
                 'options_radio',
@@ -1215,7 +1215,7 @@ class ReservationAdmin(ModelAdmin):
     search_fields = ['event__name', 'user_commande__email', 'options__name', 'datetime']
     list_filter = ['event', 'event__categorie', 'datetime', 'status', 'options']
 
-    @display(description=_("Nbrs billets"))
+    @display(description=_("Ticket count"))
     def tickets_count(self, instance: Reservation):
         return instance.tickets.count()
 
@@ -1225,7 +1225,7 @@ class ReservationAdmin(ModelAdmin):
 
     actions_detail = ["send_ticket_to_mail", ]
     @action(
-        description=_("Renvoyer les billets par mail"),
+        description=_("Send tickets through email again"),
         url_path="send_ticket_to_mail",
         permissions=["custom_actions_detail"],
     )
@@ -1234,7 +1234,7 @@ class ReservationAdmin(ModelAdmin):
         ticket_celery_mailer.delay(reservation.pk)
         messages.success(
             request,
-            _(f"Billets envoyée sur {reservation.user_commande.email}"),
+            _(f"Tickets sent to {reservation.user_commande.email}"),
         )
         return redirect(request.META["HTTP_REFERER"])
 
@@ -1265,10 +1265,10 @@ class TicketAddAdmin(ModelForm):
     pricesold = forms.ModelChoiceField(
         queryset=PriceSold.objects.filter(productsold__event__datetime__gte=timezone.localtime() - timedelta(days=1)),
         # Remplis le champ select avec les objets Price
-        empty_label=_("Sélectionnez un produit"),  # Texte affiché par défaut
+        empty_label=_("Select a product"),  # Texte affiché par défaut
         required=True,
         widget=UnfoldAdminSelectWidget(),
-        label=_("Tarif")
+        label=_("Rate")
     )
 
     options_checkbox = forms.ModelMultipleChoiceField(
@@ -1277,7 +1277,7 @@ class TicketAddAdmin(ModelForm):
         queryset=OptionGenerale.objects.filter(
             options_checkbox__datetime__gte=timezone.localtime() - timedelta(days=1)),
         widget=UnfoldAdminCheckboxSelectMultiple(),
-        label=_("Options multiples"),
+        label=_("Multiple choice menu"),
     )
 
     options_radio = forms.ModelChoiceField(
@@ -1285,14 +1285,14 @@ class TicketAddAdmin(ModelForm):
         required=False,
         queryset=OptionGenerale.objects.filter(options_radio__datetime__gte=timezone.localtime() - timedelta(days=1)),
         widget=UnfoldAdminRadioSelectWidget(),
-        label=_("Option unique"),
+        label=_("Single choice menu"),
     )
 
     payment_method = forms.ChoiceField(
         required=False,
         choices=PaymentMethod.not_online(),  # on retire les choix stripe
         widget=UnfoldAdminSelectWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
-        label=_("Moyen de paiement"),
+        label=_("Payment method"),
     )
 
     class Meta:
@@ -1365,11 +1365,11 @@ class TicketAdmin(ModelAdmin):
         'reservation__datetime',
     ]
 
-    @admin.display(ordering='reservation__datetime', description='Réservé le')
+    @admin.display(ordering='reservation__datetime', description='Booked at')
     def reservation__datetime(self, obj):
         return obj.reservation.datetime
 
-    @admin.display(ordering='reservation__event', description='Évènement')
+    @admin.display(ordering='reservation__event', description='Event')
     def event(self, obj):
         if obj.reservation.event.parent:
             return f"{obj.reservation.event.parent} -> {obj.reservation.event}"
@@ -1396,16 +1396,16 @@ class TicketAdmin(ModelAdmin):
     def state(self, obj):
         if obj.status == Ticket.NOT_SCANNED:
             return format_html(
-                f'<button><a href="{reverse("staff_admin:ticket-scann", args=[obj.pk])}" class="button">Non scanné : Scanner le billet</a></button>&nbsp;',
+                f'<button><a href="{reverse("staff_admin:ticket-scann", args=[obj.pk])}" class="button">Not scanned: scan ticket</a></button>&nbsp;',
             )
         elif obj.status == Ticket.SCANNED:
-            return 'Validé/Scanné'
+            return 'Validated / scanned'
         else:
             for choice in Reservation.TYPE_CHOICES:
                 if choice[0] == obj.reservation.status:
                     return choice[1]
 
-    state.short_description = 'Etat'
+    state.short_description = 'State'
     state.allow_tags = True
 
     def get_urls(self):
@@ -1427,7 +1427,7 @@ class TicketAdmin(ModelAdmin):
         messages.add_message(
             request,
             messages.SUCCESS,
-            f"Ticket validé. Statut scanné."
+            f"Ticket scanned successfully."
         )
         # context = self.admin_site.each_context(request)
         return HttpResponseRedirect(
@@ -1448,7 +1448,7 @@ class TicketAdmin(ModelAdmin):
 
         VALID_TICKET_FOR_PDF = [Ticket.NOT_SCANNED, Ticket.SCANNED]
         if ticket.status not in VALID_TICKET_FOR_PDF:
-            return Response('Ticket non valide', status=status.HTTP_403_FORBIDDEN)
+            return Response('Invalid ticket', status=status.HTTP_403_FORBIDDEN)
 
         pdf_binary = create_ticket_pdf(ticket)
         response = HttpResponse(pdf_binary, content_type='application/pdf')
@@ -1515,11 +1515,11 @@ class FederatedPlaceAdmin(ModelAdmin):
     fields = ["tenant", "tag_filter", "tag_exclude", ]
     autocomplete_fields = ["tenant", "tag_filter", "tag_exclude", ]
 
-    @display(description=_("Tags filtrés"))
+    @display(description=_("Included tags"))
     def str_tag_filter(self, instance: FederatedPlace):
         return ", ".join([tag.name for tag in instance.tag_filter.all()])
 
-    @display(description=_("Tags exclus"))
+    @display(description=_("Excluded tags"))
     def str_tag_exclude(self, instance: FederatedPlace):
         return ", ".join([tag.name for tag in instance.tag_exclude.all()])
 
@@ -1577,7 +1577,7 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
             # headers = {'x-api-key': obj.api_key}
             # check_api = requests.get(f'{obj.api_host}/api/v1/me', headers=headers)
             obj.set_api_key(obj.ghost_key)
-            messages.success(request, "Api Key inserted")
+            messages.success(request, _("Api Key inserted"))
             # else:
             #     obj.api_key = None
             #     messages.error(request, "Api not OK")
@@ -1639,10 +1639,10 @@ class FormbricksConfigAdmin(SingletonModelAdmin, ModelAdmin):
             check_api = requests.get(f'{obj.api_host}/api/v1/me', headers=headers)
             if check_api.ok:
                 obj.set_api_key(obj.api_key)
-                messages.success(request, "Api OK")
+                messages.success(request, _("Api OK"))
             else:
                 obj.api_key = None
-                messages.error(request, "Api not OK")
+                messages.error(request, _("Api not OK"))
 
         super().save_model(request, obj, form, change)
 
@@ -1659,9 +1659,9 @@ class FormbricksConfigAdmin(SingletonModelAdmin, ModelAdmin):
         headers = {'x-api-key': fbc.get_api_key()}
         check_api = requests.get(f'{api_host}/api/v1/me', headers=headers)
         if check_api.ok:
-            messages.success(request, "Api OK")
+            messages.success(request, _("Api OK"))
         else:
-            messages.error(request, "Api not OK")
+            messages.error(request, _("Api not OK"))
         return redirect(request.META["HTTP_REFERER"])
 
     def has_custom_actions_detail_permission(self, request, object_id):
@@ -1733,7 +1733,7 @@ class WaitingConfigAdmin(ModelAdmin):
     search_fields = ["email", "organisation", "datetime"]
 
     actions_detail = ["create_tenant", ]
-    @action(description=_("Créer le tenant"),
+    @action(description=_("Create instance"),
             url_path="create_tenant",
             permissions=["custom_actions_detail"])
     def create_tenant(self, request, object_id):
@@ -1742,12 +1742,12 @@ class WaitingConfigAdmin(ModelAdmin):
             wc.create_tenant()
             messages.add_message(
                 request, messages.SUCCESS,
-                _(f"Le tenant a bien été créé. Un mail d'invitation a été envoyé à {wc.email}")
+                _(f"The Lèspass instance has been created. An invite email has been sent to {wc.email}")
             )
         else :
             messages.add_message(
                 request, messages.WARNING,
-                _(f"L'organisation n'a pas terminé la procédure de création de compte Stripe")
+                _(f"The collective is not yet finished with Stripe account cseation.")
             )
         return redirect(request.META["HTTP_REFERER"])
 

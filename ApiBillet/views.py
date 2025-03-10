@@ -503,9 +503,9 @@ class CancelSubscription(APIView):
             membership.save()
 
             # TODO: envoyer un mail de confirmation d'annulation
-            return Response('Renouvellement automatique supprimé.', status=status.HTTP_200_OK)
+            return Response(_('Automatic renewal turned off.'), status=status.HTTP_200_OK)
 
-        return Response('Pas de renouvellement automatique sur cette adhésion.', status=status.HTTP_406_NOT_ACCEPTABLE)
+        return Response(_('No automatic renewal on this.'), status=status.HTTP_406_NOT_ACCEPTABLE)
 
 
 @permission_classes([TenantAdminApiPermission])
@@ -562,7 +562,7 @@ class TicketPdf(APIView):
 
         VALID_TICKET_FOR_PDF = [Ticket.NOT_SCANNED, Ticket.SCANNED]
         if ticket.status not in VALID_TICKET_FOR_PDF:
-            return Response('Ticket non valide', status=status.HTTP_403_FORBIDDEN)
+            return Response('Invalid ticket', status=status.HTTP_403_FORBIDDEN)
 
         pdf_binary = create_ticket_pdf(ticket)
         response = HttpResponse(pdf_binary, content_type='application/pdf')
@@ -597,7 +597,7 @@ def paiment_stripe_validator(request, paiement_stripe):
     if paiement_stripe.traitement_en_cours:
 
         data = {
-            "msg": 'Paiement validé. Création des billets et envoi par mail en cours.',
+            "msg": _('Payment confirmed. Tickets being generated and sent by email.'),
         }
 
         if paiement_stripe.reservation:
@@ -616,7 +616,7 @@ def paiment_stripe_validator(request, paiement_stripe):
     if paiement_stripe.reservation:
         if paiement_stripe.reservation.status == Reservation.PAID_ERROR:
             return Response(
-                _("Erreur dans l'envoi du mail. Merci de vérifier l'adresse"),
+                _("Email sending error, please check the email address."),
                 status=status.HTTP_412_PRECONDITION_FAILED
             )
 
@@ -625,7 +625,7 @@ def paiment_stripe_validator(request, paiement_stripe):
                                           many=True, context=request)
 
             data = {
-                "msg": 'Paiement validé. Billets envoyés par mail.',
+                "msg": _('Payment confirmed. Tickets sent by email.'),
                 "tickets": serializer.data,
             }
 
@@ -656,13 +656,13 @@ def paiment_stripe_validator(request, paiement_stripe):
             paiement_stripe.save()
 
             return Response(
-                'invoice ok',
+                _('Invoice ok'),
                 status=status.HTTP_202_ACCEPTED
             )
 
         else:
             return Response(
-                _(f'stripe invoice : {invoice.status} - paiement : {paiement_stripe.status}'),
+                _(f'Stripe invoice: {invoice.status} - payment: {paiement_stripe.status}'),
                 status=status.HTTP_402_PAYMENT_REQUIRED
             )
 
@@ -686,7 +686,7 @@ def paiment_stripe_validator(request, paiement_stripe):
 
                 if paiement_stripe.source != Paiement_stripe.QRCODE:
                     return Response(
-                        _(f'stripe : {checkout_session.payment_status} - paiement : {paiement_stripe.status}'),
+                        _(f'Stripe: {checkout_session.payment_status} - payment: {paiement_stripe.status}'),
                         status=status.HTTP_402_PAYMENT_REQUIRED
                     )
 
@@ -741,7 +741,7 @@ def paiment_stripe_validator(request, paiement_stripe):
                                               many=True, context=request)
                 # import ipdb; ipdb.set_trace()
                 data = {
-                    "msg": 'Paiement validé. Billets envoyés par mail.',
+                    "msg": _('Payment confirmed. Tickets sent by email.'),
                     "tickets": serializer.data,
                 }
                 return Response(
@@ -757,7 +757,7 @@ def paiment_stripe_validator(request, paiement_stripe):
         elif paiement_stripe.status == Paiement_stripe.PAID:
             logger.info(f"Paiement_stripe.API_BILLETTERIE  : {paiement_stripe.status}")
             data = {
-                "msg": 'Paiement validé. Création des billets et envoi par mail en cours.',
+                "msg": _('Payment confirmed. Tickets being generated and sent by email.'),
             }
             if paiement_stripe.reservation:
                 serializer = TicketSerializer(paiement_stripe.reservation.tickets.all().exclude(status=Ticket.SCANNED),
@@ -908,7 +908,7 @@ class Wallet(viewsets.ViewSet):
         email = serializer.validated_data['email']
         user: "HumanUser" = get_or_create_user(email)
         if not user :
-            return Response(f"User not valid", status=status.HTTP_406_NOT_ACCEPTABLE)
+            return Response(_(f"Invalid user"), status=status.HTTP_406_NOT_ACCEPTABLE)
 
         fedowAPI = FedowAPI()
         stripe_checkout_url = fedowAPI.wallet.get_federated_token_refill_checkout(user)
@@ -943,7 +943,7 @@ class Webhook_stripe(APIView):
             if not tenant_uuid_in_metadata:
                 logger.warning(
                     f"Webhook_stripe checkout.session.completed - id : {payload.get('id')} - no tenant in metadata")
-                return Response("no tenant in metadata",
+                return Response(_("No tenant in metadata"),
                                 status=status.HTTP_204_NO_CONTENT)
 
             # On utilise les metadata du paiement stripe pour savoir de quel tenant cela vient.
@@ -953,7 +953,7 @@ class Webhook_stripe(APIView):
                 except Client.DoesNotExist:
                     logger.warning(
                         f"Webhook_stripe checkout.session.completed - id : {payload.get('id')} - tenant {tenant_uuid_in_metadata} not found")
-                    return Response("tenant not found",
+                    return Response(_("Tenant not found"),
                                     status=status.HTTP_204_NO_CONTENT)
 
                 with tenant_context(tenant):
@@ -1007,7 +1007,7 @@ class Webhook_stripe(APIView):
                     except ProductDirectory.DoesNotExist:
                         logger.error(
                             f"Webhook_stripe invoice.paid DoesNotExist : product_sold_stripe_id {product_sold_stripe_id}, serveur de test ?")
-                        return Response('ProductDirectory DoesNotExist, serveur de test ?',
+                        return Response(_('ProductDirectory does not exist, test server?'),
                                         status=status.HTTP_204_NO_CONTENT)
 
                 # On a le tenant ( place ), on va chercher l'abonnement

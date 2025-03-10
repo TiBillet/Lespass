@@ -55,7 +55,7 @@ class Membership_fwh(viewsets.ViewSet):
                     product=product,
                     free_price=True,
                     publish=False,
-                    name=_('Prix libre'),
+                    name=_('Open price'),
                     subscription_type=Price.YEAR,
                 )
 

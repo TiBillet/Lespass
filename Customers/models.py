@@ -15,17 +15,17 @@ class Client(TenantMixin):
 
     ARTISTE, SALLE_SPECTACLE, FESTIVAL, TOURNEUR, PRODUCTEUR, META, ROOT = 'A', 'S', 'F', 'T', 'P', 'M', 'R'
     CATEGORIE_CHOICES = [
-        (ARTISTE, _('Artiste')),
-        (SALLE_SPECTACLE, _("Lieu de spectacle vivant")),
+        (ARTISTE, _('Artist')),
+        (SALLE_SPECTACLE, _("Scene")),
         (FESTIVAL, _('Festival')),
-        (TOURNEUR, _('Tourneur')),
-        (PRODUCTEUR, _('Producteur')),
-        (META, _('Agenda culturel')),
-        (ROOT, _('Tenant public root')),
+        (TOURNEUR, _('Tour operator')),
+        (PRODUCTEUR, _('Producer')),
+        (META, _('Event aggregator')),
+        (ROOT, _('Root public tenant')),
     ]
 
     categorie = models.CharField(max_length=3, choices=CATEGORIE_CHOICES, default=SALLE_SPECTACLE,
-                                         verbose_name=_("Categorie"))
+                                         verbose_name=_("Category"))
 
     # default true, schema will be automatically created and synced when it is saved
     auto_create_schema = True

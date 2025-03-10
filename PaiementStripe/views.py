@@ -135,7 +135,7 @@ class CreationPaiementStripe():
             price = ligne.pricesold.price
             if price.subscription_type in subscription_types and price.recurring_payment:
                 mode = 'subscription'
-        logger.info(f"Mode Paiement Stripe: {mode}")
+        logger.info(f"Stripe payment method: {mode}")
         return mode
 
     def dict_checkout_creator(self):
