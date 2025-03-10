@@ -1848,7 +1848,7 @@ class WaitingConfigAdmin(ModelAdmin):
 
     fields = list_display
     readonly_fields = (
-        "id_acc_connect", "datetime", "onboard_stripe_finished", "created",
+        "datetime",
     )
 
     ordering = ('-datetime',)
