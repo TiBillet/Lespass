@@ -6,6 +6,7 @@ from datetime import timedelta, datetime
 from decimal import Decimal
 from uuid import uuid4
 
+import pytz
 import requests
 import stripe
 from dateutil.relativedelta import relativedelta
@@ -307,15 +308,16 @@ class Configuration(SingletonModel):
                         verbose_name=_('Background image'),
                         )
 
-    TZ_REUNION, TZ_PARIS = "Indian/Reunion", "Europe/Paris"
-    TZ_CHOICES = [
-        (TZ_REUNION, _('Indian/Reunion')),
-        (TZ_PARIS, _('Europe/Paris')),
-    ]
-
-    fuseau_horaire = models.CharField(default=TZ_REUNION,
+    # TZ_REUNION, TZ_PARIS = "Indian/Reunion", "Europe/Paris"
+    # TZ_CHOICES = [
+    #     (TZ_REUNION, _('Indian/Reunion')),
+    #     (TZ_PARIS, _('Europe/Paris')),
+    # ]
+    TZ_CHOICES = zip(pytz.all_timezones, pytz.all_timezones)
+    fuseau_horaire = models.CharField(default="Europe/Paris",
                                       max_length=50,
                                       choices=TZ_CHOICES,
+                                      verbose_name=_("Fuseau horaire"),
                                       )
 
     # noinspection PyUnresolvedReferences

@@ -320,7 +320,7 @@ class ReservationValidator(serializers.Serializer):
                     valid_membership = False
                     if not user.memberships.filter(price__product=price.adhesion_obligatoire, deadline__gte=timezone.now()).exists():
                         logger.warning(_(f"L'utilisateur n'est pas membre"))
-                        raise serializers.ValidationError(_(f"L'utilisateur n'est pas membre"))
+                        raise serializers.ValidationError(_(f"L'utilisateur n'est pas membre."))
 
         # existe au moins un ticket validable pour la reservation ?
         if not total_ticket_qty > 0:
@@ -335,6 +335,9 @@ class ReservationValidator(serializers.Serializer):
         if valid_tickets_count + total_ticket_qty > event.jauge_max:
             remains = event.jauge_max - valid_tickets_count
             raise serializers.ValidationError(_(f'Il ne reste que {remains} places disponibles'))
+
+        # Vérification que l'utilisateur peut reserer une place si il est déja inscrit sur un horaire
+
 
         """
         TODO: Verifier l'adhésion
