@@ -243,6 +243,8 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
             'fields': (
         #         'need_name',
                 'jauge_max',
+                'membership_menu_name',
+                'event_menu_name',
                 # 'option_generale_radio',
                 # 'option_generale_checkbox',
             ),

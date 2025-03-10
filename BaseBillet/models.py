@@ -361,7 +361,7 @@ class Configuration(SingletonModel):
     ######### OPTION GENERALES #########
     """
 
-    jauge_max = models.PositiveSmallIntegerField(default=50, verbose_name=_("Jauge maximale"))
+    jauge_max = models.PositiveSmallIntegerField(default=50, verbose_name=_("Jauge maximale par defaut"))
 
     option_generale_radio = models.ManyToManyField(OptionGenerale,
                                                    blank=True,
@@ -372,6 +372,9 @@ class Configuration(SingletonModel):
                                                       related_name="checkbox")
 
     need_name = models.BooleanField(default=True, verbose_name=_("Nom requis lors du scan qrcode"))
+
+    membership_menu_name = models.CharField(max_length=200, default=_("Adhésions"), verbose_name=_("Nom du menu adhésion"))
+    event_menu_name = models.CharField(max_length=200, default=_("Agenda"), verbose_name=_("Nom du menu agenda"))
 
     """
     ######### CASHLESS #########
@@ -540,7 +543,7 @@ class Configuration(SingletonModel):
     ### TVA ###
     """
 
-    vat_taxe = models.DecimalField(max_digits=4, decimal_places=2, default=0)
+    vat_taxe = models.DecimalField(max_digits=4, decimal_places=2, default=0, help_text=_("Tva par defaut"))
 
     ######### GHOST #########
     # ghost_url = models.URLField(blank=True, null=True)

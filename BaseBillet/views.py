@@ -100,8 +100,8 @@ def get_context(request):
         "mode_test": True if os.environ.get('TEST') == '1' else False,
         "carrousel_event_list": Carrousel.objects.filter(on_event_list_page=True).order_by('order'),
         "main_nav": [
-            {'name': 'event-list', 'url': '/event/', 'label': 'Agenda', 'icon': 'calendar-date'},
-            {'name': 'memberships_mvt', 'url': '/memberships/', 'label': 'Adhésions', 'icon': 'person-badge'},
+            {'name': 'event-list', 'url': '/event/', 'label': f'{config.event_menu_name}', 'icon': 'calendar-date'},
+            {'name': 'memberships_mvt', 'url': '/memberships/', 'label': f'{config.membership_menu_name}', 'icon': 'person-badge'},
             # {'name': 'network', 'url': '/network/', 'label': 'Réseau local', 'icon': 'arrow-repeat'},
         ]
     }
