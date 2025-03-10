@@ -223,7 +223,6 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 'phone',
                 'email',
                 'site_web',
-                'fuseau_horaire',
                 # 'map_img',
             )
         }),
@@ -242,6 +241,7 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
         ('Options générales', {
             'fields': (
         #         'need_name',
+                'fuseau_horaire',
                 'jauge_max',
                 'membership_menu_name',
                 'event_menu_name',
