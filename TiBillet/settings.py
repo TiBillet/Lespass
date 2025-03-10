@@ -420,7 +420,7 @@ UNFOLD = {
     # "ENVIRONMENT_TITLE_PREFIX": "sample_app.environment_title_prefix_callback",  # environment name prefix in title tag
     "ENVIRONMENT": "Administration.admin_tenant.environment_callback",  # environment name in header
     "DASHBOARD_CALLBACK": "Administration.admin_tenant.dashboard_callback",
-
+    "SHOW_HISTORY": False, # show/hide "History" button, default: True
     "SITE_TITLE": "TiBillet",
     "SITE_HEADER": "TiBillet Lespass Admin",
     "SITE_DROPDOWN": [
