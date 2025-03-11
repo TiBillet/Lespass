@@ -1093,12 +1093,23 @@ class MembershipMVT(viewsets.ViewSet):
 
         template_context['products'] = Product.objects.filter(categorie_article=Product.ADHESION,
                                                               publish=True).prefetch_related('tag')
+        return render(
+            request, "reunion/views/membership/list.html",
+            context=template_context,
+        )
+
+    @action(detail=False, methods=['GET'])
+    def embed(self, request):
+        template_context = get_context(request)
+        template_context['products'] = Product.objects.filter(categorie_article=Product.ADHESION,
+                                                              publish=True).prefetch_related('tag')
+        template_context['embed'] = True
         response = render(
             request, "reunion/views/membership/list.html",
             context=template_context,
         )
         # Pour rendre la page dans un iframe, on vide le header X-Frame-Options pour dire au navigateur que c'est ok.
-        response['X-Frame-Options'] = '' if template_context.get('embed') else 'DENY'
+        response['X-Frame-Options'] = ''
         return response
 
     def get_federated_membership_url(self, uuid=uuid):
