@@ -622,7 +622,7 @@ class EventSerializer(serializers.ModelSerializer):
                 self.products_to_db.append(get_object_or_404(Product, uuid=product))
             return super().validate(attrs)
         else:
-            raise serializers.ValidationError(_('products doit être un json valide'))
+            raise serializers.ValidationError(_('products has to be a valid json file'))
 
     def save(self, **kwargs):
         instance = super().save(**kwargs)
@@ -1265,7 +1265,7 @@ class ReservationValidator(serializers.Serializer):
                                        self.user_commande.membership.all()]
                 if (price.adhesion_obligatoire not in membership_products
                         and price.adhesion_obligatoire not in all_product_buy):
-                    logger.warning(_(f"L'utilisateur n'est pas membre"))
+                    logger.warning(f"L'utilisateur n'est pas membre")
                     raise serializers.ValidationError(_(f"User is not subscribed and cannot be granted this rate."))
 
         # on construit l'object reservation.

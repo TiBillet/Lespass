@@ -63,8 +63,8 @@ class Weekday(models.Model):
 
 
 class SaleOrigin(models.TextChoices):
-    LESPASS = "LP", _("Online")
-    LABOUTIK = "LB", _("Register")
+    LESPASS = "LP", _("Online platform")
+    LABOUTIK = "LB", _("Cash register")
     ADMIN = "AD", _("Administration")
     EXTERNAL = "EX", _("External")
 
@@ -817,7 +817,7 @@ class Event(models.Model):
     # cashless = models.BooleanField(default=False, verbose_name="Proposer la recharge cashless")
     minimum_cashless_required = models.SmallIntegerField(default=0,
                                                          verbose_name=_(
-                                                             "Minimum valie of cashless refill"))
+                                                             "Minimum value of cashless refill"))
 
     img = StdImageField(upload_to='images/',
                         validators=[MaxSizeValidator(1920, 1920)],
@@ -847,7 +847,7 @@ class Event(models.Model):
         (FESTIVAL, _('Festival')),
         (REUNION, _('Meeting')),
         (CONFERENCE, _('Conference')),
-        (RESTAURATION, _('Restauration')),
+        (RESTAURATION, _('Catering')),
         (ACTION, _('Volunteering')),
     ]
 
@@ -1639,7 +1639,7 @@ class LigneArticle(models.Model):
         if self.paiement_stripe:
             return self.paiement_stripe.status
         else:
-            return _('no stripe send')
+            return _('No Stripe send')
 
     # def user_uuid_wallet(self):
     #     if self.paiement_stripe:
@@ -1907,7 +1907,7 @@ class FederatedPlace(models.Model):
     tag_filter = models.ManyToManyField(Tag, blank=True, related_name="filtred", verbose_name=_("Tag filters"),
                                         help_text=_("Show only these tags."))
     tag_exclude = models.ManyToManyField(Tag, blank=True, related_name="excluded", verbose_name=_("Excluded tags"),
-                                         help_text=_("Don't thow those tags."))
+                                         help_text=_("Don't show those tags."))
 
     class Meta:
         verbose_name = _('Federated space')

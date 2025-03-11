@@ -173,7 +173,7 @@ class WebhookAdmin(ModelAdmin):
         except Exception as e:
             messages.error(
                 request,
-                _(f"{e}"),
+                f"{e}",
             )
 
     def has_custom_actions_detail_permission(self, request, object_id):
@@ -580,7 +580,7 @@ class MembershipInline(TabularInline):
 class is_tenant_admin(admin.SimpleListFilter):
     # Human-readable title which will be displayed in the
     # right admin sidebar just above the filter options.
-    title = _("Administrateur·ice")
+    title = _("Administrator")
 
     # Parameter for the filter that will be used in the URL query.
     parameter_name = "is_admin"
@@ -734,7 +734,7 @@ class HumanUserAdmin(ModelAdmin):
     def display_memberships_valid(self, instance: HumanUser):
         count = instance.memberships_valid()
         if count > 0:
-            return True, f"Valid: {count}"
+            return True, _(f"Valid: {count}")
         return None, _("None")
 
     def has_view_permission(self, request, obj=None):
@@ -1560,7 +1560,7 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
 
     readonly_fields = ["has_key", "ghost_last_log"]
 
-    @display(description=_("As key"), boolean=True)
+    @display(description=_("Has key"), boolean=True)
     def has_key(self, instance: GhostConfig):
         return True if instance.ghost_key else False
 
@@ -1621,7 +1621,7 @@ class FormbricksConfigAdmin(SingletonModelAdmin, ModelAdmin):
 
     readonly_fields = ["has_key", ]
 
-    @display(description=_("Clé Api"), boolean=True)
+    @display(description=_("Api key"), boolean=True)
     def has_key(self, instance: FormbricksConfig):
         return True if instance.api_key else False
 
@@ -1650,7 +1650,7 @@ class FormbricksConfigAdmin(SingletonModelAdmin, ModelAdmin):
     # chaque decorateur @action génère une nouvelle route
     actions_detail = ["test_api_formbricks", ]
 
-    @action(description=_("Tester l'api"),
+    @action(description=_("Test Api"),
             url_path="test_api_formbricks",
             permissions=["custom_actions_detail"])
     def test_api_formbricks(self, request, object_id):
@@ -1747,7 +1747,7 @@ class WaitingConfigAdmin(ModelAdmin):
         else :
             messages.add_message(
                 request, messages.WARNING,
-                _(f"The collective is not yet finished with Stripe account cseation.")
+                _(f"The collective is not yet finished with Stripe account creation.")
             )
         return redirect(request.META["HTTP_REFERER"])
 

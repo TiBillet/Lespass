@@ -227,7 +227,7 @@ def context_for_membership_email(membership: "Membership"):
             'text': _('REQUEST INVOICE'),
             'url': f'https://{domain}/memberships/{membership.pk}/invoice/',
         },
-        'next_text_1': _("If you receive this email in error, please contact the TiBillet team."),
+        'next_text_1': _("If you receive this email by mistake, please contact the TiBillet team."),
         # 'next_text_2': "next_text_2",
         'end_text': _('See you soon!'),
         'signature': _("Mar, the TiBillet robot"),

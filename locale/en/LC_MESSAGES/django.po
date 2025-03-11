@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-10 18:25+0100\n"
+"POT-Creation-Date: 2025-03-11 20:33+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -26,11 +26,6 @@ msgstr ""
 
 #: Administration/admin_tenant.py:148
 msgid "Test"
-msgstr ""
-
-#: Administration/admin_tenant.py:176
-#, python-brace-format
-msgid "{e}"
 msgstr ""
 
 #: Administration/admin_tenant.py:240
@@ -65,8 +60,8 @@ msgstr ""
 msgid "Please add at least one rate to this product."
 msgstr ""
 
-#: Administration/admin_tenant.py:583
-msgid "Administrateur·ice"
+#: Administration/admin_tenant.py:583 AuthBillet/models.py:329
+msgid "Administrator"
 msgstr ""
 
 #: Administration/admin_tenant.py:589 Administration/admin_tenant.py:622
@@ -116,8 +111,14 @@ msgstr ""
 
 #: Administration/admin_tenant.py:733 Administration/admin_tenant.py:793
 #: BaseBillet/models.py:1740 BaseBillet/templates/reunion/views/home.html:23
+#: BaseBillet/templates/reunion/views/membership/list.html:15
 #: BaseBillet/views.py:110 TiBillet/settings.py:455 TiBillet/settings.py:528
 msgid "Subscriptions"
+msgstr ""
+
+#: Administration/admin_tenant.py:737
+#, python-brace-format
+msgid "Valid: {count}"
 msgstr ""
 
 #: Administration/admin_tenant.py:738
@@ -241,15 +242,15 @@ msgid "Excluded tags"
 msgstr ""
 
 #: Administration/admin_tenant.py:1563
-msgid "As key"
+msgid "Has key"
 msgstr ""
 
 #: Administration/admin_tenant.py:1580
 msgid "Api Key inserted"
 msgstr ""
 
-#: Administration/admin_tenant.py:1624
-msgid "Clé Api"
+#: Administration/admin_tenant.py:1624 BaseBillet/models.py:1883
+msgid "Api key"
 msgstr ""
 
 #: Administration/admin_tenant.py:1642 Administration/admin_tenant.py:1662
@@ -261,7 +262,7 @@ msgid "Api not OK"
 msgstr ""
 
 #: Administration/admin_tenant.py:1653
-msgid "Tester l'api"
+msgid "Test Api"
 msgstr ""
 
 #: Administration/admin_tenant.py:1736
@@ -276,7 +277,7 @@ msgid ""
 msgstr ""
 
 #: Administration/admin_tenant.py:1750
-msgid "The collective is not yet finished with Stripe account cseation."
+msgid "The collective is not yet finished with Stripe account creation."
 msgstr ""
 
 #: Administration/admin_tenant.py:1774
@@ -345,7 +346,7 @@ msgid "Book a call with the Team"
 msgstr ""
 
 #: Administration/templates/admin/service.html:21
-msgid "I'm good with docs"
+msgid "I'm good with the documentation"
 msgstr ""
 
 #: ApiBillet/serializers.py:31
@@ -387,7 +388,7 @@ msgid "{value} below minimum cashless value."
 msgstr ""
 
 #: ApiBillet/serializers.py:625
-msgid "products doit être un json valide"
+msgid "products has to be a valid json file"
 msgstr ""
 
 #: ApiBillet/serializers.py:647
@@ -448,10 +449,6 @@ msgstr ""
 #: ApiBillet/serializers.py:1254
 #, python-brace-format
 msgid "Option {option.name} not selectable for event."
-msgstr ""
-
-#: ApiBillet/serializers.py:1268
-msgid "L'utilisateur n'est pas membre"
 msgstr ""
 
 #: ApiBillet/serializers.py:1269
@@ -548,11 +545,11 @@ msgid ""
 msgstr ""
 
 #: ApiBillet/views.py:730
-msgid "Erreur Meta"
+msgid "Meta error"
 msgstr ""
 
 #: ApiBillet/views.py:753
-msgid "Paiement validé."
+msgid "Payment confirmed."
 msgstr ""
 
 #: ApiBillet/views.py:911
@@ -663,10 +660,6 @@ msgstr ""
 msgid "User"
 msgstr ""
 
-#: AuthBillet/models.py:329
-msgid "Administrator"
-msgstr ""
-
 #: AuthBillet/views.py:96
 msgid "Assertion error"
 msgstr ""
@@ -758,11 +751,11 @@ msgid "Sunday"
 msgstr ""
 
 #: BaseBillet/models.py:66
-msgid "Online"
+msgid "Online platform"
 msgstr ""
 
-#: BaseBillet/models.py:67 BaseBillet/templates/reunion/views/register.html:69
-msgid "Register"
+#: BaseBillet/models.py:67
+msgid "Cash register"
 msgstr ""
 
 #: BaseBillet/models.py:68
@@ -1226,7 +1219,7 @@ msgid "The event is handled outside of this platform (ex: Facebook event)."
 msgstr ""
 
 #: BaseBillet/models.py:820
-msgid "Minimum valie of cashless refill"
+msgid "Minimum value of cashless refill"
 msgstr ""
 
 #: BaseBillet/models.py:833
@@ -1254,7 +1247,7 @@ msgid "Conference"
 msgstr ""
 
 #: BaseBillet/models.py:850
-msgid "Restauration"
+msgid "Catering"
 msgstr ""
 
 #: BaseBillet/models.py:855
@@ -1436,7 +1429,7 @@ msgid "Product entry status"
 msgstr ""
 
 #: BaseBillet/models.py:1642
-msgid "no stripe send"
+msgid "No Stripe send"
 msgstr ""
 
 #: BaseBillet/models.py:1668
@@ -1504,10 +1497,6 @@ msgstr ""
 msgid "Wallets"
 msgstr ""
 
-#: BaseBillet/models.py:1883
-msgid "Api key"
-msgstr ""
-
 #: BaseBillet/models.py:1884
 msgid "Api keys"
 msgstr ""
@@ -1529,7 +1518,7 @@ msgid "Show only these tags."
 msgstr ""
 
 #: BaseBillet/models.py:1910
-msgid "Don't thow those tags."
+msgid "Don't show those tags."
 msgstr ""
 
 #: BaseBillet/models.py:1913
@@ -1585,7 +1574,7 @@ msgid "REQUEST INVOICE"
 msgstr ""
 
 #: BaseBillet/tasks.py:230
-msgid "If you receive this email in error, please contact the TiBillet team."
+msgid "If you receive this email by mistake, please contact the TiBillet team."
 msgstr ""
 
 #: BaseBillet/tasks.py:232
@@ -1982,7 +1971,8 @@ msgid "at an open price"
 msgstr ""
 
 #: BaseBillet/templates/reunion/forms/event/booking.html:88
-msgid "pour"
+#: BaseBillet/templates/reunion/views/account/memberships.html:30
+msgid "for"
 msgstr ""
 
 #: BaseBillet/templates/reunion/forms/event/booking.html:93
@@ -2194,7 +2184,7 @@ msgstr ""
 
 #: BaseBillet/templates/reunion/partials/event/volunteers.html:59
 msgid ""
-"The collectide isn't your boss or your friend! For the comfort of everyone "
+"The collective isn't your boss or your friend! For the comfort of everyone "
 "involved, only apply to help with things you find rewarding, and refuse any "
 "condition that makes you uneasy."
 msgstr ""
@@ -2366,10 +2356,6 @@ msgstr ""
 msgid "Here I can list my ongoing subscriptions and renew them."
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/account/memberships.html:30
-msgid "for"
-msgstr ""
-
 #: BaseBillet/templates/reunion/views/account/memberships.html:36
 #, python-format
 msgid ""
@@ -2398,7 +2384,7 @@ msgstr ""
 
 #: BaseBillet/templates/reunion/views/account/preferences.html:14
 msgid ""
-"Here I can personalize my settings, download or'update my personal data and "
+"Here I can personalize my settings, download or update my personal data and "
 "delete my account."
 msgstr ""
 
@@ -2416,11 +2402,8 @@ msgstr ""
 
 #: BaseBillet/templates/reunion/views/account/preferences.html:36
 #: BaseBillet/templates/reunion/views/account/preferences.html:44
-msgid "Update"
-msgstr ""
-
 #: BaseBillet/templates/reunion/views/account/preferences.html:53
-msgid "Mettre à jour"
+msgid "Update"
 msgstr ""
 
 #: BaseBillet/templates/reunion/views/account/punchclock.html:13
@@ -2469,7 +2452,7 @@ msgid "Check the event on the original website"
 msgstr ""
 
 #: BaseBillet/templates/reunion/views/event/retrieve.html:50
-msgid "Entrée libre"
+msgid "Free admission"
 msgstr ""
 
 #: BaseBillet/templates/reunion/views/event/retrieve.html:63
@@ -2489,15 +2472,13 @@ msgstr ""
 #: BaseBillet/templates/reunion/views/membership/form.html:60
 #: BaseBillet/templates/reunion/views/membership/form.html:61
 #: BaseBillet/templates/reunion/views/membership/form.html:62
+#: BaseBillet/templates/reunion/views/register.html:39
+#: BaseBillet/templates/reunion/views/register.html:40
 msgid "Last name or organization"
 msgstr ""
 
 #: BaseBillet/templates/reunion/views/membership/form.html:122
 msgid "Send my subscription request"
-msgstr ""
-
-#: BaseBillet/templates/reunion/views/membership/list.html:15
-msgid "Local subscriptions"
 msgstr ""
 
 #: BaseBillet/templates/reunion/views/membership/list.html:20
@@ -2512,17 +2493,12 @@ msgstr ""
 #: BaseBillet/templates/reunion/views/register.html:12
 msgid ""
 "\n"
-"                    In order to use my Lespass account, refill my card and "
+"                    In order to use my Lèspass account, refill my card and "
 "as a way\n"
 "                    to recover my credits if I lose my card, I need to link "
 "my Pass card\n"
 "                    to an email address.\n"
 "                    "
-msgstr ""
-
-#: BaseBillet/templates/reunion/views/register.html:39
-#: BaseBillet/templates/reunion/views/register.html:40
-msgid "Last name or organisation"
 msgstr ""
 
 #: BaseBillet/templates/reunion/views/register.html:44
@@ -2540,6 +2516,10 @@ msgid ""
 "                            I agree to <a href=\"%(config.legal_documents)s"
 "\">the terms and conditions</a>\n"
 "                            "
+msgstr ""
+
+#: BaseBillet/templates/reunion/views/register.html:69
+msgid "Register"
 msgstr ""
 
 #: BaseBillet/templates/reunion/views/tenant/after_onboard_stripe.html:7
@@ -2898,7 +2878,7 @@ msgid "Please log in first."
 msgstr ""
 
 #: BaseBillet/views.py:900
-msgid "Thank you! You are going to receive a validatioe email.."
+msgid "Thank you! You are going to receive a validation email.."
 msgstr ""
 
 #: BaseBillet/views.py:1014

@@ -727,7 +727,7 @@ def paiment_stripe_validator(request, paiement_stripe):
                 paiement_stripe.status = Paiement_stripe.CANCELED
                 paiement_stripe.save()
         else:
-            return Response(_(f'Erreur Meta'), status=status.HTTP_406_NOT_ACCEPTABLE)
+            return Response(_(f'Meta error'), status=status.HTTP_406_NOT_ACCEPTABLE)
 
     # on vérifie le changement de status
     paiement_stripe.refresh_from_db()
@@ -750,7 +750,7 @@ def paiment_stripe_validator(request, paiement_stripe):
                 )
         if paiement_stripe.status == Paiement_stripe.VALID:
             return Response(
-                _('Paiement validé.'),
+                _('Payment confirmed.'),
                 status=status.HTTP_208_ALREADY_REPORTED
             )
 

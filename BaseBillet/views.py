@@ -897,7 +897,7 @@ class EventMVT(viewsets.ViewSet):
                 messages.add_message(request, messages.ERROR, f"{validator.errors[error][0]}")
             return HttpResponseClientRedirect(request.headers['Referer'])
 
-        messages.add_message(request, messages.SUCCESS, _("Thank you! You are going to receive a validatioe email.."))
+        messages.add_message(request, messages.SUCCESS, _("Thank you! You are going to receive a validation email.."))
         return HttpResponseClientRedirect(request.headers['Referer'])
 
     @action(detail=True, methods=['POST'])
