@@ -67,13 +67,6 @@ def get_context(request):
     base_template = "reunion/headless.html" if request.htmx else "reunion/base.html"
     serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
 
-    # embed ?
-    embed = False
-    try:
-        embed = request.query_params.get('embed')
-    except:
-        embed = False
-
     # Le lien "Fédération"
     meta_url = cache.get('meta_url')
     if not meta_url:
@@ -86,7 +79,7 @@ def get_context(request):
 
     context = {
         "base_template": base_template,
-        "embed": embed,
+        "embed": request.query_params.get('embed'),
         "page": request.GET.get('page', 1),
         "tags": request.GET.getlist('tag'),
         "url_name": request.resolver_match.url_name,
@@ -706,6 +699,7 @@ class HomeViewset(viewsets.ViewSet):
 class EventMVT(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
+
     def get_federated_events(self, tags=None, search=None, page=1):
         dated_events = {}
         paginated_info = {
@@ -804,6 +798,21 @@ class EventMVT(viewsets.ViewSet):
         context['dated_events'], context['paginated_info'] = self.get_federated_events(tags=tags, page=page)
         # On renvoie la page en entier
         return render(request, "reunion/views/event/list.html", context=context)
+
+    @action(detail=False, methods=['GET'])
+    def embed(self, request):
+        template_context = get_context(request)
+        template_context['dated_events'], template_context['paginated_info'] = self.get_federated_events()
+        template_context['embed'] = True
+        response = render(
+            request, "reunion/views/event/list.html",
+            context=template_context,
+        )
+        # Pour rendre la page dans un iframe, on vide le header X-Frame-Options pour dire au navigateur que c'est ok.
+        response['X-Frame-Options'] = ''
+        return response
+
+
 
     # Recherche dans tout les tenant fédérés
     def tenant_retrieve(self, slug):

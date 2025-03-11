@@ -20,12 +20,12 @@
     <link rel="stylesheet" href="{% static 'reunion/css/tibillet.css' %}">
 
     <script src="{% static 'reunion/js/bootstrap.bundle.min.5.3.3.js' %}"
-        integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
-        crossorigin="anonymous"></script>
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+            crossorigin="anonymous"></script>
     <script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
     <script src="{% static 'mvt_htmx/js/loading-states.js' %}"></script>
     {% if formbricks_api_host %}
-    <script src="{{ formbricks_api_host}}/js/formbricks.umd.cjs" async></script>
+        <script src="{{ formbricks_api_host }}/js/formbricks.umd.cjs" async></script>
     {% endif %}
     <script type="module">
         import * as ThemeSwitcher from '{% static "reunion/js/theme-switcher.mjs" %}'
@@ -36,13 +36,17 @@
 
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' class="min-vh-100 d-flex flex-column">
 
-{% include "reunion/partials/navbar.html" %}
+{% if not embed %} <!-- Pas de navbar si embed -->
+    {% include "reunion/partials/navbar.html" %}
+{% endif %}
 
-<div class="flex-fill d-flex flex-column">
-    {% block main %}{% endblock main %}
-</div>
+    <div class="flex-fill d-flex flex-column">
+        {% block main %}{% endblock main %}
+    </div>
 
-{% include "reunion/partials/footer.html" %}
+{% if not embed %} <!-- Pas de footer si embed -->
+    {% include "reunion/partials/footer.html" %}
+{% endif %}
 
 
 {% include "reunion/partials/toasts.html" %}
