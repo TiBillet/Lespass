@@ -79,7 +79,6 @@ def get_context(request):
 
     context = {
         "base_template": base_template,
-        "embed": request.query_params.get('embed'),
         "page": request.GET.get('page', 1),
         "tags": request.GET.getlist('tag'),
         "url_name": request.resolver_match.url_name,
