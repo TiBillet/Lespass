@@ -6,7 +6,7 @@
         <input type="hidden" name="product" value="{{ product.uuid }}">
     
         <!-- prix -->
-        <div class="d-flex flex-row justify-content-start align-items-start mb-3 has-validation">
+        <div class="mb-3 has-validation">
             {% for price in product.prices.all %}
                 {% if price.publish %}
                     <div class="form-check me-3">
@@ -63,7 +63,7 @@
         </div>
     
         <!-- options radio -->
-        <div class="d-flex flex-row justify-content-start align-items-start mb-3 has-validation">
+        <div class="mb-3 has-validation">
             {% for option in product.option_generale_radio.all %}
                 <div class="form-check me-3">
                     <input class="form-check-input" type="radio"

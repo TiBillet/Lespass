@@ -62,7 +62,7 @@
             {% endif %}
         {% endfor %}
         {% for option in event.options_radio.all %}
-            <div class="d-flex flex-row justify-content-start align-items-start mb-3 has-validation">
+            <div class="mb-3 has-validation">
                 <div class="form-check me-3">
                     <input id="option-radio-{{ option.uuid }}" name="options"
                            class="form-check-input" type="radio" value="{{ option.uuid }}"
