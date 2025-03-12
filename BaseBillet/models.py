@@ -1835,6 +1835,12 @@ class Membership(models.Model):
                 return self.price.product.uuid
         return None
 
+    def product_img(self):
+        if self.price:
+            if self.price.product:
+                return self.price.product.img
+        return None
+
     def options(self):
         return " - ".join([option.name for option in self.option_generale.all()])
 

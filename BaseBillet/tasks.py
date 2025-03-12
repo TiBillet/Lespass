@@ -280,7 +280,7 @@ def create_ticket_pdf(ticket: Ticket):
     # Pour faire le qrcode
     qr = segno.make(f"{ticket.qrcode()}", micro=False)
     buffer_svg = BytesIO()
-    qr.save(buffer_svg, kind='svg', scale=6)
+    qr.save(buffer_svg, kind='svg', scale=4.6)
 
     context = {
         'ticket': ticket,

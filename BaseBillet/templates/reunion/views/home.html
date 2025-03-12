@@ -13,14 +13,14 @@
                     <a class="btn btn-lg btn-primary d-block my-3"
                         href="/event/" hx-get="/event/" hx-target="body" hx-push-url="true">
                         <i class="bi bi-calendar-date"></i>
-                        {{ config.event_menu_name }}
+                        {% trans config.event_menu_name %}
                     </a>
                 </div>
                 <div class="col-md">
                     <a class="btn btn-lg btn-primary d-block my-3"
                         href="/memberships/" hx-get="/memberships/" hx-target="body" hx-push-url="true">
                         <i class="bi bi-person-badge"></i>
-                        {{ config.membership_menu_name }}
+                        {% trans config.membership_menu_name %}
                     </a>
                 </div>
                 {% comment %} HIDE: page fédération
