@@ -1,6 +1,7 @@
 import logging
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.db import connection
 
 from AuthBillet.models import TibilletUser
@@ -63,8 +64,13 @@ def get_or_create_user(email: str,
         espece=TibilletUser.TYPE_HUM
     )
 
-    if not connection.tenant in user.client_achat.all():
-        user.client_achat.add(connection.tenant)
+    try :
+        if not connection.tenant in user.client_achat.all():
+            user.client_achat.add(connection.tenant)
+    except (AttributeError, ValidationError):
+        pass # Fake tenant, on pass
+    except Exception as e:
+        raise e
 
     if created:
         if password:
