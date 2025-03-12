@@ -719,7 +719,7 @@ def send_to_ghost(membership_pk):
     ghost_key = ghost_config.get_api_key()
 
     if ghost_url and ghost_key:
-        membership = Membership.objects.get(pk=membership_pk)
+        membership = Membership.objects.get(pk=membership_pk) #TODO: parfois ça crash, Celery n'a pas le membership
 
         # Email du compte :
         user = membership.user
