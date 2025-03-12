@@ -519,7 +519,7 @@ class ProductAdmin(ModelAdmin):
                 queryset = queryset.filter(categorie_article__in=[
                     Product.BILLET,
                     Product.FREERES,
-                ])
+                ]).exclude(archive=False)
         return queryset, use_distinct
 
     def has_changelist_row_action_permission(self, request: HttpRequest, *args, **kwargs):
@@ -1810,6 +1810,17 @@ class FormbricksFormsAdmin(ModelAdmin):
     warn_unsaved_form = True  # Default: False
 
     list_display = ['product', 'environmentId']
+
+
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        # import ipdb; ipdb.set_trace()
+        if db_field.name == 'product':  # Replace 'user_field' with your actual field name
+            kwargs['queryset'] = Product.objects.filter(
+                archive=False,
+                categorie_article=Product.ADHESION,
+            )
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     def save_model(self, request, obj: FormbricksForms, form, change):
         if obj.product:

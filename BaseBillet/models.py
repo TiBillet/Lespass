@@ -638,6 +638,7 @@ class Product(models.Model):
     CATEGORIE_ARTICLE_CHOICES = [
         (NONE, _('Select a category')),
         (BILLET, _('Ticket booking')),
+        (FREERES, _('Free booking')),
         # (PACK, _("Pack d'objets")),
         # (RECHARGE_CASHLESS, _('Recharge cashless')),
         # (RECHARGE_FEDERATED, _('Recharge suspendue')),
