@@ -63,6 +63,9 @@ def get_or_create_user(email: str,
         espece=TibilletUser.TYPE_HUM
     )
 
+    if not connection.tenant in user.client_achat.all():
+        user.client_achat.add(connection.tenant)
+
     if created:
         if password:
             user.set_password(password)
