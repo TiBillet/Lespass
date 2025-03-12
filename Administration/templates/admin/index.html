@@ -8,7 +8,7 @@
     {% if subtitle %}
         {{ subtitle }} |
     {% endif %}
-    {{ title }} | {{ site_title|default:_('Django site admin') }}
+    {{ title }} | {{ site_title|default:_('Admin panel') }}
 {% endblock %}
 
 {#{% block branding %}#}
@@ -59,7 +59,11 @@
 
                     {% component "unfold/components/text.html" %}
                         {% blocktrans %}
-                            Total revenue between <strong class="font-semibold text-font-important-light dark:text-font-important-dark dark:text-white">1 - 31 October</strong>. Increase <span class="text-green-700 font-semibold dark:text-green-400">+3.14%</span> comparing to previous month <strong class="font-semibold text-font-important-light dark:text-font-important-dark dark:text-white">1 - 30 September</strong>.
+                            Total revenue between
+                            <strong class="font-semibold text-font-important-light dark:text-font-important-dark dark:text-white">1 - 31 October</strong>.
+                            Increase <span class="text-green-700 font-semibold dark:text-green-400">+3.14%</span>
+                            comparing to previous month
+                            <strong class="font-semibold text-font-important-light dark:text-font-important-dark dark:text-white">1 - 30 September</strong>.
                         {% endblocktrans %}
                     {% endcomponent %}
 

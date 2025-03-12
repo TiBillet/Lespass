@@ -212,25 +212,25 @@ def context_for_membership_email(membership: "Membership"):
         'objet': _("Confirmation email"),
         'sub_title': _("Welcome aboard !"),
         'main_text': _(
-            _(f"Votre paiement pour {membership.price.product.name} a bien été reçu.")),
+            _(f"Your payment for {membership.price.product.name} has been received.")),
         # 'main_text_2': _("Si vous pensez que cette demande est main_text_2, vous n'avez rien a faire de plus :)"),
         # 'main_text_3': _("Dans le cas contraire, vous pouvez main_text_3. Merci de contacter l'équipe d'administration via : contact@tibillet.re au moindre doute."),
         'table_info': {
-            _('Reçu pour'): f'{membership.member_name()}',
-            _('Article'): f'{membership.price.product.name} - {membership.price.name}',
+            _('Receipt for:'): f'{membership.member_name()}',
+            _('Product'): f'{membership.price.product.name} - {membership.price.name}',
             _('Contribution'): f'{membership.contribution_value}',
             _('Date'): f'{membership.last_contribution}',
-            _('Valable jusque'): f'{membership.get_deadline()}',
+            _('Valid until'): f'{membership.get_deadline()}',
         },
         'button_color': "#009058",
         'button': {
-            'text': _('RECUPERER UNE FACTURE'),
+            'text': _('REQUEST INVOICE'),
             'url': f'https://{domain}/memberships/{membership.pk}/invoice/',
         },
-        'next_text_1': _("If you receive this email in error, please contact the TiBillet team."),
+        'next_text_1': _("If you receive this email by mistake, please contact the TiBillet team."),
         # 'next_text_2': "next_text_2",
-        'end_text': _('See you soon, and bon voyage.'),
-        'signature': _("Marvin, the TiBillet robot"),
+        'end_text': _('See you soon!'),
+        'signature': _("Mar, the TiBillet robot"),
     }
     # Ajout des options str si il y en a :
     if membership.option_generale.count() > 0:
@@ -401,7 +401,7 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
 
     # Internal SMTP and html template
     if title is None:
-        title = f"{organisation} : Confirmez votre email et connectez vous !"
+        title = _(f"{organisation} : confirm your email to login!")
     if template is None:
         template = 'emails/connexion.html'
 
@@ -423,11 +423,11 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
         )
         try:
             mail.send()
-            logger.info(f"mail.sended : {mail.sended}")
+            logger.info(f"mail.sent: {mail.sended}")
 
         except smtplib.SMTPRecipientsRefused as e:
             logger.error(f"ERROR {timezone.now()} Erreur envoie de mail pour connexion {user.email} : {e}")
-            logger.error(f"mail.sended : {mail.sended}")
+            logger.error(f"mail.sent: {mail.sended}")
             User = get_user_model()
             # ATTENTION : Jamais de user.save() dans celery : s'il ya un traitement en cours dans Django, ça va ecraser l'objet.
             User.objects.filter(pk=user.pk).update(is_active=False, email_error=True)
@@ -448,7 +448,7 @@ def new_tenant_mailer(waiting_config_uuid: str):
 
         mail = CeleryMailerClass(
             waiting_config.email,
-            _("TiBillet : Création d'un nouvel espace."),
+            _("TiBillet : Creation of a new instance."),
             template='reunion/views/tenant/emails/onboard_stripe.html',
             context={
                 'create_url_for_onboard_stripe': f'{create_url_for_onboard_stripe}',
@@ -473,7 +473,7 @@ def new_tenant_after_stripe_mailer(waiting_config_uuid: str):
         super_admin_root = [user.email for user in TibilletUser.objects.filter(is_superuser=True)]
         mail = CeleryMailerClass(
             super_admin_root,
-            _(f"{waiting_config.organisation} & TiBillet : Demande de création d'un nouvel espace. Action d'admin ROOT demandée"),
+            _(f"{waiting_config.organisation} & TiBillet : Lespass tenant creation request. ROOT admin action requested"),
             template='reunion/views/tenant/emails/after_onboard_stripe_for_superadmin.html',
             context={
                 'waiting_config': waiting_config,
@@ -507,7 +507,7 @@ def report_celery_mailer(data_report_list: list):
         try:
             mail = CeleryMailerClass(
                 configuration.email,
-                f"Rapport de vente TiBillet - {configuration.organisation}",
+                _(f"TiBillet sales report - {configuration.organisation}"),
                 template='mails/mail_rapport.html',
                 context={'organisation': f'{configuration.organisation}'},
                 attached_files=attached_files,

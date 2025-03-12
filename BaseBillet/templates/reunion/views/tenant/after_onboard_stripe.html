@@ -2,37 +2,34 @@
 {% load tibitags i18n %}
 
 {% block main %}
-    <main class="container-lg my-5">
-        {% if not details_submitted %}
-            <p class="">
-                {% trans "Nous avons bien reçu votre demande de création d'espace" %} :
-            </p>
-            <p class="">
-                {% trans "Vous ne semblez pas avoir terminé la création de compte Stripe." %}
-            </p>
-            <p class="">
-                {% trans "Vous pouvez utiliser le même lien présent dans l'email de bienvenue pour compléter la procédure." %}
-            </p>
-        {% elif not email_valid %}
-            <p class="">
-                {% trans "Nous avons bien reçu votre demande de création d'espace" %} :
-            </p>
-            <p class="">
-                {% trans "L'email renseigné sur Stripe ne semble pas correspondre à l'email d'administration."%}
-            </p>
-            <p class="">
-                {% trans "Merci de relancer une procédure avec le même email." %}
-            </p>
-        {% else %}
-            <p class="">
-                {% trans "Nous avons bien reçu votre demande de création d'espace" %}.
-            </p>
-            <p class="">
-                {% trans "Une fois votre compte vérifié par nos soins, nous vous contacterons (pendant un jour ouvré) pour finaliser votre inscription." %}
-            </p>
-            <p class="">
-                {% trans "Merci et bienvenue dans notre aventure coopérative !" %}
-            </p>
-        {% endif %}
-    </main>
+<main class="container-lg my-5">
+    {% if not details_submitted %}
+    {% blocktranslate %}
+    <p>We have received your instance creation request.</p>
+    <p>You have apparently not finished the Stripe account creation.</p>
+    <p>
+        You can use the link found in your welcome email to complete the
+        process.
+    </p>
+    {% endblocktranslate %}
+    {% elif not email_valid %}
+    {% blocktranslate %}
+    <p>We have received your instance creation request.</p>
+    <p>
+        The email you gave Stripe is different from the one you used to create
+        the administration account.
+    </p>
+    <p>Please retry the Stripe process with the administration email.</p>
+    {% endblocktranslate %}
+    {% else %}
+    {% blocktranslate %}
+    <p>We have received your instance creation request.</p>
+    <p>
+        Once your account has been verified, we'll get in touch (on a work day)
+        to finalize your instance.
+    </p>
+    <p>Thank you and welcome to our little island in the commons!</p>
+    {% endblocktranslate %}
+    {% endif %}
+</main>
 {% endblock %}

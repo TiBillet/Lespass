@@ -8,7 +8,7 @@
                 <input type="email" name="email" class="form-control" id="booking-email">
             </div>
             <div class="mb-3">
-                <label for="booking-confirm" class="form-label">{% trans "Confirmez votre email" %}</label>
+                <label for="booking-confirm" class="form-label">{% trans "Email confirmation" %}</label>
                 <input type="email" name="email-confirm" class="form-control" id="booking-confirm">
             </div>
             <p><code>{{ user.email }}</code></p>
@@ -20,7 +20,7 @@
             </div>
         {% else %}
         <div class="alert alert-danger" role="alert">
-            {% translate "Vous n'avez pas validé votre email. Merci de vérifier dans vos spams :)" %}
+            {% translate "Your email is not confirmed. Please check your spam folder :)" %}
         </div>
         {% endif %}
         {% for product in event.products.all %}
@@ -37,11 +37,11 @@
                             {% if price.adhesion_obligatoire %}
                                 {% if not user.is_authenticated %}
                                 <div class="alert alert-danger" role="alert">
-                                    {% trans "Connectez vous pour afficher ce produit." %}
+                                    {% trans "Log in to access this rate." %}
                                 </div>
                                 {% elif not user|is_membership:price.adhesion_obligatoire %}
                                 <div class="alert alert-danger" role="alert">
-                                    {% trans "Adhérez pour profiter de ce tarif." %}
+                                    {% trans "Suscribe to access this rate." %}
                                 </div>
                                 {% else %}
                                 <input type="number" step="1" min="0" max="{% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% else %}{{ price.max_per_user }}{% endif %}"
@@ -83,21 +83,23 @@
             </div>
         {% endfor %}
         <h4>
-            Total&nbsp;: <span class="js-total-amount">0</span> place(s)
-            {% if event.free_price %}à prix libre
-            {% else %}pour
+            {% trans 'Total&nbsp;:' %} <span class="js-total-amount">0</span> {% trans 'ticket(s)' %}
+            {% if event.free_price %} {% trans 'at an open price' %}
+            {% else %} {% trans 'for' %}
             <span class="fs-5 badge bg-secondary-subtle mb-md-0"><span class="js-total-price">1,00</span>&nbsp;€</span>
             {% endif %}
         </h4>
         <p>
-            Jauge maximale de {{ event.jauge_max }} personnes et nombre de
-            billets limité à <span class="js-max-amount">{{ event.max_per_user }}</span> par réservation.
+            {% blocktranslate %}
+            Maximum capacity of {{ event.jauge_max }} people and tickets limited to
+            {% endblocktranslate %}
+            <span class="js-max-amount">{{ event.max_per_user }}</span> {% trans 'per buyer' %}.
         </p>
     </div>
 
     <div class="p-3">
-        <button type="submit" class="btn btn-primary w-100 mb-3">Confirmer la réservation</button>
-        <a href="." class="btn btn-danger d-block">Annuler</a>
+        <button type="submit" class="btn btn-primary w-100 mb-3">{% trans 'Send booking request' %}</button>
+        <a href="." class="btn btn-danger d-block">{% trans 'Cancel' %}</a>
     </div>
 </form>
 

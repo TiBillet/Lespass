@@ -3,19 +3,19 @@
 {% load tibitags %}
 {% load humanize i18n %}
 
-{% block title %}{% translate 'Badgeuse' %}{% endblock %}
+{% block title %}{% translate 'Punchclock' %}{% endblock %}
 
 {% block account_page %}
-<section class="card border-top-0 rounded-top-0">
+<section class="card border-top-0 rounded-top-0 pt-3">
     <div class="card-body">
-        <h1 class="card-title d-md-none">Badgeuse</h1>
+        <h1 class="card-title d-md-none">{% trans 'Punchclock' %}</h1>
         <p class="lead">
-            Ici je peux pointer à un des espaces disponible.
+            {% trans 'Here I can punch in and out of available spaces.' %}
         </p>
     </div>
-</section>    
+</section>
 
-<h2 class="pt-3">Les espaces pointables</h2>
+<h2 class="pt-3 mt-3">{% trans 'Tracked spaces' %}</h2>
 
 <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-3 mb-5">
     {% for badge in badges %}
@@ -36,7 +36,7 @@
             </div>
             <div id="badge-{{ badge.pk }}" class="card-footer pt-3">
                 <p class="alert alert-warning">
-                    La badgeuse est en développement, elle arrive bientôt !
+                    {% trans 'The punchclock feature is being developed. Coming soon!' %}
                 </p>
                 <div class="form-check form-switch mb-3">
                     <input
@@ -50,7 +50,7 @@
                         autocomplete="off"
                         disabled>
                     <label class="form-check-label" for="badgeOut">
-                        {% translate "Badger mon arrivée" %}
+                        {% translate "Punch in" %}
                     </label>
                 </div>
             </div>

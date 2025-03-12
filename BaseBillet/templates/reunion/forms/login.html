@@ -2,12 +2,12 @@
 <form id="loginForm"
       hx-post="/connexion/" hx-target="body"
       hx-swap="innerHTML">
-    <h4>{% trans "Avec un email" %}</h4>
+    <h4>{% trans "With an email" %}</h4>
     <div class="form-floating mb-3">
         <input type="email" class="form-control" id="loginEmail" placeholder="mon@email.fr" name="email" required>
-        <label for="loginEmail">{% trans "Mon e-mail" %}</label>
-        <p class="mt-3">{% trans "Pas besoin de mot de passe, un e-mail sera envoyé pour validation." %}</p>
-        <button type="submit" class="btn btn-primary d-block w-100">{% trans "Valider" %}</button>
+        <label for="loginEmail">{% trans "Email address" %}</label>
+        <p class="mt-3">{% trans "No need for a password, a login link will be sent by email." %}</p>
+        <button type="submit" class="btn btn-primary d-block w-100">{% trans "Request login" %}</button>
     </div>
     {#    <h4 class="mt-5">#}
     {#        Avec mon compte#}

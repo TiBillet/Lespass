@@ -1,13 +1,13 @@
 {% load tibitags %}
 {% load humanize i18n %}
 
-<h2 class="pt-3">{% trans "Historique des transactions" %}</h2>
+<h2 class="pt-3">{% trans "Transaction history" %}</h2>
 <div class="table-responsive">
     <table class="table">
         <thead>
-        <th>{% trans "Montant" %}</th>
+        <th>{% trans "Value" %}</th>
         <th>{% trans "Action" %}</th>
-        <th>{% trans "Chemin" %}</th>
+        <th>{% trans "Path" %}</th>
         <th>{% trans "Date" %}</th>
         </thead>
         <tbody>
@@ -25,20 +25,20 @@
                 <td>{{ tr.get_action_display }}</td>
                 <td>
                     {% if tr.serialized_sender.uuid == user.wallet.uuid %}
-                    {% translate "Tirelire" %}
+                    {% translate "Wallet" %}
                     {% elif tr.serialized_sender.get_name == 'Primary Wallet' %}
-                    {% trans 'Plateforme Lespass' %}
+                    {% trans 'Lèspass platform' %}
                     {% else %}
-                    {% trans 'Caisse LaBoutik' %}
+                    {% trans 'LaBoutik register' %}
                     {#{ tr.serialized_sender.get_name }#}
                     {% endif %}
                     <i class="bi bi-arrow-right"></i>
                     {% if tr.serialized_receiver.uuid == user.wallet.uuid %}
-                    {% translate "Tirelire" %}
+                    {% translate "Wallet" %}
                     {% elif tr.serialized_sender.get_name == 'Primary Wallet' %}
-                    {% trans 'Plateforme Lespass' %}
+                    {% trans 'Lèspass platform' %}
                     {% else %}
-                    {% trans 'Caisse LaBoutik' %}
+                    {% trans 'LaBoutik register' %}
                     {#{ tr.serialized_receiver.get_name }#}
                     {% endif %}
                 </td>

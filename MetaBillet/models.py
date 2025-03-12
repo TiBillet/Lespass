@@ -33,27 +33,27 @@ class ProductDirectory(models.Model):
 class WaitingConfiguration(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=False)
     email = models.EmailField()
-    organisation = models.CharField(db_index=True, max_length=50, verbose_name=_("Nom de l'organisation"))
+    organisation = models.CharField(db_index=True, max_length=50, verbose_name=_("Collective name"))
 
-    id_acc_connect = models.CharField(max_length=21, blank=True, null=True, verbose_name=_("Id stripe connect"))
+    id_acc_connect = models.CharField(max_length=21, blank=True, null=True, verbose_name=_("Stripe connect ID"))
 
     laboutik_wanted = models.BooleanField(default=False)
-    dns_choice = models.CharField(max_length=200, blank=True, null=True, verbose_name=_("Choix du nom de domaine"))
+    dns_choice = models.CharField(max_length=200, blank=True, null=True, verbose_name=_("Domain name choice"))
 
     ### Ex method :
     slug = models.SlugField(max_length=50, default="")
 
-    short_description = models.CharField(max_length=250, verbose_name=_("Description courte"), blank=True, null=True)
-    long_description = models.TextField(blank=True, null=True, verbose_name=_("Description longue"))
+    short_description = models.CharField(max_length=250, verbose_name=_("Short description"), blank=True, null=True)
+    long_description = models.TextField(blank=True, null=True, verbose_name=_("Long description"))
 
-    adress = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Adresse"))
-    postal_code = models.IntegerField(blank=True, null=True, verbose_name=_("Code postal"))
-    city = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Ville"))
+    adress = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Address"))
+    postal_code = models.IntegerField(blank=True, null=True, verbose_name=_("Zip code"))
+    city = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("City"))
 
-    phone = models.CharField(max_length=20, verbose_name=_("Téléphone"))
+    phone = models.CharField(max_length=20, verbose_name=_("Phone number"))
 
     site_web = models.URLField(blank=True, null=True)
-    legal_documents = models.URLField(blank=True, null=True, verbose_name='Statuts associatif')
+    legal_documents = models.URLField(blank=True, null=True, verbose_name='By-laws')
 
     twitter = models.URLField(blank=True, null=True)
     facebook = models.URLField(blank=True, null=True)
@@ -72,7 +72,7 @@ class WaitingConfiguration(models.Model):
                                 'thumbnail': (150, 90),
                             },
                             delete_orphans=True,
-                            verbose_name=_('Carte géographique')
+                            verbose_name=_('Geographical map')
                             )
 
     carte_restaurant = JPEGField(upload_to='images/',
@@ -85,7 +85,7 @@ class WaitingConfiguration(models.Model):
                                          'thumbnail': (150, 90),
                                      },
                                      delete_orphans=True,
-                                     verbose_name=_('Carte du restaurant')
+                                     verbose_name=_('Restaurant menu')
                                      )
 
     img = JPEGField(upload_to='images/',
@@ -100,7 +100,7 @@ class WaitingConfiguration(models.Model):
                             'crop': (480, 270, True),
                         },
                         delete_orphans=True,
-                        verbose_name='Background',
+                        verbose_name=_('Background'),
                         )
 
     # stripe_connect_account = models.CharField(max_length=21, blank=True, null=True)
@@ -157,17 +157,17 @@ class WaitingConfiguration(models.Model):
 
     ARTISTE, SALLE_SPECTACLE, FESTIVAL, TOURNEUR, PRODUCTEUR, META, ROOT = 'A', 'S', 'F', 'T', 'P', 'M', 'R'
     CATEGORIE_CHOICES = [
-        (ARTISTE, _('Artiste')),
-        (SALLE_SPECTACLE, _("Lieu de spectacle vivant")),
+        (ARTISTE, _('Artist')),
+        (SALLE_SPECTACLE, _("Scene")),
         (FESTIVAL, _('Festival')),
-        (TOURNEUR, _('Tourneur')),
-        (PRODUCTEUR, _('Producteur')),
-        (META, _('Agenda culturel')),
-        (ROOT, _('Tenant public root')),
+        (TOURNEUR, _('Tour operator')),
+        (PRODUCTEUR, _('Producer')),
+        (META, _('Event aggregator')),
+        (ROOT, _('Root public tenant')),
     ]
 
     categorie = models.CharField(max_length=3, choices=CATEGORIE_CHOICES, default=SALLE_SPECTACLE,
-                                         verbose_name=_("Categorie"))
+                                         verbose_name=_("Category"))
 
     datetime = models.DateTimeField(auto_now_add=True)
     onboard_stripe_finished = models.BooleanField(default=False)
@@ -193,5 +193,5 @@ class WaitingConfiguration(models.Model):
         return f"{self.organisation} - {self.email} -> {self.slug}"
 
     class Meta:
-        verbose_name = _('Paramètres')
-        verbose_name_plural = _('Paramètres')
+        verbose_name = _('Settings')
+        verbose_name_plural = _('Settings')

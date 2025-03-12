@@ -1,15 +1,33 @@
+{% load i18n %}
+{% blocktranslate %}
 <div>
-    <span>Bonjour !</span>
+    <span>Hello and welcome!</span>
 </div>
 <div>
-    <p>Vous souhaitez créer un nouvel espace TiBillet pour le collectif {{ waiting_config.organisation }}, Merci !</p>
-    <p>Pour finaliser votre compte, nous avons besoin d'un compte stripe pour vous envoyer les sous de vos ventes
-        :-)</p>
-    <p>Merci de compléter le formulaire qui vous sera proposé via le lien ci dessous. Une fois votre compte validé par
-        Stripe, nous prendrons contact avec vous pour finaliser votre espace.</p>
-    <p>D'ici la, n'hésitez pas à venir discuter avec nous par <a href="mailto:contact@tibillet.re">email</a> ou sur <a
-            href="https://discord.gg/7FJvtYx">Discord</a> ou <a href="https://matrix.to/#/#tibillet:tiers-lieux.org">Matrix</a>
-        ou <a href="https://pouet.chapril.org/@tibillet">Mastodon</a>.</p>
-    <p>Bon voyage parmi nous !</p>
-    <p><a href="{{ create_url_for_onboard_stripe }}">-> Valider sa demande et continuer sur Stripe <-</a></p>
+    <p>
+        You wish to create a new Lèspass instance to get your collective
+        "{{ waiting_config.organisation }}" started with TiBillet, thank you!
+    </p>
+    <p>
+        In order to finalize your account, we need a Stripe account (so we can
+        transfer the money from your sales ☺️).
+    </p>
+    <p>
+        Please fill in the Stripe onboarding form by following the link below.
+        Once Stripe validates your account, we'll get in touch (on a work day)
+        to finalize your instance.
+    </p>
+    <p>
+        Until then, you can get in touch through our
+        <a href="mailto:contact@tibillet.re">support email</a> or with our
+        community hubs on <a  href="https://discord.gg/7FJvtYx">Discord</a>,
+        <a href="https://matrix.to/#/#tibillet:tiers-lieux.org">Matrix</a> or
+        <a href="https://pouet.chapril.org/@tibillet">Mastodon</a>.
+    </p>
+    <p>We hope you enjoy your time with us!</p>
+    <p><a href="{{ create_url_for_onboard_stripe }}">
+        -&gt; Confirm my request and get started with the Stripe onboarding
+        process &lt;-
+    </a></p>
 </div>
+{% endblocktranslate %}

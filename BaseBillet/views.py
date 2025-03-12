@@ -110,19 +110,19 @@ def paiement_stripe_reservation_validator(request, paiement_stripe):
     # Le paiement est en cours de traitement,
     # probablement pas le webhook POST qui arrive depuis Stripe avant le GET de redirection de l'user
     if paiement_stripe.traitement_en_cours:
-        messages.success(request, _("Paiement validé. Création des billets et envoi par mail en cours."))
+        messages.success(request, _("Payment confirmed. Tickets are being generated and sent to your email."))
         return paiement_stripe
 
     # Déja été traité et il est en erreur.
     if reservation.status == Reservation.PAID_ERROR:
-        messages.error(request, _("Paiement refusé."))
+        messages.error(request, _("Payment rejected."))
         return False
 
     # Déja traité et validé.
     if (paiement_stripe.status == Paiement_stripe.VALID or
             reservation.status == Reservation.VALID):
         messages.success(request,
-                         _('Paiement validé. Billets envoyés par mail. Vous pouvez aussi retrouver vos billets dans votre espace "mon compte"'))
+                         _('Payment confirmed. Tickets sent to your email. You can also view your tickets through "My account > Bookings".'))
         return paiement_stripe
 
     #### END PRE CHECK
@@ -141,7 +141,7 @@ def paiement_stripe_reservation_validator(request, paiement_stripe):
         if not invoice.status == 'paid':
             logger.info(
                 f"paiement_stripe.source == Paiement_stripe.INVOICE -> stripe invoice : {invoice.status} - paiement : {paiement_stripe.status}")
-            messages.error(request, _(f'stripe invoice : {invoice.status} - paiement : {paiement_stripe.status}'))
+            messages.error(request, _(f'Stripe invoice : {invoice.status} - payment : {paiement_stripe.status}'))
             return False
 
         paiement_stripe.status = Paiement_stripe.PAID
@@ -150,7 +150,7 @@ def paiement_stripe_reservation_validator(request, paiement_stripe):
         paiement_stripe.save()
 
         logger.info("paiement_stripe.source == Paiement_stripe.INVOICE -> Paiement récurent et facture générée.")
-        messages.success(request, _("Paiement récurent et facture générée."))
+        messages.success(request, _("Recurring payment and bill generated."))
         return paiement_stripe
 
     # C'est un paiement stripe checkout non traité, on tente de le valider
@@ -167,7 +167,7 @@ def paiement_stripe_reservation_validator(request, paiement_stripe):
         logger.info("*" * 30)
 
         messages.success(request,
-                         _('Paiement validé. Billets envoyés par mail. Vous pouvez aussi retrouver vos billets dans votre espace "mon compte"'))
+                         _('Payment confirmed. Tickets sent to your email. You can also view your tickets through "My account > Bookings".'))
         return paiement_stripe
 
     raise Exception('paiment_stripe_reservation_validator : aucune condition remplies ?')
@@ -222,7 +222,7 @@ def test_jinja(request):
 def deconnexion(request):
     # un logout peut-il mal se passer ?
     logout(request)
-    messages.add_message(request, messages.SUCCESS, _("Déconnexion réussie"))
+    messages.add_message(request, messages.SUCCESS, _("Logout successful"))
     return redirect('index')
 
 
@@ -239,7 +239,7 @@ def connexion(request):
             return HttpResponseClientRedirect(request.headers['Referer'])
 
         logger.error(validator.errors)
-    messages.add_message(request, messages.WARNING, "Erreur de validation de l'email")
+    messages.add_message(request, messages.WARNING, "Email validation error")
     return redirect('index')
 
 
@@ -331,7 +331,7 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
         # import ipdb; ipdb.set_trace()
         if not user:
             # Le mail n'est pas validé par django (example.org?)
-            messages.add_message(request, messages.ERROR, f"{_('Email not valid')}")
+            messages.add_message(request, messages.ERROR, f"{_('Invalid email')}")
             logger.error("email validé par validateur DRF mais pas par get_or_create_user "
                          "-> email de confirmation a renvoyé une erreur")
             return HttpResponseClientRedirect(request.headers['Referer'])
@@ -446,7 +446,7 @@ class MyAccount(viewsets.ViewSet):
         email = request.user.email
         user = get_or_create_user(email, force_mail=True)
         messages.add_message(request, messages.SUCCESS,
-                             _("Mail sended, please check spam too !"))
+                             _("Mail sent, please check spam too!"))
         return HttpResponseClientRedirect('/my_account/')
 
     @action(detail=True, methods=['GET'])
@@ -473,13 +473,13 @@ class MyAccount(viewsets.ViewSet):
         token_fed = [token for token in wallet.get('tokens') if token['asset']['is_stripe_primary'] == True]
         if len(token_fed) != 1:
             messages.add_message(request, messages.ERROR,
-                                 _("Vous n'avez pas de tirelire fédérée. Peut être avez vous rechargé votre carte sur place ?"))
+                                 _("You do not have a federated wallet. Maybe you loaded money directly at a register?"))
             return HttpResponseClientRedirect('/my_account/')
 
         value = token_fed[0]['value']
         if value < 1:
             messages.add_message(request, messages.ERROR,
-                                 _(f"Votre tirelire fédérée est déja vide."))
+                                 _(f"Your wallet is already empty."))
             return HttpResponseClientRedirect('/my_account/')
 
         status_code, result = fedowAPI.wallet.refund_fed_by_signature(user)
@@ -487,11 +487,11 @@ class MyAccount(viewsets.ViewSet):
             # On clear le cache du wallet
             cache.delete(f"wallet_user_{user.wallet.uuid}")
             messages.add_message(request, messages.SUCCESS,
-                                 _("Un remboursement a été effectué sur le compte bancaire ayant servi au paiement en ligne. Merci !"))
+                                 _("A refund has been made to the provided account. Thank you!"))
             return HttpResponseClientRedirect('/my_account/')
         else:
             messages.add_message(request, messages.WARNING,
-                                 _(f"Toutes nos excuses, il semble qu'un traitement manuel soit nécéssaire pour votre remboursement. Vous pouvez aller à l'acceuil de votre lieux, ou contacter : contact@tibillet.re"))
+                                 _(f"Apologies, it seems you need to manually request a refund. You can go to one of the collective's register, or send ar email to: contact@tibillet.re ."))
             return HttpResponseClientRedirect('/my_account/')
 
     @staticmethod
@@ -635,7 +635,7 @@ class MyAccount(viewsets.ViewSet):
             # Redirection du client vers le lien stripe demandé par Fedow
             return HttpResponseClientRedirect(stripe_checkout_url)
         else:
-            messages.add_message(request, messages.ERROR, _("No available. Contact an admin."))
+            messages.add_message(request, messages.ERROR, _("Not available. Contact an admin."))
             return HttpResponseClientRedirect('/my_account/')
 
     @action(detail=True, methods=['GET'])
@@ -684,7 +684,7 @@ class HomeViewset(viewsets.ViewSet):
             message=validator.validated_data['message'],
         )
 
-        messages.add_message(request, messages.SUCCESS, _("Message envoyé. Vous êtes en copie, Merci !"))
+        messages.add_message(request, messages.SUCCESS, _("Message sent, you have been sent a copy. Thank you!"))
         return HttpResponseClientRedirect(request.headers['Referer'])
 
     def get_permissions(self):
@@ -884,11 +884,11 @@ class EventMVT(viewsets.ViewSet):
 
         if Ticket.objects.filter(reservation__user_commande=user, reservation__event__in=event.children.all()).exists():
             messages.add_message(request, messages.ERROR,
-                                 _("Vous avez déjà confirmé votre présence sur une action lors de cet évènement."))
+                                 _("You have already checked for an action on this event."))
             return HttpResponseClientRedirect(request.headers['Referer'])
 
         if not user:
-            messages.add_message(request, messages.ERROR, _("Merci de vous connecter d'abord."))
+            messages.add_message(request, messages.ERROR, _("Please log in first."))
             return HttpResponseClientRedirect(request.headers['Referer'])
 
         validator = ReservationValidator(data={
@@ -902,7 +902,7 @@ class EventMVT(viewsets.ViewSet):
                 messages.add_message(request, messages.ERROR, f"{validator.errors[error][0]}")
             return HttpResponseClientRedirect(request.headers['Referer'])
 
-        messages.add_message(request, messages.SUCCESS, _("Merci ! Vous allez recevoir un mail de validation."))
+        messages.add_message(request, messages.SUCCESS, _("Thank you! You are going to receive a validation email.."))
         return HttpResponseClientRedirect(request.headers['Referer'])
 
     @action(detail=True, methods=['POST'])
@@ -1016,7 +1016,7 @@ class Badge(viewsets.ViewSet):
         fedowAPI = FedowAPI()
         transaction = fedowAPI.badge.badge_in(user, product)
 
-        messages.add_message(request, messages.SUCCESS, _(f"Arrivée enregistrée !"))
+        messages.add_message(request, messages.SUCCESS, _(f"Check in registered!"))
 
         return render(request, "reunion/partials/account/badge_switch.html", context={})
 
@@ -1024,7 +1024,7 @@ class Badge(viewsets.ViewSet):
     def check_out(self, request: HttpRequest):
         template_context = get_context(request)
         fedowAPI = FedowAPI()
-        messages.add_message(request, messages.SUCCESS, _(f"Départ enregistré !"))
+        messages.add_message(request, messages.SUCCESS, _(f"Check out registered!"))
         return HttpResponseClientRedirect(request.headers['Referer'])
 
     def get_permissions(self):
@@ -1179,7 +1179,7 @@ class MembershipMVT(viewsets.ViewSet):
         membership = get_object_or_404(Membership, pk=pk)
         pdf_binary = create_membership_invoice_pdf(membership)
         if not pdf_binary:
-            return HttpResponse(_('Erreur lors de la génération du PDF'), status=500)
+            return HttpResponse(_('PDF generation error'), status=500)
 
         response = HttpResponse(pdf_binary, content_type='application/pdf')
         response['Content-Disposition'] = f'inline; filename="facture.pdf"'
@@ -1304,7 +1304,7 @@ class Tenant(viewsets.ViewSet):
             waiting_config = WaitingConfiguration.objects.get(id_acc_connect=id_acc_connect)
         except Exception as e:
             logger.info("Pas de waiting config car le lien a été généré depuis l'admin. (post V1)")
-            return HttpResponse(_("Votre demande a bien été enregistrée. Merci de contacter un administrateur pour finaliser votre espace."))
+            return HttpResponse(_("Your request has been received. Please contact an admin to finalize your instance."))
         waiting_config.onboard_stripe_finished = True
         waiting_config.save()
 

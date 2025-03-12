@@ -1,6 +1,7 @@
-<div>Bonjour. Une demande de création de nouveau "tenant" a été envoyé. Merci de vérifier que tout roule !</div>
+{% load i18n %}
+{% blocktranslate %}
+<p>Hi, a tenant creation request has been sent. Please check it out!</p>
 <br>
-<div>De : {{ waiting_config.email }}</div>
-<div>Organisation : {{ waiting_config.organisation }}</div>
-
-
+<p>From : {{ waiting_config.email }}</p>
+<p>To : {{ waiting_config.organisation }}</p>
+{% endblocktranslate %}

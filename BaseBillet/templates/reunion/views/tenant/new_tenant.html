@@ -9,56 +9,69 @@
                   hx-post="/tenant/create_waiting_configuration/" hx-indicator="#tibillet-spinner"
                   hx-target="#new-tenant">
                 <div class="col-md-8 offset-md-2 col-xl-6 offset-xl-3">
-                    <h1>{% trans "Créer une nouvelle instance" %}</h1>
-                    <p class="">
-                        {% trans "Pour créer une instance " %}<strong>Lespass, </strong>{% trans "il suffit de remplir ce formulaire. " %}
-                    <p class="">
-                        {% trans "Un email de bienvenue vous sera envoyé." %}
+                    {% blocktranslate %}
+                    <h1>Create a new instance</h1>
+                    <p>
+                        To create a <strong>Lespass</strong> instance, fill this
+                        form.
                     </p>
-                    <p class="">
-                        {% trans "Vous trouverez dans cet email un lien d'invitation à créer et lier un compte " %}<strong>Stripe </strong> {% trans "pour recevoir des paiements." %}
+                    <p>A welcome email will be sent.</p>
+                    <p>
+                        You will find in it an invite link to create a
+                        <strong>Stripe</strong> account and set it up for
+                        Lespass, as it is necessary to receive payments.
                     </p>
                     <p class="mb-5">
-                        {% trans "Une fois votre compte vérifié par nos soins, nous vous contacterons (pendant un jour ouvré) pour finaliser votre inscription." %}
+                        Once your account has been verified, we'll get in touch
+                        (on a work day) to finalize your instance.
                     </p>
+                    {% endblocktranslate %}
                     <form id="linkform" role="form">
                         <div class="form-floating mb-3">
-                            <input name="email" type="email" class="form-control" placeholder="adresse@exemple.fr"
-                                   role="textbox" aria-label="Adresse mail de l'admin" required
-                                    {% if user.is_authenticated %}
-                                   value="{{ user.email }}"
-                                    {% elif email_query_params %}
-                                   value="{{ email_query_params }}"
-                                    {% endif %}>
-
-                            <label for="email">{% trans "Adresse email" %}</label>
+                            <input name="email" type="email" class="form-control"
+                                placeholder="adresse@exemple.fr"
+                                role="textbox" aria-label="{% trans 'Administrator email' %}" required
+                                {% if user.is_authenticated %}
+                                value="{{ user.email }}"
+                                {% elif email_query_params %}
+                                value="{{ email_query_params }}"
+                                {% endif %}>
+                            <label for="email">{% trans 'Administrator email' %}</label>
                         </div>
                         <div class="form-floating mb-3">
                             <input name="emailConfirmation" type="email" class="form-control"
                                    placeholder="adresse@exemple.fr" role="textbox"
-                                   aria-label="Confirmation de l'adresse email" required
+                                   aria-label="{% trans 'Email confirmation' %}" required
                                     {% if user.is_authenticated %}
                                    value="{{ user.email }}"
                                     {% endif %}>
-                            <label for="emailConfirmation">{% trans "Confirmation de l'email" %}</label>
+                            <label for="emailConfirmation">{% trans 'Email confirmation' %}</label>
                         </div>
                         {% include 'reunion/partials/field_errors.html' %}
+                        {% blocktranslate %}
                         <p class="form-text">
-                            {% trans "Le mail sera utilisé pour " %}<strong>{% trans "le compte d'administration" %}</strong>{% trans " de l'instance." %}
+                            The email will be used for
+                            <strong>the administration account</strong>
+                            of the Lespass instance.
                         </p>
                         <p class="form-text">
-                            <strong>{% trans "Il doit celui d'une personne occupant un poste à responsabilité et le même que celui que vous renseignerez sur Stripe." %}</strong>
+                            <strong>
+                                For this reason, it needs be the email through
+                                which you will manage the instance, as well as
+                                the email used for your Stripe account.
+                            </strong>
                         </p>
-
+                        {% endblocktranslate %}
                         <div class="row">
                             <div class="col">
                                 <div class="form-floating mb-3">
-                                    <input name="name" type="text" class="form-control" placeholder="Jaz" role="textbox"
-                                           aria-label="Prénom de l'adhéranne" required
-                                            {% if name_query_params %}
-                                           value="{{ name_query_params }}"
-                                            {% endif %}>
-                                    <label for="name">{% trans "Nom du collectif" %}</label>
+                                    <input name="name" type="text" class="form-control"
+                                        placeholder="Jaz" role="textbox"
+                                        aria-label="{% trans 'Name of your collective' %}" required
+                                        {% if name_query_params %}
+                                        value="{{ name_query_params }}"
+                                        {% endif %}>
+                                    <label for="name">{% trans 'Name of your collective' %}</label>
                                 </div>
                             </div>
                         </div>
@@ -67,24 +80,29 @@
                         <div class="form-check form-switch mt-5 mb-3">
                             <input class="form-check-input" type="checkbox" role="switch" name="laboutik" id="laboutik">
                             <label class="form-check-label" for="laboutik">
-                                {% trans "Je veux utiliser " %}<a
-                                    href="https://tibillet.org/fr/docs/presentation/demonstration/#caisse-enregistreuse--cashless--httpslaboutikdemotibilletorg">{% trans "une caisse enregistreuse LaBoutik" %}</a>
+                                {% blocktranslate %}
+                                I want to use a
+                                <a href="https://tibillet.org/fr/docs/presentation/demonstration/#caisse-enregistreuse--cashless--httpslaboutikdemotibilletorg">
+                                    LaBoutik cash register
+                                </a>
+                                {% endblocktranslate %}
                             </label>
                         </div>
                         <div class="form-check form-switch mb-5">
                             <input class="form-check-input" type="checkbox" role="switch" name="cgu" id="cgu" required>
                             <label class="form-check-label" for="cgu">
-                                {% trans "J'accepte" %} <a
-                                    href="https://tibillet.org/cgucgv/"
-                                    target="_blank">{% trans "les conditions d'utilisation" %}</a> {% translate "facile à lire et à comprendre" %}
-                                !
-
+                                {% blocktranslate %}
+                                I agree to
+                                <a href="https://tibillet.org/cgucgv/" target="_blank">
+                                    the terms and conditions
+                                </a>
+                                {% endblocktranslate %}
                             </label>
                         </div>
                         {% include 'reunion/partials/field_errors.html' %}
 
                         <p>
-                            {% trans "Choix du nom de domaine." %}
+                            {% trans "Domain name choice" %}
                         </p>
                         <div class="d-flex flex-row justify-content-start align-items-start mb-5 has-validation">
                             <div class="form-check me-3">
@@ -112,7 +130,7 @@
                         <input type="hidden" name="qrcode_uuid" value="{{ qrcode_uuid }}">
                         <button type="submit"
                                 class="btn btn-primary w-100 mb-3 test-return-validate-link-card"
-                        >{% translate "Confirmer" %}
+                        >{% translate "Send request" %}
                         </button>
                     </form>
                 </div>

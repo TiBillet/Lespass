@@ -28,7 +28,7 @@ class TibilletManager(BaseUserManager):
     def _create_user(self, email, password, **extra_fields):
         # import ipdb; ipdb.set_trace()
         if not email:
-            raise ValueError(_("email obligatoire"))
+            raise ValueError(_("Email required"))
 
         email = self.normalize_email(email)
         user = self.model(**extra_fields)
@@ -107,30 +107,30 @@ class TibilletUser(AbstractUser):
 
     username = models.CharField(max_length=200, unique=True)  # same as email bu defaut
     email = models.EmailField(unique=True)  # changes email to unique and blank to false
-    email_error = models.BooleanField(default=False, help_text=_("L'email de confirmation a été distribué ?"))
-    email_valid = models.BooleanField(default=False, help_text=_("L'email de confirmation OK ?"))
+    email_error = models.BooleanField(default=False, help_text=_("Confirmation email delivery failed"))
+    email_valid = models.BooleanField(default=False, help_text=_("Email confirmed"))
 
     rsa_key = models.OneToOneField(RsaKey, on_delete=models.SET_NULL, null=True, related_name='user')
     wallet = models.OneToOneField(Wallet, on_delete=models.SET_NULL, null=True, related_name='user')
 
-    first_name = models.CharField(max_length=200, null=True, blank=True, verbose_name=_('Prenom'))
-    last_name = models.CharField(max_length=200, null=True, blank=True, verbose_name=_('Nom'))
+    first_name = models.CharField(max_length=200, null=True, blank=True, verbose_name=_('First name'))
+    last_name = models.CharField(max_length=200, null=True, blank=True, verbose_name=_('Last name'))
 
-    phone = models.CharField(max_length=20, null=True, blank=True, verbose_name=_('Téléphone'))
+    phone = models.CharField(max_length=20, null=True, blank=True, verbose_name=_('Phone number'))
 
-    last_see = models.DateTimeField(auto_now=True, verbose_name=_('Dernière connexion'))
+    last_see = models.DateTimeField(auto_now=True, verbose_name=_('Last login'))
     accept_newsletter = models.BooleanField(
-        default=True, verbose_name=_("J'accepte de recevoir la newsletter"))
-    postal_code = models.IntegerField(null=True, blank=True, verbose_name=_('Code postal'))
-    birth_date = models.DateField(null=True, blank=True, verbose_name=_('Date de naissance'))
+        default=True, verbose_name=_("I want to receive newsletters"))
+    postal_code = models.IntegerField(null=True, blank=True, verbose_name=_('Zip code'))
+    birth_date = models.DateField(null=True, blank=True, verbose_name=_('Date of birth'))
 
     # can_create_tenantcan_create_tenant = models.BooleanField(default=False, verbose_name=_("Peux créer des tenants"))
 
     TYPE_TERM, TYPE_HUM, TYPE_ANDR = 'TE', 'HU', 'AN'
     ESPECE_CHOICES = (
-        (TYPE_TERM, 'Terminal'),
-        (TYPE_ANDR, 'Android'),
-        (TYPE_HUM, 'Humain'),
+        (TYPE_TERM, _('Terminal')),
+        (TYPE_ANDR, _('Android')),
+        (TYPE_HUM, _('Human')),
     )
 
     espece = models.CharField(max_length=2,
@@ -139,11 +139,11 @@ class TibilletUser(AbstractUser):
 
     PUBLIC, FREE, PREMIUM, ENTREPRISE, CUSTOM = 'PU', 'FR', 'PR', 'EN', 'CU'
     OFFRE_CHOICES = (
-        (PUBLIC, 'Public'),
-        (FREE, 'Gratuit'),
-        (PREMIUM, 'Premium'),
-        (ENTREPRISE, 'Entreprise'),
-        (CUSTOM, 'Custom'),
+        (PUBLIC, _('Public')),
+        (FREE, _('Free')),
+        (PREMIUM, _('Premium')),
+        (ENTREPRISE, _('Entreprise')),
+        (CUSTOM, _('Custom')),
     )
 
     offre = models.CharField(max_length=2,
@@ -155,7 +155,7 @@ class TibilletUser(AbstractUser):
                                       on_delete=models.SET_NULL,
                                       null=True,
                                       blank=True,
-                                      verbose_name=_("Inscription depuis"),
+                                      verbose_name=_("Registered from"),
                                       related_name="user_principal",
                                       )
 
@@ -184,7 +184,7 @@ class TibilletUser(AbstractUser):
     user_parent_pk = models.UUIDField(
         null=True,
         blank=True,
-        verbose_name=_("Utilisateur parent"),
+        verbose_name=_("Parent user"),
     )
 
     def user_parent(self):
@@ -264,8 +264,8 @@ class TermUserManager(TibilletManager):
 class TermUser(TibilletUser):
     class Meta:
         proxy = True
-        verbose_name = "Terminal"
-        verbose_name_plural = "Terminaux"
+        verbose_name = _("Terminal")
+        verbose_name_plural = _("Terminals")
 
     objects = TermUserManager()
 
@@ -293,7 +293,7 @@ class HumanUserManager(TibilletManager):
 class HumanUser(TibilletUser):
     class Meta:
         proxy = True
-        verbose_name = "Utilisateur"
+        verbose_name = _("User")
 
     objects = HumanUserManager()
 
@@ -326,7 +326,7 @@ class SuperHumanUserManager(TibilletManager):
 class SuperHumanUser(TibilletUser):
     class Meta:
         proxy = True
-        verbose_name = "Administrateur"
+        verbose_name = _("Administrator")
 
     objects = SuperHumanUserManager()
 

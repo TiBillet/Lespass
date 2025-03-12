@@ -9,7 +9,7 @@
                 <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                         data-bs-target="#ticket{{ ticket.uuid }}Details" aria-expanded="false"
                         aria-controls="ticket{{ ticket.uuid }}Details">
-                    Ticket {{ ticket.status }}-{{ ticket.numero_uuid|upper }}-{{ ticket.seat }}
+                    {% trans 'Ticket' %} {{ ticket.status }}-{{ ticket.numero_uuid|upper }}-{{ ticket.seat }}
                 </button>
             </h4>
             <div id="ticket{{ ticket.uuid }}Details" class="accordion-collapse collapse"
@@ -18,44 +18,44 @@
                     <table class="table">
                         <tbody>
                         <tr>
-                            <th>{% trans "Numéro" %}</th>
+                            <th>{% trans "Number" %}</th>
                             <td>
                                 {{ ticket.status }}-{{ ticket.numero_uuid|upper }}-{{ ticket.seat }}
                             </td>
                         </tr>
                         <tr>
-                            <th>{% trans "Réservation" %}</th>
+                            <th>{% trans "Booking" %}</th>
                             <td>
                                 {{ ticket.pricesold.price.product.name }}
                             </td>
                         </tr>
                         <tr>
-                            <th>{% trans "Nom du Tarif" %}</th>
+                            <th>{% trans "Rate name" %}</th>
                             <td>
                                 {{ ticket.pricesold.price.name }}
                             </td>
                         </tr>
                         <tr>
-                            <th>{% trans "Montant" %}</th>
+                            <th>{% trans "Value" %}</th>
                             <td>
                                 {{ ticket.paid }}&nbsp;€
                             </td>
                         </tr>
                         <tr>
-                            <th>{% trans "Placement" %}</th>
+                            <th>{% trans "Seating" %}</th>
                             <td>
                                 {% if ticket.seat == 'L' %}
-                                {% trans "Libre" %}
+                                {% trans "Free" %}
                                 {% else %}
-                                {% trans "Siège" %} {{ ticket.seat }}
+                                {% trans "Seat" %} {{ ticket.seat }}
                                 {% endif %}
                             </td>
                         </tr>
                         <tr>
-                            <th>{% trans "Titulaire" %}</th>
+                            <th>{% trans "Recipient" %}</th>
                             <td>
                                 {% if not ticket.first_name and not ticket.last_name %}
-                                    {% translate "Anonyme" %}
+                                    {% translate "Anonymous" %}
                                 {% else %}
                                     {{ ticket.first_name }} {{ ticket.last_name }}
                                 {% endif %}
@@ -68,7 +68,7 @@
                             </td>
                         </tr>
                         <tr>
-                            <th>{% trans "Statut" %}</th>
+                            <th>{% trans "Status" %}</th>
                             <td>{{ ticket.get_status_display }}</td>
                         </tr>
                         </tbody>
@@ -80,7 +80,7 @@
                         data-bs-toggle="offcanvas"
                         data-bs-target="#ticketPanel"
                         aria-controls="ticketPanel">
-                        {% translate "Voir le billet" %}
+                        {% translate "Display ticket" %}
                     </button>
                     {% comment %}
                     <div class="row">

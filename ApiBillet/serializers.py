@@ -28,7 +28,7 @@ def get_img_from_url(url):
         file_name = url.split('/')[-1]
         file_img = Image.open(res.raw)
     except Exception as e:
-        raise serializers.ValidationError(_(f"{url} doit contenir une url d'image valide : {e}"))
+        raise serializers.ValidationError(_(f"{url} must be a valid image URL: {e}"))
     return file_name, file_img
 
 
@@ -100,7 +100,7 @@ class ProductCreateSerializer(serializers.ModelSerializer):
                 option = OptionGenerale.objects.get(pk=uuid)
                 self.option_generale_radio.append(option)
             except OptionGenerale.DoesNotExist as e:
-                raise serializers.ValidationError(_(f'{uuid} Option non trouvé'))
+                raise serializers.ValidationError(_(f'{uuid} Option not found'))
         return self.option_generale_radio
 
     def validate_option_generale_checkbox(self, value):
@@ -110,7 +110,7 @@ class ProductCreateSerializer(serializers.ModelSerializer):
                 option = OptionGenerale.objects.get(pk=uuid)
                 self.option_generale_checkbox.append(option)
             except OptionGenerale.DoesNotExist as e:
-                raise serializers.ValidationError(_(f'{uuid} Option non trouvé'))
+                raise serializers.ValidationError(_(f'{uuid} Option not found'))
         return self.option_generale_checkbox
 
     def validate(self, attrs):
@@ -120,7 +120,7 @@ class ProductCreateSerializer(serializers.ModelSerializer):
         img_url = self.initial_data.get('img_url')
         if not attrs.get('img') and not img_url:
             raise serializers.ValidationError(
-                _(f'img doit contenir un fichier, ou img_url doit contenir une url valide'))
+                _(f'img field must contain a file, or img_url a valid URL'))
         if not attrs.get('img') and img_url:
             self.img_name, self.img_img = get_img_from_url(img_url)
 
@@ -202,7 +202,7 @@ class PriceSerializer(serializers.ModelSerializer):
             sub_type_novalid = [None, Price.NA]
             if attrs.get('subscription_type') in sub_type_novalid:
                 raise serializers.ValidationError(
-                    _(f'error fields subscription_type - Une adhésion doit avoir une durée de validité.'))
+                    _(f'Subscriptions are required to have a duration.'))
         return super().validate(attrs)
 
 
@@ -419,7 +419,7 @@ class ArtistEventCreateSerializer(serializers.Serializer):
             with tenant_context(tenant):
                 self.artiste_event_db['config'] = Configuration.get_solo()
         except Client.DoesNotExist as e:
-            raise serializers.ValidationError(_(f'{value} Artiste non trouvé'))
+            raise serializers.ValidationError(_(f'{value} Artist not found'))
         return value
 
     def validate_datetime(self, value):
@@ -469,7 +469,7 @@ class EventCreateSerializer(serializers.Serializer):
                 product = Product.objects.get(pk=uuid)
                 self.products_db.append(product)
             except Product.DoesNotExist as e:
-                raise serializers.ValidationError(_(f'{uuid} Produit non trouvé'))
+                raise serializers.ValidationError(_(f'{uuid} Product not found'))
         return self.products_db
 
     def validate_tags(self, value):
@@ -479,7 +479,7 @@ class EventCreateSerializer(serializers.Serializer):
                 tag, created = Tag.objects.get_or_create(name=name)
                 self.tags_db.append(tag)
             except Product.DoesNotExist as e:
-                raise serializers.ValidationError(_(f'Erreur création du Tag'))
+                raise serializers.ValidationError(_(f'Tag creation error'))
         return self.tags_db
 
     def validate_options_radio(self, value):
@@ -489,7 +489,7 @@ class EventCreateSerializer(serializers.Serializer):
                 option = OptionGenerale.objects.get(pk=uuid)
                 self.options_radio.append(option)
             except OptionGenerale.DoesNotExist as e:
-                raise serializers.ValidationError(_(f'{uuid} Option non trouvé'))
+                raise serializers.ValidationError(_(f'{uuid} Option not found'))
         return self.options_radio
 
     def validate_options_checkbox(self, value):
@@ -499,7 +499,7 @@ class EventCreateSerializer(serializers.Serializer):
                 option = OptionGenerale.objects.get(pk=uuid)
                 self.options_checkbox.append(option)
             except OptionGenerale.DoesNotExist as e:
-                raise serializers.ValidationError(_(f'{uuid} Option non trouvé'))
+                raise serializers.ValidationError(_(f'{uuid} Option not found'))
         return self.options_checkbox
 
     def validate_minimum_cashless_required(self, value):
@@ -507,7 +507,7 @@ class EventCreateSerializer(serializers.Serializer):
             try:
                 return int(value)
             except Exception as e:
-                raise serializers.ValidationError(_(f'{value} minimum_cashless non valide'))
+                raise serializers.ValidationError(_(f'{value} below minimum cashless value.'))
 
     def validate_img_url(self, value):
         if value:
@@ -1102,7 +1102,7 @@ class ReservationValidator(serializers.Serializer):
     def validate_event(self, value):
         event: Event = value
         if event.complet():
-            raise serializers.ValidationError(_(f'Jauge atteinte : Evenement complet.'))
+            raise serializers.ValidationError(_(f'Maximum capacity reached: event full.'))
         return value
 
     def validate_email(self, value):
@@ -1111,7 +1111,7 @@ class ReservationValidator(serializers.Serializer):
 
         if request.user.is_authenticated:
             if request.user.email != request.user:
-                raise serializers.ValidationError(_(f"L'email ne correspond pas à l'utilisateur connecté."))
+                raise serializers.ValidationError(_(f"Email does not match logged-in user."))
 
         return value
 
@@ -1140,7 +1140,7 @@ class ReservationValidator(serializers.Serializer):
 
                 if entry['qty'] > price.max_per_user:
                     raise serializers.ValidationError(
-                        _(f'Quantitée de réservations suppérieure au maximum autorisé pour ce prix'))
+                        _(f'Booking count above maximum for this event and rate.'))
 
                 if product.categorie_article in [Product.BILLET, Product.FREERES]:
                     self.nbr_ticket += entry['qty']
@@ -1148,24 +1148,24 @@ class ReservationValidator(serializers.Serializer):
                     # les noms sont requis pour la billetterie.
                     if product.nominative:
                         if not entry.get('customers'):
-                            raise serializers.ValidationError(_(f'customers not find in ticket'))
+                            raise serializers.ValidationError(_(f'Ticket recipients not found.'))
                         if len(entry.get('customers')) != entry['qty']:
-                            raise serializers.ValidationError(_(f'customers number not equal to ticket qty'))
+                            raise serializers.ValidationError(_(f'Number of recipients differs from number of tickets.'))
                         for customer in entry.get('customers'):
                             if not customer.get('first_name') or not customer.get('last_name'):
-                                raise serializers.ValidationError(_(f'first_name and last_name are required'))
+                                raise serializers.ValidationError(_(f'First name and last name are required for nominative tickets.'))
 
                         price_object['customers'] = entry.get('customers')
 
                 self.prices_list.append(price_object)
 
             except Price.DoesNotExist as e:
-                raise serializers.ValidationError(_(f'price non trouvé : {e}'))
+                raise serializers.ValidationError(_(f'Price not found: {e}.'))
             except ValueError as e:
-                raise serializers.ValidationError(_(f'qty doit être un entier ou un flottant : {e}'))
+                raise serializers.ValidationError(_(f'Quantity is neither int nor float: {e}.'))
 
         if self.nbr_ticket == 0:
-            raise serializers.ValidationError(_(f'pas de billet dans la reservation'))
+            raise serializers.ValidationError(_(f'No ticket found in booking.'))
 
         # import ipdb; ipdb.set_trace()
 
@@ -1193,10 +1193,10 @@ class ReservationValidator(serializers.Serializer):
         resas = event.valid_tickets_count()
 
         if self.nbr_ticket > event.max_per_user:
-            raise serializers.ValidationError(_(f'Quantitée de réservations suppérieure au maximum autorisé'))
+            raise serializers.ValidationError(_(f'Booking ticket count is over maximum allowed per user.'))
 
         if resas + self.nbr_ticket > event.jauge_max:
-            raise serializers.ValidationError(_(f'Il ne reste que {resas} places disponibles'))
+            raise serializers.ValidationError(_(f'Only {resas} seats left.'))
 
         # On check que les prices sont bien dans l'event original.
         product_list = [product for product in event.products.all()]
@@ -1207,15 +1207,15 @@ class ReservationValidator(serializers.Serializer):
 
         for price_object in self.prices_list:
             if price_object['price'].product not in product_list:
-                logger.error(f'Article non présent dans event : {price_object["price"].product.name}')
-                raise serializers.ValidationError(_(f'Article non disponible'))
+                logger.error(f'Product is not part of event: {price_object["price"].product.name}')
+                raise serializers.ValidationError(_(f'Product unavailable.'))
 
         # On check que les options sont bien dans l'event original.
         if options:
             for option in options:
                 option: OptionGenerale
                 if option not in list(set(event.options_checkbox.all()) | set(event.options_radio.all())):
-                    raise serializers.ValidationError(_(f'Option {option.name} non disponible dans event'))
+                    raise serializers.ValidationError(_(f'Option {option.name} not selectable for event.'))
 
         # si un tarif à une adhésion obligatoire, on confirme que :
         # Soit l'utilisateur est membre,
@@ -1229,8 +1229,8 @@ class ReservationValidator(serializers.Serializer):
                                        self.user_commande.membership.all()]
                 if (price.adhesion_obligatoire not in membership_products
                         and price.adhesion_obligatoire not in all_product_buy):
-                    logger.warning(_(f"L'utilisateur n'est pas membre"))
-                    raise serializers.ValidationError(_(f"L'utilisateur n'est pas membre"))
+                    logger.warning(f"L'utilisateur n'est pas membre")
+                    raise serializers.ValidationError(_(f"User is not subscribed and cannot be granted this rate."))
 
         # on construit l'object reservation.
         reservation = Reservation.objects.create(
@@ -1277,7 +1277,7 @@ class ReservationValidator(serializers.Serializer):
                     for i in range(int(qty)):
                         create_ticket(
                             pricesold,
-                            {'first_name': f'{self.user_commande.email}', 'last_name': f'Billet non nominatif {i}'},
+                            {'first_name': f'{self.user_commande.email}', 'last_name': _(f'Anonymous ticket {i}')},
                             reservation)
 
         print(f"total_checkout : {total_checkout}")
@@ -1315,7 +1315,7 @@ class ReservationValidator(serializers.Serializer):
 
                 return super().validate(attrs)
             else:
-                raise serializers.ValidationError(_(f'checkout strip not valid'))
+                raise serializers.ValidationError(_(f'Invalid Stripe checkout.'))
 
         # La validation de la reservation doit se fait uniquement si l'user possède un mail vérifié
         elif total_checkout == 0:

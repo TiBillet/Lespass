@@ -35,13 +35,13 @@ class AssetValidator(serializers.Serializer):
     SUBSCRIPTION = 'SUB'
 
     CATEGORIES = [
-        (TOKEN_LOCAL_FIAT, _('Fiduciaire')),
-        (TOKEN_LOCAL_NOT_FIAT, _('Cadeau')),
-        (STRIPE_FED_FIAT, _('Fiduciaire fédérée')),
-        (TIME, _("Monnaie temps")),
-        (FIDELITY, _("Points de fidélité")),
-        (BADGE, _("Badgeuse/Pointeuse")),
-        (SUBSCRIPTION, _('Adhésion/Abonnement')),
+        (TOKEN_LOCAL_FIAT, _('Local currency')),
+        (TOKEN_LOCAL_NOT_FIAT, _('Gift currency')),
+        (STRIPE_FED_FIAT, _('TiBillets')),
+        (TIME, _("Time-based currency")),
+        (FIDELITY, _("Loyalty points")),
+        (BADGE, _("Punchclock")),
+        (SUBSCRIPTION, _('Subscription')),
     ]
 
     category = serializers.ChoiceField(choices=CATEGORIES)
@@ -76,16 +76,16 @@ class TransactionSimpleValidator(serializers.Serializer):
 
     FIRST, SALE, CREATION, REFILL, TRANSFER, SUBSCRIBE, BADGE, FUSION, REFUND, VOID = 'FST', 'SAL', 'CRE', 'REF', 'TRF', 'SUB', 'BDG', 'FUS', 'RFD', 'VID'
     TYPE_ACTION = (
-        (FIRST, "Premier bloc"),
-        (SALE, "Vente d'article"),
-        (CREATION, 'Creation monétaire'),
-        (REFILL, 'Recharge'),
-        (TRANSFER, 'Transfert'),
-        (SUBSCRIBE, 'Abonnement ou adhésion'),
-        (BADGE, 'Badgeuse'),
-        (FUSION, 'Fusion de deux wallets'),
-        (REFUND, 'Remboursement'),
-        (VOID, 'Dissocciation de la carte et du wallet user'),
+        (FIRST, _("First block")),
+        (SALE, _("Product sale")),
+        (CREATION, _('Currency creation')),
+        (REFILL, _('Refill')),
+        (TRANSFER, _('Transfer')),
+        (SUBSCRIBE, _('Subscription')),
+        (BADGE, _('Punchclock')),
+        (FUSION, _('Wallet merge')),
+        (REFUND, _('Refund')),
+        (VOID, 'Pass card / wallet dissociation'),
     )
     action = serializers.ChoiceField(choices=TYPE_ACTION)
     get_action_display = serializers.CharField()
@@ -180,16 +180,16 @@ class TransactionValidator(serializers.Serializer):
 
     FIRST, SALE, CREATION, REFILL, TRANSFER, SUBSCRIBE, BADGE, FUSION, REFUND, VOID = 'FST', 'SAL', 'CRE', 'REF', 'TRF', 'SUB', 'BDG', 'FUS', 'RFD', 'VID'
     TYPE_ACTION = (
-        (FIRST, "Premier bloc"),
-        (SALE, "Vente d'article"),
-        (CREATION, 'Creation monétaire'),
-        (REFILL, 'Recharge'),
-        (TRANSFER, 'Transfert'),
-        (SUBSCRIBE, 'Abonnement ou adhésion'),
-        (BADGE, 'Badgeuse'),
-        (FUSION, 'Fusion de deux wallets'),
-        (REFUND, 'Remboursement'),
-        (VOID, 'Dissocciation de la carte et du wallet user'),
+        (FIRST, _("First block")),
+        (SALE, _("Product sale")),
+        (CREATION, _('Currency creation')),
+        (REFILL, _('Refill')),
+        (TRANSFER, _('Transfer')),
+        (SUBSCRIBE, _('Subscription')),
+        (BADGE, _('Punchclock')),
+        (FUSION, _('Wallet merge')),
+        (REFUND, _('Refund')),
+        (VOID, 'Pass card / wallet dissociation'),
     )
     action = serializers.ChoiceField(choices=TYPE_ACTION)
     get_action_display = serializers.CharField()

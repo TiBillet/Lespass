@@ -27,39 +27,39 @@
         {% if user.is_anonymous %}
             <div class="form-floating mb-3">
                 <input name="email" type="email" class="form-control" placeholder="adresse@exemple.fr" role="textbox"
-                       aria-label="Adresse mail de l'adhéranne" required>
-                <label for="email">{% translate 'Adresse email' %}</label>
+                       aria-label="{% trans 'Email address'  %}" required>
+                <label for="email">{% trans 'Email address'  %}</label>
             </div>
     
             <div class="form-floating mb-3">
                 <input name="confirm-email" type="email" class="form-control" placeholder="adresse@exemple.fr"
                        role="textbox"
-                       aria-label="Adresse mail de l'adhéranne" required>
-                <label for="confirm-email">{% translate 'Confirmez votre email' %}</label>
+                       aria-label="{% trans 'Email confirmation' %}" required>
+                <label for="confirm-email">{% trans 'Email confirmation' %}</label>
             </div>
         {% elif user.is_active %}
             <div class="form-floating mb-3">
                 <input name="email" type="email" class="form-control" placeholder="adresse@exemple.fr" role="textbox"
-                       aria-label="Adresse mail de l'adhéranne" value="{{ user.email }}" readonly>
-                <label for="email">{% translate 'Votre email :' %}</label>
+                       aria-label="{% trans 'Email address' %}" value="{{ user.email }}" readonly>
+                <label for="email">{% trans 'Email address' %}</label>
             </div>
         {% else %}
-            <p><code>{% translate "Vous n'avez pas validé votre email. Merci de vérifier dans vos spams :)" %}</code></p>
+            <p><code>{% translate "You have not confirmed your email address. Please check your inbox (and just in case, your spam folder!)." %}</code></p>
         {% endif %}
     
     
     
         <div class="form-floating mb-3">
-            <input name="firstname" type="text" class="form-control" placeholder="{% translate 'Prénom' %}"
+            <input name="firstname" type="text" class="form-control" placeholder="{% translate 'First name' %}"
                    role="textbox"
-                   aria-label="Prénom de l'adhéranne" required>
-            <label for="firstname">{% translate 'Prénom' %}</label>
+                   aria-label="{% trans 'First name' %}" required>
+            <label for="firstname">{% translate 'First name' %}</label>
         </div>
         <div class="form-floating mb-3">
             <input name="lastname" type="text" class="form-control"
-                   placeholder="{% translate 'Nom de famille ou structure' %}" role="textbox"
-                   aria-label="Nom de famille ou affiliation de l'adhéranne" required>
-            <label for="lastname">{% translate 'Nom de famille ou structure' %}</label>
+                   placeholder="{% translate 'Last name or organization' %}" role="textbox"
+                   aria-label="{% translate 'Last name or organization' %}" required>
+            <label for="lastname">{% translate 'Last name or organization' %}</label>
         </div>
     
         <!-- options radio -->
@@ -97,18 +97,18 @@
                 <span>{% translate "I accept the " %}</span>
                 {% if product.categorie_article == 'A' %}
                     <span>
-                                        {% if product.legal_link != None %}
-                                            <a class="text-info" href="{{ product.legal_link }}" target="_blank">
-                                            {% translate "association rules and regulations." %}
-                                        </a>
-                                        {% else %}
-                                            {% translate "association rules and regulations." %}
-                                        {% endif %}
-                                        </span>
+                    {% if product.legal_link != None %}
+                        <a class="text-info" href="{{ product.legal_link }}" target="_blank">
+                        {% translate "association rules and regulations." %}
+                    </a>
+                    {% else %}
+                        {% translate "association rules and regulations." %}
+                    {% endif %}
+                    </span>
                 {% else %}
                     {% if product.legal_link != None %}
                         <a class="text-info" href="{{ product.legal_link }}"
-                           target="_blank">{% translate "Terms and conditions." %}</a>
+                           target="_blank">{% translate "terms and conditions." %}</a>
                     {% else %}
                         <span>{% translate "terms and conditions." %}</span>
                     {% endif %}
@@ -118,7 +118,9 @@
     </div>
 
     <div class="p-3">
-        <button id="membership-submit" type="submit" class="btn btn-primary w-100 mb-3">Confirmer</button>
-        <a href="." class="btn btn-danger d-block">Annuler</a>
+        <button id="membership-submit" type="submit" class="btn btn-primary w-100 mb-3">
+            {% translate 'Send my subscription request' %}
+        </button>
+        <a href="." class="btn btn-danger d-block">{% translate 'Cancel' %}</a>
     </div>
 </form>

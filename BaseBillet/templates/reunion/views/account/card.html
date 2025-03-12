@@ -3,19 +3,18 @@
 {% load tibitags %}
 {% load humanize i18n %}
 
-{% block title %}{% translate 'Carte' %}{% endblock %}
+{% block title %}{% trans 'My Pass card' %}{% endblock %}
 
 {% block account_page %}
-<section class="card border-top-0 rounded-top-0">
+<section class="card border-top-0 rounded-top-0 pt-3">
     <div class="card-body">
-        <h1 class="card-title d-md-none">Carte</h1>
+        <h1 class="card-title d-md-none">{% trans 'My Pass card' %}</h1>
         <p class="lead">
-            Ici je peux retrouver les infos de ma carte, déclarer une carte
-            perdue et dissocier ma carte.
+            {% trans 'Here I can find my Pass card information and signal a lost card.' %}
         </p>
 
         <div hx-get="/my_account/my_cards/" hx-trigger="revealed" class="mt-4">
-            <span>{% translate "Loading NFC Card info" %}</span>
+            <span>{% translate "Loading Pass card info" %}</span>
             <div class="d-flex justify-content-center align-items-center ">
                 <div class="spinner-border text-info"
                      role="status"

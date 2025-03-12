@@ -40,14 +40,14 @@
         {#    # Todo : Garder l'user d'un dns à l'autre, et ouvrir le modal reserver dans le nouveau tenant #}
         {% if not event_in_this_tenant %}
             <a href="{{ event.full_url }}" class="btn btn-lg btn-primary d-block mt-3" role="button" target="_blank">
-                {% translate "Voir l'évènement sur le site diffuseur" %}
+                {% translate "Check the event on the original website" %}
                 <i class="bi bi-box-arrow-up-right"></i>
             </a>
         {% elif event.products.count %}
             {% include 'reunion/partials/event/booking.html' %}
         {% else %}
             <a href="#" class="btn btn-lg btn-primary d-block mt-3 disabled" role="button" aria-disabled="true">
-                {% translate "Entrée libre" %}
+                {% translate "Free admission" %}
             </a>
         {% endif %}
 
@@ -59,8 +59,8 @@
                    data-bs-target="#get-involved"
                    aria-expanded="true"
                    aria-controls="get-involved">
-                    {% translate "On cherche des volontaires" %}</a>&nbsp;:
-                <span> ({{ inscrits }}/{{ action_total_jauge }} {% translate "personnes souhaitées" %})</span>
+                    {% translate "Looking for volunteers" %}</a>&nbsp;:
+                <span> ({{ inscrits }}/{{ action_total_jauge }} {% translate "open slots" %})</span>
             </p>
         {% endif %}
 

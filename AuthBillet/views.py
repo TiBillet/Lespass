@@ -93,7 +93,7 @@ class TokenRefreshViewCustom(TokenRefreshView):
             except AssertionError as e:
                 refresh.blacklist()
                 raise AuthenticationFailed(
-                    f"AssertionError",
+                    _(f"Assertion error"),
                 )
 
         return super_return
@@ -138,12 +138,12 @@ def activate(request, token):
         try :
             user_pk = signer.unsign(urlsafe_base64_decode(token).decode('utf8'), max_age=(3600 * 72))  # 3 jours
         except UnicodeDecodeError as e:
-            messages.add_message(request, messages.ERROR, _("Token non valide. Merci de vous connecter à nouveau."))
+            messages.add_message(request, messages.ERROR, _("Invalid token. Please log in again."))
             return False
 
         user: TibilletUser = User.objects.get(pk=user_pk)
         if user.email_error:
-            messages.add_message(request, messages.ERROR, _("Mail non valide"))
+            messages.add_message(request, messages.ERROR, _("Invalid email."))
             return None
 
         user.is_active = True
@@ -154,22 +154,22 @@ def activate(request, token):
         if request.user.is_authenticated:
             if request.user == user:
                 logger.info("user déja connecté")
-                messages.add_message(request, messages.SUCCESS, _("Vous êtes bien connecté. Bienvenue !"))
+                messages.add_message(request, messages.SUCCESS, _("You are fully logged in. Welcome!"))
                 return True
 
             logger.info("user déja connecté, mais pas le même")
             logout(request)
 
-        messages.add_message(request, messages.SUCCESS, _("Vous êtes bien connecté. Bienvenue !"))
+        messages.add_message(request, messages.SUCCESS, _("You are fully logged in. Welcome!"))
         login(request, user)
         return True
 
     except SignatureExpired :
-        messages.add_message(request, messages.ERROR, _("Token expiré. Merci de vous connecter à nouveau."))
+        messages.add_message(request, messages.ERROR, _("Expired token. Please log in again."))
     except User.DoesNotExist:
-        messages.add_message(request, messages.ERROR, _("Erreur, user non valide."))
+        messages.add_message(request, messages.ERROR, _("Error, invalid user."))
     except BadSignature:
-        messages.add_message(request, messages.ERROR, _("Token non valide."))
+        messages.add_message(request, messages.ERROR, _("Invalid token."))
     except Exception as e:
         logger.error(e)
         raise e
@@ -190,13 +190,13 @@ class create_user(APIView):
 
         if user:
             sender_mail_connect(user.email)
-            return Response(_('Pour acceder à votre espace et réservations, '
-                              'merci de valider votre adresse email. '
-                              'Pensez à regarder dans les spams !'),
+            return Response(_('To fully access your account, '
+                              'please confirm your email. '
+                              'Don\'t forget to check the spam folder!'),
                             status=status.HTTP_200_OK)
         else:
-            return Response(_("Email soumis non valide. "
-                              "Merci de vérifier votre adresse."),
+            return Response(_("Invalid email submitted. "
+                              "Please check your email address."),
                             status=status.HTTP_406_NOT_ACCEPTABLE)
 
 
@@ -271,14 +271,14 @@ class SetPasswordIfEmpty(APIView):
                     user.set_password(request.data.get('password'))
                     user.save()
 
-                    return Response('Password set',
+                    return Response(_('Password set'),
                                     status=status.HTTP_200_OK)
                 else:
                     logger.error(f"Password too short")
-                    return Response('Password trop court',
+                    return Response(_('Password too short'),
                                     status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
-        return Response('Not allowed',
+        return Response(_('Not allowed'),
                         status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
@@ -295,7 +295,7 @@ class OAauthApi(APIView):
             if auth.status_code == 302:
                 return auth
         else:
-            return Response('SSO "Communecter" non disponible. Essayez avec votre email',
+            return Response(_('SSO "Communecter" not available. Try the email login.'),
                             status=status.HTTP_404_NOT_FOUND)
 
 
@@ -335,4 +335,4 @@ class OAauthCallback(APIView):
                 return HttpResponseRedirect(redirect_uri)
 
         else:
-            return Response('Access not Ok', status=status.HTTP_401_UNAUTHORIZED)
+            return Response(_('Access forbidden'), status=status.HTTP_401_UNAUTHORIZED)

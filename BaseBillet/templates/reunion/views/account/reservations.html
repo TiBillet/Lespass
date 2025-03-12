@@ -3,15 +3,25 @@
 {% load tibitags %}
 {% load humanize i18n %}
 
-{% block title %}{% translate 'Réservations' %}{% endblock %}
+{% block title %}{% translate 'My bookings' %}{% endblock %}
 
 {% block account_page %}
+<section class="card border-top-0 rounded-top-0 pt-3">
+    <div class="card-body">
+        <h1 class="card-title d-md-none">{% trans 'My bookings' %}</h1>
+        <p class="lead">
+            {% trans 'Here I can list my bookings, detail ticket information and display tickets for scanning.' %}
+        </p>
+    </div>
+</section>
 
 <div class="offcanvas offcanvas-start text-bg-light" tabindex="-1"
     id="ticketPanel" aria-labelledby="ticketPanelLabel" data-bs-theme="light">
     <div class="offcanvas-header justify-content-between">
-      <h5 class="offcanvas-title" id="ticketPanelLabel">Ticket</h5>
-      <button type="button" class="btn" data-bs-dismiss="ticketPanel" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+      <h5 class="offcanvas-title" id="ticketPanelLabel">{% trans 'Ticket' %}</h5>
+      <button type="button" class="btn" data-bs-dismiss="ticketPanel" aria-label="{% trans 'Close' %}">
+        <i class="bi bi-x-lg"></i>
+    </button>
     </div>
     <div id="ticketPanelBody" class="offcanvas-body"></div>
 </div>
@@ -32,11 +42,11 @@
                     {{ resa.event.name }}
                     <a href="{{ resa.event.full_url }}" target="_blank">
                         <i class="bi bi-box-arrow-up-right"></i>
-                        <span class="visually-hidden">Page de l'évènement</span>
+                        <span class="visually-hidden">{% trans 'Event page' %}</span>
                     </a>
                 </h3>
                 <div class="card-text hstack gap-3 mb-3">
-                    <div class="p-2">{{ resa.tickets.all|length }} places</div>
+                    <div class="p-2">{{ resa.tickets.all|length }} {% trans 'seats' %}</div>
                     <div class="vr"></div>
                     <div class="p-2">{{ resa.total_paid }}€</div>
                     <div class="vr"></div>

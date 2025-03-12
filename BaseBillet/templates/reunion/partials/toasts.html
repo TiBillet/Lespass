@@ -1,3 +1,5 @@
+{% load i18n %}
+
 <div id="toastContainer" class="toast-container position-fixed bottom-0 end-0 p-3">
     {% if messages %}
     {% for message in messages %}
@@ -7,28 +9,28 @@
 
         {% if message.tags == 'success' %}
         <div class="d-flex flex-row justify-content-between toast-header rounded-top text-bg-success">
-            Validation
-            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            {% trans 'Success' %}
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="{% trans 'Close' %}"></button>
         </div>
         {% elif message.tags == 'info' %}
         <div class="d-flex flex-row justify-content-between toast-header rounded-top text-bg-info">
-            Information
-            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            {% trans 'Heads up' %}
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="{% trans 'Close' %}"></button>
         </div>
         {% elif message.tags == 'warning' %}
         <div class="d-flex flex-row justify-content-between toast-header rounded-top text-bg-warning">
-            Attention
-            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            {% trans 'Warning' %}
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="{% trans 'Close' %}"></button>
         </div>
         {% elif message.tags == 'error' %}
         <div class="d-flex flex-row justify-content-between toast-header rounded-top text-bg-danger">
-            Erreur
-            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            {% trans 'Error' %}
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="{% trans 'Close' %}"></button>
         </div>
         {% elif message.tags == 'debug' %}
         <div class="d-flex flex-row justify-content-between toast-header rounded-top text-bg-secondary">
-            Débug
-            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            {% trans 'Debug' %}
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="{% trans 'Close' %}"></button>
         </div>
         {% endif %}
         <hr class="horizontal dark m-0">

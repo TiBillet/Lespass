@@ -11,18 +11,18 @@
 {% endblock %}
 
 {% block main %}
-    <main class="container-lg py-5">
-        <h1>{% translate 'Adhérer au réseau' %}</h1>
+<main class="container-lg py-5">
+    <h1>{% translate 'Subscriptions' %}</h1>
 
-        <!-- subscription panel -->
-        <div class="offcanvas-start offcanvas" tabindex="-1" id="subscribePanel" aria-labelledby="subscribePanelLabel">
-            <div class="offcanvas-header">
-                <h5 class="offcanvas-title" id="subscribePanelLabel">{% translate 'Prendre une adhésion' %}</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="offcanvas"
-                        aria-label="{% translate 'Fermer' %}"></button>
-            </div>
-            <div class="offcanvas-body" id="offcanvas-membership">
-            </div>
+    <!-- subscription panel -->
+    <div class="offcanvas-start offcanvas" tabindex="-1" id="subscribePanel" aria-labelledby="subscribePanelLabel">
+        <div class="offcanvas-header">
+            <h5 class="offcanvas-title" id="subscribePanelLabel">{% translate 'Subscribe' %}</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas"
+                    aria-label="{% translate 'Close' %}"></button>
+        </div>
+        <div class="offcanvas-body" id="offcanvas-membership">
+        </div>
         </div>
 
         <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-3 mb-5">
@@ -45,7 +45,7 @@
                                        type="button"
                                        href="/memberships/?open={{ product.uuid }}" target="_blank">
                                         <i class="bi bi-plus"></i>
-                                        {% translate 'Prendre une adhésion' %}
+                                        {% translate 'Subscribe' %}
                                     </a>
                                 {% else %}
                                     <button
@@ -58,7 +58,7 @@
                                             data-bs-target="#subscribePanel"
                                             aria-controls="subscribePanel">
                                         <i class="bi bi-plus"></i>
-                                        {% translate 'Prendre une adhésion' %}
+                                        {% translate 'Subscribe' %}
                                     </button>
                                 {% endif %}
                             </div>

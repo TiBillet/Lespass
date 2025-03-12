@@ -1,12 +1,13 @@
 {% load i18n %}
-<p class="">
-    {% trans "Un email de bienvenue vous a été envoyé." %}
-<p class="">
-    {% trans "Vous trouverez dans cet email un lien d'invitation à créer et lier un compte " %}<strong>Stripe </strong> {% trans "pour recevoir les paiements." %}
+{% blocktranslate %}
+<p>A welcome email has been sent.</p>
+<p>
+    You will find in it an invite link to create a <strong>Stripe</strong>
+    account and set it up for Lespass, as it is necessary to receive payments.
 </p>
-<p class="">
-    {% trans "Une fois votre compte vérifié par nos soins, nous vous contacterons (pendant un jour ouvré) pour finaliser votre inscription." %}
+<p>
+    Once your account has been verified, we'll get in touch (on a work day) to
+    finalize your instance.
 </p>
-<p class="">
-    {% trans "Merci et bienvenue dans notre aventure coopérative !" %}
-</p>
+<p>Thank you and welcome to our little island in the commons!</p>
+{% endblocktranslate %}

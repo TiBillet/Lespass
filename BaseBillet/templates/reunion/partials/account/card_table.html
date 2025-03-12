@@ -5,8 +5,8 @@
     <table class="table">
         <thead>
         <tr>
-            <th>{% trans "Numéro de carte" %}</th>
-            <th>{% trans "Origine" %}</th>
+            <th>{% trans "Card number" %}</th>
+            <th>{% trans "Provider" %}</th>
             <th>{% trans "Gen" %}</th>
         </tr>
         </thead>
@@ -24,14 +24,14 @@
         <div class="col-md">
             <button type="submit" class="btn btn-primary w-100 mb-3 mb-md-0"
                     role="button"
-                    aria-label="valider formulaire adhésion"
+                    aria-label="{% trans 'I lost my card' %}"
                     hx-get="/my_account/{{ card.number_printed }}/lost_my_card/"
                     hx-indicator="#tibillet-spinner">
-                {% translate "I LOST MY CARD NUMBER" %} {{ card.number_printed }}
+                {% translate "I lost my card number" %} {{ card.number_printed }}
             </button>
         </div>
     {% else %}
-        {% trans "Merci de valider votre email pour déclarer votre carte perdue." %}
+        {% trans "Please confirm your email to declare a lost card." %}
     {% endif %}
 
 {% comment %} HIDE: dissociation de carte
