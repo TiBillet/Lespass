@@ -18,12 +18,12 @@ from rest_framework.decorators import permission_classes, action
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
+# from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
 from rest_framework.viewsets import ViewSet
 
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
-    ReservationValidator, ConfigurationSerializer, EventCreateSerializer, TicketSerializer, \
+    ReservationValidator, ConfigurationSerializer, TicketSerializer, \
     OptionsSerializer, ProductCreateSerializer, EmailSerializer
 from ApiBillet.permissions import TenantAdminApiPermission, TibilletUser, get_apikey_valid
 from AuthBillet.models import HumanUser
@@ -32,7 +32,7 @@ from BaseBillet.models import Event, Price, Product, Reservation, Configuration,
     OptionGenerale, Membership
 from BaseBillet.tasks import create_ticket_pdf
 from Customers.models import Client
-from MetaBillet.models import EventDirectory, ProductDirectory
+from MetaBillet.models import ProductDirectory
 from PaiementStripe.views import new_entry_from_stripe_invoice
 from TiBillet import settings
 from fedow_connect.fedow_api import FedowAPI
@@ -236,68 +236,19 @@ class EventsSlugViewSet(viewsets.ViewSet):
 
 
 class EventsViewSet(viewsets.ViewSet):
+    permission_classes = [permissions.AllowAny]
 
     def list(self, request):
-        tenant: Client = connection.tenant
-        four_hour_before_now = datetime.now().date() - timedelta(hours=4)
-
-        production_places = [Client.SALLE_SPECTACLE, Client.FESTIVAL]
-        if tenant.categorie in production_places:
-            queryset = Event.objects.filter(
-                published=True,
-                datetime__gte=four_hour_before_now,
-            ).order_by('datetime')
-            events_serialized = EventSerializer(queryset, many=True, context={'request': request})
-            return Response(events_serialized.data)
-
-        elif tenant.categorie == Client.ARTISTE:
-            artist = tenant
-            directory = {}
-            events_serialized_data = []
-            with schema_context('public'):
-                events_from_public_directory = EventDirectory.objects.filter(
-                    datetime__gte=four_hour_before_now,
-                    artist=artist
-                )
-                for event in events_from_public_directory:
-                    if directory.get(event.place):
-                        directory[event.place].append(event.event_uuid)
-                    else:
-                        directory[event.place] = []
-                        directory[event.place].append(event.event_uuid)
-
-            for place in directory:
-                with tenant_context(place):
-                    queryset = Event.objects.filter(
-                        published=True,
-                        uuid__in=directory[place],
-                    )
-                    events_serialized = EventSerializer(queryset, many=True, context={'request': request})
-                    for data in events_serialized.data:
-                        events_serialized_data.append(data)
-
-            return Response(events_serialized_data)
-
-        elif tenant.categorie == Client.META:
-            events_serialized_data = []
-            tenants = Client.objects.filter(categorie=Client.SALLE_SPECTACLE)
-            for other_tenant in tenants:
-                with tenant_context(other_tenant):
-                    queryset = Event.objects.filter(
-                        published=True,
-                        datetime__gte=four_hour_before_now
-                    ).order_by('datetime')
-                    events_serialized = EventSerializer(queryset, many=True, context={'request': request})
-                    for data in events_serialized.data:
-                        events_serialized_data.append(data)
-            return Response(events_serialized_data)
+        events = Event.objects.filter(published=True).order_by('-datetime')
+        serializer = EventSerializer(events, many=True)
+        return Response(serializer.data)
 
     def retrieve(self, request, pk=None):
-        queryset = Event.objects.all().order_by('-datetime')
-        event = get_object_or_404(queryset, pk=pk)
+        event = get_object_or_404(Event, pk=pk)
         serializer = EventSerializer(event)
         return Response(serializer.data)
 
+    """
     def create(self, request):
         serializer_create = EventCreateSerializer(data=request.data)
         if serializer_create.is_valid():
@@ -326,6 +277,7 @@ class EventsViewSet(viewsets.ViewSet):
 
     def get_permissions(self):
         return get_permission_Api_LR_Any_CU_Admin(self)
+    """
 
 
 """
@@ -895,7 +847,7 @@ class Onboard_laboutik(APIView):
 # api check wallet
 class Wallet(viewsets.ViewSet):
 
-    @action(detail=False, methods=['POST'], throttle_classes=[UserRateThrottle], permission_classes=[TenantAdminApiPermission])
+    @action(detail=False, methods=['POST'], permission_classes=[TenantAdminApiPermission])
     def get_stripe_checkout_with_email(self, request):
         # Création d'un lien de paiement pour une recharge Stripe.
         # Peut être réalisée par n'importe qui. Valide du moment qu'il y a paiement.

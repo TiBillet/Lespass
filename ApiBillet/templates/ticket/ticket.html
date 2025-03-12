@@ -56,7 +56,7 @@
         <tr>
             <th>{% trans "Number" %}</th>
             <td>
-                {{ ticket.status }}-{{ ticket.numero_uuid|upper }}-{{ ticket.seat }}
+                {{ ticket.numero_uuid|upper }}-{{ ticket.status }}-{{ ticket.seat }}
             </td>
         </tr>
         <tr>
@@ -74,7 +74,7 @@
         <tr>
             <th>{% trans "Value" %}</th>
             <td>
-                {{ ticket.pricesold.prix }}&nbsp;€
+                {{ ticket.paid }}&nbsp;€
             </td>
         </tr>
         <tr>

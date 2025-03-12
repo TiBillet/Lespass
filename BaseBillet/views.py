@@ -1,22 +1,19 @@
 import logging
 import os
 import uuid
-from datetime import timedelta, datetime
+from datetime import timedelta
 from io import BytesIO
-from itertools import product
-from unicodedata import category
-from wsgiref.validate import validator
 
-import barcode
 import segno
 import stripe
 from django.contrib import messages
 from django.contrib.auth import logout, login
 from django.contrib.messages import MessageFailure
 from django.core.cache import cache
+from django.core.paginator import Paginator
 from django.db import connection
 from django.db.models import Count, Q, Sum
-from django.http import HttpResponse, HttpRequest, Http404, HttpResponseRedirect, JsonResponse
+from django.http import HttpResponse, HttpRequest, Http404, HttpResponseRedirect
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.response import TemplateResponse
 from django.utils import timezone
@@ -24,22 +21,18 @@ from django.utils.encoding import force_str, force_bytes
 from django.utils.http import urlsafe_base64_encode
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_GET
-from django_tenants.utils import tenant_context
-from django.core.paginator import Paginator
-
 from django_htmx.http import HttpResponseClientRedirect
-
+from django_tenants.utils import tenant_context
 from rest_framework import viewsets, permissions, status
 from rest_framework.authentication import SessionAuthentication
-from rest_framework.decorators import action, throttle_classes
+from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
-from rest_framework.throttling import UserRateThrottle
+# from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
-from Administration.admin_tenant import FormbricksConfigAddform
-from AuthBillet.models import TibilletUser, Wallet, HumanUser
+from AuthBillet.models import TibilletUser, Wallet
 from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
@@ -51,16 +44,17 @@ from BaseBillet.validators import LoginEmailValidator, MembershipValidator, Link
     ReservationValidator, ContactValidator
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
-from fedow_connect.fedow_api import FedowAPI, AssetFedow
+from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
 
-
+"""
 class SmallAnonRateThrottle(UserRateThrottle):
     # Un throttle pour 10 requetes par jours uniquement
     scope = 'smallanon'
+"""
 
 
 def encode_uid(pk):
@@ -72,13 +66,6 @@ def get_context(request):
     logger.debug("request.htmx") if request.htmx else None
     base_template = "reunion/headless.html" if request.htmx else "reunion/base.html"
     serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
-
-    # embed ?
-    embed = False
-    try:
-        embed = request.query_params.get('embed')
-    except:
-        embed = False
 
     # Le lien "Fédération"
     meta_url = cache.get('meta_url')
@@ -92,7 +79,6 @@ def get_context(request):
 
     context = {
         "base_template": base_template,
-        "embed": embed,
         "page": request.GET.get('page', 1),
         "tags": request.GET.getlist('tag'),
         "url_name": request.resolver_match.url_name,
@@ -106,8 +92,8 @@ def get_context(request):
         "mode_test": True if os.environ.get('TEST') == '1' else False,
         "carrousel_event_list": Carrousel.objects.filter(on_event_list_page=True).order_by('order'),
         "main_nav": [
-            {'name': 'event-list', 'url': '/event/', 'label': _('Calendar'), 'icon': 'calendar-date'},
-            {'name': 'memberships_mvt', 'url': '/memberships/', 'label': _('Subscriptions'), 'icon': 'person-badge'},
+            {'name': 'event-list', 'url': '/event/', 'label': f'{config.event_menu_name}', 'icon': 'calendar-date'},
+            {'name': 'memberships_mvt', 'url': '/memberships/', 'label': f'{config.membership_menu_name}', 'icon': 'person-badge'},
             # {'name': 'network', 'url': '/network/', 'label': 'Réseau local', 'icon': 'arrow-repeat'},
         ]
     }
@@ -306,7 +292,7 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
                 logger.info("Wallet ephemere, on demande le mail")
                 template_context = get_context(request)
                 template_context['qrcode_uuid'] = qrcode_uuid
-                # On logout l'user au cas ou on scanne les carte a la suite.
+                # Logout au cas où on scanne les cartes à la suite.
                 logout(request)
                 return render(request, "reunion/views/register.html", context=template_context)
 
@@ -341,7 +327,7 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
 
         # Le mail est envoyé
         email = validator.validated_data['email']
-        user: TibilletUser = get_or_create_user(email)
+        user: TibilletUser = get_or_create_user(email, force_mail=True)
         # import ipdb; ipdb.set_trace()
         if not user:
             # Le mail n'est pas validé par django (example.org?)
@@ -354,6 +340,9 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
             user.last_name = validator.data.get('lastname')
         if validator.data.get('firstname') and not user.first_name:
             user.first_name = validator.data.get('firstname')
+
+        # On retire le mail valid : impose la vérification du mail en cas de nouvelle carte
+        user.email_valid = False
         user.save()
 
         fedowAPI = FedowAPI()
@@ -709,6 +698,7 @@ class HomeViewset(viewsets.ViewSet):
 class EventMVT(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
+
     def get_federated_events(self, tags=None, search=None, page=1):
         dated_events = {}
         paginated_info = {
@@ -807,6 +797,21 @@ class EventMVT(viewsets.ViewSet):
         context['dated_events'], context['paginated_info'] = self.get_federated_events(tags=tags, page=page)
         # On renvoie la page en entier
         return render(request, "reunion/views/event/list.html", context=context)
+
+    @action(detail=False, methods=['GET'])
+    def embed(self, request):
+        template_context = get_context(request)
+        template_context['dated_events'], template_context['paginated_info'] = self.get_federated_events()
+        template_context['embed'] = True
+        response = render(
+            request, "reunion/views/event/list.html",
+            context=template_context,
+        )
+        # Pour rendre la page dans un iframe, on vide le header X-Frame-Options pour dire au navigateur que c'est ok.
+        response['X-Frame-Options'] = ''
+        return response
+
+
 
     # Recherche dans tout les tenant fédérés
     def tenant_retrieve(self, slug):
@@ -1087,12 +1092,23 @@ class MembershipMVT(viewsets.ViewSet):
 
         template_context['products'] = Product.objects.filter(categorie_article=Product.ADHESION,
                                                               publish=True).prefetch_related('tag')
+        return render(
+            request, "reunion/views/membership/list.html",
+            context=template_context,
+        )
+
+    @action(detail=False, methods=['GET'])
+    def embed(self, request):
+        template_context = get_context(request)
+        template_context['products'] = Product.objects.filter(categorie_article=Product.ADHESION,
+                                                              publish=True).prefetch_related('tag')
+        template_context['embed'] = True
         response = render(
             request, "reunion/views/membership/list.html",
             context=template_context,
         )
         # Pour rendre la page dans un iframe, on vide le header X-Frame-Options pour dire au navigateur que c'est ok.
-        response['X-Frame-Options'] = '' if template_context.get('embed') else 'DENY'
+        response['X-Frame-Options'] = ''
         return response
 
     def get_federated_membership_url(self, uuid=uuid):
@@ -1202,7 +1218,7 @@ class Tenant(viewsets.ViewSet):
 
         return render(request, "reunion/views/tenant/new_tenant.html", context=context)
 
-    @action(detail=False, methods=['POST'], throttle_classes=[SmallAnonRateThrottle])
+    @action(detail=False, methods=['POST'])
     def create_waiting_configuration(self, request: Request, *args, **kwargs):
         """
         Reception du formulaire de création de nouveau tenant
@@ -1230,7 +1246,7 @@ class Tenant(viewsets.ViewSet):
         new_tenant_mailer.delay(waiting_config_uuid=str(waiting_configuration.uuid))
         return render(request, "reunion/views/tenant/create_waiting_configuration_THANKS.html", context={})
 
-    @action(detail=True, methods=['GET'], throttle_classes=[SmallAnonRateThrottle])
+    @action(detail=True, methods=['GET'])
     def onboard_stripe(self, request, pk):
         """
         Requete provenant du mail envoyé après la création d'une configuration en attente

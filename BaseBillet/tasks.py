@@ -406,6 +406,8 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
         template = 'emails/connexion.html'
 
     logger.info(f'    title : {title}')
+    if settings.DEBUG:
+        logger.info(f"{connexion_url}")
 
     try:
         mail = CeleryMailerClass(
@@ -467,6 +469,7 @@ def new_tenant_after_stripe_mailer(waiting_config_uuid: str):
     try:
         # Génération du lien qui va créer la redirection vers l'url onboard
         waiting_config = WaitingConfiguration.objects.get(uuid=waiting_config_uuid)
+        logger.info(f"new_tenant_after_stripe_mailer : {waiting_config.organisation}")
         super_admin_root = [user.email for user in TibilletUser.objects.filter(is_superuser=True)]
         mail = CeleryMailerClass(
             super_admin_root,

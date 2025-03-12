@@ -8,6 +8,7 @@ from itertools import product
 
 import stripe
 from django.db import connection
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
@@ -19,7 +20,7 @@ from ApiBillet.serializers import get_or_create_price_sold, dec_to_int, create_t
 from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Price, Product, OptionGenerale, Membership, Paiement_stripe, LigneArticle, Tag, Event, \
-    Reservation, PriceSold, Ticket, ProductSold
+    Reservation, PriceSold, Ticket, ProductSold, Configuration
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from PaiementStripe.views import CreationPaiementStripe
@@ -330,11 +331,28 @@ class ReservationValidator(serializers.Serializer):
         if total_ticket_qty > event.max_per_user:
             raise serializers.ValidationError(_(f'Order quantity surpasses maximum allowed per user.'))
 
+
         # Vérification de la jauge
         valid_tickets_count = event.valid_tickets_count()
         if valid_tickets_count + total_ticket_qty > event.jauge_max:
             remains = event.jauge_max - valid_tickets_count
             raise serializers.ValidationError(_(f'There are only {remains} remaining tickets.'))
+
+        # Vérification que l'utilisateur peut reserer une place s'il est déja inscrit sur un horaire
+        if not Configuration.get_solo().allow_concurrent_bookings:
+            start_this_event = event.datetime
+            end_this_event = event.end_datetime
+            if not end_this_event:
+                end_this_event = start_this_event + timedelta(hours=1) # Si ya pas de fin sur l'event, on rajoute juste une heure.
+
+            if Reservation.objects.filter(
+                user_commande=user,
+            ).filter(
+                Q(event__datetime__range=(start_this_event, end_this_event)) |
+                Q(event__end_datetime__range=(start_this_event, end_this_event)) |
+                Q(event__datetime__lte=start_this_event, event__end_datetime__gte=end_this_event)
+            ).exists():
+                raise serializers.ValidationError(_(f'You have already booked this slot.'))
 
         """
         TODO: Verifier l'adhésion

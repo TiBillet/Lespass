@@ -59,14 +59,16 @@ def RootPermissionWithRequest(request):
 def TenantAdminPermissionWithRequest(request):
     # Vérifie que l'user existe et est admin du tenant
     if request.user:
-        if request.user.is_authenticated:
+        if request.user.is_superuser:
+            return True # le super user peut
+        elif request.user.is_authenticated:
             return all([
                 connection.tenant in request.user.client_admin.all(),
                 request.user.is_staff,
                 request.user.is_active,
                 request.user.espece == TibilletUser.TYPE_HUM
             ])
-    return request.user.is_superuser # le super user peut
+    return False
 
 
 class TenantAdminApiPermission(permissions.BasePermission):

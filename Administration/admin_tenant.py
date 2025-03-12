@@ -5,6 +5,7 @@ from typing import Any
 from unicodedata import category
 
 import requests
+import unfold.widgets
 from django import forms
 from django.conf import settings
 from django.db import models, connection
@@ -37,7 +38,6 @@ from import_export import resources
 from import_export.admin import ImportExportModelAdmin, ExportActionModelAdmin
 
 from unfold.contrib.import_export.forms import ExportForm, ImportForm, SelectableFieldsExportForm
-
 
 from ApiBillet.permissions import TenantAdminPermissionWithRequest, RootPermissionWithRequest
 from AuthBillet.models import HumanUser, TibilletUser
@@ -121,6 +121,18 @@ class ExternalApiKeyAdmin(ModelAdmin):
             obj.user = request.user
         super().save_model(request, obj, form, change)
 
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
 
 @admin.register(Webhook, site=staff_admin_site)
 class WebhookAdmin(ModelAdmin):
@@ -153,7 +165,7 @@ class WebhookAdmin(ModelAdmin):
         # Lancement d'un test de webhook :
         webhook = Webhook.objects.get(pk=object_id)
         try:
-            if webhook.event == Webhook.MEMBERSHIP:
+            if webhook.event == Webhook.MEMBERSHIP_V:
                 # On va chercher le membership le plus récent
                 membership = Membership.objects.filter(contribution_value__isnull=False).first()
                 webhook_membership(membership.pk, solo_webhook_pk=object_id)
@@ -179,6 +191,18 @@ class WebhookAdmin(ModelAdmin):
     def has_custom_actions_detail_permission(self, request, object_id):
         return TenantAdminPermissionWithRequest(request)
 
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
 
 ########################################################################
 @admin.register(Configuration, site=staff_admin_site)
@@ -199,9 +223,20 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 'phone',
                 'email',
                 'site_web',
-                'fuseau_horaire',
                 # 'map_img',
             )
+        }),
+        ('Options générales', {
+            'fields': (
+                #         'need_name',
+                'fuseau_horaire',
+                'jauge_max',
+                'membership_menu_name',
+                'event_menu_name',
+                'allow_concurrent_bookings',
+                # 'option_generale_radio',
+                # 'option_generale_checkbox',
+            ),
         }),
         ('Stripe', {
             'fields': (
@@ -210,20 +245,8 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 # 'stripe_mode_test',
             ),
         }),
-        # ('Fédération', {
-        #     'fields': (
-        #         'federated_with',
-        #     ),
-        # }),
-        # ('Options générales', {
-        #     'fields': (
-        #         'need_name',
-        #         'jauge_max',
-        #         'option_generale_radio',
-        #         'option_generale_checkbox',
-        #     ),
-        # }),
     )
+
     readonly_fields = ['onboard_stripe', ]
     autocomplete_fields = ['federated_with', ]
 
@@ -242,6 +265,18 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 messages.add_message(request, messages.ERROR, _("Cashless server OFFLINE or BAD KEY"))
 
         super().save_model(request, obj, form, change)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 class TagForm(ModelForm):
@@ -324,6 +359,18 @@ class OptionGeneraleAdmin(ModelAdmin):
         'poids',
     )
 
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
 
 class PriceInlineChangeForm(ModelForm):
     # Le formulaire pour changer une adhésion
@@ -341,8 +388,8 @@ class PriceInlineChangeForm(ModelForm):
     def clean_prix(self):
         cleaned_data = self.cleaned_data
         prix = cleaned_data.get('prix')
-        if prix < 1:
-            raise forms.ValidationError(_("A rate cannot go below 1€"), code="invalid")
+        if 0 < prix < 1:
+            raise forms.ValidationError(_("A rate cannot be between 0€ and 1€"), code="invalid")
         return prix
 
     def clean_subscription_type(self):
@@ -370,6 +417,15 @@ class PriceInline(TabularInline):
     # Surcharger la méthode pour désactiver la suppression
     def has_delete_permission(self, request, obj=None):
         return False
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
 
 class ProductAdminCustomForm(ModelForm):
@@ -418,22 +474,56 @@ class ProductAdmin(ModelAdmin):
     list_display = (
         'name',
         'img',
-        'poids',
         'categorie_article',
         'publish',
+        'poids',
     )
-    ordering = ("poids",)
+    ordering = ("categorie_article", "poids",)
     autocomplete_fields = [
         "option_generale_radio", "option_generale_checkbox",
     ]
     list_filter = ['publish', 'categorie_article']
     search_fields = ['name']
 
+    # Pour les bouton en haut de la vue change
+    # chaque decorateur @action génère une nouvelle route
+    actions_row = ["archive", ]
+
+    @action(
+        description=_("Archive"),
+        url_path="archive",
+        permissions=["changelist_row_action"],
+    )
+    def archive(self, request, object_id):
+        obj = get_object_or_404(Product, pk=object_id)
+        obj.archive = True
+        obj.save()
+        messages.success(request, _(f"{obj.name} Archived"))
+        return redirect(request.META["HTTP_REFERER"])
+
     def get_queryset(self, request):
         # On retire les recharges cashless et l'article Don
         # Pas besoin de les afficher, ils se créent automatiquement.
         qs = super().get_queryset(request)
         return qs.exclude(categorie_article__in=[Product.RECHARGE_CASHLESS, Product.DON]).exclude(archive=True)
+
+    def get_search_results(self, request, queryset, search_term):
+        """
+        Pour la recherche de produit dans la page Event.
+        On est sur un Many2Many, il faut bidouiller la réponde de ce coté
+        Le but est que cela n'affiche dans le auto complete fields que les catégories Billets
+        """
+        queryset, use_distinct = super().get_search_results(request, queryset, search_term)
+        if request.headers.get('Referer'):
+            if "event" in request.headers['Referer']:
+                queryset = queryset.filter(categorie_article__in=[
+                    Product.BILLET,
+                    Product.FREERES,
+                ])
+        return queryset, use_distinct
+
+    def has_changelist_row_action_permission(self, request: HttpRequest, *args, **kwargs):
+        return TenantAdminPermissionWithRequest(request)
 
     def has_delete_permission(self, request, obj=None):
         return False
@@ -466,9 +556,19 @@ class PriceChangeForm(ModelForm):
     def clean_prix(self):
         cleaned_data = self.cleaned_data
         prix = cleaned_data.get('prix')
-        if prix < 1:
-            raise forms.ValidationError(_("A rate cannot go below 1€"), code="invalid")
+        if 0 < prix < 1:
+            raise forms.ValidationError(_("A rate cannot be between 0€ and 1€"), code="invalid")
         return prix
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Filtrage des produits : uniquement des produits adhésions.
+        # Possible facilement car Foreign Key (voir get_search_results dans ProductAdmin)
+        self.fields['adhesion_obligatoire'].queryset = Product.objects.filter(
+            categorie_article=Product.ADHESION,
+            archive=False,
+        )
 
 
 @admin.register(Price, site=staff_admin_site)
@@ -495,20 +595,20 @@ class PaiementStripeAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
 
     list_display = (
-        'uuid_8',
         'user',
-        'total',
         'order_date',
         'status',
         # 'traitement_en_cours',
         # 'source_traitement',
         'source',
         'articles',
+        'total',
+        'uuid_8',
     )
     readonly_fields = list_display
     ordering = ('-order_date',)
-    search_fields = ('user__email','order_date' )
-    list_filter = ('status', 'order_date', )
+    search_fields = ('user__email', 'order_date')
+    list_filter = ('status', 'order_date',)
 
     def has_delete_permission(self, request, obj=None):
         # return request.user.is_superuser
@@ -556,6 +656,9 @@ class MembershipInline(TabularInline):
 
     def has_add_permission(self, request, obj=None):
         return False  # Autoriser l'ajout
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
     # def formfield_for_foreignkey(self, db_field, request=None, **kwargs):
     #     if db_field.name == "price":  # Filtre sur le champ ForeignKey "prix"
@@ -743,6 +846,12 @@ class HumanUserAdmin(ModelAdmin):
     def has_change_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_add_permission(self, request, obj=None):
+        return False  # Autoriser l'ajout
+
     def has_custom_actions_detail_permission(self, request, object_id):
         return TenantAdminPermissionWithRequest(request)
 
@@ -771,8 +880,7 @@ class MembershipResource(resources.ModelResource):
             'deadline',
             'status_name',
         )
-        export_order = ('last_contribution', )
-
+        export_order = ('last_contribution',)
 
 
 class MembershipAddForm(ModelForm):
@@ -918,8 +1026,6 @@ class MembershipAdmin(ModelAdmin, ExportActionModelAdmin):
             defaults['form'] = self.add_form
         defaults.update(kwargs)
         return super().get_form(request, obj, **defaults)
-
-
 
     # Pour les bouton en haut de la vue change
     # chaque decorateur @action génère une nouvelle route
@@ -1093,19 +1199,31 @@ class EventChildrenInline(TabularInline):
     def has_delete_permission(self, request, obj=None):
         return False
 
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
 
 class EventForm(ModelForm):
-    # def save(self, commit=True):
-    #     return super().save(commit)
-
-    # def clean(self):
-    #     return super().clean()
+    class Meta:
+        model = Event
+        fields = '__all__'
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # On mets la valeur de la jauge réglée dans la config par default
-        config = Configuration.get_solo()
-        self.fields['jauge_max'].initial = 454
+
+        try:
+            # On mets la valeur de la jauge réglée dans la config par default
+            config = Configuration.get_solo()
+            self.fields['jauge_max'].initial = config.jauge_max
+        except Exception as e:
+            logger.error(f"set gauge max error : {e}")
+            pass
 
 
 @admin.register(Event, site=staff_admin_site)
@@ -1166,14 +1284,19 @@ class EventAdmin(ModelAdmin):
     readonly_fields = (
         'valid_tickets_count',
     )
+
     search_fields = ['name']
     list_filter = ['categorie', 'datetime']
+
     autocomplete_fields = [
-        "products",
         "tag",
         "options_radio",
         "options_checkbox",
         "carrousel",
+
+        # Le autocomplete fields + many2many ne permet pas de filtrage facile
+        # Pour filter les produits de type billet, regarder le get_search_results dans ProductAdmin
+        "products",
     ]
 
     formfield_overrides = {
@@ -1224,6 +1347,7 @@ class ReservationAdmin(ModelAdmin):
         return " - ".join([option.name for option in instance.options.all()])
 
     actions_detail = ["send_ticket_to_mail", ]
+
     @action(
         description=_("Send tickets through email again"),
         url_path="send_ticket_to_mail",
@@ -1724,10 +1848,10 @@ class WaitingConfigAdmin(ModelAdmin):
 
     fields = list_display
     readonly_fields = (
-        "id_acc_connect", "datetime", "onboard_stripe_finished", "created",
+        "datetime",
     )
 
-    ordering = ('created', 'onboard_stripe_finished', 'datetime')
+    ordering = ('-datetime',)
 
     list_filter = ["datetime", "created", "onboard_stripe_finished"]
     search_fields = ["email", "organisation", "datetime"]
@@ -1744,7 +1868,7 @@ class WaitingConfigAdmin(ModelAdmin):
                 request, messages.SUCCESS,
                 _(f"The Lèspass instance has been created. An invite email has been sent to {wc.email}")
             )
-        else :
+        else:
             messages.add_message(
                 request, messages.WARNING,
                 _(f"The collective is not yet finished with Stripe account creation.")
@@ -1753,7 +1877,6 @@ class WaitingConfigAdmin(ModelAdmin):
 
     def has_custom_actions_detail_permission(self, request, object_id):
         return RootPermissionWithRequest(request)
-
 
     def has_view_permission(self, request, obj=None):
         return RootPermissionWithRequest(request)
@@ -1782,5 +1905,3 @@ def dashboard_callback(request, context):
     })
 
     return context
-
-
