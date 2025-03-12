@@ -714,23 +714,18 @@ def webhook_membership(membership_pk, solo_webhook_pk=None):
 
 @app.task
 def send_to_ghost(membership_pk):
-    membership = Membership.objects.get(pk=membership_pk)
-
-    # Email du compte :
-    user = membership.user
-    email = user.email
-    name = f"{membership.first_name.capitalize()} {membership.last_name.capitalize()}"
-
-    # Si tu as besoin du produit adhésion, tu peux utiliser les deux variables ci-dessous.
-    # Le model est BaseBillet/models.py
-    # product: Product = trigger.ligne_article.pricesold.productsold.product
-
-    # Et ici, tu as les cred' ghost à entrer dans l'admin.
     ghost_config = GhostConfig.get_solo()
     ghost_url = ghost_config.ghost_url
     ghost_key = ghost_config.get_api_key()
 
-    if ghost_url and ghost_key and email and name:
+    if ghost_url and ghost_key:
+        membership = Membership.objects.get(pk=membership_pk)
+
+        # Email du compte :
+        user = membership.user
+        email = user.email
+        name = f"{membership.first_name.capitalize()} {membership.last_name.capitalize()}"
+
         ###################################
         ## Génération du token JWT
         ###################################
