@@ -1945,7 +1945,8 @@ class BrevoConfigAdmin(SingletonModelAdmin, ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
     def has_add_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
+        return False
+        # return TenantAdminPermissionWithRequest(request)
 
     def has_change_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)

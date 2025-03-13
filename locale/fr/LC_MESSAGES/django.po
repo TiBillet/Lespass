@@ -1070,11 +1070,11 @@ msgstr "TVA par défaut"
 #: MetaBillet/models.py:196 MetaBillet/models.py:197 TiBillet/settings.py:477
 #: TiBillet/settings.py:501
 msgid "Settings"
-msgstr "Paranètres"
+msgstr "Paramètres"
 
 #: BaseBillet/models.py:582
 msgid "Settings for "
-msgstr "Paranètres pour "
+msgstr "Paramètres pour "
 
 #: BaseBillet/models.py:589
 msgid "Name"
