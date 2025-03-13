@@ -44,7 +44,7 @@ from AuthBillet.models import HumanUser, TibilletUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
-    FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel
+    FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel, BrevoConfig
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
     webhook_membership, create_ticket_pdf, ticket_celery_mailer
 from Customers.models import Client
@@ -1900,6 +1900,60 @@ class WaitingConfigAdmin(ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return RootPermissionWithRequest(request)
+
+
+@admin.register(BrevoConfig, site=staff_admin_site)
+class BrevoConfigAdmin(SingletonModelAdmin, ModelAdmin):
+    compressed_fields = True  # Default: False
+    warn_unsaved_form = True  # Default: False
+
+    readonly_fields = ['last_log',]
+    actions_detail = ["test_api_brevo", ]
+
+    @action(description=_("Test Api"),
+            url_path="test_api_brevo",
+            permissions=["custom_actions_detail"])
+    def test_api_brevo(self, request, object_id):
+        import sib_api_v3_sdk
+        from sib_api_v3_sdk.rest import ApiException
+        brevo_config = BrevoConfig.get_solo()
+
+        try:
+            configuration = sib_api_v3_sdk.Configuration()
+            configuration.api_key['api-key'] = brevo_config.get_api_key()
+            api_instance = sib_api_v3_sdk.AccountApi(sib_api_v3_sdk.ApiClient(configuration))
+            api_response = api_instance.get_account()
+            brevo_config.last_log = api_response
+            messages.success(request, _(f"Api OK"))
+        except ApiException as e:
+            brevo_config.last_log = f"{e}"
+            logger.error("ApiException when calling AccountApi->get_account: %s\n" % e)
+            messages.error(request, _(f"Api not OK : {e}"))
+        except Exception as e:
+            brevo_config.last_log = f"{type(e)} - {e}"
+            logger.error("Exception when calling AccountApi->get_account: %s\n" % e)
+            messages.error(request, _(f"Error : {type(e)} - {e}"))
+
+        brevo_config.save()
+        return redirect(request.META["HTTP_REFERER"])
+
+
+    def has_custom_actions_detail_permission(self, request, object_id):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+
 
 
 ### UNFOLD ADMIN

@@ -192,6 +192,7 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
         # Si la personne accepte la newsletter :
         if membership.newsletter:
             send_to_ghost.delay(membership.pk)
+            send_to_brevo.delay(membership.pk)
 
         logger.info(f"    TRIGGER_A ADHESION PAID -> envoi à Fedow")
         # L'adhésion possède désormais une transaction fedow associé

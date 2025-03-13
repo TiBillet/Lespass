@@ -662,6 +662,13 @@ UNFOLD = {
                         # "badge": "Administration.admin_tenant.badge_callback",
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
                     },
+                    {
+                        "title": _("Brevo"),
+                        "icon": "alternate_email",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_brevoconfig_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+                    },
                     # {
                     #     "title": _("Dokos"),
                     #     "icon": "circle",  # Supported icon set: https://fonts.google.com/icons

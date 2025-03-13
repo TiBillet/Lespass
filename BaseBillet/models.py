@@ -2019,3 +2019,21 @@ class FormbricksConfig(SingletonModel):
     class Meta:
         verbose_name = _('Formbrick settings')
         verbose_name_plural = _('Formbrick settings')
+
+
+class BrevoConfig(SingletonModel):
+    api_key = models.CharField(max_length=200, blank=True, null=True)
+    last_log = models.TextField(blank=True, null=True)
+
+
+    def get_api_key(self):
+        return fernet_decrypt(self.api_key) if self.api_key else None
+
+    def set_api_key(self, string):
+        self.api_key = fernet_encrypt(string)
+        self.save()
+        return True
+
+    class Meta:
+        verbose_name = _('Brevo setting')
+        verbose_name_plural = _('Brevo settings')

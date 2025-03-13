@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import smtplib
+import time
 from io import BytesIO
 
 import barcode
@@ -30,7 +31,7 @@ from weasyprint.text.fonts import FontConfiguration
 from ApiBillet.serializers import LigneArticleSerializer
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, Ticket, Configuration, Membership, Webhook, Paiement_stripe, LigneArticle, \
-    GhostConfig
+    GhostConfig, BrevoConfig
 from Customers.models import Client
 from MetaBillet.models import WaitingConfiguration
 from TiBillet.celery import app
@@ -713,13 +714,48 @@ def webhook_membership(membership_pk, solo_webhook_pk=None):
 
 
 @app.task
+def send_to_brevo(membership_pk):
+    brevo_config = BrevoConfig.get_solo()
+    if brevo_config.api_key:
+        try :
+            # Excpet avec nouvel essaie 3 secondes plus tard.
+            # Lorsque c'est créé par l'admin, le trigger se lance avant que l'objet se soit save en db.
+            membership = Membership.objects.get(pk=membership_pk)
+        except Membership.DoesNotExist:
+            time.sleep(2)
+            membership = Membership.objects.get(pk=membership_pk)
+
+        import sib_api_v3_sdk
+        from sib_api_v3_sdk.rest import ApiException
+        configuration = sib_api_v3_sdk.Configuration()
+        configuration.api_key['api-key'] = brevo_config.get_api_key()
+
+        try:
+            api_instance = sib_api_v3_sdk.ContactsApi(sib_api_v3_sdk.ApiClient(configuration))
+            create_contact = sib_api_v3_sdk.CreateContact(email=membership.user.email)
+            api_response = api_instance.create_contact(create_contact)
+            brevo_config.last_log = f"{api_response}"
+            brevo_config.save()
+        except ApiException as e:
+            logger.error(f"send_to_brevo ERROR : {e}")
+            brevo_config.last_log = f"{e}"
+            brevo_config.save()
+
+
+@app.task
 def send_to_ghost(membership_pk):
     ghost_config = GhostConfig.get_solo()
     ghost_url = ghost_config.ghost_url
     ghost_key = ghost_config.get_api_key()
 
     if ghost_url and ghost_key:
-        membership = Membership.objects.get(pk=membership_pk) #TODO: parfois ça crash, Celery n'a pas le membership
+        try :
+            # Excpet avec nouvel essaie 3 secondes plus tard.
+            # Lorsque c'est créé par l'admin, le trigger se lance avant que l'objet se soit save en db.
+            membership = Membership.objects.get(pk=membership_pk)
+        except Membership.DoesNotExist:
+            time.sleep(2)
+            membership = Membership.objects.get(pk=membership_pk)
 
         # Email du compte :
         user = membership.user
