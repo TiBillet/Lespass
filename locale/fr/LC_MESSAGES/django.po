@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-12 09:35+0100\n"
+"POT-Creation-Date: 2025-03-13 12:56+0000\n"
 "PO-Revision-Date: 2025-03-12 09:37+0100\n"
 "Last-Translator: Diane Alma Kay <pro@kayathommy.fr>\n"
 "Language-Team: French\n"
@@ -61,7 +61,7 @@ msgstr "Merci d'ajouter au moins une catégorie à ce produit."
 msgid "Please add at least one rate to this product."
 msgstr "Merci d'ajouter au moins un tarif à ce produit."
 
-#: Administration/admin_tenant.py:493 BaseBillet/models.py:660
+#: Administration/admin_tenant.py:493 BaseBillet/models.py:661
 msgid "Archive"
 msgstr "Archiver"
 
@@ -123,7 +123,7 @@ msgid "{user.email} has been demoted."
 msgstr "{user.email} a perdu les droits d'administration."
 
 #: Administration/admin_tenant.py:836 Administration/admin_tenant.py:901
-#: BaseBillet/models.py:378 BaseBillet/models.py:1767
+#: BaseBillet/models.py:378 BaseBillet/models.py:1768
 #: BaseBillet/templates/reunion/views/membership/list.html:15
 #: TiBillet/settings.py:456 TiBillet/settings.py:529
 msgid "Subscriptions"
@@ -142,14 +142,14 @@ msgstr "Aucun"
 msgid "Select an subscription"
 msgstr "Choisir un abonnement"
 
-#: Administration/admin_tenant.py:908 BaseBillet/models.py:1708
-#: BaseBillet/tasks.py:221
+#: Administration/admin_tenant.py:908 BaseBillet/models.py:1709
+#: BaseBillet/tasks.py:222
 msgid "Contribution"
 msgstr "Contribution"
 
 #: Administration/admin_tenant.py:915 Administration/admin_tenant.py:1419
-#: BaseBillet/models.py:1368 BaseBillet/models.py:1616
-#: BaseBillet/models.py:1710
+#: BaseBillet/models.py:1369 BaseBillet/models.py:1617
+#: BaseBillet/models.py:1711
 msgid "Payment method"
 msgstr "Mode de paiement"
 
@@ -179,7 +179,7 @@ msgid "Build an invoice"
 msgstr "Générer une facture"
 
 #: Administration/admin_tenant.py:1109
-#: ApiBillet/templates/ticket/ticket.html:75 BaseBillet/models.py:1605
+#: ApiBillet/templates/ticket/ticket.html:174 BaseBillet/models.py:1606
 #: BaseBillet/templates/reunion/partials/account/ticket_accordion.html:39
 #: BaseBillet/templates/reunion/partials/account/transaction_history.html:8
 msgid "Value"
@@ -191,8 +191,8 @@ msgstr "Montant"
 msgid "Total"
 msgstr "Total"
 
-#: Administration/admin_tenant.py:1117 BaseBillet/models.py:684
-#: BaseBillet/models.py:707 BaseBillet/models.py:1164 BaseBillet/tasks.py:220
+#: Administration/admin_tenant.py:1117 BaseBillet/models.py:685
+#: BaseBillet/models.py:708 BaseBillet/models.py:1165 BaseBillet/tasks.py:221
 msgid "Product"
 msgstr "Produit"
 
@@ -201,7 +201,7 @@ msgstr "Produit"
 msgid "Status"
 msgstr "Statut"
 
-#: Administration/admin_tenant.py:1179 BaseBillet/models.py:856
+#: Administration/admin_tenant.py:1179 BaseBillet/models.py:857
 msgid "Volunteering"
 msgstr "Volontariat"
 
@@ -226,7 +226,7 @@ msgstr "Billets envoyés à {reservation.user_commande.email}"
 msgid "Select a product"
 msgstr "Choisir un produit"
 
-#: Administration/admin_tenant.py:1395 BaseBillet/models.py:780
+#: Administration/admin_tenant.py:1395 BaseBillet/models.py:781
 msgid "Rate"
 msgstr "Tarif"
 
@@ -250,7 +250,7 @@ msgstr "PDF"
 msgid "Included tags"
 msgstr "Labels inclus"
 
-#: Administration/admin_tenant.py:1646 BaseBillet/models.py:1934
+#: Administration/admin_tenant.py:1646 BaseBillet/models.py:1941
 msgid "Excluded tags"
 msgstr "Labels exclus"
 
@@ -262,11 +262,12 @@ msgstr "A une clé"
 msgid "Api Key inserted"
 msgstr "Clé API insérée"
 
-#: Administration/admin_tenant.py:1748 BaseBillet/models.py:1908
+#: Administration/admin_tenant.py:1748 BaseBillet/models.py:1915
 msgid "Api key"
 msgstr "Clé API"
 
 #: Administration/admin_tenant.py:1766 Administration/admin_tenant.py:1786
+#: Administration/admin_tenant.py:1927
 msgid "Api OK"
 msgstr "API ok"
 
@@ -274,15 +275,15 @@ msgstr "API ok"
 msgid "Api not OK"
 msgstr "API pas OK"
 
-#: Administration/admin_tenant.py:1777
+#: Administration/admin_tenant.py:1777 Administration/admin_tenant.py:1913
 msgid "Test Api"
 msgstr "Tester l'API"
 
-#: Administration/admin_tenant.py:1860
+#: Administration/admin_tenant.py:1871
 msgid "Create instance"
 msgstr "Créer une instance"
 
-#: Administration/admin_tenant.py:1869
+#: Administration/admin_tenant.py:1880
 #, python-brace-format
 msgid ""
 "The Lèspass instance has been created. An invite email has been sent to {wc."
@@ -291,15 +292,25 @@ msgstr ""
 "L'instance Lèspass a été créée. Un mail d'invitation a été envoyé à {wc."
 "email}"
 
-#: Administration/admin_tenant.py:1874
+#: Administration/admin_tenant.py:1885
 msgid "The collective is not yet finished with Stripe account creation."
 msgstr "Le collectif n'a par fini sa création de compte Stripe."
 
-#: Administration/admin_tenant.py:1897
+#: Administration/admin_tenant.py:1931
+#, fuzzy, python-brace-format
+#| msgid "Api not OK"
+msgid "Api not OK : {e}"
+msgstr "API pas OK"
+
+#: Administration/admin_tenant.py:1935
+msgid "Error : {type(e)} - {e}"
+msgstr ""
+
+#: Administration/admin_tenant.py:1963
 msgid "Development"
 msgstr "Développement"
 
-#: Administration/admin_tenant.py:1899
+#: Administration/admin_tenant.py:1965
 msgid "Production"
 msgstr "Production"
 
@@ -340,8 +351,8 @@ msgstr ""
 "Revenu total entre\n"
 "<strong class=\"font-semibold text-font-important-light dark:text-font-"
 "important-dark dark:text-white\">1 - 31 Octobre</strong>.\n"
-"Increase <span class=\"text-green-700 font-semibold dark:text-"
-"green-400\">+3.14%%</span>\n"
+"Increase <span class=\"text-green-700 font-semibold dark:text-green-400\">"
+"+3.14%%</span>\n"
 "comparé au mois précédent\n"
 "<strong class=\"font-semibold text-font-important-light dark:text-font-"
 "important-dark dark:text-white\">1 - 30 Septembre</strong>.\n"
@@ -484,49 +495,49 @@ msgstr "Billet anonyme {i}"
 msgid "Invalid Stripe checkout."
 msgstr "Encaissement Stripe non valide."
 
-#: ApiBillet/templates/ticket/ticket.html:57
+#: ApiBillet/templates/ticket/ticket.html:156
 #: BaseBillet/templates/invoice/invoice.html:157
 #: BaseBillet/templates/reunion/partials/account/ticket_accordion.html:21
 msgid "Number"
 msgstr "Numéro"
 
-#: ApiBillet/templates/ticket/ticket.html:63
+#: ApiBillet/templates/ticket/ticket.html:162
 #: BaseBillet/templates/reunion/partials/account/ticket_accordion.html:27
 msgid "Booking"
 msgstr "Réservation"
 
-#: ApiBillet/templates/ticket/ticket.html:69 BaseBillet/models.py:712
+#: ApiBillet/templates/ticket/ticket.html:168 BaseBillet/models.py:713
 #: BaseBillet/templates/reunion/partials/account/ticket_accordion.html:33
 msgid "Rate name"
 msgstr "Nom du tarif"
 
-#: ApiBillet/templates/ticket/ticket.html:81
+#: ApiBillet/templates/ticket/ticket.html:180
 #: BaseBillet/templates/reunion/partials/account/ticket_accordion.html:45
 msgid "Seating"
 msgstr "Placement"
 
-#: ApiBillet/templates/ticket/ticket.html:84 AuthBillet/models.py:143
+#: ApiBillet/templates/ticket/ticket.html:183 AuthBillet/models.py:143
 #: BaseBillet/templates/reunion/partials/account/ticket_accordion.html:48
 msgid "Free"
 msgstr "Libre"
 
-#: ApiBillet/templates/ticket/ticket.html:86
+#: ApiBillet/templates/ticket/ticket.html:185
 #: BaseBillet/templates/reunion/partials/account/ticket_accordion.html:50
 msgid "Seat"
 msgstr "Siège"
 
-#: ApiBillet/templates/ticket/ticket.html:91
+#: ApiBillet/templates/ticket/ticket.html:190
 #: BaseBillet/templates/reunion/forms/event/booking.html:7
 #: BaseBillet/templates/reunion/forms/event/booking.html:17
 #: BaseBillet/templates/reunion/partials/account/ticket_accordion.html:65
 msgid "Email"
 msgstr "Adresse mail"
 
-#: ApiBillet/templates/ticket/ticket.html:103
+#: ApiBillet/templates/ticket/ticket.html:202
 msgid "Ticket made with"
 msgstr "Billet généré par"
 
-#: ApiBillet/templates/ticket/ticket.html:113
+#: ApiBillet/templates/ticket/ticket.html:212
 msgid "the collective organization toolbox."
 msgstr "la boîte à outils d'organisation collective."
 
@@ -604,7 +615,7 @@ msgstr "Échec d'envoi du mail de confirmation"
 msgid "Email confirmed"
 msgstr "Adresse mail confirmée"
 
-#: AuthBillet/models.py:116 BaseBillet/models.py:1717
+#: AuthBillet/models.py:116 BaseBillet/models.py:1718
 #: BaseBillet/templates/reunion/views/account/preferences.html:33
 #: BaseBillet/templates/reunion/views/membership/form.html:53
 #: BaseBillet/templates/reunion/views/membership/form.html:55
@@ -614,7 +625,7 @@ msgstr "Adresse mail confirmée"
 msgid "First name"
 msgstr "Prénom"
 
-#: AuthBillet/models.py:117 BaseBillet/models.py:1723
+#: AuthBillet/models.py:117 BaseBillet/models.py:1724
 #: BaseBillet/templates/reunion/views/account/preferences.html:41
 msgid "Last name"
 msgstr "Nom de famille"
@@ -837,7 +848,7 @@ msgstr "Couleur"
 msgid "Tag"
 msgstr "Label"
 
-#: BaseBillet/models.py:114 BaseBillet/models.py:815 TiBillet/settings.py:551
+#: BaseBillet/models.py:114 BaseBillet/models.py:816 TiBillet/settings.py:551
 msgid "Tags"
 msgstr "Labels"
 
@@ -949,12 +960,12 @@ msgstr "URL du lien"
 msgid "Collective name"
 msgstr "Nom du collectif"
 
-#: BaseBillet/models.py:249 BaseBillet/models.py:591 BaseBillet/models.py:804
+#: BaseBillet/models.py:249 BaseBillet/models.py:591 BaseBillet/models.py:805
 #: MetaBillet/models.py:46
 msgid "Short description"
 msgstr "Description courte"
 
-#: BaseBillet/models.py:250 BaseBillet/models.py:592 BaseBillet/models.py:805
+#: BaseBillet/models.py:250 BaseBillet/models.py:592 BaseBillet/models.py:806
 #: MetaBillet/models.py:47
 msgid "Long description"
 msgstr "Description longue"
@@ -1080,7 +1091,7 @@ msgstr "Paramètres pour "
 msgid "Name"
 msgstr "Nom"
 
-#: BaseBillet/models.py:594 BaseBillet/models.py:717 BaseBillet/models.py:811
+#: BaseBillet/models.py:594 BaseBillet/models.py:718 BaseBillet/models.py:812
 msgid "Publish"
 msgstr "Publier"
 
@@ -1116,11 +1127,15 @@ msgstr "Sélectionner une catégorie"
 msgid "Ticket booking"
 msgstr "Réservation de billets"
 
-#: BaseBillet/models.py:646
+#: BaseBillet/models.py:641 BaseBillet/models.py:1624
+msgid "Free booking"
+msgstr "Réservation gratuite"
+
+#: BaseBillet/models.py:647
 msgid "Subscription or membership"
 msgstr "Abonnement"
 
-#: BaseBillet/models.py:647 BaseBillet/templates/reunion/account_base.html:53
+#: BaseBillet/models.py:648 BaseBillet/templates/reunion/account_base.html:53
 #: BaseBillet/templates/reunion/views/account/punchclock.html:6
 #: BaseBillet/templates/reunion/views/account/punchclock.html:11
 #: fedow_connect/validators.py:43 fedow_connect/validators.py:85
@@ -1128,193 +1143,193 @@ msgstr "Abonnement"
 msgid "Punchclock"
 msgstr "Badgeuse"
 
-#: BaseBillet/models.py:653 BaseBillet/models.py:1083
+#: BaseBillet/models.py:654 BaseBillet/models.py:1084
 msgid "Product type"
 msgstr "Type de produit"
 
-#: BaseBillet/models.py:656
+#: BaseBillet/models.py:657
 msgid "Named booking"
 msgstr "Réservation nominative"
 
-#: BaseBillet/models.py:657
+#: BaseBillet/models.py:658
 msgid "Intended recipient's first and last names required for each ticket."
 msgstr "Nom et prénom des destinataires des billets requis."
 
-#: BaseBillet/models.py:685 BaseBillet/models.py:813 BaseBillet/models.py:1889
+#: BaseBillet/models.py:686 BaseBillet/models.py:814 BaseBillet/models.py:1896
 #: TiBillet/settings.py:538 TiBillet/settings.py:543
 msgid "Products"
 msgstr "Produits"
 
-#: BaseBillet/models.py:713 BaseBillet/templates/invoice/invoice.html:166
+#: BaseBillet/models.py:714 BaseBillet/templates/invoice/invoice.html:166
 msgid "Price"
 msgstr "Prix"
 
-#: BaseBillet/models.py:714 fedow_connect/views.py:58
+#: BaseBillet/models.py:715 fedow_connect/views.py:58
 msgid "Open price"
 msgstr "Prix libre"
 
-#: BaseBillet/models.py:715
+#: BaseBillet/models.py:716
 msgid "The amount will be asked on the Stripe checkout page."
 msgstr "Le montant sera demandé sur la page d'encaissement Stripe."
 
-#: BaseBillet/models.py:721 BaseBillet/models.py:750
+#: BaseBillet/models.py:722 BaseBillet/models.py:751
 msgid "Non applicable"
 msgstr "Non applicable"
 
-#: BaseBillet/models.py:722
+#: BaseBillet/models.py:723
 msgid "10 %"
 msgstr "10 %"
 
-#: BaseBillet/models.py:723
+#: BaseBillet/models.py:724
 msgid "20 %"
 msgstr "20 %"
 
-#: BaseBillet/models.py:724
+#: BaseBillet/models.py:725
 msgid "8.5 %"
 msgstr "8,5 %"
 
-#: BaseBillet/models.py:725
+#: BaseBillet/models.py:726
 msgid "2.2 %"
 msgstr "2,2 %"
 
-#: BaseBillet/models.py:731
+#: BaseBillet/models.py:732
 msgid "VAT rate"
 msgstr "Taux TVA"
 
-#: BaseBillet/models.py:737
+#: BaseBillet/models.py:738
 msgid "Maximum orders per user"
 msgstr "Maximum de commandes par utilisateur·ice"
 
-#: BaseBillet/models.py:738
+#: BaseBillet/models.py:739
 msgid "The same email can be used for multiple orders."
 msgstr "Le même email peut être utilisé pour plusieurs commandes."
 
-#: BaseBillet/models.py:743
+#: BaseBillet/models.py:744
 msgid "Subscription required"
 msgstr "Abonnement requis"
 
-#: BaseBillet/models.py:745
+#: BaseBillet/models.py:746
 msgid "Rate available to suscribers only: "
 msgstr "Tarif réservé aux abonné·es : "
 
-#: BaseBillet/models.py:751
+#: BaseBillet/models.py:752
 msgid "1 hour"
 msgstr "1 heure"
 
-#: BaseBillet/models.py:752
+#: BaseBillet/models.py:753
 msgid "1 day"
 msgstr "1 jour"
 
-#: BaseBillet/models.py:753
+#: BaseBillet/models.py:754
 msgid "30 days"
 msgstr "30 jours"
 
-#: BaseBillet/models.py:754
+#: BaseBillet/models.py:755
 msgid "365 days"
 msgstr "365 jours"
 
-#: BaseBillet/models.py:755
+#: BaseBillet/models.py:756
 msgid "Calendar year : 1st of January"
 msgstr "Année civile : 1er janvier"
 
-#: BaseBillet/models.py:756
+#: BaseBillet/models.py:757
 msgid "School year: 1st of September"
 msgstr "Année scolaire : 1er septembre"
 
-#: BaseBillet/models.py:762
+#: BaseBillet/models.py:763
 msgid "Subscription duration"
 msgstr "Durée d'abonnement"
 
-#: BaseBillet/models.py:781
+#: BaseBillet/models.py:782
 msgid "Rates"
 msgstr "Tarifs"
 
-#: BaseBillet/models.py:787
+#: BaseBillet/models.py:788
 msgid "Event name"
 msgstr "Nom de l'évènement"
 
-#: BaseBillet/models.py:790
+#: BaseBillet/models.py:791
 msgid "Event start"
 msgstr "Début de l'évènement"
 
-#: BaseBillet/models.py:791
+#: BaseBillet/models.py:792
 msgid "Event end"
 msgstr "Fin de l'évènement"
 
-#: BaseBillet/models.py:792
+#: BaseBillet/models.py:793
 msgid "Second date / time optional"
 msgstr "Deuxième date / heure facultative"
 
-#: BaseBillet/models.py:795
+#: BaseBillet/models.py:796
 msgid "Maximum capacity"
 msgstr "Jauge maximale"
 
-#: BaseBillet/models.py:798
+#: BaseBillet/models.py:799
 msgid "Maximum bookings per user"
 msgstr "Maximum de réservations par utilisateur·ice"
 
-#: BaseBillet/models.py:799
+#: BaseBillet/models.py:800
 msgid "The same email can be used for multiple tickets."
 msgstr "Le même email peut être utilisé pour plusieurs billets."
 
-#: BaseBillet/models.py:807
+#: BaseBillet/models.py:808
 msgid "External event"
 msgstr "Évènement externe"
 
-#: BaseBillet/models.py:808
+#: BaseBillet/models.py:809
 msgid "The event is handled outside of this platform (ex: Facebook event)."
 msgstr ""
 "L'évènement est géré en-dehors de cette plateforme (ex : évènement Facebook)."
 
-#: BaseBillet/models.py:825
+#: BaseBillet/models.py:826
 msgid "Minimum value of cashless refill"
 msgstr "Montant minimal de recharge cashless"
 
-#: BaseBillet/models.py:838
+#: BaseBillet/models.py:839
 msgid "Main image"
 msgstr "Image principale"
 
-#: BaseBillet/models.py:841
+#: BaseBillet/models.py:842
 msgid "Carousel slides"
 msgstr "Images du carrousel"
 
-#: BaseBillet/models.py:851
+#: BaseBillet/models.py:852
 msgid "Concert"
 msgstr "Concert"
 
-#: BaseBillet/models.py:852 Customers/models.py:20 MetaBillet/models.py:162
+#: BaseBillet/models.py:853 Customers/models.py:20 MetaBillet/models.py:162
 msgid "Festival"
 msgstr "Festival"
 
-#: BaseBillet/models.py:853
+#: BaseBillet/models.py:854
 msgid "Meeting"
 msgstr "Réunion"
 
-#: BaseBillet/models.py:854
+#: BaseBillet/models.py:855
 msgid "Conference"
 msgstr "Conférence"
 
-#: BaseBillet/models.py:855
+#: BaseBillet/models.py:856
 msgid "Catering"
 msgstr "Restauration"
 
-#: BaseBillet/models.py:860
+#: BaseBillet/models.py:861
 msgid "Event category"
 msgstr "Catégorie d'évènement"
 
-#: BaseBillet/models.py:876
+#: BaseBillet/models.py:877
 msgid "Quick booking"
 msgstr "Réservation rapide"
 
-#: BaseBillet/models.py:877
+#: BaseBillet/models.py:878
 msgid "One-click booking for logged-in user."
 msgstr "Réservation en un clic pour les utilisateur·ices connecté·es."
 
-#: BaseBillet/models.py:879
+#: BaseBillet/models.py:880
 msgid "Restaurant mode / scheduler"
 msgstr "Mode restaurant / booking"
 
-#: BaseBillet/models.py:881
+#: BaseBillet/models.py:882
 msgid ""
 "The event will be visible at the top of the home page, allowing the user to "
 "book a specific date."
@@ -1322,334 +1337,342 @@ msgstr ""
 "Si activé, l'évènement sera visible en haut de la page d'accueil. "
 "L'utilisateur·ice pourra sélectionner une date."
 
-#: BaseBillet/models.py:1013 BaseBillet/models.py:1408
-#: BaseBillet/models.py:1926
+#: BaseBillet/models.py:1014 BaseBillet/models.py:1409
+#: BaseBillet/models.py:1933
 msgid "Event"
 msgstr "Évènement"
 
-#: BaseBillet/models.py:1014 BaseBillet/models.py:1888 TiBillet/settings.py:581
+#: BaseBillet/models.py:1015 BaseBillet/models.py:1895 TiBillet/settings.py:581
 msgid "Events"
 msgstr "Évènements"
 
-#: BaseBillet/models.py:1264 BaseBillet/models.py:1620
-#: BaseBillet/models.py:1741
+#: BaseBillet/models.py:1265 BaseBillet/models.py:1621
+#: BaseBillet/models.py:1742
 msgid "Cancelled"
 msgstr "Annulé"
 
-#: BaseBillet/models.py:1265 BaseBillet/models.py:1354
+#: BaseBillet/models.py:1266 BaseBillet/models.py:1355
 msgid "Created"
 msgstr "Créé"
 
-#: BaseBillet/models.py:1266
+#: BaseBillet/models.py:1267
 msgid "Payment still pending"
 msgstr "Paiement en attente"
 
-#: BaseBillet/models.py:1267
+#: BaseBillet/models.py:1268
 msgid "Email verification still pending"
 msgstr "Vérification du mail en attente"
 
-#: BaseBillet/models.py:1268
+#: BaseBillet/models.py:1269
 msgid "Email verified"
 msgstr "Adresse mail vérifiée"
 
-#: BaseBillet/models.py:1269
+#: BaseBillet/models.py:1270
 msgid "Payment confirmed"
 msgstr "Paiement confirmé"
 
-#: BaseBillet/models.py:1270
+#: BaseBillet/models.py:1271
 msgid "Payment confirmed but invalid email"
 msgstr "Paiement confirmé mais adresse mail non valide"
 
-#: BaseBillet/models.py:1271
+#: BaseBillet/models.py:1272
 msgid "Payment confirmed but email not sent"
 msgstr "Paiement confirmé mais mail non envoyé"
 
-#: BaseBillet/models.py:1272 BaseBillet/models.py:1625
+#: BaseBillet/models.py:1273 BaseBillet/models.py:1626
 msgid "Confirmed"
 msgstr "Confirmé"
 
-#: BaseBillet/models.py:1276
+#: BaseBillet/models.py:1277
 msgid "Order status"
 msgstr "Statut de réservation"
 
-#: BaseBillet/models.py:1355
+#: BaseBillet/models.py:1356
 msgid "Inactive"
 msgstr "Inactive"
 
-#: BaseBillet/models.py:1356
+#: BaseBillet/models.py:1357
 msgid "Not scanned"
 msgstr "Non scannée"
 
-#: BaseBillet/models.py:1357
+#: BaseBillet/models.py:1358
 msgid "Scanned"
 msgstr "Scannée"
 
-#: BaseBillet/models.py:1361
+#: BaseBillet/models.py:1362
 msgid "Scanning status"
 msgstr "État du scan"
 
-#: BaseBillet/models.py:1363
+#: BaseBillet/models.py:1364
 msgid "L"
 msgstr "L"
 
-#: BaseBillet/models.py:1366
+#: BaseBillet/models.py:1367
 msgid "Payment source"
 msgstr "Origine du paiement"
 
-#: BaseBillet/models.py:1415
+#: BaseBillet/models.py:1416
 msgid "Booking date"
 msgstr "Date de réservation"
 
-#: BaseBillet/models.py:1442
+#: BaseBillet/models.py:1443
 #: BaseBillet/templates/reunion/partials/account/ticket_accordion.html:12
 #: BaseBillet/templates/reunion/views/account/reservations.html:21
 msgid "Ticket"
 msgstr "Billet"
 
-#: BaseBillet/models.py:1443 BaseBillet/models.py:1892 TiBillet/settings.py:595
+#: BaseBillet/models.py:1444 BaseBillet/models.py:1899 TiBillet/settings.py:595
 msgid "Tickets"
 msgstr "Billets"
 
-#: BaseBillet/models.py:1489
+#: BaseBillet/models.py:1490
 msgid "No processing ongoing"
 msgstr "Pas de traitement en cours"
 
-#: BaseBillet/models.py:1490
+#: BaseBillet/models.py:1491
 msgid "From Stripe webhook"
 msgstr "Depuis le webhook Stripe"
 
-#: BaseBillet/models.py:1491
+#: BaseBillet/models.py:1492
 msgid "From Get"
 msgstr "Depuis Get"
 
-#: BaseBillet/models.py:1492
+#: BaseBillet/models.py:1493
 msgid "From invoice webhook"
 msgstr "Depuis le webhook des factures"
 
-#: BaseBillet/models.py:1502
+#: BaseBillet/models.py:1503
 msgid "From QR code scan"
 msgstr "Depuis un scan de QR code"
 
-#: BaseBillet/models.py:1503
+#: BaseBillet/models.py:1504
 msgid "From API"
 msgstr "Depuis l'API"
 
-#: BaseBillet/models.py:1504
+#: BaseBillet/models.py:1505
 msgid "From ticketing app"
 msgstr "Depuis la billetterie"
 
-#: BaseBillet/models.py:1505
+#: BaseBillet/models.py:1506
 msgid "From invoice"
 msgstr "Depuis facture"
 
-#: BaseBillet/models.py:1593
+#: BaseBillet/models.py:1594
 msgid "Stripe payment"
 msgstr "Paiement Stripe"
 
-#: BaseBillet/models.py:1594 TiBillet/settings.py:616
+#: BaseBillet/models.py:1595 TiBillet/settings.py:616
 msgid "Stripe payments"
 msgstr "Paiements Stripe"
 
-#: BaseBillet/models.py:1602
+#: BaseBillet/models.py:1603
 msgid "Product sold"
 msgstr "Produit vendu"
 
-#: BaseBillet/models.py:1606 BaseBillet/templates/invoice/invoice.html:168
+#: BaseBillet/models.py:1607 BaseBillet/templates/invoice/invoice.html:168
 msgid "VAT"
 msgstr "TVA"
 
-#: BaseBillet/models.py:1613
+#: BaseBillet/models.py:1614
 msgid "Linked subscription"
 msgstr "Abonnement lié"
 
-#: BaseBillet/models.py:1621
+#: BaseBillet/models.py:1622
 msgid "Not sent to payment"
 msgstr "Non envoyé en paiement"
 
-#: BaseBillet/models.py:1622
+#: BaseBillet/models.py:1623
 msgid "Not paid"
 msgstr "Impayé"
 
-#: BaseBillet/models.py:1623
-msgid "Free booking"
-msgstr "Réservation gratuite"
-
-#: BaseBillet/models.py:1624
+#: BaseBillet/models.py:1625
 msgid "Paid but not confirmed"
 msgstr "Payé mais non validé"
 
-#: BaseBillet/models.py:1629
+#: BaseBillet/models.py:1630
 msgid "Product entry status"
 msgstr "Statut des entrées comptables"
 
-#: BaseBillet/models.py:1669
+#: BaseBillet/models.py:1670
 msgid "No Stripe send"
 msgstr "Pas d'envoi Stripe"
 
-#: BaseBillet/models.py:1695
+#: BaseBillet/models.py:1696
 msgid "Product / price"
 msgstr "Produit / prix"
 
-#: BaseBillet/models.py:1703 BaseBillet/templates/invoice/invoice.html:187
+#: BaseBillet/models.py:1704 BaseBillet/templates/invoice/invoice.html:187
 msgid "Payment date"
 msgstr "Date de paiement"
 
-#: BaseBillet/models.py:1706
+#: BaseBillet/models.py:1707
 msgid "Presence"
 msgstr "Présence"
 
-#: BaseBillet/models.py:1730
+#: BaseBillet/models.py:1731
 msgid "I want to receive the collective's newsletter."
 msgstr "Je veux recevoir la newsletter du collectif."
 
-#: BaseBillet/models.py:1738
+#: BaseBillet/models.py:1739
 msgid "Saved through the admin"
 msgstr "Enregistré via l'administration"
 
-#: BaseBillet/models.py:1739
+#: BaseBillet/models.py:1740
 msgid "Single online payment"
 msgstr "Paiement unique en ligne"
 
-#: BaseBillet/models.py:1740
+#: BaseBillet/models.py:1741
 msgid "Automatic renewal"
 msgstr "Renouvellement automatique"
 
-#: BaseBillet/models.py:1745
+#: BaseBillet/models.py:1746
 msgid "Origin"
 msgstr "Origine"
 
-#: BaseBillet/models.py:1766 fedow_connect/validators.py:44
+#: BaseBillet/models.py:1767 fedow_connect/validators.py:44
 #: fedow_connect/validators.py:84 fedow_connect/validators.py:188
 msgid "Subscription"
 msgstr "Abonnement"
 
-#: BaseBillet/models.py:1774
+#: BaseBillet/models.py:1775
 msgid "Anonymous "
 msgstr "Anonyme "
 
-#: BaseBillet/models.py:1866
+#: BaseBillet/models.py:1873
 msgid "User who created this key."
 msgstr "Usilisateur·ice qui a créé cette clé."
 
-#: BaseBillet/models.py:1874
+#: BaseBillet/models.py:1881
 msgid "Confirm to generate key. It will not appear before."
 msgstr "Confirmer pour générer la clé. Elle n'apparaîtra pas avant."
 
-#: BaseBillet/models.py:1879
+#: BaseBillet/models.py:1886
 msgid "Ip source"
 msgstr "Ip source"
 
-#: BaseBillet/models.py:1880
+#: BaseBillet/models.py:1887
 msgid "API key works with any IP unless specified."
 msgstr "La clé API fonctionne avec n'importe quelle IP si non définie."
 
-#: BaseBillet/models.py:1891 TiBillet/settings.py:588
+#: BaseBillet/models.py:1898 TiBillet/settings.py:588
 msgid "Bookings"
 msgstr "Réservations"
 
-#: BaseBillet/models.py:1894
+#: BaseBillet/models.py:1901
 msgid "Wallets"
 msgstr "Tirelires"
 
-#: BaseBillet/models.py:1909
+#: BaseBillet/models.py:1916
 msgid "Api keys"
 msgstr "Clés API"
 
-#: BaseBillet/models.py:1921
+#: BaseBillet/models.py:1928
 msgid "Confirmed subscription"
 msgstr "Abonnement confirmé"
 
-#: BaseBillet/models.py:1922
+#: BaseBillet/models.py:1929
 msgid "Confirmed booking"
 msgstr "Réservation confirmée"
 
-#: BaseBillet/models.py:1932
+#: BaseBillet/models.py:1939
 msgid "Tag filters"
 msgstr "Filtrage de labels"
 
-#: BaseBillet/models.py:1933
+#: BaseBillet/models.py:1940
 msgid "Show only these tags."
 msgstr "Montrer seulement ces labels."
 
-#: BaseBillet/models.py:1935
+#: BaseBillet/models.py:1942
 msgid "Don't show those tags."
 msgstr "Ne pas montrer ces labels."
 
-#: BaseBillet/models.py:1938
+#: BaseBillet/models.py:1945
 msgid "Federated space"
 msgstr "Espace fédéré"
 
-#: BaseBillet/models.py:1939
+#: BaseBillet/models.py:1946
 msgid "Federated spaces"
 msgstr "Espaces fédérés"
 
-#: BaseBillet/models.py:1990
+#: BaseBillet/models.py:1997
 msgid "Formbricks form"
 msgstr "Formulaire Formbricks"
 
-#: BaseBillet/models.py:1991
+#: BaseBillet/models.py:1998
 msgid "Formbricks forms"
 msgstr "Formulaires Formbricks"
 
-#: BaseBillet/models.py:2013 BaseBillet/models.py:2014
+#: BaseBillet/models.py:2020 BaseBillet/models.py:2021
 msgid "Formbrick settings"
 msgstr "Paramètres Formbricks"
 
-#: BaseBillet/tasks.py:212
+#: BaseBillet/models.py:2038
+#, fuzzy
+#| msgid "My settings"
+msgid "Brevo setting"
+msgstr "Mes paramètres"
+
+#: BaseBillet/models.py:2039
+#, fuzzy
+#| msgid "My settings"
+msgid "Brevo settings"
+msgstr "Mes paramètres"
+
+#: BaseBillet/tasks.py:213
 msgid "Confirmation email"
 msgstr "Mail de confirmation"
 
-#: BaseBillet/tasks.py:213
+#: BaseBillet/tasks.py:214
 msgid "Welcome aboard !"
 msgstr "Bienvenue à bord !"
 
-#: BaseBillet/tasks.py:215
+#: BaseBillet/tasks.py:216
 #, python-brace-format
 msgid "Your payment for {membership.price.product.name} has been received."
 msgstr "Votre paiement pour {membership.price.product.name} a bien été reçu."
 
-#: BaseBillet/tasks.py:219
+#: BaseBillet/tasks.py:220
 msgid "Receipt for:"
 msgstr "Reçu pour :"
 
-#: BaseBillet/tasks.py:222
+#: BaseBillet/tasks.py:223
 #: BaseBillet/templates/htmx/views/my_account/transactions_table.html:11
 #: BaseBillet/templates/invoice/invoice.html:159
 #: BaseBillet/templates/reunion/partials/account/transaction_history.html:11
 msgid "Date"
 msgstr "Date"
 
-#: BaseBillet/tasks.py:223
+#: BaseBillet/tasks.py:224
 msgid "Valid until"
 msgstr "Valable jusque"
 
-#: BaseBillet/tasks.py:227
+#: BaseBillet/tasks.py:228
 msgid "REQUEST INVOICE"
 msgstr "RÉCUPÉRER UNE FACTURE"
 
-#: BaseBillet/tasks.py:230
+#: BaseBillet/tasks.py:231
 msgid "If you receive this email by mistake, please contact the TiBillet team."
 msgstr ""
 "Si vous recevez ce mail par erreur, merci de contacter l'équipe TiBillet."
 
-#: BaseBillet/tasks.py:232
+#: BaseBillet/tasks.py:233
 msgid "See you soon!"
 msgstr "À bientôt !"
 
-#: BaseBillet/tasks.py:233
+#: BaseBillet/tasks.py:234
 msgid "Mar, the TiBillet robot"
 msgstr "Mar, le robot TiBillet"
 
-#: BaseBillet/tasks.py:404
+#: BaseBillet/tasks.py:405
 #, python-brace-format
 msgid "{organisation} : confirm your email to login!"
 msgstr "{organisation} : confirmez votre adresse mail pour vous connecter !"
 
-#: BaseBillet/tasks.py:451
+#: BaseBillet/tasks.py:452
 msgid "TiBillet : Creation of a new instance."
 msgstr "TiBillet : création d'une nouvelle instance."
 
-#: BaseBillet/tasks.py:476
+#: BaseBillet/tasks.py:477
 #, python-brace-format
 msgid ""
 "{waiting_config.organisation} & TiBillet : Lespass tenant creation request. "
@@ -1658,7 +1681,7 @@ msgstr ""
 "{waiting_config.organisation} & TiBillet : Demande de création d'un nouvel "
 "espace. Action d'admin ROOT demandée"
 
-#: BaseBillet/tasks.py:510
+#: BaseBillet/tasks.py:511
 #, python-brace-format
 msgid "TiBillet sales report - {configuration.organisation}"
 msgstr "TiBillet rapport de ventes - {configuration.organisation}"
@@ -2645,8 +2668,8 @@ msgstr "Je veux recevoir la newsletter TiBillet"
 #, python-format
 msgid ""
 "\n"
-"                            I agree to <a "
-"href=\"%(config.legal_documents)s\">the terms and conditions</a>\n"
+"                            I agree to <a href=\"%(config.legal_documents)s"
+"\">the terms and conditions</a>\n"
 "                            "
 msgstr ""
 "\n"
@@ -2824,8 +2847,8 @@ msgstr ""
 "    <p>\n"
 "        D'ici-là, vous pouvez nous contacter en passant par\n"
 "        <a href=\"mailto:contact@tibillet.re\">notre mail de suppost</a> "
-"ou         gsace à nos communautés sur <a  href=\"https://discord."
-"gg/7FJvtYx\">Discord</a>,\n"
+"ou         gsace à nos communautés sur <a  href=\"https://discord.gg/7FJvtYx"
+"\">Discord</a>,\n"
 "        <a href=\"https://matrix.to/#/#tibillet:tiers-lieux.org\">Matrix</a> "
 "ou\n"
 "        <a href=\"https://pouet.chapril.org/@tibillet\">Mastodon</a>.\n"
@@ -3319,11 +3342,15 @@ msgstr "Ghost"
 msgid "Formbricks"
 msgstr "Formbricks"
 
-#: TiBillet/settings.py:676
+#: TiBillet/settings.py:666
+msgid "Brevo"
+msgstr ""
+
+#: TiBillet/settings.py:683
 msgid "Root Configuration"
 msgstr "Configuration racine"
 
-#: TiBillet/settings.py:681
+#: TiBillet/settings.py:688
 msgid "Waiting Configuration"
 msgstr "En attente de configuration"
 
