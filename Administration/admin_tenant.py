@@ -489,6 +489,13 @@ class ProductAdmin(ModelAdmin):
     # chaque decorateur @action génère une nouvelle route
     actions_row = ["archive", ]
 
+    formfield_overrides = {
+        models.TextField: {
+            "widget": WysiwygWidget,
+        }
+    }
+
+
     @action(
         description=_("Archive"),
         url_path="archive",
