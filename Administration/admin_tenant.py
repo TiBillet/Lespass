@@ -1221,6 +1221,8 @@ class EventForm(ModelForm):
         model = Event
         fields = '__all__'
 
+
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -1232,6 +1234,12 @@ class EventForm(ModelForm):
             logger.error(f"set gauge max error : {e}")
             pass
 
+        # Filtrage des produits : uniquement des produits adhésions.
+        # Possible facilement car Foreign Key (voir get_search_results dans ProductAdmin)
+        # self.fields['adhesion_obligatoire'].queryset = Product.objects.filter(
+        #     categorie_article=Product.ADHESION,
+        #     archive=False,
+        # )
 
 @admin.register(Event, site=staff_admin_site)
 class EventAdmin(ModelAdmin):
@@ -1245,7 +1253,7 @@ class EventAdmin(ModelAdmin):
         (None, {
             'fields': (
                 'name',
-                'categorie',
+                # 'categorie',
                 'datetime',
                 'end_datetime',
                 'img',
@@ -1283,9 +1291,10 @@ class EventAdmin(ModelAdmin):
 
     list_display = [
         'name',
-        'categorie',
+        # 'categorie',
         'valid_tickets_count',
         'datetime',
+        'published',
     ]
 
     readonly_fields = (
@@ -1293,7 +1302,7 @@ class EventAdmin(ModelAdmin):
     )
 
     search_fields = ['name']
-    list_filter = ['categorie', 'datetime']
+    list_filter = ['datetime', 'published']
 
     autocomplete_fields = [
         "tag",
