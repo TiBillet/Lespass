@@ -847,6 +847,7 @@ class Event(models.Model):
     REUNION = "REU"
     CONFERENCE = "CON"
     RESTAURATION = "RES"
+    CHANTIER = "CHT"
     ACTION = "ACT"
     TYPE_CHOICES = [
         (CONCERT, _('Concert')),
@@ -854,6 +855,7 @@ class Event(models.Model):
         (REUNION, _('Meeting')),
         (CONFERENCE, _('Conference')),
         (RESTAURATION, _('Catering')),
+        (CHANTIER, _('Workcamp')),
         (ACTION, _('Volunteering')),
     ]
 
