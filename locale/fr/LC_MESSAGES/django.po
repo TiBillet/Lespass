@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-14 17:18+0100\n"
+"POT-Creation-Date: 2025-03-17 08:59+0100\n"
 "PO-Revision-Date: 2025-03-12 09:37+0100\n"
 "Last-Translator: Diane Alma Kay <pro@kayathommy.fr>\n"
 "Language-Team: French\n"
@@ -147,7 +147,7 @@ msgstr "Choisir un abonnement"
 msgid "Contribution"
 msgstr "Contribution"
 
-#: Administration/admin_tenant.py:922 Administration/admin_tenant.py:1426
+#: Administration/admin_tenant.py:922 Administration/admin_tenant.py:1435
 #: BaseBillet/models.py:1371 BaseBillet/models.py:1619
 #: BaseBillet/models.py:1713
 msgid "Payment method"
@@ -205,85 +205,85 @@ msgstr "Statut"
 msgid "Volunteering"
 msgstr "Volontariat"
 
-#: Administration/admin_tenant.py:1348
+#: Administration/admin_tenant.py:1357
 msgid "Ticket count"
 msgstr "Nombre de billets"
 
-#: Administration/admin_tenant.py:1352 BaseBillet/models.py:129
+#: Administration/admin_tenant.py:1361 BaseBillet/models.py:129
 msgid "Options"
 msgstr "Options"
 
-#: Administration/admin_tenant.py:1359
+#: Administration/admin_tenant.py:1368
 msgid "Send tickets through email again"
 msgstr "Ré-envoyer les billets par mail"
 
-#: Administration/admin_tenant.py:1368
+#: Administration/admin_tenant.py:1377
 #, python-brace-format
 msgid "Tickets sent to {reservation.user_commande.email}"
 msgstr "Billets envoyés à {reservation.user_commande.email}"
 
-#: Administration/admin_tenant.py:1399
+#: Administration/admin_tenant.py:1408
 msgid "Select a product"
 msgstr "Choisir un produit"
 
-#: Administration/admin_tenant.py:1402 BaseBillet/models.py:781
+#: Administration/admin_tenant.py:1411 BaseBillet/models.py:781
 msgid "Rate"
 msgstr "Tarif"
 
-#: Administration/admin_tenant.py:1411 BaseBillet/models.py:610
+#: Administration/admin_tenant.py:1420 BaseBillet/models.py:610
 msgid "Multiple choice menu"
 msgstr "Menu à choix multiples"
 
-#: Administration/admin_tenant.py:1419 BaseBillet/models.py:603
+#: Administration/admin_tenant.py:1428 BaseBillet/models.py:603
 msgid "Single choice menu"
 msgstr "Menu à choix unique"
 
-#: Administration/admin_tenant.py:1568
+#: Administration/admin_tenant.py:1577
 msgid "Ticket n°"
 msgstr "Billet n°"
 
-#: Administration/admin_tenant.py:1574
+#: Administration/admin_tenant.py:1583
 msgid "PDF"
 msgstr "PDF"
 
-#: Administration/admin_tenant.py:1649
+#: Administration/admin_tenant.py:1658
 msgid "Included tags"
 msgstr "Labels inclus"
 
-#: Administration/admin_tenant.py:1653 BaseBillet/models.py:1943
+#: Administration/admin_tenant.py:1662 BaseBillet/models.py:1943
 msgid "Excluded tags"
 msgstr "Labels exclus"
 
-#: Administration/admin_tenant.py:1694
+#: Administration/admin_tenant.py:1703
 msgid "Has key"
 msgstr "A une clé"
 
-#: Administration/admin_tenant.py:1711
+#: Administration/admin_tenant.py:1720
 msgid "Api Key inserted"
 msgstr "Clé API insérée"
 
-#: Administration/admin_tenant.py:1755 BaseBillet/models.py:1917
+#: Administration/admin_tenant.py:1764 BaseBillet/models.py:1917
 msgid "Api key"
 msgstr "Clé API"
 
-#: Administration/admin_tenant.py:1773 Administration/admin_tenant.py:1793
-#: Administration/admin_tenant.py:1934
+#: Administration/admin_tenant.py:1782 Administration/admin_tenant.py:1802
+#: Administration/admin_tenant.py:1943
 msgid "Api OK"
 msgstr "API ok"
 
-#: Administration/admin_tenant.py:1776 Administration/admin_tenant.py:1795
+#: Administration/admin_tenant.py:1785 Administration/admin_tenant.py:1804
 msgid "Api not OK"
 msgstr "API pas OK"
 
-#: Administration/admin_tenant.py:1784 Administration/admin_tenant.py:1920
+#: Administration/admin_tenant.py:1793 Administration/admin_tenant.py:1929
 msgid "Test Api"
 msgstr "Tester l'API"
 
-#: Administration/admin_tenant.py:1878
+#: Administration/admin_tenant.py:1887
 msgid "Create instance"
 msgstr "Créer une instance"
 
-#: Administration/admin_tenant.py:1887
+#: Administration/admin_tenant.py:1896
 #, python-brace-format
 msgid ""
 "The Lèspass instance has been created. An invite email has been sent to {wc."
@@ -292,25 +292,25 @@ msgstr ""
 "L'instance Lèspass a été créée. Un mail d'invitation a été envoyé à {wc."
 "email}"
 
-#: Administration/admin_tenant.py:1892
+#: Administration/admin_tenant.py:1901
 msgid "The collective is not yet finished with Stripe account creation."
 msgstr "Le collectif n'a par fini sa création de compte Stripe."
 
-#: Administration/admin_tenant.py:1938
+#: Administration/admin_tenant.py:1947
 #, fuzzy, python-brace-format
 #| msgid "Api not OK"
 msgid "Api not OK : {e}"
 msgstr "API pas OK"
 
-#: Administration/admin_tenant.py:1942
+#: Administration/admin_tenant.py:1951
 msgid "Error : {type(e)} - {e}"
 msgstr ""
 
-#: Administration/admin_tenant.py:1970
+#: Administration/admin_tenant.py:1979
 msgid "Development"
 msgstr "Développement"
 
-#: Administration/admin_tenant.py:1972
+#: Administration/admin_tenant.py:1981
 msgid "Production"
 msgstr "Production"
 
@@ -2633,7 +2633,7 @@ msgstr "Nom de famille ou organisation"
 
 #: BaseBillet/templates/reunion/views/membership/form.html:122
 msgid "Send my subscription request"
-msgstr "Envoyeer ma demande d'abonnement"
+msgstr "Envoyer ma demande d'abonnement"
 
 #: BaseBillet/templates/reunion/views/membership/list.html:20
 #: BaseBillet/templates/reunion/views/membership/list.html:48
