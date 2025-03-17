@@ -522,11 +522,13 @@ class ProductAdmin(ModelAdmin):
         """
         queryset, use_distinct = super().get_search_results(request, queryset, search_term)
         if request.headers.get('Referer'):
-            if "event" in request.headers['Referer']:
+            logger.info(request.headers.get('Referer'))
+            if ("event" in request.headers['Referer']
+                    and "admin/autocomplete" in request.path) : # Cela vient bien de l'admin event
                 queryset = queryset.filter(categorie_article__in=[
                     Product.BILLET,
                     Product.FREERES,
-                ]).exclude(archive=False)
+                ]).exclude(archive=True)
         return queryset, use_distinct
 
     def has_changelist_row_action_permission(self, request: HttpRequest, *args, **kwargs):
@@ -1225,6 +1227,8 @@ class EventForm(ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['products'].widget.can_change_related = False
+        self.fields['products'].widget.can_add_related = False
 
         try:
             # On mets la valeur de la jauge réglée dans la config par default
@@ -1826,8 +1830,6 @@ class FormbricksFormsAdmin(ModelAdmin):
     warn_unsaved_form = True  # Default: False
 
     list_display = ['product', 'environmentId']
-
-
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         # import ipdb; ipdb.set_trace()
