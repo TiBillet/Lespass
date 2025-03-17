@@ -1,10 +1,10 @@
 {% load i18n %}
 <form id="membership-form" hx-post="/memberships/" hx-target="#target_formbricks"
-    class="d-flex flex-column justify-content-between h-100">
+      class="d-flex flex-column justify-content-between h-100">
     <div>
         <div id="target_formbricks"></div>
         <input type="hidden" name="product" value="{{ product.uuid }}">
-    
+
         <!-- prix -->
         <div class="mb-3 has-validation">
             {% for price in product.prices.all %}
@@ -23,14 +23,14 @@
                 {% endif %}
             {% endfor %}
         </div>
-    
+
         {% if user.is_anonymous %}
             <div class="form-floating mb-3">
                 <input name="email" type="email" class="form-control" placeholder="adresse@exemple.fr" role="textbox"
-                       aria-label="{% trans 'Email address'  %}" required>
-                <label for="email">{% trans 'Email address'  %}</label>
+                       aria-label="{% trans 'Email address' %}" required>
+                <label for="email">{% trans 'Email address' %}</label>
             </div>
-    
+
             <div class="form-floating mb-3">
                 <input name="confirm-email" type="email" class="form-control" placeholder="adresse@exemple.fr"
                        role="textbox"
@@ -44,11 +44,13 @@
                 <label for="email">{% trans 'Email address' %}</label>
             </div>
         {% else %}
-            <p><code>{% translate "You have not confirmed your email address. Please check your inbox (and just in case, your spam folder!)." %}</code></p>
+            <p>
+                <code>{% translate "You have not confirmed your email address. Please check your inbox (and just in case, your spam folder!)." %}</code>
+            </p>
         {% endif %}
-    
-    
-    
+
+
+
         <div class="form-floating mb-3">
             <input name="firstname" type="text" class="form-control" placeholder="{% translate 'First name' %}"
                    role="textbox"
@@ -61,7 +63,7 @@
                    aria-label="{% translate 'Last name or organization' %}" required>
             <label for="lastname">{% translate 'Last name or organization' %}</label>
         </div>
-    
+
         <!-- options radio -->
         <div class="mb-3 has-validation">
             {% for option in product.option_generale_radio.all %}
@@ -77,7 +79,7 @@
                 </div>
             {% endfor %}
         </div>
-    
+
         <!-- options checkbox -->
         {% for option in product.option_generale_checkbox.all %}
             <div class="form-check form-switch mb-3">
@@ -88,15 +90,18 @@
                 </label>
             </div>
         {% endfor %}
-    
-    
-        <div class="form-check form-switch mb-3">
-            <input class="form-check-input" type="checkbox" role="switch" id="acknowledge" name="acknowledge" required>
-    
-            <label class="form-check-label" for="acknowledge">
-                <span>{% translate "I accept the " %}</span>
-                {% if product.categorie_article == 'A' %}
-                    <span>
+
+
+        {% if product.legal_link %}
+            <div class="form-check form-switch mb-3">
+                <input class="form-check-input" type="checkbox" role="switch" id="acknowledge" name="acknowledge"
+                       required>
+
+                <label class="form-check-label" for="acknowledge">
+                    <span>{% translate "I accept the " %}</span>
+                    <!-- Affichage du lien vers les CGU/CGV/Status s'il existe -->
+                    {% if product.categorie_article == 'A' %}
+                        <span>
                     {% if product.legal_link != None %}
                         <a class="text-info" href="{{ product.legal_link }}" target="_blank">
                         {% translate "association rules and regulations." %}
@@ -105,16 +110,17 @@
                         {% translate "association rules and regulations." %}
                     {% endif %}
                     </span>
-                {% else %}
-                    {% if product.legal_link != None %}
-                        <a class="text-info" href="{{ product.legal_link }}"
-                           target="_blank">{% translate "terms and conditions." %}</a>
                     {% else %}
-                        <span>{% translate "terms and conditions." %}</span>
+                        {% if product.legal_link != None %}
+                            <a class="text-info" href="{{ product.legal_link }}"
+                               target="_blank">{% translate "terms and conditions." %}</a>
+                        {% else %}
+                            <span>{% translate "terms and conditions." %}</span>
+                        {% endif %}
                     {% endif %}
-                {% endif %}
-            </label>
-        </div>
+                </label>
+            </div>
+        {% endif %}
     </div>
 
     <div class="p-3">

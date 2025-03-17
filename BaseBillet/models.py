@@ -614,7 +614,7 @@ class Product(models.Model):
     # TODO: doublon ?
     terms_and_conditions_document = models.URLField(blank=True, null=True)
     legal_link = models.URLField(blank=True, null=True, verbose_name=_("Terms and conditions link"),
-                                 help_text=_("Not required."))
+                                 help_text=_("Not required. If completed, displays a checkbox to validate the membership product."))
 
     img = StdImageField(upload_to='images/',
                         null=True, blank=True,
