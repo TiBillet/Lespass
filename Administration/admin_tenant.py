@@ -454,9 +454,8 @@ class ProductAdminCustomForm(ModelForm):
         return categorie
 
     def clean(self):
-        cleaned_data = self.cleaned_data
-        # récupération du dictionnaire data pour vérifier qu'on a bien au moin un tarif dans le inline :
         try:
+            # récupération du dictionnaire data pour vérifier qu'on a bien au moin un tarif dans le inline :
             if int(self.data.getlist('prices-TOTAL_FORMS')[0]) > 0:
                 return super().clean()
             raise forms.ValidationError(_("Please add at least one rate to this product."))
@@ -1937,13 +1936,47 @@ class WaitingConfigAdmin(ModelAdmin):
         return RootPermissionWithRequest(request)
 
 
+# Deux formulaires, un qui s'affiche si l'api est vide (ou supprimé)
+# L'autre qui n'affiche pas l'input.
+class BrevoConfigChangeform(ModelForm):
+    class Meta:
+        model = BrevoConfig
+        fields = ['last_log']
+
+class BrevoConfigAddform(ModelForm):
+    class Meta:
+        model = BrevoConfig
+        fields = ['api_key', 'last_log',]
+
 @admin.register(BrevoConfig, site=staff_admin_site)
 class BrevoConfigAdmin(SingletonModelAdmin, ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 
-    readonly_fields = ['last_log', ]
+    readonly_fields = ['last_log', "has_key",]
     actions_detail = ["test_api_brevo", ]
+
+    form = BrevoConfigChangeform
+    add_form = BrevoConfigAddform
+
+    @display(description=_("Has key"), boolean=True)
+    def has_key(self, instance: BrevoConfig):
+        return True if instance.api_key else False
+
+    def get_form(self, request, obj=None, **kwargs):
+        """ Si c'est un add, on modifie un peu le formulaire pour avoir un champs email """
+        defaults = {}
+        if not obj.api_key:
+            defaults['form'] = self.add_form
+        defaults.update(kwargs)
+        return super().get_form(request, obj, **defaults)
+
+    def save_model(self, request, obj: FormbricksConfig, form, change):
+        if change:
+            obj.set_api_key(obj.api_key)
+            messages.success(request, _("Clé Api chiffrée"))
+
+        super().save_model(request, obj, form, change)
 
     @action(description=_("Test Api"),
             url_path="test_api_brevo",

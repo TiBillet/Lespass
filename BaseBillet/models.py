@@ -2024,7 +2024,7 @@ class FormbricksConfig(SingletonModel):
 
 
 class BrevoConfig(SingletonModel):
-    api_key = models.CharField(max_length=200, blank=True, null=True)
+    api_key = models.CharField(max_length=400, blank=True, null=True)
     last_log = models.TextField(blank=True, null=True)
 
 
