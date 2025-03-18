@@ -446,7 +446,6 @@ class ProductAdminCustomForm(ModelForm):
             'archive',
         )
 
-
     def clean_categorie_article(self):
         cleaned_data = self.cleaned_data
         categorie = cleaned_data.get('categorie_article')
@@ -465,10 +464,6 @@ class ProductAdminCustomForm(ModelForm):
             raise forms.ValidationError(_("Please add at least one rate to this product."))
 
 
-
-
-
-
 @admin.register(Product, site=staff_admin_site)
 class ProductAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
@@ -483,6 +478,7 @@ class ProductAdmin(ModelAdmin):
         'publish',
         'poids',
     )
+
     ordering = ("categorie_article", "poids",)
     autocomplete_fields = [
         "option_generale_radio", "option_generale_checkbox",
@@ -499,7 +495,6 @@ class ProductAdmin(ModelAdmin):
             "widget": WysiwygWidget,
         }
     }
-
 
     @action(
         description=_("Archive"),
@@ -529,7 +524,7 @@ class ProductAdmin(ModelAdmin):
         if request.headers.get('Referer'):
             logger.info(request.headers.get('Referer'))
             if ("event" in request.headers['Referer']
-                    and "admin/autocomplete" in request.path) : # Cela vient bien de l'admin event
+                    and "admin/autocomplete" in request.path):  # Cela vient bien de l'admin event
                 queryset = queryset.filter(categorie_article__in=[
                     Product.BILLET,
                     Product.FREERES,
@@ -552,7 +547,6 @@ class ProductAdmin(ModelAdmin):
     #     except Exception as err:
     #         logger.error(err)
     #         raise err
-
 
     def has_changelist_row_action_permission(self, request: HttpRequest, *args, **kwargs):
         return TenantAdminPermissionWithRequest(request)
@@ -1246,8 +1240,6 @@ class EventForm(ModelForm):
         model = Event
         fields = '__all__'
 
-
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['products'].widget.can_change_related = False
@@ -1267,6 +1259,7 @@ class EventForm(ModelForm):
         #     categorie_article=Product.ADHESION,
         #     archive=False,
         # )
+
 
 @admin.register(Event, site=staff_admin_site)
 class EventAdmin(ModelAdmin):
@@ -1909,6 +1902,7 @@ class WaitingConfigAdmin(ModelAdmin):
     search_fields = ["email", "organisation", "datetime"]
 
     actions_detail = ["create_tenant", ]
+
     @action(description=_("Create instance"),
             url_path="create_tenant",
             permissions=["custom_actions_detail"])
@@ -1948,7 +1942,7 @@ class BrevoConfigAdmin(SingletonModelAdmin, ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 
-    readonly_fields = ['last_log',]
+    readonly_fields = ['last_log', ]
     actions_detail = ["test_api_brevo", ]
 
     @action(description=_("Test Api"),
@@ -1978,7 +1972,6 @@ class BrevoConfigAdmin(SingletonModelAdmin, ModelAdmin):
         brevo_config.save()
         return redirect(request.META["HTTP_REFERER"])
 
-
     def has_custom_actions_detail_permission(self, request, object_id):
         return TenantAdminPermissionWithRequest(request)
 
@@ -1994,8 +1987,6 @@ class BrevoConfigAdmin(SingletonModelAdmin, ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
-
-
 
 
 ### UNFOLD ADMIN
