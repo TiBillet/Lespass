@@ -6,7 +6,8 @@ from django.utils import timezone
 
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import LigneArticle, Product, Membership, Price, Configuration, Paiement_stripe
-from BaseBillet.tasks import send_to_ghost, send_membership_invoice_to_email, send_sale_to_laboutik, webhook_membership
+from BaseBillet.tasks import send_to_ghost, send_membership_invoice_to_email, send_sale_to_laboutik, webhook_membership, \
+    send_to_brevo
 from BaseBillet.templatetags.tibitags import dround
 from fedow_connect.fedow_api import FedowAPI
 from root_billet.models import RootConfiguration
@@ -192,7 +193,7 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
         # Si la personne accepte la newsletter :
         if membership.newsletter:
             send_to_ghost.delay(membership.pk)
-            send_to_brevo.delay(membership.pk)
+            # send_to_brevo.delay(membership.pk)
 
         logger.info(f"    TRIGGER_A ADHESION PAID -> envoi à Fedow")
         # L'adhésion possède désormais une transaction fedow associé
