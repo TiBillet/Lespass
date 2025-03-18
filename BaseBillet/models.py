@@ -712,6 +712,8 @@ class Price(models.Model):
 
     name = models.CharField(max_length=50, verbose_name=_("Rate name"))
     prix = models.DecimalField(max_digits=6, decimal_places=2, verbose_name=_("Price"))
+    order =models.SmallIntegerField(default=100)
+
     free_price = models.BooleanField(default=False, verbose_name=_("Open price"),
                                      help_text=_("The amount will be asked on the Stripe checkout page."))
 
@@ -777,7 +779,7 @@ class Price(models.Model):
 
     class Meta:
         unique_together = ('name', 'product')
-        ordering = ('prix',)
+        ordering = ('order',)
         verbose_name = _('Rate')
         verbose_name_plural = _('Rates')
 
