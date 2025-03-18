@@ -231,11 +231,17 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 #         'need_name',
                 'fuseau_horaire',
                 'jauge_max',
-                'membership_menu_name',
-                'event_menu_name',
                 'allow_concurrent_bookings',
                 # 'option_generale_radio',
                 # 'option_generale_checkbox',
+            ),
+        }),
+        ('Personalisation', {
+            'fields': (
+                'membership_menu_name',
+                'event_menu_name',
+                'first_input_label_membership',
+                'second_input_label_membership',
             ),
         }),
         ('Stripe', {

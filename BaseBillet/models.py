@@ -374,10 +374,16 @@ class Configuration(SingletonModel):
                                                       related_name="checkbox")
 
     need_name = models.BooleanField(default=True, verbose_name=_("Users have to give a first and last name at registration."))
+    allow_concurrent_bookings = models.BooleanField(default=True, verbose_name=_("Allow concurrent bookings"), help_text=_("Events need start and end dates to be comparable."))
+
+    """
+    PERSONALISATION
+    """
 
     membership_menu_name = models.CharField(max_length=200, default=_("Subscriptions"), verbose_name=_("Subscription page name"))
     event_menu_name = models.CharField(max_length=200, default=_("Calendar"), verbose_name=_("Calendar page name"))
-    allow_concurrent_bookings = models.BooleanField(default=True, verbose_name=_("Allow concurrent bookings"), help_text=_("Events need start and end dates to be comparable."))
+    first_input_label_membership = models.CharField(max_length=200, default=_("First name"), verbose_name=_("Title of the first input on the membership form"))
+    second_input_label_membership = models.CharField(max_length=200, default=_("Last name or organization"), verbose_name=_("Title of the second input on the membership form"))
 
     """
     ######### CASHLESS #########

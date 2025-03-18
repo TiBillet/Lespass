@@ -52,16 +52,16 @@
 
 
         <div class="form-floating mb-3">
-            <input name="firstname" type="text" class="form-control" placeholder="{% translate 'First name' %}"
+            <input name="firstname" type="text" class="form-control" placeholder="{% trans config.first_input_label_membership %}"
                    role="textbox"
-                   aria-label="{% trans 'First name' %}" required>
-            <label for="firstname">{% translate 'First name' %}</label>
+                   aria-label="{% trans config.first_input_label_membership %}" required>
+            <label for="firstname">{% trans config.first_input_label_membership %}</label>
         </div>
         <div class="form-floating mb-3">
             <input name="lastname" type="text" class="form-control"
-                   placeholder="{% translate 'Last name or organization' %}" role="textbox"
-                   aria-label="{% translate 'Last name or organization' %}" required>
-            <label for="lastname">{% translate 'Last name or organization' %}</label>
+                   placeholder="{% trans config.second_input_label_membership %}" role="textbox"
+                   aria-label="{% trans config.second_input_label_membership %}" required>
+            <label for="lastname">{% trans config.second_input_label_membership %}</label>
         </div>
 
         <!-- options radio -->
