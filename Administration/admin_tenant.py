@@ -8,7 +8,7 @@ import requests
 import unfold.widgets
 from django import forms
 from django.conf import settings
-from django.db import models, connection
+from django.db import models, connection, IntegrityError
 from django.contrib import admin
 from django.contrib import messages
 from django.db.models import Model
@@ -446,6 +446,7 @@ class ProductAdminCustomForm(ModelForm):
             'archive',
         )
 
+
     def clean_categorie_article(self):
         cleaned_data = self.cleaned_data
         categorie = cleaned_data.get('categorie_article')
@@ -458,10 +459,14 @@ class ProductAdminCustomForm(ModelForm):
         # récupération du dictionnaire data pour vérifier qu'on a bien au moin un tarif dans le inline :
         try:
             if int(self.data.getlist('prices-TOTAL_FORMS')[0]) > 0:
-                return cleaned_data
+                return super().clean()
             raise forms.ValidationError(_("Please add at least one rate to this product."))
         except Exception as e:
             raise forms.ValidationError(_("Please add at least one rate to this product."))
+
+
+
+
 
 
 @admin.register(Product, site=staff_admin_site)
@@ -530,6 +535,24 @@ class ProductAdmin(ModelAdmin):
                     Product.FREERES,
                 ]).exclude(archive=True)
         return queryset, use_distinct
+
+    # def save_model(self, request, obj, form, change):
+    #     try:
+    #         super().save_model(request, obj, form, change)
+    #     except IntegrityError as err:
+    #         if "BaseBillet_product_categorie_article_name" in str(err): # erreur pour         unique_together = ('categorie_article', 'name')
+    #             messages.error(
+    #                 request,
+    #                 _(f"Un autre produit avec ce nom existe déja."),
+    #             )
+    #             return redirect(request.META["HTTP_REFERER"])
+    #             # raise forms.ValidationError({"identifier": "This identifier is already in use."}) from err
+    #         logger.error(err)
+    #         raise err
+    #     except Exception as err:
+    #         logger.error(err)
+    #         raise err
+
 
     def has_changelist_row_action_permission(self, request: HttpRequest, *args, **kwargs):
         return TenantAdminPermissionWithRequest(request)
@@ -946,7 +969,7 @@ class MembershipAddForm(ModelForm):
             if not cleaned_data.get("contribution") > 0:
                 raise forms.ValidationError(_("Please fill in a positive value of the contribution."), code="invalid")
 
-        return cleaned_data
+        return super().clean()
 
     def save(self, commit=True):
         self.instance: Membership
