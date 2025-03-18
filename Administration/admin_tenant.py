@@ -236,7 +236,7 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 # 'option_generale_checkbox',
             ),
         }),
-        ('Personalisation', {
+        ('Personnalisation', {
             'fields': (
                 'membership_menu_name',
                 'event_menu_name',
