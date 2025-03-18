@@ -92,7 +92,7 @@ msgstr "Expire bientôt (2 semaines)"
 
 #: Administration/admin_tenant.py:737
 msgid "No subscription"
-msgstr "Pas d'abonnement"
+msgstr "Pas d'adhésion"
 
 #: Administration/admin_tenant.py:818
 msgid "Give admin rights"
@@ -127,7 +127,7 @@ msgstr "{user.email} a perdu les droits d'administration."
 #: BaseBillet/templates/reunion/views/membership/list.html:15
 #: TiBillet/settings.py:456 TiBillet/settings.py:529
 msgid "Subscriptions"
-msgstr "Abonnements"
+msgstr "Adhésions"
 
 #: Administration/admin_tenant.py:849
 #, python-brace-format
@@ -140,7 +140,7 @@ msgstr "Aucun"
 
 #: Administration/admin_tenant.py:907
 msgid "Select an subscription"
-msgstr "Choisir un abonnement"
+msgstr "Choisir une adhésion"
 
 #: Administration/admin_tenant.py:917 BaseBillet/models.py:1711
 #: BaseBillet/tasks.py:222
@@ -1016,7 +1016,7 @@ msgstr "Nom et prénom requis à l'inscription."
 
 #: BaseBillet/models.py:378
 msgid "Subscription page name"
-msgstr "Nom de la page d'abonnement"
+msgstr "Nom de la page d'adhésion"
 
 #: BaseBillet/models.py:379
 msgid "Calendar"
@@ -2635,13 +2635,13 @@ msgstr "Nom de famille ou organisation"
 
 #: BaseBillet/templates/reunion/views/membership/form.html:128
 msgid "Send my subscription request"
-msgstr "Envoyer ma demande d'abonnement"
+msgstr "Envoyer ma demande d'adhésion"
 
 #: BaseBillet/templates/reunion/views/membership/list.html:20
 #: BaseBillet/templates/reunion/views/membership/list.html:48
 #: BaseBillet/templates/reunion/views/membership/list.html:61
 msgid "Subscribe"
-msgstr "M'abonner"
+msgstr "Adhérer"
 
 #: BaseBillet/templates/reunion/views/register.html:10
 msgid "Linking my Pass card"
