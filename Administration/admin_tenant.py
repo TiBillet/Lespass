@@ -574,6 +574,7 @@ class PriceChangeForm(ModelForm):
             'free_price',
             'max_per_user',
             'subscription_type',
+            'order',
             'publish',
             'adhesion_obligatoire',
         )

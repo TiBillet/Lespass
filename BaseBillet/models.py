@@ -712,7 +712,7 @@ class Price(models.Model):
 
     name = models.CharField(max_length=50, verbose_name=_("Rate name"))
     prix = models.DecimalField(max_digits=6, decimal_places=2, verbose_name=_("Price"))
-    order =models.SmallIntegerField(default=100)
+    order =models.SmallIntegerField(default=100, verbose_name=_("Display order"))
 
     free_price = models.BooleanField(default=False, verbose_name=_("Open price"),
                                      help_text=_("The amount will be asked on the Stripe checkout page."))
