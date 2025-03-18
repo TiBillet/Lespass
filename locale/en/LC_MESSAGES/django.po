@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-17 15:59+0100\n"
+"POT-Creation-Date: 2025-03-18 10:16+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -121,7 +121,7 @@ msgstr ""
 #: Administration/admin_tenant.py:845 Administration/admin_tenant.py:910
 #: BaseBillet/models.py:378 BaseBillet/models.py:1770
 #: BaseBillet/templates/reunion/views/membership/list.html:15
-#: TiBillet/settings.py:456 TiBillet/settings.py:529
+#: TiBillet/settings.py:456 TiBillet/settings.py:536
 msgid "Subscriptions"
 msgstr ""
 
@@ -730,7 +730,7 @@ msgstr ""
 msgid "Access forbidden"
 msgstr ""
 
-#: BaseBillet/apps.py:7 TiBillet/settings.py:569
+#: BaseBillet/apps.py:7 TiBillet/settings.py:576
 msgid "Ticketing"
 msgstr ""
 
@@ -823,7 +823,7 @@ msgstr ""
 msgid "Tag"
 msgstr ""
 
-#: BaseBillet/models.py:114 BaseBillet/models.py:816 TiBillet/settings.py:551
+#: BaseBillet/models.py:114 BaseBillet/models.py:816 TiBillet/settings.py:558
 msgid "Tags"
 msgstr ""
 
@@ -1132,7 +1132,7 @@ msgid "Intended recipient's first and last names required for each ticket."
 msgstr ""
 
 #: BaseBillet/models.py:686 BaseBillet/models.py:814 BaseBillet/models.py:1898
-#: TiBillet/settings.py:538 TiBillet/settings.py:543
+#: TiBillet/settings.py:545 TiBillet/settings.py:550
 msgid "Products"
 msgstr ""
 
@@ -1319,7 +1319,7 @@ msgstr ""
 msgid "Event"
 msgstr ""
 
-#: BaseBillet/models.py:1017 BaseBillet/models.py:1897 TiBillet/settings.py:581
+#: BaseBillet/models.py:1017 BaseBillet/models.py:1897 TiBillet/settings.py:588
 msgid "Events"
 msgstr ""
 
@@ -1398,7 +1398,7 @@ msgstr ""
 msgid "Ticket"
 msgstr ""
 
-#: BaseBillet/models.py:1446 BaseBillet/models.py:1901 TiBillet/settings.py:595
+#: BaseBillet/models.py:1446 BaseBillet/models.py:1901 TiBillet/settings.py:602
 msgid "Tickets"
 msgstr ""
 
@@ -1438,7 +1438,7 @@ msgstr ""
 msgid "Stripe payment"
 msgstr ""
 
-#: BaseBillet/models.py:1597 TiBillet/settings.py:616
+#: BaseBillet/models.py:1597 TiBillet/settings.py:623
 msgid "Stripe payments"
 msgstr ""
 
@@ -1531,7 +1531,7 @@ msgstr ""
 msgid "API key works with any IP unless specified."
 msgstr ""
 
-#: BaseBillet/models.py:1900 TiBillet/settings.py:588
+#: BaseBillet/models.py:1900 TiBillet/settings.py:595
 msgid "Bookings"
 msgstr ""
 
@@ -3037,62 +3037,62 @@ msgid "Dashboard"
 msgstr ""
 
 #: TiBillet/settings.py:509
-msgid "Carousel"
-msgstr ""
-
-#: TiBillet/settings.py:517
-msgid "Users"
-msgstr ""
-
-#: TiBillet/settings.py:522
-msgid "User accounts"
-msgstr ""
-
-#: TiBillet/settings.py:574
-msgid "Addresses"
-msgstr ""
-
-#: TiBillet/settings.py:604
-msgid "Sales"
-msgstr ""
-
-#: TiBillet/settings.py:609
-msgid "Entries"
-msgstr ""
-
-#: TiBillet/settings.py:626
-msgid "Network"
-msgstr ""
-
-#: TiBillet/settings.py:631
 msgid "Federation"
 msgstr ""
 
-#: TiBillet/settings.py:638
+#: TiBillet/settings.py:516
+msgid "Carousel"
+msgstr ""
+
+#: TiBillet/settings.py:524
+msgid "Users"
+msgstr ""
+
+#: TiBillet/settings.py:529
+msgid "User accounts"
+msgstr ""
+
+#: TiBillet/settings.py:581
+msgid "Addresses"
+msgstr ""
+
+#: TiBillet/settings.py:611
+msgid "Sales"
+msgstr ""
+
+#: TiBillet/settings.py:616
+msgid "Entries"
+msgstr ""
+
+#: TiBillet/settings.py:633
+msgid "External tools"
+msgstr ""
+
+#: TiBillet/settings.py:639
 msgid "API Key"
 msgstr ""
 
-#: TiBillet/settings.py:645
+#: TiBillet/settings.py:646
 msgid "Webhook"
 msgstr ""
 
-#: TiBillet/settings.py:652
+#: TiBillet/settings.py:653
 msgid "Ghost"
 msgstr ""
 
-#: TiBillet/settings.py:659
+#: TiBillet/settings.py:660
 msgid "Formbricks"
 msgstr ""
 
-#: TiBillet/settings.py:666
+#: TiBillet/settings.py:667
 msgid "Brevo"
 msgstr ""
 
-#: TiBillet/settings.py:683
+#: TiBillet/settings.py:684
 msgid "Root Configuration"
 msgstr ""
 
-#: TiBillet/settings.py:688
+#: TiBillet/settings.py:689
 msgid "Waiting Configuration"
 msgstr ""
 

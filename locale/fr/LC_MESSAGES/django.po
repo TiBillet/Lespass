@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-17 15:59+0100\n"
+"POT-Creation-Date: 2025-03-18 10:16+0100\n"
 "PO-Revision-Date: 2025-03-12 09:37+0100\n"
 "Last-Translator: Diane Alma Kay <pro@kayathommy.fr>\n"
 "Language-Team: French\n"
@@ -125,7 +125,7 @@ msgstr "{user.email} a perdu les droits d'administration."
 #: Administration/admin_tenant.py:845 Administration/admin_tenant.py:910
 #: BaseBillet/models.py:378 BaseBillet/models.py:1770
 #: BaseBillet/templates/reunion/views/membership/list.html:15
-#: TiBillet/settings.py:456 TiBillet/settings.py:529
+#: TiBillet/settings.py:456 TiBillet/settings.py:536
 msgid "Subscriptions"
 msgstr "Adhésions"
 
@@ -755,7 +755,7 @@ msgstr "SSO \"Communecter\" indisponible. Essayez la connexion par mail."
 msgid "Access forbidden"
 msgstr "Accès interdit"
 
-#: BaseBillet/apps.py:7 TiBillet/settings.py:569
+#: BaseBillet/apps.py:7 TiBillet/settings.py:576
 msgid "Ticketing"
 msgstr "Billetterie"
 
@@ -848,7 +848,7 @@ msgstr "Couleur"
 msgid "Tag"
 msgstr "Label"
 
-#: BaseBillet/models.py:114 BaseBillet/models.py:816 TiBillet/settings.py:551
+#: BaseBillet/models.py:114 BaseBillet/models.py:816 TiBillet/settings.py:558
 msgid "Tags"
 msgstr "Labels"
 
@@ -1158,7 +1158,7 @@ msgid "Intended recipient's first and last names required for each ticket."
 msgstr "Nom et prénom des destinataires des billets requis."
 
 #: BaseBillet/models.py:686 BaseBillet/models.py:814 BaseBillet/models.py:1898
-#: TiBillet/settings.py:538 TiBillet/settings.py:543
+#: TiBillet/settings.py:545 TiBillet/settings.py:550
 msgid "Products"
 msgstr "Produits"
 
@@ -1348,7 +1348,7 @@ msgstr ""
 msgid "Event"
 msgstr "Évènement"
 
-#: BaseBillet/models.py:1017 BaseBillet/models.py:1897 TiBillet/settings.py:581
+#: BaseBillet/models.py:1017 BaseBillet/models.py:1897 TiBillet/settings.py:588
 msgid "Events"
 msgstr "Évènements"
 
@@ -1427,7 +1427,7 @@ msgstr "Date de réservation"
 msgid "Ticket"
 msgstr "Billet"
 
-#: BaseBillet/models.py:1446 BaseBillet/models.py:1901 TiBillet/settings.py:595
+#: BaseBillet/models.py:1446 BaseBillet/models.py:1901 TiBillet/settings.py:602
 msgid "Tickets"
 msgstr "Billets"
 
@@ -1467,7 +1467,7 @@ msgstr "Depuis facture"
 msgid "Stripe payment"
 msgstr "Paiement Stripe"
 
-#: BaseBillet/models.py:1597 TiBillet/settings.py:616
+#: BaseBillet/models.py:1597 TiBillet/settings.py:623
 msgid "Stripe payments"
 msgstr "Paiements Stripe"
 
@@ -1560,7 +1560,7 @@ msgstr "Ip source"
 msgid "API key works with any IP unless specified."
 msgstr "La clé API fonctionne avec n'importe quelle IP si non définie."
 
-#: BaseBillet/models.py:1900 TiBillet/settings.py:588
+#: BaseBillet/models.py:1900 TiBillet/settings.py:595
 msgid "Bookings"
 msgstr "Réservations"
 
@@ -3301,62 +3301,62 @@ msgid "Dashboard"
 msgstr "Tableau de bord"
 
 #: TiBillet/settings.py:509
-msgid "Carousel"
-msgstr "Carrousel"
-
-#: TiBillet/settings.py:517
-msgid "Users"
-msgstr "Utilisateur·ices"
-
-#: TiBillet/settings.py:522
-msgid "User accounts"
-msgstr "Comptes utilisateur·ice"
-
-#: TiBillet/settings.py:574
-msgid "Addresses"
-msgstr "Adresses"
-
-#: TiBillet/settings.py:604
-msgid "Sales"
-msgstr "Ventes"
-
-#: TiBillet/settings.py:609
-msgid "Entries"
-msgstr "Lignes comptables"
-
-#: TiBillet/settings.py:626
-msgid "Network"
-msgstr "Réseau"
-
-#: TiBillet/settings.py:631
 msgid "Federation"
 msgstr "Fédération"
 
-#: TiBillet/settings.py:638
+#: TiBillet/settings.py:516
+msgid "Carousel"
+msgstr "Carrousel"
+
+#: TiBillet/settings.py:524
+msgid "Users"
+msgstr "Utilisateur·ices"
+
+#: TiBillet/settings.py:529
+msgid "User accounts"
+msgstr "Comptes utilisateur·ice"
+
+#: TiBillet/settings.py:581
+msgid "Addresses"
+msgstr "Adresses"
+
+#: TiBillet/settings.py:611
+msgid "Sales"
+msgstr "Ventes"
+
+#: TiBillet/settings.py:616
+msgid "Entries"
+msgstr "Lignes comptables"
+
+#: TiBillet/settings.py:633
+msgid "External tools"
+msgstr "Outils externes"
+
+#: TiBillet/settings.py:639
 msgid "API Key"
 msgstr "Clé API"
 
-#: TiBillet/settings.py:645
+#: TiBillet/settings.py:646
 msgid "Webhook"
 msgstr "Webhook"
 
-#: TiBillet/settings.py:652
+#: TiBillet/settings.py:653
 msgid "Ghost"
 msgstr "Ghost"
 
-#: TiBillet/settings.py:659
+#: TiBillet/settings.py:660
 msgid "Formbricks"
 msgstr "Formbricks"
 
-#: TiBillet/settings.py:666
+#: TiBillet/settings.py:667
 msgid "Brevo"
 msgstr ""
 
-#: TiBillet/settings.py:683
+#: TiBillet/settings.py:684
 msgid "Root Configuration"
 msgstr "Configuration racine"
 
-#: TiBillet/settings.py:688
+#: TiBillet/settings.py:689
 msgid "Waiting Configuration"
 msgstr "En attente de configuration"
 
@@ -3407,6 +3407,12 @@ msgstr "Fusion de tirelires"
 #: fedow_connect/validators.py:87 fedow_connect/validators.py:191
 msgid "Refund"
 msgstr "Remboursement"
+
+#~ msgid "Tools"
+#~ msgstr "Outils"
+
+#~ msgid "Network"
+#~ msgstr "Réseau"
 
 #~ msgid "Not required."
 #~ msgstr "Facultatif."

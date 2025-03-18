@@ -506,6 +506,13 @@ UNFOLD = {
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
                     },
                     {
+                        "title": _("Federation"),
+                        "icon": "linked_services",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_federatedplace_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+                    },
+                    {
                         "title": _("Carousel"),
                         "icon": "photo_library",
                         "link": reverse_lazy("staff_admin:BaseBillet_carrousel_changelist"),
@@ -623,17 +630,11 @@ UNFOLD = {
                 ],
             },
             {
-                "title": _("Network"),
+                "title": _("External tools"),
                 "separator": True,  # Top border
                 "collapsible": False,  # Collapsible group of links
                 "items": [
-                    {
-                        "title": _("Federation"),
-                        "icon": "linked_services",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:BaseBillet_federatedplace_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-                    },
+
                     {
                         "title": _("API Key"),
                         "icon": "api",  # Supported icon set: https://fonts.google.com/icons
