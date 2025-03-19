@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-18 18:30+0100\n"
+"POT-Creation-Date: 2025-03-19 09:37+0100\n"
 "PO-Revision-Date: 2025-03-12 09:37+0100\n"
 "Last-Translator: Diane Alma Kay <pro@kayathommy.fr>\n"
 "Language-Team: French\n"
@@ -1046,7 +1046,6 @@ msgid "Last name or organization"
 msgstr "Nom de famille ou organisation"
 
 #: BaseBillet/models.py:386
-#| msgid "Title of the first input on the membership form"
 msgid "Title of the second input on the membership form"
 msgstr "Intitulé du second input du formulaire d'adhésion"
 
