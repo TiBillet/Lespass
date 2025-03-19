@@ -51,7 +51,7 @@
                             </ul>
 
                             {% if membership.price.product.long_description %}
-                                <p class="card-text">{{ membership.price.product.long_description }}</p>
+                                <p class="card-text">{{ membership.price.product.long_description | safe }}</p>
                             {% elif membership.price.product.short_description %}
                                 <p class="card-text">{{ membership.price.product.short_description }}</p>
                             {% endif %}

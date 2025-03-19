@@ -22,6 +22,7 @@ from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from import_export.fields import Field
+from import_export.widgets import ForeignKeyWidget
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework_api_key.models import APIKey
@@ -34,7 +35,7 @@ from unfold.widgets import UnfoldAdminTextInputWidget, UnfoldAdminEmailInputWidg
     UnfoldAdminSelectMultipleWidget, UnfoldAdminRadioSelectWidget, UnfoldAdminCheckboxSelectMultiple
 from unfold.contrib.forms.widgets import WysiwygWidget
 
-from import_export import resources
+from import_export import resources, fields
 from import_export.admin import ImportExportModelAdmin, ExportActionModelAdmin
 
 from unfold.contrib.import_export.forms import ExportForm, ImportForm, SelectableFieldsExportForm
@@ -890,7 +891,8 @@ class HumanUserAdmin(ModelAdmin):
 
 ### ADHESION
 
-class MembershipResource(resources.ModelResource):
+# L'objet pour la fonction EXPORT
+class MembershipExportResource(resources.ModelResource):
     member_name = Field(attribute='member_name', column_name='member_name')
     email = Field(attribute='email', column_name='email')
     payment_method_name = Field(attribute='payment_method_name', column_name='payment_method_name')
@@ -913,6 +915,30 @@ class MembershipResource(resources.ModelResource):
             'status_name',
         )
         export_order = ('last_contribution',)
+
+
+# Le moteur d'importation
+class MembershipImportResource(resources.ModelResource):
+    product_name = fields.Field(
+        column_name='price__product',
+        attribute='price__product',
+        widget=ForeignKeyWidget(Product, field='name'))
+
+    class Meta:
+        model = Membership
+        fields = (
+            'email',
+            'first_name',
+            'last_name',
+            'last_contribution',
+            'contribution_value',
+            'product_name',
+        )
+
+        widgets = {
+            'last_contribution': {'format': '%d/%m/%Y'},
+        }
+
 
 
 class MembershipAddForm(ModelForm):
@@ -1014,12 +1040,13 @@ def adhesion_badge_callback(request):
 
 
 @admin.register(Membership, site=staff_admin_site)
-class MembershipAdmin(ModelAdmin, ExportActionModelAdmin):
+class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 
-    resource_classes = [MembershipResource]
+    resource_classes = [MembershipExportResource, MembershipImportResource]
     export_form_class = ExportForm
+    import_form_class = ImportForm
 
     # Formulaire de modification
     form = MembershipChangeForm
