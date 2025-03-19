@@ -8,6 +8,7 @@ import requests
 import unfold.widgets
 from django import forms
 from django.conf import settings
+from django.core.exceptions import MultipleObjectsReturned
 from django.db import models, connection, IntegrityError
 from django.contrib import admin
 from django.contrib import messages
@@ -22,7 +23,7 @@ from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from import_export.fields import Field
-from import_export.widgets import ForeignKeyWidget
+from import_export.widgets import ForeignKeyWidget, ManyToManyWidget
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework_api_key.models import APIKey
@@ -917,12 +918,73 @@ class MembershipExportResource(resources.ModelResource):
         export_order = ('last_contribution',)
 
 
+class EmailUserForeignKeyWidget(ForeignKeyWidget):
+    def clean(self, value, row=None, **kwargs):
+        try:
+            val = super().clean(value)
+        except TibilletUser.DoesNotExist:
+            val = get_or_create_user(value, send_mail=False)
+        return val
+
+class PriceForeignKeyWidget(ForeignKeyWidget):
+    def clean(self, value, row=None, **kwargs):
+        try:
+            val = super().clean(value)
+        except MultipleObjectsReturned :
+            val = Price.objects.get(name=value, product__name=row.get('product_name'))
+        except Exception as err:
+            raise err
+        return val
+
+class OptionsManyToManyWidgetWidget(ManyToManyWidget):
+    def clean(self, value, row=None, **kwargs):
+        if not value:
+            return self.model.objects.none()
+        else:
+            objs = []
+            names = value.split(self.separator)
+            for name in names:
+                try :
+                    option = OptionGenerale.objects.get(name=name)
+                    objs.append(option)
+                except OptionGenerale.DoesNotExist:
+                    option = OptionGenerale.objects.create(name=name)
+                    objs.append(option)
+            return objs
+
 # Le moteur d'importation
 class MembershipImportResource(resources.ModelResource):
     product_name = fields.Field(
-        column_name='price__product',
-        attribute='price__product',
-        widget=ForeignKeyWidget(Product, field='name'))
+        column_name=_('Produit'),
+        attribute='product_name',
+        widget=ForeignKeyWidget(Product, field='name')) # renvoie une erreur si le produit n'existe pas
+
+    price_name = fields.Field(
+        column_name=_('Tarif'),
+        attribute='price',
+        widget=PriceForeignKeyWidget(Price, field='name')) # Vérfie que le price correspond bien au product
+
+    # email = Field(attribute='email', column_name='email')
+
+    email = fields.Field(
+        column_name='email',
+        attribute='user',
+        widget=EmailUserForeignKeyWidget(TibilletUser, field='email')) # si l'user n'existe pas, va le créer
+
+    option_generale = fields.Field(
+        column_name='options',
+        attribute='option_generale',
+        widget=OptionsManyToManyWidgetWidget(OptionGenerale, field='name', separator=';')
+    )
+
+    # def before_import_row(self, row, **kwargs):
+    #     import ipdb; ipdb.set_trace()
+    #
+    # def after_import_row(self, row, row_result, **kwargs):
+    #     import ipdb; ipdb.set_trace()
+
+    # def before_save_instance(self, instance, row, **kwargs):
+    #     import ipdb; ipdb.set_trace()
 
     class Meta:
         model = Membership
@@ -933,7 +995,11 @@ class MembershipImportResource(resources.ModelResource):
             'last_contribution',
             'contribution_value',
             'product_name',
+            'price_name',
+            'option_generale',
+            'commentaire',
         )
+        import_id_fields = ('email',)
 
         widgets = {
             'last_contribution': {'format': '%d/%m/%Y'},

@@ -1744,9 +1744,10 @@ class Membership(models.Model):
     phone = models.CharField(max_length=20, null=True, blank=True)
     commentaire = models.TextField(null=True, blank=True)
 
-    CANCELED, AUTO, ONCE, ADMIN = 'C', 'A', 'O', 'D'
+    CANCELED, AUTO, ONCE, ADMIN, IMPORT = 'C', 'A', 'O', 'D', 'I'
     STATUS_CHOICES = [
         (ADMIN, _("Saved through the admin")),
+        (IMPORT, _("Import from file")),
         (ONCE, _('Single online payment')),
         (AUTO, _('Automatic renewal')),
         (CANCELED, _('Cancelled')),
