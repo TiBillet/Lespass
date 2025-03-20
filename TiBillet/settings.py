@@ -12,9 +12,12 @@ https://docs.djangoproject.com/en/3.1/ref/settings/
 import os
 from datetime import timedelta
 from pathlib import Path
+
+from django.db import connection
 from django.utils.translation import gettext_lazy as _
 from django.templatetags.static import static
 from django.urls import reverse_lazy
+from faker.utils.text import slugify
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve(strict=True).parent.parent
@@ -153,7 +156,8 @@ CACHES = {
     }
 }
 
-# SOLO_CACHE='default'
+SOLO_CACHE='default'
+# SOLO_CACHE_PREFIX=slugify(connection.tenant.name)
 
 MIDDLEWARE = [
     'django_tenants.middleware.main.TenantMainMiddleware',

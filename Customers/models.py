@@ -31,7 +31,7 @@ class Client(TenantMixin):
     auto_create_schema = True
 
     def __str__(self):
-        return f"{self.name} {self.get_categorie_display()}"
+        return f"{self.name}"
 
 class Domain(DomainMixin):
     pass

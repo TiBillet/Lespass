@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.core.cache import cache
-from django.db import models
+from django.db import models, connection
+from django.utils.text import slugify
 from django_tenants.utils import schema_context
 from solo.models import SingletonModel
 
@@ -9,6 +10,11 @@ from root_billet.models import RootConfiguration
 
 
 class FedowConfig(SingletonModel):
+    @classmethod
+    def get_cache_key(cls) -> str:
+        prefix = slugify(connection.tenant.pk)
+        return f"{prefix}:{cls.__module__.lower()}:{cls.__name__.lower()}"
+
     fedow_place_uuid = models.UUIDField(blank=True, null=True, editable=False)
     fedow_place_admin_apikey = models.CharField(max_length=200, blank=True, null=True, editable=False)
 

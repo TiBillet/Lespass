@@ -25,7 +25,9 @@ from django.utils.translation import gettext_lazy as _
 from django_tenants.postgresql_backend.base import FakeTenant
 from django_tenants.utils import tenant_context
 from rest_framework_api_key.models import APIKey
+
 from solo.models import SingletonModel
+
 from stdimage import StdImageField
 from stdimage.validators import MaxSizeValidator, MinSizeValidator
 from stripe import InvalidRequestError
@@ -242,6 +244,11 @@ class Configuration(SingletonModel):
     def uuid(self):
         return connection.tenant.pk
 
+    @classmethod
+    def get_cache_key(cls) -> str:
+        prefix = slugify(connection.tenant.pk)
+        return f"{prefix}:{cls.__module__.lower()}:{cls.__name__.lower()}"
+
     organisation = models.CharField(db_index=True, max_length=50, verbose_name=_("Collective name"))
 
     slug = models.SlugField(max_length=50, default="")
@@ -373,17 +380,22 @@ class Configuration(SingletonModel):
                                                       blank=True,
                                                       related_name="checkbox")
 
-    need_name = models.BooleanField(default=True, verbose_name=_("Users have to give a first and last name at registration."))
-    allow_concurrent_bookings = models.BooleanField(default=True, verbose_name=_("Allow concurrent bookings"), help_text=_("Events need start and end dates to be comparable."))
+    need_name = models.BooleanField(default=True,
+                                    verbose_name=_("Users have to give a first and last name at registration."))
+    allow_concurrent_bookings = models.BooleanField(default=True, verbose_name=_("Allow concurrent bookings"),
+                                                    help_text=_("Events need start and end dates to be comparable."))
 
     """
     PERSONALISATION
     """
 
-    membership_menu_name = models.CharField(max_length=200, default=_("Subscriptions"), verbose_name=_("Subscription page name"))
+    membership_menu_name = models.CharField(max_length=200, default=_("Subscriptions"),
+                                            verbose_name=_("Subscription page name"))
     event_menu_name = models.CharField(max_length=200, default=_("Calendar"), verbose_name=_("Calendar page name"))
-    first_input_label_membership = models.CharField(max_length=200, default=_("First name"), verbose_name=_("Title of the first input on the membership form"))
-    second_input_label_membership = models.CharField(max_length=200, default=_("Last name or organization"), verbose_name=_("Title of the second input on the membership form"))
+    first_input_label_membership = models.CharField(max_length=200, default=_("First name"),
+                                                    verbose_name=_("Title of the first input on the membership form"))
+    second_input_label_membership = models.CharField(max_length=200, default=_("Last name or organization"),
+                                                     verbose_name=_("Title of the second input on the membership form"))
 
     """
     ######### CASHLESS #########
@@ -544,11 +556,11 @@ class Configuration(SingletonModel):
     """
 
     federated_with = models.ManyToManyField(Client,
-        blank=True,
-        verbose_name=_("Federated with"),
-        related_name="federated_with",
-        help_text=_(
-            "Displays events and subscription of the federated collectives."))
+                                            blank=True,
+                                            verbose_name=_("Federated with"),
+                                            related_name="federated_with",
+                                            help_text=_(
+                                                "Displays events and subscription of the federated collectives."))
 
     """
     ### TVA ###
@@ -620,7 +632,8 @@ class Product(models.Model):
     # TODO: doublon ?
     terms_and_conditions_document = models.URLField(blank=True, null=True)
     legal_link = models.URLField(blank=True, null=True, verbose_name=_("Terms and conditions link"),
-                                 help_text=_("Not required. If completed, displays a checkbox to validate the membership product."))
+                                 help_text=_(
+                                     "Not required. If completed, displays a checkbox to validate the membership product."))
 
     img = StdImageField(upload_to='images/',
                         null=True, blank=True,
@@ -718,7 +731,7 @@ class Price(models.Model):
 
     name = models.CharField(max_length=50, verbose_name=_("Rate name"))
     prix = models.DecimalField(max_digits=6, decimal_places=2, verbose_name=_("Price"))
-    order =models.SmallIntegerField(default=100, verbose_name=_("Display order"))
+    order = models.SmallIntegerField(default=100, verbose_name=_("Display order"))
 
     free_price = models.BooleanField(default=False, verbose_name=_("Open price"),
                                      help_text=_("The amount will be asked on the Stripe checkout page."))
@@ -745,7 +758,7 @@ class Price(models.Model):
         default=10,
         verbose_name=_("Maximum orders per user"),
         help_text=_("The same email can be used for multiple orders.")
-        )
+    )
 
     adhesion_obligatoire = models.ForeignKey(Product, on_delete=models.PROTECT,
                                              related_name="adhesion_obligatoire",
@@ -1024,6 +1037,7 @@ class Event(models.Model):
         verbose_name = _('Event')
         verbose_name_plural = _('Events')
 
+
 """
 @receiver(post_save, sender=Event)
 def add_to_public_event_directory(sender, instance: Event, created, **kwargs):
@@ -1187,7 +1201,7 @@ class PriceSold(models.Model):
         else:
             str_name = self.price.name
 
-        if not self.price.free_price :
+        if not self.price.free_price:
             str_name += f" - {self.price.prix}€"
         return str_name
 
@@ -1519,8 +1533,6 @@ class Paiement_stripe(models.Model):
     source = models.CharField(max_length=1, choices=SOURCE_CHOICES, default=API_BILLETTERIE,
                               verbose_name="Order source")
 
-
-
     fedow_transactions = models.ManyToManyField(FedowTransaction, blank=True, related_name="paiement_stripe")
 
     # total = models.FloatField(default=0)
@@ -1650,7 +1662,7 @@ class LigneArticle(models.Model):
 
     def total(self) -> int:
         # Mise à jour de amount en cas de paiement stripe pour prix libre ( a virer après les migration ? )
-        if self.amount == 0 and self.paiement_stripe and self.pricesold.price.free_price :
+        if self.amount == 0 and self.paiement_stripe and self.pricesold.price.free_price:
             logger.info("Total 0 ? free price ? update_amount()")
             self.update_amount()
         return self.amount * self.qty
@@ -1783,7 +1795,7 @@ class Membership(models.Model):
         if self.user:
             return str(self.user.email).lower()
         if self.card_number:
-            return _('Anonymous ')+ self.card_number
+            return _('Anonymous ') + self.card_number
         return f'Anonymous'
 
     def member_name(self):
@@ -1981,6 +1993,12 @@ class GhostConfig(SingletonModel):
     Trigger : pre save adhésion sur BasBillet.triggers.LigneArticlePaid_ActionByCategorie.trigger_A
     Méthode async celery : BaseBillet.tasks.send_to_ghost
     """
+
+    @classmethod
+    def get_cache_key(cls) -> str:
+        prefix = slugify(connection.tenant.pk)
+        return f"{prefix}:{cls.__module__.lower()}:{cls.__name__.lower()}"
+
     ghost_url = models.URLField(blank=True, null=True)
     ghost_key = models.CharField(max_length=400, blank=True, null=True)
     ghost_last_log = models.TextField(blank=True, null=True)
@@ -1995,6 +2013,11 @@ class GhostConfig(SingletonModel):
 
 
 # class DokosConfig(SingletonModel):
+#     @classmethod
+#     def get_cache_key(cls) -> str:
+#         prefix = slugify(connection.tenant.pk)
+#         return f"{prefix}:{cls.__module__.lower()}:{cls.__name__.lower()}"
+
 #     dokos_id = models.CharField(max_length=100, blank=True, null=True, editable=False)
 
 class FormbricksForms(models.Model):
@@ -2016,6 +2039,12 @@ class FormbricksConfig(SingletonModel):
     """
     Configuration de Formbricks pour les fomulaires sur mesures
     """
+
+    @classmethod
+    def get_cache_key(cls) -> str:
+        prefix = slugify(connection.tenant.pk)
+        return f"{prefix}:{cls.__module__.lower()}:{cls.__name__.lower()}"
+
     api_key = models.CharField(max_length=200, blank=True, null=True)
     api_host = models.CharField(max_length=220, default="https://app.formbricks.com")
 
@@ -2033,9 +2062,13 @@ class FormbricksConfig(SingletonModel):
 
 
 class BrevoConfig(SingletonModel):
+    @classmethod
+    def get_cache_key(cls) -> str:
+        prefix = slugify(connection.tenant.pk)
+        return f"{prefix}:{cls.__module__.lower()}:{cls.__name__.lower()}"
+
     api_key = models.CharField(max_length=400, blank=True, null=True)
     last_log = models.TextField(blank=True, null=True)
-
 
     def get_api_key(self):
         return fernet_decrypt(self.api_key) if self.api_key else None
