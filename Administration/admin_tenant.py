@@ -35,6 +35,17 @@ from unfold.sites import UnfoldAdminSite
 from unfold.widgets import UnfoldAdminTextInputWidget, UnfoldAdminEmailInputWidget, UnfoldAdminSelectWidget, \
     UnfoldAdminSelectMultipleWidget, UnfoldAdminRadioSelectWidget, UnfoldAdminCheckboxSelectMultiple
 from unfold.contrib.forms.widgets import WysiwygWidget
+from unfold.contrib.filters.admin import (
+    # AutocompleteSelectMultipleFilter,
+    # ChoicesDropdownFilter,
+    # MultipleRelatedDropdownFilter,
+    # RangeDateFilter,
+    RangeDateTimeFilter,
+    # RangeNumericFilter,
+    # SingleNumericFilter,
+    # TextFilter,
+)
+# from simple_history.admin import SimpleHistoryAdmin
 
 from import_export import resources, fields
 from import_export.admin import ImportExportModelAdmin, ExportActionModelAdmin
@@ -1421,7 +1432,11 @@ class EventAdmin(ModelAdmin):
     )
 
     search_fields = ['name']
-    list_filter = ['datetime', 'published']
+    list_filter = [
+        ('datetime', RangeDateTimeFilter),
+        'published',
+    ]
+    list_filter_submit = True
 
     autocomplete_fields = [
         "tag",

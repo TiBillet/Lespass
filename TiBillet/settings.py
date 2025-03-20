@@ -153,6 +153,8 @@ CACHES = {
     }
 }
 
+SOLO_CACHE='default'
+
 MIDDLEWARE = [
     'django_tenants.middleware.main.TenantMainMiddleware',
     'django.middleware.security.SecurityMiddleware',
@@ -165,6 +167,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django_htmx.middleware.HtmxMiddleware',
+    'Customers.views.TimezoneMiddleware',
 ]
 
 if DEBUG:

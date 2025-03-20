@@ -85,8 +85,8 @@ class Command(BaseCommand):
                 config.twitter = "https://twitter.com/tibillet"
                 config.facebook = "https://facebook.com/tibillet"
                 config.instagram = "https://instagram.com/tibillet"
-                config.federated_with.add(tenant1)
-                config.federated_with.add(tenant2)
+                # config.federated_with.add(tenant1)
+                # config.federated_with.add(tenant2)
 
                 postal_address = PostalAddress.objects.create(
                     name=fake.street_name(),
