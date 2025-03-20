@@ -36,7 +36,7 @@ from Customers.models import Client
 from MetaBillet.models import WaitingConfiguration
 from TiBillet.celery import app
 from django.utils.translation import gettext_lazy as _
-
+from django.utils.translation import activate, get_language_info
 logger = logging.getLogger(__name__)
 
 
@@ -362,14 +362,13 @@ def contact_mailer(sender, subject, message):
 @app.task
 def connexion_celery_mailer(user_email, base_url, title=None, template=None):
     """
-
     :param title: Sujet de l'email
     :type user_email: str
     :type url: str
     :type tenant_name: str
-
     """
     logger.info(f'WORKDER CELERY app.task connexion_celery_mailer : {user_email}')
+    activate('fr')
 
     User = get_user_model()
     user = User.objects.get(email=user_email)
@@ -446,7 +445,7 @@ def new_tenant_mailer(waiting_config_uuid: str):
         tenant_url = tenant.get_primary_domain().domain
         waiting_config = WaitingConfiguration.objects.get(uuid=waiting_config_uuid)
         create_url_for_onboard_stripe = f"https://{tenant_url}/tenant/{waiting_config_uuid}/onboard_stripe/"
-
+        activate('fr')
         mail = CeleryMailerClass(
             waiting_config.email,
             _("TiBillet : Creation of a new instance."),
