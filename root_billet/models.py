@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 class RootConfiguration(SingletonModel):
     @classmethod
     def get_cache_key(cls) -> str:
-        prefix = slugify(connection.tenant.pk)
-        return f"{prefix}:{cls.__module__.lower()}:{cls.__name__.lower()}"
+        # prefix = slugify(connection.tenant.pk)
+        return f"root:{cls.__module__.lower()}:{cls.__name__.lower()}"
 
 
     TZ_REUNION, TZ_PARIS = "Indian/Reunion", "Europe/Paris"

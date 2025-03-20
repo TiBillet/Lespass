@@ -402,7 +402,7 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
 
     # Internal SMTP and html template
     if title is None:
-        title = _(f"{organisation} : confirm your email to login!")
+        title = f"{organisation} : Confirmez votre email" # celery ne prend pas la traduction
     if template is None:
         template = 'emails/connexion.html'
 
