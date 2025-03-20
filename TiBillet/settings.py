@@ -156,8 +156,7 @@ CACHES = {
     }
 }
 
-SOLO_CACHE='default'
-# SOLO_CACHE_PREFIX=slugify(connection.tenant.name)
+# SOLO_CACHE='default' # activer le cache. ATTENTION au prefix. Django solo met le même pour tout les tenant et mélange les config.get_solo()
 
 MIDDLEWARE = [
     'django_tenants.middleware.main.TenantMainMiddleware',

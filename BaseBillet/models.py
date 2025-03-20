@@ -244,10 +244,7 @@ class Configuration(SingletonModel):
     def uuid(self):
         return connection.tenant.pk
 
-    @classmethod
-    def get_cache_key(cls) -> str:
-        prefix = slugify(connection.tenant.pk)
-        return f"{prefix}:{cls.__module__.lower()}:{cls.__name__.lower()}"
+
 
     organisation = models.CharField(db_index=True, max_length=50, verbose_name=_("Collective name"))
 
@@ -1994,11 +1991,6 @@ class GhostConfig(SingletonModel):
     Méthode async celery : BaseBillet.tasks.send_to_ghost
     """
 
-    @classmethod
-    def get_cache_key(cls) -> str:
-        prefix = slugify(connection.tenant.pk)
-        return f"{prefix}:{cls.__module__.lower()}:{cls.__name__.lower()}"
-
     ghost_url = models.URLField(blank=True, null=True)
     ghost_key = models.CharField(max_length=400, blank=True, null=True)
     ghost_last_log = models.TextField(blank=True, null=True)
@@ -2040,10 +2032,7 @@ class FormbricksConfig(SingletonModel):
     Configuration de Formbricks pour les fomulaires sur mesures
     """
 
-    @classmethod
-    def get_cache_key(cls) -> str:
-        prefix = slugify(connection.tenant.pk)
-        return f"{prefix}:{cls.__module__.lower()}:{cls.__name__.lower()}"
+
 
     api_key = models.CharField(max_length=200, blank=True, null=True)
     api_host = models.CharField(max_length=220, default="https://app.formbricks.com")
@@ -2062,10 +2051,7 @@ class FormbricksConfig(SingletonModel):
 
 
 class BrevoConfig(SingletonModel):
-    @classmethod
-    def get_cache_key(cls) -> str:
-        prefix = slugify(connection.tenant.pk)
-        return f"{prefix}:{cls.__module__.lower()}:{cls.__name__.lower()}"
+
 
     api_key = models.CharField(max_length=400, blank=True, null=True)
     last_log = models.TextField(blank=True, null=True)
