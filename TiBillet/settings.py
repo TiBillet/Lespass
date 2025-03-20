@@ -153,7 +153,7 @@ CACHES = {
     }
 }
 
-SOLO_CACHE='default'
+# SOLO_CACHE='default'
 
 MIDDLEWARE = [
     'django_tenants.middleware.main.TenantMainMiddleware',
