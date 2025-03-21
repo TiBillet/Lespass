@@ -1019,6 +1019,10 @@ class MembershipImportResource(resources.ModelResource):
 
 
 class MembershipAddForm(ModelForm):
+    '''
+    Formulaire d'ajout d'adhésion sur l'interface d'administration.
+    '''
+
     # Un formulaire d'email qui va générer les action get_or_create_user
     email = forms.EmailField(
         required=True,
@@ -1092,6 +1096,7 @@ class MembershipAddForm(ModelForm):
         self.instance.first_contribution = timezone.localtime()
         self.instance.last_contribution = timezone.localtime()
         # self.instance.set_deadline()
+
         # Le post save BaseBillet.signals.create_lignearticle_if_membership_created_on_admin s'executera
         # # Création de la ligne Article vendu qui envera à la caisse si besoin
         return super().save(commit=commit)
@@ -1141,6 +1146,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
         'deadline',
         'is_valid',
         'status',
+        'payment_method',
         # 'commentaire',
     )
 

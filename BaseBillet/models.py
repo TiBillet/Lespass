@@ -77,6 +77,7 @@ class PaymentMethod(models.TextChoices):
     CC = "CC", _("Credit card: POS terminal")
     CASH = "CA", _("Cash")
     CHEQUE = "CH", _("Check")
+    TRANSFER = "TR", _("Bank transfer")
     STRIPE_FED = "SF", _("Online: federated Stripe")
     STRIPE_NOFED = "SN", _("Online: Stripe account")
     STRIPE_RECURENT = "SR", _("Recurring: Stripe account")
@@ -424,7 +425,6 @@ class Configuration(SingletonModel):
                     headers={
                         'Authorization': f'Api-Key {self.key_cashless}',
                         'Origin': self.domain(),
-
                     },
                     timeout=1,
                     verify=bool(not settings.DEBUG),
@@ -434,10 +434,12 @@ class Configuration(SingletonModel):
                 if r.status_code == 200:
                     # TODO: Check cashless signature avec laboutik_public_pem
                     return True
-
+                else :
+                    raise Exception(f"{r.status_code} {r.content}")
             except Exception as e:
                 # import ipdb; ipdb.set_trace()
                 logger.error(f"    ERROR check_serveur_cashless : {e}")
+                raise e
         return False
 
     """
