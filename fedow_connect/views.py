@@ -69,6 +69,7 @@ class Membership_fwh(viewsets.ViewSet):
             first_contribution=now,
             last_contribution=now,
             contribution_value=amount,
+            status=Membership.LABOUTIK, # Provenance de Fedow = Laboutik
         )
         new_membership.fedow_transactions.add(transaction)
 

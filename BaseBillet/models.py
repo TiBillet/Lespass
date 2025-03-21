@@ -1753,13 +1753,14 @@ class Membership(models.Model):
     phone = models.CharField(max_length=20, null=True, blank=True)
     commentaire = models.TextField(null=True, blank=True)
 
-    CANCELED, AUTO, ONCE, ADMIN, IMPORT = 'C', 'A', 'O', 'D', 'I'
+    CANCELED, AUTO, ONCE, ADMIN, IMPORT, LABOUTIK = 'C', 'A', 'O', 'D', 'I', 'L'
     STATUS_CHOICES = [
         (ADMIN, _("Saved through the admin")),
         (IMPORT, _("Import from file")),
-        (ONCE, _('Single online payment')),
-        (AUTO, _('Automatic renewal')),
+        (ONCE, _('Single online stripe payment')),
+        (AUTO, _('Automatic stripe renewal')),
         (CANCELED, _('Cancelled')),
+        (LABOUTIK, _('LaBoutik')),
     ]
 
     status = models.CharField(max_length=1, choices=STATUS_CHOICES, default=ONCE,

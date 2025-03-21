@@ -12,5 +12,5 @@ class TimezoneMiddleware:
         tenant = connection.tenant
         if not tenant.schema_name == "public":
             config = Configuration.get_solo()
-            timezone.activate(pytz.timezone(config.fuseau_horaire))
+            timezone.activate(pytz.timezone(config.fuseau_horaire)) #TODO: A mettre en cache (même si la requete postgres est super rapide : 0,001ms)
         return self.get_response(request)
