@@ -63,7 +63,7 @@ def encode_uid(pk):
 
 def get_context(request):
     config = Configuration.get_solo()
-    logger.debug("request.htmx") if request.htmx else None
+    # logger.debug("request.htmx") if request.htmx else None
     base_template = "reunion/headless.html" if request.htmx else "reunion/base.html"
     serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
 

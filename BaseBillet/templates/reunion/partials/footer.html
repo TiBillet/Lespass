@@ -18,10 +18,10 @@
                     {% endfor %}
                     <li class="nav-item">
                         <a class="nav-link"
-                            href="#"
-                            data-bs-toggle="offcanvas"
-                            data-bs-target="#contactPanel"
-                            aria-controls="contactPanel">
+                           href="#"
+                           data-bs-toggle="offcanvas"
+                           data-bs-target="#contactPanel"
+                           aria-controls="contactPanel">
                             {% translate 'Contact and support' %}
                         </a>
                     </li>
@@ -96,18 +96,19 @@
                     <span class="visually-hidden">TiBillet</span> / Lèspass
                 </h4>
                 <p class="lead">{% trans "Ticketing, subscriptions and local currencies for your community." %}</p>
-                <hr />
+                <hr/>
                 <div class="row">
                     <div class="col-md">
                         <p>
                             {% trans "TiBillet is a collective organization toolbox: online wallet for my local currencies, cash and cashless register, ticketing system, subscriptions, collective federation, all of it open-source." %}
                         </p>
-                        <p>
-                            <a href="/tenant/new" class="btn btn-primary d-block">
-                                <i class="bi bi-stars"></i>
-                                {% translate "I want to open a Lèspass for my collective" %}
-                            </a>
-                        </p>
+                            <p>
+                                <a {% if config.stripe_mode_test %}href="https://m.tibillet.coop/tenant/new"{% else %}href="/tenant/new"{% endif %} class="btn btn-primary d-block">
+                                    <i class="bi bi-stars"></i>
+                                    {% translate "I want to open a Lèspass for my collective" %}
+                                </a>
+                            </p>
+
                     </div>
                     <div class="col-md-4 col-lg-3">
                         <ul class="nav flex-column">
@@ -116,7 +117,8 @@
                             <li class="nav-item"><a class="nav-link"
                                                     href="https://tibillet.org/fr/docs/category/documentation-utilisateur/"
                                                     target="_blank">{% trans "Documentation" %}</a></li>
-                            <li class="nav-item"><a class="nav-link" href="https://pouet.chapril.org/@tibillet" target="_blank">Mastodon</a>
+                            <li class="nav-item"><a class="nav-link" href="https://pouet.chapril.org/@tibillet"
+                                                    target="_blank">Mastodon</a>
                             </li>
                             <li class="nav-item"><a class="nav-link" href="https://github.com/TiBillet/"
                                                     target="_blank">Github</a></li>
