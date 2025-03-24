@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load i18n static %}
 
 <footer class="bg-secondary-subtle pb-5">
     <div class="container-lg py-5">
@@ -124,6 +124,16 @@
                                                     target="_blank">Github</a></li>
                         </ul>
                     </div>
+                </div>
+                <div class="mt-5 row fs-6 text-secondary">
+                    <p class="col-md">
+                        Opération soutenue par l’État dans le cadre du dispositif
+                        « Solutions de billetteries innovantes » de France 2030,
+                        opéré par la Caisse des Dépôts.
+                    </p>
+                    <p class="col-md">
+                        <img src="{% static 'reunion/img/france_2030.png' %}" alt="Logo France 2030" />
+                    </p>
                 </div>
             </div>
         </div>
