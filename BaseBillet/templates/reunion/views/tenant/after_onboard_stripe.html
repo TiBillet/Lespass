@@ -12,15 +12,6 @@
         process.
     </p>
     {% endblocktranslate %}
-    {% elif not email_valid %}
-    {% blocktranslate %}
-    <p>We have received your instance creation request.</p>
-    <p>
-        The email you gave Stripe is different from the one you used to create
-        the administration account.
-    </p>
-    <p>Please retry the Stripe process with the administration email.</p>
-    {% endblocktranslate %}
     {% else %}
     {% blocktranslate %}
     <p>We have received your instance creation request.</p>

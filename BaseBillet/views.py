@@ -1298,15 +1298,8 @@ class Tenant(viewsets.ViewSet):
             logger.error(f"onboard_stripe_return. id_acc_connect : {id_acc_connect}, erreur stripe : {e}")
             raise Http404
 
-        # Vérification de l'email
-        email_stripe = info_stripe['email']
-        try :
+        if details_submitted :
             waiting_config = WaitingConfiguration.objects.get(id_acc_connect=id_acc_connect)
-        except Exception as e:
-            logger.info("Pas de waiting config car le lien a été généré depuis l'admin. (post V1)")
-            return HttpResponse(_("Your request has been received. Please contact an admin to finalize your instance."))
-
-        if details_submitted and details_submitted :
             waiting_config.onboard_stripe_finished = True
             waiting_config.save()
             # Envoie du mail aux superadmins
@@ -1314,7 +1307,6 @@ class Tenant(viewsets.ViewSet):
 
         context = get_context(request)
         context["details_submitted"] = details_submitted
-        context["email_valid"] = True if waiting_config.email == email_stripe else False
         return render(request, "reunion/views/tenant/after_onboard_stripe.html", context=context)
 
         #     _("Your Stripe account does not seem to be valid. "
