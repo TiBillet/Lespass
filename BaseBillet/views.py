@@ -1286,7 +1286,7 @@ class Tenant(viewsets.ViewSet):
         Vérification que le formulaire a bien été complété (detail submitted)
         Envoi un mail à l'administrateur ROOT de l'insatnce TiBillet pour prévenir, vérifier, et lancer la création du tenant à la main.
         """
-
+        details_submitted, waiting_config = False, False
         id_acc_connect = pk
         # La clé du compte principal stripe connect
         stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
@@ -1305,11 +1305,12 @@ class Tenant(viewsets.ViewSet):
         except Exception as e:
             logger.info("Pas de waiting config car le lien a été généré depuis l'admin. (post V1)")
             return HttpResponse(_("Your request has been received. Please contact an admin to finalize your instance."))
-        waiting_config.onboard_stripe_finished = True
-        waiting_config.save()
 
-        # Envoie du mail aux superadmins
-        new_tenant_after_stripe_mailer.delay(waiting_config.pk)
+        if details_submitted and details_submitted :
+            waiting_config.onboard_stripe_finished = True
+            waiting_config.save()
+            # Envoie du mail aux superadmins
+            new_tenant_after_stripe_mailer.delay(waiting_config.pk)
 
         context = get_context(request)
         context["details_submitted"] = details_submitted
