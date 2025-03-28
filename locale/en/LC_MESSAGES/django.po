@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-21 13:13+0000\n"
+"POT-Creation-Date: 2025-03-28 10:31+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -121,7 +121,7 @@ msgstr ""
 #: Administration/admin_tenant.py:881 Administration/admin_tenant.py:1040
 #: BaseBillet/models.py:390 BaseBillet/models.py:1791
 #: BaseBillet/templates/reunion/views/membership/list.html:15
-#: TiBillet/settings.py:462 TiBillet/settings.py:542
+#: TiBillet/settings.py:463 TiBillet/settings.py:543
 msgid "Subscriptions"
 msgstr ""
 
@@ -135,11 +135,11 @@ msgid "None"
 msgstr ""
 
 #: Administration/admin_tenant.py:969
-msgid "Produit"
+msgid "product_name"
 msgstr ""
 
 #: Administration/admin_tenant.py:974
-msgid "Tarif"
+msgid "price_name"
 msgstr ""
 
 #: Administration/admin_tenant.py:1037
@@ -739,7 +739,7 @@ msgstr ""
 msgid "Access forbidden"
 msgstr ""
 
-#: BaseBillet/apps.py:7 TiBillet/settings.py:582
+#: BaseBillet/apps.py:7 TiBillet/settings.py:583
 msgid "Ticketing"
 msgstr ""
 
@@ -836,7 +836,7 @@ msgstr ""
 msgid "Tag"
 msgstr ""
 
-#: BaseBillet/models.py:117 BaseBillet/models.py:836 TiBillet/settings.py:564
+#: BaseBillet/models.py:117 BaseBillet/models.py:836 TiBillet/settings.py:565
 msgid "Tags"
 msgstr ""
 
@@ -1078,8 +1078,8 @@ msgid "Default VAT"
 msgstr ""
 
 #: BaseBillet/models.py:594 BaseBillet/models.py:595 BaseBillet/models.py:600
-#: MetaBillet/models.py:196 MetaBillet/models.py:197 TiBillet/settings.py:483
-#: TiBillet/settings.py:507
+#: MetaBillet/models.py:196 MetaBillet/models.py:197 TiBillet/settings.py:484
+#: TiBillet/settings.py:508
 msgid "Settings"
 msgstr ""
 
@@ -1158,7 +1158,7 @@ msgid "Intended recipient's first and last names required for each ticket."
 msgstr ""
 
 #: BaseBillet/models.py:704 BaseBillet/models.py:834 BaseBillet/models.py:1919
-#: TiBillet/settings.py:551 TiBillet/settings.py:556
+#: TiBillet/settings.py:552 TiBillet/settings.py:557
 msgid "Products"
 msgstr ""
 
@@ -1349,7 +1349,7 @@ msgstr ""
 msgid "Event"
 msgstr ""
 
-#: BaseBillet/models.py:1037 BaseBillet/models.py:1918 TiBillet/settings.py:594
+#: BaseBillet/models.py:1037 BaseBillet/models.py:1918 TiBillet/settings.py:595
 msgid "Events"
 msgstr ""
 
@@ -1428,7 +1428,7 @@ msgstr ""
 msgid "Ticket"
 msgstr ""
 
-#: BaseBillet/models.py:1467 BaseBillet/models.py:1922 TiBillet/settings.py:608
+#: BaseBillet/models.py:1467 BaseBillet/models.py:1922 TiBillet/settings.py:609
 msgid "Tickets"
 msgstr ""
 
@@ -1468,7 +1468,7 @@ msgstr ""
 msgid "Stripe payment"
 msgstr ""
 
-#: BaseBillet/models.py:1616 TiBillet/settings.py:629
+#: BaseBillet/models.py:1616 TiBillet/settings.py:630
 msgid "Stripe payments"
 msgstr ""
 
@@ -1569,7 +1569,7 @@ msgstr ""
 msgid "API key works with any IP unless specified."
 msgstr ""
 
-#: BaseBillet/models.py:1921 TiBillet/settings.py:601
+#: BaseBillet/models.py:1921 TiBillet/settings.py:602
 msgid "Bookings"
 msgstr ""
 
@@ -2139,7 +2139,7 @@ msgid "Last transaction"
 msgstr ""
 
 #: BaseBillet/templates/reunion/partials/account/token_table.html:32
-#: TiBillet/settings.py:445
+#: TiBillet/settings.py:446
 msgid "All"
 msgstr ""
 
@@ -2595,19 +2595,6 @@ msgid ""
 "\n"
 "    <p>We have received your instance creation request.</p>\n"
 "    <p>\n"
-"        The email you gave Stripe is different from the one you used to "
-"create\n"
-"        the administration account.\n"
-"    </p>\n"
-"    <p>Please retry the Stripe process with the administration email.</p>\n"
-"    "
-msgstr ""
-
-#: BaseBillet/templates/reunion/views/tenant/after_onboard_stripe.html:25
-msgid ""
-"\n"
-"    <p>We have received your instance creation request.</p>\n"
-"    <p>\n"
 "        Once your account has been verified, we'll get in touch (on a work "
 "day)\n"
 "        to finalize your instance.\n"
@@ -2817,150 +2804,144 @@ msgstr ""
 msgid "Tenant name already exist."
 msgstr ""
 
-#: BaseBillet/views.py:113
+#: BaseBillet/views.py:116
 msgid "Payment confirmed. Tickets are being generated and sent to your email."
 msgstr ""
 
-#: BaseBillet/views.py:118
+#: BaseBillet/views.py:121
 msgid "Payment rejected."
 msgstr ""
 
-#: BaseBillet/views.py:125 BaseBillet/views.py:170
+#: BaseBillet/views.py:128 BaseBillet/views.py:173
 msgid ""
 "Payment confirmed. Tickets sent to your email. You can also view your "
 "tickets through \"My account > Bookings\"."
 msgstr ""
 
-#: BaseBillet/views.py:144
+#: BaseBillet/views.py:147
 #, python-brace-format
 msgid "Stripe invoice : {invoice.status} - payment : {paiement_stripe.status}"
 msgstr ""
 
-#: BaseBillet/views.py:153
+#: BaseBillet/views.py:156
 msgid "Recurring payment and bill generated."
 msgstr ""
 
-#: BaseBillet/views.py:225
+#: BaseBillet/views.py:228
 msgid "Logout successful"
 msgstr ""
 
-#: BaseBillet/views.py:237
+#: BaseBillet/views.py:240
 msgid ""
 "To access your space, please validate\n"
 "your email address. Don't forget to check your spam!"
 msgstr ""
 
-#: BaseBillet/views.py:361
+#: BaseBillet/views.py:374
 msgid ""
 "You seem to already have a TiBillet card linked to your wallet. Please "
 "revoke it first in your profile area to link a new one."
 msgstr ""
 
-#: BaseBillet/views.py:369
+#: BaseBillet/views.py:382
 msgid "Not valid"
 msgstr ""
 
-#: BaseBillet/views.py:404
+#: BaseBillet/views.py:417
 msgid ""
 "Please validate your email to access all the features of your profile area."
 msgstr ""
 
-#: BaseBillet/views.py:449
+#: BaseBillet/views.py:462
 msgid "Mail sent, please check spam too!"
 msgstr ""
 
-#: BaseBillet/views.py:459
+#: BaseBillet/views.py:472
 msgid ""
 "Your wallet has been detached from this card. You can scan a new one to link "
 "it again."
 msgstr ""
 
-#: BaseBillet/views.py:462
+#: BaseBillet/views.py:475
 msgid "Error when detaching your card. Contact an administrator."
 msgstr ""
 
-#: BaseBillet/views.py:465
+#: BaseBillet/views.py:478
 msgid "User email not active"
 msgstr ""
 
-#: BaseBillet/views.py:476
+#: BaseBillet/views.py:489
 msgid ""
 "You do not have a federated wallet. Maybe you loaded money directly at a "
 "register?"
 msgstr ""
 
-#: BaseBillet/views.py:482
+#: BaseBillet/views.py:495
 msgid "Your wallet is already empty."
 msgstr ""
 
-#: BaseBillet/views.py:490
+#: BaseBillet/views.py:503
 msgid "A refund has been made to the provided account. Thank you!"
 msgstr ""
 
-#: BaseBillet/views.py:494
+#: BaseBillet/views.py:507
 msgid ""
 "Apologies, it seems you need to manually request a refund. You can go to one "
 "of the collective's register, or send ar email to: contact@tibillet.re ."
 msgstr ""
 
-#: BaseBillet/views.py:638
+#: BaseBillet/views.py:651
 msgid "Not available. Contact an admin."
 msgstr ""
 
-#: BaseBillet/views.py:652
+#: BaseBillet/views.py:665
 msgid "Refilled wallet"
 msgstr ""
 
-#: BaseBillet/views.py:654 BaseBillet/views.py:656
+#: BaseBillet/views.py:667 BaseBillet/views.py:669
 msgid "Payment verification error"
 msgstr ""
 
-#: BaseBillet/views.py:687
+#: BaseBillet/views.py:700
 msgid "Message sent, you have been sent a copy. Thank you!"
 msgstr ""
 
-#: BaseBillet/views.py:887
+#: BaseBillet/views.py:900
 msgid "You have already checked for an action on this event."
 msgstr ""
 
-#: BaseBillet/views.py:891
+#: BaseBillet/views.py:904
 msgid "Please log in first."
 msgstr ""
 
-#: BaseBillet/views.py:905
+#: BaseBillet/views.py:918
 msgid "Thank you! You are going to receive a validation email.."
 msgstr ""
 
-#: BaseBillet/views.py:1019
+#: BaseBillet/views.py:1032
 msgid "Check in registered!"
 msgstr ""
 
-#: BaseBillet/views.py:1027
+#: BaseBillet/views.py:1040
 msgid "Check out registered!"
 msgstr ""
 
-#: BaseBillet/views.py:1159
+#: BaseBillet/views.py:1172
 msgid ""
 "Your subscription has been validated. You will receive a confirmation email. "
 "Thank you very much!"
 msgstr ""
 
-#: BaseBillet/views.py:1161
+#: BaseBillet/views.py:1174
 msgid "Your payment is awaiting validation."
 msgstr ""
 
-#: BaseBillet/views.py:1164
+#: BaseBillet/views.py:1177
 msgid "An error has occurred, please contact the administrator."
 msgstr ""
 
-#: BaseBillet/views.py:1182
+#: BaseBillet/views.py:1195
 msgid "PDF generation error"
-msgstr ""
-
-#: BaseBillet/views.py:1307
-msgid ""
-"Your request has been received. Please contact an admin to finalize your "
-"instance."
 msgstr ""
 
 #: Customers/models.py:18 MetaBillet/models.py:160
@@ -3023,91 +3004,91 @@ msgstr ""
 msgid "No Stripe Api Key in configuration"
 msgstr ""
 
-#: TiBillet/settings.py:431
+#: TiBillet/settings.py:432
 msgid "TiBillet / Lèspass admin panel"
 msgstr ""
 
-#: TiBillet/settings.py:435
+#: TiBillet/settings.py:436
 msgid "TiBillet / Lèspass"
 msgstr ""
 
-#: TiBillet/settings.py:450
+#: TiBillet/settings.py:451
 msgid "Active subscriptions"
 msgstr ""
 
-#: TiBillet/settings.py:456
+#: TiBillet/settings.py:457
 msgid "Non-suscribed members"
 msgstr ""
 
-#: TiBillet/settings.py:478
+#: TiBillet/settings.py:479
 msgid "Forms"
 msgstr ""
 
-#: TiBillet/settings.py:496
+#: TiBillet/settings.py:497
 msgid "Global information"
 msgstr ""
 
-#: TiBillet/settings.py:501
+#: TiBillet/settings.py:502
 msgid "Dashboard"
 msgstr ""
 
-#: TiBillet/settings.py:515
+#: TiBillet/settings.py:516
 msgid "Federation"
 msgstr ""
 
-#: TiBillet/settings.py:522
+#: TiBillet/settings.py:523
 msgid "Carousel"
 msgstr ""
 
-#: TiBillet/settings.py:530
+#: TiBillet/settings.py:531
 msgid "Users"
 msgstr ""
 
-#: TiBillet/settings.py:535
+#: TiBillet/settings.py:536
 msgid "User accounts"
 msgstr ""
 
-#: TiBillet/settings.py:587
+#: TiBillet/settings.py:588
 msgid "Addresses"
 msgstr ""
 
-#: TiBillet/settings.py:617
+#: TiBillet/settings.py:618
 msgid "Sales"
 msgstr ""
 
-#: TiBillet/settings.py:622
+#: TiBillet/settings.py:623
 msgid "Entries"
 msgstr ""
 
-#: TiBillet/settings.py:639
+#: TiBillet/settings.py:640
 msgid "External tools"
 msgstr ""
 
-#: TiBillet/settings.py:645
+#: TiBillet/settings.py:646
 msgid "API Key"
 msgstr ""
 
-#: TiBillet/settings.py:652
+#: TiBillet/settings.py:653
 msgid "Webhook"
 msgstr ""
 
-#: TiBillet/settings.py:659
+#: TiBillet/settings.py:660
 msgid "Ghost"
 msgstr ""
 
-#: TiBillet/settings.py:666
+#: TiBillet/settings.py:667
 msgid "Formbricks"
 msgstr ""
 
-#: TiBillet/settings.py:673
+#: TiBillet/settings.py:674
 msgid "Brevo"
 msgstr ""
 
-#: TiBillet/settings.py:690
+#: TiBillet/settings.py:691
 msgid "Root Configuration"
 msgstr ""
 
-#: TiBillet/settings.py:695
+#: TiBillet/settings.py:696
 msgid "Waiting Configuration"
 msgstr ""
 

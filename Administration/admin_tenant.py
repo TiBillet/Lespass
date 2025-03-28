@@ -955,23 +955,24 @@ class OptionsManyToManyWidgetWidget(ManyToManyWidget):
             objs = []
             names = value.split(self.separator)
             for name in names:
-                try :
-                    option = OptionGenerale.objects.get(name=name)
-                    objs.append(option)
-                except OptionGenerale.DoesNotExist:
-                    option = OptionGenerale.objects.create(name=name)
-                    objs.append(option)
+                if name.rstrip().lstrip() : # on supprime les espace avants et après
+                    try :
+                        option = OptionGenerale.objects.get(name=name)
+                        objs.append(option)
+                    except OptionGenerale.DoesNotExist:
+                        option = OptionGenerale.objects.create(name=name)
+                        objs.append(option)
             return objs
 
 # Le moteur d'importation
 class MembershipImportResource(resources.ModelResource):
     product_name = fields.Field(
-        column_name=_('Produit'),
+        column_name='product_name',
         attribute='product_name',
         widget=ForeignKeyWidget(Product, field='name')) # renvoie une erreur si le produit n'existe pas
 
     price_name = fields.Field(
-        column_name=_('Tarif'),
+        column_name='price_name',
         attribute='price',
         widget=PriceForeignKeyWidget(Price, field='name')) # Vérfie que le price correspond bien au product
 
@@ -983,7 +984,7 @@ class MembershipImportResource(resources.ModelResource):
         widget=EmailUserForeignKeyWidget(TibilletUser, field='email')) # si l'user n'existe pas, va le créer
 
     option_generale = fields.Field(
-        column_name='options',
+        column_name='option_generale',
         attribute='option_generale',
         widget=OptionsManyToManyWidgetWidget(OptionGenerale, field='name', separator=';')
     )
@@ -994,8 +995,9 @@ class MembershipImportResource(resources.ModelResource):
     # def after_import_row(self, row, row_result, **kwargs):
     #     import ipdb; ipdb.set_trace()
 
-    # def before_save_instance(self, instance, row, **kwargs):
-    #     import ipdb; ipdb.set_trace()
+    def before_save_instance(self, instance, row, **kwargs):
+        instance.status = Membership.IMPORT
+        # import ipdb; ipdb.set_trace()
 
     class Meta:
         model = Membership
