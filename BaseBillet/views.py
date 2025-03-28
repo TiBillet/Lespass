@@ -11,6 +11,7 @@ from django.contrib.auth import logout, login
 from django.contrib.messages import MessageFailure
 from django.core.cache import cache
 from django.core.paginator import Paginator
+from django.core.signing import TimestampSigner
 from django.db import connection
 from django.db.models import Count, Q, Sum
 from django.http import HttpResponse, HttpRequest, Http404, HttpResponseRedirect
@@ -18,6 +19,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.template.response import TemplateResponse
 from django.utils import timezone
 from django.utils.encoding import force_str, force_bytes
+from django.utils.html import format_html
 from django.utils.http import urlsafe_base64_encode
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_GET
@@ -44,6 +46,7 @@ from BaseBillet.validators import LoginEmailValidator, MembershipValidator, Link
     ReservationValidator, ContactValidator
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
+from TiBillet import settings
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
 from root_billet.models import RootConfiguration
@@ -236,6 +239,16 @@ def connexion(request):
 
             messages.add_message(request, messages.SUCCESS, _("To access your space, please validate\n"
                                                               "your email address. Don't forget to check your spam!"))
+
+            # On est sur le moteur de démonstration / test
+            # Pour les tests fonctionnel, on a besoin de vérifier le token, on le génère ici.
+            if settings.DEBUG and settings.TEST :
+                signer = TimestampSigner()
+                token = urlsafe_base64_encode(signer.sign(f"{user.pk}").encode('utf8'))
+                base_url = connection.tenant.get_primary_domain().domain
+                connexion_url = f"https://{base_url}/emailconfirmation/{token}"
+                messages.add_message(request, messages.INFO, format_html(f"<a href='{connexion_url}'>TEST MODE</a>"))
+
             return HttpResponseClientRedirect(request.headers['Referer'])
 
         logger.error(validator.errors)

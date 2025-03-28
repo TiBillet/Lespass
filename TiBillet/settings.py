@@ -32,6 +32,7 @@ FERNET_KEY = os.environ.get('FERNET_KEY')
 FEDOW = True
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG') == '1'
+TEST = os.environ.get('TEST') == '1'
 
 # Sentry
 if not DEBUG and os.environ.get('SENTRY_DNS'):
