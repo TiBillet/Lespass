@@ -3,6 +3,7 @@ from itertools import product
 from random import randint
 
 from django import template
+from django.db import connection
 from django.utils import timezone
 
 from Administration.management.commands.demo_data import logger
@@ -50,6 +51,16 @@ def is_membership(user, membership_product) -> bool:
     return user.memberships.filter(price__product=membership_product, deadline__gte=timezone.now()).exists()
 
 
+@register.filter
+def can_admin(user):
+    if user.is_superuser:
+        return True
+
+    admin_this = False
+    this_tenant = connection.tenant
+    if this_tenant in user.client_admin.all():
+        admin_this = True
+    return all([user.email_valid, user.is_active, admin_this])
 
 @register.filter
 def first_eight(value):

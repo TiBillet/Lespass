@@ -1776,6 +1776,34 @@ class TenantAdmin(ModelAdmin):
     # Seul le search fields est utile :
     search_fields = ['name', ]
 
+    list_display = ['name', 'created_on', 'primary_domain', ]
+
+    actions_row = ["go_admin", ]
+
+
+    @action(
+        description=_("Go admin"),
+        url_path="go_admin",
+        permissions=["redirect_admin_action"],
+    )
+    def go_admin(self, request, object_id):
+        tenant: Client = get_object_or_404(Client, pk=object_id)
+        primary_domain = f"https://{tenant.get_primary_domain().domain}"
+        user = request.user
+        if user.is_superuser:
+            token = user.get_connect_token()
+            connexion_url = f"{primary_domain}/emailconfirmation/{token}"
+            return redirect(connexion_url)
+        return redirect(request.META["HTTP_REFERER"])
+
+    @display(description=_("Domaine principal"))
+    def primary_domain(self, instance: Client):
+        primary_domain = f"https://{instance.get_primary_domain().domain}"
+        return format_html(f"<a href='{primary_domain}' target='_blank'>{primary_domain}</a>")
+
+    def has_redirect_admin_action_permission(self, request: HttpRequest, *args, **kwargs):
+        return request.user.is_superuser
+
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 

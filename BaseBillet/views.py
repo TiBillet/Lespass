@@ -243,8 +243,7 @@ def connexion(request):
             # On est sur le moteur de démonstration / test
             # Pour les tests fonctionnel, on a besoin de vérifier le token, on le génère ici.
             if settings.DEBUG and settings.TEST :
-                signer = TimestampSigner()
-                token = urlsafe_base64_encode(signer.sign(f"{user.pk}").encode('utf8'))
+                token = user.get_connect_token()
                 base_url = connection.tenant.get_primary_domain().domain
                 connexion_url = f"https://{base_url}/emailconfirmation/{token}"
                 messages.add_message(request, messages.INFO, format_html(f"<a href='{connexion_url}'>TEST MODE</a>"))
@@ -319,6 +318,15 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
             # Parti pris : On logue l'user lorsqu'il scanne sa carte.
             login(request, user)
 
+            # Pour les tests :
+            # On est sur le moteur de démonstration / test
+            # Pour les tests fonctionnel, on a besoin de vérifier le token, on le génère ici.
+            if settings.DEBUG and settings.TEST:
+                token = user.get_connect_token()
+                base_url = connection.tenant.get_primary_domain().domain
+                connexion_url = f"https://{base_url}/emailconfirmation/{token}"
+                messages.add_message(request, messages.INFO, format_html(f"<a href='{connexion_url}'>TEST MODE</a>"))
+
             return redirect("/my_account")
 
     # @action(detail=False, methods=['POST'])
@@ -348,6 +356,8 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
             logger.error("email validé par validateur DRF mais pas par get_or_create_user "
                          "-> email de confirmation a renvoyé une erreur")
             return HttpResponseClientRedirect(request.headers['Referer'])
+
+        import ipdb; ipdb.set_trace()
 
         if validator.data.get('lastname') and not user.last_name:
             user.last_name = validator.data.get('lastname')
@@ -393,6 +403,8 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
                 user__isnull=True,
                 card_number=card_number).update(
                 user=user, first_name=user.first_name, last_name=user.last_name)
+
+
 
         return HttpResponseClientRedirect(request.headers['Referer'])
 

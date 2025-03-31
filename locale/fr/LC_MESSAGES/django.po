@@ -51,7 +51,7 @@ msgstr "Un tarif ne peut pas être entre 0€ et 1€"
 
 #: Administration/admin_tenant.py:420
 msgid "A subscription must have a duration"
-msgstr "Un abonnement doit avoir une durée"
+msgstr "Une adhésion doit avoir une durée"
 
 #: Administration/admin_tenant.py:472
 msgid "Please add at least one category to this product."
@@ -421,7 +421,7 @@ msgstr "Le champ img doit contenir une image, ou img_url une URL valide"
 
 #: ApiBillet/serializers.py:205
 msgid "Subscriptions are required to have a duration."
-msgstr "Les abonnements doivent avoir une durée."
+msgstr "Les adhésions doivent avoir une durée."
 
 #: ApiBillet/serializers.py:422
 #, python-brace-format
@@ -1274,7 +1274,7 @@ msgstr "Année scolaire : 1er septembre"
 
 #: BaseBillet/models.py:783
 msgid "Subscription duration"
-msgstr "Durée d'abonnement"
+msgstr "Durée d'adhésion"
 
 #: BaseBillet/models.py:802
 msgid "Rates"
@@ -2035,7 +2035,7 @@ msgstr "Ma tirelire"
 #: BaseBillet/templates/reunion/views/account/memberships.html:6
 #: BaseBillet/templates/reunion/views/account/memberships.html:11
 msgid "My subscriptions"
-msgstr "Mes abonnements"
+msgstr "Mes adhésions"
 
 #: BaseBillet/templates/reunion/account_base.html:46
 #: BaseBillet/templates/reunion/views/account/reservations.html:6
@@ -2377,7 +2377,7 @@ msgstr "Mon compte"
 
 #: BaseBillet/templates/reunion/partials/footer.html:99
 msgid "Ticketing, subscriptions and local currencies for your community."
-msgstr "Billetterie, abonnements et tirelires locales pour vos publics."
+msgstr "Billetterie, adhésion et tirelires locales pour vos publics."
 
 #: BaseBillet/templates/reunion/partials/footer.html:104
 msgid ""
@@ -2386,7 +2386,7 @@ msgid ""
 "collective federation, all of it open-source."
 msgstr ""
 "TiBillet, c'est une boîte à outils d'organisation collective : tirelire en "
-"ligne, caisse enregistreuse, billetterie en ligne, abonnements, fédération "
+"ligne, caisse enregistreuse, billetterie en ligne, adhésion et abonnements, fédération "
 "de collectifs, le tout libre et open-source."
 
 #: BaseBillet/templates/reunion/partials/footer.html:109
@@ -2544,7 +2544,7 @@ msgstr "Chargement des infos de la carte Pass"
 
 #: BaseBillet/templates/reunion/views/account/memberships.html:13
 msgid "Here I can list my ongoing subscriptions and renew them."
-msgstr "Ici je peux lister mes abonnements et les renouveler."
+msgstr "Ici je peux lister mes adhésions et les renouveler."
 
 #: BaseBillet/templates/reunion/views/account/memberships.html:36
 #, python-format
@@ -3187,7 +3187,7 @@ msgid ""
 "Your subscription has been validated. You will receive a confirmation email. "
 "Thank you very much!"
 msgstr ""
-"Votre abonnement a été validé. Vous allez recevoir un mail de confirmation. "
+"Votre adhésion a été validé. Vous allez recevoir un mail de confirmation. "
 "Merci !"
 
 #: BaseBillet/views.py:1174
@@ -3276,7 +3276,7 @@ msgstr "Abonnements en cours"
 
 #: TiBillet/settings.py:457
 msgid "Non-suscribed members"
-msgstr "Membres sans abonnements"
+msgstr "Membres sans adhésion"
 
 #: TiBillet/settings.py:479
 msgid "Forms"

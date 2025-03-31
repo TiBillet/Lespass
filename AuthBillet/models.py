@@ -7,8 +7,10 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from django.conf import settings
 from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractUser, Group
+from django.core.signing import TimestampSigner
 from django.db import models, connection
 from django.utils import timezone
+from django.utils.http import urlsafe_base64_encode
 from django.utils.translation import gettext_lazy as _
 
 from Customers.models import Client
@@ -244,6 +246,19 @@ class TibilletUser(AbstractUser):
             backend=default_backend()
         )
         return public_key
+
+    def get_connect_token(self):
+        # On est sur le moteur de démonstration / test
+        # Pour les tests fonctionnels, on a besoin de vérifier le token, on le génère ici.
+        signer = TimestampSigner()
+        token = urlsafe_base64_encode(signer.sign(f"{self.pk}").encode('utf8'))
+
+        # La suite pour l'utiliser :
+        # base_url = connection.tenant.get_primary_domain().domain
+        # connexion_url = f"https://{base_url}/emailconfirmation/{token}"
+        # messages.add_message(request, messages.INFO, format_html(f"<a href='{connexion_url}'>TEST MODE</a>"))
+        return token
+
 
     def __str__(self):
         return self.email

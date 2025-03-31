@@ -698,6 +698,13 @@ UNFOLD = {
                         # "badge": "Administration.admin_tenant.badge_callback",
                         "permission": "ApiBillet.permissions.RootPermissionWithRequest"
                     },
+                    {
+                        "title": _("Tenants"),
+                        "icon": "domain",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:Customers_client_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.RootPermissionWithRequest"
+                    },
                 ],
             },
         ],

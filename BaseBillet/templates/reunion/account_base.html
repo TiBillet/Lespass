@@ -1,6 +1,5 @@
 {% extends base_template %}
-{% load static %}
-{% load i18n %}
+{% load static i18n tibitags %}
 
 {% block main %}
     <main class="container-lg py-5">
@@ -67,7 +66,7 @@
                         <span class="d-none d-lg-block">{% trans 'My settings' %}</span>
                     </a>
                 </li>
-                {% if profile.admin_this_tenant and user.email_valid and user.is_active %}
+                {% if user|can_admin %}
                     <li class="nav-item">
                         <a class="nav-link link-danger" href="/admin/" target="_blank">
                             <i class="bi bi-key-fill fs-4"></i>
