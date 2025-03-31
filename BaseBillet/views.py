@@ -357,8 +357,6 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
                          "-> email de confirmation a renvoyé une erreur")
             return HttpResponseClientRedirect(request.headers['Referer'])
 
-        import ipdb; ipdb.set_trace()
-
         if validator.data.get('lastname') and not user.last_name:
             user.last_name = validator.data.get('lastname')
         if validator.data.get('firstname') and not user.first_name:
