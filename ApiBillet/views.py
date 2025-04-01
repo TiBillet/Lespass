@@ -889,7 +889,11 @@ class Webhook_stripe(APIView):
 
         # c'est une requete depuis un webhook stripe
         if payload.get('type') == "checkout.session.completed":
+            if "return_refill_wallet" in payload["data"]["object"]["success_url"]:
+                return Response(f"Ce checkout est pour fedow.", status=status.HTTP_205_RESET_CONTENT)
+
             tenant_uuid_in_metadata = payload["data"]["object"]["metadata"]["tenant"]
+
             tenant = Client.objects.get(uuid=tenant_uuid_in_metadata)
             with tenant_context(tenant):
                 paiement_stripe = Paiement_stripe.objects.get(
