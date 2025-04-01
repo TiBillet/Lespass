@@ -952,16 +952,31 @@ class EventMVT(viewsets.ViewSet):
 
     @action(detail=True, methods=['GET'])
     def stripe_return(self, request, pk, *args, **kwargs):
+        # Le retour de stripe des users.
+        # Il est possible que le update_checkout_status soit déja fait en post
+        # par /api/webhook_stripe de ApiBillet.views.Webhook_stripe
         paiement_stripe = get_object_or_404(Paiement_stripe, uuid=pk)
+        paiement_stripe.update_checkout_status()
+        paiement_stripe.refresh_from_db()
 
-        # Si pas de reservation :
-        if not paiement_stripe.reservation:
-            raise Http404
+        try:
+            if paiement_stripe.status == Paiement_stripe.VALID or paiement_stripe.traitement_en_cours :
+                messages.success(request,
+                                 _('Payment confirmed. Tickets sent to your email. You can also view your tickets through "My account > Bookings".'))
+            # Déja traité et validé.
+            elif paiement_stripe.status == Paiement_stripe.PENDING:
+                messages.add_message(request, messages.WARNING, _(f"Your payment is awaiting validation."))
+            else:
+                messages.add_message(request, messages.WARNING,
+                                     _(f"An error has occurred, please contact the administrator."))
+        except MessageFailure as e:
+            # Surement un test unitaire, les messages plantent a travers la Factory Request
+            pass
+        except Exception as e:
+            raise e
 
-        paiement_stripe_refreshed = paiement_stripe_reservation_validator(request, paiement_stripe)
-        if not paiement_stripe:
-            logger.error(f"Stripe return paiment_stripe_reservation_validator")
-            return HttpResponseClientRedirect(request.headers['Referer'])
+        # ex new method
+        # paiement_stripe_refreshed = paiement_stripe_reservation_validator(request, paiement_stripe)
 
         if request.user.is_authenticated:
             return redirect('/my_account/my_reservations/')
@@ -1172,12 +1187,15 @@ class MembershipMVT(viewsets.ViewSet):
 
     @action(detail=True, methods=['GET'])
     def stripe_return(self, request, pk, *args, **kwargs):
+        # Le retour de stripe des users.
+        # Il est possible que le update_checkout_status soit déja fait en post
+        # par /api/webhook_stripe de ApiBillet.views.Webhook_stripe
         paiement_stripe = get_object_or_404(Paiement_stripe, uuid=pk)
         paiement_stripe.update_checkout_status()
         paiement_stripe.refresh_from_db()
 
         try:
-            if paiement_stripe.status == Paiement_stripe.VALID:
+            if paiement_stripe.status == Paiement_stripe.VALID or paiement_stripe.traitement_en_cours :
                 messages.add_message(request, messages.SUCCESS,
                                      _(f"Your subscription has been validated. You will receive a confirmation email. Thank you very much!"))
             elif paiement_stripe.status == Paiement_stripe.PENDING:

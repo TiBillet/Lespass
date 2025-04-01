@@ -49,7 +49,6 @@ logger = logging.getLogger(__name__)
 #         return super(DecimalEncoder, self).default(o)
 
 
-
 def get_permission_Api_LR_Any_CU_Admin(self: ViewSet):
     # Si c'est list/retrieve -> pour tout le monde
     # Pour le reste, c'est clé API + admin tenant
@@ -85,6 +84,7 @@ def get_permission_Api_LR_Admin_CU_Any(self: ViewSet):
     else:
         permission_classes = [permissions.AllowAny]
     return [permission() for permission in permission_classes]
+
 
 def get_permission_Api_ALL_Admin(self: ViewSet):
     # clé API + admin tenant pour tout
@@ -505,7 +505,6 @@ class TicketViewset(viewsets.ViewSet):
         return Response(serializer.data)
 
 
-
 class TicketPdf(APIView):
     permission_classes = [AllowAny]
 
@@ -545,9 +544,13 @@ def metatadata_valid(paiement_stripe_db: Paiement_stripe, checkout_session):
 
 # S'execute juste après un retour Webhook ou redirection une fois le paiement stripe effectué.
 # ex : BaseBillet.views.EventMVT.stripe_return
-def paiment_stripe_validator(request, paiement_stripe):
-    if paiement_stripe.traitement_en_cours:
+def paiment_stripe_validator(request, paiement_stripe: Paiement_stripe):
+    """
+    A VIRER, On passe maintenant ( get et post webhook ) par Paiement_stripe.update_checkout_status()
+    """
 
+    if paiement_stripe.traitement_en_cours:
+        logger.info("    paiment_stripe_validator -> traitement en cours")
         data = {
             "msg": _('Payment confirmed. Tickets being generated and sent by email.'),
         }
@@ -557,13 +560,10 @@ def paiment_stripe_validator(request, paiement_stripe):
                                           many=True)
             data["tickets"] = serializer.data
 
-        # Si ce n'est pas une adhésion par QRCode,
-        # on renvoie vers le front en annonçant que le travail est en cours
-        if paiement_stripe.source != Paiement_stripe.QRCODE:
-            return Response(
-                data,
-                status=status.HTTP_226_IM_USED
-            )
+        return Response(
+            data,
+            status=status.HTTP_226_IM_USED
+        )
 
     if paiement_stripe.reservation:
         if paiement_stripe.reservation.status == Reservation.PAID_ERROR:
@@ -573,6 +573,7 @@ def paiment_stripe_validator(request, paiement_stripe):
             )
 
         if paiement_stripe.status == Paiement_stripe.VALID or paiement_stripe.reservation.status == Reservation.VALID:
+            logger.info("    paiment_stripe_validator -> Paiement déja validé")
             serializer = TicketSerializer(paiement_stripe.reservation.tickets.filter(status=Ticket.NOT_SCANNED),
                                           many=True, context=request)
 
@@ -618,7 +619,7 @@ def paiment_stripe_validator(request, paiement_stripe):
                 status=status.HTTP_402_PAYMENT_REQUIRED
             )
 
-    # Sinon c'est un paiement stripe checkout
+    # Sinon c'est un paiement stripe checkout pas encore validé
     elif paiement_stripe.status != Paiement_stripe.VALID:
         checkout_session = stripe.checkout.Session.retrieve(
             paiement_stripe.checkout_session_id_stripe,
@@ -629,18 +630,19 @@ def paiment_stripe_validator(request, paiement_stripe):
 
         # Vérifie que les metatada soient cohérentes : NTUI
         if metatadata_valid(paiement_stripe, checkout_session):
+            logger.info("metadata valide")
+
+            # Paiement foiré ou expiré
             if checkout_session.payment_status == "unpaid":
                 paiement_stripe.status = Paiement_stripe.PENDING
                 if datetime.now().timestamp() > checkout_session.expires_at:
                     paiement_stripe.status = Paiement_stripe.EXPIRE
-
                 paiement_stripe.save()
 
-                if paiement_stripe.source != Paiement_stripe.QRCODE:
-                    return Response(
-                        _(f'Stripe: {checkout_session.payment_status} - payment: {paiement_stripe.status}'),
-                        status=status.HTTP_402_PAYMENT_REQUIRED
-                    )
+                return Response(
+                    f'Stripe: {checkout_session.payment_status} - payment: {paiement_stripe.status}',
+                    status=status.HTTP_402_PAYMENT_REQUIRED
+                )
 
             elif checkout_session.payment_status == "paid":
 
@@ -683,7 +685,6 @@ def paiment_stripe_validator(request, paiement_stripe):
 
     # on vérifie le changement de status
     paiement_stripe.refresh_from_db()
-
 
     # Derniere action : on crée et envoie les billets si besoin
     if paiement_stripe.source == Paiement_stripe.API_BILLETTERIE:
@@ -859,7 +860,7 @@ class Wallet(viewsets.ViewSet):
 
         email = serializer.validated_data['email']
         user: "HumanUser" = get_or_create_user(email)
-        if not user :
+        if not user:
             return Response(_(f"Invalid user"), status=status.HTTP_406_NOT_ACCEPTABLE)
 
         fedowAPI = FedowAPI()
@@ -874,8 +875,6 @@ class Wallet(viewsets.ViewSet):
         return Response(status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
-
-
 @permission_classes([permissions.AllowAny])
 class Webhook_stripe(APIView):
 
@@ -884,40 +883,26 @@ class Webhook_stripe(APIView):
         logger.info(f" ")
         # logger.info(f"Webhook_stripe --> {payload}")
         logger.info(f"Webhook_stripe --> {payload.get('type')} - id : {payload.get('id')}")
-        logger.info(f" ")
 
-        # c'est une requete depuis les webhook
-        # configuré dans l'admin stripe
+        # if payload.get('type') == "transfer.created":
+        #     import ipdb; ipdb.set_trace()
+
+        # c'est une requete depuis un webhook stripe
         if payload.get('type') == "checkout.session.completed":
-            # logger.debug(f"Webhook_stripe checkout.session.completed : {payload}")
+            tenant_uuid_in_metadata = payload["data"]["object"]["metadata"]["tenant"]
+            tenant = Client.objects.get(uuid=tenant_uuid_in_metadata)
+            with tenant_context(tenant):
+                paiement_stripe = Paiement_stripe.objects.get(
+                    checkout_session_id_stripe=payload['data']['object']['id'])
+                logger.info(
+                    f"Webhook_stripe --> {payload.get('type')} - id : {payload.get('id')} - with tenant_context({tenant}) -> paiment_stripe_validator")
 
-            tenant_uuid_in_metadata = payload["data"]["object"]["metadata"].get("tenant")
-            if not tenant_uuid_in_metadata:
-                logger.warning(
-                    f"Webhook_stripe checkout.session.completed - id : {payload.get('id')} - no tenant in metadata")
-                return Response(_("No tenant in metadata"),
-                                status=status.HTTP_204_NO_CONTENT)
+                if paiement_stripe.traitement_en_cours:
+                    return Response(f"Traitement en cours : {paiement_stripe.get_status_display()}", status=status.HTTP_208_ALREADY_REPORTED)
 
-            # On utilise les metadata du paiement stripe pour savoir de quel tenant cela vient.
-            if f"{connection.tenant.uuid}" != tenant_uuid_in_metadata:
-                try:
-                    tenant = Client.objects.get(uuid=tenant_uuid_in_metadata)
-                except Client.DoesNotExist:
-                    logger.warning(
-                        f"Webhook_stripe checkout.session.completed - id : {payload.get('id')} - tenant {tenant_uuid_in_metadata} not found")
-                    return Response(_("Tenant not found"),
-                                    status=status.HTTP_204_NO_CONTENT)
-
-                with tenant_context(tenant):
-                    paiement_stripe = get_object_or_404(Paiement_stripe,
-                                                        checkout_session_id_stripe=payload['data']['object']['id'])
-                    return paiment_stripe_validator(request, paiement_stripe)
-
-            paiement_stripe = get_object_or_404(
-                Paiement_stripe,
-                checkout_session_id_stripe=payload['data']['object']['id']
-            )
-            return paiment_stripe_validator(request, paiement_stripe)
+                paiement_stripe.update_checkout_status()
+                paiement_stripe.refresh_from_db()
+                return Response(f"Traité par /api/Webhook_stripe : {paiement_stripe.get_status_display()}", status=status.HTTP_200_OK)
 
 
         # Prélèvement automatique d'un abonnement :
@@ -988,23 +973,15 @@ class Webhook_stripe(APIView):
                         logger.error((f'    erreur dans Webhook_stripe customer.subscription.updated : {Exception}'))
                         raise Exception
 
-        # c'est une requete depuis vue.js.
-        post_from_front_vue_js = payload.get('uuid')
-        if post_from_front_vue_js:
-            logger.info(f"Webhook_stripe post_from_front_vue_js : {payload}")
-            paiement_stripe = get_object_or_404(Paiement_stripe,
-                                                uuid=post_from_front_vue_js)
-            return paiment_stripe_validator(request, paiement_stripe)
-
         # Réponse pour l'api stripe qui envoie des webhook pour tout autre que la validation de paiement.
         # Si on renvoie une erreur, ils suppriment le webhook de leur côté.
-        return Response('Pouple', status=status.HTTP_207_MULTI_STATUS)
+        return Response('Webhook stripe bien reçu, mais aucune action lancée.', status=status.HTTP_207_MULTI_STATUS)
 
-    def get(self, request, uuid_paiement):
-        logger.info("*" * 30)
-        logger.info(f"{datetime.now()} - Webhook_stripe GET : {uuid_paiement}")
-        logger.info("*" * 30)
-
-        paiement_stripe = get_object_or_404(Paiement_stripe,
-                                            uuid=uuid_paiement)
-        return paiment_stripe_validator(request, paiement_stripe)
+    # def get(self, request, uuid_paiement):
+    #     logger.info("*" * 30)
+    #     logger.info(f"{datetime.now()} - Webhook_stripe GET : {uuid_paiement}")
+    #     logger.info("*" * 30)
+    #
+    #     paiement_stripe = get_object_or_404(Paiement_stripe,
+    #                                         uuid=uuid_paiement)
+    #     return paiment_stripe_validator(request, paiement_stripe)

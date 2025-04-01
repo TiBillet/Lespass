@@ -1523,7 +1523,7 @@ class Paiement_stripe(models.Model):
 
     QRCODE, API_BILLETTERIE, FRONT_BILLETTERIE, INVOICE = 'Q', 'B', 'F', 'I'
     SOURCE_CHOICES = (
-        (QRCODE, _('From QR code scan')),
+        (QRCODE, _('From QR code scan')), # ancien api. A virer ?
         (API_BILLETTERIE, _('From API')),
         (FRONT_BILLETTERIE, _('From ticketing app')),
         (INVOICE, _('From invoice')),
@@ -1566,6 +1566,9 @@ class Paiement_stripe(models.Model):
 
     def update_checkout_status(self) -> str:
         if self.status == Paiement_stripe.VALID:
+            return self.status
+
+        if self.traitement_en_cours:
             return self.status
 
         checkout_session = self.get_checkout_session()
