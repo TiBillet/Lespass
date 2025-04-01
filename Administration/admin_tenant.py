@@ -1255,7 +1255,7 @@ class LigneArticleAdmin(ModelAdmin):
         return dround(obj.amount)
 
     @display(description=_("Total"))
-    def total_decimal(self, obj):
+    def total_decimal(self, obj: LigneArticle):
         return dround(obj.total())
 
     @display(description=_("Product"))

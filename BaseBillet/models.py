@@ -1662,8 +1662,9 @@ class LigneArticle(models.Model):
     def total(self) -> int:
         # Mise à jour de amount en cas de paiement stripe pour prix libre ( a virer après les migration ? )
         if self.amount == 0 and self.paiement_stripe and self.pricesold.price.free_price:
-            logger.info("Total 0 ? free price ? update_amount()")
-            self.update_amount()
+            if self.paiement_stripe.status in [Paiement_stripe.PAID, Paiement_stripe.VALID] :
+                logger.info("Total == 0. free price ? go -> update_amount()")
+                self.update_amount()
         return self.amount * self.qty
 
     def total_decimal(self):
