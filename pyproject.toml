@@ -41,6 +41,7 @@ weasyprint = "^64"
 django-unfold = "^0.43.0"
 django-import-export = "^4.3.7"
 sib-api-v3-sdk = "^7.6.0"
+icalendar = "^6.1.3"
 
 [tool.poetry.group.dev.dependencies]
 django-debug-toolbar = "^4.2.0"

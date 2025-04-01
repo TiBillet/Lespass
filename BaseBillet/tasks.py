@@ -31,7 +31,7 @@ from weasyprint.text.fonts import FontConfiguration
 from ApiBillet.serializers import LigneArticleSerializer
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, Ticket, Configuration, Membership, Webhook, Paiement_stripe, LigneArticle, \
-    GhostConfig, BrevoConfig
+    GhostConfig, BrevoConfig, ICalImport
 from Customers.models import Client
 from MetaBillet.models import WaitingConfiguration
 from TiBillet.celery import app
@@ -861,7 +861,7 @@ def celery_post_request(self, url, headers, data):
             raise self.retry(countdown=retry_delay)
 
     except requests.exceptions.RequestException as exc:
-        # Log et retry en cas d’erreur réseau ou autre exception
+        # Log et retry en cas d'erreur réseau ou autre exception
         logger.error(f"Erreur lors de l'envoi de la requête POST à {url}: {exc}")
 
         # Ajoute un backoff exponentiel pour les autres erreurs
@@ -878,3 +878,12 @@ def test_logger():
     logger.info(f"{timezone.now()} info")
     logger.warning(f"{timezone.now()} warning")
     logger.error(f"{timezone.now()} error")
+
+
+@shared_task
+def sync_ical_calendars():
+    """
+    Tâche Celery pour synchroniser tous les calendriers iCal actifs
+    """
+    for ical_import in ICalImport.objects.filter(active=True):
+        ical_import.sync_events()

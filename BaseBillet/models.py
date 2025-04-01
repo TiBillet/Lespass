@@ -804,6 +804,7 @@ class Price(models.Model):
 
 class Event(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
+    ical_uid = models.CharField(max_length=255, null=True, blank=True, unique=True, verbose_name=_("UID iCal"))
 
     name = models.CharField(max_length=200, verbose_name=_("Event name"))
     slug = models.SlugField(unique=True, db_index=True, blank=True, null=True, max_length=250)
@@ -1273,8 +1274,11 @@ class PriceSold(models.Model):
 
 class Reservation(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
-    datetime = models.DateTimeField(auto_now=True)
+    ical_sequence = models.IntegerField(default=0, verbose_name=_("Séquence iCal"))
+    ical_uid = models.CharField(max_length=255, null=True, blank=True, verbose_name=_("UID iCal"))
+    ical_recurrence_id = models.CharField(max_length=255, null=True, blank=True, verbose_name=_("ID de récurrence iCal"))
 
+    datetime = models.DateTimeField(auto_now=True)
     user_commande: AuthBillet.models.TibilletUser = models.ForeignKey(settings.AUTH_USER_MODEL,
                                                                       on_delete=models.PROTECT,
                                                                       related_name='reservations')
@@ -2070,3 +2074,165 @@ class BrevoConfig(SingletonModel):
     class Meta:
         verbose_name = _('Brevo setting')
         verbose_name_plural = _('Brevo settings')
+
+
+class ICalImport(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
+    name = models.CharField(max_length=100, verbose_name=_("Nom de l'import"))
+    url = models.URLField(verbose_name=_("URL du calendrier iCal"))
+    last_sync = models.DateTimeField(null=True, blank=True, verbose_name=_("Dernière synchronisation"))
+    active = models.BooleanField(default=True, verbose_name=_("Actif"))
+    created = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _('Import iCal')
+        verbose_name_plural = _('Imports iCal')
+
+    def __str__(self):
+        return self.name
+
+    def sync_events(self):
+        """
+        Synchronise les événements depuis le calendrier iCal distant
+        """
+        try:
+            import requests
+            from icalendar import Calendar
+            from datetime import datetime
+            from django.utils import timezone
+            from django.core.mail import send_mail
+            from django.conf import settings
+
+            # Récupérer le contenu du calendrier
+            response = requests.get(self.url)
+            if response.status_code != 200:
+                raise Exception(f"Erreur lors de la récupération du calendrier: {response.status_code}")
+
+            # Parser le calendrier
+            cal = Calendar.from_ical(response.content)
+            
+            # Pour chaque composant dans le calendrier
+            for component in cal.walk():
+                if component.name == "VEVENT":
+                    # Extraire les informations de l'événement
+                    summary = str(component.get('summary', ''))
+                    description = str(component.get('description', ''))
+                    location = str(component.get('location', ''))
+                    start = component.get('dtstart').dt
+                    end = component.get('dtend', None)
+                    if end:
+                        end = end.dt
+                    uid = str(component.get('uid', ''))
+                    
+                    # Créer ou mettre à jour l'événement en utilisant l'UID iCal
+                    event, created = Event.objects.update_or_create(
+                        ical_uid=uid,
+                        defaults={
+                            'name': summary,
+                            'datetime': start,
+                            'end_datetime': end,
+                            'short_description': description[:250] if description else None,
+                            'long_description': description if len(description) > 250 else None,
+                            'published': True,
+                        }
+                    )
+
+                    # Si une adresse est fournie, créer ou mettre à jour l'adresse postale
+                    if location:
+                        postal_address, _ = PostalAddress.objects.get_or_create(
+                            street_address=location,
+                            defaults={
+                                'address_locality': '',  # À compléter si possible
+                                'postal_code': '',      # À compléter si possible
+                                'address_country': 'FR'  # Par défaut
+                            }
+                        )
+                        event.postal_address = postal_address
+                        event.save()
+
+                    # Gérer les participants (ATTENDEE)
+                    attendees = component.get('attendee', [])
+                    if not isinstance(attendees, list):
+                        attendees = [attendees]
+
+                    for attendee in attendees:
+                        if isinstance(attendee, str):
+                            email = attendee.replace('mailto:', '')
+                            partstat = component.get('partstat', 'NEEDS-ACTION')
+                            
+                            # Créer ou mettre à jour la réservation
+                            reservation, created = Reservation.objects.update_or_create(
+                                ical_uid=uid,
+                                user_commande__email=email,
+                                defaults={
+                                    'event': event,
+                                    'status': self._get_reservation_status(partstat),
+                                    'ical_sequence': component.get('sequence', 0),
+                                    'ical_recurrence_id': component.get('recurrence-id', None),
+                                }
+                            )
+
+                            # Si c'est une nouvelle réservation, envoyer un email de confirmation
+                            if created:
+                                self._send_confirmation_email(reservation)
+
+                elif component.name == "VREPLY":
+                    # Gérer les réponses aux invitations
+                    uid = str(component.get('uid', ''))
+                    partstat = component.get('partstat', 'NEEDS-ACTION')
+                    
+                    # Mettre à jour la réservation correspondante
+                    try:
+                        reservation = Reservation.objects.get(ical_uid=uid)
+                        reservation.status = self._get_reservation_status(partstat)
+                        reservation.ical_sequence = component.get('sequence', 0)
+                        reservation.save()
+                    except Reservation.DoesNotExist:
+                        logger.warning(f"Réservation non trouvée pour l'UID iCal: {uid}")
+
+            # Mettre à jour la date de dernière synchronisation
+            self.last_sync = timezone.now()
+            self.save()
+            return True
+
+        except Exception as e:
+            logger.error(f"Erreur lors de la synchronisation du calendrier {self.name}: {str(e)}")
+            return False
+
+    def _get_reservation_status(self, partstat):
+        """
+        Convertit le statut de participation iCal en statut de réservation
+        """
+        status_map = {
+            'ACCEPTED': Reservation.VALID,
+            'DECLINED': Reservation.CANCELED,
+            'TENTATIVE': Reservation.UNPAID,
+            'NEEDS-ACTION': Reservation.CREATED,
+        }
+        return status_map.get(partstat, Reservation.CREATED)
+
+    def _send_confirmation_email(self, reservation):
+        """
+        Envoie un email de confirmation pour une nouvelle réservation
+        """
+        subject = f"Confirmation de réservation - {reservation.event.name}"
+        message = f"""
+        Bonjour {reservation.user_commande.first_name},
+
+        Votre réservation pour l'événement "{reservation.event.name}" a été confirmée.
+        Date : {reservation.event.datetime.strftime('%d/%m/%Y %H:%M')}
+        
+        Pour répondre à cette invitation, vous pouvez utiliser votre client mail (Gmail, Outlook, etc.).
+        
+        Cordialement,
+        L'équipe
+        """
+        
+        send_mail(
+            subject,
+            message,
+            settings.DEFAULT_FROM_EMAIL,
+            [reservation.user_commande.email],
+            fail_silently=False,
+        )

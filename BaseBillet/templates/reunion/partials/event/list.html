@@ -2,8 +2,11 @@
 {% load tibitags %}
 
 <p class="text-end mb-5">
-    <a href="/rss/latest/feed/" target="_blank" rel="noopener noreferrer" aria-label="{% trans 'Event feed' %}">
+    <a href="/rss/latest/feed/" target="_blank" rel="noopener noreferrer" aria-label="{% trans 'Event feed' %}" class="me-3">
         <i class="bi bi-rss-fill"></i> {% trans "Event feed" %}
+    </a>
+    <a href="/rss/calendar.ics" target="_blank" rel="noopener noreferrer" aria-label="{% trans 'Calendar feed' %}">
+        <i class="bi bi-calendar-check"></i> {% trans "Calendar feed" %}
     </a>
 </p>
 
