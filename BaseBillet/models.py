@@ -1650,6 +1650,8 @@ class LigneArticle(models.Model):
     status = models.CharField(max_length=3, choices=TYPE_CHOICES, default=CREATED,
                               verbose_name=_("Product entry status"))
 
+    sended_to_laboutik = models.BooleanField(default=False, verbose_name=_("Sended to LaBoutik"))
+
     class Meta:
         ordering = ('-datetime',)
 

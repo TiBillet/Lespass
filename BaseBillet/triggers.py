@@ -143,7 +143,7 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
         self.ligne_article = update_sale_if_free_price(self.ligne_article)
 
         logger.info(f"        TRIGGER_B BILLET PAID -> envoi à LaBoutik?")
-        send_sale_to_laboutik(self.ligne_article)
+        send_sale_to_laboutik.delay(self.ligne_article.pk)
 
         logger.info(f"        TRIGGER_B BILLET PAID -> set ligne_article VALID (no save)")
         self.ligne_article.status = LigneArticle.VALID
@@ -204,7 +204,7 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
 
         # Envoi de la vente à LaBoutik
         logger.info(f"    TRIGGER_A ADHESION PAID -> envoi à LaBoutik?")
-        send_sale_to_laboutik(self.ligne_article)
+        send_sale_to_laboutik.delay(self.ligne_article.pk)
 
         # Envoi des webhooks
         webhook_membership(membership.pk)

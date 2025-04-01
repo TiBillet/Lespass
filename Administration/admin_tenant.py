@@ -1239,6 +1239,7 @@ class LigneArticleAdmin(ModelAdmin):
         'total_decimal',
         'display_status',
         'payment_method',
+        'sended_to_laboutik',
     ]
     # fields = "__all__"
     # readonly_fields = fields
@@ -1779,7 +1780,6 @@ class TenantAdmin(ModelAdmin):
     list_display = ['name', 'created_on', 'primary_domain', ]
 
     actions_row = ["go_admin", ]
-
 
     @action(
         description=_("Go admin"),
