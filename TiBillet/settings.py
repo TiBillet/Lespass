@@ -159,6 +159,7 @@ CACHES = {
     }
 }
 SOLO_CACHE='default'
+TENANT_LIMIT_SET_CALLS = True
 
 MIDDLEWARE = [
     'django_tenants.middleware.main.TenantMainMiddleware',
