@@ -907,33 +907,32 @@ class Webhook_stripe(APIView):
                 return Response(f"Traité par /api/Webhook_stripe : {paiement_stripe.get_status_display()}", status=status.HTTP_200_OK)
 
 
-        """
         elif payload.get('type') == "transfer.created":
+
+            #TODO: tout mettre dans un celery :
             amount = payload["data"]["object"]["amount"]
-            id_stripe_account = payload["data"]["object"]["destination"]
+            stripe_connect_account = payload["data"]["object"]["destination"]
             created = datetime.fromtimestamp(payload["data"]["object"]["created"])
             
             # On est sur le tenant root. Il faut chercher le tenant correspondant.
-            Client.objects.get()
-            # Retour a l'euro chez Fedow
-            try :
-                pstripe = Paiement_stripe.objects.create(
-                    detail=_("Versement de monnaie globale"),
-                    payment_intent_id=payload["data"]["object"]["id"] ,
-                    metadata_stripe=json.dumps(payload),
-                    customer_stripe=id_stripe_account,
-                    order_date=created,
-                    status=Paiement_stripe.PAID,
-                    traitement_en_cours=True,
-                    source=Paiement_stripe.TRANSFERT,
-                    source_traitement=Paiement_stripe.WEBHOOK,
-                    # fedow_transactions=,
-                )
-            except Exception as e:
-                print(e)
-                import ipdb; ipdb.set_trace()
+            for tenant in Client.objects.all().exclude(categorie=Client.ROOT):
+                with tenant_context(tenant):
+                    config = Configuration.get_solo()
+                    if config.stripe_connect_account == stripe_connect_account:
+                        # Création du paiement stripe
+                        pstripe = Paiement_stripe.objects.create(
+                                detail=_("Versement de monnaie globale"),
+                                payment_intent_id=payload["data"]["object"]["id"] ,
+                                metadata_stripe=json.dumps(payload),
+                                customer_stripe=stripe_connect_account,
+                                order_date=created,
+                                status=Paiement_stripe.PAID,
+                                traitement_en_cours=True,
+                                source=Paiement_stripe.TRANSFERT,
+                                source_traitement=Paiement_stripe.WEBHOOK,
+                                # fedow_transactions=,
+                            )
             # send_stripe_transfert_to_laboutik(payload)
-        """
 
 
         # Prélèvement automatique d'un abonnement :
