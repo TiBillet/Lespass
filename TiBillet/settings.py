@@ -154,10 +154,11 @@ CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.memcached.PyMemcacheCache',
         'LOCATION': 'memcached:11211',
+        'KEY_FUNCTION': 'django_tenants.cache.make_key',
+        'REVERSE_KEY_FUNCTION': 'django_tenants.cache.reverse_key',
     }
 }
-
-# SOLO_CACHE='default' # activer le cache. ATTENTION au prefix. Django solo met le même pour tout les tenant et mélange les config.get_solo()
+SOLO_CACHE='default'
 
 MIDDLEWARE = [
     'django_tenants.middleware.main.TenantMainMiddleware',
