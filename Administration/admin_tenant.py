@@ -251,8 +251,9 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
         }),
         ('Personnalisation', {
             'fields': (
-                'membership_menu_name',
                 'event_menu_name',
+                'membership_menu_name',
+                'description_membership_page',
                 'first_input_label_membership',
                 'second_input_label_membership',
             ),

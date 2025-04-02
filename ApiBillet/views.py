@@ -29,8 +29,8 @@ from ApiBillet.permissions import TenantAdminApiPermission, TibilletUser, get_ap
 from AuthBillet.models import HumanUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe, \
-    OptionGenerale, Membership
-from BaseBillet.tasks import create_ticket_pdf
+    OptionGenerale, Membership, LigneArticle, PriceSold, ProductSold
+from BaseBillet.tasks import create_ticket_pdf, send_stripe_transfert_to_laboutik
 from Customers.models import Client
 from MetaBillet.models import ProductDirectory
 from PaiementStripe.views import new_entry_from_stripe_invoice
@@ -884,8 +884,6 @@ class Webhook_stripe(APIView):
         # logger.info(f"Webhook_stripe --> {payload}")
         logger.info(f"Webhook_stripe --> {payload.get('type')} - id : {payload.get('id')}")
 
-        # if payload.get('type') == "transfer.created":
-        #     import ipdb; ipdb.set_trace()
 
         # c'est une requete depuis un webhook stripe
         if payload.get('type') == "checkout.session.completed":
@@ -907,6 +905,35 @@ class Webhook_stripe(APIView):
                 paiement_stripe.update_checkout_status()
                 paiement_stripe.refresh_from_db()
                 return Response(f"Traité par /api/Webhook_stripe : {paiement_stripe.get_status_display()}", status=status.HTTP_200_OK)
+
+
+        """
+        elif payload.get('type') == "transfer.created":
+            amount = payload["data"]["object"]["amount"]
+            id_stripe_account = payload["data"]["object"]["destination"]
+            created = datetime.fromtimestamp(payload["data"]["object"]["created"])
+            
+            # On est sur le tenant root. Il faut chercher le tenant correspondant.
+            Client.objects.get()
+            # Retour a l'euro chez Fedow
+            try :
+                pstripe = Paiement_stripe.objects.create(
+                    detail=_("Versement de monnaie globale"),
+                    payment_intent_id=payload["data"]["object"]["id"] ,
+                    metadata_stripe=json.dumps(payload),
+                    customer_stripe=id_stripe_account,
+                    order_date=created,
+                    status=Paiement_stripe.PAID,
+                    traitement_en_cours=True,
+                    source=Paiement_stripe.TRANSFERT,
+                    source_traitement=Paiement_stripe.WEBHOOK,
+                    # fedow_transactions=,
+                )
+            except Exception as e:
+                print(e)
+                import ipdb; ipdb.set_trace()
+            # send_stripe_transfert_to_laboutik(payload)
+        """
 
 
         # Prélèvement automatique d'un abonnement :

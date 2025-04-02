@@ -1,5 +1,5 @@
 # import os
-
+import json
 import logging
 import uuid
 from datetime import timedelta, datetime
@@ -246,7 +246,6 @@ class Configuration(SingletonModel):
         return connection.tenant.pk
 
 
-
     organisation = models.CharField(db_index=True, max_length=50, verbose_name=_("Collective name"))
 
     slug = models.SlugField(max_length=50, default="")
@@ -394,6 +393,8 @@ class Configuration(SingletonModel):
                                                     verbose_name=_("Title of the first input on the membership form"))
     second_input_label_membership = models.CharField(max_length=200, default=_("Last name or organization"),
                                                      verbose_name=_("Title of the second input on the membership form"))
+
+    description_membership_page = models.TextField(blank=True, verbose_name=_("Description on the membership page"), help_text=_("Displayed above membership products."))
 
     """
     ######### CASHLESS #########
@@ -1521,12 +1522,13 @@ class Paiement_stripe(models.Model):
     reservation = models.ForeignKey(Reservation, on_delete=models.PROTECT, blank=True, null=True,
                                     related_name="paiements")
 
-    QRCODE, API_BILLETTERIE, FRONT_BILLETTERIE, INVOICE = 'Q', 'B', 'F', 'I'
+    QRCODE, API_BILLETTERIE, FRONT_BILLETTERIE, INVOICE, TRANSFERT = 'Q', 'B', 'F', 'I', 'T'
     SOURCE_CHOICES = (
         (QRCODE, _('From QR code scan')), # ancien api. A virer ?
         (API_BILLETTERIE, _('From API')),
         (FRONT_BILLETTERIE, _('From ticketing app')),
         (INVOICE, _('From invoice')),
+        (TRANSFERT, _('Stripe Transfert')),
 
     )
     source = models.CharField(max_length=1, choices=SOURCE_CHOICES, default=API_BILLETTERIE,
@@ -1536,6 +1538,9 @@ class Paiement_stripe(models.Model):
 
     # total = models.FloatField(default=0)
     def total(self):
+        if self.source == self.TRANSFERT: # c'est un transfert de compte stripe
+            payload = json.loads(self.metadata_stripe)
+            return dround(payload["data"]["object"]["amount"])
         return dround(self.lignearticles.all().aggregate(Sum('amount'))['amount__sum']) or 0
 
     def uuid_8(self):

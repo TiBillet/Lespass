@@ -250,6 +250,15 @@ def send_membership_invoice_to_email(membership: "Membership"):
     logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation par email DELAY")
     return True
 
+
+#### SEND INFO TO LABOUTIK
+
+# @app.task
+@shared_task(bind=True, max_retries=20)
+def send_stripe_transfert_to_laboutik(self, payload: dict):
+    pass
+
+
 # @app.task
 @shared_task(bind=True, max_retries=20)
 def send_sale_to_laboutik(self, ligne_article_pk):
