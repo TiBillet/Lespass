@@ -1,0 +1,53 @@
+{% load static %}
+
+<!-- START Formbricks Surveys -->
+<script type="module">
+    import * as Spinner from '{% static "reunion/js/form-spinner.mjs" %}'
+
+    // show spinner on form submission
+    Spinner.init(document.getElementById('reservation_form'))
+
+    window.formbricks.init({
+        environmentId: "{{ form.environmentId }}",
+        apiHost: "{{ form.apiHost }}",
+        userId: "{{ reservation.email }} {{ reservation.uuid | slice:':4' }}",
+    });
+
+    console.log({
+        email: "{{ reservation.email }}",
+        name: "{{ reservation.member_name }}",
+        reservation_uuid: "{{ reservation.uuid }}",
+        product_name: "{{ reservation.price.product.name }}",
+        price_name: "{{ reservation.price.name }}",
+        product_slug: "{{ reservation.price.product.name|slugify }}",
+        price_slug: "{{ reservation.price.name|slugify }}",
+        price_amount: "{{ reservation.price.prix }}",
+    })
+
+    window.formbricks.track("{{ form.trigger_name }}", {
+        hiddenFields: {
+            email: "{{ reservation.email }}",
+            name: "{{ reservation.member_name }}",
+            reservation_uuid: "{{ reservation.uuid }}",
+            product_name: "{{ reservation.price.product.name }}",
+            price_name: "{{ reservation.price.name }}",
+            product_slug: "{{ reservation.price.product.name|slugify }}",
+            price_slug: "{{ reservation.price.name|slugify }}",
+            price_amount: "{{ reservation.price.prix }}",
+        },
+    });
+
+    window.addEventListener("message", function (event) {
+        if (event.data === "formbricksSurveyCompleted") {
+            console.log("Survey Completed");
+            window.location.href = "{{ checkout_stripe }}";
+        }
+    })
+
+    //hide offcanvas
+    bootstrap.Offcanvas.getOrCreateInstance('#bookingPanel').hide()
+
+    // hide spinner
+    Spinner.hideSpinner()
+</script>
+<!-- END Formbricks Surveys -->

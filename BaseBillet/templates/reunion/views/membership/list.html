@@ -2,14 +2,6 @@
 {% load tibitags static %}
 {% load i18n %}
 
-{% block scripts %}
-    <script type="module">
-        import * as SubscriptionWatcher from '{% static "reunion/js/subscription-watcher.mjs" %}'
-
-        SubscriptionWatcher.init()
-    </script>
-{% endblock %}
-
 {% block main %}
     <main class="container-lg py-5">
         <h1>{% translate 'Subscriptions' %}</h1>
