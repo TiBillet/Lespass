@@ -39,8 +39,8 @@
 
     window.addEventListener("message", function (event) {
         if (event.data === "formbricksSurveyCompleted") {
-            console.log("Survey Completed");
-            window.location.href = "{{ checkout_stripe }}";
+            console.log("Survey Completed")
+            window.location.href = "{{ checkout_stripe|default:'' }}"
         }
     })
 
