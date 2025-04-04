@@ -23,6 +23,7 @@ from django.db import connection
 from django.template.loader import render_to_string, get_template
 from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
+from django.utils.formats import date_format
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.text import slugify
 from weasyprint import HTML, CSS
@@ -205,8 +206,8 @@ def context_for_membership_email(membership: "Membership"):
     if hasattr(config.img, 'med'):
         image_url = f"https://{domain}{config.img.med.url}"
 
-
     activate("fr")
+    membership.refresh_from_db()
     context = {
         'username': membership.member_name(),
         'now': timezone.now(),
@@ -215,14 +216,14 @@ def context_for_membership_email(membership: "Membership"):
         'objet': _("Confirmation email"),
         'sub_title': _("Welcome aboard !"),
         'main_text': _("Your payment for ")+f"{membership.price.product.name}"+_(" has been received."),
-        # 'main_text_2': _("Si vous pensez que cette demande est main_text_2, vous n'avez rien a faire de plus :)"),
+        'main_text_2': config.additional_text_in_membership_mail,
         # 'main_text_3': _("Dans le cas contraire, vous pouvez main_text_3. Merci de contacter l'équipe d'administration via : contact@tibillet.re au moindre doute."),
         'table_info': {
             _('Receipt for:'): f'{membership.member_name()}',
             _('Product'): f'{membership.price.product.name} - {membership.price.name}',
-            _('Contribution'): f'{membership.contribution_value}',
-            _('Date'): f'{membership.last_contribution}',
-            _('Valid until'): f'{membership.get_deadline()}',
+            _('Contribution'): f'{membership.contribution_value} {config.currency_code}',
+            _('Date'): date_format(membership.last_contribution, format='DATE_FORMAT', use_l10n=True),
+            _('Valid until'): date_format(membership.get_deadline(), format='DATE_FORMAT', use_l10n=True),
         },
         'button_color': "#009058",
         'button': {
@@ -239,8 +240,9 @@ def context_for_membership_email(membership: "Membership"):
         context['table_info']['Options'] = f"{membership.options()}"
     return context
 
-
-def send_membership_invoice_to_email(membership: "Membership"):
+@app.task
+def send_membership_invoice_to_email(membership_uuid: str):
+    membership = Membership.objects.get(uuid=membership_uuid)
     user = membership.user
     # Mails de confirmation qui contient un lien vers la facture :
     logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation par email")
@@ -585,33 +587,6 @@ def report_celery_mailer(data_report_list: list):
 def send_email_generique(context: dict = None, email: str = None, attached_files: dict = None):
     template_name = "emails/email_generique.html"
     try:
-        if not context:
-            context = {
-                'username': 'UserTest',
-                'now': timezone.now(),
-                'title': 'Titre',
-                'objet': "Objet",
-                'sub_title': "sub titre",
-                'main_text': "Ceci est le texte principal du mail.",
-                'main_text_2': "Si vous pensez que cette demande est main_text_2, vous n'avez rien a faire de plus :)",
-                'main_text_3': "Dans le cas contraire, vous pouvez main_text_3. Merci de contacter l'équipe d'administration via : contact@tibillet.re au moindre doute.",
-                'table_info': {
-                    'ligne 1': 'ligne 1',
-                    'ligne 2': 'ligne 2',
-                    'ligne 3': 'ligne 3',
-                    'ligne 4': 'ligne 4',
-                },
-                'button_color': "#E8423FFF",
-                'button': {
-                    'text': 'UN BOUTON',
-                    'url': f'https://perdu.com'
-                },
-                'next_text_1': "Si vous recevez cet email par erreur, merci de contacter l'équipe de TiBillet",
-                'next_text_2': "next_text_2",
-                'end_text': 'A bientôt, et bon voyage',
-                'signature': "Marvin, le robot de TiBillet",
-            }
-
         mail = CeleryMailerClass(
             email,
             f"{context.get('title')}",

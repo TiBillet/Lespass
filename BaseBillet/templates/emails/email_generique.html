@@ -1,7 +1,7 @@
 {% extends 'emails/base.html' %}
+{% load humanize static i18n %}
 
 {% block content %}
-
     <tr>
         <td class="pt-28 td_content"
             style="background:#fff; padding:44px 64px 57px; border:1px solid #dcdcd9; border-radius:8px;">
@@ -34,12 +34,14 @@
                                 <br/> <br/>
                                 {{ main_text }}
                                 {% if main_text_2 %}
-                                    <br/> <br/>
-                                    {{ main_text_2 }}
+                                    <br/>
+                                    {{ main_text_2 | safe }}
+                                    <br/>
                                 {% endif %}
                                 {% if main_text_3 %}
-                                    <br/> <br/>
+                                    <br/>
                                     {{ main_text_3 }}
+                                    <br/>
                                 {% endif %}
                             </p>
                             {% for k, v in table_info.items %}

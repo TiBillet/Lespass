@@ -245,6 +245,7 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 'fuseau_horaire',
                 'jauge_max',
                 'allow_concurrent_bookings',
+                'currency_code',
                 # 'option_generale_radio',
                 # 'option_generale_checkbox',
             ),
@@ -256,6 +257,7 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 'description_membership_page',
                 'first_input_label_membership',
                 'second_input_label_membership',
+                'additional_text_in_membership_mail',
             ),
         }),
         ('Stripe', {
@@ -584,7 +586,7 @@ class ProductAdmin(ModelAdmin):
 
 
 class PriceChangeForm(ModelForm):
-    # Le formulaire pour changer une adhésion
+    # Le formulaire pour changer un prix lorsque l'on clic sur modification
     class Meta:
         model = Price
         fields = (
@@ -597,6 +599,7 @@ class PriceChangeForm(ModelForm):
             'order',
             'publish',
             'adhesion_obligatoire',
+            'stock',
         )
 
     def clean_prix(self):
@@ -1183,7 +1186,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
     )
     def send_invoice(self, request, object_id):
         membership = Membership.objects.get(pk=object_id)
-        send_membership_invoice_to_email(membership)
+        send_membership_invoice_to_email.delay(str(membership.uuid))
         messages.success(
             request,
             _(f"Invoice sent to {membership.user.email}"),

@@ -382,6 +382,10 @@ class Configuration(SingletonModel):
     allow_concurrent_bookings = models.BooleanField(default=True, verbose_name=_("Allow concurrent bookings"),
                                                     help_text=_("Events need start and end dates to be comparable."))
 
+    currency_code = models.CharField(max_length=3, default="EUR")
+
+    additional_text_in_membership_mail = models.TextField(blank=True, null=True, verbose_name=_("Additional text in membership mail"), help_text=_("You can add additional information that will be e-mailed to you when you sign up."))
+
     """
     PERSONALISATION
     """
@@ -796,6 +800,12 @@ class Price(models.Model):
 
     def __str__(self):
         return f"{self.product.name} {self.name}"
+
+    # def has_stock(self):
+    #     if self.stock > 0 :
+    #         ticket_count = Ticket.objects.filter(pricesold__price=self).count()
+    #     return True
+
 
     class Meta:
         unique_together = ('name', 'product')
@@ -1745,7 +1755,7 @@ class Membership(models.Model):
     payment_method = models.CharField(max_length=2, choices=PaymentMethod.choices, blank=True, null=True,
                                       verbose_name=_("Payment method"))
 
-    deadline = models.DateTimeField(null=True, blank=True, verbose_name=("Subscription end"))
+    deadline = models.DateTimeField(null=True, blank=True, verbose_name=_("Subscription end"))
 
     first_name = models.CharField(
         db_index=True,

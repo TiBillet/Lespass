@@ -188,7 +188,7 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
             user.save()
 
         # C'est parti pour l'envoi dans les mails !
-        email_sended = send_membership_invoice_to_email(membership)
+        email_sended = send_membership_invoice_to_email.delay(str(membership.uuid))
 
         # Si la personne accepte la newsletter :
         if membership.newsletter:

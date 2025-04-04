@@ -1232,7 +1232,7 @@ class MembershipMVT(viewsets.ViewSet):
         - Bouton action "Envoyer une facture par mail" dans admin adhésion
         '''
         membership = get_object_or_404(Membership, pk=pk)
-        send_membership_invoice_to_email(membership)
+        send_membership_invoice_to_email.delay(str(membership.uuid))
         return Response("sended", status=status.HTTP_200_OK)
 
     def get_permissions(self):
