@@ -27,7 +27,8 @@ logger = logging.getLogger(__name__)
 
 def set_ligne_article_paid(old_instance: Paiement_stripe, new_instance: Paiement_stripe):
     # Type :
-    logger.info(f"    START PAIEMENT_STRIPE set_ligne_article_paid {new_instance} -> {old_instance.status} to {new_instance.status}")
+    logger.info(
+        f"    START PAIEMENT_STRIPE set_ligne_article_paid {new_instance} -> {old_instance.status} to {new_instance.status}")
 
     logger.info(f"        On passe toutes les ligne_article non validées en PAID et save() :")
     lignes_article = new_instance.lignearticles.exclude(status=LigneArticle.VALID)
@@ -41,7 +42,8 @@ def set_ligne_article_paid(old_instance: Paiement_stripe, new_instance: Paiement
 
     # s'il y a une réservation, on la met aussi en payée :
     if new_instance.reservation:
-        logger.info(f"        PAIEMENT_STRIPE set_ligne_article_paid : Toutes les ligne_article on été passé en {LigneArticle.PAID} et on été save()")
+        logger.info(
+            f"        PAIEMENT_STRIPE set_ligne_article_paid : Toutes les ligne_article on été passé en {LigneArticle.PAID} et on été save()")
         logger.info(f"        On passe la reservation en PAID et save()")
         new_instance.reservation.status = Reservation.PAID
         new_instance.reservation.save()
@@ -65,7 +67,8 @@ def valide_stripe_paiement(old_instance, new_instance):
 # @receiver(post_save, sender=LigneArticle)
 
 def set_paiement_stripe_valid(old_instance: LigneArticle, new_instance: LigneArticle):
-    logger.info(f"    START SIGNAL LIGNE_ARTICLE set_paiement_stripe_valid {old_instance.status} to {new_instance.status}")
+    logger.info(
+        f"    START SIGNAL LIGNE_ARTICLE set_paiement_stripe_valid {old_instance.status} to {new_instance.status}")
     if new_instance.status == LigneArticle.VALID:
         # Si paiement stripe :
         if new_instance.paiement_stripe:
@@ -78,7 +81,8 @@ def set_paiement_stripe_valid(old_instance: LigneArticle, new_instance: LigneArt
                 uuid=new_instance.uuid)
 
             # Si toutes les lignes du même panier sont validés
-            logger.info(f"        On test si toute les autres lignes sont validées : {len(lignes_meme_panier) == len(lignes_meme_panier_valide)}")
+            logger.info(
+                f"        On test si toute les autres lignes sont validées : {len(lignes_meme_panier) == len(lignes_meme_panier_valide)}")
             if len(lignes_meme_panier) == len(lignes_meme_panier_valide):
                 # on passe le status du paiement stripe en VALID
                 logger.info(
@@ -91,7 +95,8 @@ def set_paiement_stripe_valid(old_instance: LigneArticle, new_instance: LigneArt
                 logger.info(
                     f"         PAS OK, il doit y avoir d'autres lignes à valider : {len(lignes_meme_panier)} != {len(lignes_meme_panier_valide)}")
 
-    logger.info(f"    END SIGNAL LIGNE_ARTICLE set_paiement_stripe_valid {old_instance.status} to {new_instance.status}\n")
+    logger.info(
+        f"    END SIGNAL LIGNE_ARTICLE set_paiement_stripe_valid {old_instance.status} to {new_instance.status}\n")
 
 
 def ligne_article_paid(old_instance: LigneArticle, new_instance: LigneArticle):
@@ -129,8 +134,9 @@ def reservation_paid(old_instance: Reservation, new_instance: Reservation):
     if not new_instance.mail_send:
         # Envoie du mail. Le succes du mail envoyé mettra la Reservation.VALID
         if new_instance.user_commande.email:
-            logger.info(f"         Envoie du mail via celery à {new_instance.user_commande.email}. Celery passera la Reservation à VALID")
-            ticket_celery_mailer.delay(new_instance.pk) # met la Reservation à VALID si mail envoyé
+            logger.info(
+                f"         Envoie du mail via celery à {new_instance.user_commande.email}. Celery passera la Reservation à VALID")
+            ticket_celery_mailer.delay(new_instance.pk)  # met la Reservation à VALID si mail envoyé
 
     else:
         # Dans quel cas cela arrive ? TODO: checker ?
@@ -247,7 +253,7 @@ PRE_SAVE_TRANSITIONS = {
         Reservation.PAID: {
             Reservation.PAID_ERROR: error_in_mail,
             Reservation.PAID: reservation_paid,
-            Reservation.VALID: set_paiement_valid, # Celery passe la reservation a Valid si mail sended = True
+            Reservation.VALID: set_paiement_valid,  # Celery passe la reservation a Valid si mail sended = True
             '_else_': error_regression,
         },
         Reservation.VALID: {
@@ -282,7 +288,8 @@ def pre_save_signal_status(sender, instance, **kwargs):
                 old_instance.status = getattr(old_instance, CALLABLE_STATUS_MODEL.get(sender_str))
                 new_instance.status = getattr(new_instance, CALLABLE_STATUS_MODEL.get(sender_str))
 
-            logger.info(f"\nSTART pre_save_signal_status {sender_str} {new_instance} : {old_instance.status} to {new_instance.status}\n")
+            logger.info(
+                f"\nSTART pre_save_signal_status {sender_str} {new_instance} : {old_instance.status} to {new_instance.status}\n")
 
             transitions = dict_transition.get(old_instance.status, None)
             if transitions:
@@ -304,16 +311,15 @@ def unpublish_if_archived(sender, instance, **kwargs):
         instance.publish = False
 
 
-
 @receiver(post_save, sender=Product)
 def send_membership_and_badge_product_to_fedow(sender, instance: Product, created, **kwargs):
     logger.info(f"send_membership_product_to_fedow")
     # Est ici pour éviter les double imports
     # vérifie l'existante du produit Adhésion et Badge dans Fedow et le créé si besoin
-    if instance.categorie_article in [Product.ADHESION, Product.BADGE ]:
+    if instance.categorie_article in [Product.ADHESION, Product.BADGE]:
         fedow_config = FedowConfig.get_solo()
         fedow_asset = AssetFedow(fedow_config=fedow_config)
-        if not instance.archive :
+        if not instance.archive:
             # Si l'adhésion n'est pas archivé, on vérifie qu'elle existe bien :
             asset, created = fedow_asset.get_or_create_asset(instance)
             logger.info(f"send_membership_product_to_fedow : created : {created} - asset {asset}")
@@ -327,8 +333,10 @@ def send_membership_and_badge_product_to_fedow(sender, instance: Product, create
 def price_if_free_set_t_1(sender, instance: Price, **kwargs):
     if instance.free_price:
         # Quantité unitaire pour caisse enregistreuse
-        instance.prix=1
-        instance.max_per_user=1
+        if instance.prix < 1:
+            instance.prix = 1
+        instance.max_per_user = 1
+
 
 @receiver(post_save, sender=Membership)
 def create_lignearticle_if_membership_created_on_admin(sender, instance: Membership, created, **kwargs):
@@ -341,7 +349,7 @@ def create_lignearticle_if_membership_created_on_admin(sender, instance: Members
             pricesold=get_or_create_price_sold(membership.price),
             qty=1,
             membership=membership,
-            amount=int(membership.contribution_value*100),
+            amount=int(membership.contribution_value * 100),
             payment_method=membership.payment_method,
             status=LigneArticle.CREATED,
         )
@@ -350,7 +358,6 @@ def create_lignearticle_if_membership_created_on_admin(sender, instance: Members
         # Envoie a la boutik, Fedow, webhook, etc ...
         vente.status = LigneArticle.PAID
         vente.save()
-
 
 
 @receiver(post_save, sender=Ticket)
@@ -363,7 +370,7 @@ def create_lignearticle_if_ticket_created_on_admin(sender, instance: Ticket, cre
         vente = LigneArticle.objects.create(
             pricesold=ticket.pricesold,
             qty=1,
-            amount=int(ticket.pricesold.prix*100),
+            amount=int(ticket.pricesold.prix * 100),
             payment_method=ticket.payment_method,
             status=LigneArticle.CREATED,
         )
@@ -374,4 +381,3 @@ def create_lignearticle_if_ticket_created_on_admin(sender, instance: Ticket, cre
         # Envoie a la boutik, Fedow, webhook, etc ...
         vente.status = LigneArticle.PAID
         vente.save()
-

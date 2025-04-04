@@ -618,14 +618,14 @@ class Product(models.Model):
     option_generale_radio = models.ManyToManyField(OptionGenerale,
                                                    blank=True,
                                                    related_name="produits_radio",
-                                                   verbose_name=_("Single choice menu"),
+                                                   verbose_name=_("Single choice options"),
                                                    help_text=_(
                                                        "Only one choice can be selected at order time."))
 
     option_generale_checkbox = models.ManyToManyField(OptionGenerale,
                                                       blank=True,
                                                       related_name="produits_checkbox",
-                                                      verbose_name=_("Multiple choice menu"),
+                                                      verbose_name=_("Multiple choice options"),
                                                       help_text=_(
                                                           "Any number of choices can be selected at order time."))
 
@@ -730,7 +730,8 @@ class Price(models.Model):
     long_description = models.TextField(blank=True, null=True)
 
     name = models.CharField(max_length=50, verbose_name=_("Rate name"))
-    prix = models.DecimalField(max_digits=6, decimal_places=2, verbose_name=_("Price"))
+    prix = models.DecimalField(max_digits=6, decimal_places=2, verbose_name=_("Price"),
+                               help_text=_("If the free price is activated, the amount is the minimum accepted rate."))
     order = models.SmallIntegerField(default=100, verbose_name=_("Display order"))
 
     free_price = models.BooleanField(default=False, verbose_name=_("Open price"),
@@ -1246,6 +1247,8 @@ class PriceSold(models.Model):
             data_stripe['billing_scheme'] = "per_unit"
             data_stripe['custom_unit_amount'] = {
                 "enabled": "true",
+                "minimum": f"{int(Decimal(self.prix) * 100)}",
+                # "preset": f"{int(Decimal(self.prix) * 100)}",
             }
 
         price = stripe.Price.create(**data_stripe)
