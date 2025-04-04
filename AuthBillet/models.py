@@ -203,6 +203,12 @@ class TibilletUser(AbstractUser):
     terminal_uuid = models.CharField(blank=True, null=True, max_length=200)
 
     ##### END user terminaux ####
+    def full_name(self):
+        if self.first_name and self.last_name:
+            return f"{self.first_name} {self.last_name}"
+        elif self.first_name:
+            return self.first_name
+        return "Anonyme"
 
     def achat(self):
         return " - ".join([achat["name"] for achat in self.client_achat.values("name")])

@@ -10,30 +10,24 @@
     window.formbricks.init({
         environmentId: "{{ form.environmentId }}",
         apiHost: "{{ form.apiHost }}",
-        userId: "{{ reservation.email }} {{ reservation.uuid | slice:':4' }}",
+        userId: "{{ reservation.user_commande.email }} {{ reservation.uuid | slice:':4' }}",
     });
 
     console.log({
-        email: "{{ reservation.email }}",
-        name: "{{ reservation.member_name }}",
+        email: "{{ reservation.user_commande.email }}",
+        name: "{{ reservation.user_commande.full_name }}",
         reservation_uuid: "{{ reservation.uuid }}",
-        product_name: "{{ reservation.price.product.name }}",
-        price_name: "{{ reservation.price.name }}",
-        product_slug: "{{ reservation.price.product.name|slugify }}",
-        price_slug: "{{ reservation.price.name|slugify }}",
-        price_amount: "{{ reservation.price.prix }}",
+        event_name: "{{ reservation.event.name }}",
+        event_slug: "{{ reservation.event.slug }}",
     })
 
     window.formbricks.track("{{ form.trigger_name }}", {
         hiddenFields: {
-            email: "{{ reservation.email }}",
-            name: "{{ reservation.member_name }}",
+            email: "{{ reservation.user_commande.email }}",
+            name: "{{ reservation.user_commande.full_name }}",
             reservation_uuid: "{{ reservation.uuid }}",
-            product_name: "{{ reservation.price.product.name }}",
-            price_name: "{{ reservation.price.name }}",
-            product_slug: "{{ reservation.price.product.name|slugify }}",
-            price_slug: "{{ reservation.price.name|slugify }}",
-            price_amount: "{{ reservation.price.prix }}",
+            event_name: "{{ reservation.event.name }}",
+            event_slug: "{{ reservation.event.slug }}",
         },
     });
 
