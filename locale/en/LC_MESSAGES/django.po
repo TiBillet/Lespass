@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-04-04 06:15+0000\n"
+"POT-Creation-Date: 2025-04-04 08:10+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -139,7 +139,7 @@ msgid "Select an subscription"
 msgstr ""
 
 #: Administration/admin_tenant.py:1050 BaseBillet/models.py:1744
-#: BaseBillet/tasks.py:222
+#: BaseBillet/tasks.py:223
 msgid "Contribution"
 msgstr ""
 
@@ -188,7 +188,7 @@ msgid "Total"
 msgstr ""
 
 #: Administration/admin_tenant.py:1263 BaseBillet/models.py:704
-#: BaseBillet/models.py:727 BaseBillet/models.py:1190 BaseBillet/tasks.py:221
+#: BaseBillet/models.py:727 BaseBillet/models.py:1190 BaseBillet/tasks.py:222
 msgid "Product"
 msgstr ""
 
@@ -1645,62 +1645,65 @@ msgstr ""
 msgid "Brevo settings"
 msgstr ""
 
-#: BaseBillet/tasks.py:213
+#: BaseBillet/tasks.py:215
 msgid "Confirmation email"
 msgstr ""
 
-#: BaseBillet/tasks.py:214
+#: BaseBillet/tasks.py:216
 msgid "Welcome aboard !"
 msgstr ""
 
-#: BaseBillet/tasks.py:216
-#, python-brace-format
-msgid "Your payment for {membership.price.product.name} has been received."
+#: BaseBillet/tasks.py:217
+msgid "Your payment for "
 msgstr ""
 
-#: BaseBillet/tasks.py:220
+#: BaseBillet/tasks.py:217
+msgid " has been received."
+msgstr ""
+
+#: BaseBillet/tasks.py:221
 msgid "Receipt for:"
 msgstr ""
 
-#: BaseBillet/tasks.py:223
+#: BaseBillet/tasks.py:224
 #: BaseBillet/templates/htmx/views/my_account/transactions_table.html:11
 #: BaseBillet/templates/invoice/invoice.html:159
 #: BaseBillet/templates/reunion/partials/account/transaction_history.html:11
 msgid "Date"
 msgstr ""
 
-#: BaseBillet/tasks.py:224
+#: BaseBillet/tasks.py:225
 msgid "Valid until"
 msgstr ""
 
-#: BaseBillet/tasks.py:228
+#: BaseBillet/tasks.py:229
 msgid "REQUEST INVOICE"
 msgstr ""
 
-#: BaseBillet/tasks.py:231
+#: BaseBillet/tasks.py:232
 msgid "If you receive this email by mistake, please contact the TiBillet team."
 msgstr ""
 
-#: BaseBillet/tasks.py:233
+#: BaseBillet/tasks.py:234
 msgid "See you soon!"
 msgstr ""
 
-#: BaseBillet/tasks.py:234
-msgid "Mar, the TiBillet robot"
+#: BaseBillet/tasks.py:235
+msgid "Marvin, the TiBillet robot"
 msgstr ""
 
-#: BaseBillet/tasks.py:511
+#: BaseBillet/tasks.py:512
 msgid "TiBillet : Creation of a new instance."
 msgstr ""
 
-#: BaseBillet/tasks.py:536
+#: BaseBillet/tasks.py:537
 #, python-brace-format
 msgid ""
 "{waiting_config.organisation} & TiBillet : Lespass tenant creation request. "
 "ROOT admin action requested"
 msgstr ""
 
-#: BaseBillet/tasks.py:570
+#: BaseBillet/tasks.py:571
 #, python-brace-format
 msgid "TiBillet sales report - {configuration.organisation}"
 msgstr ""

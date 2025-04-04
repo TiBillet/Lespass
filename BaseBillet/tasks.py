@@ -205,6 +205,8 @@ def context_for_membership_email(membership: "Membership"):
     if hasattr(config.img, 'med'):
         image_url = f"https://{domain}{config.img.med.url}"
 
+
+    activate("fr")
     context = {
         'username': membership.member_name(),
         'now': timezone.now(),
@@ -212,8 +214,7 @@ def context_for_membership_email(membership: "Membership"):
         'image_url': image_url,
         'objet': _("Confirmation email"),
         'sub_title': _("Welcome aboard !"),
-        'main_text': _(
-            _(f"Your payment for {membership.price.product.name} has been received.")),
+        'main_text': _("Your payment for ")+f"{membership.price.product.name}"+_(" has been received."),
         # 'main_text_2': _("Si vous pensez que cette demande est main_text_2, vous n'avez rien a faire de plus :)"),
         # 'main_text_3': _("Dans le cas contraire, vous pouvez main_text_3. Merci de contacter l'équipe d'administration via : contact@tibillet.re au moindre doute."),
         'table_info': {
@@ -231,7 +232,7 @@ def context_for_membership_email(membership: "Membership"):
         'next_text_1': _("If you receive this email by mistake, please contact the TiBillet team."),
         # 'next_text_2': "next_text_2",
         'end_text': _('See you soon!'),
-        'signature': _("Mar, the TiBillet robot"),
+        'signature': _("Marvin, the TiBillet robot"),
     }
     # Ajout des options str si il y en a :
     if membership.option_generale.count() > 0:

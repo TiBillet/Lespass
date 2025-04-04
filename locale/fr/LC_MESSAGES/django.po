@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-04-04 06:15+0000\n"
+"POT-Creation-Date: 2025-04-04 08:10+0000\n"
 "PO-Revision-Date: 2025-03-12 09:37+0100\n"
 "Last-Translator: Diane Alma Kay <pro@kayathommy.fr>\n"
 "Language-Team: French\n"
@@ -143,7 +143,7 @@ msgid "Select an subscription"
 msgstr "Choisir une adhésion"
 
 #: Administration/admin_tenant.py:1050 BaseBillet/models.py:1744
-#: BaseBillet/tasks.py:222
+#: BaseBillet/tasks.py:223
 msgid "Contribution"
 msgstr "Contribution"
 
@@ -192,7 +192,7 @@ msgid "Total"
 msgstr "Total"
 
 #: Administration/admin_tenant.py:1263 BaseBillet/models.py:704
-#: BaseBillet/models.py:727 BaseBillet/models.py:1190 BaseBillet/tasks.py:221
+#: BaseBillet/models.py:727 BaseBillet/models.py:1190 BaseBillet/tasks.py:222
 msgid "Product"
 msgstr "Produit"
 
@@ -232,12 +232,10 @@ msgid "Rate"
 msgstr "Tarif"
 
 #: Administration/admin_tenant.py:1564
-#| msgid "Multiple choice options"
 msgid "Multiple choice menu"
 msgstr "Options à choix multiples"
 
 #: Administration/admin_tenant.py:1572
-#| msgid "Single choice options"
 msgid "Single choice menu"
 msgstr "Options à choix unique"
 
@@ -1673,56 +1671,61 @@ msgstr "Paramètre Brevo"
 msgid "Brevo settings"
 msgstr "Paramètres Brevo"
 
-#: BaseBillet/tasks.py:213
+#: BaseBillet/tasks.py:215
 msgid "Confirmation email"
 msgstr "Mail de confirmation"
 
-#: BaseBillet/tasks.py:214
+#: BaseBillet/tasks.py:216
 msgid "Welcome aboard !"
 msgstr "Bienvenue à bord !"
 
-#: BaseBillet/tasks.py:216
-#, python-brace-format
-msgid "Your payment for {membership.price.product.name} has been received."
-msgstr "Votre paiement pour {membership.price.product.name} a bien été reçu."
+#: BaseBillet/tasks.py:217
+#| msgid "Tour operator"
+msgid "Your payment for "
+msgstr "Votre paiement pour "
 
-#: BaseBillet/tasks.py:220
+#: BaseBillet/tasks.py:217
+msgid " has been received."
+msgstr " a bien été reçu."
+
+#: BaseBillet/tasks.py:221
 msgid "Receipt for:"
 msgstr "Reçu pour :"
 
-#: BaseBillet/tasks.py:223
+#: BaseBillet/tasks.py:224
 #: BaseBillet/templates/htmx/views/my_account/transactions_table.html:11
 #: BaseBillet/templates/invoice/invoice.html:159
 #: BaseBillet/templates/reunion/partials/account/transaction_history.html:11
 msgid "Date"
 msgstr "Date"
 
-#: BaseBillet/tasks.py:224
+#: BaseBillet/tasks.py:225
 msgid "Valid until"
 msgstr "Valable jusque"
 
-#: BaseBillet/tasks.py:228
+#: BaseBillet/tasks.py:229
 msgid "REQUEST INVOICE"
 msgstr "RÉCUPÉRER UNE FACTURE"
 
-#: BaseBillet/tasks.py:231
+#: BaseBillet/tasks.py:232
 msgid "If you receive this email by mistake, please contact the TiBillet team."
 msgstr ""
 "Si vous recevez ce mail par erreur, merci de contacter l'équipe TiBillet."
 
-#: BaseBillet/tasks.py:233
+#: BaseBillet/tasks.py:234
 msgid "See you soon!"
 msgstr "À bientôt !"
 
-#: BaseBillet/tasks.py:234
-msgid "Mar, the TiBillet robot"
-msgstr "Mar, le robot TiBillet"
+#: BaseBillet/tasks.py:235
+#| msgid "Mar, the TiBillet robot"
+msgid "Marvin, the TiBillet robot"
+msgstr "Marvin, le robot TiBillet"
 
-#: BaseBillet/tasks.py:511
+#: BaseBillet/tasks.py:512
 msgid "TiBillet : Creation of a new instance."
 msgstr "TiBillet : création d'une nouvelle instance."
 
-#: BaseBillet/tasks.py:536
+#: BaseBillet/tasks.py:537
 #, python-brace-format
 msgid ""
 "{waiting_config.organisation} & TiBillet : Lespass tenant creation request. "
@@ -1731,7 +1734,7 @@ msgstr ""
 "{waiting_config.organisation} & TiBillet : Demande de création d'un nouvel "
 "espace. Action d'admin ROOT demandée"
 
-#: BaseBillet/tasks.py:570
+#: BaseBillet/tasks.py:571
 #, python-brace-format
 msgid "TiBillet sales report - {configuration.organisation}"
 msgstr "TiBillet rapport de ventes - {configuration.organisation}"
@@ -3390,3 +3393,8 @@ msgstr "Fusion de tirelires"
 #: fedow_connect/validators.py:87 fedow_connect/validators.py:191
 msgid "Refund"
 msgstr "Remboursement"
+
+#, python-brace-format
+#~ msgid "Your payment for {membership.price.product.name} has been received."
+#~ msgstr ""
+#~ "Votre paiement pour {membership.price.product.name} a bien été reçu."
