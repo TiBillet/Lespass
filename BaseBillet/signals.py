@@ -332,11 +332,12 @@ def send_membership_and_badge_product_to_fedow(sender, instance: Product, create
 @receiver(pre_save, sender=Price)
 def price_if_free_set_t_1(sender, instance: Price, **kwargs):
     if instance.free_price:
-        # Quantité unitaire pour caisse enregistreuse
-        if instance.prix < 1:
+        if instance.prix : # On met le prix a minimum à 1.
+            if instance.prix < 1 :
+                instance.prix = 1
+        else :
             instance.prix = 1
         instance.max_per_user = 1
-
 
 @receiver(post_save, sender=Membership)
 def create_lignearticle_if_membership_created_on_admin(sender, instance: Membership, created, **kwargs):

@@ -162,7 +162,7 @@ class Command(BaseCommand):
                     product=adhesion_asso,
                     name="Annuelle",
                     short_description="Adhésion annuelle",
-                    prix='20',
+                    prix=20,
                     recurring_payment=False,
                     subscription_type=Price.YEAR,
                 )
@@ -171,7 +171,7 @@ class Command(BaseCommand):
                     product=adhesion_asso,
                     name="Mensuelle",
                     short_description="Adhésion mensuelle récurente",
-                    prix='2',
+                    prix=2,
                     recurring_payment=True,
                     subscription_type=Price.MONTH,
                 )
@@ -180,7 +180,7 @@ class Command(BaseCommand):
                     product=adhesion_asso,
                     name="Prix libre",
                     short_description="Prix libre",
-                    prix='1',
+                    prix=1,
                     free_price=True,
                     subscription_type=Price.YEAR,
                 )
@@ -199,7 +199,7 @@ class Command(BaseCommand):
                     product=amap,
                     name="Annuelle",
                     short_description="Adhésion annuelle",
-                    prix='400',
+                    prix=400,
                     recurring_payment=False,
                     subscription_type=Price.YEAR,
                 )
@@ -208,7 +208,7 @@ class Command(BaseCommand):
                     product=amap,
                     name="Mensuelle",
                     short_description="Adhésion récurente",
-                    prix='40',
+                    prix=40,
                     recurring_payment=True,
                     subscription_type=Price.MONTH,
                 )

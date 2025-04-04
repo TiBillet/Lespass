@@ -1061,7 +1061,7 @@ msgstr "Description sur la page adhésion"
 
 #: BaseBillet/models.py:401
 msgid "Displayed above membership products."
-msgstr ""
+msgstr "Affiché au-dessus des produits d'adhésion."
 
 #: BaseBillet/models.py:411
 msgid "Cashless server URL"
