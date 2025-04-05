@@ -941,6 +941,23 @@ class EventMVT(viewsets.ViewSet):
                 messages.add_message(request, messages.ERROR, f"{validator.errors[error][0]}")
             return HttpResponseClientRedirect(request.headers['Referer'])
 
+        # Le formulaire est valide.
+        # Vérification de la demande de fomulaire supplémentaire avec Formbricks
+        for product in validator.products:
+            if product.formbricksform.exists():
+                formbicks_form: FormbricksForms = product.formbricksform.first() # On prend le premier.
+                formbricks_config = FormbricksConfig.get_solo()
+                checkout_stripe = validator.checkout_link if validator.checkout_link else None
+                context = {'form': {'apiHost': formbricks_config.api_host,
+                                    'trigger_name': formbicks_form.trigger_name,
+                                    'environmentId': formbicks_form.environmentId, },
+                           'reservation': validator.reservation,
+                           'checkout_stripe': checkout_stripe,
+                           }
+
+                return render(request, "reunion/views/event/formbricks.html", context=context)
+
+
         # SI on a un besoin de paiement, on redirige vers :
         if validator.checkout_link:
             logger.info("validator reservation OK, get checkout link -> redirect")

@@ -1,0 +1,47 @@
+{% load static %}
+
+<!-- START Formbricks Surveys -->
+<script type="module">
+    import * as Spinner from '{% static "reunion/js/form-spinner.mjs" %}'
+
+    // show spinner on form submission
+    Spinner.init(document.getElementById('reservation_form'))
+
+    window.formbricks.init({
+        environmentId: "{{ form.environmentId }}",
+        apiHost: "{{ form.apiHost }}",
+        userId: "{{ reservation.user_commande.email }} {{ reservation.uuid | slice:':4' }}",
+    });
+
+    console.log({
+        email: "{{ reservation.user_commande.email }}",
+        name: "{{ reservation.user_commande.full_name }}",
+        reservation_uuid: "{{ reservation.uuid }}",
+        event_name: "{{ reservation.event.name }}",
+        event_slug: "{{ reservation.event.slug }}",
+    })
+
+    window.formbricks.track("{{ form.trigger_name }}", {
+        hiddenFields: {
+            email: "{{ reservation.user_commande.email }}",
+            name: "{{ reservation.user_commande.full_name }}",
+            reservation_uuid: "{{ reservation.uuid }}",
+            event_name: "{{ reservation.event.name }}",
+            event_slug: "{{ reservation.event.slug }}",
+        },
+    });
+
+    window.addEventListener("message", function (event) {
+        if (event.data === "formbricksSurveyCompleted") {
+            console.log("Survey Completed")
+            window.location.href = "{{ checkout_stripe|default:'' }}"
+        }
+    })
+
+    //hide offcanvas
+    bootstrap.Offcanvas.getOrCreateInstance('#bookingPanel').hide()
+
+    // hide spinner
+    Spinner.hideSpinner()
+</script>
+<!-- END Formbricks Surveys -->

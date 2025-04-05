@@ -234,12 +234,13 @@ class ReservationValidator(serializers.Serializer):
         # Rercher des produits potentiels
         event = self.event
         products_dict = {}
+        self.products = [] # Pour checker si un formulaire forbricks est présent
         for product in event.products.all():
             for price in product.prices.all():
                 # Un input possède l'uuid du prix ?
                 if self.initial_data.get(str(price.uuid)):
                     qty = int(self.initial_data.get(str(price.uuid)))
-
+                    self.products.append(product)
                     if products_dict.get(product):
                         # On ajoute le prix a la liste des articles choisi
                         products_dict[product][price] = qty
