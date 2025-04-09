@@ -913,25 +913,29 @@ class Webhook_stripe(APIView):
             amount = payload["data"]["object"]["amount"]
             stripe_connect_account = payload["data"]["object"]["destination"]
             created = datetime.fromtimestamp(payload["data"]["object"]["created"])
-            
             # On est sur le tenant root. Il faut chercher le tenant correspondant.
             for tenant in Client.objects.all().exclude(categorie=Client.ROOT):
                 with tenant_context(tenant):
                     config = Configuration.get_solo()
-                    if config.stripe_connect_account == stripe_connect_account:
-                        # Création du paiement stripe
-                        pstripe = Paiement_stripe.objects.create(
-                                detail=_("Versement de monnaie globale"),
-                                payment_intent_id=payload["data"]["object"]["id"] ,
-                                metadata_stripe=json.dumps(payload),
-                                customer_stripe=stripe_connect_account,
-                                order_date=created,
-                                status=Paiement_stripe.PAID,
-                                traitement_en_cours=True,
-                                source=Paiement_stripe.TRANSFERT,
-                                source_traitement=Paiement_stripe.WEBHOOK,
-                                # fedow_transactions=,
-                            )
+                    tenant_stripe_connect_account = config.get_stripe_connect_account()
+                    if tenant_stripe_connect_account:
+                        if tenant_stripe_connect_account == stripe_connect_account:
+                            # Création du paiement stripe
+                            pstripe = Paiement_stripe.objects.create(
+                                    detail=_("Versement de monnaie globale"),
+                                    payment_intent_id=payload["data"]["object"]["id"] ,
+                                    metadata_stripe=json.dumps(payload),
+                                    order_date=created,
+                                    status=Paiement_stripe.PAID,
+                                    traitement_en_cours=True,
+                                    source=Paiement_stripe.TRANSFERT,
+                                    source_traitement=Paiement_stripe.WEBHOOK,
+                                    # fedow_transactions=,
+                                )
+                            logger.info(f'transfer.created OK : Paiement_stripe.objects.created : {pstripe.uuid_8}')
+                            return Response(f'transfer.created OK : Paiement_stripe.objects.created : {pstripe.uuid_8}',
+                                            status=status.HTTP_201_CREATED)
+
             # send_stripe_transfert_to_laboutik(payload)
 
 
