@@ -721,8 +721,23 @@ class HomeViewset(viewsets.ViewSet):
 class EventMVT(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
+    def federated_events_get(self, slug):
+        for place in FederatedPlace.objects.all():
+            tenant = place.tenant
+            with tenant_context(tenant):
+                try :
+                    event = Event.objects.select_related(
+                        'postal_address',
+                    ).prefetch_related(
+                        'tag', 'products', 'products__prices',
+                    ).get(slug=slug)
+                    return event
+                except Event.DoesNotExist:
+                    continue
 
-    def get_federated_events(self, tags=None, search=None, page=1):
+        raise Http404
+
+    def federated_events_filter(self, tags=None, search=None, page=1):
         dated_events = {}
         paginated_info = {
             'page': page,
@@ -809,7 +824,7 @@ class EventMVT(viewsets.ViewSet):
         logger.info(f"request.GET : {request.GET}")
 
         ctx = {}  # le dict de context pour template
-        ctx['dated_events'], ctx['paginated_info'] = self.get_federated_events(tags=tags, search=search, page=page)
+        ctx['dated_events'], ctx['paginated_info'] = self.federated_events_filter(tags=tags, search=search, page=page)
         return render(request, "reunion/partials/event/list.html", context=ctx)
 
     # La page get /
@@ -817,14 +832,14 @@ class EventMVT(viewsets.ViewSet):
         context = get_context(request)
         tags = request.GET.getlist('tag')
         page = request.GET.get('page', 1)
-        context['dated_events'], context['paginated_info'] = self.get_federated_events(tags=tags, page=page)
+        context['dated_events'], context['paginated_info'] = self.federated_events_filter(tags=tags, page=page)
         # On renvoie la page en entier
         return render(request, "reunion/views/event/list.html", context=context)
 
     @action(detail=False, methods=['GET'])
     def embed(self, request):
         template_context = get_context(request)
-        template_context['dated_events'], template_context['paginated_info'] = self.get_federated_events()
+        template_context['dated_events'], template_context['paginated_info'] = self.federated_events_filter()
         template_context['embed'] = True
         response = render(
             request, "reunion/views/event/list.html",
@@ -834,33 +849,6 @@ class EventMVT(viewsets.ViewSet):
         response['X-Frame-Options'] = ''
         return response
 
-
-
-    # Recherche dans tout les tenant fédérés
-    def tenant_retrieve(self, slug):
-        config = Configuration.get_solo()
-        for tenant in config.federated_with.all():
-            logger.info(f'on test avec {tenant.name}')
-            with tenant_context(tenant):
-                try:
-                    event = Event.objects.select_related('postal_address', ).prefetch_related('tag', 'products',
-                                                                                              'products__prices').get(
-                        slug=slug)
-
-                    # Récupération des prix
-                    tarifs = [price.prix for product in event.products.all() for price in product.prices.all()]
-                    # Calcul des prix min et max
-                    event.price_min = min(tarifs) if tarifs else None
-                    event.price_max = max(tarifs) if tarifs else None
-                    # Vérification de l'existence d'un prix libre
-                    event.free_price = any(
-                        price.free_price for product in event.products.all() for price in product.prices.all())
-
-                    logger.info(f'tenant_retrieve event trouvé')
-                    return event
-                except Event.DoesNotExist:
-                    continue
-        raise Http404
 
     def retrieve(self, request, pk=None):
         slug = pk
@@ -883,7 +871,8 @@ class EventMVT(viewsets.ViewSet):
 
         except Event.DoesNotExist:
             # L'évent n'est pas
-            event = self.tenant_retrieve(slug)
+            logger.info("Event.DoesNotExist !")
+            event = self.federated_events_get(slug)
 
         template_context = get_context(request)
         template_context['event'] = event
