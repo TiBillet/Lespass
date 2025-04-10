@@ -2059,25 +2059,25 @@ class WaitingConfigAdmin(ModelAdmin):
     list_filter = ["datetime", "created", "onboard_stripe_finished"]
     search_fields = ["email", "organisation", "datetime"]
 
-    actions_detail = ["create_tenant", ]
-
-    @action(description=_("Create instance"),
-            url_path="create_tenant",
-            permissions=["custom_actions_detail"])
-    def create_tenant(self, request, object_id):
-        wc = WaitingConfiguration.objects.get(pk=object_id)
-        if wc.onboard_stripe_finished and wc.id_acc_connect:
-            wc.create_tenant()
-            messages.add_message(
-                request, messages.SUCCESS,
-                _(f"The Lèspass instance has been created. An invite email has been sent to {wc.email}")
-            )
-        else:
-            messages.add_message(
-                request, messages.WARNING,
-                _(f"The collective is not yet finished with Stripe account creation.")
-            )
-        return redirect(request.META["HTTP_REFERER"])
+    # actions_detail = ["create_tenant", ]
+    #
+    # @action(description=_("Create instance"),
+    #         url_path="create_tenant",
+    #         permissions=["custom_actions_detail"])
+    # def create_tenant(self, request, object_id):
+    #     wc = WaitingConfiguration.objects.get(pk=object_id)
+    #     if wc.onboard_stripe_finished and wc.id_acc_connect:
+    #         wc.create_tenant()
+    #         messages.add_message(
+    #             request, messages.SUCCESS,
+    #             _(f"The Lèspass instance has been created. An invite email has been sent to {wc.email}")
+    #         )
+    #     else:
+    #         messages.add_message(
+    #             request, messages.WARNING,
+    #             _(f"The collective is not yet finished with Stripe account creation.")
+    #         )
+    #     return redirect(request.META["HTTP_REFERER"])
 
     def has_custom_actions_detail_permission(self, request, object_id):
         return RootPermissionWithRequest(request)
