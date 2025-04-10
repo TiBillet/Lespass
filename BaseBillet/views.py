@@ -735,7 +735,7 @@ class EventMVT(viewsets.ViewSet):
                 except Event.DoesNotExist:
                     continue
 
-        raise Http404
+        return None
 
     def federated_events_filter(self, tags=None, search=None, page=1):
         dated_events = {}
@@ -871,8 +871,12 @@ class EventMVT(viewsets.ViewSet):
 
         except Event.DoesNotExist:
             # L'évent n'est pas
-            logger.info("Event.DoesNotExist !")
+            logger.info("Event.DoesNotExist on tenant, check to federation")
             event = self.federated_events_get(slug)
+
+        if not event: # Event pas trouvé, on redirige vers la page d'évènement complète
+            logger.info("Event.DoesNotExist on federation, redirect")
+            return redirect("/event/")
 
         template_context = get_context(request)
         template_context['event'] = event
