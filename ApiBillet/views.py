@@ -12,7 +12,7 @@ from django.db import connection
 from django.http import Http404, HttpResponse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django_tenants.utils import schema_context, tenant_context
+from django_tenants.utils import tenant_context
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import permission_classes, action
 from rest_framework.generics import get_object_or_404
@@ -22,18 +22,16 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ViewSet
 
+from ApiBillet.permissions import TenantAdminApiPermission, TibilletUser, get_apikey_valid
 from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
     ReservationValidator, ConfigurationSerializer, TicketSerializer, \
     OptionsSerializer, ProductCreateSerializer, EmailSerializer
-from ApiBillet.permissions import TenantAdminApiPermission, TibilletUser, get_apikey_valid
 from AuthBillet.models import HumanUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe, \
-    OptionGenerale, Membership, LigneArticle, PriceSold, ProductSold
-from BaseBillet.tasks import create_ticket_pdf, send_stripe_transfert_to_laboutik
+    OptionGenerale, Membership
+from BaseBillet.tasks import create_ticket_pdf
 from Customers.models import Client
-from MetaBillet.models import ProductDirectory
-from PaiementStripe.views import new_entry_from_stripe_invoice
 from TiBillet import settings
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.utils import rsa_decrypt_string, rsa_encrypt_string, get_public_key, data_to_b64

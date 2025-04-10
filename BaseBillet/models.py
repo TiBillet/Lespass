@@ -1025,7 +1025,9 @@ class Event(models.Model):
         """
         Transforme le titre de l'evenemennt en slug, pour en faire une url lisible
         """
-        self.slug = slugify(f"{self.name} {self.datetime.strftime('%y%m%d-%H%M')}")
+        config = Configuration.get_solo()
+        timezone = pytz.timezone(config.fuseau_horaire)
+        self.slug = slugify(f"{self.name} {self.datetime.astimezone(timezone).strftime('%y%m%d-%H%M')}")
 
         # Génère l'url de l'évènement si il n'est pas externe.
         # Nécéssaire pour le prefetch multi tenant

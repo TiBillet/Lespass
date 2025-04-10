@@ -34,7 +34,7 @@
             {% endfor %}
         </p>
 
-        <p class="lead">{{ event.short_description }}</p>
+        <p class="lead">{{ event.short_description | default:"" }}</p>
 
         {#    Si l'évènement n'est pas de ce tenant, il provient d'une fédération, le bouton redigire vers la page du tenant.#}
         {#    # Todo : Garder l'user d'un dns à l'autre, et ouvrir le modal reserver dans le nouveau tenant #}
