@@ -755,9 +755,10 @@ class EventMVT(viewsets.ViewSet):
             for place in FederatedPlace.objects.all().prefetch_related("tag_filter", "tag_exclude")
         ]
         # Le tenant actuel
+        this_tenant = connection.tenant
         tenants.append(
             {
-                "tenant": connection.tenant,
+                "tenant": this_tenant,
                 "tag_filter": [],
                 "tag_exclude": [],
             }
@@ -775,6 +776,11 @@ class EventMVT(viewsets.ViewSet):
                 ).exclude(tag__slug__in=tenant['tag_filter']  # On prend les évènement d'aujourd'hui
                           ).exclude(
                     categorie=Event.ACTION)  # Les Actions sont affichés dans la page de l'evenement parent
+
+                if tenant['tenant'] != this_tenant: # on est pas sur le tenant d'origine, on filtre le bool private
+                    events = events.filter(
+                        private=False
+                    )
 
                 if len(tenant['tag_exclude']) > 0:
                     events = events.filter(

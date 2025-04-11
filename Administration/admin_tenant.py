@@ -1406,6 +1406,7 @@ class EventAdmin(ModelAdmin):
                 'jauge_max',
                 'postal_address',
                 'published',
+                'private',
             )
         }),
         ('Bookings', {
