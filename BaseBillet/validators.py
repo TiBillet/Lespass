@@ -235,11 +235,15 @@ class ReservationValidator(serializers.Serializer):
         event = self.event
         products_dict = {}
         self.products = [] # Pour checker si un formulaire forbricks est présent
+        self.free_price = False # Pour vérification plus bas que le prix libre est bien seul
+
         for product in event.products.all():
             for price in product.prices.all():
                 # Un input possède l'uuid du prix ?
                 if self.initial_data.get(str(price.uuid)):
                     qty = int(self.initial_data.get(str(price.uuid)))
+                    if price.free_price: # Pour vérification plus bas que le prix libre est bien seul
+                        self.free_price = True
                     self.products.append(product)
                     if products_dict.get(product):
                         # On ajoute le prix a la liste des articles choisi
@@ -332,6 +336,10 @@ class ReservationValidator(serializers.Serializer):
         if total_ticket_qty > event.max_per_user:
             raise serializers.ValidationError(_(f'Order quantity surpasses maximum allowed per user.'))
 
+        # Pour vérification plus bas que le prix libre est bien seul
+        if self.free_price:
+            if len(self.products) > 1:
+                raise serializers.ValidationError(_(f'Un prix libre doit être selectionné seul.'))
 
         # Vérification de la jauge
         valid_tickets_count = event.valid_tickets_count()
