@@ -842,7 +842,7 @@ class Event(models.Model):
     full_url = models.URLField(blank=True, null=True)
 
     published = models.BooleanField(default=True, verbose_name=_("Publish"))
-    private = models.BooleanField(default=False, verbose_name=_("Évènement non fédérable"), help_text=_("Ne s'affichera pas sur les agendas partagés."))
+    private = models.BooleanField(default=False, verbose_name=_("Non-federable event"), help_text=_("Will not be displayed on shared calendars."))
 
     products = models.ManyToManyField(Product, blank=True, verbose_name=_("Products"))
 

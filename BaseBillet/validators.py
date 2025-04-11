@@ -339,7 +339,7 @@ class ReservationValidator(serializers.Serializer):
         # Pour vérification plus bas que le prix libre est bien seul
         if self.free_price:
             if len(self.products) > 1:
-                raise serializers.ValidationError(_(f'Un prix libre doit être selectionné seul.'))
+                raise serializers.ValidationError(_(f'A free price must be selected alone.'))
 
         # Vérification de la jauge
         valid_tickets_count = event.valid_tickets_count()
