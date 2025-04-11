@@ -45,7 +45,7 @@ export const init = () => {
         .filter(({ amount }) => amount !== null )
     
     orders.forEach(({ amount }) => {
-        amount.addEventListener('change', updateTotal(orders, totalAmount, totalPrice))
+        amount.addEventListener('bs-counter:update', updateTotal(orders, totalAmount, totalPrice))
     })
 
     updateTotal(orders, totalAmount, totalPrice)()
