@@ -363,16 +363,15 @@ msgid "Current system health"
 msgstr "Santé actuelle du système"
 
 #: Administration/templates/admin/membership/get_wallet_info.html:6
-#, fuzzy
 #| msgid "Global information"
 msgid "Get cards and wallet information"
-msgstr "Informations générales"
+msgstr "Récupérer les information de tirelire et de carte"
 
 # DEPRECATED 2.0 old ui
 #: Administration/templates/admin/membership/wallet_info.html:40
 #: BaseBillet/templates/htmx/views/my_account/my_account.html:50
 msgid "Cards"
-msgstr ""
+msgstr "Cartes"
 
 #: Administration/templates/admin/membership/wallet_info.html:50
 #: ApiBillet/templates/ticket/ticket.html:156
@@ -387,10 +386,9 @@ msgid "Origin"
 msgstr "Origine"
 
 #: Administration/templates/admin/membership/wallet_info.html:58
-#, fuzzy
 #| msgid "Federation"
 msgid "Generation"
-msgstr "Fédération"
+msgstr "Génération"
 
 #: Administration/templates/admin/membership/wallet_info.html:92
 msgid "Card lost"
