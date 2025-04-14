@@ -1,7 +1,7 @@
 import logging
 from datetime import timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, Optional, Dict
 from unicodedata import category
 
 import requests
@@ -677,7 +677,6 @@ class PaiementStripeAdmin(ModelAdmin):
 USER
 """
 
-
 class MembershipInline(TabularInline):
     model = Membership
     # form = MembershipInlineForm
@@ -809,6 +808,18 @@ class HumanUserAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
     inlines = [MembershipInline, ]
+
+    """
+    On affiche en haut du changelist un bouton pour pouvoir changer sa carte 
+    Change form view sert à donner le pk de l'user pour le bouton htmx
+    """
+    change_form_after_template = "admin/membership/get_wallet_info.html"
+    def changeform_view(self, request: HttpRequest, object_id: Optional[str] = None, form_url: str = "",
+                        extra_context: Optional[Dict[str, bool]] = None) -> Any:
+        extra_context = extra_context or {}
+        extra_context['object_id'] = object_id
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
 
     list_display = [
         'email',
