@@ -264,6 +264,7 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
             'fields': (
                 # 'vat_taxe',
                 'onboard_stripe',
+                'stripe_invoice',
                 # 'stripe_mode_test',
             ),
         }),
@@ -1191,7 +1192,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
     actions_detail = ["send_invoice", "get_invoice"]
 
     @action(
-        description=_("Send an invoice through email"),
+        description=_("Send an receipt through email"),
         url_path="send_invoice",
         permissions=["custom_actions_detail"],
     )
@@ -1205,7 +1206,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
         return redirect(request.META["HTTP_REFERER"])
 
     @action(
-        description=_("Build an invoice"),
+        description=_("Build an receipt"),
         url_path="get_invoice",
         permissions=["custom_actions_detail"],
     )

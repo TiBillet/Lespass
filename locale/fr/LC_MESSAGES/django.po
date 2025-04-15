@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-04-14 13:03+0000\n"
+"POT-Creation-Date: 2025-04-15 12:16+0000\n"
 "PO-Revision-Date: 2025-03-12 09:37+0100\n"
 "Last-Translator: Diane Alma Kay <pro@kayathommy.fr>\n"
 "Language-Team: French\n"
@@ -166,8 +166,8 @@ msgid "Please fill in a positive value of the contribution."
 msgstr "Merci d'indiquer une valeur positive pour la contribution."
 
 #: Administration/admin_tenant.py:1194
-msgid "Send an invoice through email"
-msgstr "Envoyer une facture par mail."
+msgid "Send an receipt through email"
+msgstr "Envoyer un reçu par mail."
 
 #: Administration/admin_tenant.py:1203
 #, python-brace-format
@@ -175,8 +175,8 @@ msgid "Invoice sent to {membership.user.email}"
 msgstr "Facture envoyée à {membership.user.email}"
 
 #: Administration/admin_tenant.py:1208
-msgid "Build an invoice"
-msgstr "Générer une facture"
+msgid "Build an receipt"
+msgstr "Générer un reçu"
 
 #: Administration/admin_tenant.py:1269
 #: Administration/templates/admin/membership/wallet_info.html:128
@@ -363,7 +363,6 @@ msgid "Current system health"
 msgstr "Santé actuelle du système"
 
 #: Administration/templates/admin/membership/get_wallet_info.html:6
-#| msgid "Global information"
 msgid "Get cards and wallet information"
 msgstr "Récupérer les information de tirelire et de carte"
 
@@ -386,7 +385,6 @@ msgid "Origin"
 msgstr "Origine"
 
 #: Administration/templates/admin/membership/wallet_info.html:58
-#| msgid "Federation"
 msgid "Generation"
 msgstr "Génération"
 
@@ -1753,8 +1751,9 @@ msgid "Valid until"
 msgstr "Valable jusqu'au"
 
 #: BaseBillet/tasks.py:230
-msgid "REQUEST INVOICE"
-msgstr "RÉCUPÉRER UNE FACTURE"
+#| msgid "REQUEST INVOICE"
+msgid "REQUEST RECEIPT"
+msgstr "RÉCUPÉRER UN REÇU"
 
 #: BaseBillet/tasks.py:233
 msgid "If you receive this email by mistake, please contact the TiBillet team."
@@ -2039,8 +2038,8 @@ msgid "Thank you and welcome to the TiBillet cooperative network!"
 msgstr ""
 
 #: BaseBillet/templates/invoice/invoice.html:137
-msgid "Invoice"
-msgstr "Facture"
+msgid "Receipt"
+msgstr "Reçu"
 
 #: BaseBillet/templates/invoice/invoice.html:165
 msgid "Description"
@@ -3085,7 +3084,7 @@ msgstr "Paiement confirmé. Les billets vont être envoyés à votre adresse mai
 msgid "Payment rejected."
 msgstr "Paiement rejeté."
 
-#: BaseBillet/views.py:129 BaseBillet/views.py:174 BaseBillet/views.py:995
+#: BaseBillet/views.py:129 BaseBillet/views.py:174 BaseBillet/views.py:1013
 msgid ""
 "Payment confirmed. Tickets sent to your email. You can also view your "
 "tickets through \"My account > Bookings\"."
@@ -3134,11 +3133,11 @@ msgstr ""
 "Merci de valider votre adresse mail pour accéder à toutes les "
 "fonctionnalités de votre compte."
 
-#: BaseBillet/views.py:489
+#: BaseBillet/views.py:490
 msgid "Mail sent, please check spam too!"
 msgstr "Mail envoyé, vérifiez également les spams !"
 
-#: BaseBillet/views.py:499
+#: BaseBillet/views.py:504 BaseBillet/views.py:517
 msgid ""
 "Your wallet has been detached from this card. You can scan a new one to link "
 "it again."
@@ -3146,17 +3145,17 @@ msgstr ""
 "Votre compte a été dissocié de cette carte. Vous pouvez scanner ure nouvelle "
 "carte Pass et la lier à votre compte."
 
-#: BaseBillet/views.py:502
+#: BaseBillet/views.py:507 BaseBillet/views.py:520
 msgid "Error when detaching your card. Contact an administrator."
 msgstr ""
 "Erreur à la dissociation de la carte. Veuillez contacter un·e "
 "administrateur·ice."
 
-#: BaseBillet/views.py:505
+#: BaseBillet/views.py:523
 msgid "User email not active"
 msgstr "Adresse mail inactive"
 
-#: BaseBillet/views.py:516
+#: BaseBillet/views.py:534
 msgid ""
 "You do not have a federated wallet. Maybe you loaded money directly at a "
 "register?"
@@ -3164,15 +3163,15 @@ msgstr ""
 "Vous n'avez pas de tirelire fédérée. Peut-être avez-vous rechargé "
 "directement en caisse ?"
 
-#: BaseBillet/views.py:522
+#: BaseBillet/views.py:540
 msgid "Your wallet is already empty."
 msgstr "Votre tirelire est déjà vide."
 
-#: BaseBillet/views.py:530
+#: BaseBillet/views.py:548
 msgid "A refund has been made to the provided account. Thank you!"
 msgstr "Un remboursement a été fait sur le compte de dépense. Merci !"
 
-#: BaseBillet/views.py:534
+#: BaseBillet/views.py:552
 msgid ""
 "Apologies, it seems you need to manually request a refund. You can go to one "
 "of the collective's register, or send ar email to: contact@tibillet.re ."
@@ -3181,51 +3180,51 @@ msgstr ""
 "pouvez vous rendre à une des caisses du collectif, ou adresser un mail à : "
 "contact@tibillet.re ."
 
-#: BaseBillet/views.py:677
+#: BaseBillet/views.py:695
 msgid "Not available. Contact an admin."
 msgstr "Indisponible. Contactez un·e administrateur·ice."
 
-#: BaseBillet/views.py:691
+#: BaseBillet/views.py:709
 msgid "Refilled wallet"
 msgstr "Tirelire rechargée"
 
-#: BaseBillet/views.py:693 BaseBillet/views.py:695
+#: BaseBillet/views.py:711 BaseBillet/views.py:713
 msgid "Payment verification error"
 msgstr "Erreur de vérification de paiement"
 
-#: BaseBillet/views.py:726
+#: BaseBillet/views.py:744
 msgid "Message sent, you have been sent a copy. Thank you!"
 msgstr "Message envoyé, nous vous avons envoyé une copie. Merci !"
 
-#: BaseBillet/views.py:924
+#: BaseBillet/views.py:942
 msgid "You have already checked for an action on this event."
 msgstr "Vous vous êtes déjà proposé·e pour être volontaire sur cet évènement."
 
-#: BaseBillet/views.py:928
+#: BaseBillet/views.py:946
 msgid "Please log in first."
 msgstr "Merci de vous connecter d'abord."
 
-#: BaseBillet/views.py:942
+#: BaseBillet/views.py:960
 msgid "Thank you! You are going to receive a validation email.."
 msgstr "Merci ! Vous allez recevoir un mail de confirmation."
 
-#: BaseBillet/views.py:998 BaseBillet/views.py:1232
+#: BaseBillet/views.py:1016 BaseBillet/views.py:1250
 msgid "Your payment is awaiting validation."
 msgstr "Votre paiement est en attente de validation."
 
-#: BaseBillet/views.py:1001 BaseBillet/views.py:1235
+#: BaseBillet/views.py:1019 BaseBillet/views.py:1253
 msgid "An error has occurred, please contact the administrator."
 msgstr "Une erreur s'est produite, merci de contacter un·e administrateur·ice."
 
-#: BaseBillet/views.py:1087
+#: BaseBillet/views.py:1105
 msgid "Check in registered!"
 msgstr "Pointage d'arrivée enregistré !"
 
-#: BaseBillet/views.py:1095
+#: BaseBillet/views.py:1113
 msgid "Check out registered!"
 msgstr "Pointage de départ enregistré !"
 
-#: BaseBillet/views.py:1230
+#: BaseBillet/views.py:1248
 msgid ""
 "Your subscription has been validated. You will receive a confirmation email. "
 "Thank you very much!"
@@ -3233,7 +3232,7 @@ msgstr ""
 "Votre adhésion a été validé. Vous allez recevoir un mail de confirmation. "
 "Merci !"
 
-#: BaseBillet/views.py:1253
+#: BaseBillet/views.py:1271
 msgid "PDF generation error"
 msgstr "Erreur de génération PDF"
 
@@ -3436,6 +3435,9 @@ msgstr "Fusion de tirelires"
 #: fedow_connect/validators.py:87 fedow_connect/validators.py:191
 msgid "Refund"
 msgstr "Remboursement"
+
+#~ msgid "Invoice"
+#~ msgstr "Facture"
 
 #~ msgid "card lost"
 #~ msgstr "carte perdue"

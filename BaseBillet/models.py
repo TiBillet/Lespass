@@ -470,6 +470,9 @@ class Configuration(SingletonModel):
     """
     ######### STRIPE #########
     """
+
+    stripe_invoice = models.BooleanField(default=False, verbose_name=_("send a stripe invoice"), help_text=_("Send a stripe invoice to the customer"))
+
     stripe_mode_test = models.BooleanField(default=False)
 
     stripe_connect_account = models.CharField(max_length=21, blank=True, null=True)
