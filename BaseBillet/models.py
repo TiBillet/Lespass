@@ -15,6 +15,7 @@ from django.db import models
 from django.db.models import JSONField, SET_NULL, Sum
 # Create your models here.
 from django.db.models import Q
+from django.db.models.query import QuerySet
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.urls import reverse
@@ -1040,6 +1041,10 @@ class Event(models.Model):
             return dates
 
         return [self.datetime, ]
+
+    def published_prices(self) -> QuerySet:
+        return Price.objects.filter(product__in=self.products.all(), publish=True)
+
 
     def save(self, *args, **kwargs):
         """
