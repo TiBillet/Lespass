@@ -898,7 +898,8 @@ class EventMVT(viewsets.ViewSet):
             event = Event.objects.select_related('postal_address', ).prefetch_related('tag', 'products',
                                                                                       'products__prices').get(slug=slug)
             # Récupération des prix
-            tarifs = [price.prix for product in event.products.all() for price in product.prices.all()]
+            event.prices = [price for product in event.products.all() for price in product.prices.all()]
+            tarifs = [price.prix for price in event.prices]
             # Calcul des prix min et max
             event.price_min = min(tarifs) if tarifs else None
             event.price_max = max(tarifs) if tarifs else None
