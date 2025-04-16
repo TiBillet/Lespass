@@ -28,10 +28,9 @@
                             {% include 'reunion/partials/picture.html' with img=product.img alt=product.name class='card-img-top' %}
                             <div class="card-body">
                                 <h3 class="card-title">{{ product.name }}</h3>
+                                <p class="card-text">{{ product.short_description }}</p>
                                 {% if product.long_description %}
                                     <p class="card-text">{{ product.long_description | safe }}</p>
-                                {% elif product.short_description %}
-                                    <p class="card-text">{{ product.short_description }}</p>
                                 {% endif %}
                             </div>
                             <div class="card-footer">

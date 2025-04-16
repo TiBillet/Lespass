@@ -2,6 +2,13 @@
 <form id="membership-form" hx-post="/memberships/" hx-target="#target_formbricks"
       class="d-flex flex-column justify-content-between h-100">
     <div>
+        
+        <h3>{{ product.name }}</h3>
+        <p>{{ product.short_description }}</p>
+        {% if product.long_description %}
+            <p>{{ product.long_description | safe }}</p>
+        {% endif %}
+
         <div id="target_formbricks"></div>
         <input type="hidden" name="product" value="{{ product.uuid }}">
 
