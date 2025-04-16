@@ -1412,6 +1412,7 @@ class EventAdmin(ModelAdmin):
                 'datetime',
                 'end_datetime',
                 'img',
+                'sticker_img',
                 'carrousel',
                 'short_description',
                 'long_description',

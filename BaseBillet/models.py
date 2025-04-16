@@ -872,11 +872,27 @@ class Event(models.Model):
                             'crop_hdr': (960, 540, True),
                             'crop': (480, 270, True),
                         },
-                        delete_orphans=True, verbose_name=_("Main image")
+                        delete_orphans=True, verbose_name=_("Main image"),
+                        help_text=_("The main image of the event, displayed in the head of the event page.")
+                        )
+
+    sticker_img = StdImageField(upload_to='images/',
+                        validators=[MaxSizeValidator(1920, 1920)],
+                        blank=True, null=True,
+                        variations={
+                            'fhd': (1920, 1920),
+                            'hdr': (1280, 1280),
+                            'med': (480, 480),
+                            'thumbnail': (150, 90),
+                            'crop_hdr': (960, 540, True),
+                            'crop': (480, 270, True),
+                        },
+                        delete_orphans=True, verbose_name=_("Sticker image"),
+                        help_text=_("The small image displayed in the events list. If None, img will be displayed. 4x3 ratio.")
                         )
 
     carrousel = models.ManyToManyField(Carrousel, blank=True, verbose_name=_("Carousel slides"),
-                                       related_name='events')
+                                       related_name='events', help_text=_("Images that will be displayed in the program section."))
 
     CONCERT = "LIV"
     FESTIVAL = "FES"
