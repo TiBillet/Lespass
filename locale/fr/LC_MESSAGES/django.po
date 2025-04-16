@@ -1075,9 +1075,6 @@ msgid ""
 msgstr ""
 "Vous pouvez ajouter des informations supplémentaires qui seront envoyées "
 "dans le mail d'adhésion."
-msgstr ""
-"Vous pouvez ajouter des informations supplémentaires qui seront envoyées "
-"dans le mail d'adhésion."
 
 #: BaseBillet/models.py:395
 msgid "Subscription page name"
@@ -1377,15 +1374,6 @@ msgid "The event is handled outside of this platform (ex: Facebook event)."
 msgstr ""
 "L'évènement est géré en-dehors de cette plateforme (ex : évènement Facebook)."
 
-#: BaseBillet/models.py:848
-msgid "Non-federable event"
-msgstr "Événement non fédérable"
-
-#: BaseBillet/models.py:848
-msgid "Will not be displayed on shared calendars."
-msgstr "Ne s'affichera pas sur les agendas partagés."
-
-#: BaseBillet/models.py:862
 #: BaseBillet/models.py:859
 msgid "Minimum value of cashless refill"
 msgstr "Montant minimal de recharge cashless"
@@ -2357,7 +2345,6 @@ msgstr "Demander une réservation"
 #: BaseBillet/templates/reunion/views/account/balance.html:68
 #: BaseBillet/templates/reunion/views/account/reservations.html:22
 #: BaseBillet/templates/reunion/views/membership/list.html:17
-#: BaseBillet/templates/reunion/views/membership/list.html:17
 msgid "Close"
 msgstr "Fermer"
 
@@ -2733,9 +2720,6 @@ msgstr ""
 msgid "Send my subscription request"
 msgstr "Envoyer ma demande d'adhésion"
 
-#: BaseBillet/templates/reunion/views/membership/list.html:15
-#: BaseBillet/templates/reunion/views/membership/list.html:43
-#: BaseBillet/templates/reunion/views/membership/list.html:56
 #: BaseBillet/templates/reunion/views/membership/list.html:15
 #: BaseBillet/templates/reunion/views/membership/list.html:43
 #: BaseBillet/templates/reunion/views/membership/list.html:56

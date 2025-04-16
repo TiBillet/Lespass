@@ -2268,7 +2268,6 @@ msgstr ""
 #: BaseBillet/templates/reunion/views/account/balance.html:68
 #: BaseBillet/templates/reunion/views/account/reservations.html:22
 #: BaseBillet/templates/reunion/views/membership/list.html:17
-#: BaseBillet/templates/reunion/views/membership/list.html:17
 msgid "Close"
 msgstr ""
 
@@ -2603,9 +2602,6 @@ msgstr ""
 msgid "Send my subscription request"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/membership/list.html:15
-#: BaseBillet/templates/reunion/views/membership/list.html:43
-#: BaseBillet/templates/reunion/views/membership/list.html:56
 #: BaseBillet/templates/reunion/views/membership/list.html:15
 #: BaseBillet/templates/reunion/views/membership/list.html:43
 #: BaseBillet/templates/reunion/views/membership/list.html:56
