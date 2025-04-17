@@ -215,7 +215,7 @@ def poids_option_generale(sender, instance: OptionGenerale, created, **kwargs):
     if created:
         # poids d'apparition
         if instance.poids == 0:
-            instance.poids = len(OptionGenerale.objects.all()) + 1
+            instance.poids = OptionGenerale.objects.all().count() + 1
 
         instance.save()
 
