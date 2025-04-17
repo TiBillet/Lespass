@@ -162,7 +162,7 @@ def create_membership_invoice_pdf(membership: Membership):
     }
 
     html = template.render(context)
-
+    activate('fr')
     css = CSS(string=
               '''
                 @font-face {
@@ -227,7 +227,7 @@ def context_for_membership_email(membership: "Membership"):
         },
         'button_color': "#009058",
         'button': {
-            'text': _('REQUEST INVOICE'),
+            'text': _('REQUEST RECEIPT'),
             'url': f'https://{domain}/memberships/{membership.pk}/invoice/',
         },
         'next_text_1': _("If you receive this email by mistake, please contact the TiBillet team."),

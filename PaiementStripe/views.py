@@ -149,8 +149,12 @@ class CreationPaiementStripe():
             'metadata': self.metadata,
             'client_reference_id': f"{self.user.pk}",
             'stripe_account': f'{self.stripe_connect_account}',
+            'invoice_creation': {"enabled": True,}
         }
 
+        config = Configuration.get_solo()
+        if self.mode == 'payment' and config.stripe_invoice :
+            data_checkout['invoice_creation'] = {"enabled": True,}
         return data_checkout
 
     def _checkout_session(self):

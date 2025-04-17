@@ -1,7 +1,7 @@
 import logging
 from datetime import timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, Optional, Dict
 from unicodedata import category
 
 import requests
@@ -264,6 +264,7 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
             'fields': (
                 # 'vat_taxe',
                 'onboard_stripe',
+                'stripe_invoice',
                 # 'stripe_mode_test',
             ),
         }),
@@ -677,7 +678,6 @@ class PaiementStripeAdmin(ModelAdmin):
 USER
 """
 
-
 class MembershipInline(TabularInline):
     model = Membership
     # form = MembershipInlineForm
@@ -809,6 +809,18 @@ class HumanUserAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
     inlines = [MembershipInline, ]
+
+    """
+    On affiche en haut du changelist un bouton pour pouvoir changer sa carte 
+    Change form view sert à donner le pk de l'user pour le bouton htmx
+    """
+    change_form_after_template = "admin/membership/get_wallet_info.html"
+    def changeform_view(self, request: HttpRequest, object_id: Optional[str] = None, form_url: str = "",
+                        extra_context: Optional[Dict[str, bool]] = None) -> Any:
+        extra_context = extra_context or {}
+        extra_context['object_id'] = object_id
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
 
     list_display = [
         'email',
@@ -1180,7 +1192,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
     actions_detail = ["send_invoice", "get_invoice"]
 
     @action(
-        description=_("Send an invoice through email"),
+        description=_("Send an receipt through email"),
         url_path="send_invoice",
         permissions=["custom_actions_detail"],
     )
@@ -1194,7 +1206,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
         return redirect(request.META["HTTP_REFERER"])
 
     @action(
-        description=_("Build an invoice"),
+        description=_("Build an receipt"),
         url_path="get_invoice",
         permissions=["custom_actions_detail"],
     )
@@ -1400,6 +1412,7 @@ class EventAdmin(ModelAdmin):
                 'datetime',
                 'end_datetime',
                 'img',
+                'sticker_img',
                 'carrousel',
                 'short_description',
                 'long_description',

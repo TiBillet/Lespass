@@ -109,7 +109,7 @@ class TibilletUser(AbstractUser):
 
     username = models.CharField(max_length=200, unique=True)  # same as email bu defaut
     email = models.EmailField(unique=True)  # changes email to unique and blank to false
-    email_error = models.BooleanField(default=False, help_text=_("Confirmation email delivery failed"))
+    email_error = models.BooleanField(default=False, help_text=_("Confirmation email delivery failed if true"))
     email_valid = models.BooleanField(default=False, help_text=_("Email confirmed"))
 
     rsa_key = models.OneToOneField(RsaKey, on_delete=models.SET_NULL, null=True, related_name='user')
@@ -168,6 +168,10 @@ class TibilletUser(AbstractUser):
     # sur quelle interface d'admin peut-il aller ?
     client_admin = models.ManyToManyField(Client,
                                           related_name="user_admin", blank=True)
+
+    def is_tenant_admin(self, tenant):
+        """Vérifie si le tenant est dans le client_admin de l'utilisateur."""
+        return self.client_admin.filter(pk=tenant.pk).exists()
 
     last_know_ip = models.GenericIPAddressField(blank=True, null=True)
     last_know_user_agent = models.CharField(max_length=500, blank=True, null=True)

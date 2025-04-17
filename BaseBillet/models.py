@@ -15,6 +15,7 @@ from django.db import models
 from django.db.models import JSONField, SET_NULL, Sum
 # Create your models here.
 from django.db.models import Q
+from django.db.models.query import QuerySet
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.urls import reverse
@@ -440,7 +441,9 @@ class Configuration(SingletonModel):
                     # TODO: Check cashless signature avec laboutik_public_pem
                     return True
                 else :
-                    raise Exception(f"{r.status_code} {r.content}")
+                    logger.error(f"{r.status_code} {r.content}")
+                    return False
+                    # raise Exception(f"{r.status_code} {r.content}")
             except Exception as e:
                 # import ipdb; ipdb.set_trace()
                 logger.error(f"    ERROR check_serveur_cashless : {e}")
@@ -470,6 +473,9 @@ class Configuration(SingletonModel):
     """
     ######### STRIPE #########
     """
+
+    stripe_invoice = models.BooleanField(default=False, verbose_name=_("send a stripe invoice"), help_text=_("Send a stripe invoice to the customer"))
+
     stripe_mode_test = models.BooleanField(default=False)
 
     stripe_connect_account = models.CharField(max_length=21, blank=True, null=True)
@@ -869,11 +875,27 @@ class Event(models.Model):
                             'crop_hdr': (960, 540, True),
                             'crop': (480, 270, True),
                         },
-                        delete_orphans=True, verbose_name=_("Main image")
+                        delete_orphans=True, verbose_name=_("Main image"),
+                        help_text=_("The main image of the event, displayed in the head of the event page.")
+                        )
+
+    sticker_img = StdImageField(upload_to='images/',
+                        validators=[MaxSizeValidator(1920, 1920)],
+                        blank=True, null=True,
+                        variations={
+                            'fhd': (1920, 1920),
+                            'hdr': (1280, 1280),
+                            'med': (480, 480),
+                            'thumbnail': (150, 90),
+                            'crop_hdr': (960, 540, True),
+                            'crop': (480, 270, True),
+                        },
+                        delete_orphans=True, verbose_name=_("Sticker image"),
+                        help_text=_("The small image displayed in the events list. If None, img will be displayed. 4x3 ratio.")
                         )
 
     carrousel = models.ManyToManyField(Carrousel, blank=True, verbose_name=_("Carousel slides"),
-                                       related_name='events')
+                                       related_name='events', help_text=_("Images that will be displayed in the program section."))
 
     CONCERT = "LIV"
     FESTIVAL = "FES"
@@ -1021,6 +1043,10 @@ class Event(models.Model):
             return dates
 
         return [self.datetime, ]
+
+    def published_prices(self) -> QuerySet:
+        return Price.objects.filter(product__in=self.products.all(), publish=True)
+
 
     def save(self, *args, **kwargs):
         """

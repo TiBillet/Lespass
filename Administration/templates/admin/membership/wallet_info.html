@@ -1,0 +1,171 @@
+{% load tibitags unfold %}
+{% load humanize i18n %}
+
+
+{##}
+{#{% for card in cards %}#}
+{#    <table class="table">#}
+{#        <thead>#}
+{#        <tr>#}
+{#            <th>{% trans "Card number" %}</th>#}
+{#            <th>{% trans "Provider" %}</th>#}
+{#            <th>{% trans "Gen" %}</th>#}
+{#        </tr>#}
+{#        </thead>#}
+{#        <tbody>#}
+{#        <tr>#}
+{#            <td>{{ card.number_printed }}</td>#}
+{#            <td>{{ card.origin.place.name }}</td>#}
+{#            <td>{{ card.origin.generation }}</td>#}
+{#        </tr>#}
+{#        </tbody>#}
+{#    </table>#}
+{##}
+{#    <div class="row">#}
+{#        <div class="col-md">#}
+{#            <button type="submit" class="btn btn-primary w-100 mb-3 mb-md-0"#}
+{#                    role="button"#}
+{#                    aria-label="{% trans 'I lost my card' %}"#}
+{#                    hx-get="/my_account/{{ card.number_printed }}/lost_my_card/"#}
+{#                    hx-indicator="#tibillet-spinner">#}
+{#                {% translate "I lost my card number" %} {{ card.number_printed }}#}
+{#            </button>#}
+{#        </div>#}
+{#    </div>#}
+{#{% endfor %}#}
+
+{% if cards %}
+    <div class="border flex flex-col flex-grow overflow-hidden p-6 relative rounded-md shadow-sm dark:border-gray-800">
+        <h2 class="bg-gray-50 border-b font-semibold mb-6 -mt-6 -mx-6 py-4 px-6 text-font-important-light dark:text-font-important-dark dark:border-gray-800 dark:bg-white/[.02]">
+            {% translate "Cards" %}
+        </h2>
+        <div class="flex-grow relative ">
+            <div class="-m-6 overflow-x-auto lg:dark:border-gray-800">
+                <table class="block border-gray-200 border-spacing-none border-separate w-full lg:table">
+
+                    <thead class="text-gray-900 dark:text-gray-100">
+                    <tr class="bg-gray-50 dark:bg-white/[.02]">
+
+                        <th class="align-middle font-semibold py-2 text-left text-sm whitespace-nowrap sortable column-description hidden px-3 lg:table-cell first:pl-6 last:pr-6">
+                            {% translate "Number" %}
+                        </th>
+
+                        <th class="align-middle font-semibold py-2 text-left text-sm whitespace-nowrap sortable column-description hidden px-3 lg:table-cell first:pl-6 last:pr-6">
+                            {% translate "Origin" %}
+                        </th>
+
+                        <th class="align-middle font-semibold py-2 text-left text-sm whitespace-nowrap sortable column-description hidden px-3 lg:table-cell first:pl-6 last:pr-6">
+                            {% translate "Generation" %}
+                        </th>
+
+                        <th class="align-middle font-semibold py-2 text-left text-sm whitespace-nowrap sortable column-description hidden px-3 lg:table-cell first:pl-6 last:pr-6">
+
+                        </th>
+                    </tr>
+                    </thead>
+
+
+                    {% for card in cards %}
+                        <tbody class="block lg:table-row-group">
+
+                        <tr class=" block border-t lg:table-row lg:border-none lg:mb-0 lg:shadow-none dark:border-gray-800">
+
+                            <td class="px-3 py-2 align-middle flex border-t border-gray-200 font-normal gap-4 min-w-0 overflow-hidden text-left before:flex before:capitalize before:content-[attr(data-label)] before:items-center before:mr-auto first:border-t-0 lg:before:hidden lg:first:border-t lg:py-3 lg:table-cell dark:border-gray-800 lg:first:pl-6 lg:last:pr-6"
+                                data-label="Numéro">
+                                {{ card.number_printed }}
+                            </td>
+
+                            <td class="px-3 py-2 align-middle flex border-t border-gray-200 font-normal gap-4 min-w-0 overflow-hidden text-left before:flex before:capitalize before:content-[attr(data-label)] before:items-center before:mr-auto first:border-t-0 lg:before:hidden lg:first:border-t lg:py-3 lg:table-cell dark:border-gray-800 lg:first:pl-6 lg:last:pr-6"
+                                data-label="Origine">
+                                {{ card.origin.place.name }}
+                            </td>
+
+                            <td class="px-3 py-2 align-middle flex border-t border-gray-200 font-normal gap-4 min-w-0 overflow-hidden text-left before:flex before:capitalize before:content-[attr(data-label)] before:items-center before:mr-auto first:border-t-0 lg:before:hidden lg:first:border-t lg:py-3 lg:table-cell dark:border-gray-800 lg:first:pl-6 lg:last:pr-6"
+                                data-label="Génération">
+                                {{ card.origin.generation }}
+                            </td>
+
+                            <td>
+                                <button class="border font-medium px-3 py-2 rounded-md text-center whitespace-nowrap bg-primary-600 border-transparent text-white"
+                                        hx-get="/my_account/{{ user_pk }}:{{ card.number_printed }}/admin_lost_my_card/"
+                                        hx-swap="outerHTML">
+                                    {% trans 'Card lost' %}
+                                </button>
+                            </td>
+
+                        </tr>
+
+                    {% endfor %}
+
+                    </tbody>
+
+                </table>
+            </div>
+        </div>
+    </div>
+{% else %}
+    <div class="border flex flex-col flex-grow overflow-hidden p-6 relative rounded-md shadow-sm dark:border-gray-800">
+        <h2 class="bg-gray-50 border-b font-semibold mb-6 -mt-6 -mx-6 py-4 px-6 text-font-important-light dark:text-font-important-dark dark:border-gray-800 dark:bg-white/[.02]">
+            {% translate "No card" %}
+        </h2>
+    </div>
+{% endif %}
+
+<br/>
+
+{% if tokens %}
+    <div class="border flex flex-col flex-grow overflow-hidden p-6 relative rounded-md shadow-sm dark:border-gray-800 py-4">
+        <h2 class="bg-gray-50 border-b font-semibold mb-6 -mt-6 -mx-6 py-4 px-6 text-font-important-light dark:text-font-important-dark dark:border-gray-800 dark:bg-white/[.02]">
+            {% translate "Wallet" %}
+        </h2>
+        <div class="flex-grow relative ">
+            <div class="-m-6 overflow-x-auto lg:dark:border-gray-800">
+                <table class="block border-gray-200 border-spacing-none border-separate w-full lg:table">
+
+                    <thead class="text-gray-900 dark:text-gray-100">
+                    <tr class="bg-gray-50 dark:bg-white/[.02]">
+                        <th class="align-middle font-semibold py-2 text-left text-sm whitespace-nowrap sortable column-description hidden px-3 lg:table-cell first:pl-6 last:pr-6">
+                            {% translate "Value" %}
+                        </th>
+
+                        <th class="align-middle font-semibold py-2 text-left text-sm whitespace-nowrap sortable column-description hidden px-3 lg:table-cell first:pl-6 last:pr-6">
+                            {% translate "Currencies" %}
+                        </th>
+                    </tr>
+                    </thead>
+
+
+                    {% for token in tokens %}
+                        <tbody class="block lg:table-row-group">
+
+                        <tr class=" block border-t lg:table-row lg:border-none lg:mb-0 lg:shadow-none dark:border-gray-800">
+                            <td class="px-3 py-2 align-middle flex border-t border-gray-200 font-normal gap-4 min-w-0 overflow-hidden text-left before:flex before:capitalize before:content-[attr(data-label)] before:items-center before:mr-auto first:border-t-0 lg:before:hidden lg:first:border-t lg:py-3 lg:table-cell dark:border-gray-800 lg:first:pl-6 lg:last:pr-6"
+                                data-label="Origine">
+                                <strong>{{ token.value | dround }}</strong>
+                            </td>
+
+                            <td class="px-3 py-2 align-middle flex border-t border-gray-200 font-normal gap-4 min-w-0 overflow-hidden text-left before:flex before:capitalize before:content-[attr(data-label)] before:items-center before:mr-auto first:border-t-0 lg:before:hidden lg:first:border-t lg:py-3 lg:table-cell dark:border-gray-800 lg:first:pl-6 lg:last:pr-6"
+                                data-label="Numéro">
+                                {% if token.asset.is_stripe_primary %}
+                                    TiBillets
+                                {% else %}
+                                    {{ token.name }}
+                                {% endif %}
+                            </td>
+                        </tr>
+
+                    {% endfor %}
+
+                    </tbody>
+
+                </table>
+            </div>
+        </div>
+    </div>
+{% else %}
+    <div class="border flex flex-col flex-grow overflow-hidden p-6 relative rounded-md shadow-sm dark:border-gray-800">
+        <h2 class="bg-gray-50 border-b font-semibold mb-6 -mt-6 -mx-6 py-4 px-6 text-font-important-light dark:text-font-important-dark dark:border-gray-800 dark:bg-white/[.02]">
+            {% translate "No wallet" %}
+        </h2>
+    </div>
+{% endif %}

@@ -34,7 +34,7 @@ from rest_framework.response import Response
 # from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
-from AuthBillet.models import TibilletUser, Wallet
+from AuthBillet.models import TibilletUser, Wallet, HumanUser
 from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
@@ -96,7 +96,8 @@ def get_context(request):
         "carrousel_event_list": Carrousel.objects.filter(on_event_list_page=True).order_by('order'),
         "main_nav": [
             {'name': 'event-list', 'url': '/event/', 'label': f'{config.event_menu_name}', 'icon': 'calendar-date'},
-            {'name': 'memberships_mvt', 'url': '/memberships/', 'label': f'{config.membership_menu_name}', 'icon': 'person-badge'},
+            {'name': 'memberships_mvt', 'url': '/memberships/', 'label': f'{config.membership_menu_name}',
+             'icon': 'person-badge'},
             # {'name': 'network', 'url': '/network/', 'label': 'Réseau local', 'icon': 'arrow-repeat'},
         ]
     }
@@ -242,7 +243,7 @@ def connexion(request):
 
             # On est sur le moteur de démonstration / test
             # Pour les tests fonctionnel, on a besoin de vérifier le token, on le génère ici.
-            if settings.DEBUG and settings.TEST :
+            if settings.DEBUG and settings.TEST:
                 token = user.get_connect_token()
                 base_url = connection.tenant.get_primary_domain().domain
                 connexion_url = f"https://{base_url}/emailconfirmation/{token}"
@@ -402,8 +403,6 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
                 card_number=card_number).update(
                 user=user, first_name=user.first_name, last_name=user.last_name)
 
-
-
         return HttpResponseClientRedirect(request.headers['Referer'])
 
     def get_permissions(self):
@@ -444,6 +443,25 @@ class MyAccount(viewsets.ViewSet):
         }
         return render(request, "reunion/partials/account/card_table.html", context=context)
 
+    @action(detail=True, methods=['GET'])
+    def admin_my_cards(self, request, pk):
+        tenant = request.tenant
+        admin = request.user
+        if admin.is_tenant_admin(tenant):
+            fedowAPI = FedowAPI()
+            user = get_object_or_404(HumanUser, pk=pk)
+            cards = fedowAPI.NFCcard.retrieve_card_by_signature(user)
+            wallet = fedowAPI.wallet.cached_retrieve_by_signature(user).validated_data
+            tokens = [token for token in wallet.get('tokens') if token.get('asset_category') not in ['SUB', 'BDG']]
+
+            context = {
+                'cards': cards,
+                'tokens': tokens,
+                'user_pk': pk,
+            }
+            return render(request, "admin/membership/wallet_info.html", context=context)
+        return "No cards"
+
     @action(detail=False, methods=['GET'])
     def my_reservations(self, request):
         reservations = Reservation.objects.filter(
@@ -471,6 +489,23 @@ class MyAccount(viewsets.ViewSet):
         messages.add_message(request, messages.SUCCESS,
                              _("Mail sent, please check spam too!"))
         return HttpResponseClientRedirect('/my_account/')
+
+    @action(detail=True, methods=['GET'])
+    def admin_lost_my_card(self, request, pk, *args, **kwargs):
+        tenant = request.tenant
+        admin = request.user
+        user_pk, number_printed = pk.split(':')
+        user = get_object_or_404(HumanUser, pk=user_pk)
+        if admin.is_tenant_admin(tenant):
+            fedowAPI = FedowAPI()
+            lost_card_report = fedowAPI.NFCcard.lost_my_card_by_signature(user, number_printed=number_printed)
+            if lost_card_report:
+                messages.add_message(request, messages.SUCCESS,
+                                     _("Your wallet has been detached from this card. You can scan a new one to link it again."))
+            else:
+                messages.add_message(request, messages.ERROR,
+                                     _("Error when detaching your card. Contact an administrator."))
+            return HttpResponseClientRedirect(request.headers['Referer'])
 
     @action(detail=True, methods=['GET'])
     def lost_my_card(self, request, pk):
@@ -631,7 +666,6 @@ class MyAccount(viewsets.ViewSet):
         context['memberships_dict'] = memberships_dict
         return render(request, "reunion/views/account/memberships.html", context=context)
 
-
     @action(detail=False, methods=['GET'])
     def card(self, request: HttpRequest) -> HttpResponse:
         context = get_context(request)
@@ -725,7 +759,7 @@ class EventMVT(viewsets.ViewSet):
         for place in FederatedPlace.objects.all():
             tenant = place.tenant
             with tenant_context(tenant):
-                try :
+                try:
                     event = Event.objects.select_related(
                         'postal_address',
                     ).prefetch_related(
@@ -777,7 +811,7 @@ class EventMVT(viewsets.ViewSet):
                           ).exclude(
                     categorie=Event.ACTION)  # Les Actions sont affichés dans la page de l'evenement parent
 
-                if tenant['tenant'] != this_tenant: # on est pas sur le tenant d'origine, on filtre le bool private
+                if tenant['tenant'] != this_tenant:  # on est pas sur le tenant d'origine, on filtre le bool private
                     events = events.filter(
                         private=False
                     )
@@ -855,7 +889,6 @@ class EventMVT(viewsets.ViewSet):
         response['X-Frame-Options'] = ''
         return response
 
-
     def retrieve(self, request, pk=None):
         slug = pk
 
@@ -865,7 +898,8 @@ class EventMVT(viewsets.ViewSet):
             event = Event.objects.select_related('postal_address', ).prefetch_related('tag', 'products',
                                                                                       'products__prices').get(slug=slug)
             # Récupération des prix
-            tarifs = [price.prix for product in event.products.all() for price in product.prices.all()]
+            event.prices = [price for product in event.products.all() for price in product.prices.all()]
+            tarifs = [price.prix for price in event.prices]
             # Calcul des prix min et max
             event.price_min = min(tarifs) if tarifs else None
             event.price_max = max(tarifs) if tarifs else None
@@ -880,7 +914,7 @@ class EventMVT(viewsets.ViewSet):
             logger.info("Event.DoesNotExist on tenant, check to federation")
             event = self.federated_events_get(slug)
 
-        if not event: # Event pas trouvé, on redirige vers la page d'évènement complète
+        if not event:  # Event pas trouvé, on redirige vers la page d'évènement complète
             logger.info("Event.DoesNotExist on federation, redirect")
             return redirect("/event/")
 
@@ -944,7 +978,7 @@ class EventMVT(viewsets.ViewSet):
         # Vérification de la demande de fomulaire supplémentaire avec Formbricks
         for product in validator.products:
             if product.formbricksform.exists():
-                formbicks_form: FormbricksForms = product.formbricksform.first() # On prend le premier.
+                formbicks_form: FormbricksForms = product.formbricksform.first()  # On prend le premier.
                 formbricks_config = FormbricksConfig.get_solo()
                 checkout_stripe = validator.checkout_link if validator.checkout_link else None
                 context = {'form': {'apiHost': formbricks_config.api_host,
@@ -955,7 +989,6 @@ class EventMVT(viewsets.ViewSet):
                            }
 
                 return render(request, "reunion/views/event/formbricks.html", context=context)
-
 
         # SI on a un besoin de paiement, on redirige vers :
         if validator.checkout_link:
@@ -976,7 +1009,7 @@ class EventMVT(viewsets.ViewSet):
         paiement_stripe.refresh_from_db()
 
         try:
-            if paiement_stripe.status == Paiement_stripe.VALID or paiement_stripe.traitement_en_cours :
+            if paiement_stripe.status == Paiement_stripe.VALID or paiement_stripe.traitement_en_cours:
                 messages.success(request,
                                  _('Payment confirmed. Tickets sent to your email. You can also view your tickets through "My account > Bookings".'))
             # Déja traité et validé.
@@ -1211,7 +1244,7 @@ class MembershipMVT(viewsets.ViewSet):
         paiement_stripe.refresh_from_db()
 
         try:
-            if paiement_stripe.status == Paiement_stripe.VALID or paiement_stripe.traitement_en_cours :
+            if paiement_stripe.status == Paiement_stripe.VALID or paiement_stripe.traitement_en_cours:
                 messages.add_message(request, messages.SUCCESS,
                                      _(f"Your subscription has been validated. You will receive a confirmation email. Thank you very much!"))
             elif paiement_stripe.status == Paiement_stripe.PENDING:
@@ -1355,7 +1388,7 @@ class Tenant(viewsets.ViewSet):
             logger.error(f"onboard_stripe_return. id_acc_connect : {id_acc_connect}, erreur stripe : {e}")
             raise Http404
 
-        if details_submitted :
+        if details_submitted:
             waiting_config = WaitingConfiguration.objects.get(id_acc_connect=id_acc_connect)
             waiting_config.onboard_stripe_finished = True
             waiting_config.save()
@@ -1369,4 +1402,3 @@ class Tenant(viewsets.ViewSet):
         #     _("Your Stripe account does not seem to be valid. "
         #       "\nPlease complete your Stripe.com registration before creating a new TiBillet space."))
         # return redirect('/tenant/new/')
-
