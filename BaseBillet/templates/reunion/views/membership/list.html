@@ -1,10 +1,9 @@
 {% extends base_template %}
 {% load tibitags static %}
 {% load i18n %}
-
 {% block main %}
     <main class="container-lg py-5">
-        <h1>{% translate 'Subscriptions' %}</h1>
+        <h1>{% translate config.membership_menu_name %}</h1>
         {% if config.description_membership_page %}
             <div>{{ config.description_membership_page | safe }}</div>
         {% endif %}

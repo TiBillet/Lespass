@@ -441,7 +441,9 @@ class Configuration(SingletonModel):
                     # TODO: Check cashless signature avec laboutik_public_pem
                     return True
                 else :
-                    raise Exception(f"{r.status_code} {r.content}")
+                    logger.error(f"{r.status_code} {r.content}")
+                    return False
+                    # raise Exception(f"{r.status_code} {r.content}")
             except Exception as e:
                 # import ipdb; ipdb.set_trace()
                 logger.error(f"    ERROR check_serveur_cashless : {e}")

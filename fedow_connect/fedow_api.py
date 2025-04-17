@@ -602,6 +602,8 @@ class TransactionFedow():
         if fedow_config is None:
             self.config = FedowConfig.get_solo()
 
+    def tibillet_bank_stripe_deposit(self, tenant, payment_intent_id):
+        pass
 
     def retrieve(self, uuid):
         response = _get(self.fedow_config, path=f'transaction/{uuid}')
