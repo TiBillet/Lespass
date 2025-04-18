@@ -5,7 +5,7 @@
 {# class: string|null #}
 {# style: string|null #}
 {# ratio: string|null #}
-<picture class="d-block h-100{% if ratio %} ratio ratio-{{ ratio }}{% endif %}">
+<picture class="d-block {% if ratio %}ratio ratio-{{ ratio }}{% else %}h-100{% endif %}">
     <source srcset="{{ img.fhd.url }}" media="(min-width: 1920px), (min-height: 1920px)" />
     <source srcset="{{ img.hdr.url }}" media="(min-width: 1280px), (min-height: 1280px)" />
     <source srcset="{{ img.crop_hdr.url }}" media="(min-width: 960px), (min-height: 540px)" />
