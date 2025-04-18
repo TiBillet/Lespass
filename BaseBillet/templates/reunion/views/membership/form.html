@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load i18n static %}
 <form id="membership-form" hx-post="/memberships/" hx-target="#target_formbricks"
       class="d-flex flex-column justify-content-between h-100">
     <div>
@@ -9,7 +9,14 @@
             <p>{{ product.long_description | safe }}</p>
         {% endif %}
 
-        <div id="target_formbricks"></div>
+        <div id="target_formbricks">
+            <script type="module">
+                import * as Spinner from '{% static "reunion/js/form-spinner.mjs" %}'
+
+                // show spinner on form submission
+                Spinner.init(document.getElementById('membership-form'))
+            </script>
+        </div>
         <input type="hidden" name="product" value="{{ product.uuid }}">
 
         <!-- prix -->
