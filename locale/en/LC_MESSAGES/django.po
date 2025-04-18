@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-04-17 06:38+0000\n"
+"POT-Creation-Date: 2025-04-18 10:13+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -44,7 +44,7 @@ msgstr ""
 msgid "Color"
 msgstr ""
 
-#: Administration/admin_tenant.py:415 Administration/admin_tenant.py:610
+#: Administration/admin_tenant.py:415 Administration/admin_tenant.py:613
 msgid "A rate cannot be between 0€ and 1€"
 msgstr ""
 
@@ -52,128 +52,132 @@ msgstr ""
 msgid "A subscription must have a duration"
 msgstr ""
 
-#: Administration/admin_tenant.py:476
+#: Administration/admin_tenant.py:472
+msgid "Product image is displayed at a 16/9 ratio."
+msgstr ""
+
+#: Administration/admin_tenant.py:479
 msgid "Please add at least one category to this product."
 msgstr ""
 
-#: Administration/admin_tenant.py:484 Administration/admin_tenant.py:486
+#: Administration/admin_tenant.py:487 Administration/admin_tenant.py:489
 msgid "Please add at least one rate to this product."
 msgstr ""
 
-#: Administration/admin_tenant.py:522 BaseBillet/models.py:690
+#: Administration/admin_tenant.py:525 BaseBillet/models.py:690
 msgid "Archive"
 msgstr ""
 
-#: Administration/admin_tenant.py:530
+#: Administration/admin_tenant.py:533
 #, python-brace-format
 msgid "{obj.name} Archived"
 msgstr ""
 
-#: Administration/admin_tenant.py:735 AuthBillet/models.py:354
+#: Administration/admin_tenant.py:738 AuthBillet/models.py:354
 msgid "Administrator"
 msgstr ""
 
-#: Administration/admin_tenant.py:741 Administration/admin_tenant.py:774
+#: Administration/admin_tenant.py:744 Administration/admin_tenant.py:777
 msgid "Yes"
 msgstr ""
 
-#: Administration/admin_tenant.py:741 Administration/admin_tenant.py:775
+#: Administration/admin_tenant.py:744 Administration/admin_tenant.py:778
 msgid "No"
 msgstr ""
 
-#: Administration/admin_tenant.py:760
+#: Administration/admin_tenant.py:763
 msgid "Valid subscription"
 msgstr ""
 
-#: Administration/admin_tenant.py:776
+#: Administration/admin_tenant.py:779
 msgid "Expires soon (2 weeks)"
 msgstr ""
 
-#: Administration/admin_tenant.py:777
+#: Administration/admin_tenant.py:780
 msgid "No subscription"
 msgstr ""
 
-#: Administration/admin_tenant.py:870
+#: Administration/admin_tenant.py:873
 msgid "Give admin rights"
 msgstr ""
 
-#: Administration/admin_tenant.py:879
+#: Administration/admin_tenant.py:882
 #, python-brace-format
 msgid ""
 "With great power comes great responsibilities. {user.email} has been "
 "promoted to admin."
 msgstr ""
 
-#: Administration/admin_tenant.py:881
+#: Administration/admin_tenant.py:884
 #, python-brace-format
 msgid "Does not fulfill condition: {user.email} needs to confirm their email."
 msgstr ""
 
-#: Administration/admin_tenant.py:886
+#: Administration/admin_tenant.py:889
 msgid "Strip admin rights"
 msgstr ""
 
-#: Administration/admin_tenant.py:893
+#: Administration/admin_tenant.py:896
 #, python-brace-format
 msgid "{user.email} has been demoted."
 msgstr ""
 
-#: Administration/admin_tenant.py:897 Administration/admin_tenant.py:1058
+#: Administration/admin_tenant.py:900 Administration/admin_tenant.py:1061
 #: BaseBillet/models.py:394 BaseBillet/models.py:1844 TiBillet/settings.py:465
 #: TiBillet/settings.py:545
 msgid "Subscriptions"
 msgstr ""
 
-#: Administration/admin_tenant.py:901
+#: Administration/admin_tenant.py:904
 #, python-brace-format
 msgid "Valid: {count}"
 msgstr ""
 
-#: Administration/admin_tenant.py:902
+#: Administration/admin_tenant.py:905
 msgid "None"
 msgstr ""
 
-#: Administration/admin_tenant.py:1055
+#: Administration/admin_tenant.py:1058
 msgid "Select an subscription"
 msgstr ""
 
-#: Administration/admin_tenant.py:1065 BaseBillet/models.py:1783
+#: Administration/admin_tenant.py:1068 BaseBillet/models.py:1783
 #: BaseBillet/tasks.py:224
 msgid "Contribution"
 msgstr ""
 
-#: Administration/admin_tenant.py:1072 Administration/admin_tenant.py:1596
+#: Administration/admin_tenant.py:1075 Administration/admin_tenant.py:1599
 #: BaseBillet/models.py:1435 BaseBillet/models.py:1688
 #: BaseBillet/models.py:1785
 msgid "Payment method"
 msgstr ""
 
-#: Administration/admin_tenant.py:1088
+#: Administration/admin_tenant.py:1091
 msgid "Please add a payment method for the contribution."
 msgstr ""
 
-#: Administration/admin_tenant.py:1093
+#: Administration/admin_tenant.py:1096
 msgid "Please fill in the value of the contribution."
 msgstr ""
 
-#: Administration/admin_tenant.py:1095
+#: Administration/admin_tenant.py:1098
 msgid "Please fill in a positive value of the contribution."
 msgstr ""
 
-#: Administration/admin_tenant.py:1195
+#: Administration/admin_tenant.py:1198
 msgid "Send an receipt through email"
 msgstr ""
 
-#: Administration/admin_tenant.py:1204
+#: Administration/admin_tenant.py:1207
 #, python-brace-format
 msgid "Invoice sent to {membership.user.email}"
 msgstr ""
 
-#: Administration/admin_tenant.py:1209
+#: Administration/admin_tenant.py:1212
 msgid "Build an receipt"
 msgstr ""
 
-#: Administration/admin_tenant.py:1270
+#: Administration/admin_tenant.py:1273
 #: Administration/templates/admin/membership/wallet_info.html:128
 #: ApiBillet/templates/ticket/ticket.html:174 BaseBillet/models.py:1677
 #: BaseBillet/templates/reunion/partials/account/ticket_accordion.html:39
@@ -181,127 +185,127 @@ msgstr ""
 msgid "Value"
 msgstr ""
 
-#: Administration/admin_tenant.py:1274
+#: Administration/admin_tenant.py:1277
 #: BaseBillet/templates/invoice/invoice.html:169
 #: BaseBillet/templates/invoice/invoice.html:189
 msgid "Total"
 msgstr ""
 
-#: Administration/admin_tenant.py:1278 BaseBillet/models.py:714
+#: Administration/admin_tenant.py:1281 BaseBillet/models.py:714
 #: BaseBillet/models.py:737 BaseBillet/models.py:1229 BaseBillet/tasks.py:223
 msgid "Product"
 msgstr ""
 
-#: Administration/admin_tenant.py:1283
+#: Administration/admin_tenant.py:1286
 #: BaseBillet/templates/reunion/partials/account/ticket_accordion.html:71
 msgid "Status"
 msgstr ""
 
-#: Administration/admin_tenant.py:1340 BaseBillet/models.py:914
+#: Administration/admin_tenant.py:1343 BaseBillet/models.py:914
 msgid "Volunteering"
 msgstr ""
 
-#: Administration/admin_tenant.py:1518
+#: Administration/admin_tenant.py:1521
 msgid "Ticket count"
 msgstr ""
 
-#: Administration/admin_tenant.py:1522 BaseBillet/models.py:133
+#: Administration/admin_tenant.py:1525 BaseBillet/models.py:133
 #: TiBillet/settings.py:575
 msgid "Options"
 msgstr ""
 
-#: Administration/admin_tenant.py:1529
+#: Administration/admin_tenant.py:1532
 msgid "Send tickets through email again"
 msgstr ""
 
-#: Administration/admin_tenant.py:1538
+#: Administration/admin_tenant.py:1541
 #, python-brace-format
 msgid "Tickets sent to {reservation.user_commande.email}"
 msgstr ""
 
-#: Administration/admin_tenant.py:1569
+#: Administration/admin_tenant.py:1572
 msgid "Select a product"
 msgstr ""
 
-#: Administration/admin_tenant.py:1572 BaseBillet/models.py:819
+#: Administration/admin_tenant.py:1575 BaseBillet/models.py:819
 msgid "Rate"
 msgstr ""
 
-#: Administration/admin_tenant.py:1581
+#: Administration/admin_tenant.py:1584
 msgid "Multiple choice menu"
 msgstr ""
 
-#: Administration/admin_tenant.py:1589
+#: Administration/admin_tenant.py:1592
 msgid "Single choice menu"
 msgstr ""
 
-#: Administration/admin_tenant.py:1738
+#: Administration/admin_tenant.py:1741
 msgid "Ticket n°"
 msgstr ""
 
-#: Administration/admin_tenant.py:1744
+#: Administration/admin_tenant.py:1747
 msgid "PDF"
 msgstr ""
 
-#: Administration/admin_tenant.py:1803
+#: Administration/admin_tenant.py:1806
 msgid "Go admin"
 msgstr ""
 
-#: Administration/admin_tenant.py:1817
+#: Administration/admin_tenant.py:1820
 msgid "Domaine principal"
 msgstr ""
 
-#: Administration/admin_tenant.py:1851
+#: Administration/admin_tenant.py:1854
 msgid "Included tags"
 msgstr ""
 
-#: Administration/admin_tenant.py:1855 BaseBillet/models.py:2017
+#: Administration/admin_tenant.py:1858 BaseBillet/models.py:2017
 msgid "Excluded tags"
 msgstr ""
 
-#: Administration/admin_tenant.py:1896 Administration/admin_tenant.py:2135
+#: Administration/admin_tenant.py:1899 Administration/admin_tenant.py:2138
 msgid "Has key"
 msgstr ""
 
-#: Administration/admin_tenant.py:1913
+#: Administration/admin_tenant.py:1916
 msgid "Api Key inserted"
 msgstr ""
 
-#: Administration/admin_tenant.py:1957 BaseBillet/models.py:1991
+#: Administration/admin_tenant.py:1960 BaseBillet/models.py:1991
 msgid "Api key"
 msgstr ""
 
-#: Administration/admin_tenant.py:1975 Administration/admin_tenant.py:1995
-#: Administration/admin_tenant.py:2168
+#: Administration/admin_tenant.py:1978 Administration/admin_tenant.py:1998
+#: Administration/admin_tenant.py:2171
 msgid "Api OK"
 msgstr ""
 
-#: Administration/admin_tenant.py:1978 Administration/admin_tenant.py:1997
+#: Administration/admin_tenant.py:1981 Administration/admin_tenant.py:2000
 msgid "Api not OK"
 msgstr ""
 
-#: Administration/admin_tenant.py:1986 Administration/admin_tenant.py:2154
+#: Administration/admin_tenant.py:1989 Administration/admin_tenant.py:2157
 msgid "Test Api"
 msgstr ""
 
-#: Administration/admin_tenant.py:2150
+#: Administration/admin_tenant.py:2153
 msgid "Clé Api chiffrée"
 msgstr ""
 
-#: Administration/admin_tenant.py:2172
+#: Administration/admin_tenant.py:2175
 #, python-brace-format
 msgid "Api not OK : {e}"
 msgstr ""
 
-#: Administration/admin_tenant.py:2176
+#: Administration/admin_tenant.py:2179
 msgid "Error : {type(e)} - {e}"
 msgstr ""
 
-#: Administration/admin_tenant.py:2201
+#: Administration/admin_tenant.py:2204
 msgid "Development"
 msgstr ""
 
-#: Administration/admin_tenant.py:2203
+#: Administration/admin_tenant.py:2206
 msgid "Production"
 msgstr ""
 
@@ -2054,7 +2058,6 @@ msgstr ""
 
 #: BaseBillet/templates/reunion/base.html:11
 #: BaseBillet/templates/reunion/headless.html:4
-#: templates/admin/send_invitation.html:16
 msgid "Home"
 msgstr ""
 
