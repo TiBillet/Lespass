@@ -911,6 +911,8 @@ class Webhook_stripe(APIView):
             amount = payload["data"]["object"]["amount"]
             stripe_connect_account = payload["data"]["object"]["destination"]
             created = datetime.fromtimestamp(payload["data"]["object"]["created"])
+            tranfer_id = payload["data"]["object"]["id"]
+
             # On est sur le tenant root. Il faut chercher le tenant correspondant.
             for tenant in Client.objects.all().exclude(categorie=Client.ROOT):
                 with tenant_context(tenant):
@@ -918,10 +920,19 @@ class Webhook_stripe(APIView):
                     tenant_stripe_connect_account = config.get_stripe_connect_account()
                     if tenant_stripe_connect_account:
                         if tenant_stripe_connect_account == stripe_connect_account:
+
+                            # Le paiement a déja été pris en compte
+                            if Paiement_stripe.objects.filter(payment_intent_id=tranfer_id).exists():
+                                return Response(f"Déja pris en compte", status=status.HTTP_208_ALREADY_REPORTED)
+
+                            fedowAPI = FedowAPI()
+                            import ipdb; ipdb.set_trace()
+                            transaction = fedowAPI.wallet.global_asset_bank_stripe_deposit(tranfer_id)
+
                             # Création du paiement stripe
                             pstripe = Paiement_stripe.objects.create(
                                     detail=_("Versement de monnaie globale"),
-                                    payment_intent_id=payload["data"]["object"]["id"] ,
+                                    payment_intent_id=tranfer_id,
                                     metadata_stripe=json.dumps(payload),
                                     order_date=created,
                                     status=Paiement_stripe.PAID,

@@ -12,9 +12,11 @@ from django.core.signing import TimestampSigner
 from django.db import connection
 from django.utils import timezone
 from django_tenants.postgresql_backend.base import FakeTenant
+from django_tenants.utils import tenant_context
 
-from AuthBillet.models import TibilletUser, Wallet
+from AuthBillet.models import TibilletUser, Wallet, HumanUser
 from BaseBillet.models import Configuration, Membership, Product
+from Customers.models import Client
 from fedow_connect.models import FedowConfig
 from fedow_connect.utils import sign_message, data_to_b64, verify_signature, rsa_decrypt_string
 from fedow_connect.validators import WalletValidator, AssetValidator, TransactionValidator, \
@@ -53,8 +55,6 @@ def _post(fedow_config: FedowConfig = None,
         ).decode('utf-8')
 
         # Ici, on s'autovérifie :
-        # Assert volontaire. Si non effectué en prod, ce n'est pas grave.
-        # logger.debug("_post verify_signature start")
         if not verify_signature(user.get_public_key(),
                                 data_to_b64(data),
                                 signature):
@@ -303,6 +303,36 @@ class WalletFedow():
         if not fedow_config:
             self.fedow_config = FedowConfig.get_solo()
 
+    def global_asset_bank_stripe_deposit(self, payment_intent_id: str):
+        '''
+        Remise en euro des tokens.
+        Arrive lorsque un virement stripe primaire vers le stripe connect du lieu
+        pour un transfert des sommes correspondantes a articles vendu avec l'asset primaire.
+        Check de la valeur des tokens primaire du wallet du lieu (place)
+        On ajoute une transaction de type action "DEPOSIT" su montant du virement
+
+        auth : même niveau de protection que create place. Seul le tenant ROOT peut demander cette action
+        '''
+
+        # Pour la création, on prend la clé "create_place_apikey" de Root
+        fedow_config = FedowConfig.get_solo()
+        # Prendre la clé du lieu permet de l'identifier sur fedow (request.place)
+        apikey = fedow_config.get_fedow_place_admin_apikey()
+
+        # On a besoin d'un user pour signer la requete. On prend le premier admin du lieu.
+        admin = HumanUser.objects.filter(client_admin=connection.tenant).first()
+
+        data = {
+            "payment_intent_id":payment_intent_id,
+            "amount": f"{amount}",
+        }
+        request_bank_stripe_deposit = _post(fedow_config=self.fedow_config,
+                                      user=admin,
+                                      path='wallet/global_asset_bank_stripe_deposit',
+                                      data=data, apikey=apikey)
+
+
+
     def cached_retrieve_by_signature(self, user):
         if not user.wallet:
             wallet = self.get_or_create_wallet(user)
@@ -506,8 +536,8 @@ class PlaceFedow():
 
         new_place_data = request_for_new_place.json()
 
+        # Le wallet est créé par fedow
         wallet = Wallet.objects.create(
-            # display_name=tenant_config.organisation,
             uuid=new_place_data['wallet']
         )
 
@@ -601,9 +631,6 @@ class TransactionFedow():
         self.fedow_config: FedowConfig = fedow_config
         if fedow_config is None:
             self.config = FedowConfig.get_solo()
-
-    def tibillet_bank_stripe_deposit(self, tenant, payment_intent_id):
-        pass
 
     def retrieve(self, uuid):
         response = _get(self.fedow_config, path=f'transaction/{uuid}')

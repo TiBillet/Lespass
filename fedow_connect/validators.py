@@ -8,7 +8,7 @@ class PlaceValidator(serializers.Serializer):
     uuid = serializers.UUIDField()
     name = serializers.CharField()
     wallet = serializers.UUIDField()
-    stripe_connect_valid = serializers.BooleanField()
+    # stripe_connect_valid = serializers.BooleanField()
     dokos_id = serializers.CharField(max_length=50, allow_null=True, required=False)
     lespass_domain = serializers.CharField(max_length=100, allow_null=True, required=False)
 
