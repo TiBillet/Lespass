@@ -303,7 +303,7 @@ class WalletFedow():
         if not fedow_config:
             self.fedow_config = FedowConfig.get_solo()
 
-    def global_asset_bank_stripe_deposit(self, payment_intent_id: str):
+    def global_asset_bank_stripe_deposit(self, payload: dict):
         '''
         Remise en euro des tokens.
         Arrive lorsque un virement stripe primaire vers le stripe connect du lieu
@@ -321,16 +321,19 @@ class WalletFedow():
 
         # On a besoin d'un user pour signer la requete. On prend le premier admin du lieu.
         admin = HumanUser.objects.filter(client_admin=connection.tenant).first()
-
         data = {
-            "payment_intent_id":payment_intent_id,
-            "amount": f"{amount}",
+            "payload":payload,
         }
         request_bank_stripe_deposit = _post(fedow_config=self.fedow_config,
                                       user=admin,
                                       path='wallet/global_asset_bank_stripe_deposit',
                                       data=data, apikey=apikey)
 
+        serialized_transaction = TransactionValidator(data=request_bank_stripe_deposit.json())
+        if serialized_transaction.is_valid():
+            validated_data = serialized_transaction.validated_data
+            return validated_data
+        raise Exception(f"{serialized_transaction.errors}")
 
 
     def cached_retrieve_by_signature(self, user):

@@ -468,6 +468,9 @@ class ProductAdminCustomForm(ModelForm):
             'publish',
             'archive',
         )
+        help_texts = {
+            'img': _('Product image is displayed at a 16/9 ratio.'),
+        }
 
     def clean_categorie_article(self):
         cleaned_data = self.cleaned_data

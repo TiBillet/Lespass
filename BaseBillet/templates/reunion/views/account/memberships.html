@@ -21,7 +21,7 @@
 
                 <div class="col{% if not is_valid %} d-flex flex-column justify-content-between{% endif %}">
                     <div class="card{% if is_valid %} h-100{% else %} opacity-50 flex-grow-1{% endif %}">
-                        {% include 'reunion/partials/picture.html' with img=membership.product_img alt=membership.name class='card-img-top' %}
+                        {% include 'reunion/partials/picture.html' with img=membership.product_img alt=membership.name class='card-img-top' ratio='16x9' %}
                         <div class="card-body">
                             <h3 class="card-title">
                                 {{ membership.price.product.name }} {{ membership.price.name|lower }}
