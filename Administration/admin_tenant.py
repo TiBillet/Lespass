@@ -813,6 +813,10 @@ class HumanUserAdmin(ModelAdmin):
     warn_unsaved_form = True  # Default: False
     inlines = [MembershipInline, ]
 
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        return queryset.prefetch_related('memberships', 'client_admin')
+
     """
     On affiche en haut du changelist un bouton pour pouvoir changer sa carte 
     Change form view sert à donner le pk de l'user pour le bouton htmx
@@ -1177,7 +1181,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        return qs.filter(last_contribution__isnull=False)
+        return qs.filter(last_contribution__isnull=False).select_related('user', 'price', 'price__product').prefetch_related('option_generale')
 
     ### FORMULAIRES
     autocomplete_fields = ['option_generale', ]
@@ -1488,7 +1492,7 @@ class EventAdmin(ModelAdmin):
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
         # Les events action et les events children doivent s'afficher dans un inline
-        return queryset.exclude(categorie=Event.ACTION).exclude(parent__isnull=False)
+        return queryset.exclude(categorie=Event.ACTION).exclude(parent__isnull=False).select_related('postal_address').prefetch_related('tag', 'options_radio', 'options_checkbox', 'carrousel', 'products')
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
@@ -1517,6 +1521,10 @@ class ReservationAdmin(ModelAdmin):
     # readonly_fields = list_display
     search_fields = ['event__name', 'user_commande__email', 'options__name', 'datetime']
     list_filter = ['event', 'event__categorie', 'datetime', 'status', 'options']
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        return queryset.select_related('user_commande', 'event').prefetch_related('tickets', 'options')
 
     @display(description=_("Ticket count"))
     def tickets_count(self, instance: Reservation):
@@ -1669,6 +1677,10 @@ class TicketAdmin(ModelAdmin):
         'reservation__datetime',
     ]
 
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        return queryset.select_related('reservation', 'reservation__event', 'reservation__event__parent', 'reservation__user_commande').prefetch_related('reservation__options')
+
     @admin.display(ordering='reservation__datetime', description='Booked at')
     def reservation__datetime(self, obj):
         return obj.reservation.datetime
@@ -1800,6 +1812,10 @@ class TenantAdmin(ModelAdmin):
 
     list_display = ['name', 'created_on', 'primary_domain', ]
 
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        return queryset.prefetch_related('domains')
+
     actions_row = ["go_admin", ]
 
     @action(
@@ -1845,6 +1861,10 @@ class FederatedPlaceAdmin(ModelAdmin):
     list_display = ["tenant", "str_tag_filter", "str_tag_exclude", ]
     fields = ["tenant", "tag_filter", "tag_exclude", ]
     autocomplete_fields = ["tag_filter", "tag_exclude", ]
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        return queryset.select_related('tenant').prefetch_related('tag_filter', 'tag_exclude')
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == 'tenant':  # Replace 'user_field' with your actual field name
