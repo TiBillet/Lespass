@@ -32,8 +32,9 @@
             </a>
             <div class="col-md-auto text-md-end event-tags">
                 {% for tag in event.tag.all %}
-                    <a href="?tag={{ tag.slug }}" hx-boost="true" class="btn btn-info btn-sm mb-1">
-                        {{ tag.name }}
+                    <a href="?tag={{ tag.slug }}" hx-boost="true" class="btn btn-sm mb-1"
+                       style="background-color: {{ tag.color }}; color: {% if tag.color|brightness < 128 %}white{% else %}black{% endif %};">
+                    {{ tag.name }}
                     </a>
                 {% endfor %}
             </div>

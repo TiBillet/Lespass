@@ -104,7 +104,7 @@ class Tag(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid4)
     name = models.CharField(max_length=50, verbose_name=_("Tag name"))
     slug = models.CharField(max_length=50, verbose_name=_("Tag slug"), db_index=True)
-    color = models.CharField(max_length=7, verbose_name=_("Tag color"), default="#000000")
+    color = models.CharField(max_length=7, verbose_name=_("Tag color"), default="#0dcaf0")
 
     def __str__(self):
         return self.name

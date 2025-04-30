@@ -97,3 +97,19 @@ def dict_key(d, k):
     except KeyError:
         return ""
 
+@register.filter(name='brightness')
+def brightness(color):
+    # dans le template : {% if tag.color|brightness < 128 %}white{% else %}black{% endif %}
+    if not color:
+        return 0
+    # Remove '#' if present
+    color = color.lstrip('#')
+
+    # Convert hex to RGB
+    r = int(color[0:2], 16)
+    g = int(color[2:4], 16)
+    b = int(color[4:6], 16)
+
+    # Calculate brightness using perceived luminance formula
+    # Source: https://www.w3.org/TR/AERT/#color-contrast
+    return ((r * 299) + (g * 587) + (b * 114)) / 1000

@@ -32,8 +32,19 @@ from solo.admin import SingletonModelAdmin
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.decorators import display, action
 from unfold.sites import UnfoldAdminSite
-from unfold.widgets import UnfoldAdminTextInputWidget, UnfoldAdminEmailInputWidget, UnfoldAdminSelectWidget, \
-    UnfoldAdminSelectMultipleWidget, UnfoldAdminRadioSelectWidget, UnfoldAdminCheckboxSelectMultiple
+# from unfold.widgets import UnfoldAdminTextInputWidget, UnfoldAdminEmailInputWidget, UnfoldAdminSelectWidget, \
+#     UnfoldAdminSelectMultipleWidget, UnfoldAdminRadioSelectWidget, UnfoldAdminCheckboxSelectMultiple
+
+from unfold.widgets import (
+    UnfoldAdminCheckboxSelectMultiple,
+    UnfoldAdminEmailInputWidget,
+    UnfoldAdminRadioSelectWidget,
+    UnfoldAdminColorInputWidget,
+    UnfoldAdminSelectWidget,
+    UnfoldAdminSplitDateTimeWidget,
+    UnfoldAdminTextInputWidget,
+)
+
 from unfold.contrib.forms.widgets import WysiwygWidget
 from unfold.contrib.filters.admin import (
     # AutocompleteSelectMultipleFilter,
@@ -307,7 +318,7 @@ class TagForm(ModelForm):
         model = Tag
         fields = '__all__'
         widgets = {
-            'color': TextInput(attrs={'type': 'color'}),
+            'color': UnfoldAdminColorInputWidget(),
         }
 
 
@@ -340,7 +351,7 @@ class CarrouselAdmin(ModelAdmin):
 
 @admin.register(Tag, site=staff_admin_site)
 class TagAdmin(ModelAdmin):
-    compressed_fields = True  # Default: False
+    compressed_fields = True  # Default: False 
     warn_unsaved_form = True  # Default: False
 
     form = TagForm
@@ -353,12 +364,16 @@ class TagAdmin(ModelAdmin):
     search_fields = ['name']
 
     def _color(self, obj):
+        # Add link to change page around color div
         return format_html(
-            '<div style="width: 20px; height: 20px; background-color: {}; border: 1px solid #000;"></div>',
-            obj.color, )
+            '<a href="{url}">'
+            '<div style="width: 20px; height: 20px; background-color: {color}; border: 1px solid #000;"></div>'
+            '</a>',
+            url=reverse('staff_admin:BaseBillet_tag_change', args=[obj.pk]),
+            color=obj.color,
+        )
 
     _color.short_description = _("Color")
-
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
