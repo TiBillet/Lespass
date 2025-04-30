@@ -6,7 +6,7 @@
     }
 </style>
 
-<form id="reservation_form" hx-post="reservation/" hx-indicator="#tibillet-spinner" class="d-flex flex-column justify-content-between h-100">
+<form id="reservation_form" hx-post="reservation/" class="d-flex flex-column justify-content-between h-100">
     <div>
         <input type="hidden" name="event" value="{{ event.uuid }}">
         {% if user.is_anonymous %}
@@ -134,6 +134,9 @@
 
 <script type="module">
     import * as BookingCalculator from '{% static "reunion/js/booking-calculator.mjs" %}'
+    import * as Spinner from '{% static "reunion/js/form-spinner.mjs" %}'
 
+    // show spinner on form submission
+    Spinner.init(document.getElementById('reservation_form'))
     BookingCalculator.init()
 </script>
