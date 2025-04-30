@@ -266,6 +266,7 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 'event_menu_name',
                 'membership_menu_name',
                 'description_membership_page',
+                'description_event_page',
                 'first_input_label_membership',
                 'second_input_label_membership',
                 'additional_text_in_membership_mail',

@@ -13,6 +13,12 @@
             </header>
         {% endif %}
 
+        {% if config.description_event_page %}
+            <section class="container-lg p-3 sticky-top bg-body" style="height: fit-content;">
+                <div>{{ config.description_event_page | safe }}</div>
+            </section>
+        {% endif %}
+
         <!-- search bar and filtering -->
         <section class="container-lg p-3 sticky-top bg-body" style="height: fit-content;">
             {% include "reunion/partials/event/search.html" %}

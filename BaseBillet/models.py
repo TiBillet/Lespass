@@ -414,6 +414,9 @@ class Configuration(SingletonModel):
     description_membership_page = models.TextField(blank=True, verbose_name=_("Description on the membership page"),
                                                    help_text=_("Displayed above membership products."))
 
+    description_event_page = models.TextField(blank=True, verbose_name=_("Description on the event page"),
+                                                   help_text=_("Displayed above the search field."))
+
     """
     ######### CASHLESS #########
     """
