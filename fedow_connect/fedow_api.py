@@ -331,8 +331,8 @@ class WalletFedow():
 
         serialized_transaction = TransactionValidator(data=request_bank_stripe_deposit.json())
         if serialized_transaction.is_valid():
-            validated_data = serialized_transaction.validated_data
-            return validated_data
+            serialized_transaction = serialized_transaction # tout le serialized_transaction plutôt que validated data pour récupérer l'objet FedowTransaction créé en DB
+            return serialized_transaction
         raise Exception(f"{serialized_transaction.errors}")
 
 
