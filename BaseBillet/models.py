@@ -958,6 +958,11 @@ class Event(models.Model):
     easy_reservation = models.BooleanField(default=False, verbose_name=_("Quick booking"),
                                            help_text=_("One-click booking for logged-in user."))
 
+    custom_confirmation_message = models.TextField(blank=True, null=True,
+                                                          verbose_name=_("Personalized text in the booking confirmation e-mail."),
+                                                          help_text=_(
+                                                              "Not required: You can add additional information to be sent by e-mail."))
+
     booking = models.BooleanField(default=False, verbose_name=_("Restaurant mode / scheduler"),
                                   help_text=_(
                                       "The event will be visible at the top of the home page, allowing the user to book a specific date."))

@@ -12,6 +12,7 @@ import jwt
 import requests
 import segno
 from celery import shared_task
+from celery.concurrency import custom
 from celery.exceptions import MaxRetriesExceededError
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -617,6 +618,7 @@ def ticket_celery_mailer(reservation_uuid: str):
         if reservation.event.img:
             image_url_event = f"https://{domain}{reservation.event.img.med.url}"
 
+
     if not reservation.to_mail:
         reservation.status = Reservation.PAID_NOMAIL
         reservation.save()
@@ -634,6 +636,7 @@ def ticket_celery_mailer(reservation_uuid: str):
                 template='emails/buy_confirmation.html',
                 context={
                     'config': config,
+                    'custom_confirmation_message': reservation.event.custom_confirmation_message,
                     'reservation': reservation,
                     'image_url_place': image_url_place,
                     'image_url_event': image_url_event,

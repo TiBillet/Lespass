@@ -1451,6 +1451,7 @@ class EventAdmin(ModelAdmin):
                 # 'easy_reservation',
                 'max_per_user',
                 'products',
+                'custom_confirmation_message',
             ),
             "classes": ["tab"],
         }),
