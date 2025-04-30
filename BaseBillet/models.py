@@ -385,7 +385,9 @@ class Configuration(SingletonModel):
 
     currency_code = models.CharField(max_length=3, default="EUR")
 
-    additional_text_in_membership_mail = models.TextField(blank=True, null=True, verbose_name=_("Additional text in membership mail"), help_text=_("You can add additional information that will be e-mailed to you when you sign up."))
+    additional_text_in_membership_mail = models.TextField(blank=True, null=True,
+                                                          verbose_name=_("Additional text in membership mail"),
+                                                          help_text=_("You can add additional information that will be e-mailed to you when you sign up."))
 
     """
     PERSONALISATION
@@ -394,10 +396,13 @@ class Configuration(SingletonModel):
     membership_menu_name = models.CharField(max_length=200,
                                             blank=True, null=True,
                                             verbose_name=_("Subscription page name"),
-                                            help_text=_("'Subscriptions' If empty.")
-                                            )
+                                            help_text=_("'Subscriptions' If empty."))
 
-    event_menu_name = models.CharField(max_length=200, default=_("Calendar"), verbose_name=_("Calendar page name"))
+    event_menu_name = models.CharField(max_length=200,
+                                       blank=True, null=True,
+                                       verbose_name=_("Calendar page name"),
+                                       help_text=_("'Calendar' If empty."))
+
     first_input_label_membership = models.CharField(max_length=200, default=_("First name"),
                                                     verbose_name=_("Title of the first input on the membership form"))
     second_input_label_membership = models.CharField(max_length=200, default=_("Last name or organization"),
