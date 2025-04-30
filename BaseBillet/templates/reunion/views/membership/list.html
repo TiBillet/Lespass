@@ -3,7 +3,7 @@
 {% load i18n %}
 {% block main %}
     <main class="container-lg py-5">
-        <h1>{% translate config.membership_menu_name %}</h1>
+        <h1>{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% trans 'Subscriptions' %}{% endif %}</h1>
         {% if config.description_membership_page %}
             <div>{{ config.description_membership_page | safe }}</div>
         {% endif %}
@@ -11,7 +11,7 @@
         <!-- subscription panel -->
         <div class="offcanvas-start offcanvas" tabindex="-1" id="subscribePanel" aria-labelledby="subscribePanelLabel">
             <div class="offcanvas-header">
-                <h5 class="offcanvas-title" id="subscribePanelLabel">{% translate 'Subscribe' %}</h5>
+                <h5 class="offcanvas-title" id="subscribePanelLabel">{% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}{% translate 'Subscribe' %}{% endif %}</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="offcanvas"
                         aria-label="{% translate 'Close' %}"></button>
             </div>
@@ -38,7 +38,7 @@
                                        type="button"
                                        href="/memberships/?open={{ product.uuid }}" target="_blank">
                                         <i class="bi bi-plus"></i>
-                                        {% translate 'Subscribe' %}
+                                        {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}{% translate 'Subscribe' %}{% endif %}
                                     </a>
                                 {% else %}
                                     <button
@@ -51,7 +51,7 @@
                                             data-bs-target="#subscribePanel"
                                             aria-controls="subscribePanel">
                                         <i class="bi bi-plus"></i>
-                                        {% translate 'Subscribe' %}
+                                        {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}{% translate 'Subscribe' %}{% endif %}
                                     </button>
                                 {% endif %}
                             </div>

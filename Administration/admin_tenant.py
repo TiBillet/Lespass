@@ -464,6 +464,7 @@ class ProductAdminCustomForm(ModelForm):
             'poids',
             "option_generale_radio",
             "option_generale_checkbox",
+            "validate_button_text",
             "legal_link",
             'publish',
             'archive',

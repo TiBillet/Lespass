@@ -2,28 +2,27 @@
 {% load tibitags i18n %}
 
 {% block main %}
-<div class="home-bg py-5 flex-fill">
-    <main class="container-lg my-5">
-        <div class="bg-body rounded-5 px-5 py-3{% if config.img %} shadow{% endif %}">
-            <h1 class="display-1 mt-5 mb-3">{{ config.organisation }}</h1>
-            <p class="lead fs-4">{{ config.short_description | default:"" }}</p>
-            <p class="lead">{{ config.long_description | safe | default:"" }}</p>
-            <div class="row">
-                <div class="col-md mb-3">
-                    <a class="btn btn-lg btn-primary d-block my-3"
-                        href="/event/" hx-get="/event/" hx-target="body" hx-push-url="true">
-                        <i class="bi bi-calendar-date"></i>
-                        {% trans config.event_menu_name %}
-                    </a>
-                </div>
-                <div class="col-md">
-                    <a class="btn btn-lg btn-primary d-block my-3"
-                        href="/memberships/" hx-get="/memberships/" hx-target="body" hx-push-url="true">
-                        <i class="bi bi-person-badge"></i>
-                        {% trans config.membership_menu_name %}
-                    </a>
-                </div>
-                {% comment %} HIDE: page fédération
+    <div class="home-bg py-5 flex-fill">
+        <main class="container-lg my-5">
+            <div class="bg-body rounded-5 px-5 py-3{% if config.img %} shadow{% endif %}">
+                <h1 class="display-1 mt-5 mb-3">{{ config.organisation }}</h1>
+                <p class="lead fs-4">{{ config.short_description | default:"" }}</p>
+                <p class="lead">{{ config.long_description | safe | default:"" }}</p>
+                <div class="row">
+                    <div class="col-md mb-3">
+                        <a class="btn btn-lg btn-primary d-block my-3"
+                           href="/event/" hx-get="/event/" hx-target="body" hx-push-url="true">
+                            <i class="bi bi-calendar-date"></i>
+                            {% trans config.event_menu_name %}
+                        </a>
+                    </div>
+                    <div class="col-md">
+                        <a class="btn btn-lg btn-primary d-block my-3"
+                           href="/memberships/" hx-get="/memberships/" hx-target="body" hx-push-url="true">
+                            <i class="bi bi-person-badge"></i>{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% trans 'Subscriptions' %}{% endif %}
+                        </a>
+                    </div>
+                    {% comment %} HIDE: page fédération
                 <div class="col-md">
                     <a class="btn btn-lg btn-primary d-block my-3"
                         href="/network/" hx-get="/network/" hx-target="body" hx-push-url="true">
@@ -32,33 +31,33 @@
                     </a>
                 </div>
                 {% endcomment %}
+                </div>
             </div>
-        </div>
-    </main>
-</div>
-<style>
-    .home-bg {
-        background-image: url('{{ config.img.med.url }}');
-        background-size: cover;
-        background-position: center;
-    }
-
-    @media (min-width: 960px), (min-height: 540px) {
+        </main>
+    </div>
+    <style>
         .home-bg {
-            background-image: url('{{ config.img.crop_hdr.url }}');
+            background-image: url('{{ config.img.med.url }}');
+            background-size: cover;
+            background-position: center;
         }
-    }
 
-    @media (min-width: 1280px), (min-height: 1280px) {
-        .home-bg {
-            background-image: url('{{ config.img.hdr.url }}');
+        @media (min-width: 960px), (min-height: 540px) {
+            .home-bg {
+                background-image: url('{{ config.img.crop_hdr.url }}');
+            }
         }
-    }
 
-    @media (min-width: 1920px), (min-height: 1920px) {
-        .home-bg {
-            background-image: url('{{ config.img.fhd.url }}');
+        @media (min-width: 1280px), (min-height: 1280px) {
+            .home-bg {
+                background-image: url('{{ config.img.hdr.url }}');
+            }
         }
-    }
-</style>
+
+        @media (min-width: 1920px), (min-height: 1920px) {
+            .home-bg {
+                background-image: url('{{ config.img.fhd.url }}');
+            }
+        }
+    </style>
 {% endblock %}

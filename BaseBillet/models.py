@@ -391,8 +391,12 @@ class Configuration(SingletonModel):
     PERSONALISATION
     """
 
-    membership_menu_name = models.CharField(max_length=200, default=_("Subscriptions"),
-                                            verbose_name=_("Subscription page name"))
+    membership_menu_name = models.CharField(max_length=200,
+                                            blank=True, null=True,
+                                            verbose_name=_("Subscription page name"),
+                                            help_text=_("'Subscriptions' If empty.")
+                                            )
+
     event_menu_name = models.CharField(max_length=200, default=_("Calendar"), verbose_name=_("Calendar page name"))
     first_input_label_membership = models.CharField(max_length=200, default=_("First name"),
                                                     verbose_name=_("Title of the first input on the membership form"))
@@ -688,6 +692,10 @@ class Product(models.Model):
                                      )
 
     archive = models.BooleanField(default=False, verbose_name=_("Archive"))
+
+    validate_button_text = models.CharField(blank=True, null=True, max_length=20,
+                                            verbose_name=_("Validate button text for membership"),
+                                            help_text=_("'Subscribe' If empty. Only useful for membership or subscription products."))
 
     # TODO: A retirer, plus utilisé ?
     # send_to_cashless = models.BooleanField(default=False,
@@ -1022,7 +1030,8 @@ class Event(models.Model):
         """
         Un booléen pour savoir si l'évènement est complet ou pas.
         """
-
+        # TODO: Mettre en cache cette variable et la vider si la jauge_max change dans l'admin
+        # Voire même mettre en cache toutes les variables de l'évènement...
         if self.valid_tickets_count() >= self.jauge_max:
             return True
         else:

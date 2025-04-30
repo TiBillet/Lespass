@@ -96,7 +96,7 @@ def get_context(request):
         "carrousel_event_list": Carrousel.objects.filter(on_event_list_page=True).order_by('order'),
         "main_nav": [
             {'name': 'event-list', 'url': '/event/', 'label': f'{config.event_menu_name}', 'icon': 'calendar-date'},
-            {'name': 'memberships_mvt', 'url': '/memberships/', 'label': f'{config.membership_menu_name}',
+            {'name': 'memberships_mvt', 'url': '/memberships/', 'label': config.membership_menu_name if config.membership_menu_name else _('Subscriptions'),
              'icon': 'person-badge'},
             # {'name': 'network', 'url': '/network/', 'label': 'Réseau local', 'icon': 'arrow-repeat'},
         ]

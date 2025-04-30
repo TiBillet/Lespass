@@ -139,7 +139,7 @@
 
     <div class="p-3">
         <button id="membership-submit" type="submit" class="btn btn-primary w-100 mb-3">
-            {% translate 'Send my subscription request' %}
+            {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}{% translate 'Send my subscription request' %}{% endif %}
         </button>
         <a href="." class="btn btn-danger d-block test-membership-bt-cancel">{% translate 'Cancel' %}</a>
     </div>

@@ -6,11 +6,11 @@
 {% block scripts %}
     <script>
         // auto-scroll for volunteer accordion section
-       document
+        document
             .getElementById("volunteerButton")
             ?.addEventListener("click", ({target}) => {
                 document.getElementById("get-involved").scrollIntoView()
-        })
+            })
     </script>
 {% endblock %}
 
@@ -43,12 +43,14 @@
                 {% translate "Check the event on the original website" %}
                 <i class="bi bi-box-arrow-up-right"></i>
             </a>
+        {% elif event.complet %}
+            <a href="#" class="btn btn-lg btn-danger d-block mt-3 disabled" role="button" aria-disabled="true">
+                {% translate "Full capacity: The event is sold out." %}
+            </a>
         {% elif event.products.count %}
             {% include 'reunion/partials/event/booking.html' %}
         {% else %}
-            <a href="#" class="btn btn-lg btn-primary d-block mt-3 disabled" role="button" aria-disabled="true">
-                {% translate "Free admission" %}
-            </a>
+            {% translate "Free admission" %}
         {% endif %}
 
         {% if action_total_jauge %}
