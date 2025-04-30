@@ -1126,11 +1126,11 @@ msgstr "API du serveur Fedow"
 
 #: BaseBillet/models.py:490
 msgid "send a stripe invoice"
-msgstr ""
+msgstr "Envoyer une facture via Stripe"
 
 #: BaseBillet/models.py:491
 msgid "Send a stripe invoice to the customer"
-msgstr ""
+msgstr "Demander à stripe de générer une facture. Attention à bien le configurer dans votre espace Stripe (numéro de facture)"
 
 #: BaseBillet/models.py:566
 msgid "Link your stripe account to accept payment"
