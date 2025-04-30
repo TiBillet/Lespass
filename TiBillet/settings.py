@@ -37,11 +37,12 @@ TEST = os.environ.get('TEST') == '1'
 # Age of cookie, in seconds (default: 2 weeks).
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 7 * 12 # 12 weeks (3 month)
 
+# TODO montrer ça à Sham
 # Mecanisme qui permet d'etre loggue sur toute les instances tibillet multi tenant
 # SECURITY WARNING: This setting is only safe if all subdomains are fully trusted and controlled by you
 # Otherwise it could enable session hijacking attacks across subdomains
 SESSION_COOKIE_DOMAIN = f'.{os.environ["DOMAIN"]}'
-# Store CSRF data in session instead of cookie 
+# Store CSRF data in session instead of cookie
 # This is safer since session is signed and secure against tampering
 CSRF_USE_SESSIONS = True
 
