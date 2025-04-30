@@ -246,7 +246,6 @@ class Configuration(SingletonModel):
     def uuid(self):
         return connection.tenant.pk
 
-
     organisation = models.CharField(db_index=True, max_length=50, verbose_name=_("Collective name"))
 
     slug = models.SlugField(max_length=50, default="")
@@ -387,7 +386,8 @@ class Configuration(SingletonModel):
 
     additional_text_in_membership_mail = models.TextField(blank=True, null=True,
                                                           verbose_name=_("Additional text in membership mail"),
-                                                          help_text=_("You can add additional information that will be e-mailed to you when you sign up."))
+                                                          help_text=_(
+                                                              "You can add additional information that will be e-mailed to you when you sign up."))
 
     """
     PERSONALISATION
@@ -403,12 +403,16 @@ class Configuration(SingletonModel):
                                        verbose_name=_("Calendar page name"),
                                        help_text=_("'Calendar' If empty."))
 
-    first_input_label_membership = models.CharField(max_length=200, default=_("First name"),
-                                                    verbose_name=_("Title of the first input on the membership form"))
-    second_input_label_membership = models.CharField(max_length=200, default=_("Last name or organization"),
-                                                     verbose_name=_("Title of the second input on the membership form"))
+    first_input_label_membership = models.CharField(max_length=200, blank=True, null=True,
+                                                    verbose_name=_("Title of the first input on the membership form"),
+                                                    help_text=_("'First name' If empty."))
 
-    description_membership_page = models.TextField(blank=True, verbose_name=_("Description on the membership page"), help_text=_("Displayed above membership products."))
+    second_input_label_membership = models.CharField(max_length=200, blank=True, null=True,
+                                                     verbose_name=_("Title of the second input on the membership form"),
+                                                     help_text=_("'Last name or organization' If empty."))
+
+    description_membership_page = models.TextField(blank=True, verbose_name=_("Description on the membership page"),
+                                                   help_text=_("Displayed above membership products."))
 
     """
     ######### CASHLESS #########
@@ -449,7 +453,7 @@ class Configuration(SingletonModel):
                 if r.status_code == 200:
                     # TODO: Check cashless signature avec laboutik_public_pem
                     return True
-                else :
+                else:
                     logger.error(f"{r.status_code} {r.content}")
                     return False
                     # raise Exception(f"{r.status_code} {r.content}")
@@ -483,7 +487,8 @@ class Configuration(SingletonModel):
     ######### STRIPE #########
     """
 
-    stripe_invoice = models.BooleanField(default=False, verbose_name=_("send a stripe invoice"), help_text=_("Send a stripe invoice to the customer"))
+    stripe_invoice = models.BooleanField(default=False, verbose_name=_("send a stripe invoice"),
+                                         help_text=_("Send a stripe invoice to the customer"))
 
     stripe_mode_test = models.BooleanField(default=False)
 
@@ -700,7 +705,8 @@ class Product(models.Model):
 
     validate_button_text = models.CharField(blank=True, null=True, max_length=20,
                                             verbose_name=_("Validate button text for membership"),
-                                            help_text=_("'Subscribe' If empty. Only useful for membership or subscription products."))
+                                            help_text=_(
+                                                "'Subscribe' If empty. Only useful for membership or subscription products."))
 
     # TODO: A retirer, plus utilisé ?
     # send_to_cashless = models.BooleanField(default=False,
@@ -825,7 +831,6 @@ class Price(models.Model):
     #         ticket_count = Ticket.objects.filter(pricesold__price=self).count()
     #     return True
 
-
     class Meta:
         unique_together = ('name', 'product')
         ordering = ('order',)
@@ -861,7 +866,8 @@ class Event(models.Model):
     full_url = models.URLField(blank=True, null=True)
 
     published = models.BooleanField(default=True, verbose_name=_("Publish"))
-    private = models.BooleanField(default=False, verbose_name=_("Non-federable event"), help_text=_("Will not be displayed on shared calendars."))
+    private = models.BooleanField(default=False, verbose_name=_("Non-federable event"),
+                                  help_text=_("Will not be displayed on shared calendars."))
 
     products = models.ManyToManyField(Product, blank=True, verbose_name=_("Products"))
 
@@ -893,22 +899,24 @@ class Event(models.Model):
                         )
 
     sticker_img = StdImageField(upload_to='images/',
-                        validators=[MaxSizeValidator(1920, 1920)],
-                        blank=True, null=True,
-                        variations={
-                            'fhd': (1920, 1920),
-                            'hdr': (1280, 1280),
-                            'med': (480, 480),
-                            'thumbnail': (150, 90),
-                            'crop_hdr': (960, 540, True),
-                            'crop': (480, 270, True),
-                        },
-                        delete_orphans=True, verbose_name=_("Sticker image"),
-                        help_text=_("The small image displayed in the events list. If None, img will be displayed. 4x3 ratio.")
-                        )
+                                validators=[MaxSizeValidator(1920, 1920)],
+                                blank=True, null=True,
+                                variations={
+                                    'fhd': (1920, 1920),
+                                    'hdr': (1280, 1280),
+                                    'med': (480, 480),
+                                    'thumbnail': (150, 90),
+                                    'crop_hdr': (960, 540, True),
+                                    'crop': (480, 270, True),
+                                },
+                                delete_orphans=True, verbose_name=_("Sticker image"),
+                                help_text=_(
+                                    "The small image displayed in the events list. If None, img will be displayed. 4x3 ratio.")
+                                )
 
     carrousel = models.ManyToManyField(Carrousel, blank=True, verbose_name=_("Carousel slides"),
-                                       related_name='events', help_text=_("Images that will be displayed in the program section."))
+                                       related_name='events',
+                                       help_text=_("Images that will be displayed in the program section."))
 
     CONCERT = "LIV"
     FESTIVAL = "FES"
@@ -1060,7 +1068,6 @@ class Event(models.Model):
 
     def published_prices(self) -> QuerySet:
         return Price.objects.filter(product__in=self.products.all(), publish=True)
-
 
     def save(self, *args, **kwargs):
         """
@@ -1580,7 +1587,7 @@ class Paiement_stripe(models.Model):
 
     QRCODE, API_BILLETTERIE, FRONT_BILLETTERIE, INVOICE, TRANSFERT = 'Q', 'B', 'F', 'I', 'T'
     SOURCE_CHOICES = (
-        (QRCODE, _('From QR code scan')), # ancien api. A virer ?
+        (QRCODE, _('From QR code scan')),  # ancien api. A virer ?
         (API_BILLETTERIE, _('From API')),
         (FRONT_BILLETTERIE, _('From ticketing app')),
         (INVOICE, _('From invoice')),
@@ -1594,7 +1601,7 @@ class Paiement_stripe(models.Model):
 
     # total = models.FloatField(default=0)
     def total(self):
-        if self.source == self.TRANSFERT: # c'est un transfert de compte stripe
+        if self.source == self.TRANSFERT:  # c'est un transfert de compte stripe
             payload = json.loads(self.metadata_stripe)
             return dround(payload["data"]["object"]["amount"])
         return dround(self.lignearticles.all().aggregate(Sum('amount'))['amount__sum']) or 0
@@ -1728,7 +1735,7 @@ class LigneArticle(models.Model):
     def total(self) -> int:
         # Mise à jour de amount en cas de paiement stripe pour prix libre ( a virer après les migration ? )
         if self.amount == 0 and self.paiement_stripe and self.pricesold.price.free_price:
-            if self.paiement_stripe.status in [Paiement_stripe.PAID, Paiement_stripe.VALID] :
+            if self.paiement_stripe.status in [Paiement_stripe.PAID, Paiement_stripe.VALID]:
                 logger.info("Total == 0. free price ? go -> update_amount()")
                 self.update_amount()
         return self.amount * self.qty
@@ -2102,8 +2109,6 @@ class FormbricksConfig(SingletonModel):
     Configuration de Formbricks pour les fomulaires sur mesures
     """
 
-
-
     api_key = models.CharField(max_length=200, blank=True, null=True)
     api_host = models.CharField(max_length=220, default="https://app.formbricks.com")
 
@@ -2121,8 +2126,6 @@ class FormbricksConfig(SingletonModel):
 
 
 class BrevoConfig(SingletonModel):
-
-
     api_key = models.CharField(max_length=400, blank=True, null=True)
     last_log = models.TextField(blank=True, null=True)
 
