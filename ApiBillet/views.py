@@ -889,6 +889,8 @@ class Webhook_stripe(APIView):
                 return Response(f"Ce checkout est pour fedow.", status=status.HTTP_205_RESET_CONTENT)
 
             tenant_uuid_in_metadata = payload["data"]["object"]["metadata"]["tenant"]
+            if tenant_uuid_in_metadata == "payment_link" :
+                return Response(f"Payment link, probablement des carte ? Pas besoin de traitement.",status=status.HTTP_204_NO_CONTENT)
 
             tenant = Client.objects.get(uuid=tenant_uuid_in_metadata)
             with tenant_context(tenant):
