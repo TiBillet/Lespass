@@ -257,10 +257,58 @@ def send_membership_invoice_to_email(membership_uuid: str):
 
 #### SEND INFO TO LABOUTIK
 
-# @app.task
 @shared_task(bind=True, max_retries=20)
-def send_stripe_transfert_to_laboutik(self, payload: dict):
-    pass
+def send_stripe_bank_deposit_to_laboutik(self, payload):
+    # Le max de temps entre deux retries : 24 heures
+    MAX_RETRY_TIME = 86400  # 24 * 60 * 60 seconds = 24 h
+    config = Configuration.get_solo()
+    # On check si le serveur cashless est bien opérationnel :
+    try :
+        if not config.check_serveur_cashless():
+            logger.warning(f"No serveur cashless on config. send_stripe_bank_deposit_to_laboutik not sended")
+            return True
+    except Exception as exc:
+        logger.error(f"Erreur lors de config.check_serveur_cashless() Serveur down ?")
+        # Ajoute un backoff exponentiel pour les autres erreurs
+        retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
+        raise self.retry(exc=exc, countdown=retry_delay)
+    except MaxRetriesExceededError:
+        logger.error(f"La tâche a échoué après plusieurs tentatives pour {config.check_serveur_cashless()}")
+
+    json_data = json.dumps(payload, cls=DjangoJSONEncoder)
+
+    url = f'{config.server_cashless}/api/stripebankdepositfromlespass'
+    try:
+        logger.info(f"start celery_post_request to {url}")
+        response = requests.post(
+            url,
+            headers={
+                "Authorization": f"Api-Key {config.key_cashless}",
+                "Content-type": "application/json",
+            },
+            data=json_data,
+            verify=bool(not settings.DEBUG),
+            timeout=2,
+        )
+        if response.status_code == 200:
+            logger.info("send_stripe_bank_deposit_to_laboutik sended_to_laboutik = True")
+        # Si la réponse est 404, on déclenche un retry
+        if response.status_code == 404:
+            # Augmente le délai de retry avec un backoff exponentiel
+            retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
+            raise self.retry(countdown=retry_delay)
+
+    except requests.exceptions.RequestException as exc:
+        # Log et retry en cas d’erreur réseau ou autre exception
+        logger.error(f"Erreur lors de l'envoi de la requête POST à {url}: {exc}")
+
+        # Ajoute un backoff exponentiel pour les autres erreurs
+        retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
+        raise self.retry(exc=exc, countdown=retry_delay)
+
+    except MaxRetriesExceededError:
+        logger.error(f"La tâche a échoué après plusieurs tentatives pour {url}")
+
 
 
 # @app.task

@@ -30,7 +30,7 @@ from AuthBillet.models import HumanUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe, \
     OptionGenerale, Membership
-from BaseBillet.tasks import create_ticket_pdf
+from BaseBillet.tasks import create_ticket_pdf, send_stripe_bank_deposit_to_laboutik
 from Customers.models import Client
 from TiBillet import settings
 from fedow_connect.fedow_api import FedowAPI
@@ -934,8 +934,15 @@ class Webhook_stripe(APIView):
                                 return Response(f"Déja pris en compte", status=status.HTTP_208_ALREADY_REPORTED)
 
                             try:
+                                # Envoi à Fedow
                                 fedowAPI = FedowAPI()
                                 serializer_transaction = fedowAPI.wallet.global_asset_bank_stripe_deposit(payload)
+                                hash = serializer_transaction.fedow_transaction.hash
+                                uuid = serializer_transaction.fedow_transaction.uuid
+                                # Envoie à Laboutik
+                                payload['fedow_transaction_hash'] = hash
+                                payload['fedow_transaction_uuid'] = uuid
+                                send_stripe_bank_deposit_to_laboutik(payload) # todo: passer sur celery
 
                                 # Création du paiement stripe
                                 pstripe = Paiement_stripe.objects.create(
@@ -950,9 +957,9 @@ class Webhook_stripe(APIView):
                                 )
                                 pstripe.fedow_transactions.add(serializer_transaction.fedow_transaction)
                                 logger.info(
-                                    f'transfer.created OK : Paiement_stripe.objects.created : {pstripe.uuid_8} : hash fedow {serializer_transaction.fedow_transaction.hash}')
+                                    f'transfer.created OK : Paiement_stripe.objects.created : {pstripe.uuid_8} : hash fedow {hash}')
                                 return Response(
-                                    f'transfer.created OK : Paiement_stripe.objects.created : {pstripe.uuid_8} : hash fedow {serializer_transaction.fedow_transaction.hash}',
+                                    f'transfer.created OK : Paiement_stripe.objects.created : {pstripe.uuid_8} : hash fedow {hash}',
                                     status=status.HTTP_201_CREATED)
                             except Exception as e:
                                 logger.error(f"Error processing Stripe transfer for tenant {tenant}: {str(e)}")
