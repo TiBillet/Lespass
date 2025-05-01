@@ -4,25 +4,11 @@
 <script type="module">
     import * as Spinner from '{% static "reunion/js/form-spinner.mjs" %}'
 
-    // show spinner on form submission
-    Spinner.init(document.getElementById('membership-form'))
-
     window.formbricks.init({
         environmentId: "{{ form.environmentId }}",
         apiHost: "{{ form.apiHost }}",
         userId: "{{ membership.email }} {{ membership.uuid | slice:':4' }}",
     });
-
-    console.log({
-        email: "{{ membership.email }}",
-        name: "{{ membership.member_name }}",
-        membership_uuid: "{{ membership.uuid }}",
-        product_name: "{{ membership.price.product.name }}",
-        price_name: "{{ membership.price.name }}",
-        product_slug: "{{ membership.price.product.name|slugify }}",
-        price_slug: "{{ membership.price.name|slugify }}",
-        price_amount: "{{ membership.price.prix }}",
-    })
 
     window.formbricks.track("{{ form.trigger_name }}", {
         hiddenFields: {
@@ -40,14 +26,14 @@
     window.addEventListener("message", function (event) {
         if (event.data === "formbricksSurveyCompleted") {
             console.log("Survey Completed");
-            window.location.href = "{{ checkout_stripe|default:'' }}";
+            window.location.href = "{{ checkout_stripe|default:'.' }}";
+
+            // hide spinner
+            Spinner.hideSpinner()
         }
     })
 
     //hide offcanvas
     bootstrap.Offcanvas.getOrCreateInstance('#subscribePanel').hide()
-
-    // hide spinner
-    Spinner.hideSpinner()
 </script>
 <!-- END Formbricks Surveys -->

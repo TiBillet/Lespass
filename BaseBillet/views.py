@@ -95,8 +95,11 @@ def get_context(request):
         "mode_test": True if os.environ.get('TEST') == '1' else False,
         "carrousel_event_list": Carrousel.objects.filter(on_event_list_page=True).order_by('order'),
         "main_nav": [
-            {'name': 'event-list', 'url': '/event/', 'label': f'{config.event_menu_name}', 'icon': 'calendar-date'},
-            {'name': 'memberships_mvt', 'url': '/memberships/', 'label': f'{config.membership_menu_name}',
+            {'name': 'event-list', 'url': '/event/',
+             'label': config.event_menu_name if config.event_menu_name else _('Calendar'),
+             'icon': 'calendar-date'},
+            {'name': 'memberships_mvt', 'url': '/memberships/',
+             'label': config.membership_menu_name if config.membership_menu_name else _('Subscriptions'),
              'icon': 'person-badge'},
             # {'name': 'network', 'url': '/network/', 'label': 'Réseau local', 'icon': 'arrow-repeat'},
         ]
@@ -898,7 +901,8 @@ class EventMVT(viewsets.ViewSet):
             event = Event.objects.select_related('postal_address', ).prefetch_related('tag', 'products',
                                                                                       'products__prices').get(slug=slug)
             # Récupération des prix
-            tarifs = [price.prix for product in event.products.all() for price in product.prices.all()]
+            event.prices = [price for product in event.products.all() for price in product.prices.all()]
+            tarifs = [price.prix for price in event.prices]
             # Calcul des prix min et max
             event.price_min = min(tarifs) if tarifs else None
             event.price_max = max(tarifs) if tarifs else None

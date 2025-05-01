@@ -1,8 +1,22 @@
-{% load i18n %}
+{% load i18n static %}
 <form id="membership-form" hx-post="/memberships/" hx-target="#target_formbricks"
       class="d-flex flex-column justify-content-between h-100">
     <div>
-        <div id="target_formbricks"></div>
+
+        <h3>{{ product.name }}</h3>
+        <p>{{ product.short_description }}</p>
+        {% if product.long_description %}
+            <p>{{ product.long_description | safe }}</p>
+        {% endif %}
+
+        <div id="target_formbricks">
+            <script type="module">
+                import * as Spinner from '{% static "reunion/js/form-spinner.mjs" %}'
+
+                // show spinner on form submission
+                Spinner.init(document.getElementById('membership-form'))
+            </script>
+        </div>
         <input type="hidden" name="product" value="{{ product.uuid }}">
 
         <!-- prix -->
@@ -51,19 +65,23 @@
 
 
 
-        <div class="form-floating mb-3">
-            <input name="firstname" type="text" class="form-control" placeholder="{% trans config.first_input_label_membership %}"
-                   role="textbox"
-                   aria-label="{% trans config.first_input_label_membership %}" required>
-            <label for="firstname">{% trans config.first_input_label_membership %}</label>
-        </div>
-        <div class="form-floating mb-3">
-            <input name="lastname" type="text" class="form-control"
-                   placeholder="{% trans config.second_input_label_membership %}" role="textbox"
-                   aria-label="{% trans config.second_input_label_membership %}" required>
-            <label for="lastname">{% trans config.second_input_label_membership %}</label>
-        </div>
+        {% with first_label=config.first_input_label_membership|default:_('First name') %}
+            <div class="form-floating mb-3">
+                <input name="firstname" type="text" class="form-control" placeholder="{{ first_label }}"
+                       role="textbox"
+                       aria-label="{{ first_label }}" required>
+                <label for="firstname">{{ first_label }}</label>
+            </div>
+        {% endwith %}
 
+        {% with second_label=config.second_input_label_membership|default:_('Last name or organization') %}
+            <div class="form-floating mb-3">
+                <input name="lastname" type="text" class="form-control" placeholder="{{ second_label }}"
+                       role="textbox"
+                       aria-label="{{ second_label }}" required>
+                <label for="lastname">{{ second_label }}</label>
+            </div>
+        {% endwith %}
         <!-- options radio -->
         <div class="mb-3 has-validation">
             {% for option in product.option_generale_radio.all %}
@@ -125,8 +143,9 @@
 
     <div class="p-3">
         <button id="membership-submit" type="submit" class="btn btn-primary w-100 mb-3">
-            {% translate 'Send my subscription request' %}
+            {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}
+                {% translate 'Send my subscription request' %}{% endif %}
         </button>
-        <a href="." class="btn btn-danger d-block">{% translate 'Cancel' %}</a>
+        <a href="." class="btn btn-danger d-block test-membership-bt-cancel">{% translate 'Cancel' %}</a>
     </div>
 </form>

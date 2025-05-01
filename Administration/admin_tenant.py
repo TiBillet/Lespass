@@ -32,8 +32,19 @@ from solo.admin import SingletonModelAdmin
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.decorators import display, action
 from unfold.sites import UnfoldAdminSite
-from unfold.widgets import UnfoldAdminTextInputWidget, UnfoldAdminEmailInputWidget, UnfoldAdminSelectWidget, \
-    UnfoldAdminSelectMultipleWidget, UnfoldAdminRadioSelectWidget, UnfoldAdminCheckboxSelectMultiple
+# from unfold.widgets import UnfoldAdminTextInputWidget, UnfoldAdminEmailInputWidget, UnfoldAdminSelectWidget, \
+#     UnfoldAdminSelectMultipleWidget, UnfoldAdminRadioSelectWidget, UnfoldAdminCheckboxSelectMultiple
+
+from unfold.widgets import (
+    UnfoldAdminCheckboxSelectMultiple,
+    UnfoldAdminEmailInputWidget,
+    UnfoldAdminRadioSelectWidget,
+    UnfoldAdminColorInputWidget,
+    UnfoldAdminSelectWidget,
+    UnfoldAdminSplitDateTimeWidget,
+    UnfoldAdminTextInputWidget,
+)
+
 from unfold.contrib.forms.widgets import WysiwygWidget
 from unfold.contrib.filters.admin import (
     # AutocompleteSelectMultipleFilter,
@@ -255,6 +266,7 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 'event_menu_name',
                 'membership_menu_name',
                 'description_membership_page',
+                'description_event_page',
                 'first_input_label_membership',
                 'second_input_label_membership',
                 'additional_text_in_membership_mail',
@@ -264,6 +276,7 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
             'fields': (
                 # 'vat_taxe',
                 'onboard_stripe',
+                'stripe_invoice',
                 # 'stripe_mode_test',
             ),
         }),
@@ -306,7 +319,7 @@ class TagForm(ModelForm):
         model = Tag
         fields = '__all__'
         widgets = {
-            'color': TextInput(attrs={'type': 'color'}),
+            'color': UnfoldAdminColorInputWidget(),
         }
 
 
@@ -339,7 +352,7 @@ class CarrouselAdmin(ModelAdmin):
 
 @admin.register(Tag, site=staff_admin_site)
 class TagAdmin(ModelAdmin):
-    compressed_fields = True  # Default: False
+    compressed_fields = True  # Default: False 
     warn_unsaved_form = True  # Default: False
 
     form = TagForm
@@ -352,12 +365,16 @@ class TagAdmin(ModelAdmin):
     search_fields = ['name']
 
     def _color(self, obj):
+        # Add link to change page around color div
         return format_html(
-            '<div style="width: 20px; height: 20px; background-color: {}; border: 1px solid #000;"></div>',
-            obj.color, )
+            '<a href="{url}">'
+            '<div style="width: 20px; height: 20px; background-color: {color}; border: 1px solid #000;"></div>'
+            '</a>',
+            url=reverse('staff_admin:BaseBillet_tag_change', args=[obj.pk]),
+            color=obj.color,
+        )
 
     _color.short_description = _("Color")
-
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
@@ -463,10 +480,14 @@ class ProductAdminCustomForm(ModelForm):
             'poids',
             "option_generale_radio",
             "option_generale_checkbox",
+            "validate_button_text",
             "legal_link",
             'publish',
             'archive',
         )
+        help_texts = {
+            'img': _('Product image is displayed at a 16/9 ratio.'),
+        }
 
     def clean_categorie_article(self):
         cleaned_data = self.cleaned_data
@@ -808,6 +829,10 @@ class HumanUserAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
     inlines = [MembershipInline, ]
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        return queryset.prefetch_related('memberships', 'client_admin')
 
     """
     On affiche en haut du changelist un bouton pour pouvoir changer sa carte 
@@ -1173,7 +1198,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        return qs.filter(last_contribution__isnull=False)
+        return qs.filter(last_contribution__isnull=False).select_related('user', 'price', 'price__product').prefetch_related('option_generale')
 
     ### FORMULAIRES
     autocomplete_fields = ['option_generale', ]
@@ -1191,7 +1216,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
     actions_detail = ["send_invoice", "get_invoice"]
 
     @action(
-        description=_("Send an invoice through email"),
+        description=_("Send an receipt through email"),
         url_path="send_invoice",
         permissions=["custom_actions_detail"],
     )
@@ -1205,7 +1230,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
         return redirect(request.META["HTTP_REFERER"])
 
     @action(
-        description=_("Build an invoice"),
+        description=_("Build an receipt"),
         url_path="get_invoice",
         permissions=["custom_actions_detail"],
     )
@@ -1411,6 +1436,7 @@ class EventAdmin(ModelAdmin):
                 'datetime',
                 'end_datetime',
                 'img',
+                'sticker_img',
                 'carrousel',
                 'short_description',
                 'long_description',
@@ -1425,6 +1451,7 @@ class EventAdmin(ModelAdmin):
                 # 'easy_reservation',
                 'max_per_user',
                 'products',
+                'custom_confirmation_message',
             ),
             "classes": ["tab"],
         }),
@@ -1483,7 +1510,7 @@ class EventAdmin(ModelAdmin):
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
         # Les events action et les events children doivent s'afficher dans un inline
-        return queryset.exclude(categorie=Event.ACTION).exclude(parent__isnull=False)
+        return queryset.exclude(categorie=Event.ACTION).exclude(parent__isnull=False).select_related('postal_address').prefetch_related('tag', 'options_radio', 'options_checkbox', 'carrousel', 'products')
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
@@ -1512,6 +1539,10 @@ class ReservationAdmin(ModelAdmin):
     # readonly_fields = list_display
     search_fields = ['event__name', 'user_commande__email', 'options__name', 'datetime']
     list_filter = ['event', 'event__categorie', 'datetime', 'status', 'options']
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        return queryset.select_related('user_commande', 'event').prefetch_related('tickets', 'options')
 
     @display(description=_("Ticket count"))
     def tickets_count(self, instance: Reservation):
@@ -1664,6 +1695,10 @@ class TicketAdmin(ModelAdmin):
         'reservation__datetime',
     ]
 
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        return queryset.select_related('reservation', 'reservation__event', 'reservation__event__parent', 'reservation__user_commande').prefetch_related('reservation__options')
+
     @admin.display(ordering='reservation__datetime', description='Booked at')
     def reservation__datetime(self, obj):
         return obj.reservation.datetime
@@ -1795,6 +1830,10 @@ class TenantAdmin(ModelAdmin):
 
     list_display = ['name', 'created_on', 'primary_domain', ]
 
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        return queryset.prefetch_related('domains')
+
     actions_row = ["go_admin", ]
 
     @action(
@@ -1840,6 +1879,10 @@ class FederatedPlaceAdmin(ModelAdmin):
     list_display = ["tenant", "str_tag_filter", "str_tag_exclude", ]
     fields = ["tenant", "tag_filter", "tag_exclude", ]
     autocomplete_fields = ["tag_filter", "tag_exclude", ]
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        return queryset.select_related('tenant').prefetch_related('tag_filter', 'tag_exclude')
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == 'tenant':  # Replace 'user_field' with your actual field name

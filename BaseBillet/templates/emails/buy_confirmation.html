@@ -432,7 +432,11 @@
                                                     <tr>
                                                         <td class="td-padding" align="left"
                                                             style="font-family: 'Roboto Mono', monospace; color: #212121!important; font-size: 16px; line-height: 24px; padding-top: 18px; padding-left: 18px!important; padding-right: 18px!important; padding-bottom: 0px!important; mso-line-height-rule: exactly; mso-padding-alt: 18px 18px 0px 18px;">
-                                                            Bonjour !
+                                                            {% if custom_confirmation_message %}
+                                                                {{ custom_confirmation_message | safe }}
+                                                            {% else %}
+                                                                Bonjour !
+                                                            {% endif %}
                                                             <br><br>
                                                             {% if reservation.total_paid > 0 %}
                                                                 Nous vous confirmons votre achat
@@ -445,8 +449,6 @@
                                                             <br><br>
                                                             {% if reservation.tickets %}
                                                                 Vous trouverez vos billets en pièce jointe.
-                                                            {% else %}
-                                                                Aucun billets pour un concert ? Etrange etrange
                                                             {% endif %}
                                                             <br><br>
 
@@ -467,73 +469,6 @@
         </td>
     </tr>
     <!-- END CARD 1 -->
-
-
-    <!-- START CARD 2 -->
-    <tr>
-        <td width="100%" valign="top" align="center" class="padding-container"
-            style="padding-top: 0px!important; padding-bottom: 18px!important; mso-padding-alt: 0px 0px 18px 0px;">
-            <table width="600" cellpadding="0" cellspacing="0" border="0" align="center" class="wrapper">
-                <tr>
-                    <td>
-                        <table cellpadding="0" cellspacing="0" border="0">
-                            <tr>
-                                <td style="border-radius: 3px; border-bottom: 2px solid #d4d4d4;" class="card-1"
-                                    width="100%" valign="top" align="center">
-                                    <table style="border-radius: 3px;" width="600" cellpadding="0" cellspacing="0"
-                                           border="0" align="center" class="wrapper" bgcolor="#ffffff">
-                                        <tr>
-                                            <td align="center">
-                                                <table width="600" cellpadding="0" cellspacing="0" border="0"
-                                                       class="container">
-                                                    <tr>
-                                                        <td class="td-padding" align="left"
-                                                            style="font-family: 'Roboto Mono', monospace; color: #212121!important; font-size: 24px; line-height: 30px; padding-top: 18px; padding-left: 18px!important; padding-right: 18px!important; padding-bottom: 0px!important; mso-line-height-rule: exactly; mso-padding-alt: 18px 18px 0px 13px;">
-                                                            Vous entrez maintenant dans le réseau coopératif de
-                                                            TiBillet.
-                                                        </td>
-                                                    </tr>
-                                                    <tr>
-                                                        <td class="td-padding" align="left"
-                                                            style="font-family: 'Roboto Mono', monospace; color: #212121!important; font-size: 16px; line-height: 24px; padding-top: 18px; padding-left: 18px!important; padding-right: 18px!important; padding-bottom: 0px!important; mso-line-height-rule: exactly; mso-padding-alt: 18px 18px 0px 18px;">
-
-                                                            <a href="https://tibillet.org">TiBillet</a> est une
-                                                            solution libre de gestion associative orientée économie
-                                                            sociale et solidaire.
-                                                            <br><br>
-                                                            Vous pouvez acheter des billets dans tout le reseau avec
-                                                            votre
-                                                            carte associative de cashless, recharger cette dernière en
-                                                            ligne ou sur
-                                                            place
-                                                            et en profiter dans tous les lieux partenaires !
-                                                            <br><br>
-                                                            Vous êtes artiste ? Organisateur ? Vous pouvez créer votre
-                                                            espace
-                                                            TiBillet en quelques clics et démarcher dans tout le reseau
-                                                            coopératif !
-                                                            <br><br>
-                                                            Si vous voulez en savoir plus, <a href="https://tibillet.org">n'hésitez pas</a> !
-                                                            <br><br>
-
-                                                        </td>
-                                                    </tr>
-                                                    <!-- END BODY COPY -->
-
-                                                </table>
-                                            </td>
-                                        </tr>
-                                    </table>
-                                </td>
-                            </tr>
-                        </table>
-                    </td>
-                </tr>
-            </table>
-        </td>
-    </tr>
-    <!-- END CARD 2 -->
-
 
     <!-- SPACER -->
     <!--[if gte mso 9]>

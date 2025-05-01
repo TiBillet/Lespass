@@ -151,6 +151,9 @@ class CreationPaiementStripe():
             'stripe_account': f'{self.stripe_connect_account}',
         }
 
+        config = Configuration.get_solo()
+        if self.mode == 'payment' and config.stripe_invoice :
+            data_checkout['invoice_creation'] = {"enabled": True,}
         return data_checkout
 
     def _checkout_session(self):

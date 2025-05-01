@@ -12,6 +12,7 @@ import jwt
 import requests
 import segno
 from celery import shared_task
+from celery.concurrency import custom
 from celery.exceptions import MaxRetriesExceededError
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -162,7 +163,7 @@ def create_membership_invoice_pdf(membership: Membership):
     }
 
     html = template.render(context)
-
+    activate('fr')
     css = CSS(string=
               '''
                 @font-face {
@@ -227,7 +228,7 @@ def context_for_membership_email(membership: "Membership"):
         },
         'button_color': "#009058",
         'button': {
-            'text': _('REQUEST INVOICE'),
+            'text': _('REQUEST RECEIPT'),
             'url': f'https://{domain}/memberships/{membership.pk}/invoice/',
         },
         'next_text_1': _("If you receive this email by mistake, please contact the TiBillet team."),
@@ -256,10 +257,58 @@ def send_membership_invoice_to_email(membership_uuid: str):
 
 #### SEND INFO TO LABOUTIK
 
-# @app.task
 @shared_task(bind=True, max_retries=20)
-def send_stripe_transfert_to_laboutik(self, payload: dict):
-    pass
+def send_stripe_bank_deposit_to_laboutik(self, payload):
+    # Le max de temps entre deux retries : 24 heures
+    MAX_RETRY_TIME = 86400  # 24 * 60 * 60 seconds = 24 h
+    config = Configuration.get_solo()
+    # On check si le serveur cashless est bien opérationnel :
+    try :
+        if not config.check_serveur_cashless():
+            logger.warning(f"No serveur cashless on config. send_stripe_bank_deposit_to_laboutik not sended")
+            return True
+    except Exception as exc:
+        logger.error(f"Erreur lors de config.check_serveur_cashless() Serveur down ?")
+        # Ajoute un backoff exponentiel pour les autres erreurs
+        retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
+        raise self.retry(exc=exc, countdown=retry_delay)
+    except MaxRetriesExceededError:
+        logger.error(f"La tâche a échoué après plusieurs tentatives pour {config.check_serveur_cashless()}")
+
+    json_data = json.dumps(payload, cls=DjangoJSONEncoder)
+
+    url = f'{config.server_cashless}/api/stripebankdepositfromlespass'
+    try:
+        logger.info(f"start celery_post_request to {url}")
+        response = requests.post(
+            url,
+            headers={
+                "Authorization": f"Api-Key {config.key_cashless}",
+                "Content-type": "application/json",
+            },
+            data=json_data,
+            verify=bool(not settings.DEBUG),
+            timeout=2,
+        )
+        if response.status_code == 200:
+            logger.info("send_stripe_bank_deposit_to_laboutik sended_to_laboutik = True")
+        # Si la réponse est 404, on déclenche un retry
+        if response.status_code == 404:
+            # Augmente le délai de retry avec un backoff exponentiel
+            retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
+            raise self.retry(countdown=retry_delay)
+
+    except requests.exceptions.RequestException as exc:
+        # Log et retry en cas d’erreur réseau ou autre exception
+        logger.error(f"Erreur lors de l'envoi de la requête POST à {url}: {exc}")
+
+        # Ajoute un backoff exponentiel pour les autres erreurs
+        retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
+        raise self.retry(exc=exc, countdown=retry_delay)
+
+    except MaxRetriesExceededError:
+        logger.error(f"La tâche a échoué après plusieurs tentatives pour {url}")
+
 
 
 # @app.task
@@ -617,6 +666,7 @@ def ticket_celery_mailer(reservation_uuid: str):
         if reservation.event.img:
             image_url_event = f"https://{domain}{reservation.event.img.med.url}"
 
+
     if not reservation.to_mail:
         reservation.status = Reservation.PAID_NOMAIL
         reservation.save()
@@ -634,6 +684,7 @@ def ticket_celery_mailer(reservation_uuid: str):
                 template='emails/buy_confirmation.html',
                 context={
                     'config': config,
+                    'custom_confirmation_message': reservation.event.custom_confirmation_message,
                     'reservation': reservation,
                     'image_url_place': image_url_place,
                     'image_url_event': image_url_event,

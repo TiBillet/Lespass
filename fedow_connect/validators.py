@@ -8,7 +8,7 @@ class PlaceValidator(serializers.Serializer):
     uuid = serializers.UUIDField()
     name = serializers.CharField()
     wallet = serializers.UUIDField()
-    stripe_connect_valid = serializers.BooleanField()
+    # stripe_connect_valid = serializers.BooleanField()
     dokos_id = serializers.CharField(max_length=50, allow_null=True, required=False)
     lespass_domain = serializers.CharField(max_length=100, allow_null=True, required=False)
 
@@ -178,7 +178,7 @@ class TransactionValidator(serializers.Serializer):
     primary_card = serializers.UUIDField(required=False, allow_null=True)
     previous_transaction = serializers.UUIDField()
 
-    FIRST, SALE, CREATION, REFILL, TRANSFER, SUBSCRIBE, BADGE, FUSION, REFUND, VOID = 'FST', 'SAL', 'CRE', 'REF', 'TRF', 'SUB', 'BDG', 'FUS', 'RFD', 'VID'
+    FIRST, SALE, CREATION, REFILL, TRANSFER, SUBSCRIBE, BADGE, FUSION, REFUND, VOID, DEPOSIT = 'FST', 'SAL', 'CRE', 'REF', 'TRF', 'SUB', 'BDG', 'FUS', 'RFD', 'VID', 'BNK'
     TYPE_ACTION = (
         (FIRST, _("First block")),
         (SALE, _("Product sale")),
@@ -190,6 +190,7 @@ class TransactionValidator(serializers.Serializer):
         (FUSION, _('Wallet merge')),
         (REFUND, _('Refund')),
         (VOID, 'Pass card / wallet dissociation'),
+        (DEPOSIT, 'Remise en banque'),
     )
     action = serializers.ChoiceField(choices=TYPE_ACTION)
     get_action_display = serializers.CharField()

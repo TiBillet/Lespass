@@ -30,7 +30,7 @@ from AuthBillet.models import HumanUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe, \
     OptionGenerale, Membership
-from BaseBillet.tasks import create_ticket_pdf
+from BaseBillet.tasks import create_ticket_pdf, send_stripe_bank_deposit_to_laboutik
 from Customers.models import Client
 from TiBillet import settings
 from fedow_connect.fedow_api import FedowAPI
@@ -889,6 +889,8 @@ class Webhook_stripe(APIView):
                 return Response(f"Ce checkout est pour fedow.", status=status.HTTP_205_RESET_CONTENT)
 
             tenant_uuid_in_metadata = payload["data"]["object"]["metadata"]["tenant"]
+            if tenant_uuid_in_metadata == "payment_link" :
+                return Response(f"Payment link, probablement des carte ? Pas besoin de traitement.",status=status.HTTP_204_NO_CONTENT)
 
             tenant = Client.objects.get(uuid=tenant_uuid_in_metadata)
             with tenant_context(tenant):
@@ -908,32 +910,60 @@ class Webhook_stripe(APIView):
         elif payload.get('type') == "transfer.created":
 
             #TODO: tout mettre dans un celery :
-            amount = payload["data"]["object"]["amount"]
             stripe_connect_account = payload["data"]["object"]["destination"]
             created = datetime.fromtimestamp(payload["data"]["object"]["created"])
+            transfer_id = payload["data"]["object"]["id"]
+
+            # Vérification de la requete chez Stripe
+            stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+            transfer = stripe.Transfer.retrieve(transfer_id)
+            if stripe_connect_account != transfer.destination:
+                raise ValueError("Transfert stripe illegal")
+            amount = transfer.amount
+
             # On est sur le tenant root. Il faut chercher le tenant correspondant.
             for tenant in Client.objects.all().exclude(categorie=Client.ROOT):
-                with tenant_context(tenant):
+                with tenant_context(tenant): # Comment faire sans itérer dans tout les tenant ?
                     config = Configuration.get_solo()
                     tenant_stripe_connect_account = config.get_stripe_connect_account()
                     if tenant_stripe_connect_account:
                         if tenant_stripe_connect_account == stripe_connect_account:
-                            # Création du paiement stripe
-                            pstripe = Paiement_stripe.objects.create(
+
+                            # Le paiement a déja été pris en compte
+                            if Paiement_stripe.objects.filter(payment_intent_id=transfer_id).exists():
+                                return Response(f"Déja pris en compte", status=status.HTTP_208_ALREADY_REPORTED)
+
+                            try:
+                                # Envoi à Fedow
+                                fedowAPI = FedowAPI()
+                                serializer_transaction = fedowAPI.wallet.global_asset_bank_stripe_deposit(payload)
+                                hash = serializer_transaction.fedow_transaction.hash
+                                uuid = serializer_transaction.fedow_transaction.uuid
+                                # Envoie à Laboutik
+                                payload['fedow_transaction_hash'] = hash
+                                payload['fedow_transaction_uuid'] = uuid
+                                send_stripe_bank_deposit_to_laboutik(payload) # todo: passer sur celery
+
+                                # Création du paiement stripe
+                                pstripe = Paiement_stripe.objects.create(
                                     detail=_("Versement de monnaie globale"),
-                                    payment_intent_id=payload["data"]["object"]["id"] ,
+                                    payment_intent_id=transfer_id,
                                     metadata_stripe=json.dumps(payload),
                                     order_date=created,
                                     status=Paiement_stripe.PAID,
                                     traitement_en_cours=True,
                                     source=Paiement_stripe.TRANSFERT,
                                     source_traitement=Paiement_stripe.WEBHOOK,
-                                    # fedow_transactions=,
                                 )
-                            logger.info(f'transfer.created OK : Paiement_stripe.objects.created : {pstripe.uuid_8}')
-                            return Response(f'transfer.created OK : Paiement_stripe.objects.created : {pstripe.uuid_8}',
-                                            status=status.HTTP_201_CREATED)
-
+                                pstripe.fedow_transactions.add(serializer_transaction.fedow_transaction)
+                                logger.info(
+                                    f'transfer.created OK : Paiement_stripe.objects.created : {pstripe.uuid_8} : hash fedow {hash}')
+                                return Response(
+                                    f'transfer.created OK : Paiement_stripe.objects.created : {pstripe.uuid_8} : hash fedow {hash}',
+                                    status=status.HTTP_201_CREATED)
+                            except Exception as e:
+                                logger.error(f"Error processing Stripe transfer for tenant {tenant}: {str(e)}")
+                                raise e from None
             # send_stripe_transfert_to_laboutik(payload)
 
 
