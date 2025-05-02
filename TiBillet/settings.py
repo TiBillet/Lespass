@@ -44,7 +44,7 @@ SESSION_COOKIE_AGE = 60 * 60 * 24 * 7 * 12 # 12 weeks (3 month)
 SESSION_COOKIE_DOMAIN = f'.{os.environ["DOMAIN"]}'
 # Store CSRF data in session instead of cookie
 # This is safer since session is signed and secure against tampering
-CSRF_USE_SESSIONS = True
+# CSRF_USE_SESSIONS = True
 
 # Sentry
 if not DEBUG and os.environ.get('SENTRY_DNS'):

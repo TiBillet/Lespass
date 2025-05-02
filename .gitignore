@@ -162,3 +162,5 @@ DjangoFiles/logs/nginxError.log
 
 tempo/
 /www/
+/debug_format.txt
+/resume_git_*
