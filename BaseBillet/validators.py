@@ -552,17 +552,21 @@ class TenantCreateValidator(serializers.Serializer):
             config.slug = slugify(name)
             config.email = user.email
 
-            rootConf = RootConfiguration.get_solo()
-            stripe.api_key = rootConf.get_stripe_api()
-            config.stripe_mode_test = rootConf.stripe_mode_test
 
-            info_stripe = stripe.Account.retrieve(waiting_config.id_acc_connect)
-            config.site_web = info_stripe.business_profile.url
-            config.phone = info_stripe.business_profile.support_phone
-            if rootConf.stripe_mode_test:
-                config.stripe_connect_account_test = info_stripe.id
-            else:
-                config.stripe_connect_account = info_stripe.id
+            try :
+                rootConf = RootConfiguration.get_solo()
+                stripe.api_key = rootConf.get_stripe_api()
+                config.stripe_mode_test = rootConf.stripe_mode_test
+                info_stripe = stripe.Account.retrieve(waiting_config.id_acc_connect)
+                config.site_web = info_stripe.business_profile.url
+                config.phone = info_stripe.business_profile.support_phone
+                if rootConf.stripe_mode_test:
+                    config.stripe_connect_account_test = info_stripe.id
+                else:
+                    config.stripe_connect_account = info_stripe.id
+            except Exception as e:
+                logger.info("Stripe non ok")
+                pass
 
             config.save()
 
