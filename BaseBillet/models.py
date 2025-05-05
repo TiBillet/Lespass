@@ -261,7 +261,7 @@ class Configuration(SingletonModel):
     tva_number = models.CharField(max_length=20, blank=True, null=True, verbose_name=_("VAT number"))
     siren = models.CharField(max_length=20, blank=True, null=True, verbose_name=_("SIREN number"))
 
-    phone = models.CharField(max_length=20, verbose_name=_("Phone number"))
+    phone = models.CharField(max_length=20, verbose_name=_("Phone number"), blank=True, null=True)
     email = models.EmailField()
 
     site_web = models.URLField(blank=True, null=True)
