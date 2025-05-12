@@ -12,11 +12,11 @@
         {% if user.is_anonymous %}
             <div class="mb-3">
                 <label for="booking-email" class="form-label">{% trans "Email" %}</label>
-                <input type="email" name="email" class="form-control" id="booking-email">
+                <input type="email" name="email" class="form-control" id="booking-email" required>
             </div>
             <div class="mb-3">
                 <label for="booking-confirm" class="form-label">{% trans "Email confirmation" %}</label>
-                <input type="email" name="email-confirm" class="form-control" id="booking-confirm">
+                <input type="email" name="email-confirm" class="form-control" id="booking-confirm" required>
             </div>
             <p><code>{{ user.email }}</code></p>
         {% elif user.is_active %}
