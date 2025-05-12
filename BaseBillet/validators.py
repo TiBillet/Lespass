@@ -404,22 +404,15 @@ class MembershipValidator(serializers.Serializer):
         queryset=Price.objects.filter(product__categorie_article=Product.ADHESION)
     )
 
-    email = serializers.EmailField()
     firstname = serializers.CharField(max_length=200)
     lastname = serializers.CharField(max_length=200)
+    email = serializers.EmailField()
 
     options = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(), many=True,
                                                  allow_null=True, required=False)
 
     newsletter = serializers.BooleanField()
 
-    def validate_email(self, email):
-        self.user = get_or_create_user(email)
-        return email
-
-    def validate_price(self, price):
-        self.price = price
-        return price
 
     def get_checkout_stripe(self):
         # Fiche membre créée, si price payant, on crée le checkout stripe :
@@ -468,6 +461,11 @@ class MembershipValidator(serializers.Serializer):
         return checkout_stripe_url
 
     def validate(self, attrs):
+        self.price = attrs['price']
+
+        # Création de l'user après les validation champs par champ ( un robot peut spammer le POST et créer des user a la volée sinon )
+        self.user = get_or_create_user(attrs['email'])
+
         ### CREATION DE LA FICHE MEMBRE
         # Il peut y avoir plusieurs adhésions pour le même user (ex : parent/enfant)
         membership = Membership.objects.create(
