@@ -185,10 +185,12 @@ def activator_free_reservation(old_instance: TibilletUser, new_instance: Tibille
 
 ######################## MOTEUR SIGNAL ########################
 
+def no_change(old_instance, new_instance):
+    logger.info(f"models_signal no_change {old_instance.status} to {new_instance.status}")
+    pass
+
 def error_regression(old_instance, new_instance):
-    logger.info(f"models_signal erreur_regression {old_instance.status} to {new_instance.status}")
-    logger.error(f"######################## error_regression ########################")
-    # raise Exception('Regression de status impossible.')
+    logger.error(f"models_signal erreur_regression {old_instance.status} to {new_instance.status}")
     pass
 
 
@@ -232,6 +234,7 @@ PRE_SAVE_TRANSITIONS = {
             '_else_': error_regression,
         },
         LigneArticle.VALID: {
+            LigneArticle.VALID: no_change, # après send_to_laboutik, on re-enregistre la ligne_article avec le status VALID
             '_all_': error_regression,
         }
     },

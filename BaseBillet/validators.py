@@ -528,7 +528,7 @@ class TenantCreateValidator(serializers.Serializer):
                 on_trial=False,
                 categorie=Client.SALLE_SPECTACLE,
             )
-            Domain.objects.create(
+            Domain.objects.get_or_create(
                 domain=f'{slug}.{waiting_config.dns_choice}',
                 tenant=tenant,
                 is_primary=True
