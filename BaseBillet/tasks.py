@@ -405,6 +405,7 @@ def create_ticket_pdf(ticket: Ticket):
     # template_name = 'ticket/ticket_V2.html'
 
     # template_name = 'ticket/example_flight_ticket.html'
+    activate('fr')
     font_config = FontConfiguration()
     template = get_template(template_name)
     html = template.render(context)
