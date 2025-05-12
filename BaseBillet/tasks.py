@@ -816,18 +816,28 @@ def send_to_brevo(membership_pk):
         from sib_api_v3_sdk.rest import ApiException
         configuration = sib_api_v3_sdk.Configuration()
         configuration.api_key['api-key'] = brevo_config.get_api_key()
+        api_instance = sib_api_v3_sdk.ContactsApi(sib_api_v3_sdk.ApiClient(configuration))
 
         try:
-            api_instance = sib_api_v3_sdk.ContactsApi(sib_api_v3_sdk.ApiClient(configuration))
-            create_contact = sib_api_v3_sdk.CreateContact(email=membership.user.email)
-            api_response = api_instance.create_contact(create_contact)
-            brevo_config.last_log = f"{api_response}"
+            # First, check if the contact already exists
+            api_instance.get_contact_info(membership.user.email)
+            logger.info(f"Contact with email {membership.user.email} already exists in Brevo")
+            brevo_config.last_log = f"Contact already exists: {membership.user.email}"
             brevo_config.save()
-        except ApiException as e:
-            logger.error(f"send_to_brevo ERROR : {e}")
-            brevo_config.last_log = f"{e}"
-            brevo_config.save()
+            return  # Exit as there's nothing more to do
 
+        except ApiException as e:
+            # If we get a 404, the contact doesn't exist, which is what we want
+            if e.status == 404:
+                # Contact doesn't exist, create it
+                create_contact = sib_api_v3_sdk.CreateContact(email=membership.user.email)
+                api_response = api_instance.create_contact(create_contact)
+                brevo_config.last_log = f"Contact created: {api_response}"
+                brevo_config.save()
+            else:
+                # Any other API exception should be handled as an error
+                logger.error(f"send_to_brevo ERROR : {e}")
+                raise e
 
 @app.task
 def send_to_ghost(membership_pk):
