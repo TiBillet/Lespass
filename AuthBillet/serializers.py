@@ -109,7 +109,7 @@ class MeSerializer(serializers.ModelSerializer):
 
     def get_admin_this_tenant(self, user: TibilletUser):
         this_tenant: Client = connection.tenant
-        if this_tenant in user.client_admin.all():
+        if user.is_tenant_admin(this_tenant):
             return True
 
     class Meta:

@@ -58,7 +58,7 @@ def can_admin(user):
 
     admin_this = False
     this_tenant = connection.tenant
-    if this_tenant in user.client_admin.all():
+    if user.is_tenant_admin(this_tenant):
         admin_this = True
     return all([user.email_valid, user.is_active, admin_this])
 

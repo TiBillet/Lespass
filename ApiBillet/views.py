@@ -763,7 +763,7 @@ class Get_user_pub_pem(APIView):
         # Il faut que l'admin dans le cashless soit le même que l'admin de ce tenant
         User = get_user_model()
         user: TibilletUser = get_object_or_404(User, email=f"{request.data['email']}")
-        if connection.tenant not in user.client_admin.all():
+        if not user.is_tenant_admin(connection.tenant):
             return Response(status=status.HTTP_401_UNAUTHORIZED)
 
         data = {

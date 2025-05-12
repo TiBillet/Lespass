@@ -63,7 +63,7 @@ def TenantAdminPermissionWithRequest(request):
             return True # le super user peut
         elif request.user.is_authenticated:
             return all([
-                connection.tenant in request.user.client_admin.all(),
+                request.user.is_tenant_admin(connection.tenant),
                 request.user.is_staff,
                 request.user.is_active,
                 request.user.espece == TibilletUser.TYPE_HUM
@@ -97,7 +97,7 @@ class TerminalScanPermission(permissions.BasePermission):
         if request.user.is_authenticated:
             return any([
                 all([
-                    connection.tenant in request.user.client_admin.all(),
+                    request.user.is_tenant_admin(connection.tenant),
                     request.user.is_active,
                     request.user.user_parent().is_staff,
                     request.user.espece == TibilletUser.TYPE_TERM

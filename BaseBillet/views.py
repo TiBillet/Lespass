@@ -824,9 +824,10 @@ class EventMVT(viewsets.ViewSet):
                         tag__slug__in=tenant['tag_exclude'])
                 if tags:
                     # Annotate et filter Pour avoir les events qui ont TOUS les tags
-                    events = events.filter(
-                        tag__slug__in=tags).annotate(
-                        num_tag=Count('tag')).filter(num_tag=len(tags))
+                    # Use a more efficient approach to filter events with all specified tags
+                    for tag in tags:
+                        events = events.filter(tag__slug=tag)
+
                 elif search:
                     # On recherche dans nom, description et tag
                     events = events.filter(
