@@ -228,7 +228,6 @@ class ReservationValidator(serializers.Serializer):
     def extract_products(self):
         """
         On vérifie ici :
-            input dans template ressemble à ça : name="products[{{ product.uuid }}][{{ price.uuid }}]"
             les objets produit et prix existent bien en DB et a une quantité valide
         """
         # Rercher des produits potentiels
@@ -242,6 +241,10 @@ class ReservationValidator(serializers.Serializer):
                 # Un input possède l'uuid du prix ?
                 if self.initial_data.get(str(price.uuid)):
                     qty = int(self.initial_data.get(str(price.uuid)))
+
+                    if qty <= 0 : # Skip zero or negative quantities
+                        continue
+
                     if price.free_price: # Pour vérification plus bas que le prix libre est bien seul
                         self.free_price = True
                     self.products.append(product)
@@ -251,7 +254,7 @@ class ReservationValidator(serializers.Serializer):
                     else:
                         # Si le dict product n'existe pas :
                         products_dict[product] = {price: qty}
-
+        
         return products_dict
 
     def validate_event(self, value):
