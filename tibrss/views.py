@@ -51,12 +51,21 @@ class LatestEntriesEvent(Feed):
         return f"{item.name} : {item.datetime.strftime('%D %R')}"
 
     def item_description(self, item: Event):
+        import re
+
+        # Function to remove control characters
+        def remove_control_chars(text):
+            if text:
+                # Remove control characters (ASCII 0-8, 11-12, 14-31)
+                return re.sub(r"[\x00-\x08\x0B-\x0C\x0E-\x1F]", "", text)
+            return ""
+
         if item.short_description and item.long_description:
-            return f"{item.short_description} - {item.long_description}"
+            return f"{remove_control_chars(item.short_description)} - {remove_control_chars(item.long_description)}"
         elif item.long_description:
-            return item.long_description
-        elif item.long_description:
-            return item.long_description
+            return remove_control_chars(item.long_description)
+        elif item.short_description:
+            return remove_control_chars(item.short_description)
 
         return ""
 
