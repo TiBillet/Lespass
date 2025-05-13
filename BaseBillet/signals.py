@@ -235,7 +235,7 @@ PRE_SAVE_TRANSITIONS = {
         },
         LigneArticle.VALID: {
             LigneArticle.VALID: no_change, # après send_to_laboutik, on re-enregistre la ligne_article avec le status VALID
-            '_all_': error_regression,
+            '_else_': error_regression,
         }
     },
 
