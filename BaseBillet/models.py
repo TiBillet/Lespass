@@ -527,47 +527,14 @@ class Configuration(SingletonModel):
             self.save()
         return id_acc_connect
 
-    # Vérifie que le compte stripe connect soit valide et accepte les paiements.
-    def check_stripe_payouts(self):
-        logger.info("check_stripe_payouts")
-        id_acc_connect = self.get_stripe_connect_account()
-        if id_acc_connect:
-            stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-            info_stripe = stripe.Account.retrieve(id_acc_connect)
-            if info_stripe and info_stripe.get('payouts_enabled'):
-                self.stripe_payouts_enabled = info_stripe.get('payouts_enabled')
-                self.save()
-        return self.stripe_payouts_enabled
-
-    def link_for_onboard_stripe(self):
-        # Doublon avec basebillet.views.create_account_link_for_onboard ?
-        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-        tenant = connection.tenant
-        tenant_url = tenant.get_primary_domain().domain
-
-        url_onboard_stripe = stripe.AccountLink.create(
-            account=self.get_stripe_connect_account(),
-            refresh_url=f"https://{tenant_url}/tenant/{self.stripe_connect_account}/onboard_stripe_return/",
-            return_url=f"https://{tenant_url}/tenant/{self.stripe_connect_account}/onboard_stripe_return/",
-            type="account_onboarding",
-        )
-
-        # Clean des objets stripes
-        Configuration.get_solo().clean_product_stripe_id()
-
-        return url_onboard_stripe.url
-
     def onboard_stripe(self):
         try:
             # on vérifie que le compte soit toujours lié et qu'il peut recevoir des paiements :
             if not self.stripe_payouts_enabled:
-                if not self.check_stripe_payouts():
-                    logger.info("onboard_stripe")
-                    # if self.check_stripe_payouts():
-                    #     return "Stripe connected"
-                    url_onboard_stripe = self.link_for_onboard_stripe()
-                    msg = _('Link your stripe account to accept payment')
-                    return format_html(f"<a href='{url_onboard_stripe}'>{msg}</a>")
+                tenant = connection.tenant
+                tenant_url = tenant.get_primary_domain().domain
+                msg = _('Link your stripe account to accept payment')
+                return format_html(f"<a href='https://{tenant_url}/tenant/onboard_stripe_from_config'>{msg}</a>")
             return _("Stripe connected")
         except Exception as e:
             logger.error(_("Stripe error, check admin"))

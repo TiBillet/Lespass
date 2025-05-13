@@ -38,6 +38,8 @@ class WaitingConfiguration(models.Model):
     id_acc_connect = models.CharField(max_length=21, blank=True, null=True, verbose_name=_("Stripe connect ID"))
 
     laboutik_wanted = models.BooleanField(default=False)
+    payment_wanted = models.BooleanField(default=False)
+
     dns_choice = models.CharField(max_length=200, blank=True, null=True, verbose_name=_("Domain name choice"))
 
     ### Ex method :

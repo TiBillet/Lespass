@@ -566,6 +566,7 @@ def new_tenant_mailer(waiting_config_uuid: str):
             context={
                 'create_url_for_onboard_stripe': f'{create_url_for_onboard_stripe}',
                 'waiting_config': waiting_config,
+                'orga_name': f"{waiting_config.organisation.capitalize()}",
             }
         )
         mail.send()

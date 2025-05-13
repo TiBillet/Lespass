@@ -494,16 +494,24 @@ class ProductAdminCustomForm(ModelForm):
         categorie = cleaned_data.get('categorie_article')
         if categorie == Product.NONE:
             raise forms.ValidationError(_("Please add at least one category to this product."))
+
+        # Vérification que la clé Stripe est opérationnelle :
+        if categorie != Product.FREERES:
+            config = Configuration.get_solo()
+            if not config.stripe_payouts_enabled:
+                raise forms.ValidationError(_("Your Stripe account is not activated. To create paid items, please go to Settings/Stripe/Onboard."))
         return categorie
 
     def clean(self):
-        try:
-            # récupération du dictionnaire data pour vérifier qu'on a bien au moin un tarif dans le inline :
-            if int(self.data.getlist('prices-TOTAL_FORMS')[0]) > 0:
-                return super().clean()
-            raise forms.ValidationError(_("Please add at least one rate to this product."))
-        except Exception as e:
-            raise forms.ValidationError(_("Please add at least one rate to this product."))
+        # Vérification qu'il existe au moins un tarif si produit payant
+        if self.data.get('categorie_article') not in [Product.FREERES, Product.BADGE]:
+            try:
+                # récupération du dictionnaire data pour vérifier qu'on a bien au moin un tarif dans le inline :
+                if int(self.data.getlist('prices-TOTAL_FORMS')[0]) > 0:
+                    return super().clean()
+                raise forms.ValidationError(_("Please add at least one rate to this product."))
+            except Exception as e:
+                raise forms.ValidationError(_("Please add at least one rate to this product."))
 
 
 @admin.register(Product, site=staff_admin_site)
@@ -2099,6 +2107,7 @@ class WaitingConfigAdmin(ModelAdmin):
         "email",
         "datetime",
         "laboutik_wanted",
+        "payment_wanted",
         "id_acc_connect",
         "onboard_stripe_finished",
         "created",

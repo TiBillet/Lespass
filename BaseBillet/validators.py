@@ -501,6 +501,7 @@ class TenantCreateValidator(serializers.Serializer):
     name = serializers.CharField(max_length=200)
     laboutik = serializers.BooleanField(required=True)
     cgu = serializers.BooleanField(required=True)
+    payment_wanted = serializers.BooleanField(required=True)
     dns_choice = serializers.ChoiceField(choices=["tibillet.coop", "tibillet.re"])
 
     def validate_cgu(self, value):
@@ -580,5 +581,18 @@ class TenantCreateValidator(serializers.Serializer):
 
             # Envoie du mail de connection et validation
             get_or_create_user(admin_email, force_mail=True)
+
+            # Création des articles par default :
+            freeres, created = Product.objects.get_or_create(
+                name="Réservation gratuite",
+                categorie_article=Product.FREERES,
+            )
+
+            freeres_p, created = Price.objects.get_or_create(
+                name="Tarif gratuit",
+                prix=0,
+                product=freeres,
+                max_per_user=10,
+            )
 
         return tenant

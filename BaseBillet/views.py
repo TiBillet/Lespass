@@ -1302,7 +1302,7 @@ class Tenant(viewsets.ViewSet):
     permission_classes = [permissions.AllowAny, ]
 
     @action(detail=False, methods=['GET', 'POST'])
-    def new(self, request: Request, *args, **kwargs):
+    def new(self, request, *args, **kwargs):
         """
         Le formulaire de création de nouveau tenant
         """
@@ -1313,7 +1313,7 @@ class Tenant(viewsets.ViewSet):
         return render(request, "reunion/views/tenant/new_tenant.html", context=context)
 
     @action(detail=False, methods=['POST'])
-    def create_waiting_configuration(self, request: Request, *args, **kwargs):
+    def create_waiting_configuration(self, request, *args, **kwargs):
         """
         Reception du formulaire de création de nouveau tenant
         Création d'un objet waiting configuration
@@ -1332,6 +1332,7 @@ class Tenant(viewsets.ViewSet):
             organisation=validated_data['name'],
             email=validated_data['email'],
             laboutik_wanted=validated_data['laboutik'],
+            payment_wanted=validated_data['payment_wanted'],
             # id_acc_connect=id_acc_connect,
             dns_choice=validated_data['dns_choice'],
         )
@@ -1372,6 +1373,7 @@ class Tenant(viewsets.ViewSet):
         url_onboard = account_link.get('url')
         return redirect(url_onboard)
 
+
     @action(detail=True, methods=['GET'])
     def onboard_stripe_return(self, request, pk):
         """
@@ -1398,6 +1400,74 @@ class Tenant(viewsets.ViewSet):
             waiting_config.save()
             # Envoie du mail aux superadmins
             new_tenant_after_stripe_mailer.delay(waiting_config.pk)
+
+        context = get_context(request)
+        context["details_submitted"] = details_submitted
+        return render(request, "reunion/views/tenant/after_onboard_stripe.html", context=context)
+
+        #     _("Your Stripe account does not seem to be valid. "
+        #       "\nPlease complete your Stripe.com registration before creating a new TiBillet space."))
+        # return redirect('/tenant/new/')
+
+
+
+    @action(detail=False, methods=['GET'])
+    def onboard_stripe_from_config(self, request):
+        """
+        Requete provenant du mail envoyé après la création d'une configuration en attente
+        Fabrication du lien stripe onboard
+        """
+        config = Configuration.get_solo()
+        id_acc_connect = config.get_stripe_connect_account()
+        tenant = connection.tenant
+        tenant_url = tenant.get_primary_domain().domain
+
+        rootConf = RootConfiguration.get_solo()
+        stripe.api_key = rootConf.get_stripe_api()
+
+        account_link = stripe.AccountLink.create(
+            account=id_acc_connect,
+            refresh_url=f"https://{tenant_url}/tenant/{id_acc_connect}/onboard_stripe_return_from_config/",
+            return_url=f"https://{tenant_url}/tenant/{id_acc_connect}/onboard_stripe_return_from_config/",
+            type="account_onboarding",
+        )
+
+        url_onboard = account_link.get('url')
+        return redirect(url_onboard)
+
+    @action(detail=True, methods=['GET'])
+    def onboard_stripe_return_from_config(self, request, pk):
+        """
+        Return url après avoir terminé le onboard sur stripe
+        Vérification que le mail soit bien le même (cela nous confirme qu'il existe bien, Stripe impose une double auth)
+        Vérification que le formulaire a bien été complété (detail submitted)
+        Envoi un mail à l'administrateur ROOT de l'insatnce TiBillet pour prévenir, vérifier, et lancer la création du tenant à la main.
+        """
+        details_submitted, waiting_config = False, False
+        id_acc_connect = pk
+        # La clé du compte principal stripe connect
+        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+        # Récupération des info lié au lieu via sont id account connec
+        try:
+            info_stripe = stripe.Account.retrieve(id_acc_connect)
+            details_submitted = info_stripe.details_submitted
+        except Exception as e:
+            logger.error(f"onboard_stripe_return. id_acc_connect : {id_acc_connect}, erreur stripe : {e}")
+            raise Http404
+
+        if details_submitted:
+            waiting_config = WaitingConfiguration.objects.get(id_acc_connect=id_acc_connect)
+            waiting_config.onboard_stripe_finished = True
+            waiting_config.save()
+            # Envoie du mail aux superadmins
+            new_tenant_after_stripe_mailer.delay(waiting_config.pk)
+
+        config = Configuration.get_solo()
+        info_stripe = stripe.Account.retrieve(id_acc_connect)
+        if info_stripe and info_stripe.get('payouts_enabled'):
+            config.stripe_payouts_enabled = info_stripe.get('payouts_enabled')
+            config.save()
+
 
         context = get_context(request)
         context["details_submitted"] = details_submitted

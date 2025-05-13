@@ -9,35 +9,24 @@
                   hx-post="/tenant/create_waiting_configuration/" hx-indicator="#tibillet-spinner"
                   hx-target="#new-tenant">
                 <div class="col-md-8 offset-md-2 col-xl-6 offset-xl-3">
-                    {% blocktranslate %}
-                    <h1>Create a new instance</h1>
-                    <p>
-                        To create a <strong>Lespass</strong> instance, fill this
-                        form.
+                    <h1>{% trans "Create a new instance" %}</h1>
+                    <p class="mt-5">
+                        {% trans "To create a <strong>Lespass</strong> instance, please fill this form. A welcome email will be sent." %}
                     </p>
-                    <p>A welcome email will be sent.</p>
-                    <p>
-                        You will find in it an invite link to create a
-                        <strong>Stripe</strong> account and set it up for
-                        Lespass, as it is necessary to receive payments.
-                    </p>
-                    <p class="mb-5">
-                        Once your account has been verified, we'll get in touch
-                        (on a work day) to finalize your instance.
-                    </p>
-                    {% endblocktranslate %}
+
                     <form id="linkform" role="form">
                         <div class="form-floating mb-3">
                             <input name="email" type="email" class="form-control"
-                                placeholder="adresse@exemple.fr"
-                                role="textbox" aria-label="{% trans 'Administrator email' %}" required
-                                {% if user.is_authenticated %}
-                                value="{{ user.email }}"
-                                {% elif email_query_params %}
-                                value="{{ email_query_params }}"
-                                {% endif %}>
+                                   placeholder="adresse@exemple.fr"
+                                   role="textbox" aria-label="{% trans 'Administrator email' %}" required
+                                    {% if user.is_authenticated %}
+                                   value="{{ user.email }}"
+                                    {% elif email_query_params %}
+                                   value="{{ email_query_params }}"
+                                    {% endif %}>
                             <label for="email">{% trans 'Administrator email' %}</label>
                         </div>
+
                         <div class="form-floating mb-3">
                             <input name="emailConfirmation" type="email" class="form-control"
                                    placeholder="adresse@exemple.fr" role="textbox"
@@ -48,29 +37,16 @@
                             <label for="emailConfirmation">{% trans 'Email confirmation' %}</label>
                         </div>
                         {% include 'reunion/partials/field_errors.html' %}
-                        {% blocktranslate %}
-                        <p class="form-text">
-                            The email will be used for
-                            <strong>the administration account</strong>
-                            of the Lespass instance.
-                        </p>
-                        <p class="form-text">
-                            <strong>
-                                For this reason, it needs be the email through
-                                which you will manage the instance, as well as
-                                the email used for your Stripe account.
-                            </strong>
-                        </p>
-                        {% endblocktranslate %}
+
                         <div class="row">
                             <div class="col">
                                 <div class="form-floating mb-3">
                                     <input name="name" type="text" class="form-control"
-                                        placeholder="Jaz" role="textbox"
-                                        aria-label="{% trans 'Name of your collective' %}" required
-                                        {% if name_query_params %}
-                                        value="{{ name_query_params }}"
-                                        {% endif %}>
+                                           placeholder="Jaz" role="textbox"
+                                           aria-label="{% trans 'Name of your collective' %}" required
+                                            {% if name_query_params %}
+                                           value="{{ name_query_params }}"
+                                            {% endif %}>
                                     <label for="name">{% trans 'Name of your collective' %}</label>
                                 </div>
                             </div>
@@ -78,24 +54,40 @@
                         {% include 'reunion/partials/field_errors.html' %}
 
                         <div class="form-check form-switch mt-5 mb-3">
+                            <input class="form-check-input" type="checkbox" role="switch" name="payment_wanted" id="payment_wanted"
+                                   checked>
+                            <label class="form-check-label" for="payment_wanted">
+                                {% translate "I would like to collect payments: Tickets, Memberships, Donations" %}
+                            </label>
+                        </div>
+                        <p>
+                            {% trans "If checked : a Stripe onboarding link will be sent to you in the e-mail. We'll get in touch (on a work day) to finalize your instance." %}
+                        </p>
+                        <p>
+                            {% trans "If unchecked, you will only be able to register free events. You can connect a stripe account later." %}
+                        </p>
+
+                        <div class="form-check form-switch mt-5 mb-3">
                             <input class="form-check-input" type="checkbox" role="switch" name="laboutik" id="laboutik">
                             <label class="form-check-label" for="laboutik">
                                 {% blocktranslate %}
-                                I want to use a
-                                <a href="https://tibillet.org/fr/docs/presentation/demonstration/#caisse-enregistreuse--cashless--httpslaboutikdemotibilletorg">
-                                    LaBoutik cash register
-                                </a>
+                                    I want to use a
+                                    <a href="https://tibillet.org/fr/docs/presentation/demonstration/#caisse-enregistreuse--cashless--httpslaboutikdemotibilletorg"
+                                       target="_blank">
+                                        LaBoutik cash register
+                                    </a>
                                 {% endblocktranslate %}
                             </label>
                         </div>
+
                         <div class="form-check form-switch mb-5">
                             <input class="form-check-input" type="checkbox" role="switch" name="cgu" id="cgu" required>
                             <label class="form-check-label" for="cgu">
                                 {% blocktranslate %}
-                                I agree to
-                                <a href="https://tibillet.org/cgucgv/" target="_blank">
-                                    the terms and conditions
-                                </a>
+                                    I agree to
+                                    <a href="https://tibillet.org/cgucgv/" target="_blank">
+                                        the terms and conditions
+                                    </a>
                                 {% endblocktranslate %}
                             </label>
                         </div>

@@ -1,27 +1,34 @@
 {% load i18n %}
 
 {% blocktranslate %}
-<div>
-    <span>Hello and welcome!</span>
-</div>
-<div>
+    <div>
+        <span>Hello and welcome!</span>
+    </div>
+    <div>
     <p>
         You wish to create a new Lèspass instance to get your collective
-        "{{ waiting_config.organisation }}" started with TiBillet, thank you!
+        <strong>{{ orga_name }}</strong> started with TiBillet, thank you!
+    </p>
+{% endblocktranslate %}
+{% blocktranslate %}
+    <p>
+        If you'd like to raise money through ticketing, memberships or donations, we need you to create a stripe
+        account. (so we can transfer the money from your sales ☺️).
     </p>
     <p>
-        In order to finalize your account, we need a Stripe account (so we can
-        transfer the money from your sales ☺️).
+        If you only wish to create free events, you can activate your stripe account later.
     </p>
-    <p>
-        Please fill in the Stripe onboarding form by following the link below.
-        Once Stripe validates your account, we'll get in touch (on a work day)
-        to finalize your instance.
-    </p>
+{% endblocktranslate %}
+
+{% blocktranslate %}
+    <p>We'll look into your request. You should receive a confirmation e-mail shortly.</p>
+{% endblocktranslate %}
+
+{% blocktranslate %}
     <p>
         Until then, you can get in touch through our
         <a href="mailto:contact@tibillet.re">support email</a> or with our
-        community hubs on <a  href="https://discord.gg/7FJvtYx">Discord</a>,
+        community hubs on <a href="https://discord.gg/7FJvtYx">Discord</a>,
         <a href="https://matrix.to/#/#tibillet:tiers-lieux.org">Matrix</a> or
         <a href="https://pouet.chapril.org/@tibillet">Mastodon</a>.
     </p>
@@ -30,5 +37,5 @@
         -&gt; Confirm my request and get started with the Stripe onboarding
         process &lt;-
     </a></p>
-</div>
+    </div>
 {% endblocktranslate %}
