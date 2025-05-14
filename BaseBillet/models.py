@@ -30,7 +30,7 @@ from rest_framework_api_key.models import APIKey
 from solo.models import SingletonModel
 
 from stdimage import StdImageField
-from stdimage.validators import MaxSizeValidator, MinSizeValidator
+from stdimage.validators import MinSizeValidator
 from stripe import InvalidRequestError
 
 import AuthBillet.models
@@ -273,7 +273,6 @@ class Configuration(SingletonModel):
 
     map_img = StdImageField(upload_to='images/',
                             null=True, blank=True,
-                            validators=[MaxSizeValidator(1920, 1920)],
                             variations={
                                 'fhd': (1920, 1920),
                                 'hdr': (720, 720),
@@ -286,7 +285,6 @@ class Configuration(SingletonModel):
 
     carte_restaurant = StdImageField(upload_to='images/',
                                      null=True, blank=True,
-                                     validators=[MaxSizeValidator(1920, 1920)],
                                      variations={
                                          'fhd': (1920, 1920),
                                          'hdr': (720, 720),
@@ -339,7 +337,6 @@ class Configuration(SingletonModel):
             return {}
 
     logo = StdImageField(upload_to='images/',
-                         validators=[MaxSizeValidator(1920, 1920)],
                          blank=True, null=True,
                          variations={
                              'fhd': (1920, 1920),
@@ -631,7 +628,6 @@ class Product(models.Model):
 
     img = StdImageField(upload_to='images/',
                         null=True, blank=True,
-                        validators=[MaxSizeValidator(1920, 1920)],
                         variations={
                             'fhd': (1920, 1920),
                             'hdr': (720, 720),
@@ -854,7 +850,6 @@ class Event(models.Model):
                                                              "Minimum value of cashless refill"))
 
     img = StdImageField(upload_to='images/',
-                        validators=[MaxSizeValidator(1920, 1920)],
                         blank=True, null=True,
                         variations={
                             'fhd': (1920, 1920),
@@ -869,7 +864,6 @@ class Event(models.Model):
                         )
 
     sticker_img = StdImageField(upload_to='images/',
-                                validators=[MaxSizeValidator(1920, 1920)],
                                 blank=True, null=True,
                                 variations={
                                     'fhd': (1920, 1920),

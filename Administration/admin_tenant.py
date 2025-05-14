@@ -18,6 +18,7 @@ from django.forms.utils import ErrorList
 from django.http import HttpResponse, HttpRequest, HttpResponseRedirect
 from django.shortcuts import redirect, get_object_or_404
 from django.template.defaultfilters import slugify
+from django.template.loader import render_to_string
 from django.urls import reverse, re_path
 from django.utils import timezone
 from django.utils.html import format_html
@@ -30,6 +31,7 @@ from rest_framework_api_key.models import APIKey
 from solo.admin import SingletonModelAdmin
 
 from unfold.admin import ModelAdmin, TabularInline
+from unfold.components import register_component, BaseComponent
 from unfold.decorators import display, action
 from unfold.sites import UnfoldAdminSite
 # from unfold.widgets import UnfoldAdminTextInputWidget, UnfoldAdminEmailInputWidget, UnfoldAdminSelectWidget, \
@@ -375,6 +377,7 @@ class TagAdmin(ModelAdmin):
         )
 
     _color.short_description = _("Color")
+
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
@@ -499,7 +502,8 @@ class ProductAdminCustomForm(ModelForm):
         if categorie != Product.FREERES:
             config = Configuration.get_solo()
             if not config.stripe_payouts_enabled:
-                raise forms.ValidationError(_("Your Stripe account is not activated. To create paid items, please go to Settings/Stripe/Onboard."))
+                raise forms.ValidationError(
+                    _("Your Stripe account is not activated. To create paid items, please go to Settings/Stripe/Onboard."))
         return categorie
 
     def clean(self):
@@ -519,6 +523,8 @@ class ProductAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
     inlines = [PriceInline, ]
+
+    # list_before_template = "admin/product/product_list_before.html"
 
     form = ProductAdminCustomForm
     list_display = (
@@ -613,6 +619,21 @@ class ProductAdmin(ModelAdmin):
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
+# @register_component
+# class DriverActiveComponent(BaseComponent):
+#     def get_context_data(self, **kwargs):
+#         context = super().get_context_data(**kwargs)
+#
+#         context["children"] = render_to_string(
+#             "formula/helpers/kpi_progress.html",
+#             {
+#                 "total": 50,
+#                 "progress": "positive",
+#                 "percentage": "2.8%",
+#             },
+#         )
+#         return context
+
 
 class PriceChangeForm(ModelForm):
     # Le formulaire pour changer un prix lorsque l'on clic sur modification
@@ -705,6 +726,7 @@ class PaiementStripeAdmin(ModelAdmin):
 """
 USER
 """
+
 
 class MembershipInline(TabularInline):
     model = Membership
@@ -847,12 +869,12 @@ class HumanUserAdmin(ModelAdmin):
     Change form view sert à donner le pk de l'user pour le bouton htmx
     """
     change_form_after_template = "admin/membership/get_wallet_info.html"
+
     def changeform_view(self, request: HttpRequest, object_id: Optional[str] = None, form_url: str = "",
                         extra_context: Optional[Dict[str, bool]] = None) -> Any:
         extra_context = extra_context or {}
         extra_context['object_id'] = object_id
         return super().changeform_view(request, object_id, form_url, extra_context)
-
 
     list_display = [
         'email',
@@ -985,15 +1007,17 @@ class EmailUserForeignKeyWidget(ForeignKeyWidget):
             val = get_or_create_user(value, send_mail=False)
         return val
 
+
 class PriceForeignKeyWidget(ForeignKeyWidget):
     def clean(self, value, row=None, **kwargs):
         try:
             val = super().clean(value)
-        except MultipleObjectsReturned :
+        except MultipleObjectsReturned:
             val = Price.objects.get(name=value, product__name=row.get('product_name'))
         except Exception as err:
             raise err
         return val
+
 
 class OptionsManyToManyWidgetWidget(ManyToManyWidget):
     def clean(self, value, row=None, **kwargs):
@@ -1003,8 +1027,8 @@ class OptionsManyToManyWidgetWidget(ManyToManyWidget):
             objs = []
             names = value.split(self.separator)
             for name in names:
-                if name.rstrip().lstrip() : # on supprime les espace avants et après
-                    try :
+                if name.rstrip().lstrip():  # on supprime les espace avants et après
+                    try:
                         option = OptionGenerale.objects.get(name=name)
                         objs.append(option)
                     except OptionGenerale.DoesNotExist:
@@ -1012,24 +1036,25 @@ class OptionsManyToManyWidgetWidget(ManyToManyWidget):
                         objs.append(option)
             return objs
 
+
 # Le moteur d'importation
 class MembershipImportResource(resources.ModelResource):
     product_name = fields.Field(
         column_name='product_name',
         attribute='product_name',
-        widget=ForeignKeyWidget(Product, field='name')) # renvoie une erreur si le produit n'existe pas
+        widget=ForeignKeyWidget(Product, field='name'))  # renvoie une erreur si le produit n'existe pas
 
     price_name = fields.Field(
         column_name='price_name',
         attribute='price',
-        widget=PriceForeignKeyWidget(Price, field='name')) # Vérfie que le price correspond bien au product
+        widget=PriceForeignKeyWidget(Price, field='name'))  # Vérfie que le price correspond bien au product
 
     # email = Field(attribute='email', column_name='email')
 
     email = fields.Field(
         column_name='email',
         attribute='user',
-        widget=EmailUserForeignKeyWidget(TibilletUser, field='email')) # si l'user n'existe pas, va le créer
+        widget=EmailUserForeignKeyWidget(TibilletUser, field='email'))  # si l'user n'existe pas, va le créer
 
     option_generale = fields.Field(
         column_name='option_generale',
@@ -1065,7 +1090,6 @@ class MembershipImportResource(resources.ModelResource):
         widgets = {
             'last_contribution': {'format': '%d/%m/%Y'},
         }
-
 
 
 class MembershipAddForm(ModelForm):
@@ -1206,7 +1230,9 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        return qs.filter(last_contribution__isnull=False).select_related('user', 'price', 'price__product').prefetch_related('option_generale')
+        return qs.filter(last_contribution__isnull=False).select_related('user', 'price',
+                                                                         'price__product').prefetch_related(
+            'option_generale')
 
     ### FORMULAIRES
     autocomplete_fields = ['option_generale', ]
@@ -1411,6 +1437,7 @@ class EventForm(ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['products'].widget.can_change_related = False
         self.fields['products'].widget.can_add_related = False
+        self.fields['products'].help_text = _("Leave empty to avoid reservations.")
 
         try:
             # On mets la valeur de la jauge réglée dans la config par default
@@ -1518,7 +1545,8 @@ class EventAdmin(ModelAdmin):
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
         # Les events action et les events children doivent s'afficher dans un inline
-        return queryset.exclude(categorie=Event.ACTION).exclude(parent__isnull=False).select_related('postal_address').prefetch_related('tag', 'options_radio', 'options_checkbox', 'carrousel', 'products')
+        return queryset.exclude(categorie=Event.ACTION).exclude(parent__isnull=False).select_related(
+            'postal_address').prefetch_related('tag', 'options_radio', 'options_checkbox', 'carrousel', 'products')
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
@@ -1705,7 +1733,8 @@ class TicketAdmin(ModelAdmin):
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        return queryset.select_related('reservation', 'reservation__event', 'reservation__event__parent', 'reservation__user_commande').prefetch_related('reservation__options')
+        return queryset.select_related('reservation', 'reservation__event', 'reservation__event__parent',
+                                       'reservation__user_commande').prefetch_related('reservation__options')
 
     @admin.display(ordering='reservation__datetime', description='Booked at')
     def reservation__datetime(self, obj):
@@ -1884,7 +1913,7 @@ class TenantAdmin(ModelAdmin):
 
 @admin.register(FederatedPlace, site=staff_admin_site)
 class FederatedPlaceAdmin(ModelAdmin):
-    list_display = ["tenant", "str_tag_filter", "str_tag_exclude",]
+    list_display = ["tenant", "str_tag_filter", "str_tag_exclude", ]
     fields = ["tenant", "tag_filter", "tag_exclude", ]
     autocomplete_fields = ["tag_filter", "tag_exclude", ]
 
@@ -1894,7 +1923,8 @@ class FederatedPlaceAdmin(ModelAdmin):
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == 'tenant':  # Replace 'user_field' with your actual field name
-            kwargs['queryset'] = Client.objects.all().exclude(categorie__in=[Client.ROOT, Client.META]).exclude(pk=connection.tenant.pk)
+            kwargs['queryset'] = Client.objects.all().exclude(categorie__in=[Client.ROOT, Client.META]).exclude(
+                pk=connection.tenant.pk)
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     actions_row = ["connect_to", ]
@@ -2185,17 +2215,19 @@ class BrevoConfigChangeform(ModelForm):
         model = BrevoConfig
         fields = ['last_log']
 
+
 class BrevoConfigAddform(ModelForm):
     class Meta:
         model = BrevoConfig
-        fields = ['api_key', 'last_log',]
+        fields = ['api_key', 'last_log', ]
+
 
 @admin.register(BrevoConfig, site=staff_admin_site)
 class BrevoConfigAdmin(SingletonModelAdmin, ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 
-    readonly_fields = ['last_log', "has_key",]
+    readonly_fields = ['last_log', "has_key", ]
     actions_detail = ["test_api_brevo", ]
 
     form = BrevoConfigChangeform
