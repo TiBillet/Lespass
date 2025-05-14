@@ -1884,7 +1884,7 @@ class TenantAdmin(ModelAdmin):
 
 @admin.register(FederatedPlace, site=staff_admin_site)
 class FederatedPlaceAdmin(ModelAdmin):
-    list_display = ["tenant", "str_tag_filter", "str_tag_exclude", ]
+    list_display = ["tenant", "str_tag_filter", "str_tag_exclude",]
     fields = ["tenant", "tag_filter", "tag_exclude", ]
     autocomplete_fields = ["tag_filter", "tag_exclude", ]
 
@@ -1896,6 +1896,25 @@ class FederatedPlaceAdmin(ModelAdmin):
         if db_field.name == 'tenant':  # Replace 'user_field' with your actual field name
             kwargs['queryset'] = Client.objects.all().exclude(categorie__in=[Client.ROOT, Client.META]).exclude(pk=connection.tenant.pk)
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    actions_row = ["connect_to", ]
+
+    @action(
+        description=_("See this place"),
+        url_path="connect_to",
+        permissions=["redirect_admin_action"],
+    )
+    def connect_to(self, request, object_id):
+        fp = get_object_or_404(FederatedPlace, pk=object_id)
+        tenant = fp.tenant
+        primary_domain = f"https://{tenant.get_primary_domain().domain}"
+        user: TibilletUser = request.user
+        token = user.get_connect_token()
+        connexion_url = f"{primary_domain}/emailconfirmation/{token}"
+        return redirect(connexion_url)
+
+    def has_redirect_admin_action_permission(self, request: HttpRequest, *args, **kwargs):
+        return TenantAdminPermissionWithRequest(request)
 
     @display(description=_("Included tags"))
     def str_tag_filter(self, instance: FederatedPlace):

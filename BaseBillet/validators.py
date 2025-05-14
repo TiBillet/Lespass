@@ -530,8 +530,9 @@ class TenantCreateValidator(serializers.Serializer):
                 on_trial=False,
                 categorie=Client.SALLE_SPECTACLE,
             )
+            dns = waiting_config.dns_choice if waiting_config.dns_choice else 'tibillet.coop'
             Domain.objects.get_or_create(
-                domain=f'{slug}.{waiting_config.dns_choice}',
+                domain=f'{slug}.{dns}',
                 tenant=tenant,
                 is_primary=True
             )
