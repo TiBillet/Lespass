@@ -1,0 +1,20 @@
+{% load unfold i18n %}
+
+<div class="grid gap-4 mb-4 md:grid-cols-2">
+    {% component "unfold/components/card.html" %}
+        {% component "unfold/components/text.html" %}
+            {% trans "Active memberships" %}
+        {% endcomponent %}
+
+        {% component "unfold/components/title.html" with component_class="MembershipComponent" type="active" %}{% endcomponent %}
+    {% endcomponent %}
+
+    {% component "unfold/components/card.html" %}
+        {% component "unfold/components/text.html" %}
+            {% trans "Inactive memberships" %}
+        {% endcomponent %}
+
+        {% component "unfold/components/title.html" with component_class="MembershipComponent" type="inactive" %}{% endcomponent %}
+    {% endcomponent %}
+
+</div>

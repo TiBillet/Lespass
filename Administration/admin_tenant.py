@@ -518,13 +518,29 @@ class ProductAdminCustomForm(ModelForm):
                 raise forms.ValidationError(_("Please add at least one rate to this product."))
 
 
+
+@register_component
+class CheckStripeComponent(BaseComponent):
+    def get_context_data(self, **kwargs):
+        config = Configuration.get_solo()
+
+        context = super().get_context_data(**kwargs)
+
+        context["children"] = render_to_string(
+            "admin/product/checkstripe_component.html",
+            {
+                "stripe_payouts_enabled": config.stripe_payouts_enabled,
+            },
+        )
+        return context
+
 @admin.register(Product, site=staff_admin_site)
 class ProductAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
     inlines = [PriceInline, ]
 
-    # list_before_template = "admin/product/product_list_before.html"
+    list_before_template = "admin/product/product_list_before.html" # appelle le component CheckStripe plus haut pour le contexte
 
     form = ProductAdminCustomForm
     list_display = (
@@ -619,20 +635,6 @@ class ProductAdmin(ModelAdmin):
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
-# @register_component
-# class DriverActiveComponent(BaseComponent):
-#     def get_context_data(self, **kwargs):
-#         context = super().get_context_data(**kwargs)
-#
-#         context["children"] = render_to_string(
-#             "formula/helpers/kpi_progress.html",
-#             {
-#                 "total": 50,
-#                 "progress": "positive",
-#                 "percentage": "2.8%",
-#             },
-#         )
-#         return context
 
 
 class PriceChangeForm(ModelForm):
@@ -747,6 +749,10 @@ class MembershipInline(TabularInline):
     )
     readonly_fields = fields
 
+    def get_queryset(self, request):
+        # On ne rend pas visible les adhésion qui n'ont pas eu de last_contribution
+        return super().get_queryset(request).exclude(last_contribution=None)
+
     def has_change_permission(self, request, obj=None):
         return False  # On interdit la modification
 
@@ -824,8 +830,6 @@ class MembershipValid(admin.SimpleListFilter):
             ("Y", _("Yes")),
             ("N", _("No")),
             ("B", _("Expires soon (2 weeks)")),
-            ("O", _("No subscription")),
-
         ]
 
     def queryset(self, request, queryset):
@@ -841,16 +845,14 @@ class MembershipValid(admin.SimpleListFilter):
                 memberships__deadline__gte=timezone.localtime(),
             ).distinct()
         if self.value() == "N":
-            return queryset.filter(
-                memberships__deadline__lte=timezone.localtime(),
+            return queryset.exclude(
+                memberships__deadline__gte=timezone.localtime()
             ).distinct()
         if self.value() == "B":
             return queryset.filter(
                 memberships__deadline__lte=timezone.localtime() + timedelta(weeks=2),
                 memberships__deadline__gte=timezone.localtime(),
             ).distinct()
-        if self.value() == 'O':
-            return queryset.filter(memberships__isnull=True).distinct()
 
 
 # Tout les utilisateurs de type HUMAIN
@@ -1195,6 +1197,28 @@ def adhesion_badge_callback(request):
     return f"+ {Membership.objects.filter(last_contribution__gte=timezone.localtime() - timedelta(days=7)).count()}"
 
 
+@register_component
+class MembershipComponent(BaseComponent):
+    def get_context_data(self, **kwargs):
+
+        context = super().get_context_data(**kwargs)
+        # Les adhésion en cours :
+        active_count = Membership.objects.filter(deadline__gte=timezone.localtime()).count()
+        # Les user qui n'ont pas d'adhésion en cours :
+        inactive_count = HumanUser.objects.exclude(
+                memberships__deadline__gte=timezone.localtime()
+            ).distinct().count()
+
+        context["children"] = render_to_string(
+            "admin/membership/membership_component.html",
+            {
+                "type": kwargs.get('type'),
+                "active": active_count,
+                "inactive": inactive_count,
+            },
+        )
+        return context
+
 @admin.register(Membership, site=staff_admin_site)
 class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
     compressed_fields = True  # Default: False
@@ -1203,6 +1227,9 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
     resource_classes = [MembershipExportResource, MembershipImportResource]
     export_form_class = ExportForm
     import_form_class = ImportForm
+
+    list_before_template = "admin/membership/membership_list_before.html" # appelle le MembershipComponent plus haut pour le contexte
+
 
     # Formulaire de modification
     form = MembershipChangeForm
@@ -1303,6 +1330,8 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
 class LigneArticleAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
+
+    list_filter = ('status', 'pricesold__productsold')
 
     list_display = [
         'productsold',
@@ -1561,6 +1590,46 @@ class EventAdmin(ModelAdmin):
         return False
 
 
+
+class ReservationValidFilter(admin.SimpleListFilter):
+    # Pour filtrer sur les réservation valide : payée, payée et confirmée, et mail en erreur même si payés
+    title = _("Valid")
+
+    # Parameter for the filter that will be used in the URL query.
+    parameter_name = "status_valid"
+
+    def lookups(self, request, model_admin):
+        return [
+            ("Y", _("Yes")),
+            ("N", _("No")),
+        ]
+
+    def queryset(self, request, queryset):
+        """
+        Returns the filtered queryset based on the value
+        provided in the query string and retrievable via
+        `self.value()`.
+        """
+        # Compare the requested value (either '80s' or '90s')
+        # to decide how to filter the queryset.
+        if self.value() == "Y":
+            return queryset.exclude(
+                status__in=[
+                        Reservation.CANCELED,
+                        Reservation.CREATED,
+                        Reservation.UNPAID,
+                        ]
+            ).distinct()
+        if self.value() == "N":
+            return queryset.filter(
+                status__in=[
+                        Reservation.CANCELED,
+                        Reservation.CREATED,
+                        Reservation.UNPAID,
+                        ]
+            ).distinct()
+
+
 @admin.register(Reservation, site=staff_admin_site)
 class ReservationAdmin(ModelAdmin):
     list_display = (
@@ -1574,7 +1643,7 @@ class ReservationAdmin(ModelAdmin):
     )
     # readonly_fields = list_display
     search_fields = ['event__name', 'user_commande__email', 'options__name', 'datetime']
-    list_filter = ['event', 'event__categorie', 'datetime', 'status', 'options']
+    list_filter = ['event', ReservationValidFilter, 'datetime', 'options']
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
@@ -1728,6 +1797,7 @@ class TicketAdmin(ModelAdmin):
         'event',
         'options',
         'state',
+        'scan',
         'reservation__datetime',
     ]
 
@@ -1736,7 +1806,7 @@ class TicketAdmin(ModelAdmin):
         return queryset.select_related('reservation', 'reservation__event', 'reservation__event__parent',
                                        'reservation__user_commande').prefetch_related('reservation__options')
 
-    @admin.display(ordering='reservation__datetime', description='Booked at')
+    @admin.display(ordering='reservation__datetime', description=_('Booked at'))
     def reservation__datetime(self, obj):
         return obj.reservation.datetime
 
@@ -1763,21 +1833,40 @@ class TicketAdmin(ModelAdmin):
         'reservation__user_commande__email'
     )
 
-    # TODO: Checker un vrai bouton avec Unfold admin
-    def state(self, obj):
-        if obj.status == Ticket.NOT_SCANNED:
-            return format_html(
-                f'<button><a href="{reverse("staff_admin:ticket-scann", args=[obj.pk])}" class="button">Not scanned: scan ticket</a></button>&nbsp;',
-            )
-        elif obj.status == Ticket.SCANNED:
-            return 'Validated / scanned'
-        else:
-            for choice in Reservation.TYPE_CHOICES:
-                if choice[0] == obj.reservation.status:
-                    return choice[1]
+    # def state(self, obj):
+    #     if obj.status == Ticket.NOT_SCANNED:
+    #         return format_html(
+    #             f'<button><a href="{reverse("staff_admin:ticket-scann", args=[obj.pk])}" class="button">Not scanned: scan ticket</a></button>&nbsp;',
+    #         )
+    #     elif obj.status == Ticket.SCANNED:
+    #         return 'Validated / scanned'
+    #     else:
+    #         for choice in Reservation.TYPE_CHOICES:
+    #             if choice[0] == obj.reservation.status:
+    #                 return choice[1]
+    #
+    # state.short_description = 'State'
+    # state.allow_tags = True
 
-    state.short_description = 'State'
-    state.allow_tags = True
+    # noinspection PyTypeChecker
+    @display(description=_("State"), label={None: "danger", True: "success", 'scanned': "warning"})
+    def state(self, obj: Ticket):
+        if obj.status == Ticket.NOT_SCANNED:
+            return True, obj.get_status_display()
+        elif obj.status == Ticket.SCANNED:
+                return 'scanned', obj.get_status_display()
+        return None, obj.get_status_display()
+
+    # noinspection PyTypeChecker
+    @display(description=_("Scan"), label={True: "success"})
+    def scan(self, obj: Ticket):
+        if obj.status == Ticket.NOT_SCANNED:
+            scanner = _("Scan the ticket")
+            return True, format_html(
+                f'<button><a href="{reverse("staff_admin:ticket-scann", args=[obj.pk])}" class="button">{scanner}</a></button>&nbsp;',
+            )
+        return None, ""
+
 
     def get_urls(self):
         urls = super().get_urls()
@@ -1800,20 +1889,17 @@ class TicketAdmin(ModelAdmin):
             messages.SUCCESS,
             f"Ticket scanned successfully."
         )
-        # context = self.admin_site.each_context(request)
-        return HttpResponseRedirect(
-            reverse("staff_admin:BaseBillet_ticket_changelist")
-        )
+        return redirect(request.META["HTTP_REFERER"])
 
     @display(description=_("Ticket n°"))
     def ticket(self, instance: Ticket):
         return f"{instance.reservation.user_commande.email} {str(instance.uuid)[:8]}"
 
-    actions_detail = ["get_pdf", ]
+    actions_row = ["get_pdf", "unscan"]
 
     @action(description=_("PDF"),
             url_path="ticket_pdf",
-            permissions=["custom_actions_detail"])
+            permissions=["custom_actions_row"])
     def get_pdf(self, request, object_id):
         ticket = get_object_or_404(Ticket, uuid=object_id)
 
@@ -1826,6 +1912,24 @@ class TicketAdmin(ModelAdmin):
         response['Content-Disposition'] = f'attachment; filename="{ticket.pdf_filename()}"'
         return response
 
+    @action(
+        description=_("Unscan"),
+        url_path="unscan",
+        permissions=["custom_actions_row"],
+    )
+    def unscan(self, request, object_id):
+        ticket = Ticket.objects.get(pk=object_id)
+        if ticket.status == Ticket.SCANNED:
+            ticket.status = Ticket.NOT_SCANNED
+            ticket.save()
+            messages.add_message(
+                request,
+                messages.SUCCESS,
+                _("Ticket unscanned successfully.")
+            )
+        return redirect(request.META["HTTP_REFERER"])
+
+
     def get_form(self, request, obj=None, **kwargs):
         """ Si c'est un add, on modifie le formulaire"""
         defaults = {}
@@ -1834,7 +1938,7 @@ class TicketAdmin(ModelAdmin):
         defaults.update(kwargs)
         return super().get_form(request, obj, **defaults)
 
-    def has_custom_actions_detail_permission(self, request, object_id):
+    def has_custom_actions_row_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
     def has_view_permission(self, request, obj=None):

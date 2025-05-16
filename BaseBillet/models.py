@@ -412,7 +412,7 @@ class Configuration(SingletonModel):
                                                    help_text=_("Displayed above membership products."))
 
     description_event_page = models.TextField(blank=True, verbose_name=_("Description on the event page"),
-                                                   help_text=_("Displayed above the search field."))
+                                              help_text=_("Displayed above the search field."))
 
     """
     ######### CASHLESS #########
@@ -597,8 +597,10 @@ class Product(models.Model):
 
     name = models.CharField(max_length=500, verbose_name=_("Name"))
 
-    short_description = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Short description"))
-    long_description = models.TextField(blank=True, null=True, verbose_name=_("Long description"))
+    short_description = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Short description"),
+                                         help_text=_("Affiché uniquement pour les produits adhésions / abonnements."))
+    long_description = models.TextField(blank=True, null=True, verbose_name=_("Long description"),
+                                        help_text=_("Affiché uniquement pour les produits adhésions / abonnements."))
 
     publish = models.BooleanField(default=True, verbose_name=_("Publish"))
     poids = models.PositiveSmallIntegerField(default=0, verbose_name=_("Weight"),
@@ -920,9 +922,10 @@ class Event(models.Model):
                                            help_text=_("One-click booking for logged-in user."))
 
     custom_confirmation_message = models.TextField(blank=True, null=True,
-                                                          verbose_name=_("Personalized text in the booking confirmation e-mail."),
-                                                          help_text=_(
-                                                              "Not required: You can add additional information to be sent by e-mail."))
+                                                   verbose_name=_(
+                                                       "Personalized text in the booking confirmation e-mail."),
+                                                   help_text=_(
+                                                       "Not required: You can add additional information to be sent by e-mail."))
 
     booking = models.BooleanField(default=False, verbose_name=_("Restaurant mode / scheduler"),
                                   help_text=_(
@@ -1008,12 +1011,20 @@ class Event(models.Model):
             .exclude(status=Ticket.NOT_ACTIV) \
             .count()
 
+    def en_cours_dachat_tickets_count(self):
+        return Ticket.objects.filter(reservation__event__pk=self.pk) \
+            .exclude(status=Ticket.CREATED) \
+            .exclude(status=Ticket.NOT_ACTIV) \
+            .count()
+
     def complet(self):
         """
         Un booléen pour savoir si l'évènement est complet ou pas.
+        Compte aussi les reservation en cours de paiement ( < 15 min )
         """
-        # TODO: Mettre en cache cette variable et la vider si la jauge_max change dans l'admin
-        # Voire même mettre en cache toutes les variables de l'évènement...
+        valid_tickets_count = self.valid_tickets_count()
+
+
         if self.valid_tickets_count() >= self.jauge_max:
             return True
         else:
@@ -1399,8 +1410,8 @@ class Reservation(models.Model):
 class Ticket(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
 
-    first_name = models.CharField(max_length=200, blank=True, null=True)
-    last_name = models.CharField(max_length=200, blank=True, null=True)
+    first_name = models.CharField(max_length=200, blank=True, null=True, verbose_name=_("First name"))
+    last_name = models.CharField(max_length=200, blank=True, null=True, verbose_name=_("Last name"))
 
     reservation = models.ForeignKey(Reservation, on_delete=models.CASCADE, related_name="tickets")
 
@@ -1410,8 +1421,8 @@ class Ticket(models.Model):
     SCAN_CHOICES = [
         (CREATED, _('Created')),
         (NOT_ACTIV, _('Inactive')),
-        (NOT_SCANNED, _('Not scanned')),
-        (SCANNED, _('Scanned')),
+        (NOT_SCANNED, _('Valid and not scanned')),
+        (SCANNED, _('Valid and scanned')),
     ]
 
     status = models.CharField(max_length=1, choices=SCAN_CHOICES, default=CREATED,

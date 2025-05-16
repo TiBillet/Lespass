@@ -1,0 +1,26 @@
+{% load unfold humanize i18n %}
+
+
+{% if stripe_payouts_enabled %} {#On affiche une alerte si le compte stripe n'est pas activé#}
+
+    <div class="flex flex-row items-center gap-3">
+        {% trans "Votre compte stripe est connecté ! Vous pouvez créer ici des produits de type adhésion et billet payant ou de type reservation gratuite." %}
+    </div>
+
+{% else %}
+    <div class="flex flex-row items-center gap-3 mt-2">
+        {% trans "Votre compte Stripe ne semble pas activé : vous ne pourrez créer ici que des produits de type réservation gratuite. Pour recevoir des paiements : " %}
+    </div>
+    <div class="flex flex-row items-center gap-3 mt-2">
+        <button class="border font-medium px-3 py-1 rounded-md text-center whitespace-nowrap bg-primary-600 border-transparent text-white">
+            Créer et lier son compte stripe
+        </button>
+    </div>
+{% endif %}
+
+<div class="flex flex-row items-center gap-3 mt-2">
+    {% trans "Pour plus d'information, n'hésitez pas à consulter la documentation :" %}
+    <a href="https://tibillet.org/fr/docs/category/billetterie/" target="_blank">
+        {% trans "https://tibillet.org/fr/docs/category/billetterie/" %}
+    </a>
+</div>
