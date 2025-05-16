@@ -3,74 +3,81 @@
 {% load tibitags %}
 
 {% block main %}
-<div class="flex-fill">
-    <div class="container-lg py-5">
-        <div class="row">
-            <div class="col-md-8 offset-md-2 col-lg-6 offset-lg-3 col-xl-4 offset-xl-4">
-                <h1>{% trans 'Linking my Pass card' %}</h1>
-                <p>
-                    {% blocktranslate %}
-                    In order to use my Lèspass account, refill my card and as a way
-                    to recover my credits if I lose my card, I need to link my Pass card
-                    to an email address.
-                    {% endblocktranslate %}
-                </p>
-                <form id="linkform" role="form">
-                    <div class="form-floating mb-3">
-                        <input name="email" type="email" class="form-control" placeholder="adresse@exemple.fr" role="textbox" aria-label="{% trans 'Email address' %}" required>
-                        <label for="email">{% trans 'Email address' %}</label>
-                    </div>
-                    <div class="form-floating mb-3">
-                        <input name="emailConfirmation" type="email" class="form-control" placeholder="adresse@exemple.fr" role="textbox" aria-label="{% trans 'Email confirmation' %}" required>
-                        <label for="emailConfirmation">{% trans 'Email confirmation' %}</label>
-                    </div>
-                    {% include 'reunion/partials/field_errors.html' %}
-                    
-                    {% if config.need_name %}
-                    <div class="row">
-                        <div class="col">
-                            <div class="form-floating mb-3">
-                                <input name="firstname" type="text" class="form-control" placeholder="Jaz" role="textbox" aria-label="{% trans 'First name' %}" required>
-                                <label for="firstname">{% trans 'First name' %}</label>
-                            </div>
+    <div class="flex-fill">
+        <div class="container-lg py-5">
+            <div class="row">
+                <div class="col-md-8 offset-md-2 col-lg-6 offset-lg-3 col-xl-4 offset-xl-4">
+                    <h1>{% trans 'Linking my Pass card' %}</h1>
+                    <p>
+                        {% blocktranslate %}
+                            In order to use my Lèspass account, refill my card and as a way
+                            to recover my credits if I lose my card, I need to link my Pass card
+                            to an email address.
+                        {% endblocktranslate %}
+                    </p>
+                    <form id="linkform" role="form" hx-post="/qr/link/"
+                          hx-indicator="#tibillet-spinner">
+                        <div class="form-floating mb-3">
+                            <input name="email" type="email" class="form-control" placeholder="adresse@exemple.fr"
+                                   role="textbox" aria-label="{% trans 'Email address' %}" required>
+                            <label for="email">{% trans 'Email address' %}</label>
                         </div>
-                        <div class="col">
-                            <div class="form-floating mb-3">
-                                <input name="lastname" type="text" class="form-control" placeholder="Doe" role="textbox" aria-label="{% trans 'Last name or organization' %}" required>
-                                <label for="lastname">{% trans 'Last name or organization' %}</label>
-                            </div>
+                        <div class="form-floating mb-3">
+                            <input name="emailConfirmation" type="email" class="form-control"
+                                   placeholder="adresse@exemple.fr" role="textbox"
+                                   aria-label="{% trans 'Email confirmation' %}" required>
+                            <label for="emailConfirmation">{% trans 'Email confirmation' %}</label>
                         </div>
-                    </div>
-                    <p class="form-text">{% translate "Registering your name is required by this collective." %}</p>
-                    {% include 'reunion/partials/field_errors.html' %}
-                    {% endif %}
-    
-                    <div class="form-check form-switch mb-3">
-                        <input class="form-check-input" type="checkbox" role="switch" name="newsletter" id="newsletter">
-                        <label class="form-check-label" for="newsletter">
-                            {% trans 'I want to receive the TiBillet newsletter' %}
-                        </label>
-                    </div>
-                    <div class="form-check form-switch mb-3">
-                        <input class="form-check-input" type="checkbox" role="switch" name="cgu" id="cgu" required>
-                        <label class="form-check-label" for="cgu">
-                            {% blocktranslate %}
-                            I agree to <a href="{{ config.legal_documents }}">the terms and conditions</a>
-                            {% endblocktranslate %}
-                        </label>
-                    </div>
-                    {% include 'reunion/partials/field_errors.html' %}
-    
-                    <input type="hidden" name="qrcode_uuid" value="{{ qrcode_uuid }}">
-                    <button type="button"
-                            class="btn btn-primary w-100 mb-3 test-return-validate-link-card"
-                            hx-post="/qr/link/"
-                            hx-indicator="#tibillet-spinner"
-                    >{% translate "Register" %}
-                    </button>
-                </form>
+                        {% include 'reunion/partials/field_errors.html' %}
+
+                        {% if config.need_name %}
+                            <div class="row">
+                                <div class="col">
+                                    <div class="form-floating mb-3">
+                                        <input name="firstname" type="text" class="form-control" placeholder="Jaz"
+                                               role="textbox" aria-label="{% trans 'First name' %}" required>
+                                        <label for="firstname">{% trans 'First name' %}</label>
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <div class="form-floating mb-3">
+                                        <input name="lastname" type="text" class="form-control" placeholder="Doe"
+                                               role="textbox" aria-label="{% trans 'Last name or organization' %}"
+                                               required>
+                                        <label for="lastname">{% trans 'Last name or organization' %}</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="form-text">{% translate "Registering your name is required by this collective." %}</p>
+                            {% include 'reunion/partials/field_errors.html' %}
+                        {% endif %}
+
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" role="switch" name="newsletter"
+                                   id="newsletter">
+                            <label class="form-check-label" for="newsletter">
+                                {% trans 'I want to receive the TiBillet newsletter' %}
+                            </label>
+                        </div>
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" role="switch" name="cgu" id="cgu" required>
+                            <label class="form-check-label" for="cgu">
+                                {% blocktranslate %}
+                                    I agree to
+                                    <a href="https://tibillet.org/cgucgv/" target="_blank">the terms and conditions</a>
+                                {% endblocktranslate %}
+                            </label>
+                        </div>
+                        {% include 'reunion/partials/field_errors.html' %}
+
+                        <input type="hidden" name="qrcode_uuid" value="{{ qrcode_uuid }}">
+                        <button type="submit"
+                                class="btn btn-primary w-100 mb-3 test-return-validate-link-card"
+                        >{% translate "Register" %}
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
-</div>
 {% endblock %}
