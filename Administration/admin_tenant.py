@@ -81,7 +81,11 @@ logger = logging.getLogger(__name__)
 
 
 class StaffAdminSite(UnfoldAdminSite):
-    pass
+    def login(self, request, extra_context=None):
+        """
+        Redirect admin login to the root URL for better security.
+        """
+        return HttpResponseRedirect('/')
 
 
 staff_admin_site = StaffAdminSite(name='staff_admin')
