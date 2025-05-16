@@ -4,6 +4,7 @@ import logging
 import uuid
 from datetime import timedelta, datetime
 from decimal import Decimal
+from time import localtime
 from uuid import uuid4
 
 import pytz
@@ -1005,27 +1006,27 @@ class Event(models.Model):
         Renvoie la quantité de tous les ticket valide d'un évènement.
         Compte les billets achetés/réservés.
         """
-
         return Ticket.objects.filter(reservation__event__pk=self.pk) \
-            .exclude(status=Ticket.CREATED) \
-            .exclude(status=Ticket.NOT_ACTIV) \
-            .count()
+            .exclude(status__in=[Ticket.CREATED, Ticket.NOT_ACTIV]) \
+            .distinct().count()
 
-    def en_cours_dachat_tickets_count(self):
-        return Ticket.objects.filter(reservation__event__pk=self.pk) \
-            .exclude(status=Ticket.CREATED) \
-            .exclude(status=Ticket.NOT_ACTIV) \
-            .count()
+    def under_purchase(self):
+        # Compte les reservation en cours de paiement ( < 15 min )
+        return Ticket.objects.filter(reservation__event__pk=self.pk,
+                                     status__in=[Ticket.CREATED, Ticket.NOT_ACTIV],
+                                     reservation__datetime__gt=timezone.localtime() - timedelta(minutes=15)
+                                     ).distinct().count()
 
     def complet(self):
         """
         Un booléen pour savoir si l'évènement est complet ou pas.
         Compte aussi les reservation en cours de paiement ( < 15 min )
         """
+
         valid_tickets_count = self.valid_tickets_count()
+        under_purchase =self.under_purchase()
 
-
-        if self.valid_tickets_count() >= self.jauge_max:
+        if valid_tickets_count + under_purchase >= self.jauge_max:
             return True
         else:
             return False
