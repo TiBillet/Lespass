@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-16 12:31+0000\n"
+"POT-Creation-Date: 2025-05-16 13:04+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -252,6 +252,10 @@ msgstr ""
 msgid "Single choice menu"
 msgstr ""
 
+#: Administration/admin_tenant.py:1809
+msgid "Booked at"
+msgstr ""
+
 #: Administration/admin_tenant.py:1852
 msgid "State"
 msgstr ""
@@ -261,88 +265,92 @@ msgid "Scan"
 msgstr ""
 
 #: Administration/admin_tenant.py:1864
-msgid "Scan the ticket"
+msgid "SCAN 1"
 msgstr ""
 
-#: Administration/admin_tenant.py:1897
+#: Administration/admin_tenant.py:1865
+msgid "SCAN"
+msgstr ""
+
+#: Administration/admin_tenant.py:1904
 msgid "Ticket n°"
 msgstr ""
 
-#: Administration/admin_tenant.py:1903
+#: Administration/admin_tenant.py:1910
 msgid "PDF"
 msgstr ""
 
-#: Administration/admin_tenant.py:1919
+#: Administration/admin_tenant.py:1926
 msgid "Unscan"
 msgstr ""
 
-#: Administration/admin_tenant.py:1931
+#: Administration/admin_tenant.py:1938
 msgid "Ticket unscanned successfully."
 msgstr ""
 
-#: Administration/admin_tenant.py:1984
+#: Administration/admin_tenant.py:1991
 msgid "Go admin"
 msgstr ""
 
-#: Administration/admin_tenant.py:1998
+#: Administration/admin_tenant.py:2005
 msgid "Domaine principal"
 msgstr ""
 
-#: Administration/admin_tenant.py:2040
+#: Administration/admin_tenant.py:2047
 msgid "See this place"
 msgstr ""
 
-#: Administration/admin_tenant.py:2056
+#: Administration/admin_tenant.py:2063
 msgid "Included tags"
 msgstr ""
 
-#: Administration/admin_tenant.py:2060 BaseBillet/models.py:2018
+#: Administration/admin_tenant.py:2067 BaseBillet/models.py:2018
 msgid "Excluded tags"
 msgstr ""
 
-#: Administration/admin_tenant.py:2101 Administration/admin_tenant.py:2343
+#: Administration/admin_tenant.py:2108 Administration/admin_tenant.py:2350
 msgid "Has key"
 msgstr ""
 
-#: Administration/admin_tenant.py:2118
+#: Administration/admin_tenant.py:2125
 msgid "Api Key inserted"
 msgstr ""
 
-#: Administration/admin_tenant.py:2162 BaseBillet/models.py:1992
+#: Administration/admin_tenant.py:2169 BaseBillet/models.py:1992
 msgid "Api key"
 msgstr ""
 
-#: Administration/admin_tenant.py:2180 Administration/admin_tenant.py:2200
-#: Administration/admin_tenant.py:2376
+#: Administration/admin_tenant.py:2187 Administration/admin_tenant.py:2207
+#: Administration/admin_tenant.py:2383
 msgid "Api OK"
 msgstr ""
 
-#: Administration/admin_tenant.py:2183 Administration/admin_tenant.py:2202
+#: Administration/admin_tenant.py:2190 Administration/admin_tenant.py:2209
 msgid "Api not OK"
 msgstr ""
 
-#: Administration/admin_tenant.py:2191 Administration/admin_tenant.py:2362
+#: Administration/admin_tenant.py:2198 Administration/admin_tenant.py:2369
 msgid "Test Api"
 msgstr ""
 
-#: Administration/admin_tenant.py:2358
+#: Administration/admin_tenant.py:2365
 msgid "Clé Api chiffrée"
 msgstr ""
 
-#: Administration/admin_tenant.py:2380
+#: Administration/admin_tenant.py:2387
 #, python-brace-format
 msgid "Api not OK : {e}"
 msgstr ""
 
-#: Administration/admin_tenant.py:2384
+#: Administration/admin_tenant.py:2391
 msgid "Error : {type(e)} - {e}"
 msgstr ""
 
-#: Administration/admin_tenant.py:2409
+#: Administration/admin_tenant.py:2416
 msgid "Development"
 msgstr ""
 
-#: Administration/admin_tenant.py:2411
+#: Administration/admin_tenant.py:2418
 msgid "Production"
 msgstr ""
 
@@ -688,7 +696,7 @@ msgstr ""
 msgid "Email confirmed"
 msgstr ""
 
-#: AuthBillet/models.py:118 BaseBillet/models.py:1793
+#: AuthBillet/models.py:118 BaseBillet/models.py:1413 BaseBillet/models.py:1793
 #: BaseBillet/templates/reunion/views/account/preferences.html:33
 #: BaseBillet/templates/reunion/views/membership/form.html:68
 #: BaseBillet/templates/reunion/views/register.html:33
@@ -696,7 +704,7 @@ msgstr ""
 msgid "First name"
 msgstr ""
 
-#: AuthBillet/models.py:119 BaseBillet/models.py:1799
+#: AuthBillet/models.py:119 BaseBillet/models.py:1414 BaseBillet/models.py:1799
 #: BaseBillet/templates/reunion/views/account/preferences.html:41
 msgid "Last name"
 msgstr ""

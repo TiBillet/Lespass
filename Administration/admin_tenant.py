@@ -1610,8 +1610,6 @@ class ReservationValidFilter(admin.SimpleListFilter):
         provided in the query string and retrievable via
         `self.value()`.
         """
-        # Compare the requested value (either '80s' or '90s')
-        # to decide how to filter the queryset.
         if self.value() == "Y":
             return queryset.exclude(
                 status__in=[
@@ -1780,6 +1778,41 @@ class TicketChangeAdmin(ModelForm):
         ]
 
 
+class TicketValidFilter(admin.SimpleListFilter):
+    # Pour filtrer sur les réservation valide : payée, payée et confirmée, et mail en erreur même si payés
+    title = _("Valid")
+
+    # Parameter for the filter that will be used in the URL query.
+    parameter_name = "status_valid"
+
+    def lookups(self, request, model_admin):
+        return [
+            ("Y", _("Yes")),
+            ("N", _("No")),
+        ]
+
+    def queryset(self, request, queryset):
+        """
+        Returns the filtered queryset based on the value
+        provided in the query string and retrievable via
+        `self.value()`.
+        """
+        if self.value() == "Y":
+            return queryset.filter(
+                status__in=[
+                        Ticket.NOT_SCANNED,
+                        Ticket.SCANNED,
+                        ]
+            ).distinct()
+        if self.value() == "N":
+            return queryset.exclude(
+                status__in=[
+                        Ticket.NOT_SCANNED,
+                        Ticket.SCANNED,
+                        ]
+            ).distinct()
+
+
 @admin.register(Ticket, site=staff_admin_site)
 class TicketAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
@@ -1792,8 +1825,8 @@ class TicketAdmin(ModelAdmin):
 
     list_display = [
         'ticket',
-        'first_name',
-        'last_name',
+        # 'first_name',
+        # 'last_name',
         'event',
         'options',
         'state',
@@ -1824,7 +1857,7 @@ class TicketAdmin(ModelAdmin):
     #     EventFilter,
     # 'reservation__uuid'
     # )
-    list_filter = ["reservation__event", "status", "reservation__options"]
+    list_filter = ["reservation__event", TicketValidFilter, "reservation__options"]
 
     search_fields = (
         'uuid',
@@ -1861,10 +1894,17 @@ class TicketAdmin(ModelAdmin):
     @display(description=_("Scan"), label={True: "success"})
     def scan(self, obj: Ticket):
         if obj.status == Ticket.NOT_SCANNED:
-            scanner = _("Scan the ticket")
+            scan_one = _("SCAN 1")
+            scan_all = _("SCAN")
+            ticket_count = Ticket.objects.filter(reservation=obj.reservation).count()
+            if ticket_count > 1 : # Si on a plusieurs ticket dans la même reservation, on permet le scan tous les tickets
+                return True, format_html(
+                    f'<button><a href="{reverse("staff_admin:ticket-scann", args=[obj.pk])}" class="button">{scan_one}</a></button>&nbsp;'
+                    f'  --  '
+                    f'<button><a href="{reverse("staff_admin:ticket-scann", args=[obj.pk])}?all=True" class="button">{scan_all} {ticket_count}</a></button>&nbsp;',
+                )
             return True, format_html(
-                f'<button><a href="{reverse("staff_admin:ticket-scann", args=[obj.pk])}" class="button">{scanner}</a></button>&nbsp;',
-            )
+                f'<button><a href="{reverse("staff_admin:ticket-scann", args=[obj.pk])}" class="button">{scan_one}</a></button>&nbsp;')
         return None, ""
 
 
@@ -1880,15 +1920,18 @@ class TicketAdmin(ModelAdmin):
         return custom_urls + urls
 
     def scanner(self, request, ticket_pk, *arg, **kwarg):
-        print(ticket_pk)
+        list_to_scan = []
         ticket = Ticket.objects.get(pk=ticket_pk)
-        ticket.status = Ticket.SCANNED
-        ticket.save()
-        messages.add_message(
-            request,
-            messages.SUCCESS,
-            f"Ticket scanned successfully."
-        )
+        list_to_scan.append(ticket)
+
+        if request.GET.get('all') == 'True':
+            list_to_scan = Ticket.objects.filter(reservation=ticket.reservation)
+
+        for ticket in list_to_scan:
+            if ticket.status == Ticket.NOT_SCANNED:
+                ticket.status = Ticket.SCANNED
+                ticket.save()
+
         return redirect(request.META["HTTP_REFERER"])
 
     @display(description=_("Ticket n°"))

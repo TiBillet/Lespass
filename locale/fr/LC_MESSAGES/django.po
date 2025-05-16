@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-16 12:32+0000\n"
+"POT-Creation-Date: 2025-05-16 13:04+0000\n"
 "PO-Revision-Date: 2025-03-12 09:37+0100\n"
 "Last-Translator: Diane Alma Kay <pro@kayathommy.fr>\n"
 "Language-Team: French\n"
@@ -260,99 +260,105 @@ msgstr "Options à choix multiples"
 msgid "Single choice menu"
 msgstr "Options à choix unique"
 
+#: Administration/admin_tenant.py:1809
+msgid "Booked at"
+msgstr "Réservé le"
+
 #: Administration/admin_tenant.py:1852
-#| msgid "Status"
 msgid "State"
 msgstr "Statut"
 
 #: Administration/admin_tenant.py:1861
-#| msgid "Scanned"
 msgid "Scan"
 msgstr "Scanner"
 
 #: Administration/admin_tenant.py:1864
-msgid "Scan the ticket"
-msgstr "Scanner le billet"
+msgid "SCAN 1"
+msgstr ""
 
-#: Administration/admin_tenant.py:1897
+#: Administration/admin_tenant.py:1865
+msgid "SCAN"
+msgstr ""
+
+#: Administration/admin_tenant.py:1904
 msgid "Ticket n°"
 msgstr "Billet n°"
 
-#: Administration/admin_tenant.py:1903
+#: Administration/admin_tenant.py:1910
 msgid "PDF"
 msgstr "PDF"
 
-#: Administration/admin_tenant.py:1919
+#: Administration/admin_tenant.py:1926
 msgid "Unscan"
 msgstr "De-Scanner"
 
-#: Administration/admin_tenant.py:1931
+#: Administration/admin_tenant.py:1938
 msgid "Ticket unscanned successfully."
 msgstr "Ticket 'dé-scanné' avec succes"
 
-#: Administration/admin_tenant.py:1984
+#: Administration/admin_tenant.py:1991
 msgid "Go admin"
 msgstr ""
 
-#: Administration/admin_tenant.py:1998
+#: Administration/admin_tenant.py:2005
 msgid "Domaine principal"
 msgstr ""
 
-#: Administration/admin_tenant.py:2040
+#: Administration/admin_tenant.py:2047
 msgid "See this place"
 msgstr "Voir le site"
 
-#: Administration/admin_tenant.py:2056
+#: Administration/admin_tenant.py:2063
 msgid "Included tags"
 msgstr "Labels inclus"
 
-#: Administration/admin_tenant.py:2060 BaseBillet/models.py:2018
+#: Administration/admin_tenant.py:2067 BaseBillet/models.py:2018
 msgid "Excluded tags"
 msgstr "Labels exclus"
 
-#: Administration/admin_tenant.py:2101 Administration/admin_tenant.py:2343
+#: Administration/admin_tenant.py:2108 Administration/admin_tenant.py:2350
 msgid "Has key"
 msgstr "A une clé"
 
-#: Administration/admin_tenant.py:2118
+#: Administration/admin_tenant.py:2125
 msgid "Api Key inserted"
 msgstr "Clé API insérée"
 
-#: Administration/admin_tenant.py:2162 BaseBillet/models.py:1992
+#: Administration/admin_tenant.py:2169 BaseBillet/models.py:1992
 msgid "Api key"
 msgstr "Clé API"
 
-#: Administration/admin_tenant.py:2180 Administration/admin_tenant.py:2200
-#: Administration/admin_tenant.py:2376
+#: Administration/admin_tenant.py:2187 Administration/admin_tenant.py:2207
+#: Administration/admin_tenant.py:2383
 msgid "Api OK"
 msgstr "API ok"
 
-#: Administration/admin_tenant.py:2183 Administration/admin_tenant.py:2202
+#: Administration/admin_tenant.py:2190 Administration/admin_tenant.py:2209
 msgid "Api not OK"
 msgstr "API pas OK"
 
-#: Administration/admin_tenant.py:2191 Administration/admin_tenant.py:2362
+#: Administration/admin_tenant.py:2198 Administration/admin_tenant.py:2369
 msgid "Test Api"
 msgstr "Tester l'API"
 
-#: Administration/admin_tenant.py:2358
+#: Administration/admin_tenant.py:2365
 msgid "Clé Api chiffrée"
 msgstr ""
 
-#: Administration/admin_tenant.py:2380
+#: Administration/admin_tenant.py:2387
 #, python-brace-format
 msgid "Api not OK : {e}"
 msgstr ""
 
-#: Administration/admin_tenant.py:2384
+#: Administration/admin_tenant.py:2391
 msgid "Error : {type(e)} - {e}"
 msgstr ""
 
-#: Administration/admin_tenant.py:2409
+#: Administration/admin_tenant.py:2416
 msgid "Development"
 msgstr "Développement"
 
-#: Administration/admin_tenant.py:2411
+#: Administration/admin_tenant.py:2418
 msgid "Production"
 msgstr "Production"
 
@@ -713,7 +719,7 @@ msgstr "Échec d'envoi du mail de confirmation si True"
 msgid "Email confirmed"
 msgstr "Adresse mail confirmée"
 
-#: AuthBillet/models.py:118 BaseBillet/models.py:1793
+#: AuthBillet/models.py:118 BaseBillet/models.py:1413 BaseBillet/models.py:1793
 #: BaseBillet/templates/reunion/views/account/preferences.html:33
 #: BaseBillet/templates/reunion/views/membership/form.html:68
 #: BaseBillet/templates/reunion/views/register.html:33
@@ -721,7 +727,7 @@ msgstr "Adresse mail confirmée"
 msgid "First name"
 msgstr "Prénom"
 
-#: AuthBillet/models.py:119 BaseBillet/models.py:1799
+#: AuthBillet/models.py:119 BaseBillet/models.py:1414 BaseBillet/models.py:1799
 #: BaseBillet/templates/reunion/views/account/preferences.html:41
 msgid "Last name"
 msgstr "Nom de famille"
@@ -3580,6 +3586,12 @@ msgstr "Fusion de tirelires"
 #: fedow_connect/validators.py:87 fedow_connect/validators.py:191
 msgid "Refund"
 msgstr "Remboursement"
+
+#~ msgid "SCAN THE TICKET"
+#~ msgstr "SCANNER LE TICKET"
+
+#~ msgid "Scan the ticket"
+#~ msgstr "Scanner le billet"
 
 #~ msgid "No subscription"
 #~ msgstr "Pas d'adhésion"
