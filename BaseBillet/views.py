@@ -41,7 +41,7 @@ from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, Product, Event, Paiement_stripe, Membership, Reservation, \
     FormbricksConfig, FormbricksForms, FederatedPlace, Carrousel
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, new_tenant_mailer, \
-    contact_mailer, new_tenant_after_stripe_mailer
+    contact_mailer, new_tenant_after_stripe_mailer, send_to_ghost_email
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
     ReservationValidator, ContactValidator
 from Customers.models import Client, Domain
@@ -1336,6 +1336,8 @@ class Tenant(viewsets.ViewSet):
             # id_acc_connect=id_acc_connect,
             dns_choice=validated_data['dns_choice'],
         )
+
+        send_to_ghost_email.delay(validated_data['email'])
 
         # Envoi d'un mail pour vérifier le compte. Un lien vers stripe sera créé
         new_tenant_mailer.delay(waiting_config_uuid=str(waiting_configuration.uuid))
