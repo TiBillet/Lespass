@@ -1337,7 +1337,7 @@ class Tenant(viewsets.ViewSet):
             dns_choice=validated_data['dns_choice'],
         )
 
-        send_to_ghost_email.delay(validated_data['email'])
+        send_to_ghost_email.delay(validated_data['email'], name=validated_data['name'])
 
         # Envoi d'un mail pour vérifier le compte. Un lien vers stripe sera créé
         new_tenant_mailer.delay(waiting_config_uuid=str(waiting_configuration.uuid))
