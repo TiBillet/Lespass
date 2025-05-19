@@ -1,0 +1,100 @@
+{% extends 'emails/base.html' %}
+{% load humanize static i18n %}
+
+{% block content %}
+    <tr>
+        <td class="pt-28 td_content"
+            style="background:#fff; padding:44px 64px 57px; border:1px solid #dcdcd9; border-radius:8px;">
+            <table align="center" cellpadding="0" cellspacing="0" class="w-100p"
+                   style="max-width:472px; margin:0 auto;" width="472">
+                <table style="">
+                    <tr>
+                        <td>
+                            <table style="border-spacing: 0px;">
+                                <tr>
+                                    <td valign="middle"><span
+                                            style="font-weight:bold;color:#636360;font:10px Arial-Bold, Helvetica-Bold, sans-serif;text-transform:uppercase;">{% trans "Bienvenue dans la communauté TiBillet" %}</span><span
+                                            style="color:transparent;display:none;height:0;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;visibility:hidden;width:0;">&nbsp;|&nbsp;</span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <h1 style="font-weight:400;style:regular;color:#1d1d1b;font:24px/32px Arial, Helvetica, sans-serif;margin: 30px 0 30px;">
+                                {% trans "Découvrez tout ce que vous pouvez faire avec TiBillet" %}</h1><span
+                                style="color:transparent;display:none;height:0;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;visibility:hidden;width:0;">&nbsp;|&nbsp;</span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 24px 0;">
+                                {% trans "Bonjour" %} {{ username }},
+                                <br/> <br/>
+                                {% trans "Nous sommes ravis de vous accueillir dans l'écosystème TiBillet ! Vous venez de rejoindre une communauté engagée dans les communs numériques et la coopération." %}
+                                <br/><br/>
+                                {% trans "TiBillet est une solution développée par la Coopérative Code Commun, qui propose des outils libres et open source pour la gestion d'événements, d'adhésions et de paiements cashless." %}
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0 0 24px 0;">
+                            <h2 style="font-weight:600;color:#009058;font:18px/24px Arial, Helvetica, sans-serif;margin: 0 0 16px 0;">
+                                {% trans "Voici ce que vous pouvez faire avec TiBillet :" %}
+                            </h2>
+                            <ul style="color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 24px 0;">
+                                <li style="margin-bottom: 8px;">
+                                    <b>{% trans "Billetterie" %}</b> - {% trans "Créez et gérez des événements, vendez des billets en ligne, et suivez vos ventes en temps réel." %}
+                                </li>
+                                <li style="margin-bottom: 8px;">
+                                    <b>{% trans "Adhésions et abonnements" %}</b> - {% trans "Gérez les adhésions à votre structure, proposez différentes formules d'abonnement, et suivez les renouvellements." %}
+                                </li>
+                                <li style="margin-bottom: 8px;">
+                                    <b>{% trans "Système Cashless" %}</b> - {% trans "Proposez un système de paiement sans espèces pour vos événements, avec des cartes rechargeables et une application de point de vente." %}
+                                </li>
+                                <li style="margin-bottom: 8px;">
+                                    <b>{% trans "Fédération d'agendas" %}</b> - {% trans "Partagez vos événements sur un réseau fédéré d'agendas culturels, augmentant ainsi leur visibilité auprès d'un public plus large." %}
+                                </li>
+                            </ul>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0 0 24px 0;">
+                            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 24px 0;">
+                                {% trans "En tant que solution coopérative, TiBillet est conçu avec et pour ses utilisateurs. Votre participation enrichit les communs numériques que nous développons ensemble." %}
+                                <br/><br/>
+                                {% trans "La fédération d'agendas est l'un des piliers de notre projet : elle permet de connecter les acteurs culturels et associatifs pour créer un réseau d'événements partagés, tout en respectant l'autonomie de chacun." %}
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0 0 24px 0;">
+                            <table style="width:100%;border-spacing: 0px;padding: 0px;">
+                                <tr>
+                                    <td class="active-t btn" align="center"
+                                        style="background:#009058;font:13px/16px Arial, Helvetica, sans-serif;border-radius:3px;height:48px;">
+                                        <a style="color:#ffffff; text-decoration:none; display:block; padding:16px 10px;"
+                                           target="_blank"
+                                           href="https://tibillet.org/fr/docs/intro">{% trans "DÉCOUVRIR LA DOCUMENTATION" %}</a></td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;">
+                                {% trans "Si vous avez des questions ou besoin d'aide pour démarrer, n'hésitez pas à nous contacter. Nous sommes là pour vous accompagner dans votre utilisation de TiBillet." %}
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;padding-top:32px;">
+                                {% trans "À bientôt sur TiBillet" %},<br/>{% trans "L'équipe de la Coopérative Code Commun" %}</p></td>
+                        </tr>
+                </table>
+            </table>
+        </td>
+    </tr>
+{% endblock %}
