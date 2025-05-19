@@ -840,6 +840,92 @@ def send_to_brevo(membership_pk):
                 logger.error(f"send_to_brevo ERROR : {e}")
                 raise e
 
+
+@app.task
+def send_to_ghost_email(email, name=None):
+    ghost_config = GhostConfig.get_solo()
+    ghost_url = ghost_config.ghost_url
+    ghost_key = ghost_config.get_api_key()
+
+    ###################################
+    ## Génération du token JWT
+    ###################################
+
+    # Split the key into ID and SECRET
+    id, secret = ghost_key.split(':')
+
+    # Prepare header and payload
+    iat = int(datetime.datetime.now().timestamp())
+
+    header = {'alg': 'HS256', 'typ': 'JWT', 'kid': id}
+    payload = {
+        'iat': iat,
+        'exp': iat + 5 * 60,
+        'aud': '/admin/'
+    }
+
+    # Create the token (including decoding secret)
+    token = jwt.encode(payload, bytes.fromhex(secret), algorithm='HS256', headers=header)
+    logger.debug(f"JWT token: " + token)
+
+    ###################################
+    ## Appels de l'API Ghost
+    ###################################
+
+    # Définir les critères de filtrage
+    filter = {
+        "filter": f"email:{email}"
+    }
+    headers = {'Authorization': f'Ghost {token}'}
+
+    # Récupérer la liste des membres de l'instance Ghost
+    response = requests.get(ghost_url + "/ghost/api/admin/members/", params=filter, headers=headers)
+
+    # Vérifier que la réponse de l'API est valide
+    if response.ok:
+        # Décoder la réponse JSON
+        j = response.json()
+        members = j['members']
+
+        # Si aucun membre n'a été trouvé avec l'adresse e-mail spécifiée
+        if len(members) == 0:
+            # Définir les informations du nouveau membre
+            member_data = {
+                "members": [
+                    {
+                        "email": email,
+                        "name": name if name else "",
+                        "labels": ["TiBillet", f"import {timezone.now().strftime('%d/%m/%Y')}"]
+                    }
+                ]
+            }
+
+            # Ajouter le nouveau membre à l'instance Ghost
+            response = requests.post(ghost_url + "/ghost/api/admin/members/", json=member_data, headers=headers,
+                                     timeout=2)
+
+            # Vérifier que la réponse de l'API est valide
+            if response.status_code == 201:
+                # Décoder la réponse JSON
+                j = response.json()
+                members = j['members']
+                logger.info(f"Le nouveau membre a été créé avec succès : {members}")
+            else:
+                logger.error(f"Erreur lors de la création du nouveau membre : {response.text}")
+        else:
+            # Afficher la liste des membres
+            logger.info(f"Le membre {email} existe déja dans : {members}")
+    else:
+        logger.error(f"Erreur lors de la récupération des membres : {response.text}")
+
+    # On met à jour les logs pour debug
+    try:
+        ghost_config.ghost_last_log = f"{timezone.now()} : {response.text}"
+        ghost_config.save()
+    except Exception as e:
+        logger.error(f"Erreur lors de la mise à jour du log : {e}")
+
+
 @app.task
 def send_to_ghost(membership_pk):
     ghost_config = GhostConfig.get_solo()
@@ -859,86 +945,7 @@ def send_to_ghost(membership_pk):
         user = membership.user
         email = user.email
         name = f"{membership.first_name.capitalize()} {membership.last_name.capitalize()}"
-
-        ###################################
-        ## Génération du token JWT
-        ###################################
-
-        # Split the key into ID and SECRET
-        id, secret = ghost_key.split(':')
-
-        # Prepare header and payload
-        iat = int(datetime.datetime.now().timestamp())
-
-        header = {'alg': 'HS256', 'typ': 'JWT', 'kid': id}
-        payload = {
-            'iat': iat,
-            'exp': iat + 5 * 60,
-            'aud': '/admin/'
-        }
-
-        # Create the token (including decoding secret)
-        token = jwt.encode(payload, bytes.fromhex(secret), algorithm='HS256', headers=header)
-        logger.debug(f"JWT token: " + token)
-
-        ###################################
-        ## Appels de l'API Ghost
-        ###################################
-
-        # Définir les critères de filtrage
-        filter = {
-            "filter": f"email:{email}"
-        }
-        headers = {'Authorization': f'Ghost {token}'}
-
-        # Récupérer la liste des membres de l'instance Ghost
-        response = requests.get(ghost_url + "/ghost/api/admin/members/", params=filter, headers=headers)
-
-        # Vérifier que la réponse de l'API est valide
-        if response.ok:
-            # Décoder la réponse JSON
-            j = response.json()
-            members = j['members']
-
-            # Si aucun membre n'a été trouvé avec l'adresse e-mail spécifiée
-            if len(members) == 0:
-                # Définir les informations du nouveau membre
-                member_data = {
-                    "members": [
-                        {
-                            "email": email,
-                            "name": name,
-                            "labels": ["TiBillet", f"import {timezone.now().strftime('%d/%m/%Y')}"]
-                        }
-                    ]
-                }
-
-                # Ajouter le nouveau membre à l'instance Ghost
-                response = requests.post(ghost_url + "/ghost/api/admin/members/", json=member_data, headers=headers,
-                                         timeout=2)
-
-                # Vérifier que la réponse de l'API est valide
-                if response.status_code == 201:
-                    # Décoder la réponse JSON
-                    j = response.json()
-                    members = j['members']
-                    logger.info(f"Le nouveau membre a été créé avec succès : {members}")
-                else:
-                    logger.error(f"Erreur lors de la création du nouveau membre : {response.text}")
-            else:
-                # Afficher la liste des membres
-                logger.info(f"Le membre {email} existe déja dans : {members}")
-        else:
-            logger.error(f"Erreur lors de la récupération des membres : {response.text}")
-
-        # On met à jour les logs pour debug
-        try:
-            ghost_config.ghost_last_log = f"{timezone.now()} : {response.text}"
-            ghost_config.save()
-        except Exception as e:
-            logger.error(f"Erreur lors de la mise à jour du log : {e}")
-
-
+        send_to_ghost_email(email, name)
 
 
 @app.task

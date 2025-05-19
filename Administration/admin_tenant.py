@@ -2141,6 +2141,7 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
     add_form = GhostConfigAddform
 
     readonly_fields = ["has_key", "ghost_last_log"]
+    actions_detail = ["test_api_ghost"]
 
     @display(description=_("Has key"), boolean=True)
     def has_key(self, instance: GhostConfig):
@@ -2165,6 +2166,61 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
             #     messages.error(request, "Api not OK")
 
         super().save_model(request, obj, form, change)
+
+    @action(description=_("Test Api"),
+            url_path="test_api_ghost",
+            permissions=["custom_actions_detail"])
+    def test_api_ghost(self, request, object_id):
+        import datetime
+        import jwt
+
+        ghost_config = GhostConfig.get_solo()
+        ghost_url = ghost_config.ghost_url
+        ghost_key = ghost_config.get_api_key()
+
+        if not ghost_url or not ghost_key:
+            messages.error(request, _("Ghost URL or API key is missing"))
+            return redirect(request.META["HTTP_REFERER"])
+
+        try:
+            # Split the key into ID and SECRET
+            id, secret = ghost_key.split(':')
+
+            # Prepare header and payload
+            iat = int(datetime.datetime.now().timestamp())
+
+            header = {'alg': 'HS256', 'typ': 'JWT', 'kid': id}
+            payload = {
+                'iat': iat,
+                'exp': iat + 5 * 60,
+                'aud': '/admin/'
+            }
+
+            # Create the token
+            token = jwt.encode(payload, bytes.fromhex(secret), algorithm='HS256', headers=header)
+
+            # Make a request to the Ghost API
+            headers = {'Authorization': f'Ghost {token}'}
+            response = requests.get(f"{ghost_url}/ghost/api/admin/members/", headers=headers, params={"limit": 1})
+
+            # Update the last_log field with the response
+            ghost_config.ghost_last_log = f"{timezone.now()} - Status: {response.status_code} - Response: {response.text}"
+            ghost_config.save()
+
+            if response.ok:
+                messages.success(request, _("Ghost API connection successful"))
+            else:
+                messages.error(request, _(f"Ghost API connection failed: {response.status_code} - {response.reason}"))
+
+        except Exception as e:
+            ghost_config.ghost_last_log = f"{timezone.now()} - Error: {type(e).__name__} - {str(e)}"
+            ghost_config.save()
+            messages.error(request, _(f"Error testing Ghost API: {type(e).__name__} - {str(e)}"))
+
+        return redirect(request.META["HTTP_REFERER"])
+
+    def has_custom_actions_detail_permission(self, request, object_id):
+        return TenantAdminPermissionWithRequest(request)
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
