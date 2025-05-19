@@ -1496,6 +1496,8 @@ class EventAdmin(ModelAdmin):
 
     inlines = [EventChildrenInline, ]
 
+    actions_row = ["duplicate_day_plus_one", "duplicate_week_plus_one", "duplicate_month_plus_one"]
+
     fieldsets = (
         (None, {
             'fields': (
@@ -1592,6 +1594,150 @@ class EventAdmin(ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+    def has_custom_actions_row_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    @action(
+        description=_("Duplicate (day+1)"),
+        permissions=["custom_actions_row"],
+    )
+    def duplicate_day_plus_one(self, request, object_id):
+        """Duplicate an event with the date set to the next day"""
+        obj = Event.objects.get(pk=object_id)
+        try :
+            duplicate = self._duplicate_event(obj, date_adjustment="day")
+            messages.success(request, _("Event duplicated successfully"))
+        except IntegrityError as e:
+            messages.error(request, _("Un evenement avec le même nom et date semble déja dupliqué"))
+
+        return redirect(request.META["HTTP_REFERER"])
+
+        # return redirect(reverse('staff:BaseBillet_event_change', args=[duplicate.uuid]))
+
+    @action(
+        description=_("Duplicate (week+1)"),
+        permissions=["custom_actions_row"],
+    )
+    def duplicate_week_plus_one(self, request, object_id):
+        """Duplicate an event with the date set to the next week"""
+        obj = Event.objects.get(pk=object_id)
+        try :
+            duplicate = self._duplicate_event(obj, date_adjustment="week")
+            messages.success(request, _("Event duplicated successfully"))
+        except IntegrityError as e:
+            messages.error(request, _("Un evenement avec le même nom et date semble déja dupliqué"))
+
+        return redirect(request.META["HTTP_REFERER"])
+
+        # return redirect(reverse('staff:BaseBillet_event_change', args=[duplicate.uuid]))
+
+    @action(
+        description=_("Duplicate (month+1)"),
+        permissions=["custom_actions_row"],
+    )
+    def duplicate_month_plus_one(self, request, object_id):
+        """Duplicate an event with the date set to the next month"""
+        obj = Event.objects.get(pk=object_id)
+        try :
+            duplicate = self._duplicate_event(obj, date_adjustment="month")
+            messages.success(request, _("Event duplicated successfully"))
+        except IntegrityError as e:
+            messages.error(request, _("Un evenement avec le même nom et date semble déja dupliqué"))
+        return redirect(request.META["HTTP_REFERER"])
+
+        # return redirect(reverse('staff:BaseBillet_event_change', args=[duplicate.uuid]))
+
+    def _duplicate_event(self, obj, date_adjustment=None):
+        """
+        Helper method to duplicate an event
+
+        Args:
+            obj: The event to duplicate
+            date_adjustment: Type of date adjustment to apply ("day", "week", "month", or None for same date)
+
+        Returns:
+            The duplicated event
+        """
+        # Create a copy of the event
+        duplicate = Event.objects.get(uuid=obj.uuid)
+        duplicate.pk = None  # This will create a new object on save
+        duplicate.rsa_key = None  # Ensure a new RSA key is generated
+        duplicate.slug = None  # Ensure a new slug is generated
+
+        # Set the name with [DUPLICATE] prefix
+        duplicate.name = f"[DUPLICATE] {obj.name}"
+
+        # Set published to False
+        duplicate.published = False
+
+        # Adjust the date based on the date_adjustment parameter
+        if date_adjustment == "day":
+            # Add 1 day to the date
+            duplicate.datetime = obj.datetime + timedelta(days=1)
+            if obj.end_datetime:
+                duplicate.end_datetime = obj.end_datetime + timedelta(days=1)
+        elif date_adjustment == "week":
+            # Add 7 days to the date
+            duplicate.datetime = obj.datetime + timedelta(days=7)
+            if obj.end_datetime:
+                duplicate.end_datetime = obj.end_datetime + timedelta(days=7)
+        elif date_adjustment == "month":
+            # Add 1 month to the date
+            from dateutil.relativedelta import relativedelta
+            duplicate.datetime = obj.datetime + relativedelta(months=1)
+            if obj.end_datetime:
+                duplicate.end_datetime = obj.end_datetime + relativedelta(months=1)
+
+        # Save the duplicate
+        duplicate.save()
+
+        # Copy many-to-many relationships
+        duplicate.products.set(obj.products.all())
+        duplicate.tag.set(obj.tag.all())
+        duplicate.options_radio.set(obj.options_radio.all())
+        duplicate.options_checkbox.set(obj.options_checkbox.all())
+        duplicate.carrousel.set(obj.carrousel.all())
+
+        # Duplicate child events of type ACTION
+        for child in obj.children.filter(categorie=Event.ACTION):
+            child_duplicate = Event.objects.get(uuid=child.uuid)
+            child_duplicate.pk = None  # This will create a new object on save
+            child_duplicate.rsa_key = None  # Ensure a new RSA key is generated
+            child_duplicate.slug = None  # Ensure a new slug is generated
+            child_duplicate.parent = duplicate
+
+            # Child events should be published
+            child_duplicate.published = True
+
+            # Adjust the date based on the date_adjustment parameter
+            if date_adjustment == "day":
+                # Add 1 day to the date
+                child_duplicate.datetime = child.datetime + timedelta(days=1)
+                if child.end_datetime:
+                    child_duplicate.end_datetime = child.end_datetime + timedelta(days=1)
+            elif date_adjustment == "week":
+                # Add 7 days to the date
+                child_duplicate.datetime = child.datetime + timedelta(days=7)
+                if child.end_datetime:
+                    child_duplicate.end_datetime = child.end_datetime + timedelta(days=7)
+            elif date_adjustment == "month":
+                # Add 1 month to the date
+                from dateutil.relativedelta import relativedelta
+                child_duplicate.datetime = child.datetime + relativedelta(months=1)
+                if child.end_datetime:
+                    child_duplicate.end_datetime = child.end_datetime + relativedelta(months=1)
+
+            child_duplicate.save()
+
+            # Copy many-to-many relationships for child
+            child_duplicate.products.set(child.products.all())
+            child_duplicate.tag.set(child.tag.all())
+            child_duplicate.options_radio.set(child.options_radio.all())
+            child_duplicate.options_checkbox.set(child.options_checkbox.all())
+            child_duplicate.carrousel.set(child.carrousel.all())
+
+        return duplicate
 
 
 
