@@ -557,16 +557,30 @@ def new_tenant_mailer(waiting_config_uuid: str):
         tenant = connection.tenant
         tenant_url = tenant.get_primary_domain().domain
         waiting_config = WaitingConfiguration.objects.get(uuid=waiting_config_uuid)
-        create_url_for_onboard_stripe = f"https://{tenant_url}/tenant/{waiting_config_uuid}/onboard_stripe/"
+
+        User = get_user_model()
+        user = User.objects.get(email=waiting_config.email)
+
+        signer = TimestampSigner()
+        token = urlsafe_base64_encode(signer.sign(f"{user.pk}").encode('utf8'))
+
+        ### VERIFICATION SIGNATURE AVANT D'ENVOYER
+        user_pk = signer.unsign(urlsafe_base64_decode(token).decode('utf8'), max_age=(3600 * 72))  # 3 jours
+        designed_user = User.objects.get(pk=user_pk)
+        assert user == designed_user
+
+        p_domain = connection.tenant.get_primary_domain().domain
+        connexion_url = f"https://{p_domain}/emailconfirmation_tenant/{token}"
+
         activate('fr')
         mail = CeleryMailerClass(
             waiting_config.email,
             _("TiBillet : Creation of a new instance."),
-            template='reunion/views/tenant/emails/onboard_stripe.html',
+            template='reunion/views/tenant/emails/welcome_email.html',
             context={
-                'create_url_for_onboard_stripe': f'{create_url_for_onboard_stripe}',
                 'waiting_config': waiting_config,
                 'orga_name': f"{waiting_config.organisation.capitalize()}",
+                'tenant_url': tenant_url,
             }
         )
         mail.send()

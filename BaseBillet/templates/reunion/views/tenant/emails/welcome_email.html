@@ -20,6 +20,56 @@
                             </table>
                         </td>
                     </tr>
+
+                    <tr>
+                        <h1 style="font-weight:400;style:regular;color:#1d1d1b;font:24px/32px Arial, Helvetica, sans-serif;margin: 30px 0 30px;">
+                            {% trans "Confirmation de votre demande pour " %}{{ orga_name }}</h1><span
+                            style="color:transparent;display:none;height:0;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;visibility:hidden;width:0;">&nbsp;|&nbsp;</span>
+                        <td style="padding: 24px 0 24px 0; ">
+                            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 16px 0;">
+                                {% trans "Votre demande de création est bien prise en compte. Pour la valider, merci de cliquer sur le bouton suivant :" %}
+                            </p>
+                            <table style="width:100%;border-spacing: 0px;padding: 0px;">
+                                <tr>
+                                    <td class="active-t btn" align="center"
+                                        style="background:#009058;font:13px/16px Arial, Helvetica, sans-serif;border-radius:3px;height:48px;">
+                                        <a style="color:#ffffff; text-decoration:none; display:block; padding:16px 10px;"
+                                           target="_blank"
+                                           href="https://{{ tenant_url }}/tenant/{{ waiting_config.pk }}/onboard_stripe/">{% trans "CONFIRMER MON MAIL" %}</a>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0 0 24px 0;">
+                            <h2 style="font-weight:600;color:#009058;font:18px/24px Arial, Helvetica, sans-serif;margin: 0 0 16px 0;">
+                                {% trans "Informations importantes" %}
+                            </h2>
+                            <ul style="color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 24px 0;">
+                                <li style="margin-bottom: 8px;">
+                                    {% trans "Si vous souhaitez récolter de l'argent, il vous faudra créer un compte Stripe depuis la page d'administration de votre future instance." %}
+                                </li>
+                                <li style="margin-bottom: 8px;">
+                                    {% trans "Vous recevrez dans les prochains jours une validation de la création de votre compte. Cette étape est manuelle du côté de la coopérative." %}
+                                </li>
+                                <li style="margin-bottom: 8px;">
+                                    {% trans "D'ici là, n'hésitez pas à venir rencontrer la communauté autour des outils TiBillet :" %}
+                                    <div style="margin-top: 8px;">
+                                        <a href="mailto:contact@tibillet.re"
+                                           style="color:#009058;text-decoration:underline;">{% trans "Email de support" %}</a><br/>
+                                        <a href="https://discord.gg/7FJvtYx"
+                                           style="color:#009058;text-decoration:underline;">Discord</a><br/>
+                                        <a href="https://matrix.to/#/#tibillet:tiers-lieux.org"
+                                           style="color:#009058;text-decoration:underline;">Matrix</a><br/>
+                                        <a href="https://pouet.chapril.org/@tibillet"
+                                           style="color:#009058;text-decoration:underline;">Mastodon</a>
+                                    </div>
+                                </li>
+                            </ul>
+                        </td>
+                    </tr>
+
                     <tr>
                         <td>
                             <h1 style="font-weight:400;style:regular;color:#1d1d1b;font:24px/32px Arial, Helvetica, sans-serif;margin: 30px 0 30px;">
@@ -45,16 +95,20 @@
                             </h2>
                             <ul style="color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 24px 0;">
                                 <li style="margin-bottom: 8px;">
-                                    <b>{% trans "Billetterie" %}</b> - {% trans "Créez et gérez des événements, vendez des billets en ligne, et suivez vos ventes en temps réel." %}
+                                    <b>{% trans "Billetterie" %}</b>
+                                    - {% trans "Créez et gérez des événements, vendez des billets en ligne, et suivez vos ventes en temps réel." %}
                                 </li>
                                 <li style="margin-bottom: 8px;">
-                                    <b>{% trans "Adhésions et abonnements" %}</b> - {% trans "Gérez les adhésions à votre structure, proposez différentes formules d'abonnement, et suivez les renouvellements." %}
+                                    <b>{% trans "Adhésions et abonnements" %}</b>
+                                    - {% trans "Gérez les adhésions à votre structure, proposez différentes formules d'abonnement, et suivez les renouvellements." %}
                                 </li>
                                 <li style="margin-bottom: 8px;">
-                                    <b>{% trans "Système Cashless" %}</b> - {% trans "Proposez un système de paiement sans espèces pour vos événements, avec des cartes rechargeables et une application de point de vente." %}
+                                    <b>{% trans "Caisse enregistreuse & Cartes cashless" %}</b>
+                                    - {% trans "Utilisez une caisse enregistreuse (bientôt) certifiée et proposez un système de paiement sans espèces pour vos événements, avec des cartes d'adhésions rechargeables en monnaie temps pour valorisez l'engagement bénévole." %}
                                 </li>
                                 <li style="margin-bottom: 8px;">
-                                    <b>{% trans "Fédération d'agendas" %}</b> - {% trans "Partagez vos événements sur un réseau fédéré d'agendas culturels, augmentant ainsi leur visibilité auprès d'un public plus large." %}
+                                    <b>{% trans "Fédération d'agendas" %}</b>
+                                    - {% trans "Partagez vos événements et créez un réseau fédéré d'agendas culturels, augmentant ainsi leur visibilité auprès d'un public plus large." %}
                                 </li>
                             </ul>
                         </td>
@@ -76,7 +130,8 @@
                                         style="background:#009058;font:13px/16px Arial, Helvetica, sans-serif;border-radius:3px;height:48px;">
                                         <a style="color:#ffffff; text-decoration:none; display:block; padding:16px 10px;"
                                            target="_blank"
-                                           href="https://tibillet.org/fr/docs/intro">{% trans "DÉCOUVRIR LA DOCUMENTATION" %}</a></td>
+                                           href="https://tibillet.org/fr/">{% trans "DÉCOUVRIR LA DOCUMENTATION" %}</a>
+                                    </td>
                                 </tr>
                             </table>
                         </td>
@@ -88,11 +143,13 @@
                             </p>
                         </td>
                     </tr>
+
                     <tr>
                         <td>
                             <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;padding-top:32px;">
-                                {% trans "À bientôt sur TiBillet" %},<br/>{% trans "L'équipe de la Coopérative Code Commun" %}</p></td>
-                        </tr>
+                                {% trans "À bientôt sur TiBillet" %},<br/>{% trans "L'équipe de la Coopérative Code Commun : Axel, Adrienne, Nicolas, Kaya, Mike et Jonas." %}
+                            </p></td>
+                    </tr>
                 </table>
             </table>
         </td>

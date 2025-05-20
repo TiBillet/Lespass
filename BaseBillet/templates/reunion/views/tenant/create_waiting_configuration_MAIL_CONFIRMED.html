@@ -1,0 +1,41 @@
+{% load i18n %}
+
+<div class="col-md-8 offset-md-2 col-xl-6 offset-xl-3">
+    <div class="text-center mb-4">
+        <h2 class="mb-4">{% translate "Merci pour votre inscription !" %}</h2>
+        <div class="alert alert-success">
+            <i class="bi bi-envelope-check me-2"></i>
+            {% translate "Votre mail a bien été vérifié." %}
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title mb-3">{% translate "Prochaines étapes" %}</h5>
+            <p class="card-text">
+                {% translate "Nous allons confirmer la création de votre instance manuellement. Comptez un ou deux jours ouvrable." %}
+            </p>
+        </div>
+    </div>
+
+    <div class="card mb-4 border-info">
+        <div class="card-body">
+            <h5 class="card-title mb-3 text-info">
+                <i class="bi bi-chat-dots-fill me-2"></i>
+                {% translate "Venez discuter avec nous !" %}
+            </h5>
+            <p class="card-text">
+                {% translate "En attendant que votre instance soit créée, pourquoi ne pas venir faire connaissance avec notre communauté de passionnés ? Nous adorons papoter, échanger des idées et répondre à vos questions !" %}
+            </p>
+            <div class="d-flex flex-wrap justify-content-center gap-3 mt-4">
+                <a href="https://discord.gg/7FJvtYx" class="btn btn-outline-primary" target="_blank">
+                    <i class="bi bi-discord me-2"></i>{% translate "Rejoindre Discord" %}
+                </a>
+                <a href="https://matrix.to/#/#tibillet:tiers-lieux.org" class="btn btn-outline-success" target="_blank">
+                    <i class="bi bi-chat-square-text me-2"></i>{% translate "Rejoindre Matrix" %}
+                </a>
+            </div>
+        </div>
+    </div>
+
+</div>

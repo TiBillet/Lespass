@@ -39,6 +39,7 @@ class WaitingConfiguration(models.Model):
 
     laboutik_wanted = models.BooleanField(default=False)
     payment_wanted = models.BooleanField(default=False)
+    email_confirmed = models.BooleanField(default=False)
 
     dns_choice = models.CharField(max_length=200, blank=True, null=True, verbose_name=_("Domain name choice"))
 

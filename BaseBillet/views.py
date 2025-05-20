@@ -1340,7 +1340,9 @@ class Tenant(viewsets.ViewSet):
         send_to_ghost_email.delay(validated_data['email'], name=validated_data['name'])
 
         # Envoi d'un mail pour vérifier le compte. Un lien vers stripe sera créé
-        new_tenant_mailer.delay(waiting_config_uuid=str(waiting_configuration.uuid))
+        # new_tenant_mailer.delay(waiting_config_uuid=str(waiting_configuration.uuid))
+        new_tenant_mailer(waiting_config_uuid=str(waiting_configuration.uuid))
+
         return render(request, "reunion/views/tenant/create_waiting_configuration_THANKS.html", context={})
 
     @action(detail=True, methods=['GET'])
@@ -1411,7 +1413,17 @@ class Tenant(viewsets.ViewSet):
         #       "\nPlease complete your Stripe.com registration before creating a new TiBillet space."))
         # return redirect('/tenant/new/')
 
-
+    @action(detail=False, methods=['GET'])
+    def emailconfirmation(self, request, pk):
+        import ipdb; ipdb.set_trace()
+        """
+        Requete provenant du mail envoyé après la création d'un tenant
+        """
+        wc = WaitingConfiguration.objects.get(pk=pk)
+        wc.email_confirmed = True
+        wc.save()
+        context = get_context(request)
+        return render(request, "reunion/views/tenant/create_waiting_configuration_MAIL_CONFIRMED.html", context=context)
 
     @action(detail=False, methods=['GET'])
     def onboard_stripe_from_config(self, request):
