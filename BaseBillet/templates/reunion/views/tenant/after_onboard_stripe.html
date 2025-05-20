@@ -4,23 +4,11 @@
 {% block main %}
 <main class="container-lg my-5">
     {% if not details_submitted %}
-    {% blocktranslate %}
-    <p>We have received your instance creation request.</p>
-    <p>You have apparently not finished the Stripe account creation.</p>
-    <p>
-        You can use the link found in your welcome email to complete the
-        process.
-    </p>
-    {% endblocktranslate %}
+        {% translate "You do not seem to have completed your Stripe registration. Please contact us if you need help." %}
+{#        {% translate "Vous ne semblez pas avoir terminé votre enregistrement Stripe. N'hésitez pas à nous contacter si vous avez besoin d'aide." %}#}
     {% else %}
-    {% blocktranslate %}
-    <p>We have received your instance creation request.</p>
-    <p>
-        Once your account has been verified, we'll get in touch (on a work day)
-        to finalize your instance.
-    </p>
-    <p>Thank you and welcome to our little island in the commons!</p>
-    {% endblocktranslate %}
+        {% translate "Your stripe account has been registered. Thank you very much!" %}
+{#        {% translate "Votre compte stripe a bien été enregistré. Merci !" %}#}
     {% endif %}
 </main>
 {% endblock %}

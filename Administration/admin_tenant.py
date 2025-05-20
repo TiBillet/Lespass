@@ -23,8 +23,6 @@ from django.urls import reverse, re_path
 from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
-from import_export.fields import Field
-from import_export.widgets import ForeignKeyWidget, ManyToManyWidget
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework_api_key.models import APIKey
@@ -527,9 +525,7 @@ class ProductAdminCustomForm(ModelForm):
 class CheckStripeComponent(BaseComponent):
     def get_context_data(self, **kwargs):
         config = Configuration.get_solo()
-
         context = super().get_context_data(**kwargs)
-
         context["children"] = render_to_string(
             "admin/product/checkstripe_component.html",
             {
@@ -979,123 +975,14 @@ class HumanUserAdmin(ModelAdmin):
 
 ### ADHESION
 
-# L'objet pour la fonction EXPORT
-class MembershipExportResource(resources.ModelResource):
-    member_name = Field(attribute='member_name', column_name='member_name')
-    email = Field(attribute='email', column_name='email')
-    payment_method_name = Field(attribute='payment_method_name', column_name='payment_method_name')
-    options = Field(attribute='options', column_name='options')
-    status_name = Field(attribute='status_name', column_name='status_name')
-
-    class Meta:
-        model = Membership
-        fields = (
-            'last_contribution',
-            'email',
-            'member_name',
-            'price__product__name',
-            'price__name',
-            'contribution_value',
-            'payment_method_name',
-            'options',
-            'is_valid',
-            'deadline',
-            'status_name',
-        )
-        export_order = ('last_contribution',)
-
-
-class EmailUserForeignKeyWidget(ForeignKeyWidget):
-    def clean(self, value, row=None, **kwargs):
-        try:
-            val = super().clean(value)
-        except TibilletUser.DoesNotExist:
-            val = get_or_create_user(value, send_mail=False)
-        return val
-
-
-class PriceForeignKeyWidget(ForeignKeyWidget):
-    def clean(self, value, row=None, **kwargs):
-        try:
-            val = super().clean(value)
-        except MultipleObjectsReturned:
-            val = Price.objects.get(name=value, product__name=row.get('product_name'))
-        except Exception as err:
-            raise err
-        return val
-
-
-class OptionsManyToManyWidgetWidget(ManyToManyWidget):
-    def clean(self, value, row=None, **kwargs):
-        if not value:
-            return self.model.objects.none()
-        else:
-            objs = []
-            names = value.split(self.separator)
-            for name in names:
-                if name.rstrip().lstrip():  # on supprime les espace avants et après
-                    try:
-                        option = OptionGenerale.objects.get(name=name)
-                        objs.append(option)
-                    except OptionGenerale.DoesNotExist:
-                        option = OptionGenerale.objects.create(name=name)
-                        objs.append(option)
-            return objs
-
-
-# Le moteur d'importation
-class MembershipImportResource(resources.ModelResource):
-    product_name = fields.Field(
-        column_name='product_name',
-        attribute='product_name',
-        widget=ForeignKeyWidget(Product, field='name'))  # renvoie une erreur si le produit n'existe pas
-
-    price_name = fields.Field(
-        column_name='price_name',
-        attribute='price',
-        widget=PriceForeignKeyWidget(Price, field='name'))  # Vérfie que le price correspond bien au product
-
-    # email = Field(attribute='email', column_name='email')
-
-    email = fields.Field(
-        column_name='email',
-        attribute='user',
-        widget=EmailUserForeignKeyWidget(TibilletUser, field='email'))  # si l'user n'existe pas, va le créer
-
-    option_generale = fields.Field(
-        column_name='option_generale',
-        attribute='option_generale',
-        widget=OptionsManyToManyWidgetWidget(OptionGenerale, field='name', separator=';')
-    )
-
-    # def before_import_row(self, row, **kwargs):
-    #     import ipdb; ipdb.set_trace()
-    #
-    # def after_import_row(self, row, row_result, **kwargs):
-    #     import ipdb; ipdb.set_trace()
-
-    def before_save_instance(self, instance, row, **kwargs):
-        instance.status = Membership.IMPORT
-        # import ipdb; ipdb.set_trace()
-
-    class Meta:
-        model = Membership
-        fields = (
-            'email',
-            'first_name',
-            'last_name',
-            'last_contribution',
-            'contribution_value',
-            'product_name',
-            'price_name',
-            'option_generale',
-            'commentaire',
-        )
-        import_id_fields = ('email',)
-
-        widgets = {
-            'last_contribution': {'format': '%d/%m/%Y'},
-        }
+from Administration.importers.membership_importers import (
+    MembershipExportResource,
+    MembershipImportResource,
+    EmailUserForeignKeyWidget,
+    PriceForeignKeyWidget,
+    OptionsManyToManyWidgetWidget
+)
+from Administration.importers.event_importers import PostalAddressForeignKeyWidget
 
 
 class MembershipAddForm(ModelForm):
@@ -1488,11 +1375,18 @@ class EventForm(ModelForm):
         # )
 
 
+from Administration.importers.event_importers import EventImportResource
+
+
 @admin.register(Event, site=staff_admin_site)
-class EventAdmin(ModelAdmin):
+class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     form = EventForm
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
+
+    resource_classes = [EventImportResource]
+    export_form_class = ExportForm
+    import_form_class = ImportForm
 
     inlines = [EventChildrenInline, ]
 

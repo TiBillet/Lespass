@@ -12,9 +12,11 @@
         {% trans "Votre compte Stripe ne semble pas activé : vous ne pourrez créer ici que des produits de type réservation gratuite. Pour recevoir des paiements : " %}
     </div>
     <div class="flex flex-row items-center gap-3 mt-2">
-        <button class="border font-medium px-3 py-1 rounded-md text-center whitespace-nowrap bg-primary-600 border-transparent text-white">
-            Créer et lier son compte stripe
-        </button>
+        <a href="/tenant/onboard_stripe_from_config">
+            <button class="border font-medium px-3 py-1 rounded-md text-center whitespace-nowrap bg-primary-600 border-transparent text-white">
+                Créer et lier son compte stripe
+            </button>
+        </a>
     </div>
 {% endif %}
 

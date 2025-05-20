@@ -1449,7 +1449,7 @@ class Tenant(viewsets.ViewSet):
         id_acc_connect = pk
         # La clé du compte principal stripe connect
         stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-        # Récupération des info lié au lieu via sont id account connec
+        # Récupération des infos liées au lieu via son id account connec
         try:
             info_stripe = stripe.Account.retrieve(id_acc_connect)
             details_submitted = info_stripe.details_submitted
@@ -1457,15 +1457,7 @@ class Tenant(viewsets.ViewSet):
             logger.error(f"onboard_stripe_return. id_acc_connect : {id_acc_connect}, erreur stripe : {e}")
             raise Http404
 
-        if details_submitted:
-            waiting_config = WaitingConfiguration.objects.get(id_acc_connect=id_acc_connect)
-            waiting_config.onboard_stripe_finished = True
-            waiting_config.save()
-            # Envoie du mail aux superadmins
-            new_tenant_after_stripe_mailer.delay(waiting_config.pk)
-
         config = Configuration.get_solo()
-        info_stripe = stripe.Account.retrieve(id_acc_connect)
         if info_stripe and info_stripe.get('payouts_enabled'):
             config.stripe_payouts_enabled = info_stripe.get('payouts_enabled')
             config.save()
