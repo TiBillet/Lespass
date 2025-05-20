@@ -949,6 +949,40 @@ def send_to_ghost(membership_pk):
 
 
 @app.task
+def send_welcome_email(email: str, username: str = None):
+    """
+    Envoie un email de bienvenue aux nouveaux utilisateurs.
+
+    Args:
+        email: L'adresse email du destinataire
+        username: Le nom d'utilisateur (optionnel)
+    """
+    logger.info(f"Envoi d'un email de bienvenue à {email}")
+
+    context = {
+        'title': _("Bienvenue sur TiBillet"),
+        'username': username or email.split('@')[0],
+        'now': timezone.now(),
+        'objet': _("Bienvenue"),
+        'image_url': "https://tibillet.org/fr/img/design/logo-couleur.svg",
+    }
+
+    try:
+        mail = CeleryMailerClass(
+            email,
+            f"{context.get('title')}",
+            template="emails/welcome/welcome_email.html",
+            context=context,
+        )
+        mail.send()
+        logger.info(f"send_welcome_email : mail.sended : {mail.sended}")
+        return mail.sended
+    except Exception as e:
+        logger.error(f"ERROR {timezone.now()} Erreur lors de l'envoi de l'email de bienvenue à {email}: {e}")
+        return False
+
+
+@app.task
 def test_logger():
     logger.debug(f"{timezone.now()} debug")
     logger.info(f"{timezone.now()} info")
