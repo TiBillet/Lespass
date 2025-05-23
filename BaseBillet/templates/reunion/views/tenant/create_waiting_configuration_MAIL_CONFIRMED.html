@@ -1,4 +1,8 @@
+{% extends base_template %}
 {% load i18n %}
+{% load tibitags %}
+
+{% block main %}
 
 <div class="col-md-8 offset-md-2 col-xl-6 offset-xl-3">
     <div class="text-center mb-4">
@@ -25,7 +29,7 @@
                 {% translate "Venez discuter avec nous !" %}
             </h5>
             <p class="card-text">
-                {% translate "En attendant que votre instance soit créée, pourquoi ne pas venir faire connaissance avec notre communauté de passionnés ? Nous adorons papoter, échanger des idées et répondre à vos questions !" %}
+                {% translate "En attendant que votre instance soit créée, pourquoi ne pas venir faire connaissance avec notre communauté de passionnés ? Venez nous dire ce que vous souhaitez faire avec TiBillet, nous adorons papoter, échanger des idées et répondre à vos questions !" %}
             </p>
             <div class="d-flex flex-wrap justify-content-center gap-3 mt-4">
                 <a href="https://discord.gg/7FJvtYx" class="btn btn-outline-primary" target="_blank">
@@ -39,3 +43,4 @@
     </div>
 
 </div>
+{% endblock %}

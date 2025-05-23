@@ -46,6 +46,7 @@ class LinkQrCodeValidator(serializers.Serializer):
     lastname = serializers.CharField(max_length=500, required=False, allow_blank=True)
     # data=request.POST.dict() in the controler for boolean
     cgu = serializers.BooleanField(required=True, allow_null=False)
+    newsletter = serializers.BooleanField(required=False, allow_null=True)
     qrcode_uuid = serializers.UUIDField()
 
     def validate(self, attrs):
@@ -510,11 +511,9 @@ class TenantCreateValidator(serializers.Serializer):
         return value
 
     def validate_name(self, value):
-        try:
-            Client.objects.get(schema_name=slugify(value))
-            raise serializers.ValidationError(_('Tenant name already exist.'))
-        except Client.DoesNotExist:
-            return value
+        if Client.objects.filter(schema_name=slugify(value)).exists() or WaitingConfiguration.objects.filter(slug=slugify(value)).exists():
+            raise serializers.ValidationError(f"{value} : {_('Tenant name already exist.')}")
+        return value
 
     @staticmethod
     def create_tenant(waiting_config: WaitingConfiguration):

@@ -26,6 +26,9 @@
                             {% trans "Confirmation de votre demande pour " %}{{ orga_name }}</h1><span
                             style="color:transparent;display:none;height:0;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;visibility:hidden;width:0;">&nbsp;|&nbsp;</span>
                         <td style="padding: 24px 0 24px 0; ">
+                            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 24px 0;">
+                                {% trans "Nous sommes vraiment super mega trop ravis de vous accueillir dans l'écosystème TiBillet ! Vous venez de rejoindre une communauté engagée dans les communs numériques et la coopération." %}
+                            </p>
                             <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 16px 0;">
                                 {% trans "Votre demande de création est bien prise en compte. Pour la valider, merci de cliquer sur le bouton suivant :" %}
                             </p>
@@ -35,7 +38,7 @@
                                         style="background:#009058;font:13px/16px Arial, Helvetica, sans-serif;border-radius:3px;height:48px;">
                                         <a style="color:#ffffff; text-decoration:none; display:block; padding:16px 10px;"
                                            target="_blank"
-                                           href="https://{{ tenant_url }}/tenant/{{ waiting_config.pk }}/onboard_stripe/">{% trans "CONFIRMER MON MAIL" %}</a>
+                                           href="{{ connexion_url }}">{% trans "CONFIRMER MA DEMANDE" %}</a>
                                     </td>
                                 </tr>
                             </table>
@@ -69,25 +72,6 @@
                             </ul>
                         </td>
                     </tr>
-
-                    <tr>
-                        <td>
-                            <h1 style="font-weight:400;style:regular;color:#1d1d1b;font:24px/32px Arial, Helvetica, sans-serif;margin: 30px 0 30px;">
-                                {% trans "Découvrez tout ce que vous pouvez faire avec TiBillet" %}</h1><span
-                                style="color:transparent;display:none;height:0;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;visibility:hidden;width:0;">&nbsp;|&nbsp;</span>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>
-                            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 24px 0;">
-                                {% trans "Bonjour" %} {{ username }},
-                                <br/> <br/>
-                                {% trans "Nous sommes ravis de vous accueillir dans l'écosystème TiBillet ! Vous venez de rejoindre une communauté engagée dans les communs numériques et la coopération." %}
-                                <br/><br/>
-                                {% trans "TiBillet est une solution développée par la Coopérative Code Commun, qui propose des outils libres et open source pour la gestion d'événements, d'adhésions et de paiements cashless." %}
-                            </p>
-                        </td>
-                    </tr>
                     <tr>
                         <td style="padding: 0 0 24px 0;">
                             <h2 style="font-weight:600;color:#009058;font:18px/24px Arial, Helvetica, sans-serif;margin: 0 0 16px 0;">
@@ -104,22 +88,13 @@
                                 </li>
                                 <li style="margin-bottom: 8px;">
                                     <b>{% trans "Caisse enregistreuse & Cartes cashless" %}</b>
-                                    - {% trans "Utilisez une caisse enregistreuse (bientôt) certifiée et proposez un système de paiement sans espèces pour vos événements, avec des cartes d'adhésions rechargeables en monnaie temps pour valorisez l'engagement bénévole." %}
+                                    - {% trans "Utilisez une caisse enregistreuse (bientôt) certifiée et proposez un système de paiement sans espèces pour vos événements, avec des cartes d'adhésions rechargeables en monnaie temps pour valoriser l'engagement bénévole." %}
                                 </li>
                                 <li style="margin-bottom: 8px;">
                                     <b>{% trans "Fédération d'agendas" %}</b>
-                                    - {% trans "Partagez vos événements et créez un réseau fédéré d'agendas culturels, augmentant ainsi leur visibilité auprès d'un public plus large." %}
+                                    - {% trans "Partagez vos événements et créez un réseau fédéré d'agendas, augmentant ainsi leur visibilité auprès d'un public plus large." %}
                                 </li>
                             </ul>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 0 0 24px 0;">
-                            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 24px 0;">
-                                {% trans "En tant que solution coopérative, TiBillet est conçu avec et pour ses utilisateurs. Votre participation enrichit les communs numériques que nous développons ensemble." %}
-                                <br/><br/>
-                                {% trans "La fédération d'agendas est l'un des piliers de notre projet : elle permet de connecter les acteurs culturels et associatifs pour créer un réseau d'événements partagés, tout en respectant l'autonomie de chacun." %}
-                            </p>
                         </td>
                     </tr>
                     <tr>

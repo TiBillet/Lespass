@@ -20,7 +20,7 @@ from django.template.response import TemplateResponse
 from django.utils import timezone
 from django.utils.encoding import force_str, force_bytes
 from django.utils.html import format_html
-from django.utils.http import urlsafe_base64_encode
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_GET
 from django_htmx.http import HttpResponseClientRedirect
@@ -365,7 +365,8 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
             user.last_name = validator.data.get('lastname')
         if validator.data.get('firstname') and not user.first_name:
             user.first_name = validator.data.get('firstname')
-
+        if validator.data.get('newsletter'):
+            send_to_ghost_email.delay(email, f"{user.first_name} {user.last_name}")
         # On retire le mail valid : impose la vérification du mail en cas de nouvelle carte
         user.email_valid = False
         user.save()
@@ -1341,9 +1342,25 @@ class Tenant(viewsets.ViewSet):
 
         # Envoi d'un mail pour vérifier le compte. Un lien vers stripe sera créé
         # new_tenant_mailer.delay(waiting_config_uuid=str(waiting_configuration.uuid))
-        new_tenant_mailer(waiting_config_uuid=str(waiting_configuration.uuid))
+        new_tenant_mailer.delay(waiting_config_uuid=str(waiting_configuration.uuid))
 
         return render(request, "reunion/views/tenant/create_waiting_configuration_THANKS.html", context={})
+
+    @action(detail=True, methods=['GET'])
+    def emailconfirmation_tenant(self, request, pk):
+        """
+        Lien de vérification de demande de création de nouveau tenant
+        Mail envoyé par tasks.new_tenant_mailer
+        """
+        signer = TimestampSigner()
+        wc_pk = signer.unsign(urlsafe_base64_decode(pk).decode('utf8'), max_age=(3600 * 72))  # 3 jours
+        wc = WaitingConfiguration.objects.get(uuid=wc_pk)
+        wc.email_confirmed = True
+        wc.save()
+
+        context = get_context(request)
+        return render(request, "reunion/views/tenant/create_waiting_configuration_MAIL_CONFIRMED.html", context=context)
+
 
     @action(detail=True, methods=['GET'])
     def onboard_stripe(self, request, pk):

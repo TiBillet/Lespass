@@ -562,15 +562,16 @@ def new_tenant_mailer(waiting_config_uuid: str):
         user = User.objects.get(email=waiting_config.email)
 
         signer = TimestampSigner()
-        token = urlsafe_base64_encode(signer.sign(f"{user.pk}").encode('utf8'))
+        token = urlsafe_base64_encode(signer.sign(f"{waiting_config.uuid}").encode('utf8'))
 
         ### VERIFICATION SIGNATURE AVANT D'ENVOYER
-        user_pk = signer.unsign(urlsafe_base64_decode(token).decode('utf8'), max_age=(3600 * 72))  # 3 jours
-        designed_user = User.objects.get(pk=user_pk)
-        assert user == designed_user
+        wc_pk = signer.unsign(urlsafe_base64_decode(token).decode('utf8'), max_age=(3600 * 72))  # 3 jours
+        wv_wanted = WaitingConfiguration.objects.get(uuid=wc_pk)
+        if not waiting_config == wv_wanted:
+            raise Exception("signature check error")
 
         p_domain = connection.tenant.get_primary_domain().domain
-        connexion_url = f"https://{p_domain}/emailconfirmation_tenant/{token}"
+        connexion_url = f"https://{p_domain}/tenant/{token}/emailconfirmation_tenant"
 
         activate('fr')
         mail = CeleryMailerClass(
@@ -581,6 +582,7 @@ def new_tenant_mailer(waiting_config_uuid: str):
                 'waiting_config': waiting_config,
                 'orga_name': f"{waiting_config.organisation.capitalize()}",
                 'tenant_url': tenant_url,
+                'connexion_url': connexion_url,
             }
         )
         mail.send()
@@ -589,6 +591,15 @@ def new_tenant_mailer(waiting_config_uuid: str):
     except smtplib.SMTPRecipientsRefused as e:
         logger.error(
             f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour report_celery_mailer : {e}")
+        raise e
+
+@app.task
+def async_tenant_create(waiting_config_uuid: str):
+    try:
+        # Génération du lien qui va créer la redirection vers l'url onboard
+        waiting_config = WaitingConfiguration.objects.get(uuid=waiting_config_uuid)
+        waiting_config.create_tenant()
+    except Exception as e:
         raise e
 
 @app.task
