@@ -1,6 +1,7 @@
 from django.urls import path, include
 from rest_framework import routers
 from BaseBillet import views as base_view
+from BaseBillet.views_robots import robots_txt
 
 router = routers.DefaultRouter()
 router.register(r'memberships', base_view.MembershipMVT, basename='membership_mvt')
@@ -14,6 +15,9 @@ router.register(r'home', base_view.HomeViewset, basename='home')
 
 
 urlpatterns = [
+    # Dynamic robots.txt - Access at: https://yourdomain.com/robots.txt
+    # This automatically includes a reference to the sitemap at: https://yourdomain.com/sitemap.xml
+    path('robots.txt', robots_txt, name='robots_txt'),
 
     path('ticket/<uuid:pk_uuid>/', base_view.Ticket_html_view.as_view()),
     # path('event/<slug:slug>/', base_view.event, name='event'),

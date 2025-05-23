@@ -1,6 +1,9 @@
 {% extends base_template %}
 {% load tibitags i18n %}
 
+{% block title %}{% translate 'Home' %}{% endblock %}
+{% block meta_description %}{{ config.short_description|default:config.organisation }} - {% translate 'Welcome to our platform' %}{% endblock %}
+
 {% block main %}
     <div class="home-bg py-5 flex-fill">
         <main class="container-lg my-5">

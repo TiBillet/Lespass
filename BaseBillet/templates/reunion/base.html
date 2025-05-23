@@ -8,6 +8,8 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="{% block meta_description %}{% if config.short_description %}{{ config.short_description }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
+    <meta name="robots" content="{% block meta_robots %}index, follow{% endblock %}">
     <title>{% block title %}{% translate 'Home' %}{% endblock %} | {{ config.organisation }}</title>
 
     <link rel="preload" as="style" href="{% static 'reunion/css/tibillet.css' %}">
@@ -30,7 +32,7 @@
     {% endif %}
     <script type="module">
         import * as ThemeSwitcher from '{% static "reunion/js/theme-switcher.mjs" %}'
-        
+
         // components
         import '{% static "reunion/js/bs-counter.mjs" %}'
 

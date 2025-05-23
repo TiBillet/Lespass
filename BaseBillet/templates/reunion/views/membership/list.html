@@ -1,6 +1,10 @@
 {% extends base_template %}
 {% load tibitags static %}
 {% load i18n %}
+
+{% block title %}{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Subscriptions' %}{% endif %}{% endblock %}
+{% block meta_description %}{% translate 'Join our community by subscribing to one of our membership options' %} - {{ config.organisation }}{% endblock %}
+
 {% block main %}
     <main class="container-lg py-5">
         {% if config.description_membership_page %}

@@ -787,8 +787,8 @@ class EventMVT(viewsets.ViewSet):
         tenants = [
             {
                 "tenant": place.tenant,
-                "tag_filter": [tag.slug for tag in place.tag_exclude.all()],
-                "tag_exclude": [tag.slug for tag in place.tag_filter.all()],
+                "tag_exclude": [tag.slug for tag in place.tag_exclude.all()],
+                "tag_filter": [tag.slug for tag in place.tag_filter.all()],
             }
             for place in FederatedPlace.objects.all().prefetch_related("tag_filter", "tag_exclude")
         ]
@@ -824,10 +824,10 @@ class EventMVT(viewsets.ViewSet):
                     events = events.filter(
                         tag__slug__in=tenant['tag_exclude'])
                 if tags:
-                    # Annotate et filter Pour avoir les events qui ont TOUS les tags
-                    # Use a more efficient approach to filter events with all specified tags
-                    for tag in tags:
-                        events = events.filter(tag__slug=tag)
+                    # Utiliser une annotation pour compter les tags correspondants
+                    events = events.filter(tag__slug__in=tags).annotate(
+                        tag_count=Count('tag', filter=Q(tag__slug__in=tags))
+                    ).filter(tag_count=len(tags))
 
                 elif search:
                     # On recherche dans nom, description et tag

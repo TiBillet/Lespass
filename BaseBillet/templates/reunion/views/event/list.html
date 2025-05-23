@@ -3,6 +3,7 @@
 {% load i18n %}
 
 {% block title %}{% translate 'Agenda' %}{% endblock %}
+{% block meta_description %}{% translate 'Discover all our upcoming events and activities' %} - {{ config.organisation }}{% endblock %}
 
 {% block main %}
     {% if not embed %}

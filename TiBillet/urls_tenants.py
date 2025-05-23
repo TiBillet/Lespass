@@ -2,15 +2,29 @@ from django.contrib import admin
 from django.urls import path, include, re_path
 from django.conf.urls.static import static
 from django.conf import settings
+from django.contrib.sitemaps.views import sitemap
 from Administration.admin_tenant import staff_admin_site
 
 # on modifie la creation du token pour rajouter access_token dans la réponse pour Postman
 from ApiBillet.views import Webhook_stripe
+from BaseBillet.sitemap import EventSitemap, ProductSitemap, StaticViewSitemap
 
 urlpatterns = [
     # path('jet/', include('jet.urls', 'jet')),  # Django JET URLS
     # re_path(r'^jet/dashboard/', include('jet.dashboard.urls', 'jet-dashboard')),  # Django JET dashboard URLS
     path('admin/', staff_admin_site.urls, name="staff_admin_site"),
+
+    # Sitemap
+    # Access the complete sitemap at: https://yourdomain.com/sitemap.xml
+    # Access specific sections:
+    # - Events sitemap: https://yourdomain.com/sitemap.xml?section=events
+    # - Products sitemap: https://yourdomain.com/sitemap.xml?section=products
+    # - Static pages sitemap: https://yourdomain.com/sitemap.xml?section=static
+    path('sitemap.xml', sitemap, {'sitemaps': {
+        'events': EventSitemap,
+        'products': ProductSitemap,
+        'static': StaticViewSitemap,
+    }, 'template_name': 'sitemaps/sitemap.xml'}, name='django.contrib.sitemaps.views.sitemap'),
 
     re_path(r'api/user/', include('AuthBillet.urls')),
 
