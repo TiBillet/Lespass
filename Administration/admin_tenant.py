@@ -1390,7 +1390,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
 
     inlines = [EventChildrenInline, ]
 
-    actions_row = ["duplicate_day_plus_one", "duplicate_week_plus_one", "duplicate_month_plus_one"]
+    actions_row = ["duplicate_day_plus_one", "duplicate_week_plus_one", "duplicate_week_plus_two", "duplicate_month_plus_one"]
 
     fieldsets = (
         (None, {
@@ -1443,6 +1443,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         'published',
     ]
 
+    list_editable = ['published',]
     readonly_fields = (
         'valid_tickets_count',
     )
@@ -1527,6 +1528,23 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         # return redirect(reverse('staff:BaseBillet_event_change', args=[duplicate.uuid]))
 
     @action(
+        description=_("Duplicate (week+2)"),
+        permissions=["custom_actions_row"],
+    )
+    def duplicate_week_plus_two(self, request, object_id):
+        """Duplicate an event with the date set to two weeks ahead"""
+        obj = Event.objects.get(pk=object_id)
+        try :
+            duplicate = self._duplicate_event(obj, date_adjustment="week2")
+            messages.success(request, _("Event duplicated successfully"))
+        except IntegrityError as e:
+            messages.error(request, _("Un evenement avec le même nom et date semble déja dupliqué"))
+
+        return redirect(request.META["HTTP_REFERER"])
+
+        # return redirect(reverse('staff:BaseBillet_event_change', args=[duplicate.uuid]))
+
+    @action(
         description=_("Duplicate (month+1)"),
         permissions=["custom_actions_row"],
     )
@@ -1559,8 +1577,8 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         duplicate.rsa_key = None  # Ensure a new RSA key is generated
         duplicate.slug = None  # Ensure a new slug is generated
 
-        # Set the name with [DUPLICATE] prefix
-        duplicate.name = f"[DUPLICATE] {obj.name}"
+        # Set the name (no prefix)
+        duplicate.name = obj.name
 
         # Set published to False
         duplicate.published = False
@@ -1576,6 +1594,11 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
             duplicate.datetime = obj.datetime + timedelta(days=7)
             if obj.end_datetime:
                 duplicate.end_datetime = obj.end_datetime + timedelta(days=7)
+        elif date_adjustment == "week2":
+            # Add 14 days to the date
+            duplicate.datetime = obj.datetime + timedelta(days=14)
+            if obj.end_datetime:
+                duplicate.end_datetime = obj.end_datetime + timedelta(days=14)
         elif date_adjustment == "month":
             # Add 1 month to the date
             from dateutil.relativedelta import relativedelta
@@ -1615,6 +1638,11 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
                 child_duplicate.datetime = child.datetime + timedelta(days=7)
                 if child.end_datetime:
                     child_duplicate.end_datetime = child.end_datetime + timedelta(days=7)
+            elif date_adjustment == "week2":
+                # Add 14 days to the date
+                child_duplicate.datetime = child.datetime + timedelta(days=14)
+                if child.end_datetime:
+                    child_duplicate.end_datetime = child.end_datetime + timedelta(days=14)
             elif date_adjustment == "month":
                 # Add 1 month to the date
                 from dateutil.relativedelta import relativedelta
