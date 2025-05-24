@@ -29,17 +29,17 @@
     {% endif %}
     <div class="accordion-item">
         <h2 class="accordion-header">
-            <button class="accordion-button collapsed text-dark"
+            <button class="accordion-button text-dark"
                     type="button"
                     data-bs-toggle="collapse"
                     data-bs-target="#timeAndPlace"
-                    aria-expanded="false"
+                    aria-expanded="true"
                     aria-controls="timeAndPlace"
                     style="background: var(--mayaj-pons);">
                 {% translate "Time and place" %}
             </button>
         </h2>
-        <div id="timeAndPlace" class="accordion-collapse collapse" data-bs-parent="#infoAccordion">
+        <div id="timeAndPlace" class="accordion-collapse collapse show" data-bs-parent="#infoAccordion">
             <div class="accordion-body px-0">
                 <ul class="list-group list-group-horizontal-xl w-100">
                     <li class="list-group-item border-start-0 border-end-0 rounded-0 px-0 py-3 p-xl-5">

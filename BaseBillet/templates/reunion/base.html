@@ -15,15 +15,15 @@
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="{% block og_type %}website{% endblock %}">
     <meta property="og:url" content="{{ request.build_absolute_uri }}">
-    <meta property="og:title" content="{% block og_title %}{% block title %}{% translate 'Home' %}{% endblock %} | {{ config.organisation }}{% endblock %}">
-    <meta property="og:description" content="{% block og_description %}{% block meta_description %}{% if config.short_description %}{{ config.short_description }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}{% endblock %}">
+    <meta property="og:title" content="{% block og_title %}{% translate 'Home' %} | {{ config.organisation }}{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}{% if config.short_description %}{{ config.short_description }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
     <meta property="og:image" content="{% block og_image %}{% if config.img %}{{ config.img.hdr.url }}{% else %}{% static 'reunion/img/favicon.png' %}{% endif %}{% endblock %}">
 
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image">
     <meta property="twitter:url" content="{{ request.build_absolute_uri }}">
-    <meta property="twitter:title" content="{% block twitter_title %}{% block title %}{% translate 'Home' %}{% endblock %} | {{ config.organisation }}{% endblock %}">
-    <meta property="twitter:description" content="{% block twitter_description %}{% block meta_description %}{% if config.short_description %}{{ config.short_description }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}{% endblock %}">
+    <meta property="twitter:title" content="{% block twitter_title %}{% translate 'Home' %} | {{ config.organisation }}{% endblock %}">
+    <meta property="twitter:description" content="{% block twitter_description %}{% if config.short_description %}{{ config.short_description }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
     <meta property="twitter:image" content="{% block twitter_image %}{% if config.img %}{{ config.img.hdr.url }}{% else %}{% static 'reunion/img/favicon.png' %}{% endif %}{% endblock %}">
 
     <link rel="preload" as="style" href="{% static 'reunion/css/tibillet.css' %}">
