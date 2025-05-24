@@ -2,6 +2,14 @@
 {% load tibitags i18n static %}
 
 {% block title %}{{ event.name }}{% endblock %}
+{% block meta_description %}{{ event.short_description }}{% endblock %}
+{% block og_type %}event{% endblock %}
+{% block og_title %}{{ event.name }}{% endblock %}
+{% block og_description %}{{ event.short_description }}{% endblock %}
+{% block og_image %}{% if event.img %}{{ event.img.hdr.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block twitter_title %}{{ event.name }}{% endblock %}
+{% block twitter_description %}{{ event.short_description }}{% endblock %}
+{% block twitter_image %}{% if event.img %}{{ event.img.hdr.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
 
 {% block scripts %}
     <script>
@@ -11,6 +19,44 @@
             ?.addEventListener("click", ({target}) => {
                 document.getElementById("get-involved").scrollIntoView()
             })
+    </script>
+
+    <!-- Schema.org Event structured data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Event",
+        "name": "{{ event.name }}",
+        "description": "{{ event.short_description }}",
+        "image": "{% if event.img %}{{ event.img.hdr.url }}{% else %}{% static 'reunion/img/favicon.png' %}{% endif %}",
+        "startDate": "{{ event.datetime|date:'c' }}",
+        {% if event.end_datetime %}"endDate": "{{ event.end_datetime|date:'c' }}",{% endif %}
+        "eventStatus": "https://schema.org/EventScheduled",
+        {% if event.complet %}"eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode",{% endif %}
+        "location": {
+            "@type": "Place",
+            "name": "{{ config.organisation }}",
+            {% if event.postal_address %}"address": {
+                "@type": "PostalAddress",
+                "streetAddress": "{{ event.postal_address.address }}",
+                "addressLocality": "{{ event.postal_address.city }}",
+                "postalCode": "{{ event.postal_address.postal_code }}",
+                "addressCountry": "{{ event.postal_address.country }}"
+            }{% endif %}
+        },
+        "organizer": {
+            "@type": "Organization",
+            "name": "{{ config.organisation }}",
+            "url": "{{ request.build_absolute_uri|slice:':-6' }}"
+        },
+        {% if event.price_min %}"offers": {
+            "@type": "Offer",
+            "price": "{{ event.price_min }}",
+            "priceCurrency": "EUR",
+            "availability": "{% if event.complet %}https://schema.org/SoldOut{% else %}https://schema.org/InStock{% endif %}",
+            "url": "{{ request.build_absolute_uri }}"
+        }{% endif %}
+    }
     </script>
 {% endblock %}
 

@@ -2952,7 +2952,7 @@ msgstr "Envoyer ma demande d'adhésion"
 
 #: BaseBillet/templates/reunion/views/membership/list.html:6
 msgid "Join our community by subscribing to one of our membership options"
-msgstr ""
+msgstr "Rejoignez notre communauté en souscrivant à l'une de nos adhésions"
 
 #: BaseBillet/templates/reunion/views/membership/list.html:22
 #: BaseBillet/templates/reunion/views/membership/list.html:53
