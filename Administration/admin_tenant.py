@@ -1358,6 +1358,7 @@ class EventForm(ModelForm):
         self.fields['products'].widget.can_change_related = False
         self.fields['products'].widget.can_add_related = False
         self.fields['products'].help_text = _("Leave empty to avoid reservations.")
+        self.fields['short_description'].help_text = _("Used for social network descriptions.")
 
         try:
             # On mets la valeur de la jauge réglée dans la config par default

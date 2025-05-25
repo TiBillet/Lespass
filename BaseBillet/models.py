@@ -306,6 +306,7 @@ class Configuration(SingletonModel):
                             'thumbnail': (150, 90),
                             'crop_hdr': (960, 540, True),
                             'crop': (480, 270, True),
+                            'social_card': (1200, 630, True),
                         },
                         delete_orphans=True,
                         verbose_name=_('Background image'),
@@ -333,6 +334,7 @@ class Configuration(SingletonModel):
                 'thumbnail': self.img.thumbnail.url,
                 'crop_hdr': self.img.crop_hdr.url,
                 'crop': self.img.crop.url,
+                'social_card': self.img.social_card.url,
             }
         else:
             return {}
@@ -638,6 +640,7 @@ class Product(models.Model):
                             'thumbnail': (150, 90),
                             'crop_hdr': (960, 540, True),
                             'crop': (480, 270, True),
+                            'social_card': (1200, 630, True),
                         },
                         delete_orphans=True,
                         verbose_name=_('Product image'),
@@ -861,9 +864,10 @@ class Event(models.Model):
                             'thumbnail': (150, 90),
                             'crop_hdr': (960, 540, True),
                             'crop': (480, 270, True),
+                            'social_card': (1200, 630, True),
                         },
                         delete_orphans=True, verbose_name=_("Main image"),
-                        help_text=_("The main image of the event, displayed in the head of the event page.")
+                        help_text=_("The main image of the event, displayed in the head of the event page and for social shares.")
                         )
 
     sticker_img = StdImageField(upload_to='images/',

@@ -4,6 +4,12 @@
 
 {% block title %}{% translate 'Agenda' %}{% endblock %}
 {% block meta_description %}{% translate 'Discover all our upcoming events and activities' %} - {{ config.organisation }}{% endblock %}
+{% block og_title %}{% translate 'Agenda' %} | {{ config.organisation }}{% endblock %}
+{% block og_description %}{% translate 'Discover all our upcoming events and activities' %} - {{ config.organisation }}{% endblock %}
+{% block og_image_alt %}{{ config.organisation }} - {% translate 'Events calendar' %}{% endblock %}
+{% block twitter_title %}{% translate 'Agenda' %} | {{ config.organisation }}{% endblock %}
+{% block twitter_description %}{% translate 'Discover all our upcoming events and activities' %} - {{ config.organisation }}{% endblock %}
+{% block twitter_image_alt %}{{ config.organisation }} - {% translate 'Events calendar' %}{% endblock %}
 
 {% block main %}
     {% if not embed %}

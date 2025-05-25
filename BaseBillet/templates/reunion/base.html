@@ -6,9 +6,10 @@
 <html lang="{{ LANGUAGE_CODE }}">
 
 <head>
+    {% load i18n %}
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <meta name="description" content="{% block meta_description %}{% if config.short_description %}{{ config.short_description }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
+    <meta name="description" content="{% block meta_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
     <meta name="robots" content="{% block meta_robots %}index, follow{% endblock %}">
     <title>{% block title %}{% translate 'Home' %}{% endblock %} | {{ config.organisation }}</title>
 
@@ -16,15 +17,22 @@
     <meta property="og:type" content="{% block og_type %}website{% endblock %}">
     <meta property="og:url" content="{{ request.build_absolute_uri }}">
     <meta property="og:title" content="{% block og_title %}{% translate 'Home' %} | {{ config.organisation }}{% endblock %}">
-    <meta property="og:description" content="{% block og_description %}{% if config.short_description %}{{ config.short_description }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
     <meta property="og:image" content="{% block og_image %}{% if config.img %}{{ config.img.hdr.url }}{% else %}{% static 'reunion/img/favicon.png' %}{% endif %}{% endblock %}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="{% block og_image_alt %}{{ config.organisation }}{% endblock %}">
+    <meta property="og:site_name" content="{{ config.organisation }}">
 
     <!-- Twitter -->
-    <meta property="twitter:card" content="summary_large_image">
-    <meta property="twitter:url" content="{{ request.build_absolute_uri }}">
-    <meta property="twitter:title" content="{% block twitter_title %}{% translate 'Home' %} | {{ config.organisation }}{% endblock %}">
-    <meta property="twitter:description" content="{% block twitter_description %}{% if config.short_description %}{{ config.short_description }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
-    <meta property="twitter:image" content="{% block twitter_image %}{% if config.img %}{{ config.img.hdr.url }}{% else %}{% static 'reunion/img/favicon.png' %}{% endif %}{% endblock %}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="{{ request.build_absolute_uri }}">
+    <meta name="twitter:domain" content="{{ request.get_host }}">
+    <meta name="twitter:title" content="{% block twitter_title %}{% translate 'Home' %} | {{ config.organisation }}{% endblock %}">
+    <meta name="twitter:description" content="{% block twitter_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
+    <meta name="twitter:image" content="{% block twitter_image %}{% if config.img %}{{ config.img.hdr.url }}{% else %}{% static 'reunion/img/favicon.png' %}{% endif %}{% endblock %}">
+    <meta name="twitter:image:alt" content="{% block twitter_image_alt %}{{ config.organisation }}{% endblock %}">
+    {% if config.twitter %}<meta name="twitter:site" content="@{{ config.twitter|cut:'https://twitter.com/'|cut:'https://x.com/'|cut:'/' }}">{% endif %}
 
     <link rel="preload" as="style" href="{% static 'reunion/css/tibillet.css' %}">
     <link rel="modulepreload" href="{% static 'reunion/js/theme-switcher.mjs' %}">

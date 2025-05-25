@@ -872,84 +872,87 @@ def send_to_ghost_email(email, name=None):
     ghost_url = ghost_config.ghost_url
     ghost_key = ghost_config.get_api_key()
 
-    ###################################
-    ## Génération du token JWT
-    ###################################
+    if ghost_url and ghost_key:
 
-    # Split the key into ID and SECRET
-    id, secret = ghost_key.split(':')
+        ###################################
+        ## Génération du token JWT
+        ###################################
 
-    # Prepare header and payload
-    iat = int(datetime.datetime.now().timestamp())
+        # Split the key into ID and SECRET
+        id, secret = ghost_key.split(':')
 
-    header = {'alg': 'HS256', 'typ': 'JWT', 'kid': id}
-    payload = {
-        'iat': iat,
-        'exp': iat + 5 * 60,
-        'aud': '/admin/'
-    }
+        # Prepare header and payload
+        iat = int(datetime.datetime.now().timestamp())
 
-    # Create the token (including decoding secret)
-    token = jwt.encode(payload, bytes.fromhex(secret), algorithm='HS256', headers=header)
-    logger.debug(f"JWT token: " + token)
+        header = {'alg': 'HS256', 'typ': 'JWT', 'kid': id}
+        payload = {
+            'iat': iat,
+            'exp': iat + 5 * 60,
+            'aud': '/admin/'
+        }
 
-    ###################################
-    ## Appels de l'API Ghost
-    ###################################
+        # Create the token (including decoding secret)
+        token = jwt.encode(payload, bytes.fromhex(secret), algorithm='HS256', headers=header)
+        logger.debug(f"JWT token: " + token)
 
-    # Définir les critères de filtrage
-    filter = {
-        "filter": f"email:{email}"
-    }
-    headers = {'Authorization': f'Ghost {token}'}
+        ###################################
+        ## Appels de l'API Ghost
+        ###################################
 
-    # Récupérer la liste des membres de l'instance Ghost
-    response = requests.get(ghost_url + "/ghost/api/admin/members/", params=filter, headers=headers)
+        # Définir les critères de filtrage
+        filter = {
+            "filter": f"email:{email}"
+        }
+        headers = {'Authorization': f'Ghost {token}'}
 
-    # Vérifier que la réponse de l'API est valide
-    if response.ok:
-        # Décoder la réponse JSON
-        j = response.json()
-        members = j['members']
+        # Récupérer la liste des membres de l'instance Ghost
+        response = requests.get(ghost_url + "/ghost/api/admin/members/", params=filter, headers=headers)
 
-        # Si aucun membre n'a été trouvé avec l'adresse e-mail spécifiée
-        if len(members) == 0:
-            # Définir les informations du nouveau membre
-            member_data = {
-                "members": [
-                    {
-                        "email": email,
-                        "name": name if name else "",
-                        "labels": ["TiBillet", f"import {timezone.now().strftime('%d/%m/%Y')}"]
-                    }
-                ]
-            }
+        # Vérifier que la réponse de l'API est valide
+        if response.ok:
+            # Décoder la réponse JSON
+            j = response.json()
+            members = j['members']
 
-            # Ajouter le nouveau membre à l'instance Ghost
-            response = requests.post(ghost_url + "/ghost/api/admin/members/", json=member_data, headers=headers,
-                                     timeout=2)
+            # Si aucun membre n'a été trouvé avec l'adresse e-mail spécifiée
+            if len(members) == 0:
+                # Définir les informations du nouveau membre
+                member_data = {
+                    "members": [
+                        {
+                            "email": email,
+                            "name": name if name else "",
+                            "labels": ["TiBillet", f"import {timezone.now().strftime('%d/%m/%Y')}"]
+                        }
+                    ]
+                }
 
-            # Vérifier que la réponse de l'API est valide
-            if response.status_code == 201:
-                # Décoder la réponse JSON
-                j = response.json()
-                members = j['members']
-                logger.info(f"Le nouveau membre a été créé avec succès : {members}")
+                # Ajouter le nouveau membre à l'instance Ghost
+                response = requests.post(ghost_url + "/ghost/api/admin/members/", json=member_data, headers=headers,
+                                         timeout=2)
+
+                # Vérifier que la réponse de l'API est valide
+                if response.status_code == 201:
+                    # Décoder la réponse JSON
+                    j = response.json()
+                    members = j['members']
+                    logger.info(f"Le nouveau membre a été créé avec succès : {members}")
+                else:
+                    logger.error(f"Erreur lors de la création du nouveau membre : {response.text}")
             else:
-                logger.error(f"Erreur lors de la création du nouveau membre : {response.text}")
+                # Afficher la liste des membres
+                logger.info(f"Le membre {email} existe déja dans : {members}")
         else:
-            # Afficher la liste des membres
-            logger.info(f"Le membre {email} existe déja dans : {members}")
+            logger.error(f"Erreur lors de la récupération des membres : {response.text}")
+
+        # On met à jour les logs pour debug
+        try:
+            ghost_config.ghost_last_log = f"{timezone.now()} : {response.text}"
+            ghost_config.save()
+        except Exception as e:
+            logger.error(f"Erreur lors de la mise à jour du log : {e}")
     else:
-        logger.error(f"Erreur lors de la récupération des membres : {response.text}")
-
-    # On met à jour les logs pour debug
-    try:
-        ghost_config.ghost_last_log = f"{timezone.now()} : {response.text}"
-        ghost_config.save()
-    except Exception as e:
-        logger.error(f"Erreur lors de la mise à jour du log : {e}")
-
+        logger.warning(f"send_to_ghost_email : ghost_url or ghost_key is empty on {connection.tenant.get_primary_domain()}")
 
 @app.task
 def send_to_ghost(membership_pk):
