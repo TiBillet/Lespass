@@ -16,8 +16,12 @@ class HasScanApi(BaseHasAPIKey):
 
     def has_permission(self, request: HttpRequest, view: typing.Any) -> bool:
         key = self.get_key(request)
-        scan_app: ScanApp = key.scan_app
-        if scan_app.archive:
-            raise PermissionDenied("App is archived.")
+        try :
+            scan_app: ScanApp = key.scan_app
+            if scan_app.archive:
+                raise PermissionDenied("App is archived.")
+        except AttributeError:
+            raise PermissionDenied("No app associated with this key.")
+
         request.scan_app = scan_app
         return super().has_permission(request, view)

@@ -1412,6 +1412,31 @@ class Reservation(models.Model):
     #
 
 
+### Pour App de scan Android
+
+class ScannerAPIKey(AbstractAPIKey):
+    class Meta:
+        ordering = ("-created",)
+        # unique_together = [['place', 'user', 'name']]
+
+
+class ScanApp(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=30)
+    key = models.OneToOneField(ScannerAPIKey,
+                               on_delete=models.CASCADE,
+                               blank=True, null=True,
+                               related_name="scan_app",
+                               )
+
+    archive = models.BooleanField(default=False)
+    qrcode = models.CharField(max_length=255, null=True, blank=True)
+    claimed = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.name
+
+
 class Ticket(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
 
@@ -1439,6 +1464,8 @@ class Ticket(models.Model):
                                    verbose_name=_("Payment source"))
     payment_method = models.CharField(max_length=2, choices=PaymentMethod.choices, blank=True, null=True,
                                       verbose_name=_("Payment method"))
+
+    scanned_by = models.ForeignKey(ScanApp, on_delete=models.PROTECT, blank=True, null=True,)
 
     def paid(self):
         if self.pricesold:
@@ -2030,30 +2057,6 @@ class FederatedPlace(models.Model):
     def __str__(self):
         return self.tenant.name
 
-
-### Pour App de scan Android
-
-class ScannerAPIKey(AbstractAPIKey):
-    class Meta:
-        ordering = ("-created",)
-        # unique_together = [['place', 'user', 'name']]
-
-
-class ScanApp(models.Model):
-    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=30)
-    key = models.OneToOneField(ScannerAPIKey,
-                               on_delete=models.CASCADE,
-                               blank=True, null=True,
-                               related_name="scan_app",
-                               )
-
-    archive = models.BooleanField(default=False)
-    qrcode = models.CharField(max_length=255, null=True, blank=True)
-    claimed = models.BooleanField(default=False)
-
-    def __str__(self):
-        return self.name
 
 
 class History(models.Model):
