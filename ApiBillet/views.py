@@ -890,7 +890,7 @@ class Webhook_stripe(APIView):
 
             if not payload["data"]["object"]["metadata"].get('tenant'):
                 logger.error(f"Webhook_stripe Pas de tenant dans metadata --> {payload}")
-                return Response(f"Pas de tenant dans metadata ? {payload["data"]["object"]}",
+                return Response(f"Pas de tenant dans metadata ? {payload}",
                                 status=status.HTTP_406_NOT_ACCEPTABLE)
 
             tenant_uuid_in_metadata = payload["data"]["object"]["metadata"]["tenant"]
