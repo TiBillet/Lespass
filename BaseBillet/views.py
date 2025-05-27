@@ -41,6 +41,7 @@ from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, Product, Event, Paiement_stripe, Membership, Reservation, \
     FormbricksConfig, FormbricksForms, FederatedPlace, Carrousel, ScanApp, ScannerAPIKey
+from BaseBillet.permissions import HasScanApi
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, new_tenant_mailer, \
     contact_mailer, new_tenant_after_stripe_mailer, send_to_ghost_email
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
@@ -1531,7 +1532,30 @@ class ScanTicket(viewsets.ViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+    @action(detail=False, methods=['GET'])
+    def test_api(self, request):
+        scan_app: ScanApp = request.scan_app # grâce à HasScanApi
+        return Response({
+            "success": True,
+            "message": "API key is valid",
+            "device_info": {
+                "uuid": str(scan_app.uuid),
+                "name": scan_app.name,
+                "claimed": scan_app.claimed,
+                "archived": scan_app.archive
+            },
+            "server_info": {
+                "tenant": connection.tenant.name,
+                "domain": connection.tenant.get_primary_domain().domain,
+                "timestamp": timezone.now().isoformat()
+            }
+        }, status=status.HTTP_200_OK)
+
 
     def get_permissions(self):
-        permission_classes = [permissions.AllowAny]
+        if self.action in ['pair', ]:
+            # L'api Key de l'organisation au minimum
+            permission_classes = [permissions.AllowAny]
+        else:
+            permission_classes = [HasScanApi]
         return [permission() for permission in permission_classes]
