@@ -12,6 +12,7 @@ router.register(r'my_account', base_view.MyAccount, basename='my_account')
 router.register(r'qr', base_view.ScanQrCode, basename='scan_qrcode')
 router.register(r'event', base_view.EventMVT, basename='event')
 router.register(r'home', base_view.HomeViewset, basename='home')
+router.register(r'scan', base_view.ScanTicket, basename='scan')
 
 
 urlpatterns = [

@@ -29,6 +29,7 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
+from rest_framework.renderers import JSONRenderer
 from rest_framework.request import Request
 from rest_framework.response import Response
 # from rest_framework.throttling import UserRateThrottle
@@ -39,7 +40,7 @@ from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, Product, Event, Paiement_stripe, Membership, Reservation, \
-    FormbricksConfig, FormbricksForms, FederatedPlace, Carrousel
+    FormbricksConfig, FormbricksForms, FederatedPlace, Carrousel, ScanApp, ScannerAPIKey
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, new_tenant_mailer, \
     contact_mailer, new_tenant_after_stripe_mailer, send_to_ghost_email
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
@@ -1499,3 +1500,38 @@ class Tenant(viewsets.ViewSet):
         #     _("Your Stripe account does not seem to be valid. "
         #       "\nPlease complete your Stripe.com registration before creating a new TiBillet space."))
         # return redirect('/tenant/new/')
+
+
+
+class ScanTicket(viewsets.ViewSet):
+
+    @action(detail=True, methods=['GET'])
+    def pair(self, request, pk):
+        try:
+            signer = TimestampSigner()
+            scanapp_uuid = signer.unsign(urlsafe_base64_decode(pk).decode('utf8'), max_age=(300000))
+            scannapp = get_object_or_404(ScanApp, uuid=scanapp_uuid, claimed=False)
+
+            scannapp.claimed = True
+            scannapp.key, api_key_string = ScannerAPIKey.objects.create_key(name=f"{scannapp.uuid}")
+            scannapp.save()
+
+            # Return success response with API key
+            return Response({
+                "success": True,
+                "message": "Device successfully paired",
+                "api_key": api_key_string,
+                "device_uuid": str(scannapp.uuid),
+                "device_name": scannapp.name
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+    def get_permissions(self):
+        permission_classes = [permissions.AllowAny]
+        return [permission() for permission in permission_classes]

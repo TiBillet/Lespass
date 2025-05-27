@@ -26,7 +26,7 @@ from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 from django_tenants.postgresql_backend.base import FakeTenant
 from django_tenants.utils import tenant_context
-from rest_framework_api_key.models import APIKey
+from rest_framework_api_key.models import APIKey, AbstractAPIKey
 
 from solo.models import SingletonModel
 
@@ -2033,13 +2033,19 @@ class FederatedPlace(models.Model):
 
 ### Pour App de scan Android
 
+class ScannerAPIKey(AbstractAPIKey):
+    class Meta:
+        ordering = ("-created",)
+        # unique_together = [['place', 'user', 'name']]
+
+
 class ScanApp(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=30)
-    key = models.OneToOneField(APIKey,
+    key = models.OneToOneField(ScannerAPIKey,
                                on_delete=models.CASCADE,
                                blank=True, null=True,
-                               related_name="scan_api_key",
+                               related_name="scan_app",
                                )
 
     archive = models.BooleanField(default=False)
