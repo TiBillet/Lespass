@@ -174,7 +174,7 @@ class ScanAppAdmin(ModelAdmin):
     warn_unsaved_form = True
 
     list_display = [
-        'uuid',
+        'name',
         'claimed',
         'archive',
     ]
@@ -208,8 +208,8 @@ class ScanAppAdmin(ModelAdmin):
             # Generate QR code using segno
             qr = segno.make(qrcode_data)
 
-            # Get SVG as string
-            svg_string = qr.svg_inline(scale=4)
+            # Get SVG as string with white background
+            svg_string = qr.svg_inline(scale=4, light="white")
 
             # Use mark_safe for the SVG content to prevent escaping
             return format_html(f'{mark_safe(svg_string)}')

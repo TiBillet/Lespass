@@ -2046,6 +2046,8 @@ class ScanApp(models.Model):
     qrcode = models.CharField(max_length=255, null=True, blank=True)
     claimed = models.BooleanField(default=False)
 
+    def __str__(self):
+        return self.name
 
 
 class History(models.Model):
