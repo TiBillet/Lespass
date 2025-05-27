@@ -1,3 +1,4 @@
+import base64
 import logging
 from datetime import timedelta
 from decimal import Decimal
@@ -5,10 +6,12 @@ from typing import Any, Optional, Dict
 from unicodedata import category
 
 import requests
+import segno
 import unfold.widgets
 from django import forms
 from django.conf import settings
 from django.core.exceptions import MultipleObjectsReturned
+from django.core.signing import TimestampSigner
 from django.db import models, connection, IntegrityError
 from django.contrib import admin
 from django.contrib import messages
@@ -22,6 +25,8 @@ from django.template.loader import render_to_string
 from django.urls import reverse, re_path
 from django.utils import timezone
 from django.utils.html import format_html
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 from rest_framework import status
 from rest_framework.response import Response
@@ -68,7 +73,7 @@ from AuthBillet.models import HumanUser, TibilletUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
-    FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel, BrevoConfig
+    FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel, BrevoConfig, ScanApp
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
     webhook_membership, create_ticket_pdf, ticket_celery_mailer, async_tenant_create
 from Customers.models import Client
@@ -148,6 +153,71 @@ class ExternalApiKeyAdmin(ModelAdmin):
             obj.key = api_key
             obj.user = request.user
         super().save_model(request, obj, form, change)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+
+
+@admin.register(ScanApp, site=staff_admin_site)
+class ScanAppAdmin(ModelAdmin):
+    compressed_fields = True
+    warn_unsaved_form = True
+
+    list_display = [
+        'uuid',
+        'claimed',
+        'archive',
+    ]
+
+    fields = [
+        'name',
+        'archive',
+        'pairing_code',
+    ]
+
+    readonly_fields = [
+        'pairing_code',
+    ]
+
+
+    def pairing_code(self, obj):
+        if obj.pk and obj.name and not obj.claimed:
+            base_url = f"https://{connection.tenant.get_primary_domain().domain}"
+
+            signer = TimestampSigner()
+            token = urlsafe_base64_encode(signer.sign(f"{obj.uuid}").encode('utf8'))
+            qrcode_data = f"{base_url}/api/scan/pair?token={token}"
+
+            ### VERIFICATION SIGNATURE AVANT D'ENVOYER
+            scanapp_uuid = signer.unsign(urlsafe_base64_decode(token).decode('utf8'), max_age=(300))  # 5 min
+            sc = ScanApp.objects.get(uuid=scanapp_uuid)
+            if not obj == sc:
+                raise Exception("signature check error")
+
+
+            # Generate QR code using segno
+            qr = segno.make(qrcode_data)
+
+            # Get SVG as string
+            svg_string = qr.svg_inline(scale=4)
+
+            # Use mark_safe for the SVG content to prevent escaping
+            return format_html(f'{mark_safe(svg_string)}')
+        elif obj.pk and obj.name and obj.claimed:
+            return "Claimed"
+        return "Sauvegarder pour afficher le qr code de pairing. ( bouton Enregistrer et continuer les modifications )"
+
+    pairing_code.short_description = _("Pairing Code")
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)

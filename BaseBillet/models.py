@@ -2031,6 +2031,23 @@ class FederatedPlace(models.Model):
         return self.tenant.name
 
 
+### Pour App de scan Android
+
+class ScanApp(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=30)
+    key = models.OneToOneField(APIKey,
+                               on_delete=models.CASCADE,
+                               blank=True, null=True,
+                               related_name="scan_api_key",
+                               )
+
+    archive = models.BooleanField(default=False)
+    qrcode = models.CharField(max_length=255, null=True, blank=True)
+    claimed = models.BooleanField(default=False)
+
+
+
 class History(models.Model):
     """
     Track change on user profile, event or membership

@@ -628,6 +628,13 @@ UNFOLD = {
                         # "badge": "Administration.admin_tenant.badge_callback",
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest",
                     },
+                    {
+                        "title": _("Scan App"),
+                        "icon": "qr_code_scanner",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_scanapp_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest",
+                    },
                 ],
             },
             {
