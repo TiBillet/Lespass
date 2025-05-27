@@ -556,8 +556,9 @@ def new_tenant_mailer(waiting_config_uuid: str):
         # Génération du lien qui va créer la redirection vers l'url onboard
         tenant = connection.tenant
         tenant_url = tenant.get_primary_domain().domain
-        waiting_config = WaitingConfiguration.objects.get(uuid=waiting_config_uuid)
 
+        time.sleep(2) # Attendre que la db soit bien
+        waiting_config = WaitingConfiguration.objects.get(uuid=waiting_config_uuid)
         User = get_user_model()
         user = User.objects.get(email=waiting_config.email)
 

@@ -888,6 +888,11 @@ class Webhook_stripe(APIView):
             if "return_refill_wallet" in payload["data"]["object"]["success_url"]:
                 return Response(f"Ce checkout est pour fedow.", status=status.HTTP_205_RESET_CONTENT)
 
+            if not payload["data"]["object"]["metadata"].get('tenant'):
+                logger.error(f"Webhook_stripe Pas de tenant dans metadata --> {payload}")
+                return Response(f"Pas de tenant dans metadata ? {payload["data"]["object"]}",
+                                status=status.HTTP_406_NOT_ACCEPTABLE)
+
             tenant_uuid_in_metadata = payload["data"]["object"]["metadata"]["tenant"]
             if tenant_uuid_in_metadata == "payment_link" :
                 return Response(f"Payment link, probablement des carte ? Pas besoin de traitement.",status=status.HTTP_204_NO_CONTENT)
