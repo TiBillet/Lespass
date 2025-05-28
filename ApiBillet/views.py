@@ -890,12 +890,12 @@ class Webhook_stripe(APIView):
 
             if not payload["data"]["object"]["metadata"].get('tenant'):
                 logger.error(f"Webhook_stripe Pas de tenant dans metadata --> {payload}")
-                return Response(f"Pas de tenant dans metadata ? {payload}",
-                                status=status.HTTP_406_NOT_ACCEPTABLE)
+                return Response(f"Pas de tenant dans metadata, pas pour nous ? {payload}",
+                                status=status.HTTP_204_NO_CONTENT)
 
             tenant_uuid_in_metadata = payload["data"]["object"]["metadata"]["tenant"]
             if tenant_uuid_in_metadata == "payment_link" :
-                return Response(f"Payment link, probablement des carte ? Pas besoin de traitement.",status=status.HTTP_204_NO_CONTENT)
+                return Response(f"Payment link ? Pas besoin de traitement.",status=status.HTTP_204_NO_CONTENT)
 
             tenant = Client.objects.get(uuid=tenant_uuid_in_metadata)
             with tenant_context(tenant):

@@ -934,7 +934,7 @@ class HumanUserAdmin(ModelAdmin):
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        return queryset.prefetch_related('memberships', 'client_admin')
+        return queryset.prefetch_related('memberships', 'client_admin', 'client_achat')
 
     """
     On affiche en haut du changelist un bouton pour pouvoir changer sa carte 

@@ -215,10 +215,18 @@ class TibilletUser(AbstractUser):
         return "Anonyme"
 
     def achat(self):
-        return " - ".join([achat["name"] for achat in self.client_achat.values("name")])
+        # Check if client_achat is already prefetched to avoid N+1 query
+        if hasattr(self, '_prefetched_objects_cache') and 'client_achat' in self._prefetched_objects_cache:
+            return " - ".join([achat.name for achat in self.client_achat.all()])
+        else:
+            return " - ".join([achat["name"] for achat in self.client_achat.values("name")])
 
     def administre(self):
-        return " - ".join([admin["name"] for admin in self.client_admin.values("name")])
+        # Check if client_admin is already prefetched to avoid N+1 query
+        if hasattr(self, '_prefetched_objects_cache') and 'client_admin' in self._prefetched_objects_cache:
+            return " - ".join([admin.name for admin in self.client_admin.all()])
+        else:
+            return " - ".join([admin["name"] for admin in self.client_admin.values("name")])
 
     def as_password(self):
         return bool(self.password)
