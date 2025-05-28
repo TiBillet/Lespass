@@ -1645,6 +1645,7 @@ class Paiement_stripe(models.Model):
         return checkout_session
 
     def update_checkout_status(self) -> str:
+        self.refresh_from_db()
         if self.status == Paiement_stripe.VALID:
             return self.status
 

@@ -1251,7 +1251,10 @@ class MembershipMVT(viewsets.ViewSet):
         paiement_stripe.refresh_from_db()
 
         try:
-            if paiement_stripe.status == Paiement_stripe.VALID or paiement_stripe.traitement_en_cours:
+            if paiement_stripe.traitement_en_cours:
+                messages.add_message(request, messages.SUCCESS,
+                                     _(f"Your payment has been validated and is being processed. Thank you very much!"))
+            elif paiement_stripe.status == Paiement_stripe.VALID:
                 messages.add_message(request, messages.SUCCESS,
                                      _(f"Your subscription has been validated. You will receive a confirmation email. Thank you very much!"))
             elif paiement_stripe.status == Paiement_stripe.PENDING:

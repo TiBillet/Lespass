@@ -2533,7 +2533,7 @@ class WaitingConfigAdmin(ModelAdmin):
         else:
             messages.add_message(
                 request, messages.WARNING,
-                _(f"pas de email_confirmed")
+                _(f"Email not confirmed")
             )
         return redirect(request.META["HTTP_REFERER"])
 
@@ -2619,7 +2619,7 @@ class BrevoConfigAdmin(SingletonModelAdmin, ModelAdmin):
         except Exception as e:
             brevo_config.last_log = f"{type(e)} - {e}"
             logger.error("Exception when calling AccountApi->get_account: %s\n" % e)
-            messages.error(request, _(f"Error : {type(e)} - {e}"))
+            messages.error(request, f"Error : {type(e)} - {e}")
 
         brevo_config.save()
         return redirect(request.META["HTTP_REFERER"])
