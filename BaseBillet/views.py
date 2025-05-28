@@ -1358,13 +1358,17 @@ class Tenant(viewsets.ViewSet):
         Mail envoyé par tasks.new_tenant_mailer
         """
         signer = TimestampSigner()
-        wc_pk = signer.unsign(urlsafe_base64_decode(pk).decode('utf8'), max_age=(3600 * 72))  # 3 jours
-        wc = WaitingConfiguration.objects.get(uuid=wc_pk)
-        wc.email_confirmed = True
-        wc.save()
+        try:
+            wc_pk = signer.unsign(urlsafe_base64_decode(pk).decode('utf8'), max_age=(3600 * 24 * 30))  # 30 jours
+            wc = WaitingConfiguration.objects.get(uuid=wc_pk)
+            wc.email_confirmed = True
+            wc.save()
 
-        context = get_context(request)
-        return render(request, "reunion/views/tenant/create_waiting_configuration_MAIL_CONFIRMED.html", context=context)
+            context = get_context(request)
+            return render(request, "reunion/views/tenant/create_waiting_configuration_MAIL_CONFIRMED.html", context=context)
+        except UnicodeDecodeError as e:
+            messages.error(request, _("Invalid token. Please request a new confirmation email."))
+            return redirect('/')
 
 
     @action(detail=True, methods=['GET'])

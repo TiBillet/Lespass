@@ -308,6 +308,14 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        return queryset.select_related('postal_address').prefetch_related(
+            'federated_with',
+            'option_generale_radio',
+            'option_generale_checkbox'
+        )
+
     fieldsets = (
         (None, {
             'fields': (
