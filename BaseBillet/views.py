@@ -466,7 +466,7 @@ class MyAccount(viewsets.ViewSet):
                 'user_pk': pk,
             }
             return render(request, "admin/membership/wallet_info.html", context=context)
-        return "No cards"
+        return HttpResponse("No cards")
 
     @action(detail=False, methods=['GET'])
     def my_reservations(self, request):
