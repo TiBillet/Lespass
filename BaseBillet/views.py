@@ -1465,12 +1465,25 @@ class Tenant(viewsets.ViewSet):
         rootConf = RootConfiguration.get_solo()
         stripe.api_key = rootConf.get_stripe_api()
 
-        account_link = stripe.AccountLink.create(
-            account=id_acc_connect,
-            refresh_url=f"https://{tenant_url}/tenant/{id_acc_connect}/onboard_stripe_return_from_config/",
-            return_url=f"https://{tenant_url}/tenant/{id_acc_connect}/onboard_stripe_return_from_config/",
-            type="account_onboarding",
-        )
+        try :
+            account_link = stripe.AccountLink.create(
+                account=id_acc_connect,
+                refresh_url=f"https://{tenant_url}/tenant/{id_acc_connect}/onboard_stripe_return_from_config/",
+                return_url=f"https://{tenant_url}/tenant/{id_acc_connect}/onboard_stripe_return_from_config/",
+                type="account_onboarding",
+            )
+
+        except stripe._error.InvalidRequestError:
+            # Stripe account not valid, on le vide et on relance
+            config.stripe_connect_account = None
+            config.save()
+            id_acc_connect = config.get_stripe_connect_account()
+            account_link = stripe.AccountLink.create(
+                account=id_acc_connect,
+                refresh_url=f"https://{tenant_url}/tenant/{id_acc_connect}/onboard_stripe_return_from_config/",
+                return_url=f"https://{tenant_url}/tenant/{id_acc_connect}/onboard_stripe_return_from_config/",
+                type="account_onboarding",
+            )
 
         url_onboard = account_link.get('url')
         return redirect(url_onboard)
