@@ -1226,16 +1226,29 @@ class MembershipMVT(viewsets.ViewSet):
         La fonction qui va chercher le formulaire d'inscription.
         - Redirige vers le bon tenant si il faut
         - Fait apparaitre formbricks si besoin
+        - Renvoie une page 404 personnalisée si le produit n'existe pas
         '''
         try:
             # On essaye sur ce tenant :
             product = Product.objects.get(uuid=pk, categorie_article=Product.ADHESION, publish=True)
         except Product.DoesNotExist:
-            # Il est possible que ça soit sur un autre tenant ?
-            url = self.get_federated_membership_url(uuid=pk)
-            return HttpResponseClientRedirect(url)
-        except:
-            raise Http404
+            try:
+                # Il est possible que ça soit sur un autre tenant ?
+                url = self.get_federated_membership_url(uuid=pk)
+                if url:
+                    return HttpResponseClientRedirect(url)
+                else:
+                    # Si le produit n'existe pas dans les tenants fédérés, on affiche la page 404 personnalisée
+                    context = get_context(request)
+                    return render(request, "reunion/views/membership/404.html", context=context, status=404)
+            except Exception as e:
+                # En cas d'erreur lors de la recherche dans les tenants fédérés, on affiche la page 404 personnalisée
+                context = get_context(request)
+                return render(request, "reunion/views/membership/404.html", context=context, status=404)
+        except Exception as e:
+            # Pour toute autre erreur, on affiche la page 404 personnalisée
+            context = get_context(request)
+            return render(request, "reunion/views/membership/404.html", context=context, status=404)
 
         context = get_context(request)
         context['product'] = product

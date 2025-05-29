@@ -1,0 +1,16 @@
+{% load i18n static %}
+<div class="d-flex flex-column justify-content-center align-items-center h-100 text-center">
+    <div class="mb-4">
+        <h1 class="display-4">{% translate "Oops!" %}</h1>
+        <h2>{% translate "The product you're looking for has disappeared!" %}</h2>
+    </div>
+    
+    <div class="mb-4">
+        <p class="lead">{% translate "It seems the membership product you're trying to access doesn't exist or is no longer available." %}</p>
+    </div>
+    
+    <div class="p-3">
+        <a href="/memberships/" class="btn btn-primary mb-3">{% translate 'See all memberships' %}</a>
+        <a href="/" class="btn btn-outline-secondary d-block">{% translate 'Back to home' %}</a>
+    </div>
+</div>
