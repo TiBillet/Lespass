@@ -244,16 +244,34 @@ def context_for_membership_email(membership: "Membership"):
 @app.task
 def send_membership_invoice_to_email(membership_uuid: str):
     time.sleep(1) # pour donner le tps de récupérer l'objet
-    membership = Membership.objects.get(uuid=membership_uuid)
-    user = membership.user
-    # Mails de confirmation qui contient un lien vers la facture :
-    logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation par email")
-    send_email_generique(
-        context=context_for_membership_email(membership),
-        email=f"{user.email}",
-    )
-    logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation par email DELAY")
-    return True
+
+    # Retry mechanism for getting membership
+    attempts = 0
+    max_attempts = 10
+    wait_time = 2  # seconds
+
+    while attempts < max_attempts:
+        try:
+            membership = Membership.objects.get(uuid=membership_uuid)
+            user = membership.user
+            # Mails de confirmation qui contient un lien vers la facture :
+            logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation par email")
+            send_email_generique(
+                context=context_for_membership_email(membership),
+                email=f"{user.email}",
+            )
+            logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation par email DELAY")
+            return True
+        except Membership.DoesNotExist:
+            attempts += 1
+            if attempts >= max_attempts:
+                logger.error(f"Membership with uuid {membership_uuid} not found after {max_attempts} attempts")
+                raise Exception(f"Membership with uuid {membership_uuid} not found after {max_attempts} attempts")
+            logger.warning(f"Membership with uuid {membership_uuid} not found, retrying in {wait_time} seconds (attempt {attempts}/{max_attempts})")
+            time.sleep(wait_time)
+
+    # This should never be reached due to the exception in the loop
+    return False
 
 
 #### SEND INFO TO LABOUTIK
