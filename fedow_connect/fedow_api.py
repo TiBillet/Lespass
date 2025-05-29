@@ -560,6 +560,10 @@ class NFCcardFedow():
             self.config = FedowConfig.get_solo()
 
     def retrieve_card_by_signature(self, user: TibilletUser):
+        if not user.wallet:
+            wallet_fedow = WalletFedow(self.fedow_config)
+            wallet, created = wallet_fedow.get_or_create_wallet(user)
+
         response_get_card = _get(
             self.fedow_config,
             user=user,

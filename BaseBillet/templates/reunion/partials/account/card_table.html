@@ -44,4 +44,8 @@
     </div>
 {% endcomment %}
 </div>
+{% empty %}
+    <div class="alert alert-info" role="alert">
+        {% trans "You don't have any cards associated with your account yet." %}
+    </div>
 {% endfor %}

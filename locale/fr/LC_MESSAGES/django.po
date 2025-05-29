@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-29 09:30+0000\n"
+"POT-Creation-Date: 2025-05-29 12:53+0000\n"
 "PO-Revision-Date: 2025-03-12 09:37+0100\n"
 "Last-Translator: Diane Alma Kay <pro@kayathommy.fr>\n"
 "Language-Team: French\n"
@@ -2494,6 +2494,10 @@ msgstr "J'ai perdu ma carte numéro"
 #: BaseBillet/templates/reunion/partials/account/card_table.html:34
 msgid "Please confirm your email to declare a lost card."
 msgstr "Merci de confirmer votre adresse mail pour déclarer une carte perdue."
+
+#: BaseBillet/templates/reunion/partials/account/card_table.html:49
+msgid "You don't have any cards associated with your account yet."
+msgstr "Aucune carte n'est encore associée à votre compte."
 
 #: BaseBillet/templates/reunion/partials/account/ticket_accordion.html:55
 msgid "Recipient"

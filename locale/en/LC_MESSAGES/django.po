@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-29 09:30+0000\n"
+"POT-Creation-Date: 2025-05-29 12:53+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2402,6 +2402,10 @@ msgstr ""
 
 #: BaseBillet/templates/reunion/partials/account/card_table.html:34
 msgid "Please confirm your email to declare a lost card."
+msgstr ""
+
+#: BaseBillet/templates/reunion/partials/account/card_table.html:49
+msgid "You don't have any cards associated with your account yet."
 msgstr ""
 
 #: BaseBillet/templates/reunion/partials/account/ticket_accordion.html:55
