@@ -88,6 +88,7 @@ class StaffAdminSite(UnfoldAdminSite):
         """
         Redirect admin login to the root URL for better security.
         """
+        messages.add_message(request, messages.WARNING, _("Please login to access this page."))
         return HttpResponseRedirect('/')
 
 

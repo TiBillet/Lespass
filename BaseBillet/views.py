@@ -420,6 +420,21 @@ class MyAccount(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
     permission_classes = [permissions.IsAuthenticated, ]
 
+    def dispatch(self, request, *args, **kwargs):
+        """
+        Vérifie si l'utilisateur est authentifié avant d'accéder à la page "My Account".
+        Si l'utilisateur n'est pas authentifié, il est redirigé vers la page d'accueil (/).
+        Cela évite l'erreur 403 Forbidden pour les utilisateurs anonymes.
+
+        Cette méthode est appelée pour chaque requête avant d'exécuter la méthode spécifique (list, wallet, etc.).
+        Elle sert de point de contrôle d'authentification centralisé pour toutes les actions de cette vue.
+        """
+        if not request.user.is_authenticated:
+            messages.add_message(request, messages.WARNING,
+                                 _("Please login to access this page."))
+            return redirect('/')
+        return super().dispatch(request, *args, **kwargs)
+
     def list(self, request: HttpRequest):
         template_context = get_context(request)
         # Pas de header sur cette page
@@ -1378,11 +1393,11 @@ class Tenant(viewsets.ViewSet):
             wc.save()
 
             context = get_context(request)
-            return render(request, "reunion/views/tenant/create_waiting_configuration_MAIL_CONFIRMED.html", context=context)
+            return render(request, "reunion/views/tenant/create_waiting_configuration_MAIL_CONFIRMED.html",
+                          context=context)
         except UnicodeDecodeError as e:
             messages.error(request, _("Invalid token. Please request a new confirmation email."))
             return redirect('/')
-
 
     @action(detail=True, methods=['GET'])
     def onboard_stripe(self, request, pk):
@@ -1415,7 +1430,6 @@ class Tenant(viewsets.ViewSet):
 
         url_onboard = account_link.get('url')
         return redirect(url_onboard)
-
 
     @action(detail=True, methods=['GET'])
     def onboard_stripe_return(self, request, pk):
@@ -1454,7 +1468,8 @@ class Tenant(viewsets.ViewSet):
 
     @action(detail=False, methods=['GET'])
     def emailconfirmation(self, request, pk):
-        import ipdb; ipdb.set_trace()
+        import ipdb;
+        ipdb.set_trace()
         """
         Requete provenant du mail envoyé après la création d'un tenant
         """
@@ -1478,7 +1493,7 @@ class Tenant(viewsets.ViewSet):
         rootConf = RootConfiguration.get_solo()
         stripe.api_key = rootConf.get_stripe_api()
 
-        try :
+        try:
             account_link = stripe.AccountLink.create(
                 account=id_acc_connect,
                 refresh_url=f"https://{tenant_url}/tenant/{id_acc_connect}/onboard_stripe_return_from_config/",
@@ -1526,7 +1541,6 @@ class Tenant(viewsets.ViewSet):
             config.stripe_payouts_enabled = info_stripe.get('payouts_enabled')
             config.save()
 
-
         context = get_context(request)
         context["details_submitted"] = details_submitted
         return render(request, "reunion/views/tenant/after_onboard_stripe.html", context=context)
@@ -1534,7 +1548,6 @@ class Tenant(viewsets.ViewSet):
         #     _("Your Stripe account does not seem to be valid. "
         #       "\nPlease complete your Stripe.com registration before creating a new TiBillet space."))
         # return redirect('/tenant/new/')
-
 
 
 class ScanTicket(viewsets.ViewSet):
@@ -1567,7 +1580,7 @@ class ScanTicket(viewsets.ViewSet):
 
     @action(detail=False, methods=['GET'])
     def test_api(self, request):
-        scan_app: ScanApp = request.scan_app # grâce à HasScanApi
+        scan_app: ScanApp = request.scan_app  # grâce à HasScanApi
         return Response({
             "success": True,
             "message": "API key is valid",
@@ -1634,9 +1647,9 @@ class ScanTicket(viewsets.ViewSet):
             from fedow_connect.utils import verify_signature
             data_b64_bytes = data_b64.encode('utf-8')
             if not verify_signature(
-                ticket.reservation.event.get_public_key(),
-                data_b64_bytes,
-                signature
+                    ticket.reservation.event.get_public_key(),
+                    data_b64_bytes,
+                    signature
             ):
                 return Response(
                     {"error": "Invalid ticket signature"},
@@ -1658,7 +1671,8 @@ class ScanTicket(viewsets.ViewSet):
                     "first_name": ticket.first_name,
                     "last_name": ticket.last_name,
                     "price": ticket.pricesold.price.name if ticket.pricesold else None,
-                    "product": ticket.pricesold.productsold.product.name if ticket.pricesold and hasattr(ticket.pricesold, 'productsold') else None,
+                    "product": ticket.pricesold.productsold.product.name if ticket.pricesold and hasattr(
+                        ticket.pricesold, 'productsold') else None,
                     "scanned_by": str(ticket.scanned_by.uuid) if ticket.scanned_by else None
                 },
                 "reservation": {
@@ -1723,9 +1737,9 @@ class ScanTicket(viewsets.ViewSet):
             from fedow_connect.utils import verify_signature
             data_b64_bytes = data_b64.encode('utf-8')
             if not verify_signature(
-                ticket.reservation.event.get_public_key(),
-                data_b64_bytes,
-                signature
+                    ticket.reservation.event.get_public_key(),
+                    data_b64_bytes,
+                    signature
             ):
                 return Response(
                     {"error": "Invalid ticket signature"},
@@ -1747,7 +1761,8 @@ class ScanTicket(viewsets.ViewSet):
                         "first_name": ticket.first_name,
                         "last_name": ticket.last_name,
                         "price": ticket.pricesold.price.name if ticket.pricesold else None,
-                        "product": ticket.pricesold.productsold.product.name if ticket.pricesold and hasattr(ticket.pricesold, 'productsold') else None,
+                        "product": ticket.pricesold.productsold.product.name if ticket.pricesold and hasattr(
+                            ticket.pricesold, 'productsold') else None,
                         "scanned_by": str(ticket.scanned_by.uuid) if ticket.scanned_by else None
                     },
                     "reservation": {
@@ -1773,7 +1788,8 @@ class ScanTicket(viewsets.ViewSet):
                     "first_name": ticket.first_name,
                     "last_name": ticket.last_name,
                     "price": ticket.pricesold.price.name if ticket.pricesold else None,
-                    "product": ticket.pricesold.productsold.product.name if ticket.pricesold and hasattr(ticket.pricesold, 'productsold') else None
+                    "product": ticket.pricesold.productsold.product.name if ticket.pricesold and hasattr(
+                        ticket.pricesold, 'productsold') else None
                 },
                 "reservation": {
                     "uuid": str(ticket.reservation.uuid),
