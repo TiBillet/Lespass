@@ -243,6 +243,7 @@ def context_for_membership_email(membership: "Membership"):
 
 @app.task
 def send_membership_invoice_to_email(membership_uuid: str):
+    time.sleep(1) # pour donner le tps de récupérer l'objet
     membership = Membership.objects.get(uuid=membership_uuid)
     user = membership.user
     # Mails de confirmation qui contient un lien vers la facture :
