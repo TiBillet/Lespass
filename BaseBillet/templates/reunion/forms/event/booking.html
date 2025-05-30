@@ -30,66 +30,68 @@
             {% translate "Your email is not confirmed. Please check your spam folder :)" %}
         </div>
         {% endif %}
-        {% regroup event.published_prices by free_price as price_groups %}
-        {% for free_price, published_prices in price_groups %}
-        <details class="js-price-group mb-3" name="price_groups" {% if forloop.first %}open{% endif %}>
-            <summary class="text-secondary">
-                {% if free_price %}
-                {% trans 'Open price (one ticket)' %}
-                {% else %}
-                {% trans 'Specific prices' %}
-                {% endif %}
-            </summary>
-            {% for price in published_prices %}
-            {% if price.free_price == free_price %}
-            <div class="mb-3 js-order">
-                <label for="amount-{{ price.uuid }}" class="form-label">
-                    <strong>{{ price.name }}</strong>{% if not free_price and price.prix > 0 %}&nbsp;:
-                    <span class="js-order-price">{{ price.prix }}</span>&nbsp;€
-                    {% elif free_price %}
-                    <span class="js-order-price-alt d-none">{% trans 'at an open price' %}</span>
-                    {% endif %}
-                </label>
-                <!-- Adhésion obligatoire pour selectionner ce produit ! -->
-                {% if price.adhesion_obligatoire %}
-                    {% if not user.is_authenticated %}
-                    <div class="alert alert-danger" role="alert">
-                        {% trans "Log in to access this rate." %}
-                    </div>
-                    {% elif not user|is_membership:price.adhesion_obligatoire %}
-                    <div class="alert alert-danger" role="alert">
-                        {% trans "Suscribe to access this rate." %}
-                    </div>
+        <div class="accordion mb-3">
+            {% regroup event.published_prices by free_price as price_groups %}
+            {% for free_price, published_prices in price_groups %}
+            <details class="accordion-item js-price-group" name="price_groups" {% if forloop.first %}open{% endif %}>
+                <summary class="text-secondary p-3">
+                    {% if free_price %}
+                    {% trans 'Open price (one ticket)' %}
                     {% else %}
-                    <span class="d-flex align-items-baseline gap-3">
-                        <bs-counter
-                            id="amount-{{ price.uuid }}"
-                            name="{{ price.uuid }}"
-                            step="1" min="0"
-                            max="{% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% else %}{{ price.max_per_user }}{% endif %}"
-                            class="flex-grow-1 js-order-amount"
-                        ></bs-counter>
-                        {% trans 'ticket(s)' %}
-                    </span>
+                    {% trans 'Specific prices' %}
                     {% endif %}
-                <!-- Adhésion non obligatoire -->
-                {% else %}
-                    <span class="d-flex align-items-baseline gap-3">
-                        <bs-counter
-                            id="amount-{{ price.uuid }}"
-                            name="{{ price.uuid }}"
-                            step="1" min="0"
-                            max="{% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% else %}{{ price.max_per_user }}{% endif %}"
-                            class="flex-grow-1 js-order-amount"
-                        ></bs-counter>
-                        {% trans 'ticket(s)' %}
-                    </span>
+                </summary>
+                {% for price in published_prices %}
+                {% if price.free_price == free_price %}
+                <div class="p-3 js-order">
+                    <label for="amount-{{ price.uuid }}" class="form-label">
+                        <strong>{{ price.name }}</strong>{% if not free_price and price.prix > 0 %}&nbsp;:
+                        <span class="js-order-price">{{ price.prix }}</span>&nbsp;€
+                        {% elif free_price %}
+                        <span class="js-order-price-alt d-none">{% trans 'at an open price' %}</span>
+                        {% endif %}
+                    </label>
+                    <!-- Adhésion obligatoire pour selectionner ce produit ! -->
+                    {% if price.adhesion_obligatoire %}
+                        {% if not user.is_authenticated %}
+                        <div class="alert alert-danger" role="alert">
+                            {% trans "Log in to access this rate." %}
+                        </div>
+                        {% elif not user|is_membership:price.adhesion_obligatoire %}
+                        <div class="alert alert-danger" role="alert">
+                            {% trans "Suscribe to access this rate." %}
+                        </div>
+                        {% else %}
+                        <span class="d-flex align-items-baseline gap-3">
+                            <bs-counter
+                                id="amount-{{ price.uuid }}"
+                                name="{{ price.uuid }}"
+                                step="1" min="0"
+                                max="{% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% else %}{{ price.max_per_user }}{% endif %}"
+                                class="flex-grow-1 js-order-amount"
+                            ></bs-counter>
+                            {% trans 'ticket(s)' %}
+                        </span>
+                        {% endif %}
+                    <!-- Adhésion non obligatoire -->
+                    {% else %}
+                        <span class="d-flex align-items-baseline gap-3">
+                            <bs-counter
+                                id="amount-{{ price.uuid }}"
+                                name="{{ price.uuid }}"
+                                step="1" min="0"
+                                max="{% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% else %}{{ price.max_per_user }}{% endif %}"
+                                class="flex-grow-1 js-order-amount"
+                            ></bs-counter>
+                            {% trans 'ticket(s)' %}
+                        </span>
+                    {% endif %}
+                </div>
                 {% endif %}
-            </div>
-            {% endif %}
+                {% endfor %}
+            </details>
             {% endfor %}
-        </details>
-        {% endfor %}
+        </div>
         {% for option in event.options_radio.all %}
             <div class="mb-3 has-validation">
                 <div class="form-check me-3">

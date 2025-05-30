@@ -67,6 +67,13 @@ body {
 	background: none;
 }
 
+details.accordion-item:hover {
+    background: var(--bs-tertiary-bg);
+}
+details.accordion-item[open] {
+    background: var(--bs-secondary-bg);
+}
+
 @media (min-width: 768px) {
     .event-tags {
         max-width: 50%;
