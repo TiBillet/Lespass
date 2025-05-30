@@ -80,6 +80,7 @@ class Command(BaseCommand):
                 config.email = os.environ['ADMIN_EMAIL']
                 config.stripe_mode_test = True
                 config.stripe_connect_account_test = os.environ.get('TEST_STRIPE_CONNECT_ACCOUNT')
+                config.stripe_payouts_enabled = True
                 config.site_web = "https://tibillet.org"
                 config.legal_documents = "https://tibillet.org/cgucgv"
                 config.twitter = "https://twitter.com/tibillet"

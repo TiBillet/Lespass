@@ -77,12 +77,12 @@ class Command(BaseCommand):
         # crash if bad api stripe key
         stripe_mode_test = True
         try:
-            if os.environ.get('STRIPE_TEST') != '1':
+            if os.environ.get('STRIPE_TEST') != '1': # Si PROD
                 stripe_mode_test = False
                 stripe.api_key = stripe_api_key
                 # Test de la cléf
                 stripe.Product.list()
-            else:
+            else: # Si TEST
                 stripe.api_key = stripe_test_api_key
                 stripe.Product.list()
         except Exception as e:
