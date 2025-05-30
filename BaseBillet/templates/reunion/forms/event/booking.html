@@ -33,8 +33,8 @@
         <div class="accordion mb-3">
             {% regroup event.published_prices by free_price as price_groups %}
             {% for free_price, published_prices in price_groups %}
-            <details class="accordion-item p-3 js-price-group" name="price_groups" {% if forloop.first %}open{% endif %}>
-                <summary class="text-secondary">
+            <details class="accordion-item js-price-group" name="price_groups" {% if forloop.first %}open{% endif %}>
+                <summary class="text-secondary p-3">
                     {% if free_price %}
                     {% trans 'Open price (one ticket)' %}
                     {% else %}
@@ -43,7 +43,7 @@
                 </summary>
                 {% for price in published_prices %}
                 {% if price.free_price == free_price %}
-                <div class="mb-3 js-order">
+                <div class="p-3 js-order">
                     <label for="amount-{{ price.uuid }}" class="form-label">
                         <strong>{{ price.name }}</strong>{% if not free_price and price.prix > 0 %}&nbsp;:
                         <span class="js-order-price">{{ price.prix }}</span>&nbsp;€
