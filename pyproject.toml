@@ -10,7 +10,7 @@ package-mode = false
 [tool.poetry.dependencies]
 python = "^3.11"
 django = "^4.2"
-djangorestframework = "^3.14.0"
+djangorestframework = "^3.14"
 requests = "^2.31.0"
 pillow = "^11"
 django-stdimage = "^6.0.2"
