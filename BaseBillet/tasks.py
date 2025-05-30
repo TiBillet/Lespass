@@ -578,8 +578,6 @@ def new_tenant_mailer(waiting_config_uuid: str):
 
         time.sleep(2) # Attendre que la db soit bien
         waiting_config = WaitingConfiguration.objects.get(uuid=waiting_config_uuid)
-        User = get_user_model()
-        user = User.objects.get(email=waiting_config.email)
 
         signer = TimestampSigner()
         token = urlsafe_base64_encode(signer.sign(f"{waiting_config.uuid}").encode('utf8'))
