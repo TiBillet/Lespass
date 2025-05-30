@@ -576,7 +576,7 @@ def new_tenant_mailer(waiting_config_uuid: str):
         tenant = connection.tenant
         tenant_url = tenant.get_primary_domain().domain
 
-        time.sleep(2) # Attendre que la db soit bien
+        time.sleep(2) # Attendre que la db soit bien a jour
         waiting_config = WaitingConfiguration.objects.get(uuid=waiting_config_uuid)
 
         signer = TimestampSigner()
