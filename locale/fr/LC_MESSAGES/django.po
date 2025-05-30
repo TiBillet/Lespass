@@ -2392,7 +2392,7 @@ msgstr "Prix libre (un billet)"
 
 #: BaseBillet/templates/reunion/forms/event/booking.html:40
 msgid "Specific prices"
-msgstr "Tarifs"
+msgstr "Tarifs fixes"
 
 #: BaseBillet/templates/reunion/forms/event/booking.html:50
 msgid "at an open price"
