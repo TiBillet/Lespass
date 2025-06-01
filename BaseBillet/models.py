@@ -144,6 +144,37 @@ class PostalAddress(models.Model):
                             help_text=_("It will help with finding it quickly later.")
                             )
 
+    img = StdImageField(upload_to='images/',
+                        blank=True, null=True,
+                        variations={
+                            'fhd': (1920, 1920),
+                            'hdr': (1280, 1280),
+                            'med': (480, 480),
+                            'thumbnail': (150, 90),
+                            'crop_hdr': (960, 540, True),
+                            'crop': (480, 270, True),
+                            'social_card': (1200, 630, True),
+                        },
+                        delete_orphans=True, verbose_name=_("Main image"),
+                        help_text=_("The main image of the adress, displayed in the head of the event page if no image on event.")
+                        )
+
+    sticker_img = StdImageField(upload_to='images/',
+                                blank=True, null=True,
+                                variations={
+                                    'fhd': (1920, 1920),
+                                    'hdr': (1280, 1280),
+                                    'med': (480, 480),
+                                    'thumbnail': (150, 90),
+                                    'crop_hdr': (960, 540, True),
+                                    'crop': (480, 270, True),
+                                },
+                                delete_orphans=True, verbose_name=_("Sticker image"),
+                                help_text=_(
+                                    "The small image displayed in the events list if not img on event. If None, img will be displayed. 4x3 ratio.")
+                                )
+
+
     street_address = models.TextField(
         verbose_name=_("Street address"),
         help_text=_("Street number, name, etc.")
@@ -1066,6 +1097,10 @@ class Event(models.Model):
         # Nécéssaire pour le prefetch multi tenant
         if not self.is_external:
             self.full_url = f"https://{connection.tenant.get_primary_domain().domain}/event/{self.slug}/"
+
+        if not self.postal_address:
+            if config.postal_address:
+                self.postal_address = config.postal_address
 
         # Si parent, on force la catégorie ACTION
         if self.parent:

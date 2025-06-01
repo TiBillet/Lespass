@@ -40,6 +40,7 @@
             "name": "{{ config.organisation }}",
             {% if event.postal_address %}"address": {
                 "@type": "PostalAddress",
+                {% if event.postal_address.name %}"name": "{{ event.postal_address.name }}",{% endif %}
                 "streetAddress": "{{ event.postal_address.address }}",
                 "addressLocality": "{{ event.postal_address.city }}",
                 "postalCode": "{{ event.postal_address.postal_code }}",

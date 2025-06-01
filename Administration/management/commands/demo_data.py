@@ -90,7 +90,7 @@ class Command(BaseCommand):
                 # config.federated_with.add(tenant2)
 
                 postal_address = PostalAddress.objects.create(
-                    name=fake.street_name(),
+                    name="Le Coeur en Or",
                     street_address=fake.street_address(),
                     address_locality=fake.city(),
                     address_region=fake.region(),
@@ -98,11 +98,25 @@ class Command(BaseCommand):
                     address_country='France',
                     latitude=fake.latitude(),
                     longitude=fake.longitude(),
-                    comment=fake.sentence(),
+                    comment="Bus 42 et métro : Arrêt D. Adams. Merci d'eteindre votre moteur d'improbabilité infinie.",
                     is_main=True,
                 )
+
                 config.postal_address = postal_address
                 config.save()
+
+                postal_address_2 = PostalAddress.objects.create(
+                    name="Le Discovery",
+                    street_address=fake.street_address(),
+                    address_locality=fake.city(),
+                    address_region=fake.region(),
+                    postal_code=fake.postcode(),
+                    address_country='France',
+                    latitude=fake.latitude(),
+                    longitude=fake.longitude(),
+                    comment="Parking sur le col des Aravis. Boisson offerte si vous venez à velo. Paix et prospérité.",
+                    is_main=False,
+                )
 
                 ### LINK TO FEDOW
                 ## Liaison tenant avec Fedow
@@ -255,7 +269,7 @@ class Command(BaseCommand):
                 entree_libre, created = Tag.objects.get_or_create(name='Entrée libre')
 
                 event_entree_libre, created = Event.objects.get_or_create(
-                    name=f"{fake.word().capitalize()} : Entrée libre",
+                    name=f"Scène ouverte : Entrée libre",
                     datetime=fake.future_datetime('+7d'),
                     short_description="Scène ouverte Rock !",
                     long_description="Un évènement gratuit, ouvert à tous.tes sans réservation."
@@ -284,13 +298,13 @@ class Command(BaseCommand):
                 )
 
                 event_gratuit_avec_free_resa, created = Event.objects.get_or_create(
-                    name=f"{fake.word().capitalize()} : Gratuit avec réservation",
+                    name=f"Disco Caravane : Gratuit avec réservation",
                     datetime=fake.future_datetime('+7d'),
                     jauge_max=200,
                     max_per_user=4,
                     short_description="Attention, places limitées, pensez à réserver !",
                     long_description="Un évènement gratuit, avec une jauge maximale de 200 personnes et un nombre de billets limité à 4 par réservation."
-                                     "\nBillets non nominatifs.",
+                                     "\nBillets non nominatifs.\nÇa fait pas mal pour une caravane hein ?",
                     categorie=Event.CONCERT,
                     postal_address=postal_address,
                 )
@@ -318,7 +332,7 @@ class Command(BaseCommand):
                 prix_libre, created = Tag.objects.get_or_create(name='Prix libre')
 
                 event_prix_libre, created = Event.objects.get_or_create(
-                    name=f"{fake.word().capitalize()} : Entrée a prix libre",
+                    name=f"Concert caritatif : Entrée a prix libre",
                     datetime=fake.future_datetime('+7d'),
                     jauge_max=200,
                     max_per_user=4,
@@ -326,7 +340,7 @@ class Command(BaseCommand):
                     long_description="Un évènement à prix libre, avec une jauge maximale de 200 personnes et un nombre de billets limité à 1 par réservation."
                                      "\nBillets non nominatifs.",
                     categorie=Event.CONCERT,
-                    postal_address=postal_address,
+                    postal_address=postal_address_2,
                 )
                 event_prix_libre.products.add(free_price_resa)
                 event_prix_libre.tag.add(jazz)
@@ -357,7 +371,7 @@ class Command(BaseCommand):
                 )
 
                 event_payant_nominatif_tarif_asso, created = Event.objects.get_or_create(
-                    name=f"{fake.word().capitalize()} : Spectacle payant",
+                    name=f"What the Funk ? Spectacle payant",
                     datetime=fake.future_datetime('+7d'),
                     jauge_max=600,
                     max_per_user=10,
@@ -365,7 +379,6 @@ class Command(BaseCommand):
                     long_description="Jauge maximale de 600 personnes et nombre de billets limité à 10 par réservation."
                                      "\nBillets nominatifs.",
                     categorie=Event.CONCERT,
-                    postal_address=postal_address,
                 )
                 event_payant_nominatif_tarif_asso.products.add(billet)
                 event_payant_nominatif_tarif_asso.tag.add(world)

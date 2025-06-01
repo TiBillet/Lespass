@@ -26,10 +26,22 @@
                 </div>
             {% endif %}
             {#  <a href="{{ event.full_url }}" hx-get="{{ event.full_url }}" hx-target="body" hx-push-url="true" class="col fs-5">#}
-            <a href="/event/{{ event.slug }}/" hx-boost="true" hx-target="body" class="col fs-5"
-               {% if embed %}target="_blank" {% endif %}> <!-- Si c'est embed, on ouvre dans une page externe -->
-                {{ event.name }}
-            </a>
+            <div class="col">
+                <a href="/event/{{ event.slug }}/" hx-boost="true" hx-target="body" class="fs-5"
+                   {% if embed %}target="_blank" {% endif %}> <!-- Si c'est embed, on ouvre dans une page externe -->
+                    {{ event.name }}
+                </a>
+                <div class="small text-muted">
+                    {% if event.postal_address %}
+                        {% if event.postal_address.name %}<i class="bi bi-geo-alt-fill"></i> {{ event.postal_address.name }} - {% endif %}
+                        <i class="bi bi-buildings"></i> {{ event.postal_address.address_locality }}
+                    {% elif event.full_url and "://" in event.full_url %}
+                        {% with domain=event.full_url|cut:"https://"|cut:"http://"|cut:"/event/"|cut:event.slug|cut:"/" %}
+                            <i class="bi bi-globe"></i> {{ domain }}
+                        {% endwith %}
+                    {% endif %}
+                </div>
+            </div>
             <div class="col-md-auto text-md-end event-tags">
                 {% for tag in event.tag.all %}
                     <a href="?tag={{ tag.slug }}" hx-boost="true" class="btn btn-sm mb-1"

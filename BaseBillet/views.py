@@ -850,6 +850,9 @@ class EventMVT(viewsets.ViewSet):
                     # On recherche dans nom, description et tag
                     events = events.filter(
                         Q(name__icontains=search) |
+                        Q(postal_address__name__icontains=search) |
+                        Q(postal_address__address_locality__icontains=search) |
+                        Q(postal_address__postal_code__icontains=search) |
                         Q(short_description__icontains=search) |
                         Q(long_description__icontains=search) |
                         Q(tag__slug__icontains=search) |
@@ -893,6 +896,7 @@ class EventMVT(viewsets.ViewSet):
     def list(self, request: HttpRequest):
         context = get_context(request)
         tags = request.GET.getlist('tag')
+        # search = str(request.data['search'])  # on s'assure que c'est bien une string. Todo : Validator !
         page = request.GET.get('page', 1)
         context['dated_events'], context['paginated_info'] = self.federated_events_filter(tags=tags, page=page)
         # On renvoie la page en entier
