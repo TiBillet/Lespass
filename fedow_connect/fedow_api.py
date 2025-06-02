@@ -329,6 +329,9 @@ class WalletFedow():
                                       path='wallet/global_asset_bank_stripe_deposit',
                                       data=data, apikey=apikey)
 
+        if request_bank_stripe_deposit.status_code == 208:
+            logger.info(f"Fedow global_asset_bank_stripe_deposit HTTP_208_ALREADY_REPORTED")
+
         serialized_transaction = TransactionValidator(data=request_bank_stripe_deposit.json())
         if serialized_transaction.is_valid():
             serialized_transaction = serialized_transaction # tout le serialized_transaction plutôt que validated data pour récupérer l'objet FedowTransaction créé en DB

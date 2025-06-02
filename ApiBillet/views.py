@@ -944,12 +944,14 @@ class Webhook_stripe(APIView):
                                 serializer_transaction = fedowAPI.wallet.global_asset_bank_stripe_deposit(payload)
                                 hash = serializer_transaction.fedow_transaction.hash
                                 uuid = serializer_transaction.fedow_transaction.uuid
-                                # Envoie à Laboutik
                                 payload['fedow_transaction_hash'] = str(hash)
                                 payload['fedow_transaction_uuid'] = str(uuid)
+
+                                # Envoie à Laboutik
                                 send_stripe_bank_deposit_to_laboutik.delay(payload)
-                                logger.info(f"Envoyé à Fedow. Création de la ligne comptable :")
-                                logger.info(f"{payload}")
+                                # logger.info(f"Envoyé à Laboutik. Création de la ligne comptable :")
+                                # logger.info(f"{payload}")
+
                                 # Création du paiement stripe
                                 pstripe = Paiement_stripe.objects.create(
                                     detail=_("Versement de monnaie globale"),
