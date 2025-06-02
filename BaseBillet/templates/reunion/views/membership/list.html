@@ -43,7 +43,7 @@
                             {% include 'reunion/partials/picture.html' with img=product.img alt=product.name class='card-img-top' ratio='16x9' %}
                             <div class="card-body">
                                 <h3 class="card-title">{{ product.name }}</h3>
-                                {% if product.long_description %}
+                                {% if product.short_description %}
                                     <p class="card-text">{{ product.short_description }}</p>
                                 {% endif %}
                                 {% if product.long_description %}
