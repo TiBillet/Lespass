@@ -20,7 +20,7 @@
 
                     {% if event.carrousel.all %}
                     <div class="my-5">
-                        {% include 'reunion/partials/event/carousel.html' with carousel=event.carrousel.all max_height='25vh' auto=false %}
+                        {% include 'reunion/views/event/partial/carousel.html' with carousel=event.carrousel.all max_height='25vh' auto=false %}
                     </div>
                     {% endif %}
                 </div>
@@ -60,6 +60,6 @@
         </div>
     </div>
     {% if event.children.exists %}
-        {% include 'reunion/partials/event/volunteers.html' %}
+        {% include 'reunion/views/event/partial/volunteers.html' %}
     {% endif %}
 </div>

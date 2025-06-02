@@ -16,7 +16,7 @@
         <!-- slideshow -->
         {% if carrousel_event_list|length > 0 %}
             <header class="container-lg">
-                {% include "reunion/partials/event/carousel.html" with carousel=carrousel_event_list %}
+                {% include "reunion/views/event/partial/carousel.html" with carousel=carrousel_event_list %}
             </header>
         {% endif %}
 
@@ -28,11 +28,11 @@
 
         <!-- search bar and filtering -->
         <section class="container-lg p-3 sticky-top bg-body" style="height: fit-content;">
-            {% include "reunion/partials/event/search.html" %}
+            {% include "reunion/views/event/partial/search.html" %}
         </section>
     {% endif %}
     <!-- event list -->
     <main class="container-lg" id="event_list">
-        {% include "reunion/partials/event/list.html" %}
+        {% include "reunion/views/event/partial/list.html" %}
     </main>
 {% endblock %}

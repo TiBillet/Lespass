@@ -886,6 +886,7 @@ class EventMVT(viewsets.ViewSet):
         search = request.data.get('search')  # on s'assure que c'est bien une string. Todo : Validator !
         if not search: # Pour le get réalisé par le clic sur l'adresse
             search = request.GET.get('search')
+
         if search:
             search = str(search)
 
@@ -896,10 +897,13 @@ class EventMVT(viewsets.ViewSet):
 
         ctx = {}  # le dict de context pour template
         ctx['dated_events'], ctx['paginated_info'] = self.federated_events_filter(tags=tags, search=search, page=page)
-        return render(request, "reunion/partials/event/list.html", context=ctx)
+        return render(request, "reunion/views/event/partial/list.html", context=ctx)
 
     # La page get /
     def list(self, request: HttpRequest):
+        #TODO pour pouvoir sauvegader l'url de recherche :
+        # - tout passer en GET ( et non pas le partial_list POST plus haut )
+        # - passer sur du partial render avec HTMX
         context = get_context(request)
         tags = request.GET.getlist('tag')
         # search = str(request.data['search'])  # on s'assure que c'est bien une string. Todo : Validator !

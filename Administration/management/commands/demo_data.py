@@ -262,11 +262,11 @@ class Command(BaseCommand):
                 # )
 
                 ### EVENTS ###
-                rock, created = Tag.objects.get_or_create(name='Rock')
-                jazz, created = Tag.objects.get_or_create(name='Jazz')
-                world, created = Tag.objects.get_or_create(name='EDM')
-                gratuit, created = Tag.objects.get_or_create(name='Gratuit')
-                entree_libre, created = Tag.objects.get_or_create(name='Entrée libre')
+                rock, created = Tag.objects.get_or_create(name='Rock', color='#3B71CA')
+                jazz, created = Tag.objects.get_or_create(name='Jazz', color='#14A44D')
+                world, created = Tag.objects.get_or_create(name='EDM', color='#DC4C64')
+                gratuit, created = Tag.objects.get_or_create(name='Gratuit', color='#E4A11B')
+                entree_libre, created = Tag.objects.get_or_create(name='Entrée libre', color='##FBFBFB')
 
                 event_entree_libre, created = Event.objects.get_or_create(
                     name=f"Scène ouverte : Entrée libre",
