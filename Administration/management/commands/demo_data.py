@@ -32,7 +32,7 @@ class Command(BaseCommand):
         sub = os.environ['SUB']
         tenant1 = Client.objects.get(name=sub)
         tenant1.name = "Le Tiers-Lustre"
-        
+
         tenant1.save()
 
         # Fabrication d'un deuxième tenant pour de la fédération
@@ -264,9 +264,10 @@ class Command(BaseCommand):
                 ### EVENTS ###
                 rock, created = Tag.objects.get_or_create(name='Rock', color='#3B71CA')
                 jazz, created = Tag.objects.get_or_create(name='Jazz', color='#14A44D')
-                world, created = Tag.objects.get_or_create(name='EDM', color='#DC4C64')
+                world, created = Tag.objects.get_or_create(name='World', color='#DC4C64')
                 gratuit, created = Tag.objects.get_or_create(name='Gratuit', color='#E4A11B')
-                entree_libre, created = Tag.objects.get_or_create(name='Entrée libre', color='##FBFBFB')
+                entree_libre, created = Tag.objects.get_or_create(name='Entrée libre', color='#FBFBFB')
+                chantiers, created = Tag.objects.get_or_create(name='chantiers', color='#54B4D3')
 
                 event_entree_libre, created = Event.objects.get_or_create(
                     name=f"Scène ouverte : Entrée libre",
@@ -385,3 +386,59 @@ class Command(BaseCommand):
 
                 # TODO: Gratuit mais avec recharge cashless obligatoire
                 # TODO: Multi artiste
+
+                # Création de l'événement principal "Chantier participatif : besoin de volontaires"
+                event_chantier_participatif, created = Event.objects.get_or_create(
+                    name="Chantier participatif : besoin de volontaires",
+                    datetime=fake.future_datetime('+14d'),
+                    short_description="Venez participer à nos chantiers collectifs !",
+                    long_description="Nous avons besoin de volontaires pour différentes actions de chantier participatif. "
+                                     "Inscrivez-vous aux différentes sessions selon vos disponibilités et compétences.",
+                    categorie=Event.CHANTIER,
+                    postal_address=postal_address,
+                    jauge_max=30,
+                    max_per_user=1,
+                )
+                event_chantier_participatif.tag.add(chantiers)
+                event_chantier_participatif.tag.add(gratuit)
+
+                # Création des sous-événements de type Action
+                sous_event_jardinage, created = Event.objects.get_or_create(
+                    name="Jardinage et plantation",
+                    datetime=fake.future_datetime('+15d'),
+                    short_description="Aménagement du jardin partagé",
+                    long_description="Venez nous aider à planter, désherber et aménager notre jardin partagé. "
+                                     "Apportez vos gants et votre bonne humeur !",
+                    categorie=Event.ACTION,
+                    jauge_max=10,
+                    max_per_user=1,
+                    parent=event_chantier_participatif,
+                )
+                sous_event_jardinage.tag.add(chantiers)
+
+                sous_event_peinture, created = Event.objects.get_or_create(
+                    name="Peinture et décoration",
+                    datetime=fake.future_datetime('+16d'),
+                    short_description="Rafraîchissement des murs et décorations",
+                    long_description="Session de peinture pour rafraîchir les murs du local. "
+                                     "Nous fournirons le matériel, venez avec des vêtements adaptés.",
+                    categorie=Event.ACTION,
+                    jauge_max=8,
+                    max_per_user=1,
+                    parent=event_chantier_participatif,
+                )
+                sous_event_peinture.tag.add(chantiers)
+
+                sous_event_bricolage, created = Event.objects.get_or_create(
+                    name="Bricolage et réparations",
+                    datetime=fake.future_datetime('+17d'),
+                    short_description="Petits travaux de bricolage",
+                    long_description="Nous avons besoin de personnes pour effectuer divers travaux de bricolage : "
+                                     "réparation de mobilier, installation d'étagères, etc. "
+                                     "Si vous avez des compétences en bricolage, rejoignez-nous !",
+                    categorie=Event.ACTION,
+                    jauge_max=5,
+                    max_per_user=1,
+                    parent=event_chantier_participatif,
+                )
+                sous_event_bricolage.tag.add(chantiers)
