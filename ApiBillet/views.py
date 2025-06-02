@@ -948,14 +948,15 @@ class Webhook_stripe(APIView):
                                 payload['fedow_transaction_hash'] = str(hash)
                                 payload['fedow_transaction_uuid'] = str(uuid)
                                 send_stripe_bank_deposit_to_laboutik.delay(payload)
-
+                                logger.info(f"Envoyé à Fedow. Création de la ligne comptable :")
+                                logger.info(f"{payload}")
                                 # Création du paiement stripe
                                 pstripe = Paiement_stripe.objects.create(
                                     detail=_("Versement de monnaie globale"),
                                     payment_intent_id=transfer_id,
                                     metadata_stripe=json.dumps(payload),
                                     order_date=created,
-                                    status=Paiement_stripe.PAID,
+                                    status=Paiement_stripe.VALID,
                                     traitement_en_cours=True,
                                     source=Paiement_stripe.TRANSFERT,
                                     source_traitement=Paiement_stripe.WEBHOOK,
@@ -968,7 +969,7 @@ class Webhook_stripe(APIView):
                                     status=status.HTTP_201_CREATED)
                             except Exception as e:
                                 logger.error(f"Error processing Stripe transfer for tenant {tenant}: {str(e)}")
-                                raise e from None
+                                raise e
             # send_stripe_transfert_to_laboutik(payload)
 
 
