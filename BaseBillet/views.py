@@ -879,10 +879,16 @@ class EventMVT(viewsets.ViewSet):
         # Retourn les évènements classés par date et les infos de pagination
         return sorted_dict_by_date, paginated_info
 
-    @action(detail=False, methods=['POST'])
+    @action(detail=False, methods=['POST', 'GET'])
     def partial_list(self, request):
         logger.info(f"request.data : {request.data}")
-        search = str(request.data['search'])  # on s'assure que c'est bien une string. Todo : Validator !
+
+        search = request.data.get('search')  # on s'assure que c'est bien une string. Todo : Validator !
+        if not search: # Pour le get réalisé par le clic sur l'adresse
+            search = request.GET.get('search')
+        if search:
+            search = str(search)
+
         tags = request.GET.getlist('tag')
         page = request.GET.get('page', 1)
 

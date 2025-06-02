@@ -20,7 +20,7 @@
                 <div class="col-auto py-3" style="width: 140px">
                     {% include 'reunion/partials/picture.html' with img=event.sticker_img alt=event.name ratio='4x3' class='rounded' %}
                 </div>
-                {% else %}
+            {% else %}
                 <div class="col-auto py-3" style="width: 140px">
                     {% include 'reunion/partials/picture.html' with img=event.img alt=event.name ratio='4x3' class='rounded' %}
                 </div>
@@ -33,8 +33,16 @@
                 </a>
                 <div class="small text-muted">
                     {% if event.postal_address %}
-                        {% if event.postal_address.name %}<i class="bi bi-geo-alt-fill"></i> {{ event.postal_address.name }} - {% endif %}
+                        {% if event.postal_address.name %}
+                            <a hx-get="/event/partial_list/?page={{ page }}&search={{ event.postal_address.name }}"
+                                  hx-target="#event_list">
+                            <i class="bi bi-geo-alt-fill"></i>{{ event.postal_address.name }} -
+                            </a>
+                        {% endif %}
+                        <a hx-get="/event/partial_list/?page={{ page }}&search={{ event.postal_address.address_locality }}"
+                              hx-target="#event_list">
                         <i class="bi bi-buildings"></i> {{ event.postal_address.address_locality }}
+                        </a>
                     {% elif event.full_url and "://" in event.full_url %}
                         {% with domain=event.full_url|cut:"https://"|cut:"http://"|cut:"/event/"|cut:event.slug|cut:"/" %}
                             <i class="bi bi-globe"></i> {{ domain }}
@@ -46,7 +54,7 @@
                 {% for tag in event.tag.all %}
                     <a href="?tag={{ tag.slug }}" hx-boost="true" class="btn btn-sm mb-1"
                        style="background-color: {{ tag.color }}; color: {% if tag.color|brightness < 128 %}white{% else %}black{% endif %};">
-                    {{ tag.name }}
+                        {{ tag.name }}
                     </a>
                 {% endfor %}
             </div>
