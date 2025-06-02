@@ -945,9 +945,9 @@ class Webhook_stripe(APIView):
                                 hash = serializer_transaction.fedow_transaction.hash
                                 uuid = serializer_transaction.fedow_transaction.uuid
                                 # Envoie à Laboutik
-                                payload['fedow_transaction_hash'] = hash
-                                payload['fedow_transaction_uuid'] = uuid
-                                send_stripe_bank_deposit_to_laboutik(payload) # todo: passer sur celery
+                                payload['fedow_transaction_hash'] = str(hash)
+                                payload['fedow_transaction_uuid'] = str(uuid)
+                                send_stripe_bank_deposit_to_laboutik.delay(payload)
 
                                 # Création du paiement stripe
                                 pstripe = Paiement_stripe.objects.create(

@@ -10,7 +10,7 @@ from faker import Faker
 
 from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
-from BaseBillet.models import Product, OptionGenerale, Price, Configuration, Event, Tag, PostalAddress
+from BaseBillet.models import Product, OptionGenerale, Price, Configuration, Event, Tag, PostalAddress, FormbricksConfig, FormbricksForms
 from Customers.models import Client, Domain
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
@@ -104,6 +104,13 @@ class Command(BaseCommand):
 
                 config.postal_address = postal_address
                 config.save()
+
+                # Configuration de Formbricks
+                formbricks_config = FormbricksConfig.get_solo()
+                formbricks_api_key = os.environ.get('TEST_FORMBRICKS_API', '')
+                if formbricks_api_key:
+                    formbricks_config.set_api_key(formbricks_api_key)
+                    formbricks_config.save()
 
                 postal_address_2 = PostalAddress.objects.create(
                     name="Le Discovery",
@@ -442,3 +449,90 @@ class Command(BaseCommand):
                     parent=event_chantier_participatif,
                 )
                 sous_event_bricolage.tag.add(chantiers)
+
+                ### EVENT WITH FORMBRICKS FORM ###
+                if os.environ.get('TEST_FORMBRICKS_ADH_FORM') and os.environ.get('TEST_FORMBRICKS_ADH_FORM'):
+                    # Create a product with a Formbricks form
+                    formbricks_event_product, created = Product.objects.get_or_create(
+                        name="Billet avec formulaire Formbricks",
+                        short_description="Démonstration d'un billet avec formulaire personnalisé",
+                        long_description="Ce produit est une démonstration de l'intégration avec Formbricks. "
+                                        "Après l'achat, un formulaire personnalisé sera présenté pour recueillir des informations supplémentaires.",
+                        categorie_article=Product.BILLET,
+                        nominative=True,
+                    )
+
+                    # Create a price for the product
+                    formbricks_event_price, created = Price.objects.get_or_create(
+                        name="Tarif standard",
+                        short_description="Tarif standard avec formulaire",
+                        prix=15,
+                        product=formbricks_event_product,
+                    )
+
+                    # Create a Formbricks form for the product
+                    formbricks_event_form_id = os.environ.get('TEST_FORMBRICKS_EVENT_FORM', '')
+                    if formbricks_event_form_id:
+                        formbricks_event_form, created = FormbricksForms.objects.get_or_create(
+                            environmentId=formbricks_event_form_id,
+                            trigger_name="event_booking",
+                            product=formbricks_event_product,
+                        )
+
+                    # Create an event that uses this product
+                    formbricks_tag, created = Tag.objects.get_or_create(name='Formulaire', color='#9C27B0')
+
+                    event_with_formbricks, created = Event.objects.get_or_create(
+                        name="Atelier participatif avec formulaire personnalisé",
+                        datetime=fake.future_datetime('+10d'),
+                        jauge_max=30,
+                        max_per_user=2,
+                        short_description="Démonstration d'un événement avec formulaire Formbricks",
+                        long_description="Cet événement est une démonstration de l'intégration avec Formbricks. "
+                                        "Après la réservation, un formulaire personnalisé sera présenté pour recueillir "
+                                        "des informations supplémentaires sur vos préférences et besoins.",
+                        categorie=Event.CONFERENCE,
+                        postal_address=postal_address,
+                    )
+                    event_with_formbricks.products.add(formbricks_event_product)
+                    event_with_formbricks.tag.add(formbricks_tag)
+
+                    ### MEMBERSHIP WITH FORMBRICKS FORM ###
+
+                    # Create a membership product with a Formbricks form
+                    formbricks_membership, created = Product.objects.get_or_create(
+                        name="Adhésion avec formulaire personnalisé",
+                        short_description="Démonstration d'une adhésion avec formulaire Formbricks",
+                        long_description="Cette adhésion est une démonstration de l'intégration avec Formbricks. "
+                                        "Après l'achat, un formulaire personnalisé sera présenté pour recueillir "
+                                        "des informations supplémentaires sur le nouvel adhérent.",
+                        categorie_article=Product.ADHESION,
+                    )
+
+                    # Create prices for the membership
+                    formbricks_membership_annual, created = Price.objects.get_or_create(
+                        product=formbricks_membership,
+                        name="Annuelle",
+                        short_description="Adhésion annuelle avec formulaire",
+                        prix=25,
+                        recurring_payment=False,
+                        subscription_type=Price.YEAR,
+                    )
+
+                    formbricks_membership_monthly, created = Price.objects.get_or_create(
+                        product=formbricks_membership,
+                        name="Mensuelle",
+                        short_description="Adhésion mensuelle récurrente avec formulaire",
+                        prix=3,
+                        recurring_payment=True,
+                        subscription_type=Price.MONTH,
+                    )
+
+                    # Create a Formbricks form for the membership
+                    formbricks_adh_form_id = os.environ.get('TEST_FORMBRICKS_ADH_FORM', '')
+                    if formbricks_adh_form_id:
+                        formbricks_adh_form, created = FormbricksForms.objects.get_or_create(
+                            environmentId=formbricks_adh_form_id,
+                            trigger_name="membership_registration",
+                            product=formbricks_membership,
+                        )
