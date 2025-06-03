@@ -54,7 +54,7 @@ class TicketExportResource(resources.ModelResource):
             'reservation_datetime',
             'payment_method_display',
         )
-        export_order = ('event_name', 'event_datetime', 'first_name', 'last_name', 'user_id', 'reservation_uuid', 'email')
+        export_order = ('event_name', 'event_datetime', 'first_name', 'last_name', 'email', 'user_id', 'reservation_uuid')
 
     def dehydrate_event_datetime(self, ticket):
         """
