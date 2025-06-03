@@ -820,13 +820,20 @@ class Onboard_laboutik(APIView):
         encryptor = Fernet(rand_key)
         cypher_json_key_to_cashless = encryptor.encrypt(data_to_b64(json_key_to_cashless)).decode('utf8')
 
+
+        adress = f"{config.postal_address.street_address}" if config.postal_address else ""
+        city = f"{config.postal_address.address_locality}" if config.postal_address else ""
+        country = f"{config.postal_address.address_country}" if config.postal_address else ""
+        postal_code = f"{config.postal_address.postal_code}" if config.postal_address else ""
+
         data = {
             'cypher_rand_key': cypher_rand_key,
             'cypher_json_key_to_cashless': cypher_json_key_to_cashless,
             "organisation_name": config.organisation,
-            "adress": config.adress,
-            "postal_code": config.postal_code,
-            "city": config.city,
+            "adress": adress,
+            "city": city,
+            "country": country,
+            "postal_code": postal_code,
             "tva_number": config.tva_number,
             "siren": config.siren,
             "phone": config.phone,
