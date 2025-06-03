@@ -21,11 +21,30 @@ class TicketExportResource(resources.ModelResource):
     reservation_datetime = Field(column_name='reservation_datetime')
     payment_method_display = Field(attribute='get_payment_method_display', column_name='payment_method')
 
+    # Formbricks fields
+    email = Field(attribute='reservation__user_commande__email', column_name='email')
+    user_id = Field(column_name='userId')
+    reservation_uuid = Field(attribute='reservation__uuid', column_name='reservation_uuid')
+
+
+    def dehydrate_user_id(self, ticket):
+        """
+        Format user_id as "email uuid[:4]"
+        """
+        if ticket.reservation and ticket.reservation.user_commande:
+            email = ticket.reservation.user_commande.email
+            uuid_prefix = str(ticket.reservation.uuid)[:4]
+            return f"{email} {uuid_prefix}"
+        return ""
+
     class Meta:
         model = Ticket
         fields = (
             'event_name',
             'event_datetime',
+            'email',
+            'user_id',
+            'reservation_uuid',
             # 'first_name',
             # 'last_name',
             'status_display',
@@ -35,7 +54,7 @@ class TicketExportResource(resources.ModelResource):
             'reservation_datetime',
             'payment_method_display',
         )
-        export_order = ('event_name', 'event_datetime', 'first_name', 'last_name')
+        export_order = ('event_name', 'event_datetime', 'first_name', 'last_name', 'user_id', 'reservation_uuid', 'email')
 
     def dehydrate_event_datetime(self, ticket):
         """
