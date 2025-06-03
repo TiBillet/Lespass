@@ -40,6 +40,9 @@ from unfold.sites import UnfoldAdminSite
 # from unfold.widgets import UnfoldAdminTextInputWidget, UnfoldAdminEmailInputWidget, UnfoldAdminSelectWidget, \
 #     UnfoldAdminSelectMultipleWidget, UnfoldAdminRadioSelectWidget, UnfoldAdminCheckboxSelectMultiple
 
+from Administration.importers.event_importers import EventImportResource
+from Administration.importers.ticket_exporter import TicketExportResource
+
 from unfold.widgets import (
     UnfoldAdminCheckboxSelectMultiple,
     UnfoldAdminEmailInputWidget,
@@ -1061,7 +1064,9 @@ from Administration.importers.membership_importers import (
     PriceForeignKeyWidget,
     OptionsManyToManyWidgetWidget
 )
-from Administration.importers.event_importers import PostalAddressForeignKeyWidget
+
+# from Administration.importers.event_importers import PostalAddressForeignKeyWidget
+
 
 
 class MembershipAddForm(ModelForm):
@@ -1455,9 +1460,6 @@ class EventForm(ModelForm):
         # )
 
 
-from Administration.importers.event_importers import EventImportResource
-
-
 @admin.register(Event, site=staff_admin_site)
 class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     form = EventForm
@@ -1486,26 +1488,28 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
                 'long_description',
                 'jauge_max',
                 'postal_address',
-                'published',
-                'private',
             )
         }),
-        ('Bookings', {
+        (_('Tags and forms'), {
+            'fields': (
+                'tag',
+                'options_radio',
+                'options_checkbox',
+            ),
+        }),
+        (_('Bookings'), {
             'fields': (
                 # 'easy_reservation',
                 'max_per_user',
                 'products',
                 'custom_confirmation_message',
             ),
-            "classes": ["tab"],
         }),
-        ('Tags and forms', {
+        (_('Publish'), {
             'fields': (
-                'tag',
-                'options_radio',
-                'options_checkbox',
+                'published',
+                'private',
             ),
-            "classes": ["tab"],
         }),
         # ("Carrousel d'image", {
         #     'fields': (
@@ -1966,7 +1970,10 @@ class TicketValidFilter(admin.SimpleListFilter):
 
 
 @admin.register(Ticket, site=staff_admin_site)
-class TicketAdmin(ModelAdmin):
+class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
+    resource_classes = [TicketExportResource]
+    export_form_class = ExportForm
+
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 
@@ -1975,16 +1982,32 @@ class TicketAdmin(ModelAdmin):
     # Formulaire de création. A besoin de get_form pour fonctionner
     add_form = TicketAddAdmin
 
+
     list_display = [
         'ticket',
         # 'first_name',
         # 'last_name',
         'event',
         'options',
+        'product_name',
+        'price_name',
         'state',
         'scan',
         'reservation__datetime',
     ]
+
+    @admin.display(ordering='pricesold__price', description=_('Price'))
+    def price_name(self, obj: Ticket):
+        if obj.pricesold:
+            return obj.pricesold.price.name
+        return ""
+
+    @admin.display(ordering='pricesold__price', description=_('Product'))
+    def product_name(self, obj: Ticket):
+        if obj.pricesold:
+            return obj.pricesold.price.product.name
+        return ""
+
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)

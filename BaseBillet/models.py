@@ -877,9 +877,11 @@ class Event(models.Model):
     tag = models.ManyToManyField(Tag, blank=True, related_name="events", verbose_name=_("Tags"))
 
     options_radio = models.ManyToManyField(OptionGenerale, blank=True, related_name="options_radio",
-                                           verbose_name="Single choice menu")
+                                           verbose_name=_("Single choice menu"),
+                                           help_text=_("Des cases à cocher pendant la reservation. Un seul choix possible.")
+                                           )
     options_checkbox = models.ManyToManyField(OptionGenerale, blank=True, related_name="options_checkbox",
-                                              verbose_name="Multiple choice menu")
+                                              verbose_name=_("Des cases à cocher pendant la reservation. Plusieurs choix possibles."),)
 
     # cashless = models.BooleanField(default=False, verbose_name="Proposer la recharge cashless")
     minimum_cashless_required = models.SmallIntegerField(default=0,
