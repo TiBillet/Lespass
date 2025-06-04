@@ -21,6 +21,19 @@
             ?.addEventListener("click", ({target}) => {
                 document.getElementById("get-involved").scrollIntoView()
             })
+
+        // Check if openbookingPanel parameter exists in URL and open booking panel if it does
+        // Example URL: https://example.com/event/123/?openbookingPanel=true
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('openbookingPanel')) {
+                const bookingPanel = document.getElementById('bookingPanel');
+                if (bookingPanel) {
+                    const offcanvas = new bootstrap.Offcanvas(bookingPanel);
+                    offcanvas.show();
+                }
+            }
+        });
     </script>
 
     <!-- Schema.org Event structured data -->
@@ -86,10 +99,10 @@
         <p class="lead">{{ event.short_description | default:"" }}</p>
 
         {#    Si l'évènement n'est pas de ce tenant, il provient d'une fédération, le bouton redigire vers la page du tenant.#}
-        {#    # Todo : Garder l'user d'un dns à l'autre, et ouvrir le modal reserver dans le nouveau tenant #}
+        {#    # Todo : Garder l'user d'un dns à l'autre #}
         {% if not event_in_this_tenant %}
-            <a href="{{ event.full_url }}" class="btn btn-lg btn-primary d-block mt-3" role="button" target="_blank">
-                {% translate "Check the event on the original website" %}
+            <a href="{{ event.full_url }}?openbookingPanel=true" class="btn btn-lg btn-primary d-block mt-3" role="button">
+                {% translate "I want to book one or more seats" %}
                 <i class="bi bi-box-arrow-up-right"></i>
             </a>
         {% elif event.complet %}
