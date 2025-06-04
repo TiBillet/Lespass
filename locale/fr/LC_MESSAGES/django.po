@@ -2769,7 +2769,7 @@ msgid ""
 "TiBillets are the only currency we can refund online. For local currencies, "
 "ask the collective that issued them."
 msgstr ""
-"Les TiBillets sont la seule monnaie remboursable en ligne. Pour les monnaies "
+"Les TiBillets sont la seule monnaie remboursable en ligne et utilisable dans tout les collectifs. Pour les monnaies "
 "locales, adressez-vous au collectif qui vous les a fournies."
 
 #: BaseBillet/templates/reunion/views/account/balance.html:134
