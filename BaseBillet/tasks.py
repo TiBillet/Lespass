@@ -7,38 +7,35 @@ import smtplib
 import time
 from io import BytesIO
 
-import barcode
 import jwt
 import requests
 import segno
 from celery import shared_task
-from celery.concurrency import custom
 from celery.exceptions import MaxRetriesExceededError
 from django.conf import settings
 from django.contrib.auth import get_user_model
 # from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import EmailMultiAlternatives
 from django.core.serializers.json import DjangoJSONEncoder
-from django.core.signing import Signer, TimestampSigner
+from django.core.signing import TimestampSigner
 from django.db import connection
 from django.template.loader import render_to_string, get_template
 from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
 from django.utils.formats import date_format
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
-from django.utils.text import slugify
+from django.utils.translation import activate
+from django.utils.translation import gettext_lazy as _
 from weasyprint import HTML, CSS
 from weasyprint.text.fonts import FontConfiguration
 
 from ApiBillet.serializers import LigneArticleSerializer
 from AuthBillet.models import TibilletUser
-from BaseBillet.models import Reservation, Ticket, Configuration, Membership, Webhook, Paiement_stripe, LigneArticle, \
+from BaseBillet.models import Reservation, Ticket, Configuration, Membership, Webhook, LigneArticle, \
     GhostConfig, BrevoConfig
-from Customers.models import Client
 from MetaBillet.models import WaitingConfiguration
 from TiBillet.celery import app
-from django.utils.translation import gettext_lazy as _
-from django.utils.translation import activate, get_language_info
+
 logger = logging.getLogger(__name__)
 
 
@@ -414,9 +411,11 @@ def create_ticket_pdf(ticket: Ticket):
     buffer_svg = BytesIO()
     qr.save(buffer_svg, kind='svg', scale=4.6)
 
+    config = Configuration.get_solo()
+
     context = {
         'ticket': ticket,
-        'config': Configuration.get_solo(),
+        'config': config,
         'img_svg': buffer_svg.getvalue().decode('utf-8'),
     }
 

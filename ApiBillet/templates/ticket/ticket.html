@@ -1,4 +1,4 @@
-{% load static humanize i18n %}
+{% load static humanize i18n tz %}
 <html lang="fr">
 <head>
     <meta charset="utf-8">
@@ -126,8 +126,8 @@
     <header class="mb-3">
         <h1 class="mt-3">
             <small>
-                {{ event.datetime|date:'l j F Y'|capfirst }} <br/> 
-                {{ event.datetime|time:'H\hi' }} <br/>
+                {{ event.datetime|timezone:config.fuseau_horaire|date:'l j F Y'|capfirst }} <br/>
+                {{ event.datetime|timezone:config.fuseau_horaire|time:'H\hi' }} <br/>
             </small>
             {{ event.name }}
         </h1>
