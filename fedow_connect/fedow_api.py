@@ -322,22 +322,21 @@ class WalletFedow():
         # On a besoin d'un user pour signer la requete. On prend le premier admin du lieu.
         admin = HumanUser.objects.filter(client_admin=connection.tenant).first()
         data = {
-            "payload":payload,
+            "payload": payload,
         }
         request_bank_stripe_deposit = _post(fedow_config=self.fedow_config,
-                                      user=admin,
-                                      path='wallet/global_asset_bank_stripe_deposit',
-                                      data=data, apikey=apikey)
+                                            user=admin,
+                                            path='wallet/global_asset_bank_stripe_deposit',
+                                            data=data, apikey=apikey)
 
         if request_bank_stripe_deposit.status_code == 208:
             logger.info(f"Fedow global_asset_bank_stripe_deposit HTTP_208_ALREADY_REPORTED")
 
         serialized_transaction = TransactionValidator(data=request_bank_stripe_deposit.json())
         if serialized_transaction.is_valid():
-            serialized_transaction = serialized_transaction # tout le serialized_transaction plutôt que validated data pour récupérer l'objet FedowTransaction créé en DB
+            serialized_transaction = serialized_transaction  # tout le serialized_transaction plutôt que validated data pour récupérer l'objet FedowTransaction créé en DB
             return serialized_transaction
         raise Exception(f"{serialized_transaction.errors}")
-
 
     def cached_retrieve_by_signature(self, user):
         if not user.wallet:
@@ -391,7 +390,7 @@ class WalletFedow():
         wallet_serialized = WalletValidator(data=response_refund_fed.json())
         if wallet_serialized.is_valid():
             return response_refund_fed.status_code, wallet_serialized
-        return(500, wallet_serialized.errors)
+        return (500, wallet_serialized.errors)
 
     def get_or_create_wallet(self, user: TibilletUser):
         email = user.email.lower()
@@ -419,9 +418,13 @@ class WalletFedow():
 
     def get_federated_token_refill_checkout(self, user: TibilletUser):
         # Pour que le retour Fedow soit vérifié par un élément de signature créé lors de la demande
+        wallet = user.wallet
+        if not wallet:
+            wallet, created = self.get_or_create_wallet(user)
+
         signer = TimestampSigner()
         signed_data = signer.sign({
-            "origin_request_wallet": f"{user.wallet.uuid}"
+            "origin_request_wallet": f"{wallet.uuid}"
         })
         response_checkout = _post(
             self.fedow_config,
@@ -655,7 +658,6 @@ class TransactionFedow():
             logger.error(response.json())
             return response.status_code
 
-
     def get_from_hash(self, hash_fedow: str = None):
         response_hash = _get(self.fedow_config, path=f'transaction/{hash_fedow}/get_from_hash')
         if response_hash.status_code == 200:
@@ -689,8 +691,6 @@ class TransactionFedow():
             logger.error(f"retrieve_by_signature wallet_serialized ERRORS : {paginated_transactions_serialized.errors}")
             raise Exception(
                 f"retrieve_by_signature wallet_serialized ERRORS : {paginated_transactions_serialized.errors}")
-
-
 
 
 # from fedow_connect.fedow_api import FedowAPI
