@@ -32,16 +32,16 @@
     <div class="mb-3">
         <label for="first_name" class="form-label">{% trans "First name" %}</label>
         <div class="input-group mb-3">
-            <input type="text" class="form-control" id="first_name" value="{{ user.first_name }}"/>
-            <button class="btn btn-secondary" type="button" id="button-addon2">{% trans "Update" %}</button>
+            <input type="text" class="form-control" id="first_name" value="{{ user.first_name|default:"" }}" disabled/>
+{#            <button class="btn btn-secondary" type="button" id="button-addon2">{% trans "Update" %}</button>#}
         </div>
     </div>
 
     <div class="mb-3">
         <label for="last_name" class="form-label">{% trans "Last name" %}</label>
         <div class="input-group mb-3">
-            <input type="text" class="form-control" id="last_name" value="{{ user.last_name }}"/>
-            <button class="btn btn-secondary" type="button" id="button-addon2">{% trans "Update" %}</button>
+            <input type="text" class="form-control" id="last_name" value="{{ user.last_name|default:"" }}" disabled/>
+{#            <button class="btn btn-secondary" type="button" id="button-addon2">{% trans "Update" %}</button>#}
         </div>
     </div>
     
@@ -49,8 +49,8 @@
         <label for="recoveryEmail" class="form-label">{% trans "Email address" %}</label>
         <div class="input-group mb-3">
             <input type="email" class="form-control" id="recoveryEmail" placeholder="nom@exemple.fr"
-                   value="{{ user.email }}"/>
-            <button class="btn btn-secondary" type="button" id="button-addon2">{% trans "Update" %}</button>
+                   value="{{ user.email }}" disabled/>
+{#            <button class="btn btn-secondary" type="button" id="button-addon2">{% trans "Update" %}</button>#}
         </div>
     </div>
 

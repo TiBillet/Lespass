@@ -68,7 +68,7 @@
         {% with first_label=config.first_input_label_membership|default:_('First name') %}
             <div class="form-floating mb-3">
                 <input name="firstname" type="text" class="form-control" placeholder="{{ first_label }}"
-                       role="textbox"
+                       role="textbox" value="{{ user.first_name|default:"" }}"
                        aria-label="{{ first_label }}" required>
                 <label for="firstname">{{ first_label }}</label>
             </div>
@@ -77,7 +77,7 @@
         {% with second_label=config.second_input_label_membership|default:_('Last name or organization') %}
             <div class="form-floating mb-3">
                 <input name="lastname" type="text" class="form-control" placeholder="{{ second_label }}"
-                       role="textbox"
+                       role="textbox" value="{{ user.last_name|default:"" }}"
                        aria-label="{{ second_label }}" required>
                 <label for="lastname">{{ second_label }}</label>
             </div>
