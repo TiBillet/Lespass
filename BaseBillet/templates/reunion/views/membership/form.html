@@ -64,8 +64,8 @@
         {% endif %}
 
 
-
-        {% with first_label=config.first_input_label_membership|default:_('First name') %}
+        {% translate "First name" as default_first_label %}
+        {% with first_label=config.first_input_label_membership|default:default_first_label %}
             <div class="form-floating mb-3">
                 <input name="firstname" type="text" class="form-control" placeholder="{{ first_label }}"
                        role="textbox" value="{{ user.first_name|default:"" }}"
@@ -74,7 +74,8 @@
             </div>
         {% endwith %}
 
-        {% with second_label=config.second_input_label_membership|default:_('Last name or organization') %}
+        {% translate "Last name or organization" as default_second_label %}
+        {% with second_label=config.second_input_label_membership|default:default_second_label %}
             <div class="form-floating mb-3">
                 <input name="lastname" type="text" class="form-control" placeholder="{{ second_label }}"
                        role="textbox" value="{{ user.last_name|default:"" }}"

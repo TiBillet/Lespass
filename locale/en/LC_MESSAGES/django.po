@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-04 08:26+0000\n"
+"POT-Creation-Date: 2025-06-05 10:01+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -158,7 +158,7 @@ msgid "Select an subscription"
 msgstr ""
 
 #: Administration/admin_tenant.py:1098 BaseBillet/models.py:1854
-#: BaseBillet/tasks.py:225
+#: BaseBillet/tasks.py:222
 msgid "Contribution"
 msgstr ""
 
@@ -209,7 +209,7 @@ msgstr ""
 
 #: Administration/admin_tenant.py:1340 Administration/admin_tenant.py:2005
 #: BaseBillet/models.py:736 BaseBillet/models.py:759 BaseBillet/models.py:1272
-#: BaseBillet/tasks.py:224
+#: BaseBillet/tasks.py:221
 msgid "Product"
 msgstr ""
 
@@ -785,7 +785,7 @@ msgstr ""
 
 #: AuthBillet/models.py:118 BaseBillet/models.py:1480 BaseBillet/models.py:1863
 #: BaseBillet/templates/reunion/views/account/preferences.html:33
-#: BaseBillet/templates/reunion/views/membership/form.html:68
+#: BaseBillet/templates/reunion/views/membership/form.html:67
 #: BaseBillet/templates/reunion/views/register.html:38
 #: BaseBillet/templates/reunion/views/register.html:39
 msgid "First name"
@@ -793,6 +793,8 @@ msgstr ""
 
 #: AuthBillet/models.py:119 BaseBillet/models.py:1481 BaseBillet/models.py:1869
 #: BaseBillet/templates/reunion/views/account/preferences.html:41
+#: BaseBillet/templates/reunion/views/register.html:45
+#: BaseBillet/templates/reunion/views/register.html:47
 msgid "Last name"
 msgstr ""
 
@@ -1928,74 +1930,74 @@ msgstr ""
 msgid "Brevo settings"
 msgstr ""
 
-#: BaseBillet/tasks.py:217
+#: BaseBillet/tasks.py:214
 msgid "Confirmation email"
 msgstr ""
 
-#: BaseBillet/tasks.py:218
+#: BaseBillet/tasks.py:215
 msgid "Welcome aboard !"
 msgstr ""
 
-#: BaseBillet/tasks.py:219
+#: BaseBillet/tasks.py:216
 msgid "Your payment for "
 msgstr ""
 
-#: BaseBillet/tasks.py:219
+#: BaseBillet/tasks.py:216
 msgid " has been received."
 msgstr ""
 
-#: BaseBillet/tasks.py:223
+#: BaseBillet/tasks.py:220
 msgid "Receipt for:"
 msgstr ""
 
-#: BaseBillet/tasks.py:226
+#: BaseBillet/tasks.py:223
 #: BaseBillet/templates/htmx/views/my_account/transactions_table.html:11
 #: BaseBillet/templates/invoice/invoice.html:159
 #: BaseBillet/templates/reunion/partials/account/transaction_history.html:11
 msgid "Date"
 msgstr ""
 
-#: BaseBillet/tasks.py:227
+#: BaseBillet/tasks.py:224
 msgid "Valid until"
 msgstr ""
 
-#: BaseBillet/tasks.py:231
+#: BaseBillet/tasks.py:228
 msgid "REQUEST RECEIPT"
 msgstr ""
 
-#: BaseBillet/tasks.py:234
+#: BaseBillet/tasks.py:231
 msgid "If you receive this email by mistake, please contact the TiBillet team."
 msgstr ""
 
-#: BaseBillet/tasks.py:236
+#: BaseBillet/tasks.py:233
 msgid "See you soon!"
 msgstr ""
 
-#: BaseBillet/tasks.py:237
+#: BaseBillet/tasks.py:234
 msgid "Marvin, the TiBillet robot"
 msgstr ""
 
-#: BaseBillet/tasks.py:597
+#: BaseBillet/tasks.py:596
 msgid "TiBillet : Creation of a new instance."
 msgstr ""
 
-#: BaseBillet/tasks.py:633
+#: BaseBillet/tasks.py:632
 #, python-brace-format
 msgid ""
 "{waiting_config.organisation} & TiBillet : Lespass tenant creation request. "
 "ROOT admin action requested"
 msgstr ""
 
-#: BaseBillet/tasks.py:667
+#: BaseBillet/tasks.py:666
 #, python-brace-format
 msgid "TiBillet sales report - {configuration.organisation}"
 msgstr ""
 
-#: BaseBillet/tasks.py:1009
+#: BaseBillet/tasks.py:1008
 msgid "Bienvenue sur TiBillet"
 msgstr ""
 
-#: BaseBillet/tasks.py:1012
+#: BaseBillet/tasks.py:1011
 msgid "Bienvenue"
 msgstr ""
 
@@ -2071,14 +2073,14 @@ msgid "Adhérez"
 msgstr ""
 
 #: BaseBillet/templates/htmx/views/membership/modal_form.html:29
-#: BaseBillet/templates/reunion/views/membership/form.html:119
+#: BaseBillet/templates/reunion/views/membership/form.html:120
 msgid "I accept the "
 msgstr ""
 
 #: BaseBillet/templates/htmx/views/membership/modal_form.html:34
 #: BaseBillet/templates/htmx/views/membership/modal_form.html:37
-#: BaseBillet/templates/reunion/views/membership/form.html:125
-#: BaseBillet/templates/reunion/views/membership/form.html:128
+#: BaseBillet/templates/reunion/views/membership/form.html:126
+#: BaseBillet/templates/reunion/views/membership/form.html:129
 msgid "association rules and regulations."
 msgstr ""
 
@@ -2087,8 +2089,8 @@ msgid "Terms and conditions."
 msgstr ""
 
 #: BaseBillet/templates/htmx/views/membership/modal_form.html:45
-#: BaseBillet/templates/reunion/views/membership/form.html:134
-#: BaseBillet/templates/reunion/views/membership/form.html:136
+#: BaseBillet/templates/reunion/views/membership/form.html:135
+#: BaseBillet/templates/reunion/views/membership/form.html:137
 msgid "terms and conditions."
 msgstr ""
 
@@ -2307,7 +2309,7 @@ msgstr ""
 #: BaseBillet/templates/reunion/forms/contact.html:21
 #: BaseBillet/templates/reunion/forms/event/booking.html:133
 #: BaseBillet/templates/reunion/views/account/balance.html:69
-#: BaseBillet/templates/reunion/views/membership/form.html:149
+#: BaseBillet/templates/reunion/views/membership/form.html:150
 msgid "Cancel"
 msgstr ""
 
@@ -2485,6 +2487,7 @@ msgid "LaBoutik register"
 msgstr ""
 
 #: BaseBillet/templates/reunion/partials/event/booking.html:31
+#: BaseBillet/templates/reunion/views/event/retrieve.html:105
 msgid "I want to book one or more seats"
 msgstr ""
 
@@ -2708,12 +2711,6 @@ msgstr ""
 msgid "Data"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/account/preferences.html:36
-#: BaseBillet/templates/reunion/views/account/preferences.html:44
-#: BaseBillet/templates/reunion/views/account/preferences.html:53
-msgid "Update"
-msgstr ""
-
 #: BaseBillet/templates/reunion/views/account/punchclock.html:13
 msgid "Here I can punch in and out of available spaces."
 msgstr ""
@@ -2797,7 +2794,7 @@ msgid "Search filters"
 msgstr ""
 
 #: BaseBillet/templates/reunion/views/event/partial/volunteers.html:11
-#: BaseBillet/templates/reunion/views/event/retrieve.html:113
+#: BaseBillet/templates/reunion/views/event/retrieve.html:126
 msgid "Looking for volunteers"
 msgstr ""
 
@@ -2841,15 +2838,11 @@ msgid ""
 "the spam folder!"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/retrieve.html:92
-msgid "Check the event on the original website"
-msgstr ""
-
-#: BaseBillet/templates/reunion/views/event/retrieve.html:97
+#: BaseBillet/templates/reunion/views/event/retrieve.html:110
 msgid "Full capacity: The event is sold out."
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/retrieve.html:114
+#: BaseBillet/templates/reunion/views/event/retrieve.html:127
 msgid "open slots"
 msgstr ""
 
@@ -2897,12 +2890,10 @@ msgid ""
 msgstr ""
 
 #: BaseBillet/templates/reunion/views/membership/form.html:77
-#: BaseBillet/templates/reunion/views/register.html:45
-#: BaseBillet/templates/reunion/views/register.html:47
 msgid "Last name or organization"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/membership/form.html:147
+#: BaseBillet/templates/reunion/views/membership/form.html:148
 msgid "Send my subscription request"
 msgstr ""
 
