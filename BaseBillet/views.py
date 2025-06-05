@@ -355,6 +355,9 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
         # Le mail est envoyé
         email = validator.validated_data['email']
         user: TibilletUser = get_or_create_user(email, force_mail=True)
+        if validator.validated_data.get('newsletter'):
+            send_to_ghost_email.delay(email)
+
         # import ipdb; ipdb.set_trace()
         if not user:
             # Le mail n'est pas validé par django (example.org?)
