@@ -179,6 +179,7 @@ class Command(BaseCommand):
             user: TibilletUser = get_or_create_user(admin_email)
             user.client_admin.add(tenant_first_sub)
             user.is_staff=True
+            user.is_superuser=True
             user.groups.add(staff_group)
             user.save()
 

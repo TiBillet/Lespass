@@ -9,11 +9,12 @@ class Client(TenantMixin):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
 
     name = models.CharField(max_length=100, unique=True, db_index=True)
-    paid_until =  models.DateField(default=timezone.now)
-    on_trial = models.BooleanField(default=True)
     created_on = models.DateField(auto_now_add=True)
 
-    ARTISTE, SALLE_SPECTACLE, FESTIVAL, TOURNEUR, PRODUCTEUR, META, ROOT = 'A', 'S', 'F', 'T', 'P', 'M', 'R'
+    paid_until =  models.DateField(default=timezone.now)
+    on_trial = models.BooleanField(default=False)
+
+    ARTISTE, SALLE_SPECTACLE, FESTIVAL, TOURNEUR, PRODUCTEUR, META, WAITING_CONFIG, ROOT = 'A', 'S', 'F', 'T', 'P', 'M', 'W', 'R'
     CATEGORIE_CHOICES = [
         (ARTISTE, _('Artist')),
         (SALLE_SPECTACLE, _("Scene")),
@@ -21,6 +22,7 @@ class Client(TenantMixin):
         (TOURNEUR, _('Tour operator')),
         (PRODUCTEUR, _('Producer')),
         (META, _('Event aggregator')),
+        (WAITING_CONFIG, _('Waiting configuration')),
         (ROOT, _('Root public tenant')),
     ]
 

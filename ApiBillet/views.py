@@ -934,7 +934,7 @@ class Webhook_stripe(APIView):
             amount = transfer.amount
 
             # On est sur le tenant root. Il faut chercher le tenant correspondant.
-            for tenant in Client.objects.all().exclude(categorie=Client.ROOT):
+            for tenant in Client.objects.all().exclude(categorie__in=[Client.ROOT, Client.WAITING_CONFIG]):
                 with tenant_context(tenant): # Comment faire sans itérer dans tout les tenant ?
                     config = Configuration.get_solo()
                     tenant_stripe_connect_account = config.get_stripe_connect_account()

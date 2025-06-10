@@ -78,7 +78,7 @@ from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Pai
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
     FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel, BrevoConfig, ScanApp
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
-    webhook_membership, create_ticket_pdf, ticket_celery_mailer, async_tenant_create
+    webhook_membership, create_ticket_pdf, ticket_celery_mailer
 from Customers.models import Client
 from MetaBillet.models import WaitingConfiguration
 from fedow_connect.utils import dround
@@ -171,7 +171,6 @@ class ExternalApiKeyAdmin(ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
 
-
 @admin.register(ScanApp, site=staff_admin_site)
 class ScanAppAdmin(ModelAdmin):
     compressed_fields = True
@@ -193,7 +192,6 @@ class ScanAppAdmin(ModelAdmin):
         'pairing_code',
     ]
 
-
     def pairing_code(self, obj):
         if obj.pk and obj.name and not obj.claimed:
             base_url = f"https://{connection.tenant.get_primary_domain().domain}"
@@ -207,7 +205,6 @@ class ScanAppAdmin(ModelAdmin):
             sc = ScanApp.objects.get(uuid=scanapp_uuid)
             if not obj == sc:
                 raise Exception("signature check error")
-
 
             # Generate QR code using segno
             qr = segno.make(qrcode_data)
@@ -602,7 +599,6 @@ class ProductAdminCustomForm(ModelForm):
                 raise forms.ValidationError(_("Please add at least one rate to this product."))
 
 
-
 @register_component
 class CheckStripeComponent(BaseComponent):
     def get_context_data(self, **kwargs):
@@ -616,13 +612,14 @@ class CheckStripeComponent(BaseComponent):
         )
         return context
 
+
 @admin.register(Product, site=staff_admin_site)
 class ProductAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
     inlines = [PriceInline, ]
 
-    list_before_template = "admin/product/product_list_before.html" # appelle le component CheckStripe plus haut pour le contexte
+    list_before_template = "admin/product/product_list_before.html"  # appelle le component CheckStripe plus haut pour le contexte
 
     form = ProductAdminCustomForm
     list_display = (
@@ -716,7 +713,6 @@ class ProductAdmin(ModelAdmin):
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
-
 
 
 class PriceChangeForm(ModelForm):
@@ -1065,8 +1061,8 @@ from Administration.importers.membership_importers import (
     OptionsManyToManyWidgetWidget
 )
 
-# from Administration.importers.event_importers import PostalAddressForeignKeyWidget
 
+# from Administration.importers.event_importers import PostalAddressForeignKeyWidget
 
 
 class MembershipAddForm(ModelForm):
@@ -1175,14 +1171,13 @@ def adhesion_badge_callback(request):
 @register_component
 class MembershipComponent(BaseComponent):
     def get_context_data(self, **kwargs):
-
         context = super().get_context_data(**kwargs)
         # Les adhésion en cours :
         active_count = Membership.objects.filter(deadline__gte=timezone.localtime()).count()
         # Les user qui n'ont pas d'adhésion en cours :
         inactive_count = HumanUser.objects.exclude(
-                memberships__deadline__gte=timezone.localtime()
-            ).distinct().count()
+            memberships__deadline__gte=timezone.localtime()
+        ).distinct().count()
 
         context["children"] = render_to_string(
             "admin/membership/membership_component.html",
@@ -1194,6 +1189,7 @@ class MembershipComponent(BaseComponent):
         )
         return context
 
+
 @admin.register(Membership, site=staff_admin_site)
 class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
     compressed_fields = True  # Default: False
@@ -1203,8 +1199,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
     export_form_class = ExportForm
     import_form_class = ImportForm
 
-    list_before_template = "admin/membership/membership_list_before.html" # appelle le MembershipComponent plus haut pour le contexte
-
+    list_before_template = "admin/membership/membership_list_before.html"  # appelle le MembershipComponent plus haut pour le contexte
 
     # Formulaire de modification
     form = MembershipChangeForm
@@ -1472,7 +1467,8 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
 
     inlines = [EventChildrenInline, ]
 
-    actions_row = ["duplicate_day_plus_one", "duplicate_week_plus_one", "duplicate_week_plus_two", "duplicate_month_plus_one"]
+    actions_row = ["duplicate_day_plus_one", "duplicate_week_plus_one", "duplicate_week_plus_two",
+                   "duplicate_month_plus_one"]
 
     fieldsets = (
         (None, {
@@ -1527,7 +1523,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         'published',
     ]
 
-    list_editable = ['published',]
+    list_editable = ['published', ]
     readonly_fields = (
         'display_valid_tickets_count',
     )
@@ -1588,7 +1584,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     def duplicate_day_plus_one(self, request, object_id):
         """Duplicate an event with the date set to the next day"""
         obj = Event.objects.get(pk=object_id)
-        try :
+        try:
             duplicate = self._duplicate_event(obj, date_adjustment="day")
             messages.success(request, _("Event duplicated successfully"))
         except IntegrityError as e:
@@ -1605,7 +1601,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     def duplicate_week_plus_one(self, request, object_id):
         """Duplicate an event with the date set to the next week"""
         obj = Event.objects.get(pk=object_id)
-        try :
+        try:
             duplicate = self._duplicate_event(obj, date_adjustment="week")
             messages.success(request, _("Event duplicated successfully"))
         except IntegrityError as e:
@@ -1622,7 +1618,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     def duplicate_week_plus_two(self, request, object_id):
         """Duplicate an event with the date set to two weeks ahead"""
         obj = Event.objects.get(pk=object_id)
-        try :
+        try:
             duplicate = self._duplicate_event(obj, date_adjustment="week2")
             messages.success(request, _("Event duplicated successfully"))
         except IntegrityError as e:
@@ -1639,7 +1635,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     def duplicate_month_plus_one(self, request, object_id):
         """Duplicate an event with the date set to the next month"""
         obj = Event.objects.get(pk=object_id)
-        try :
+        try:
             duplicate = self._duplicate_event(obj, date_adjustment="month")
             messages.success(request, _("Event duplicated successfully"))
         except IntegrityError as e:
@@ -1750,7 +1746,6 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         return duplicate
 
 
-
 class ReservationValidFilter(admin.SimpleListFilter):
     # Pour filtrer sur les réservation valide : payée, payée et confirmée, et mail en erreur même si payés
     title = _("Valid")
@@ -1773,18 +1768,18 @@ class ReservationValidFilter(admin.SimpleListFilter):
         if self.value() == "Y":
             return queryset.exclude(
                 status__in=[
-                        Reservation.CANCELED,
-                        Reservation.CREATED,
-                        Reservation.UNPAID,
-                        ]
+                    Reservation.CANCELED,
+                    Reservation.CREATED,
+                    Reservation.UNPAID,
+                ]
             ).distinct()
         if self.value() == "N":
             return queryset.filter(
                 status__in=[
-                        Reservation.CANCELED,
-                        Reservation.CREATED,
-                        Reservation.UNPAID,
-                        ]
+                    Reservation.CANCELED,
+                    Reservation.CREATED,
+                    Reservation.UNPAID,
+                ]
             ).distinct()
 
 
@@ -1960,16 +1955,16 @@ class TicketValidFilter(admin.SimpleListFilter):
         if self.value() == "Y":
             return queryset.filter(
                 status__in=[
-                        Ticket.NOT_SCANNED,
-                        Ticket.SCANNED,
-                        ]
+                    Ticket.NOT_SCANNED,
+                    Ticket.SCANNED,
+                ]
             ).distinct()
         if self.value() == "N":
             return queryset.exclude(
                 status__in=[
-                        Ticket.NOT_SCANNED,
-                        Ticket.SCANNED,
-                        ]
+                    Ticket.NOT_SCANNED,
+                    Ticket.SCANNED,
+                ]
             ).distinct()
 
 
@@ -1985,7 +1980,6 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
     form = TicketChangeAdmin
     # Formulaire de création. A besoin de get_form pour fonctionner
     add_form = TicketAddAdmin
-
 
     list_display = [
         'ticket',
@@ -2011,7 +2005,6 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
         if obj.pricesold:
             return obj.pricesold.price.product.name
         return ""
-
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
@@ -2066,7 +2059,7 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
         if obj.status == Ticket.NOT_SCANNED:
             return True, obj.get_status_display()
         elif obj.status == Ticket.SCANNED:
-                return 'scanned', obj.get_status_display()
+            return 'scanned', obj.get_status_display()
         return None, obj.get_status_display()
 
     # noinspection PyTypeChecker
@@ -2076,7 +2069,7 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
             scan_one = _("SCAN 1")
             scan_all = _("SCAN")
             ticket_count = Ticket.objects.filter(reservation=obj.reservation).count()
-            if ticket_count > 1 : # Si on a plusieurs ticket dans la même reservation, on permet le scan tous les tickets
+            if ticket_count > 1:  # Si on a plusieurs ticket dans la même reservation, on permet le scan tous les tickets
                 return True, format_html(
                     f'<button><a href="{reverse("staff_admin:ticket-scann", args=[obj.pk])}" class="button">{scan_one}</a></button>&nbsp;'
                     f'  --  '
@@ -2085,7 +2078,6 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
             return True, format_html(
                 f'<button><a href="{reverse("staff_admin:ticket-scann", args=[obj.pk])}" class="button">{scan_one}</a></button>&nbsp;')
         return None, ""
-
 
     def get_urls(self):
         urls = super().get_urls()
@@ -2150,7 +2142,6 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
                 _("Ticket unscanned successfully.")
             )
         return redirect(request.META["HTTP_REFERER"])
-
 
     def get_form(self, request, obj=None, **kwargs):
         """ Si c'est un add, on modifie le formulaire"""
@@ -2249,7 +2240,8 @@ class FederatedPlaceAdmin(ModelAdmin):
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == 'tenant':  # Replace 'user_field' with your actual field name
-            kwargs['queryset'] = Client.objects.all().exclude(categorie__in=[Client.ROOT, Client.META]).exclude(
+            kwargs['queryset'] = Client.objects.all().exclude(
+                categorie__in=[Client.ROOT, Client.META, Client.WAITING_CONFIG]).exclude(
                 pk=connection.tenant.pk)
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
@@ -2537,6 +2529,8 @@ class WaitingConfigAdmin(ModelAdmin):
         "organisation",
         "email",
         "datetime",
+        "site_web",
+        "short_description",
         "laboutik_wanted",
         "payment_wanted",
         "email_confirmed",
@@ -2561,11 +2555,18 @@ class WaitingConfigAdmin(ModelAdmin):
     def create_tenant(self, request, object_id):
         wc = WaitingConfiguration.objects.get(pk=object_id)
         if wc.email_confirmed:
-            async_tenant_create.delay(wc.uuid)
-            messages.add_message(
-                request, messages.SUCCESS,
-                _(f"creation async launched")
-            )
+            try:
+                tenant = wc.create_tenant()
+                messages.add_message(
+                    request, messages.SUCCESS,
+                    _(f"creation OK")
+                )
+            except Exception as e :
+                messages.add_message(
+                    request, messages.ERROR,
+                    _(f"{wc.organisation} tenant create error : {e} not confirmed")
+                )
+
         else:
             messages.add_message(
                 request, messages.WARNING,

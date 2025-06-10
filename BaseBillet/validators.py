@@ -508,6 +508,8 @@ class TenantCreateValidator(serializers.Serializer):
     cgu = serializers.BooleanField(required=True)
     payment_wanted = serializers.BooleanField(required=True)
     dns_choice = serializers.ChoiceField(choices=["tibillet.coop", "tibillet.re"])
+    website = serializers.URLField(required=True)
+    short_description = serializers.CharField(max_length=250)
 
     def validate_cgu(self, value):
         if not value:
@@ -515,37 +517,48 @@ class TenantCreateValidator(serializers.Serializer):
         return value
 
     def validate_name(self, value):
-        if Client.objects.filter(schema_name=slugify(value)).exists() or WaitingConfiguration.objects.filter(slug=slugify(value)).exists():
-            raise serializers.ValidationError(f"{value} : {_('Tenant name already exist.')}")
+        if WaitingConfiguration.objects.filter(slug=slugify(value)).exists():
+            raise serializers.ValidationError(f"{value}. "+ _('This name is not available'))
+        if Client.objects.filter(name=value).exists():
+            raise serializers.ValidationError(f"{value}. "+ _('This name is not available'))
+        if Domain.objects.filter(domain__icontains=f'{slugify(value)}').exists():
+            raise serializers.ValidationError(f"{value}. "+ _('This name is not available'))
+
         return value
 
     @staticmethod
     def create_tenant(waiting_config: WaitingConfiguration):
         name = waiting_config.organisation
         admin_email = waiting_config.email.lower()
+        if waiting_config.tenant:
+            raise Exception("Tenant already exists. ")
 
         with schema_context('public'):
+            tenant = Client.objects.filter(categorie=Client.WAITING_CONFIG).first()
+            if not tenant:
+                raise Exception("No waiting tenant. ")
+
             slug = slugify(name)
-            domain = os.getenv("DOMAIN")
-            tenant, created = Client.objects.get_or_create(
-                schema_name=slug,
-                name=name,
-                on_trial=False,
-                categorie=Client.SALLE_SPECTACLE,
-            )
             dns = waiting_config.dns_choice if waiting_config.dns_choice else 'tibillet.coop'
+
+            tenant.name=name
+            tenant.on_trial=False
+            tenant.categorie=Client.SALLE_SPECTACLE
+            tenant.save()
+
             Domain.objects.get_or_create(
                 domain=f'{slug}.{dns}',
                 tenant=tenant,
                 is_primary=True
             )
 
+
         with tenant_context(tenant):
             ## Création du premier admin:
             from django.contrib.auth.models import Group
             staff_group, created = Group.objects.get_or_create(name="staff")
 
-            # Sans envoie d'email pour l'instant, on l'envoie quand tout sera bien terminé
+            # Sans envoi d'email pour l'instant, on l'envoie quand tout sera bien terminé
             user: TibilletUser = get_or_create_user(admin_email, send_mail=False)
             user.client_admin.add(tenant)
             user.is_staff = True
@@ -555,9 +568,11 @@ class TenantCreateValidator(serializers.Serializer):
             from BaseBillet.models import Configuration
             config = Configuration.get_solo()
             config.organisation = name
+            config.site_web = waiting_config.site_web
+            config.short_description = waiting_config.short_description
+            config.long_description = """<div><strong>Bienvenue dans votre nouvel espace !</strong><br>Pour changer ce texte visible par tout le monde, allez découvrir votre panneau d\'administration dans votre espace "Mon Compte".<br><br>Hésitez surtout pas à venir discuter avec nous sur l\'un de nos canaux :<br>- <a href="https://discord.gg/7FJvtYx">Discord</a><br>- <a href="https://matrix.to/#/#tibillet:tiers-lieux.org">Matrix</a><br>- <a href="https://pouet.chapril.org/@tibillet">Mastodon</a><br><br>Nous vous accompagnerons avec plaisir !</div>"""
             config.slug = slugify(name)
             config.email = user.email
-
 
             try :
                 rootConf = RootConfiguration.get_solo()
@@ -598,5 +613,9 @@ class TenantCreateValidator(serializers.Serializer):
                 product=freeres,
                 max_per_user=10,
             )
+
+        waiting_config.tenant = tenant
+        waiting_config.created = True
+        waiting_config.save()
 
         return tenant

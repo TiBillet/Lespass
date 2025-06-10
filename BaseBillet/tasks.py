@@ -610,14 +610,7 @@ def new_tenant_mailer(waiting_config_uuid: str):
             f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour report_celery_mailer : {e}")
         raise e
 
-@app.task
-def async_tenant_create(waiting_config_uuid: str):
-    try:
-        # Génération du lien qui va créer la redirection vers l'url onboard
-        waiting_config = WaitingConfiguration.objects.get(uuid=waiting_config_uuid)
-        waiting_config.create_tenant()
-    except Exception as e:
-        raise e
+
 
 @app.task
 def new_tenant_after_stripe_mailer(waiting_config_uuid: str):

@@ -90,6 +90,7 @@ class TenantAdminApiPermission(permissions.BasePermission):
         return TenantAdminPermissionWithRequest(request)
 
 
+"""
 class TerminalScanPermission(permissions.BasePermission):
     message = "Termnal must be validated by an admin"
 
@@ -110,3 +111,4 @@ class TerminalScanPermission(permissions.BasePermission):
             ])
         else:
             return False
+"""

@@ -188,9 +188,7 @@ class WaitingConfiguration(models.Model):
     def create_tenant(self):
         from BaseBillet.validators import TenantCreateValidator
         tenant = TenantCreateValidator.create_tenant(self)
-        self.created = True
-        self.tenant = tenant
-        self.save()
+        return tenant
 
     def __str__(self):
         return f"{self.organisation} - {self.email} -> {self.slug}"

@@ -742,7 +742,10 @@ class MyAccount(viewsets.ViewSet):
 @require_GET
 def index(request):
     # On redirige vers la page d'adhésion en attendant que les events soient disponibles
-    # tenant: Client = connection.tenant
+    tenant: Client = connection.tenant
+    if tenant.categorie in [Client.WAITING_CONFIG, Client.ROOT]:
+        return HttpResponseRedirect('https://tibillet.org/')
+
     template_context = get_context(request)
     return render(request, "reunion/views/home.html", context=template_context)
 
@@ -887,7 +890,7 @@ class EventMVT(viewsets.ViewSet):
         logger.info(f"request.data : {request.data}")
 
         search = request.data.get('search')  # on s'assure que c'est bien une string. Todo : Validator !
-        if not search: # Pour le get réalisé par le clic sur l'adresse
+        if not search:  # Pour le get réalisé par le clic sur l'adresse
             search = request.GET.get('search')
 
         if search:
@@ -904,7 +907,7 @@ class EventMVT(viewsets.ViewSet):
 
     # La page get /
     def list(self, request: HttpRequest):
-        #TODO pour pouvoir sauvegader l'url de recherche :
+        # TODO pour pouvoir sauvegader l'url de recherche :
         # - tout passer en GET ( et non pas le partial_list POST plus haut )
         # - passer sur du partial render avec HTMX
         context = get_context(request)
@@ -1386,13 +1389,19 @@ class Tenant(viewsets.ViewSet):
             payment_wanted=validated_data['payment_wanted'],
             # id_acc_connect=id_acc_connect,
             dns_choice=validated_data['dns_choice'],
+            site_web=validated_data['website'],
+            short_description=validated_data['short_description'],
         )
-
-        send_to_ghost_email.delay(validated_data['email'], name=validated_data['name'])
-
         # Envoi d'un mail pour vérifier le compte. Un lien vers stripe sera créé
         # new_tenant_mailer.delay(waiting_config_uuid=str(waiting_configuration.uuid))
         new_tenant_mailer.delay(waiting_config_uuid=str(waiting_configuration.uuid))
+
+        try:
+            meta = Client.objects.filter(categorie=Client.META).first()
+            with tenant_context(meta):
+                send_to_ghost_email.delay(validated_data['email'], name=validated_data['name'])
+        except Exception as e:
+            logger.error(f"new_tenant send_to_ghost_email ERROR : {e}")
 
         return render(request, "reunion/views/tenant/create_waiting_configuration_THANKS.html", context={})
 
@@ -1409,9 +1418,19 @@ class Tenant(viewsets.ViewSet):
             wc.email_confirmed = True
             wc.save()
 
-            context = get_context(request)
-            return render(request, "reunion/views/tenant/create_waiting_configuration_MAIL_CONFIRMED.html",
-                          context=context)
+            # Si assez de tenant en attentent de création existent :
+            if Client.objects.filter(categorie=Client.WAITING_CONFIG).exists():
+                tenant = wc.create_tenant()
+                primary_domain = f"https://{tenant.get_primary_domain().domain}"
+                user = get_or_create_user(wc.email, send_mail=False)
+                token = user.get_connect_token()
+                connexion_url = f"{primary_domain}/emailconfirmation/{token}"
+                return redirect(connexion_url)
+
+            else:
+                context = get_context(request)
+                return render(request, "reunion/views/tenant/create_waiting_configuration_MAIL_CONFIRMED.html",
+                              context=context)
         except UnicodeDecodeError as e:
             messages.error(request, _("Invalid token. Please request a new confirmation email."))
             return redirect('/')
@@ -1483,10 +1502,9 @@ class Tenant(viewsets.ViewSet):
         #       "\nPlease complete your Stripe.com registration before creating a new TiBillet space."))
         # return redirect('/tenant/new/')
 
+    '''
     @action(detail=False, methods=['GET'])
     def emailconfirmation(self, request, pk):
-        import ipdb;
-        ipdb.set_trace()
         """
         Requete provenant du mail envoyé après la création d'un tenant
         """
@@ -1495,6 +1513,7 @@ class Tenant(viewsets.ViewSet):
         wc.save()
         context = get_context(request)
         return render(request, "reunion/views/tenant/create_waiting_configuration_MAIL_CONFIRMED.html", context=context)
+    '''
 
     @action(detail=False, methods=['GET'])
     def onboard_stripe_from_config(self, request):
