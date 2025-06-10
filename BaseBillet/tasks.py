@@ -26,6 +26,7 @@ from django.utils.formats import date_format
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.translation import activate
 from django.utils.translation import gettext_lazy as _
+from django_tenants.utils import get_tenant_model, tenant_context
 from weasyprint import HTML, CSS
 from weasyprint.text.fonts import FontConfiguration
 
@@ -213,7 +214,7 @@ def context_for_membership_email(membership: "Membership"):
         'image_url': image_url,
         'objet': _("Confirmation email"),
         'sub_title': _("Welcome aboard !"),
-        'main_text': _("Your payment for ")+f"{membership.price.product.name}"+_(" has been received."),
+        'main_text': _("Your payment for ") + f"{membership.price.product.name}" + _(" has been received."),
         'main_text_2': config.additional_text_in_membership_mail,
         # 'main_text_3': _("Dans le cas contraire, vous pouvez main_text_3. Merci de contacter l'équipe d'administration via : contact@tibillet.re au moindre doute."),
         'table_info': {
@@ -238,9 +239,10 @@ def context_for_membership_email(membership: "Membership"):
         context['table_info']['Options'] = f"{membership.options()}"
     return context
 
+
 @app.task
 def send_membership_invoice_to_email(membership_uuid: str):
-    time.sleep(1) # pour donner le tps de récupérer l'objet
+    time.sleep(1)  # pour donner le tps de récupérer l'objet
 
     # Retry mechanism for getting membership
     attempts = 0
@@ -264,7 +266,8 @@ def send_membership_invoice_to_email(membership_uuid: str):
             if attempts >= max_attempts:
                 logger.error(f"Membership with uuid {membership_uuid} not found after {max_attempts} attempts")
                 raise Exception(f"Membership with uuid {membership_uuid} not found after {max_attempts} attempts")
-            logger.warning(f"Membership with uuid {membership_uuid} not found, retrying in {wait_time} seconds (attempt {attempts}/{max_attempts})")
+            logger.warning(
+                f"Membership with uuid {membership_uuid} not found, retrying in {wait_time} seconds (attempt {attempts}/{max_attempts})")
             time.sleep(wait_time)
 
     # This should never be reached due to the exception in the loop
@@ -279,7 +282,7 @@ def send_stripe_bank_deposit_to_laboutik(self, payload):
     MAX_RETRY_TIME = 86400  # 24 * 60 * 60 seconds = 24 h
     config = Configuration.get_solo()
     # On check si le serveur cashless est bien opérationnel :
-    try :
+    try:
         if not config.check_serveur_cashless():
             logger.warning(f"No serveur cashless on config. send_stripe_bank_deposit_to_laboutik not sended")
             return True
@@ -326,7 +329,6 @@ def send_stripe_bank_deposit_to_laboutik(self, payload):
         logger.error(f"La tâche a échoué après plusieurs tentatives pour {url}")
 
 
-
 # @app.task
 @shared_task(bind=True, max_retries=20)
 def send_sale_to_laboutik(self, ligne_article_pk):
@@ -335,7 +337,7 @@ def send_sale_to_laboutik(self, ligne_article_pk):
     config = Configuration.get_solo()
 
     # On check si le serveur cashless est bien opérationnel :
-    try :
+    try:
         if not config.check_serveur_cashless():
             logger.warning(f"No serveur cashless on config. Article not sended")
             return True
@@ -356,7 +358,6 @@ def send_sale_to_laboutik(self, ligne_article_pk):
         time.sleep(1)
         ligne_article.refresh_from_db()
         logger.info(f"send_sale_to_laboutik -> Ligne Article is Valid ? : {ligne_article.get_status_display()}")
-
 
     # import ipdb; ipdb.set_trace()
     serialized_ligne_article = LigneArticleSerializer(ligne_article).data
@@ -395,7 +396,6 @@ def send_sale_to_laboutik(self, ligne_article_pk):
 
     except MaxRetriesExceededError:
         logger.error(f"La tâche a échoué après plusieurs tentatives pour {url}")
-
 
 
 def create_ticket_pdf(ticket: Ticket):
@@ -532,7 +532,7 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
 
     # Internal SMTP and html template
     if title is None:
-        title = f"{organisation} : Confirmez votre email" # celery ne prend pas la traduction
+        title = f"{organisation} : Confirmez votre email"  # celery ne prend pas la traduction
     if template is None:
         template = 'emails/connexion.html'
 
@@ -575,7 +575,7 @@ def new_tenant_mailer(waiting_config_uuid: str):
         tenant = connection.tenant
         tenant_url = tenant.get_primary_domain().domain
 
-        time.sleep(2) # Attendre que la db soit bien a jour
+        time.sleep(2)  # Attendre que la db soit bien a jour
         waiting_config = WaitingConfiguration.objects.get(uuid=waiting_config_uuid)
 
         signer = TimestampSigner()
@@ -611,7 +611,6 @@ def new_tenant_mailer(waiting_config_uuid: str):
         raise e
 
 
-
 @app.task
 def new_tenant_after_stripe_mailer(waiting_config_uuid: str):
     # Mail qui prévient l'administrateur ROOT de l'instance TiBillet qu'un nouveau tenant souhaite se créer.
@@ -635,7 +634,6 @@ def new_tenant_after_stripe_mailer(waiting_config_uuid: str):
         logger.error(
             f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour report_celery_mailer : {e}")
         raise e
-
 
 
 @app.task
@@ -702,7 +700,6 @@ def ticket_celery_mailer(reservation_uuid: str):
     if reservation.event:
         if reservation.event.img:
             image_url_event = f"https://{domain}{reservation.event.img.med.url}"
-
 
     if not reservation.to_mail:
         reservation.status = Reservation.PAID_NOMAIL
@@ -840,7 +837,7 @@ def webhook_membership(membership_pk, solo_webhook_pk=None):
 def send_to_brevo(membership_pk):
     brevo_config = BrevoConfig.get_solo()
     if brevo_config.api_key:
-        try :
+        try:
             # Excpet avec nouvel essaie 3 secondes plus tard.
             # Lorsque c'est créé par l'admin, le trigger se lance avant que l'objet se soit save en db.
             membership = Membership.objects.get(pk=membership_pk)
@@ -962,7 +959,9 @@ def send_to_ghost_email(email, name=None):
         except Exception as e:
             logger.error(f"Erreur lors de la mise à jour du log : {e}")
     else:
-        logger.warning(f"send_to_ghost_email : ghost_url or ghost_key is empty on {connection.tenant.get_primary_domain()}")
+        logger.warning(
+            f"send_to_ghost_email : ghost_url or ghost_key is empty on {connection.tenant.get_primary_domain()}")
+
 
 @app.task
 def send_to_ghost(membership_pk):
@@ -971,7 +970,7 @@ def send_to_ghost(membership_pk):
     ghost_key = ghost_config.get_api_key()
 
     if ghost_url and ghost_key:
-        try :
+        try:
             # Excpet avec nouvel essaie 3 secondes plus tard.
             # Lorsque c'est créé par l'admin, le trigger se lance avant que l'objet se soit save en db.
             membership = Membership.objects.get(pk=membership_pk)
@@ -1019,6 +1018,43 @@ def send_welcome_email(email: str, username: str = None):
         logger.error(f"ERROR {timezone.now()} Erreur lors de l'envoi de l'email de bienvenue à {email}: {e}")
         return False
 
+
+@app.task
+def membership_renewal_reminder():
+    """
+    Envoie d'un mail de renouvellement si l'adhésion arrive a expiration le lendemain
+    """
+    for tenant in get_tenant_model().objects.exclude(schema_name='public'):
+        with tenant_context(tenant):
+            memberships = Membership.objects.filter(deadline__lt=timezone.now() + timezone.timedelta(days=1))
+            for membership in memberships:
+                config = Configuration.get_solo()
+                user = membership.user
+                email = user.email
+
+                context = {
+                    'title': _(f"Votre adhésion au collectif {config.organisation} arrive à expiration"),
+                    'membership': membership,
+                    'now': timezone.now(),
+                    'objet': _(f"Votre ahdésion {config.organisation} arrive à expiration"),
+                    'image_url': "https://tibillet.org/fr/img/design/logo-couleur.svg",
+                    'renewal_url' : f"https://{tenant.get_primary_domain().domain}/memberships/"
+                }
+
+                try:
+                    mail = CeleryMailerClass(
+                        email,
+                        f"{context.get('title')}",
+                        template="emails/membership_renewal_reminder.html",
+                        context=context,
+                    )
+                    mail.send()
+                    logger.info(f"send_welcome_email : mail.sended : {mail.sended}")
+                    return mail.sended
+                except Exception as e:
+                    logger.error(
+                        f"ERROR {timezone.now()} Erreur lors de l'envoi de membership_renewal_reminder à {email}: {e}")
+                    return False
 
 @app.task
 def test_logger():

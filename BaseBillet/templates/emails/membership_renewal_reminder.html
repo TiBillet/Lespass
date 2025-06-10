@@ -1,0 +1,114 @@
+{% extends 'emails/base.html' %}
+{% load humanize static i18n %}
+
+{% block content %}
+    <tr>
+        <td class="pt-28 td_content"
+            style="background:#fff; padding:44px 64px 57px; border:1px solid #dcdcd9; border-radius:8px;">
+            <table align="center" cellpadding="0" cellspacing="0" class="w-100p"
+                   style="max-width:472px; margin:0 auto;" width="472">
+                <table style="">
+                    <tr>
+                        <td>
+                            <table style="border-spacing: 0px;">
+                                <tr>
+                                    <td valign="middle"><span
+                                            style="font-weight:bold;color:#636360;font:10px Arial-Bold, Helvetica-Bold, sans-serif;text-transform:uppercase;">{% trans "Rappel d'adhésion" %}</span><span
+                                            style="color:transparent;display:none;height:0;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;visibility:hidden;width:0;">&nbsp;|&nbsp;</span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <h1 style="font-weight:400;style:regular;color:#1d1d1b;font:24px/32px Arial, Helvetica, sans-serif;margin: 30px 0 30px;">
+                            {% trans "Votre adhésion arrive bientôt à échéance" %}</h1><span
+                            style="color:transparent;display:none;height:0;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;visibility:hidden;width:0;">&nbsp;|&nbsp;</span>
+                        <td style="padding: 24px 0 24px 0; ">
+                            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 24px 0;">
+                                {% trans "Bonjour" %} {{ membership.member_name }},
+                            </p>
+                            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 16px 0;">
+                                {% trans "Nous vous informons que votre adhésion" %} <strong>{{ membership.product_name }}</strong> {% trans "arrivera à échéance le" %} <strong>{{ membership.get_deadline|date:"d F Y" }}</strong>.
+                            </p>
+                            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 24px 0;">
+                                {% trans "Pour continuer à bénéficier de tous les avantages liés à votre adhésion, nous vous invitons à la renouveler dès maintenant." %}
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0 0 24px 0;">
+                            <h2 style="font-weight:600;color:#009058;font:18px/24px Arial, Helvetica, sans-serif;margin: 0 0 16px 0;">
+                                {% trans "Détails de votre adhésion" %}
+                            </h2>
+                            <ul style="color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 24px 0;">
+                                <li style="margin-bottom: 8px;">
+                                    <b>{% trans "Adhésion" %}</b>: {{ membership.product_name }}
+                                </li>
+                                <li style="margin-bottom: 8px;">
+                                    <b>{% trans "Date d'expiration" %}</b>: {{ membership.get_deadline|date:"d F Y" }}
+                                </li>
+                                <li style="margin-bottom: 8px;">
+                                    <b>{% trans "Tarif" %}</b>: {{ membership.price_name }}
+                                </li>
+                                {% if membership.options %}
+                                <li style="margin-bottom: 8px;">
+                                    <b>{% trans "Options" %}</b>: {{ membership.options }}
+                                </li>
+                                {% endif %}
+                            </ul>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0 0 24px 0;">
+                            <h2 style="font-weight:600;color:#009058;font:18px/24px Arial, Helvetica, sans-serif;margin: 0 0 16px 0;">
+                                {% trans "Pourquoi renouveler votre adhésion ?" %}
+                            </h2>
+                            <ul style="color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 24px 0;">
+                                <li style="margin-bottom: 8px;">
+                                    {% trans "Continuez à soutenir nos actions et nos projets" %}
+                                </li>
+                                <li style="margin-bottom: 8px;">
+                                    {% trans "Gardez l'accès à tous les avantages réservés aux membres" %}
+                                </li>
+                                <li style="margin-bottom: 8px;">
+                                    {% trans "Participez activement à la vie de notre communauté" %}
+                                </li>
+                            </ul>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0 0 24px 0;">
+                            <table style="width:100%;border-spacing: 0px;padding: 0px;">
+                                <tr>
+                                    <td class="active-t btn" align="center"
+                                        style="background:#009058;font:13px/16px Arial, Helvetica, sans-serif;border-radius:3px;height:48px;">
+                                        <a style="color:#ffffff; text-decoration:none; display:block; padding:16px 10px;"
+                                           target="_blank"
+                                           href="{{ renewal_url }}">{% trans "RENOUVELER MON ADHÉSION" %}</a>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;">
+                                {% trans "Si vous avez des questions concernant votre adhésion ou si vous rencontrez des difficultés pour la renouveler, n'hésitez pas à nous contacter. Nous sommes là pour vous aider." %}
+                            </p>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td>
+                            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;padding-top:32px;">
+                                {% trans "Merci pour votre soutien continu" %},<br/>{% trans "L'équipe" %}
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </table>
+        </td>
+    </tr>
+{% endblock %}
