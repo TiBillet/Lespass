@@ -1522,14 +1522,14 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     list_display = [
         'name',
         # 'categorie',
-        'valid_tickets_count',
+        'display_valid_tickets_count',
         'datetime',
         'published',
     ]
 
     list_editable = ['published',]
     readonly_fields = (
-        'valid_tickets_count',
+        'display_valid_tickets_count',
     )
 
     search_fields = ['name']
@@ -1576,6 +1576,10 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
 
     def has_custom_actions_row_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
+
+    @display(description=_("Billets valides"))
+    def display_valid_tickets_count(self, instance: Event):
+        return f"{instance.valid_tickets_count()} / {instance.jauge_max}"
 
     @action(
         description=_("Duplicate (day+1)"),
