@@ -1577,7 +1577,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     def has_custom_actions_row_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
-    @display(description=_("Billets valides"))
+    @display(description=_("Valid tickets"))
     def display_valid_tickets_count(self, instance: Event):
         return f"{instance.valid_tickets_count()} / {instance.jauge_max}"
 
