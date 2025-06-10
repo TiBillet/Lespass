@@ -68,5 +68,14 @@
                 background-image: url('{{ config.img.fhd.url }}');
             }
         }
+
+        /* Custom background color for the bg-body div in home page */
+        [data-bs-theme="light"] .home-bg .bg-body {
+            background-color: #f8f9fa !important; /* Light gray for light mode */
+        }
+
+        [data-bs-theme="dark"] .home-bg .bg-body {
+            background-color: #2b3035 !important; /* Darker gray for dark mode */
+        }
     </style>
 {% endblock %}
