@@ -7,6 +7,7 @@ from decimal import Decimal
 from itertools import product
 
 import stripe
+from django.conf import settings
 from django.db import connection
 from django.db.models import Q
 from django.utils import timezone
@@ -540,6 +541,8 @@ class TenantCreateValidator(serializers.Serializer):
 
             slug = slugify(name)
             dns = waiting_config.dns_choice if waiting_config.dns_choice else 'tibillet.coop'
+            if settings.DEBUG :
+                dns = "tibillet.localhost"
 
             tenant.name=name
             tenant.on_trial=False
