@@ -283,7 +283,11 @@ class ReservationValidator(serializers.Serializer):
 
     def validate_options(self, value):
         # On check que les options sont bien dans l'event original.
-        event: Event = self.event
+        try :
+            event: Event = self.event
+        except Exception as e:
+            logger.error(f"validate_options : {e}")
+            raise serializers.ValidationError(_(f'No event selected. Please retry.'))
         if value:
             for option in value:
                 option: OptionGenerale
