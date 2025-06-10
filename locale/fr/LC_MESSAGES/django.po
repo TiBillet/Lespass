@@ -2825,7 +2825,7 @@ msgid ""
 "Here I can personalize my settings, download or update my personal data and "
 "delete my account."
 msgstr ""
-"Ici je peux régler mes paramètresc télécharger ou mettre à jour mes données "
+"Ici je peux régler mes paramètres télécharger ou mettre à jour mes données "
 "personnelles et supprimer mon compte."
 
 #: BaseBillet/templates/reunion/views/account/preferences.html:19
