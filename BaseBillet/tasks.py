@@ -1036,7 +1036,7 @@ def membership_renewal_reminder():
                     'title': _(f"Votre adhésion au collectif {config.organisation} arrive à expiration"),
                     'membership': membership,
                     'now': timezone.now(),
-                    'objet': _(f"Votre ahdésion {config.organisation} arrive à expiration"),
+                    'objet': _(f"Votre adhésion {config.organisation} arrive à expiration"),
                     'image_url': "https://tibillet.org/fr/img/design/logo-couleur.svg",
                     'renewal_url' : f"https://{tenant.get_primary_domain().domain}/memberships/"
                 }
