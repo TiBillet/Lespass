@@ -746,6 +746,11 @@ def post_save_Product(sender, instance: Product, created, **kwargs):
             instance.poids = len(Product.objects.all()) + 1
         instance.save()
 
+    if instance.categorie_article == Product.FREERES :
+        try :
+            Price.objects.get(product=instance, prix=0, publish=True)
+        except Price.DoesNotExist:
+            Price.objects.create(product=instance, name=_("Free price"), prix=0, publish=True)
 
 """
 Un autre post save existe dans .signals.py : send_membership_and_badge_product_to_fedow

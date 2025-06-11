@@ -142,7 +142,7 @@ class TibilletUser(AbstractUser):
     PUBLIC, FREE, PREMIUM, ENTREPRISE, CUSTOM = 'PU', 'FR', 'PR', 'EN', 'CU'
     OFFRE_CHOICES = (
         (PUBLIC, _('Public')),
-        (FREE, _('Free')),
+        (FREE, _('Free price')),
         (PREMIUM, _('Premium')),
         (ENTREPRISE, _('Entreprise')),
         (CUSTOM, _('Custom')),
