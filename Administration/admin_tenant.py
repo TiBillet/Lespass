@@ -2186,7 +2186,8 @@ class TenantAdmin(ModelAdmin):
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        return queryset.prefetch_related('domains')
+        # Uniquement les client qui ont un domaine
+        return queryset.prefetch_related('domains').exclude(categorie__in=[Client.WAITING_CONFIG, Client.ROOT])
 
     actions_row = ["go_admin", ]
 
