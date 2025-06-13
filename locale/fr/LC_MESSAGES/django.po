@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-11 09:54+0000\n"
+"POT-Creation-Date: 2025-06-13 17:33+0200\n"
 "PO-Revision-Date: 2025-03-12 09:37+0100\n"
 "Last-Translator: Diane Alma Kay <pro@kayathommy.fr>\n"
 "Language-Team: French\n"
@@ -2477,7 +2477,6 @@ msgstr "Déconnexion"
 #: BaseBillet/templates/reunion/base.html:31
 #: BaseBillet/templates/reunion/headless.html:4
 #: BaseBillet/templates/reunion/views/home.html:4
-#: templates/admin/send_invitation.html:16
 msgid "Home"
 msgstr "Accueil"
 
@@ -2694,11 +2693,21 @@ msgstr "Caisse LaBoutik"
 msgid "I want to book one or more seats"
 msgstr "Je veux réserver une ou plusieurs places"
 
-#: BaseBillet/templates/reunion/partials/event/booking.html:40
+#: BaseBillet/templates/reunion/partials/event/booking.html:37
+#, python-format
+msgid "Prices ranging between %(min)s and %(max)s euros per ticket."
+msgstr "Prix allant de %(min)s à %(max)s euros par billet."
+
+#: BaseBillet/templates/reunion/partials/event/booking.html:42
+#, python-format
+msgid "Priced at %(price)s euros per ticket."
+msgstr "Prix fixé à %(price)s euros par billet."
+
+#: BaseBillet/templates/reunion/partials/event/booking.html:55
 msgid "Request booking"
 msgstr "Demander une réservation"
 
-#: BaseBillet/templates/reunion/partials/event/booking.html:41
+#: BaseBillet/templates/reunion/partials/event/booking.html:56
 #: BaseBillet/templates/reunion/partials/navbar.html:66
 #: BaseBillet/templates/reunion/partials/navbar.html:78
 #: BaseBillet/templates/reunion/partials/toasts.html:13
