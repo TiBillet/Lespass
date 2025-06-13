@@ -19,7 +19,9 @@ const parsePrice100 = price =>
 const updateTotal = (orders, totalAmount, totalPrice) => _ => {
     let ta = 0
     let tp = 0
-    const openOrders = orders.filter(({ amount }) => amount.closest('details:open'))
+    const openOrders = orders.filter(({ amount }) =>
+        amount.closest('details').open
+    )
 
     if (openOrders.some(({ price }) => Number(price === null )))
         totalPrice.closest('.js-total-has-price').classList.add('d-none')
