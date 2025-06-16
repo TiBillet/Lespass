@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-13 17:33+0200\n"
+"POT-Creation-Date: 2025-06-16 15:41+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -354,100 +354,105 @@ msgstr ""
 msgid "Ticket unscanned successfully."
 msgstr ""
 
-#: Administration/admin_tenant.py:2194
+#: Administration/admin_tenant.py:2195
 msgid "Go admin"
 msgstr ""
 
-#: Administration/admin_tenant.py:2208
+#: Administration/admin_tenant.py:2209
 msgid "Domaine principal"
 msgstr ""
 
-#: Administration/admin_tenant.py:2251
+#: Administration/admin_tenant.py:2252
 msgid "See this place"
 msgstr ""
 
-#: Administration/admin_tenant.py:2267
+#: Administration/admin_tenant.py:2268
 msgid "Included tags"
 msgstr ""
 
-#: Administration/admin_tenant.py:2271 BaseBillet/models.py:2093
+#: Administration/admin_tenant.py:2272 BaseBillet/models.py:2093
 msgid "Excluded tags"
 msgstr ""
 
-#: Administration/admin_tenant.py:2313 Administration/admin_tenant.py:2618
+#: Administration/admin_tenant.py:2313 Administration/admin_tenant.py:2631
 msgid "Has key"
 msgstr ""
 
-#: Administration/admin_tenant.py:2330
+#: Administration/admin_tenant.py:2359
 msgid "Api Key inserted"
 msgstr ""
 
-#: Administration/admin_tenant.py:2337 Administration/admin_tenant.py:2458
-#: Administration/admin_tenant.py:2637
-msgid "Test Api"
-msgstr ""
-
-#: Administration/admin_tenant.py:2349
-msgid "Ghost URL or API key is missing"
-msgstr ""
-
-#: Administration/admin_tenant.py:2378
-msgid "Ghost API connection successful"
-msgstr ""
-
-#: Administration/admin_tenant.py:2380
+#: Administration/admin_tenant.py:2362 Administration/admin_tenant.py:2392
 #, python-brace-format
 msgid "Ghost API connection failed: {response.status_code} - {response.reason}"
 msgstr ""
 
-#: Administration/admin_tenant.py:2385
+#: Administration/admin_tenant.py:2364
+#, python-brace-format
+msgid "Ghost API connection failed: {e}"
+msgstr ""
+
+#: Administration/admin_tenant.py:2370 Administration/admin_tenant.py:2471
+#: Administration/admin_tenant.py:2650
+msgid "Test Api"
+msgstr ""
+
+#: Administration/admin_tenant.py:2380
+msgid "Ghost URL or API key is missing"
+msgstr ""
+
+#: Administration/admin_tenant.py:2390
+msgid "Ghost API connection successful"
+msgstr ""
+
+#: Administration/admin_tenant.py:2397
 msgid "Error testing Ghost API: {type(e).__name__} - {str(e)}"
 msgstr ""
 
-#: Administration/admin_tenant.py:2429 BaseBillet/models.py:2067
+#: Administration/admin_tenant.py:2442 BaseBillet/models.py:2067
 msgid "Api key"
 msgstr ""
 
-#: Administration/admin_tenant.py:2447 Administration/admin_tenant.py:2467
-#: Administration/admin_tenant.py:2651
+#: Administration/admin_tenant.py:2460 Administration/admin_tenant.py:2480
+#: Administration/admin_tenant.py:2664
 msgid "Api OK"
 msgstr ""
 
-#: Administration/admin_tenant.py:2450 Administration/admin_tenant.py:2469
+#: Administration/admin_tenant.py:2463 Administration/admin_tenant.py:2482
 msgid "Api not OK"
 msgstr ""
 
-#: Administration/admin_tenant.py:2552
+#: Administration/admin_tenant.py:2565
 msgid "Create instance"
 msgstr ""
 
-#: Administration/admin_tenant.py:2562
+#: Administration/admin_tenant.py:2575
 msgid "creation OK"
 msgstr ""
 
-#: Administration/admin_tenant.py:2567
+#: Administration/admin_tenant.py:2580
 #, python-brace-format
 msgid "{wc.organisation} tenant create error : {e} not confirmed"
 msgstr ""
 
-#: Administration/admin_tenant.py:2573
+#: Administration/admin_tenant.py:2586
 msgid "Email not confirmed"
 msgstr ""
 
-#: Administration/admin_tenant.py:2633
+#: Administration/admin_tenant.py:2646
 msgid "Clé Api chiffrée"
 msgstr ""
 
-#: Administration/admin_tenant.py:2655
+#: Administration/admin_tenant.py:2668
 #, python-brace-format
 msgid "Api not OK : {e}"
 msgstr ""
 
-#: Administration/admin_tenant.py:2684
+#: Administration/admin_tenant.py:2697
 msgid "Development"
 msgstr ""
 
-#: Administration/admin_tenant.py:2686
+#: Administration/admin_tenant.py:2699
 msgid "Production"
 msgstr ""
 
@@ -2384,6 +2389,7 @@ msgstr ""
 #: BaseBillet/templates/reunion/base.html:31
 #: BaseBillet/templates/reunion/headless.html:4
 #: BaseBillet/templates/reunion/views/home.html:4
+#: templates/admin/send_invitation.html:16
 msgid "Home"
 msgstr ""
 
@@ -2596,21 +2602,21 @@ msgstr ""
 msgid "I want to book one or more seats"
 msgstr ""
 
-#: BaseBillet/templates/reunion/partials/event/booking.html:37
+#: BaseBillet/templates/reunion/partials/event/booking.html:38
 #, python-format
 msgid "Prices ranging between %(min)s and %(max)s euros per ticket."
 msgstr ""
 
-#: BaseBillet/templates/reunion/partials/event/booking.html:42
+#: BaseBillet/templates/reunion/partials/event/booking.html:43
 #, python-format
 msgid "Priced at %(price)s euros per ticket."
 msgstr ""
 
-#: BaseBillet/templates/reunion/partials/event/booking.html:55
+#: BaseBillet/templates/reunion/partials/event/booking.html:57
 msgid "Request booking"
 msgstr ""
 
-#: BaseBillet/templates/reunion/partials/event/booking.html:56
+#: BaseBillet/templates/reunion/partials/event/booking.html:58
 #: BaseBillet/templates/reunion/partials/navbar.html:66
 #: BaseBillet/templates/reunion/partials/navbar.html:78
 #: BaseBillet/templates/reunion/partials/toasts.html:13
