@@ -23,13 +23,30 @@
 {#    {% else %}#}
         <div class="col-md">
             <button
-                    class="btn btn-lg btn-primary w-100 mt-3"
+                    class="btn btn-lg btn-primary w-100 my-3"
                     type="button"
                     data-bs-toggle="offcanvas"
                     data-bs-target="#bookingPanel"
                     aria-controls="bookingPanel">
                 {% translate "I want to book one or more seats" %}
             </button>
+
+            {% if not event.free_price %}
+            {% if event.price_min or event.price_max %}
+            <p class="text-secondary">
+                {% if event.price_min is not event.price_max %}
+                {% blocktrans trimmed with min=event.price_min max=event.price_max %}
+                Prices ranging between {{ min }} and {{ max }} euros per ticket.
+                {% endblocktrans %}
+                
+                {% elif event.price_min is event.price_max and event.price_min > 0 %}
+                {% blocktrans trimmed with price=event.price_min %}
+                Priced at {{ price }} euros per ticket.
+                {% endblocktrans %}
+                {% endif %}
+            </p>
+            {% endif %}
+            {% endif %}
         </div>
 {#    {% endif %}#}
 </div>

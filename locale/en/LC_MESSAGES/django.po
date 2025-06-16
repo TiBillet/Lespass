@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-11 09:53+0000\n"
+"POT-Creation-Date: 2025-06-13 17:33+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2384,7 +2384,6 @@ msgstr ""
 #: BaseBillet/templates/reunion/base.html:31
 #: BaseBillet/templates/reunion/headless.html:4
 #: BaseBillet/templates/reunion/views/home.html:4
-#: templates/admin/send_invitation.html:16
 msgid "Home"
 msgstr ""
 
@@ -2597,11 +2596,21 @@ msgstr ""
 msgid "I want to book one or more seats"
 msgstr ""
 
-#: BaseBillet/templates/reunion/partials/event/booking.html:40
+#: BaseBillet/templates/reunion/partials/event/booking.html:37
+#, python-format
+msgid "Prices ranging between %(min)s and %(max)s euros per ticket."
+msgstr ""
+
+#: BaseBillet/templates/reunion/partials/event/booking.html:42
+#, python-format
+msgid "Priced at %(price)s euros per ticket."
+msgstr ""
+
+#: BaseBillet/templates/reunion/partials/event/booking.html:55
 msgid "Request booking"
 msgstr ""
 
-#: BaseBillet/templates/reunion/partials/event/booking.html:41
+#: BaseBillet/templates/reunion/partials/event/booking.html:56
 #: BaseBillet/templates/reunion/partials/navbar.html:66
 #: BaseBillet/templates/reunion/partials/navbar.html:78
 #: BaseBillet/templates/reunion/partials/toasts.html:13
