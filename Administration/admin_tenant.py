@@ -2291,8 +2291,7 @@ class FederatedPlaceAdmin(ModelAdmin):
 class GhostConfigChangeform(ModelForm):
     class Meta:
         model = GhostConfig
-        fields = ['ghost_url', 'ghost_last_log']
-
+        fields = ['ghost_last_log']
 
 class GhostConfigAddform(ModelForm):
     class Meta:
@@ -2309,7 +2308,7 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
     add_form = GhostConfigAddform
 
     readonly_fields = ["has_key", "ghost_last_log"]
-    actions_detail = ["test_api_ghost"]
+    actions_detail = ["test_api_ghost_admin_button"]
 
     @display(description=_("Has key"), boolean=True)
     def has_key(self, instance: GhostConfig):
@@ -2323,24 +2322,55 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
         defaults.update(kwargs)
         return super().get_form(request, obj, **defaults)
 
+
+    def test_api_ghost(self, ghost_url, ghost_key):
+        import datetime
+        import jwt
+
+        # Split the key into ID and SECRET
+        id, secret = ghost_key.split(':')
+
+        # Prepare header and payload
+        iat = int(datetime.datetime.now().timestamp())
+
+        header = {'alg': 'HS256', 'typ': 'JWT', 'kid': id}
+        payload = {
+            'iat': iat,
+            'exp': iat + 5 * 60,
+            'aud': '/admin/'
+        }
+
+        # Create the token
+        token = jwt.encode(payload, bytes.fromhex(secret), algorithm='HS256', headers=header)
+
+        # Make a request to the Ghost API
+        headers = {'Authorization': f'Ghost {token}'}
+        response = requests.get(f"{ghost_url}/ghost/api/admin/members/", headers=headers, params={"limit": 1})
+        return response
+
     def save_model(self, request, obj: GhostConfig, form, change):
         if change:
             # headers = {'x-api-key': obj.api_key}
             # check_api = requests.get(f'{obj.api_host}/api/v1/me', headers=headers)
-            obj.set_api_key(obj.ghost_key)
-            messages.success(request, _("Api Key inserted"))
-            # else:
-            #     obj.api_key = None
-            #     messages.error(request, "Api not OK")
+            try:
+                response = self.test_api_ghost(obj.ghost_url, obj.ghost_key)
+                if response.ok:
+                    obj.set_api_key(obj.ghost_key)
+                    messages.success(request, _("Api Key inserted"))
+                else:
+                    messages.error(request,
+                                   _(f"Ghost API connection failed: {response.status_code} - {response.reason}"))
+            except Exception as e:
+                messages.error(request, _(f"Ghost API connection failed: {e}"))
 
-        super().save_model(request, obj, form, change)
+            # Always save the model, even in error cases
+            super().save_model(request, obj, form, change)
+
 
     @action(description=_("Test Api"),
-            url_path="test_api_ghost",
+            url_path="test_api_ghost_admin_button",
             permissions=["custom_actions_detail"])
-    def test_api_ghost(self, request, object_id):
-        import datetime
-        import jwt
+    def test_api_ghost_admin_button(self, request, object_id):
 
         ghost_config = GhostConfig.get_solo()
         ghost_url = ghost_config.ghost_url
@@ -2351,26 +2381,7 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
             return redirect(request.META["HTTP_REFERER"])
 
         try:
-            # Split the key into ID and SECRET
-            id, secret = ghost_key.split(':')
-
-            # Prepare header and payload
-            iat = int(datetime.datetime.now().timestamp())
-
-            header = {'alg': 'HS256', 'typ': 'JWT', 'kid': id}
-            payload = {
-                'iat': iat,
-                'exp': iat + 5 * 60,
-                'aud': '/admin/'
-            }
-
-            # Create the token
-            token = jwt.encode(payload, bytes.fromhex(secret), algorithm='HS256', headers=header)
-
-            # Make a request to the Ghost API
-            headers = {'Authorization': f'Ghost {token}'}
-            response = requests.get(f"{ghost_url}/ghost/api/admin/members/", headers=headers, params={"limit": 1})
-
+            response = self.test_api_ghost(ghost_url, ghost_key)
             # Update the last_log field with the response
             ghost_config.ghost_last_log = f"{timezone.now()} - Status: {response.status_code} - Response: {response.text}"
             ghost_config.save()
@@ -2386,6 +2397,7 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
             messages.error(request, _(f"Error testing Ghost API: {type(e).__name__} - {str(e)}"))
 
         return redirect(request.META["HTTP_REFERER"])
+
 
     def has_custom_actions_detail_permission(self, request, object_id):
         return TenantAdminPermissionWithRequest(request)
@@ -2562,7 +2574,7 @@ class WaitingConfigAdmin(ModelAdmin):
                     request, messages.SUCCESS,
                     _(f"creation OK")
                 )
-            except Exception as e :
+            except Exception as e:
                 messages.add_message(
                     request, messages.ERROR,
                     _(f"{wc.organisation} tenant create error : {e} not confirmed")

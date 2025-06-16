@@ -2124,8 +2124,8 @@ class GhostConfig(SingletonModel):
     Méthode async celery : BaseBillet.tasks.send_to_ghost
     """
 
-    ghost_url = models.URLField(blank=True, null=True)
-    ghost_key = models.CharField(max_length=400, blank=True, null=True)
+    ghost_url = models.URLField(blank=True, null=True, verbose_name="Ghost API URL")
+    ghost_key = models.CharField(max_length=400, blank=True, null=True, verbose_name="Ghost Admin API key")
     ghost_last_log = models.TextField(blank=True, null=True)
 
     def get_api_key(self):
