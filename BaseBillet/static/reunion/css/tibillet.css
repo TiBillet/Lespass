@@ -51,7 +51,7 @@ body {
 
 .navbar {
     padding-block: 20px;
-    
+
     .badge {
         font-family: luciole, sans-serif;
         font-size: var(--bs-badge-font-size);
@@ -78,4 +78,18 @@ details.accordion-item[open] {
     .event-tags {
         max-width: 50%;
     }
+}
+
+/* Make images in long_description responsive and centered */
+figure.attachment,
+figure[data-trix-attachment] {
+    text-align: center;
+    margin: 0 auto;
+}
+
+figure.attachment img,
+figure[data-trix-attachment] img {
+    max-width: 100%;
+    height: auto;
+    width: 100%;
 }

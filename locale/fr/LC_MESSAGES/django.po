@@ -3717,7 +3717,7 @@ msgstr "Votre tirelire est déjà vide."
 
 #: BaseBillet/views.py:572
 msgid "A refund has been made to the provided account. Thank you!"
-msgstr "Un remboursement a été fait sur le compte de dépense. Merci !"
+msgstr "Un remboursement a été réalisé sur la carte bancaire utilisé pour la recharge. Merci !"
 
 #: BaseBillet/views.py:576
 msgid ""
