@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-16 15:41+0000\n"
+"POT-Creation-Date: 2025-06-18 13:43+0000\n"
 "PO-Revision-Date: 2025-03-12 09:37+0100\n"
 "Last-Translator: Diane Alma Kay <pro@kayathommy.fr>\n"
 "Language-Team: French\n"
@@ -872,7 +872,7 @@ msgstr "Humain·e"
 msgid "Public"
 msgstr "Public"
 
-#: AuthBillet/models.py:145 BaseBillet/models.py:753
+#: AuthBillet/models.py:145
 msgid "Free price"
 msgstr "Gratuit"
 
@@ -2461,7 +2461,7 @@ msgstr "Mes réservations"
 #: BaseBillet/templates/reunion/views/account/card.html:6
 #: BaseBillet/templates/reunion/views/account/card.html:11
 msgid "My Pass card"
-msgstr "Ma carte Pass"
+msgstr "Ma carte TiBillet"
 
 #: BaseBillet/templates/reunion/account_base.html:66
 #: BaseBillet/templates/reunion/views/account/preferences.html:6
@@ -3082,16 +3082,24 @@ msgstr ""
 msgid ""
 "Your booking is complete. The tickets have been sent to your email address."
 msgstr ""
-"Votre réservation est complète. Les billets ont été envoyés à votre adresse "
-"mail."
+"Votre réservation est bien prise en compte. Les billets ont été envoyés à "
+"votre adresse mail."
 
-#: BaseBillet/templates/reunion/views/event/reservation_ok.html:6
+#: BaseBillet/templates/reunion/views/event/reservation_ok.html:8
+msgid "Please validate your e-mail to confirm this booking."
+msgstr "Veuillez valider votre e-mail pour confirmer cette réservation."
+
+#: BaseBillet/templates/reunion/views/event/reservation_ok.html:11
 msgid ""
-"Please validate your email to confirm this booking. Don't forget to check "
-"the spam folder!"
+"Your reservation is blocked for 15 minutes. After this time, places will be "
+"made available again."
 msgstr ""
-"Merci de valider votre adresse mail pour confirmer cette réservation. Pensez "
-"à vérifier que le mail n'est pas passé dans les spams !"
+"Votre réservation est bloquée pendant 15 minutes. Passé ce délai, les places "
+"seront de nouveau remise à disposition."
+
+#: BaseBillet/templates/reunion/views/event/reservation_ok.html:14
+msgid "Don't forget to check the spam folder!"
+msgstr "Pensez à vérifier que le mail n'est pas passé dans les spams !"
 
 #: BaseBillet/templates/reunion/views/event/retrieve.html:110
 msgid "Full capacity: The event is sold out."
@@ -3607,9 +3615,8 @@ msgid "A free price must be selected alone."
 msgstr "Un prix libre doit être selectionné seul."
 
 #: BaseBillet/validators.py:357
-#, python-brace-format
-msgid "There are only {remains} remaining tickets."
-msgstr "Il ne reste plus que {remains} billets restants."
+msgid "Number of places available : "
+msgstr "Nombre de places disponibles : "
 
 #: BaseBillet/validators.py:373
 msgid "You have already booked this slot."
@@ -3717,7 +3724,9 @@ msgstr "Votre tirelire est déjà vide."
 
 #: BaseBillet/views.py:572
 msgid "A refund has been made to the provided account. Thank you!"
-msgstr "Un remboursement a été réalisé sur la carte bancaire utilisée pour la recharge. Merci !"
+msgstr ""
+"Un remboursement a été réalisé sur la carte bancaire utilisée pour la "
+"recharge. Merci !"
 
 #: BaseBillet/views.py:576
 msgid ""
@@ -4000,6 +4009,9 @@ msgstr "Fusion de tirelires"
 #: fedow_connect/validators.py:87 fedow_connect/validators.py:191
 msgid "Refund"
 msgstr "Remboursement"
+
+#~ msgid "There are only {remains} remaining tickets."
+#~ msgstr "Il ne reste plus que {remains} billets restants."
 
 #~ msgid "creation async launched"
 #~ msgstr "Création async lancée"

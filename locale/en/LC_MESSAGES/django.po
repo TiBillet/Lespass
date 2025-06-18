@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-16 15:41+0000\n"
+"POT-Creation-Date: 2025-06-18 13:43+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -849,7 +849,7 @@ msgstr ""
 msgid "Public"
 msgstr ""
 
-#: AuthBillet/models.py:145 BaseBillet/models.py:753
+#: AuthBillet/models.py:145
 msgid "Free price"
 msgstr ""
 
@@ -2953,10 +2953,18 @@ msgid ""
 "Your booking is complete. The tickets have been sent to your email address."
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/reservation_ok.html:6
+#: BaseBillet/templates/reunion/views/event/reservation_ok.html:8
+msgid "Please validate your e-mail to confirm this booking."
+msgstr ""
+
+#: BaseBillet/templates/reunion/views/event/reservation_ok.html:11
 msgid ""
-"Please validate your email to confirm this booking. Don't forget to check "
-"the spam folder!"
+"Your reservation is blocked for 15 minutes. After this time, places will be "
+"made available again."
+msgstr ""
+
+#: BaseBillet/templates/reunion/views/event/reservation_ok.html:14
+msgid "Don't forget to check the spam folder!"
 msgstr ""
 
 #: BaseBillet/templates/reunion/views/event/retrieve.html:110
@@ -3410,8 +3418,7 @@ msgid "A free price must be selected alone."
 msgstr ""
 
 #: BaseBillet/validators.py:357
-#, python-brace-format
-msgid "There are only {remains} remaining tickets."
+msgid "Number of places available : "
 msgstr ""
 
 #: BaseBillet/validators.py:373

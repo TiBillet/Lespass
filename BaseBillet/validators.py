@@ -352,9 +352,10 @@ class ReservationValidator(serializers.Serializer):
 
         # Vérification de la jauge
         valid_tickets_count = event.valid_tickets_count()
-        if valid_tickets_count + total_ticket_qty > event.jauge_max:
-            remains = event.jauge_max - valid_tickets_count
-            raise serializers.ValidationError(_(f'There are only {remains} remaining tickets.'))
+        under_purchase = event.under_purchase()
+        if valid_tickets_count + total_ticket_qty + under_purchase > event.jauge_max:
+            remains = event.jauge_max - valid_tickets_count - under_purchase
+            raise serializers.ValidationError(_('Number of places available : ')+ f"{remains}")
 
         # Vérification que l'utilisateur peut reserer une place s'il est déja inscrit sur un horaire
         if not Configuration.get_solo().allow_concurrent_bookings:

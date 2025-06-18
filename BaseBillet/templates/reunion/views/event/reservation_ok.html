@@ -1,9 +1,19 @@
 {% load i18n %}
 
 {% if user.is_active %}
-    <span>{% translate "Your booking is complete. The tickets have been sent to your email address." %}</span>
+    <div>{% translate "Your booking is complete. The tickets have been sent to your email address." %}</div>
 {% else %}
-    <span>{% translate "Please validate your email to confirm this booking. Don't forget to check the spam folder!" %}</span>
+    <div>
+        <div>
+            {% translate "Please validate your e-mail to confirm this booking." %}
+        </div>
+        <div style="margin-top: 1rem">
+            {% translate "Your reservation is blocked for 15 minutes. After this time, places will be made available again." %}
+        </div>
+        <div style="margin-top: 1rem">
+            {% translate "Don't forget to check the spam folder!" %}
+        </div>
+    </div>
 {% endif %}
 
 <script type="module">

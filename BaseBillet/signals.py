@@ -1,9 +1,11 @@
 import logging
+from datetime import timedelta
 
 from django.db import connection
 from django.db.models import Q
 from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
+from django.utils import timezone
 
 from ApiBillet.serializers import get_or_create_price_sold
 from AuthBillet.models import TibilletUser
@@ -176,18 +178,48 @@ def activator_free_reservation(old_instance: TibilletUser, new_instance: Tibille
             to_mail=True,
             status=Reservation.FREERES
         )
+        error_message = None
 
         for resa in free_reservation:
-            print(f"    {resa}")
-            resa.status = Reservation.FREERES_USERACTIV
-            resa.save()
+            #TODO: Faire un test E2E
+            event = resa.event
+            # Si les tickets ont moins de 15 minutes, alors ils sont légitimes :
+            if resa.datetime > (timezone.localtime() - timedelta(minutes=15)):
+                print(f"    {resa} : {resa.datetime} < {timezone.now() - timedelta(minutes=15)}")
+                resa.status = Reservation.FREERES_USERACTIV
+                resa.save()
 
+            else : # On vérifie que l'évènement ne soit pas complet ou proche de l'etre :
+                under_purchase = event.under_purchase()
+                valid_tickets_count = event.valid_tickets_count()
+                total_ticket_qty = resa.tickets.count()
+                if valid_tickets_count + total_ticket_qty + under_purchase > event.jauge_max:
+                    logger.warning(f"    {resa} : {valid_tickets_count} + {total_ticket_qty} + {under_purchase} > {event.jauge_max}")
+                    remains = event.jauge_max - valid_tickets_count - under_purchase
+                    error_message = "Votre validation est supérieure de 15 minutes à votre réservation. "
+                    if remains > 0 :
+                        error_message += f"L'évènement est presque complet, il reste {remains} places, merci de relancer votre reservation."
+                    else :
+                        error_message += "L'évènement est complet."
+                    resa.tickets.all().update(status=Ticket.NOT_ACTIV)
+                    resa.status = Reservation.CANCELED
+                    resa.save()
+
+                else : # Il reste des place, on valide quand même
+                    print(f"    {resa}")
+                    resa.status = Reservation.FREERES_USERACTIV
+                    resa.save()
+
+        if error_message:
+            #TODO: On préfèrerais passer par un error_message en front, mais ici on a pas le request.
+            raise ValueError(error_message)
 
 ######################## MOTEUR SIGNAL ########################
 
 def no_change(old_instance, new_instance):
     logger.info(f"models_signal no_change {old_instance.status} to {new_instance.status}")
     pass
+
 
 def error_regression(old_instance, new_instance):
     logger.error(f"models_signal erreur_regression {old_instance.status} to {new_instance.status}")
@@ -234,7 +266,8 @@ PRE_SAVE_TRANSITIONS = {
             '_else_': error_regression,
         },
         LigneArticle.VALID: {
-            LigneArticle.VALID: no_change, # après send_to_laboutik, on re-enregistre la ligne_article avec le status VALID
+            LigneArticle.VALID: no_change,
+            # après send_to_laboutik, on re-enregistre la ligne_article avec le status VALID
             '_else_': error_regression,
         }
     },
@@ -335,12 +368,13 @@ def send_membership_and_badge_product_to_fedow(sender, instance: Product, create
 @receiver(pre_save, sender=Price)
 def price_if_free_set_t_1(sender, instance: Price, **kwargs):
     if instance.free_price:
-        if instance.prix : # On met le prix a minimum à 1.
-            if instance.prix < 1 :
+        if instance.prix:  # On met le prix a minimum à 1.
+            if instance.prix < 1:
                 instance.prix = 1
-        else :
+        else:
             instance.prix = 1
         instance.max_per_user = 1
+
 
 @receiver(post_save, sender=Membership)
 def create_lignearticle_if_membership_created_on_admin(sender, instance: Membership, created, **kwargs):

@@ -750,7 +750,7 @@ def post_save_Product(sender, instance: Product, created, **kwargs):
         try :
             Price.objects.get(product=instance, prix=0, publish=True)
         except Price.DoesNotExist:
-            Price.objects.create(product=instance, name=_("Free price"), prix=0, publish=True)
+            Price.objects.create(product=instance, name="Tarif gratuit", prix=0, publish=True)
 
 """
 Un autre post save existe dans .signals.py : send_membership_and_badge_product_to_fedow
@@ -1038,7 +1038,6 @@ class Event(models.Model):
                 'thumbnail': img.thumbnail.url,
                 'crop_hdr': img.crop_hdr.url,
                 'crop': img.crop.url,
-
             }
         else:
             return {}
