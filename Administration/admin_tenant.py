@@ -2231,8 +2231,8 @@ class TenantAdmin(ModelAdmin):
 
 @admin.register(FederatedPlace, site=staff_admin_site)
 class FederatedPlaceAdmin(ModelAdmin):
-    list_display = ["tenant", "str_tag_filter", "str_tag_exclude", ]
-    fields = ["tenant", "tag_filter", "tag_exclude", ]
+    list_display = ["tenant", "str_tag_filter", "str_tag_exclude", "membership_visible",]
+    fields = ["tenant", "tag_filter", "tag_exclude", "membership_visible",]
     autocomplete_fields = ["tag_filter", "tag_exclude", ]
 
     def get_queryset(self, request):

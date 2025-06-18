@@ -83,5 +83,32 @@
             {% endfor %}
         </div>
 
+    {% if federated_tenants %}
+        <h4>{% trans "Découvrez les adhésions des espaces fédérés :" %}</h4>
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-3 mb-5">
+            {% for tenant in federated_tenants %}
+                <div class="col">
+                    <div class="card h-100">
+                        {% if tenant.img_url %}
+                            <img src="{{ tenant.img_url }}" class="card-img-top" alt="{{ tenant.name }}" style="aspect-ratio: 16/9; object-fit: cover;">
+                        {% endif %}
+                        <div class="card-body">
+                            <h3 class="card-title">{{ tenant.name }}</h3>
+                            {% if tenant.short_description %}
+                                <p class="card-text">{{ tenant.short_description }}</p>
+                            {% endif %}
+                        </div>
+                        <div class="card-footer">
+                            <a href="https://{{ tenant.domain }}/memberships/" class="btn btn-primary w-100 my-3" target="_blank">
+                                <i class="bi bi-arrow-right"></i>
+                                Voir les adhésions
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
     </main>
 {% endblock main %}

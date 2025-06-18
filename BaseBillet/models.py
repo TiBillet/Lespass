@@ -2092,6 +2092,9 @@ class FederatedPlace(models.Model):
     tag_exclude = models.ManyToManyField(Tag, blank=True, related_name="excluded", verbose_name=_("Excluded tags"),
                                          help_text=_("Don't show those tags."))
 
+    membership_visible = models.BooleanField(default=False, verbose_name=_("Federate memberships and subscriptions"),
+                                             help_text=_("Also display memberships and subscriptions for this site."))
+
     class Meta:
         verbose_name = _('Federated space')
         verbose_name_plural = _('Federated spaces')

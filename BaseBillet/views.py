@@ -62,6 +62,7 @@ class SmallAnonRateThrottle(UserRateThrottle):
     scope = 'smallanon'
 """
 
+
 @requires_csrf_token
 def handler500(request, exception=None):
     """
@@ -1228,21 +1229,23 @@ class MembershipMVT(viewsets.ViewSet):
         template_context = get_context(request)
 
         # Récupération de tout les produits adhésions de la fédération
-        # config = template_context['config']
-        # tenants = [tenant for tenant in config.federated_with.all()]
-        # self_tenant = connection.tenant
-        # if self_tenant not in tenants:
-        #     tenants.append(connection.tenant)
-        # products = []
-        # for tenant in tenants:
-        #     with tenant_context(tenant):
-        #         for product in Product.objects.filter(categorie_article=Product.ADHESION, publish=True).prefetch_related('tag'):
-        #             products.append(product)
+        tenants = [fed.tenant for fed in FederatedPlace.objects.filter(membership_visible=True)]
+        federated_tenant_dict = []
+        for tenant in tenants:
+            with tenant_context(tenant):
+                config = Configuration.get_solo()
+                federated_tenant_dict.append({
+                    'name': config.organisation,
+                    'short_description': config.short_description,
+                    'domain': tenant.get_primary_domain().domain,
+                    'img_url': config.img.hdr.url if config.img else None,
+                })
 
-        # messages.add_message(request, messages.SUCCESS, "coucou")
+                template_context['federated_tenants'] = federated_tenant_dict
 
-        template_context['products'] = Product.objects.filter(categorie_article=Product.ADHESION,
-                                                              publish=True).prefetch_related('tag')
+                template_context['products'] = Product.objects.filter(categorie_article=Product.ADHESION,
+                                                                      publish=True).prefetch_related('tag')
+
         return render(
             request, "reunion/views/membership/list.html",
             context=template_context,
