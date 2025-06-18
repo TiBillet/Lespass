@@ -3709,7 +3709,7 @@ msgid ""
 "register?"
 msgstr ""
 "Vous n'avez pas de tirelire fédérée. Peut-être avez-vous rechargé "
-"directement en caisse ?"
+"directement en caisse ?"
 
 #: BaseBillet/views.py:564
 msgid "Your wallet is already empty."
@@ -3717,7 +3717,7 @@ msgstr "Votre tirelire est déjà vide."
 
 #: BaseBillet/views.py:572
 msgid "A refund has been made to the provided account. Thank you!"
-msgstr "Un remboursement a été réalisé sur la carte bancaire utilisé pour la recharge. Merci !"
+msgstr "Un remboursement a été réalisé sur la carte bancaire utilisée pour la recharge. Merci !"
 
 #: BaseBillet/views.py:576
 msgid ""
@@ -3725,7 +3725,7 @@ msgid ""
 "of the collective's register, or send ar email to: contact@tibillet.re ."
 msgstr ""
 "Toutes nos excuses, vous allez devoir demander un remboursement manuel. Vous "
-"pouvez vous rendre à une des caisses du collectif, ou adresser un mail à : "
+"pouvez vous rendre à une des caisses du collectif, ou adresser un mail à : "
 "contact@tibillet.re ."
 
 #: BaseBillet/views.py:719
