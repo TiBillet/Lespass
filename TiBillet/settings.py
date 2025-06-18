@@ -32,6 +32,8 @@ FERNET_KEY = os.environ.get('FERNET_KEY')
 FEDOW = True
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG') == '1'
+DEBUG = False
+
 TEST = os.environ.get('TEST') == '1'
 
 # Age of cookie, in seconds (default: 2 weeks).

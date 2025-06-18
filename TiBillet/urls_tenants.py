@@ -8,6 +8,7 @@ from Administration.admin_tenant import staff_admin_site
 # on modifie la creation du token pour rajouter access_token dans la réponse pour Postman
 from ApiBillet.views import Webhook_stripe
 from BaseBillet.sitemap import EventSitemap, ProductSitemap, StaticViewSitemap
+from BaseBillet.views import handler500
 
 urlpatterns = [
     # path('jet/', include('jet.urls', 'jet')),  # Django JET URLS
@@ -51,3 +52,6 @@ if settings.DEBUG:
     urlpatterns += [path("__reload__/", include("django_browser_reload.urls")),]
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+
+# Register custom error handlers
+handler500 = 'BaseBillet.views.handler500'

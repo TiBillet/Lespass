@@ -1,0 +1,44 @@
+{% extends "reunion/base.html" %}
+{% load i18n %}
+
+{% block title %}{% translate "Page not found" %}{% endblock %}
+
+{% block main %}
+<div class="container py-5">
+    <div class="col-md-8 offset-md-2 col-xl-6 offset-xl-3">
+        <div class="text-center mb-4">
+            <h1 class="display-4 mb-4">{% translate "404" %}</h1>
+            <h2>{% translate "Page not found" %}</h2>
+            <div class="alert alert-warning mt-3">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                {% translate "The page you are looking for does not exist or has been moved." %}
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title mb-3">{% translate "What can you do?" %}</h5>
+                <p class="card-text">
+                    {% translate "You can try one of the following:" %}
+                </p>
+                <ul>
+                    <li>{% translate "Check the URL for typos" %}</li>
+                    <li>{% translate "Go back to the previous page" %}</li>
+                    <li>{% translate "Return to the homepage" %}</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="text-center">
+            <button onclick="history.back()" class="btn btn-outline-secondary me-2">
+                <i class="bi bi-arrow-left me-1"></i>
+                {% translate "Go back" %}
+            </button>
+            <a href="/" class="btn btn-primary">
+                <i class="bi bi-house me-1"></i>
+                {% translate "Home" %}
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

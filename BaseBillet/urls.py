@@ -2,6 +2,7 @@ from django.urls import path, include
 from rest_framework import routers
 from BaseBillet import views as base_view
 from BaseBillet.views_robots import robots_txt
+from BaseBillet.test_error_views import test_404, test_500
 
 router = routers.DefaultRouter()
 router.register(r'memberships', base_view.MembershipMVT, basename='membership_mvt')
@@ -19,6 +20,10 @@ urlpatterns = [
     # Dynamic robots.txt - Access at: https://yourdomain.com/robots.txt
     # This automatically includes a reference to the sitemap at: https://yourdomain.com/sitemap.xml
     path('robots.txt', robots_txt, name='robots_txt'),
+
+    # Test routes for error templates
+    path('test-errors/404/', test_404, name='test_404'),
+    path('test-errors/500/', test_500, name='test_500'),
 
     path('ticket/<uuid:pk_uuid>/', base_view.Ticket_html_view.as_view()),
     # path('event/<slug:slug>/', base_view.event, name='event'),

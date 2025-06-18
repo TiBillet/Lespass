@@ -22,6 +22,7 @@ from django.utils.encoding import force_str, force_bytes
 from django.utils.html import format_html
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.translation import gettext_lazy as _
+from django.views.decorators.csrf import requires_csrf_token
 from django.views.decorators.http import require_GET
 from django_htmx.http import HttpResponseClientRedirect
 from django_tenants.utils import tenant_context
@@ -60,6 +61,24 @@ class SmallAnonRateThrottle(UserRateThrottle):
     # Un throttle pour 10 requetes par jours uniquement
     scope = 'smallanon'
 """
+
+@requires_csrf_token
+def handler500(request, exception=None):
+    """
+    Custom 500 error handler that passes the exception to the template.
+    """
+    import sys
+    exc_type, exc_value, exc_traceback = sys.exc_info()
+
+    # Use the passed exception if available, otherwise use the one from sys.exc_info()
+    exception_to_use = exception if exception else exc_value
+
+    context = {
+        'exception': str(exception_to_use) if exception_to_use else None,
+        'type_exception': type(exception_to_use).__name__ if exception_to_use else None,
+    }
+    logger.info(context)
+    return render(request, '500.html', context, status=500)
 
 
 def encode_uid(pk):
