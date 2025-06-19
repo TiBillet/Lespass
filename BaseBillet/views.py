@@ -1241,10 +1241,9 @@ class MembershipMVT(viewsets.ViewSet):
                     'img_url': config.img.hdr.url if config.img else None,
                 })
 
-                template_context['federated_tenants'] = federated_tenant_dict
-
-                template_context['products'] = Product.objects.filter(categorie_article=Product.ADHESION,
-                                                                      publish=True).prefetch_related('tag')
+        template_context['federated_tenants'] = federated_tenant_dict
+        template_context['products'] = Product.objects.filter(categorie_article=Product.ADHESION,
+                                                              publish=True).prefetch_related('tag')
 
         return render(
             request, "reunion/views/membership/list.html",
