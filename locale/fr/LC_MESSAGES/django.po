@@ -2337,12 +2337,6 @@ msgstr "J'accepte les"
 msgid "association rules and regulations."
 msgstr "règles et statuts associatifs."
 
-#: BaseBillet/templates/htmx/views/membership/modal_form.html:43
-#, fuzzy
-#| msgid "terms and conditions."
-msgid "Terms and conditions."
-msgstr "cgu / cgv"
-
 #: BaseBillet/templates/htmx/views/membership/modal_form.html:45
 #: BaseBillet/templates/reunion/views/membership/form.html:135
 #: BaseBillet/templates/reunion/views/membership/form.html:137
@@ -2351,19 +2345,6 @@ msgstr "cgu / cgv"
 
 #: BaseBillet/templates/htmx/views/membership/modal_form.html:138
 msgid "I do not wish to receive news by email from the association."
-msgstr ""
-
-#: BaseBillet/templates/htmx/views/membership/modal_form.html:148
-#, fuzzy
-#| msgid "Valid"
-msgid "Validate"
-msgstr "Valide"
-
-#: BaseBillet/templates/htmx/views/my_account/cards.html:15
-msgid ""
-"If you've lost your card, please report it. Your account will not be "
-"deleted, and you will keep your tokens and memberships. You can request and "
-"scan a new blank card at the front desk of your favorite venue :)"
 msgstr ""
 
 #: BaseBillet/templates/htmx/views/my_account/cards.html:21
@@ -2383,52 +2364,14 @@ msgstr "Veuillez valider votre e-mail pour confirmer cette réservation."
 msgid "Resend validation email"
 msgstr "Renvoyer le mail de validation"
 
-#: BaseBillet/templates/htmx/views/my_account/my_account.html:27
-#, fuzzy
-#| msgid "Stripe connected"
-msgid "Se deconnecter"
-msgstr "Stripe connecté"
 
-#: BaseBillet/templates/htmx/views/my_account/my_account_membership.html:7
-#, fuzzy
-#| msgid "Subscription or membership"
-msgid "I subscribe to a new membership"
-msgstr "Adhésion ou abonnement"
-
-#: BaseBillet/templates/htmx/views/my_account/my_account_membership.html:11
-#: BaseBillet/templates/htmx/views/my_account/my_account_wallet.html:17
-#, fuzzy
-#| msgid "Loading list"
-msgid "Loading tokens"
-msgstr "Chargement de la liste"
 
 #: BaseBillet/templates/htmx/views/my_account/my_account_profil.html:9
-#, fuzzy
-#| msgid ""
-#| "Please validate your email to access all the features of your profile "
-#| "area."
 msgid "Please validate your email to manage and view your cards."
 msgstr ""
 "Merci de valider votre adresse mail pour accéder à toutes les "
 "fonctionnalités de votre compte."
 
-#: BaseBillet/templates/htmx/views/my_account/my_account_profil.html:13
-#, fuzzy
-#| msgid "Loading Pass card info"
-msgid "Loading NFC Card info"
-msgstr "Chargement des infos de la carte Pass"
-
-#: BaseBillet/templates/htmx/views/my_account/my_account_wallet.html:10
-#, fuzzy
-#| msgid "Refilled wallet"
-msgid "Refill my wallet"
-msgstr "Tirelire rechargée"
-
-#: BaseBillet/templates/htmx/views/my_account/my_account_wallet.html:34
-#, fuzzy
-#| msgid "Last transaction"
-msgid "Show the last transactions"
-msgstr "Dernière transaction"
 
 #: BaseBillet/templates/htmx/views/my_account/my_account_wallet.html:71
 msgid "Je souhaite récupérer ma tirelire fédérée"
@@ -2439,24 +2382,6 @@ msgstr ""
 msgid "Asset / Place"
 msgstr ""
 
-#: BaseBillet/templates/htmx/views/my_account/tokens_membership_table.html:9
-#: BaseBillet/templates/htmx/views/my_account/tokens_table.html:9
-#, fuzzy
-#| msgid "Open price"
-msgid "Type / Price"
-msgstr "Prix libre"
-
-#: BaseBillet/templates/htmx/views/my_account/tokens_membership_table.html:10
-#, fuzzy
-#| msgid "See all memberships"
-msgid "Start membership"
-msgstr "Voir toutes les adhésions"
-
-#: BaseBillet/templates/htmx/views/my_account/tokens_table.html:11
-#, fuzzy
-#| msgid "Last transaction"
-msgid "Last action"
-msgstr "Dernière transaction"
 
 #: BaseBillet/templates/htmx/views/my_account/transactions_table.html:8
 msgid "From / To"
@@ -2464,34 +2389,12 @@ msgstr ""
 
 #: BaseBillet/templates/htmx/views/my_account/transactions_table.html:9
 #: BaseBillet/templates/reunion/partials/account/transaction_history.html:9
-#, fuzzy
-#| msgid "Option"
 msgid "Action"
-msgstr "Option"
+msgstr "Action"
 
 #: BaseBillet/templates/htmx/views/my_account/transactions_table.html:10
 msgid "Asset / Qty"
 msgstr ""
-
-#: BaseBillet/templates/htmx/views/my_account/transactions_table.html:24
-#: BaseBillet/templates/htmx/views/my_account/transactions_table.html:30
-msgid "Myself"
-msgstr ""
-
-#: BaseBillet/templates/htmx/views/tenant/new.html:11
-msgid "Preferred DNS :"
-msgstr ""
-
-#: BaseBillet/templates/htmx/views/tenant/new.html:45
-msgid ""
-"I would also like to use a « LaBoutik » cash / cashless register system."
-msgstr ""
-
-#: BaseBillet/templates/htmx/views/tenant/new.html:67
-#, fuzzy
-#| msgid "Online: Stripe account"
-msgid "Link stripe account"
-msgstr "En ligne : compte Stripe"
 
 #: BaseBillet/templates/htmx/views/tenant/onboard_stripe_return.html:8
 msgid ""
@@ -2934,7 +2837,7 @@ msgstr ""
 "qui vous a fourni votre carte.\n"
 "</p>\n"
 "<p>\n"
-"    Votre carte Pass elle-même et votre compte sont à vous à vie et peuvent "
+"    Votre carte TiBillet elle-même et votre compte sont à vous à vie et peuvent "
 "être utilisés avec tous les collectifs TiBillet ! </p>"
 
 #: BaseBillet/templates/reunion/views/account/balance.html:54
@@ -2983,12 +2886,12 @@ msgstr "Chargement de la liste"
 #: BaseBillet/templates/reunion/views/account/card.html:13
 msgid "Here I can find my Pass card information and signal a lost card."
 msgstr ""
-"Ici je peux voir les informations de ma carte Pass et signaler une carte "
+"Ici je peux voir les informations de ma carte TiBillet et signaler une carte "
 "perdue."
 
 #: BaseBillet/templates/reunion/views/account/card.html:17
 msgid "Loading Pass card info"
-msgstr "Chargement des infos de la carte Pass"
+msgstr "Chargement des infos de la carte TiBillet"
 
 #: BaseBillet/templates/reunion/views/account/memberships.html:13
 msgid "Here I can list my ongoing subscriptions and renew them."
@@ -3757,7 +3660,7 @@ msgid ""
 "You seem to already have a TiBillet card linked to your wallet. Please "
 "revoke it first in your profile area to link a new one."
 msgstr ""
-"Vous semblez déjà avoir une carte Pass liée à votre compte. Merci de la "
+"Vous semblez déjà avoir une carte TiBillet liée à votre compte. Merci de la "
 "dissocier avant de lier votre compte à une nouvelle carte."
 
 #: BaseBillet/views.py:420
