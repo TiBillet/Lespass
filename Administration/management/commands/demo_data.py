@@ -298,13 +298,6 @@ class Command(BaseCommand):
                     nominative=False,
                 )
 
-                free_resa_price, created = Price.objects.get_or_create(
-                    name="Tarif gratuit",
-                    prix=0,
-                    short_description="Tarif gratuit",
-                    product=free_resa,
-                )
-
                 event_gratuit_avec_free_resa, created = Event.objects.get_or_create(
                     name=f"Disco Caravane : Gratuit avec réservation",
                     datetime=fake.future_datetime('+7d'),
