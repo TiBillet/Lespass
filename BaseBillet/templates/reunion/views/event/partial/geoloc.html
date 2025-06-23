@@ -1,6 +1,15 @@
 {% load static %}
 {% load i18n %}
 
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""/>
+<!-- Make sure you put this AFTER Leaflet's CSS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""></script>
+
 <style>
     #map {
         height: 400px;
@@ -9,6 +18,7 @@
         margin-bottom: 20px;
         border-radius: 8px;
     }
+
     .osm-link {
         display: block;
         margin-bottom: 10px;
@@ -17,13 +27,13 @@
 </style>
 
 <div class="osm-link">
-    <a href="https://www.openstreetmap.org/?mlat={{ event.postal_address.latitude | safe  }}&mlon={{ event.postal_address.longitude  | safe }}&zoom=15" target="_blank" rel="noopener noreferrer">
+    <a href="https://www.openstreetmap.org/?mlat={{ event.postal_address.latitude | safe }}&mlon={{ event.postal_address.longitude  | safe }}&zoom=15"
+       target="_blank" rel="noopener noreferrer">
         <i class="bi bi-box-arrow-up-right"></i> {% trans "View on OpenStreetMap" %}
     </a>
 </div>
 
 <div id="map" aria-label="{% trans 'Map showing the location of' %} {{ event.name }}" role="application"></div>
-
 
 
 <script>
@@ -75,9 +85,9 @@
             `).openPopup();
 
             // Force a resize and recenter after a short delay to handle cases where the map is in a hidden container initially
-            setTimeout(function() {
+            setTimeout(function () {
                 map.invalidateSize();
-                map.setView([lat, lng], 15, { animate: false });
+                map.setView([lat, lng], 15, {animate: false});
             }, 100);
         } catch (error) {
             console.error('Error initializing map:', error);
@@ -93,7 +103,7 @@
         }
 
         // Create an observer instance
-        const observer = new IntersectionObserver(function(entries) {
+        const observer = new IntersectionObserver(function (entries) {
             // If the map is visible
             if (entries[0].isIntersecting) {
                 // Initialize the map
