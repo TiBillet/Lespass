@@ -43,6 +43,8 @@
         <meta name="twitter:site"
               content="@{{ config.twitter|cut:'https://twitter.com/'|cut:'https://x.com/'|cut:'/' }}">{% endif %}
 
+    {% block extra_meta %}{% endblock %}
+
     <link rel="preload" as="style" href="{% static 'reunion/css/tibillet.css' %}">
     <link rel="modulepreload" href="{% static 'reunion/js/theme-switcher.mjs' %}">
 

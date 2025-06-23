@@ -48,10 +48,12 @@
                         {{ event.datetime|date:'j F Y, H:i' }}
                     </li>
                     <li class="list-group-item border-start-0 border-end-0 px-0 py-3 p-xl-5">
-                        {% if event.postal_address.name %}<i class="bi bi-geo-alt-fill me-3"></i>
-                            {{ event.postal_address.name }}<br/>{% endif %}
-                        </i>{{ event.postal_address.street_address }}<br/>
-                        <i class="bi bi-buildings me-3"></i>{{ event.postal_address.postal_code }} {{ event.postal_address.address_locality }}
+                        <address itemscope itemtype="https://schema.org/PostalAddress">
+                            {% if event.postal_address.name %}<i class="bi bi-geo-alt-fill me-3"></i>
+                            <span itemprop="name">{{ event.postal_address.name }}</span><br/>{% endif %}
+                            <i class="bi bi-house-door-fill me-3"></i><span itemprop="streetAddress">{{ event.postal_address.street_address }}</span><br/>
+                            <i class="bi bi-buildings me-3"></i><span itemprop="postalCode">{{ event.postal_address.postal_code }}</span> <span itemprop="addressLocality">{{ event.postal_address.address_locality }}</span>
+                        </address>
                     </li>
                     <li class="list-group-item border-start-0 border-end-0 rounded-0 px-0 py-3 p-xl-5 flex-fill">
                         <i class="bi bi-bus-front-fill me-3"></i>
