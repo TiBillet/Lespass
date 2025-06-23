@@ -1,4 +1,5 @@
 {% load static %}
+{% load i18n %}
 
 <style>
     #map {
@@ -8,7 +9,18 @@
         margin-bottom: 20px;
         border-radius: 8px;
     }
+    .osm-link {
+        display: block;
+        margin-bottom: 10px;
+        text-align: right;
+    }
 </style>
+
+<div class="osm-link">
+    <a href="https://www.openstreetmap.org/?mlat={{ event.postal_address.latitude | safe  }}&mlon={{ event.postal_address.longitude  | safe }}&zoom=15" target="_blank" rel="noopener noreferrer">
+        <i class="bi bi-box-arrow-up-right"></i> {% trans "View on OpenStreetMap" %}
+    </a>
+</div>
 
 <div id="map"></div>
 
