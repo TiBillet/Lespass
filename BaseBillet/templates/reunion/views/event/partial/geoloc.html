@@ -1,0 +1,80 @@
+{% load static %}
+
+<link rel="stylesheet" href="{% static 'reunion/leaflet/leaflet.css' %}"
+     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+     crossorigin=""/>
+
+<style>
+    #map {
+        height: 400px;
+        width: 100%;
+        margin-top: 20px;
+        margin-bottom: 20px;
+        border-radius: 8px;
+    }
+</style>
+
+<div id="map"></div>
+
+<!-- Make sure you put this AFTER Leaflet's CSS -->
+<script src="{% static 'reunion/leaflet/leaflet.js' %}"
+     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+     crossorigin=""></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        try {
+            // Get coordinates from the event's postal address
+            // Use Number() instead of parseFloat() for more precise conversion
+            const lat = {{ event.postal_address.latitude | safe }};
+            const lng = {{ event.postal_address.longitude | safe }};
+
+            // Check if coordinates are valid
+            if (isNaN(lat) || isNaN(lng)) {
+                console.error('Invalid coordinates:', lat, lng);
+                return;
+            }
+
+            // Create the map and set the view to the event's location
+            const mapElement = document.getElementById('map');
+            if (!mapElement) {
+                console.error('Map container not found');
+                return;
+            }
+
+            // Create map with precise coordinates
+            const map = L.map('map', {
+                center: [lat, lng],
+                zoom: 15,
+                zoomControl: true,
+                attributionControl: true
+            });
+
+            // Add the OpenStreetMap tile layer
+            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            }).addTo(map);
+
+            // Add a marker at the exact coordinates
+            const marker = L.marker([lat, lng], {
+                alt: "{{ event.name }}"
+            }).addTo(map);
+
+            // Add a popup with the event's name and address
+            marker.bindPopup(`
+                <strong>{{ event.name }}</strong><br>
+                {{ event.postal_address.street_address }}<br>
+                {{ event.postal_address.postal_code }} {{ event.postal_address.address_locality }}
+            `).openPopup();
+
+            // Force a resize and recenter after a short delay to handle cases where the map is in a hidden container initially
+            setTimeout(function() {
+                map.invalidateSize();
+                map.setView([lat, lng], 15, { animate: false });
+            }, 100);
+        } catch (error) {
+            console.error('Error initializing map:', error);
+        }
+    });
+</script>

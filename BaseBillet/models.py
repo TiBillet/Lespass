@@ -201,22 +201,24 @@ class PostalAddress(models.Model):
         verbose_name=_("Country"),
         help_text=_("Full name or ISO code.")
     )
+
     latitude = models.DecimalField(
-        max_digits=9,
-        decimal_places=6,
+        max_digits=18,
+        decimal_places=16,
         blank=True,
         null=True,
         verbose_name=_("Latitude"),
         help_text=_("GPS coordinate: latitude.")
     )
     longitude = models.DecimalField(
-        max_digits=9,
-        decimal_places=6,
+        max_digits=18,
+        decimal_places=16,
         blank=True,
         null=True,
         verbose_name=_("Longitude"),
         help_text=_("GPS coordinate: longitude.")
     )
+
     comment = models.TextField(
         blank=True,
         null=True,
