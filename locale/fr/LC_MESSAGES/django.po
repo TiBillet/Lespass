@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-23 08:24+0000\n"
+"POT-Creation-Date: 2025-06-23 08:28+0000\n"
 "PO-Revision-Date: 2025-03-12 09:37+0100\n"
 "Last-Translator: Diane Alma Kay <pro@kayathommy.fr>\n"
 "Language-Team: French\n"
@@ -2339,7 +2339,6 @@ msgid "association rules and regulations."
 msgstr "règles et statuts associatifs."
 
 #: BaseBillet/templates/htmx/views/membership/modal_form.html:43
-#| msgid "terms and conditions."
 msgid "Terms and conditions."
 msgstr "cgu / cgv"
 
@@ -2351,7 +2350,9 @@ msgstr "cgu / cgv"
 
 #: BaseBillet/templates/htmx/views/membership/modal_form.html:138
 msgid "I do not wish to receive news by email from the association."
-msgstr "Je ne souhaite pas recevoir de nouvelles de l'association par courrier électronique."
+msgstr ""
+"Je ne souhaite pas recevoir de nouvelles de l'association par courrier "
+"électronique."
 
 #: BaseBillet/templates/htmx/views/membership/modal_form.html:148
 msgid "Validate"
@@ -2369,7 +2370,6 @@ msgid "I LOST MY CARD NUMBER"
 msgstr "J'AI PERDU MA CARTE Numéro"
 
 #: BaseBillet/templates/htmx/views/my_account/my_account.html:18
-#| msgid "Please validate your e-mail to confirm this booking."
 msgid "Please validate your email for activate your account."
 msgstr "Veuillez valider votre e-mail pour activer votre compte."
 
@@ -2381,7 +2381,6 @@ msgid "Resend validation email"
 msgstr "Renvoyer le mail de validation"
 
 #: BaseBillet/templates/htmx/views/my_account/my_account.html:27
-#| msgid "Stripe connected"
 msgid "Se deconnecter"
 msgstr "Se deconnecter"
 
@@ -2391,7 +2390,6 @@ msgstr ""
 
 #: BaseBillet/templates/htmx/views/my_account/my_account_membership.html:11
 #: BaseBillet/templates/htmx/views/my_account/my_account_wallet.html:17
-#| msgid "Loading list"
 msgid "Loading tokens"
 msgstr ""
 
@@ -2402,17 +2400,14 @@ msgstr ""
 "fonctionnalités de votre compte."
 
 #: BaseBillet/templates/htmx/views/my_account/my_account_profil.html:13
-#| msgid "Loading Pass card info"
 msgid "Loading NFC Card info"
 msgstr "Chargement des infos de la carte TiBillet"
 
 #: BaseBillet/templates/htmx/views/my_account/my_account_wallet.html:10
-#| msgid "Refilled wallet"
 msgid "Refill my wallet"
 msgstr ""
 
 #: BaseBillet/templates/htmx/views/my_account/my_account_wallet.html:34
-#| msgid "Last transaction"
 msgid "Show the last transactions"
 msgstr ""
 
@@ -2427,17 +2422,14 @@ msgstr ""
 
 #: BaseBillet/templates/htmx/views/my_account/tokens_membership_table.html:9
 #: BaseBillet/templates/htmx/views/my_account/tokens_table.html:9
-#| msgid "Open price"
 msgid "Type / Price"
 msgstr ""
 
 #: BaseBillet/templates/htmx/views/my_account/tokens_membership_table.html:10
-#| msgid "See all memberships"
 msgid "Start membership"
 msgstr ""
 
 #: BaseBillet/templates/htmx/views/my_account/tokens_table.html:11
-#| msgid "Last transaction"
 msgid "Last action"
 msgstr "Dernière transaction"
 
@@ -2749,7 +2741,7 @@ msgid "LaBoutik register"
 msgstr "Caisse LaBoutik"
 
 #: BaseBillet/templates/reunion/partials/event/booking.html:31
-#: BaseBillet/templates/reunion/views/event/retrieve.html:105
+#: BaseBillet/templates/reunion/views/event/retrieve.html:120
 msgid "I want to book one or more seats"
 msgstr "Je veux réserver une ou plusieurs places"
 
@@ -3072,6 +3064,10 @@ msgstr "Suivante"
 msgid "View on OpenStreetMap"
 msgstr "Voir dans OpenStreetMap"
 
+#: BaseBillet/templates/reunion/views/event/partial/geoloc.html:25
+msgid "Map showing the location of"
+msgstr ""
+
 #: BaseBillet/templates/reunion/views/event/partial/list.html:5
 #: BaseBillet/templates/reunion/views/event/partial/list.html:6
 msgid "Event feed"
@@ -3098,7 +3094,7 @@ msgid "Search filters"
 msgstr "Filtres de recherche"
 
 #: BaseBillet/templates/reunion/views/event/partial/volunteers.html:11
-#: BaseBillet/templates/reunion/views/event/retrieve.html:126
+#: BaseBillet/templates/reunion/views/event/retrieve.html:141
 msgid "Looking for volunteers"
 msgstr "Appel à volontaires"
 
@@ -3159,11 +3155,11 @@ msgstr ""
 msgid "Don't forget to check the spam folder!"
 msgstr "Pensez à vérifier que le mail n'est pas passé dans les spams !"
 
-#: BaseBillet/templates/reunion/views/event/retrieve.html:110
+#: BaseBillet/templates/reunion/views/event/retrieve.html:125
 msgid "Full capacity: The event is sold out."
 msgstr "Jauge maximale atteinte : évènement complet."
 
-#: BaseBillet/templates/reunion/views/event/retrieve.html:127
+#: BaseBillet/templates/reunion/views/event/retrieve.html:142
 msgid "open slots"
 msgstr "personnes souhaitées"
 

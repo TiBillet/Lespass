@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-23 08:23+0000\n"
+"POT-Creation-Date: 2025-06-23 08:28+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2665,7 +2665,7 @@ msgid "LaBoutik register"
 msgstr ""
 
 #: BaseBillet/templates/reunion/partials/event/booking.html:31
-#: BaseBillet/templates/reunion/views/event/retrieve.html:105
+#: BaseBillet/templates/reunion/views/event/retrieve.html:120
 msgid "I want to book one or more seats"
 msgstr ""
 
@@ -2956,6 +2956,10 @@ msgstr ""
 msgid "View on OpenStreetMap"
 msgstr ""
 
+#: BaseBillet/templates/reunion/views/event/partial/geoloc.html:25
+msgid "Map showing the location of"
+msgstr ""
+
 #: BaseBillet/templates/reunion/views/event/partial/list.html:5
 #: BaseBillet/templates/reunion/views/event/partial/list.html:6
 msgid "Event feed"
@@ -2982,7 +2986,7 @@ msgid "Search filters"
 msgstr ""
 
 #: BaseBillet/templates/reunion/views/event/partial/volunteers.html:11
-#: BaseBillet/templates/reunion/views/event/retrieve.html:126
+#: BaseBillet/templates/reunion/views/event/retrieve.html:141
 msgid "Looking for volunteers"
 msgstr ""
 
@@ -3034,11 +3038,11 @@ msgstr ""
 msgid "Don't forget to check the spam folder!"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/retrieve.html:110
+#: BaseBillet/templates/reunion/views/event/retrieve.html:125
 msgid "Full capacity: The event is sold out."
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/retrieve.html:127
+#: BaseBillet/templates/reunion/views/event/retrieve.html:142
 msgid "open slots"
 msgstr ""
 
