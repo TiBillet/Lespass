@@ -1,9 +1,5 @@
 {% load static %}
 
-<link rel="stylesheet" href="{% static 'reunion/leaflet/leaflet.css' %}"
-     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-     crossorigin=""/>
-
 <style>
     #map {
         height: 400px;
@@ -16,13 +12,11 @@
 
 <div id="map"></div>
 
-<!-- Make sure you put this AFTER Leaflet's CSS -->
-<script src="{% static 'reunion/leaflet/leaflet.js' %}"
-     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-     crossorigin=""></script>
+
 
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
+    // Function to initialize the map
+    function initializeMap() {
         try {
             // Get coordinates from the event's postal address
             // Use Number() instead of parseFloat() for more precise conversion
@@ -76,5 +70,37 @@
         } catch (error) {
             console.error('Error initializing map:', error);
         }
-    });
+    }
+
+    // Function to set up the Intersection Observer
+    function setupMapObserver() {
+        const mapElement = document.getElementById('map');
+        if (!mapElement) {
+            console.error('Map container not found for observer');
+            return;
+        }
+
+        // Create an observer instance
+        const observer = new IntersectionObserver(function(entries) {
+            // If the map is visible
+            if (entries[0].isIntersecting) {
+                // Initialize the map
+                initializeMap();
+                // Stop observing once the map is initialized
+                observer.disconnect();
+            }
+        }, {
+            // Options: trigger when at least 10% of the element is visible
+            threshold: 0.1
+        });
+
+        // Start observing the map element
+        observer.observe(mapElement);
+    }
+
+    // Set up the observer when the DOM is loaded (for direct page loads)
+    document.addEventListener('DOMContentLoaded', setupMapObserver);
+
+    // Set up the observer when content is loaded via HTMX (for HTMX page loads)
+    document.addEventListener('htmx:afterSwap', setupMapObserver);
 </script>

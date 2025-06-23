@@ -9,16 +9,20 @@
     {% load i18n %}
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <meta name="description" content="{% block meta_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
+    <meta name="description" content="
+            {% block meta_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
     <meta name="robots" content="{% block meta_robots %}index, follow{% endblock %}">
     <title>{% block title %}{% translate 'Home' %}{% endblock %} | {{ config.organisation }}</title>
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="{% block og_type %}website{% endblock %}">
     <meta property="og:url" content="{{ request.build_absolute_uri }}">
-    <meta property="og:title" content="{% block og_title %}{% translate 'Home' %} | {{ config.organisation }}{% endblock %}">
-    <meta property="og:description" content="{% block og_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
-    <meta property="og:image" content="{% block og_image %}{% if config.img %}{{ config.img.hdr.url }}{% else %}{% static 'reunion/img/favicon.png' %}{% endif %}{% endblock %}">
+    <meta property="og:title"
+          content="{% block og_title %}{% translate 'Home' %} | {{ config.organisation }}{% endblock %}">
+    <meta property="og:description" content="
+            {% block og_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
+    <meta property="og:image" content="
+            {% block og_image %}{% if config.img %}{{ config.img.hdr.url }}{% else %}{% static 'reunion/img/favicon.png' %}{% endif %}{% endblock %}">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="{% block og_image_alt %}{{ config.organisation }}{% endblock %}">
@@ -28,11 +32,16 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:url" content="{{ request.build_absolute_uri }}">
     <meta name="twitter:domain" content="{{ request.get_host }}">
-    <meta name="twitter:title" content="{% block twitter_title %}{% translate 'Home' %} | {{ config.organisation }}{% endblock %}">
-    <meta name="twitter:description" content="{% block twitter_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
-    <meta name="twitter:image" content="{% block twitter_image %}{% if config.img %}{{ config.img.hdr.url }}{% else %}{% static 'reunion/img/favicon.png' %}{% endif %}{% endblock %}">
+    <meta name="twitter:title"
+          content="{% block twitter_title %}{% translate 'Home' %} | {{ config.organisation }}{% endblock %}">
+    <meta name="twitter:description" content="
+            {% block twitter_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
+    <meta name="twitter:image" content="
+            {% block twitter_image %}{% if config.img %}{{ config.img.hdr.url }}{% else %}{% static 'reunion/img/favicon.png' %}{% endif %}{% endblock %}">
     <meta name="twitter:image:alt" content="{% block twitter_image_alt %}{{ config.organisation }}{% endblock %}">
-    {% if config.twitter %}<meta name="twitter:site" content="@{{ config.twitter|cut:'https://twitter.com/'|cut:'https://x.com/'|cut:'/' }}">{% endif %}
+    {% if config.twitter %}
+        <meta name="twitter:site"
+              content="@{{ config.twitter|cut:'https://twitter.com/'|cut:'https://x.com/'|cut:'/' }}">{% endif %}
 
     <link rel="preload" as="style" href="{% static 'reunion/css/tibillet.css' %}">
     <link rel="modulepreload" href="{% static 'reunion/js/theme-switcher.mjs' %}">
@@ -40,7 +49,8 @@
     <link rel="icon" type="image/png" href="{% static 'reunion/img/favicon.png' %}">
     <link data-bs-stylesheet="bootstrap" href="{% static 'reunion/css/bootstrap.min.5.3.3.css' %}" rel="stylesheet"
           integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
-    <link data-bs-stylesheet="bootstrap-icons" rel="stylesheet" href="{% static 'reunion/css/bootstrap-icons.min.css' %}">
+    <link data-bs-stylesheet="bootstrap-icons" rel="stylesheet"
+          href="{% static 'reunion/css/bootstrap-icons.min.css' %}">
     <link rel="stylesheet" href="{% static 'reunion/css/vars.css' %}">
     <link rel="stylesheet" href="{% static 'reunion/css/tibillet.css' %}">
 
@@ -60,6 +70,14 @@
 
         ThemeSwitcher.init()
     </script>
+
+    <link rel="stylesheet" href="{% static 'reunion/leaflet/leaflet.css' %}"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin=""/>
+    <!-- Make sure you put this AFTER Leaflet's CSS -->
+    <script src="{% static 'reunion/leaflet/leaflet.js' %}"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
 </head>
 
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' class="min-vh-100 d-flex flex-column">
@@ -68,9 +86,9 @@
     {% include "reunion/partials/navbar.html" %}
 {% endif %}
 
-    <div class="flex-fill d-flex flex-column">
-        {% block main %}{% endblock main %}
-    </div>
+<div class="flex-fill d-flex flex-column">
+    {% block main %}{% endblock main %}
+</div>
 
 {% if not embed %} <!-- Pas de footer si embed -->
     {% include "reunion/partials/footer.html" %}
