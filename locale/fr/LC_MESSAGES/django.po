@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-23 08:28+0000\n"
+"POT-Creation-Date: 2025-06-24 07:27+0000\n"
 "PO-Revision-Date: 2025-03-12 09:37+0100\n"
 "Last-Translator: Diane Alma Kay <pro@kayathommy.fr>\n"
 "Language-Team: French\n"
@@ -1091,8 +1091,8 @@ msgid ""
 "The main image of the adress, displayed in the head of the event page if no "
 "image on event."
 msgstr ""
-"L'image principale de l'événement, affichée tout en haut de la page de "
-"l'événement. "
+"L'image principale de l'adresse. S'affiche sur les évènements s'ils n'ont "
+"pas d'adresse."
 
 #: BaseBillet/models.py:172 BaseBillet/models.py:923
 msgid "Sticker image"
@@ -1101,10 +1101,8 @@ msgstr "Image vignette"
 #: BaseBillet/models.py:174
 msgid ""
 "The small image displayed in the events list if not img on event. If None, "
-"img will be displayed. 4x3 ratio."
-msgstr ""
-"La petite image affichée dans la liste des événements. Si elle est nulle, "
-"c'est l'image principale qui sera affichée. Rapport 4x3."
+"Main img will be displayed. 4x3 ratio."
+msgstr "La petite image utilisé si abscente des évènements. Rapport 4x3."
 
 #: BaseBillet/models.py:179
 msgid "Street address"
@@ -1628,10 +1626,10 @@ msgstr "Montant minimal de recharge cashless"
 #: BaseBillet/models.py:910
 msgid ""
 "The main image of the event, displayed in the head of the event page and for "
-"social shares."
+"social shares. If empty, the address image is displayed."
 msgstr ""
 "L'image principale de l'événement, affichée tout en haut de la page de "
-"l'événement. "
+"l'événement. Si vide, l'image de l'adresse s'affiche."
 
 #: BaseBillet/models.py:925
 msgid ""
@@ -3060,11 +3058,11 @@ msgstr "Précédente"
 msgid "Next"
 msgstr "Suivante"
 
-#: BaseBillet/templates/reunion/views/event/partial/geoloc.html:21
+#: BaseBillet/templates/reunion/views/event/partial/geoloc.html:32
 msgid "View on OpenStreetMap"
 msgstr "Voir dans OpenStreetMap"
 
-#: BaseBillet/templates/reunion/views/event/partial/geoloc.html:25
+#: BaseBillet/templates/reunion/views/event/partial/geoloc.html:36
 msgid "Map showing the location of"
 msgstr ""
 

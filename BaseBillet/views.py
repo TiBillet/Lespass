@@ -815,6 +815,8 @@ class EventMVT(viewsets.ViewSet):
                     ).prefetch_related(
                         'tag', 'products', 'products__prices',
                     ).get(slug=slug)
+                    event.img = event.get_img()
+                    event.sticker_img = event.get_sticker_img()
                     return event
                 except Event.DoesNotExist:
                     continue
@@ -896,6 +898,10 @@ class EventMVT(viewsets.ViewSet):
                 paginated_info['has_previous'] = paginated_events.has_previous()
 
                 for event in paginated_events:
+                    # On va chercher les urls d'images :
+                    event.img = event.get_img()
+                    event.sticker_img = event.get_sticker_img()
+
                     date = event.datetime.date()
                     # setdefault pour éviter de faire un if date exist dans le dict
                     dated_events.setdefault(date, []).append(event)
@@ -962,6 +968,10 @@ class EventMVT(viewsets.ViewSet):
         try:
             event = Event.objects.select_related('postal_address', ).prefetch_related('tag', 'products',
                                                                                       'products__prices').get(slug=slug)
+            # selection et mise en cache des images
+            event.img = event.get_img()
+            event.sticker_img = event.get_sticker_img()
+
             # Récupération des prix
             event.prices = [price for product in event.products.all() for price in product.prices.all()]
             tarifs = [price.prix for price in event.prices]
@@ -995,6 +1005,15 @@ class EventMVT(viewsets.ViewSet):
             template_context['inscrits'] = Ticket.objects.filter(reservation__event__parent=event).count()
 
         return render(request, "reunion/views/event/retrieve.html", context=template_context)
+
+    @action(detail=True, methods=['GET'])
+    def show_map(self, request, pk=None):
+        """HTMX endpoint to load the map for an event"""
+        # Get the event by slug or pk
+        event = get_object_or_404(Event, slug=pk)
+
+        # Return the map partial template with the event data
+        return render(request, "reunion/views/event/partial/geoloc.html", context={'event': event})
 
     @action(detail=True, methods=['POST'], permission_classes=[permissions.IsAuthenticated])
     def action_reservation(self, request, pk=None):

@@ -1,11 +1,12 @@
 {% load static %}
 {% load i18n %}
 
-
+<!-- Leaflet CSS -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
       crossorigin=""/>
-<!-- Make sure you put this AFTER Leaflet's CSS -->
+
+<!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
         crossorigin=""></script>
@@ -35,15 +36,167 @@
 
 <div id="map" aria-label="{% trans 'Map showing the location of' %} {{ event.name }}" role="application"></div>
 
-
 <script>
-    // Function to initialize the map
+    // Function to ensure Leaflet is loaded
+    function ensureLeafletLoaded() {
+        // Check if Leaflet script is already in the document
+        const leafletScriptExists = Array.from(document.scripts).some(script => 
+            script.src && script.src.includes('leaflet'));
+
+        // Check if Leaflet CSS is already in the document
+        const leafletCSSExists = Array.from(document.styleSheets).some(styleSheet => 
+            styleSheet.href && styleSheet.href.includes('leaflet'));
+
+        // If Leaflet script doesn't exist, load it dynamically
+        if (!leafletScriptExists) {
+            console.log('Leaflet script not found, loading it dynamically...');
+            const leafletScript = document.createElement('script');
+            leafletScript.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+            leafletScript.integrity = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';
+            leafletScript.crossOrigin = '';
+            document.head.appendChild(leafletScript);
+        }
+
+        // If Leaflet CSS doesn't exist, load it dynamically
+        if (!leafletCSSExists) {
+            console.log('Leaflet CSS not found, loading it dynamically...');
+            const leafletCSS = document.createElement('link');
+            leafletCSS.rel = 'stylesheet';
+            leafletCSS.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+            leafletCSS.integrity = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=';
+            leafletCSS.crossOrigin = '';
+            document.head.appendChild(leafletCSS);
+        }
+
+        // Wait for Leaflet to be fully loaded
+        waitForLeaflet(initializeMap);
+    }
+
+    // Initialize the map when the DOM is loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        ensureLeafletLoaded();
+    });
+
+    // Also initialize when this content is swapped in via HTMX
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        // If the document is already loaded, initialize immediately
+        setTimeout(function() {
+            ensureLeafletLoaded();
+        }, 100);
+    }
+
+    // Handle HTMX content swaps
+    document.addEventListener('htmx:afterSwap', function(event) {
+        console.log('HTMX afterSwap event triggered');
+
+        // Check if our map element is in the swapped content
+        const mapElement = event.detail.target.querySelector('#map');
+        if (mapElement) {
+            console.log('Map element found in HTMX swapped content');
+
+            // Force a small delay to ensure the DOM is fully updated
+            setTimeout(function() {
+                console.log('Initializing map after HTMX swap');
+
+                // Check if Leaflet is already loaded
+                if (typeof L !== 'undefined') {
+                    console.log('Leaflet is already loaded, initializing map directly');
+                    initializeMap();
+                } else {
+                    console.log('Leaflet not loaded yet, ensuring it gets loaded');
+                    ensureLeafletLoaded();
+                }
+            }, 200); // Slightly longer delay to ensure DOM is ready
+        } else {
+            console.log('Map element not found in HTMX swapped content');
+        }
+    });
+
+    // Handle HTMX load event (triggered when HTMX loads new content)
+    document.addEventListener('htmx:load', function(event) {
+        console.log('HTMX load event triggered');
+
+        // Check if our map element exists in the document
+        const mapElement = document.getElementById('map');
+        if (mapElement) {
+            console.log('Map element found after HTMX load');
+
+            // Force a small delay to ensure the DOM is fully updated
+            setTimeout(function() {
+                console.log('Initializing map after HTMX load');
+
+                // Check if Leaflet is already loaded
+                if (typeof L !== 'undefined') {
+                    console.log('Leaflet is already loaded, initializing map directly');
+                    initializeMap();
+                } else {
+                    console.log('Leaflet not loaded yet, ensuring it gets loaded');
+                    ensureLeafletLoaded();
+                }
+            }, 300); // Slightly longer delay to ensure DOM is ready
+        }
+    });
+
+    // Function to wait for Leaflet to be fully loaded
+    function waitForLeaflet(callback, attempts = 0, maxAttempts = 20) {
+        // If Leaflet is loaded, call the callback
+        if (typeof L !== 'undefined' && L.map && L.tileLayer && L.marker) {
+            console.log('Leaflet is loaded, initializing map');
+            callback();
+            return;
+        }
+
+        // If we've reached the maximum number of attempts, log an error
+        if (attempts >= maxAttempts) {
+            console.error('Failed to load Leaflet after ' + maxAttempts + ' attempts');
+            return;
+        }
+
+        // Calculate delay with exponential backoff (100ms, 200ms, 400ms, etc.)
+        const delay = Math.min(100 * Math.pow(1.5, attempts), 2000);
+
+        console.log('Waiting for Leaflet to load, attempt ' + (attempts + 1) + ', next try in ' + delay + 'ms');
+
+        // Try again after the delay
+        setTimeout(function() {
+            waitForLeaflet(callback, attempts + 1, maxAttempts);
+        }, delay);
+    }
+
+    // Global variable to track if the map has been initialized
+    let mapInitialized = false;
+    let mapInstance = null;
+
+    // Function to remove any existing map instance
+    function removeExistingMap() {
+        if (mapInstance) {
+            console.log('Removing existing map instance');
+            mapInstance.remove();
+            mapInstance = null;
+            mapInitialized = false;
+        }
+    }
+
     function initializeMap() {
+        // If map is already initialized, don't initialize it again
+        if (mapInitialized) {
+            console.log('Map already initialized, skipping initialization');
+            return;
+        }
+
         try {
+            console.log('Starting map initialization');
+
+            // Double-check if Leaflet is loaded (just to be safe)
+            if (typeof L === 'undefined') {
+                console.error('Leaflet not loaded, cannot initialize map');
+                return;
+            }
+
             // Get coordinates from the event's postal address
-            // Use Number() instead of parseFloat() for more precise conversion
             const lat = {{ event.postal_address.latitude | safe }};
             const lng = {{ event.postal_address.longitude | safe }};
+            console.log('Map coordinates:', lat, lng);
 
             // Check if coordinates are valid
             if (isNaN(lat) || isNaN(lng)) {
@@ -51,15 +204,23 @@
                 return;
             }
 
-            // Create the map and set the view to the event's location
+            // Get the map element
             const mapElement = document.getElementById('map');
             if (!mapElement) {
                 console.error('Map container not found');
                 return;
             }
+            console.log('Map container found');
+
+            // Check if the map container already has a map instance
+            if (mapElement._leaflet_id) {
+                console.log('Map container already has a map instance, removing it');
+                removeExistingMap();
+            }
 
             // Create map with precise coordinates
-            const map = L.map('map', {
+            console.log('Creating new map instance');
+            mapInstance = L.map('map', {
                 center: [lat, lng],
                 zoom: 15,
                 zoomControl: true,
@@ -70,12 +231,12 @@
             L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
                 attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            }).addTo(map);
+            }).addTo(mapInstance);
 
             // Add a marker at the exact coordinates
             const marker = L.marker([lat, lng], {
                 alt: "{{ event.name }}"
-            }).addTo(map);
+            }).addTo(mapInstance);
 
             // Add a popup with the event's name and address
             marker.bindPopup(`
@@ -86,43 +247,37 @@
 
             // Force a resize and recenter after a short delay to handle cases where the map is in a hidden container initially
             setTimeout(function () {
-                map.invalidateSize();
-                map.setView([lat, lng], 15, {animate: false});
+                console.log('Resizing and recentering map');
+                mapInstance.invalidateSize();
+                mapInstance.setView([lat, lng], 15, {animate: false});
             }, 100);
+
+            // Mark the map as initialized
+            mapInitialized = true;
+            console.log('Map initialized successfully');
         } catch (error) {
             console.error('Error initializing map:', error);
+            mapInitialized = false;
+            mapInstance = null;
         }
     }
 
-    // Function to set up the Intersection Observer
-    function setupMapObserver() {
-        const mapElement = document.getElementById('map');
-        if (!mapElement) {
-            console.error('Map container not found for observer');
-            return;
-        }
-
-        // Create an observer instance
-        const observer = new IntersectionObserver(function (entries) {
-            // If the map is visible
-            if (entries[0].isIntersecting) {
-                // Initialize the map
-                initializeMap();
-                // Stop observing once the map is initialized
-                observer.disconnect();
-            }
-        }, {
-            // Options: trigger when at least 10% of the element is visible
-            threshold: 0.1
+    // Direct initialization as a fallback
+    // This will run immediately when the script is executed
+    console.log('Direct initialization as fallback');
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        // If the document is already loaded, initialize immediately
+        console.log('Document already loaded, initializing map directly');
+        setTimeout(function() {
+            ensureLeafletLoaded();
+        }, 500); // Longer delay to ensure everything else has had a chance to run
+    } else {
+        // If the document is not yet loaded, wait for it to load
+        console.log('Document not yet loaded, waiting for DOMContentLoaded');
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                ensureLeafletLoaded();
+            }, 500);
         });
-
-        // Start observing the map element
-        observer.observe(mapElement);
     }
-
-    // Set up the observer when the DOM is loaded (for direct page loads)
-    document.addEventListener('DOMContentLoaded', setupMapObserver);
-
-    // Set up the observer when content is loaded via HTMX (for HTMX page loads)
-    document.addEventListener('htmx:afterSwap', setupMapObserver);
 </script>

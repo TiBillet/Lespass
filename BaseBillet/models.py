@@ -6,6 +6,7 @@ from datetime import timedelta, datetime
 from decimal import Decimal
 from time import localtime
 from uuid import uuid4
+from functools import lru_cache
 
 import pytz
 import requests
@@ -27,6 +28,7 @@ from django.utils.translation import gettext_lazy as _
 from django_tenants.postgresql_backend.base import FakeTenant
 from django_tenants.utils import tenant_context
 from rest_framework_api_key.models import APIKey, AbstractAPIKey
+from django.core.cache import cache
 
 from solo.models import SingletonModel
 
@@ -171,7 +173,7 @@ class PostalAddress(models.Model):
                                 },
                                 delete_orphans=True, verbose_name=_("Sticker image"),
                                 help_text=_(
-                                    "The small image displayed in the events list if not img on event. If None, img will be displayed. 4x3 ratio.")
+                                    "The small image displayed in the events list if not img on event. If None, Main img will be displayed. 4x3 ratio.")
                                 )
 
 
@@ -907,8 +909,34 @@ class Event(models.Model):
                             'social_card': (1200, 630, True),
                         },
                         delete_orphans=True, verbose_name=_("Main image"),
-                        help_text=_("The main image of the event, displayed in the head of the event page and for social shares.")
+                        help_text=_("The main image of the event, displayed in the head of the event page and for social shares. If empty, the address image is displayed.")
                         )
+
+    def get_img(self):
+        # Cache key based on instance ID and method name
+        cache_key = f'event_get_img_{self.pk}'
+        cached_result = cache.get(cache_key)
+
+        if cached_result is not None:
+            return cached_result
+
+        # Algo pour récupérer l'image à afficher.
+        if self.img:
+            result = self.img
+        elif self.postal_address and self.postal_address.img:
+            logger.info("postal_address img")
+            result = self.postal_address.img
+        else:
+            config = Configuration.get_solo()
+            if config.img:
+                logger.info("config img")
+                result = config.img
+            else:
+                result = None
+
+        # Cache the result for 1 hour (3600 seconds)
+        cache.set(cache_key, result, 3600)
+        return result
 
     sticker_img = StdImageField(upload_to='images/',
                                 blank=True, null=True,
@@ -924,6 +952,31 @@ class Event(models.Model):
                                 help_text=_(
                                     "The small image displayed in the events list. If None, img will be displayed. 4x3 ratio.")
                                 )
+
+    def get_sticker_img(self):
+        # Cache key based on instance ID and method name
+        cache_key = f'event_get_sticker_img_{self.pk}'
+        cached_result = cache.get(cache_key)
+
+        if cached_result is not None:
+            return cached_result
+
+        # Algo pour récupérer l'image à afficher.
+        if self.sticker_img:
+            result = self.sticker_img
+        elif self.postal_address and self.postal_address.sticker_img:
+            result = self.postal_address.sticker_img
+        else:
+            config = Configuration.get_solo()
+            if config.logo:
+                result = config.logo
+            else:
+                # Au cas ou aucune image précédente, on prend les img classiques
+                result = self.get_img()
+
+        # Cache the result for 1 hour (3600 seconds)
+        cache.set(cache_key, result, 3600)
+        return result
 
     carrousel = models.ManyToManyField(Carrousel, blank=True, verbose_name=_("Carousel slides"),
                                        related_name='events',
@@ -949,10 +1002,6 @@ class Event(models.Model):
     categorie = models.CharField(max_length=3, choices=TYPE_CHOICES, default=CONCERT,
                                  verbose_name=_("Event category"))
 
-    # recurrent = models.ManyToManyField(Weekday, blank=True,
-    #                                    help_text=_(
-    #                                        "Selectionnez le jour de la semaine pour une récurence hebdomadaire. La date de l'évènement sera la date de fin de la récurence."),
-    #                                    verbose_name=_("Jours de la semaine"))
 
     # La relation parent / enfant
     parent = models.ForeignKey(
@@ -1116,6 +1165,10 @@ class Event(models.Model):
             self.easy_reservation = True
 
         super().save(*args, **kwargs)
+
+        # Clear the cache for get_img and get_sticker_img methods
+        cache.delete(f'event_get_img_{self.pk}')
+        cache.delete(f'event_get_sticker_img_{self.pk}')
 
     def __str__(self):
         return f"{self.datetime.strftime('%d/%m')} {self.name}"

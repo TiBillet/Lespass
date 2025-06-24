@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-23 08:28+0000\n"
+"POT-Creation-Date: 2025-06-24 07:27+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1074,7 +1074,7 @@ msgstr ""
 #: BaseBillet/models.py:174
 msgid ""
 "The small image displayed in the events list if not img on event. If None, "
-"img will be displayed. 4x3 ratio."
+"Main img will be displayed. 4x3 ratio."
 msgstr ""
 
 #: BaseBillet/models.py:179
@@ -1591,7 +1591,7 @@ msgstr ""
 #: BaseBillet/models.py:910
 msgid ""
 "The main image of the event, displayed in the head of the event page and for "
-"social shares."
+"social shares. If empty, the address image is displayed."
 msgstr ""
 
 #: BaseBillet/models.py:925
@@ -2952,11 +2952,11 @@ msgstr ""
 msgid "Next"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/geoloc.html:21
+#: BaseBillet/templates/reunion/views/event/partial/geoloc.html:32
 msgid "View on OpenStreetMap"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/geoloc.html:25
+#: BaseBillet/templates/reunion/views/event/partial/geoloc.html:36
 msgid "Map showing the location of"
 msgstr ""
 

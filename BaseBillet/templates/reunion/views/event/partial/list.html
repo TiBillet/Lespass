@@ -16,15 +16,9 @@
             <div class="col-md-auto">
                 <h3 class="mb-0 mt-2 mt-md-0">{{ event.datetime|time:'H\hi' }}</h3>
             </div>
-            {% if event.sticker_img %}
-                <div class="col-auto py-3" style="width: 140px">
-                    {% include 'reunion/partials/picture.html' with img=event.sticker_img alt=event.name ratio='4x3' class='rounded' %}
-                </div>
-            {% else %}
-                <div class="col-auto py-3" style="width: 140px">
-                    {% include 'reunion/partials/picture.html' with img=event.img alt=event.name ratio='4x3' class='rounded' %}
-                </div>
-            {% endif %}
+            <div class="col-auto py-3" style="width: 140px">
+                {% include 'reunion/partials/picture.html' with img=event.get_sticker_img alt=event.name ratio='4x3' class='rounded' %}
+            </div>
             {#  <a href="{{ event.full_url }}" hx-get="{{ event.full_url }}" hx-target="body" hx-push-url="true" class="col fs-5">#}
             <div class="col">
                 <a href="/event/{{ event.slug }}/" hx-boost="true" hx-target="body" class="fs-5"
