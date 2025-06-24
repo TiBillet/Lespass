@@ -18,6 +18,49 @@
         margin-top: 20px;
         margin-bottom: 20px;
         border-radius: 8px;
+        position: relative;
+        z-index: 1;
+    }
+
+    /* Ensure the map container is visible */
+    #map-container {
+        min-height: 400px;
+        width: 100%;
+        position: relative;
+    }
+
+    /* Force visibility for map elements */
+    .force-visible {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        height: 400px !important;
+        width: 100% !important;
+        position: relative !important;
+        z-index: 10 !important; /* Higher z-index to ensure it's above other elements */
+    }
+
+    /* Force visibility for map child elements */
+    .force-visible * {
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+
+    /* Force visibility for Leaflet-specific elements */
+    .leaflet-container {
+        visibility: visible !important;
+        opacity: 1 !important;
+        z-index: 10 !important;
+    }
+
+    .leaflet-tile-container {
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+
+    .leaflet-tile {
+        visibility: visible !important;
+        opacity: 1 !important;
     }
 
     .osm-link {
@@ -228,10 +271,25 @@
             });
 
             // Add the OpenStreetMap tile layer
-            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            const tileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
                 attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            }).addTo(mapInstance);
+            });
+
+            // Add event listeners to debug tile loading
+            tileLayer.on('loading', function() {
+                console.log('Tile layer loading started');
+            });
+
+            tileLayer.on('load', function() {
+                console.log('Tile layer loaded successfully');
+            });
+
+            tileLayer.on('tileerror', function(error) {
+                console.error('Tile error:', error);
+            });
+
+            tileLayer.addTo(mapInstance);
 
             // Add a marker at the exact coordinates
             const marker = L.marker([lat, lng], {
@@ -245,12 +303,125 @@
                 {{ event.postal_address.postal_code }} {{ event.postal_address.address_locality }}
             `).openPopup();
 
-            // Force a resize and recenter after a short delay to handle cases where the map is in a hidden container initially
+            // Force a resize and recenter after a delay to handle cases where the map is in a hidden container initially
             setTimeout(function () {
                 console.log('Resizing and recentering map');
-                mapInstance.invalidateSize();
+
+                // Ensure the map container is visible
+                const mapContainer = document.getElementById('map');
+                if (mapContainer) {
+                    // Force the map container to be visible with explicit styles
+                    mapContainer.style.display = 'block';
+                    mapContainer.style.visibility = 'visible';
+                    mapContainer.style.height = '400px';
+
+                    // Check if the map container is actually visible in the DOM
+                    const rect = mapContainer.getBoundingClientRect();
+                    console.log('Map container dimensions:', rect.width, 'x', rect.height);
+
+                    if (rect.width === 0 || rect.height === 0) {
+                        console.warn('Map container has zero dimensions, forcing size');
+                        mapContainer.style.width = '100%';
+                        mapContainer.style.height = '400px';
+                    }
+
+                    // Check if the parent container is visible
+                    const parentContainer = document.getElementById('map-container');
+                    if (parentContainer) {
+                        console.log('Parent container found');
+                        parentContainer.style.display = 'block';
+                        parentContainer.style.visibility = 'visible';
+                        parentContainer.style.minHeight = '400px';
+
+                        const parentRect = parentContainer.getBoundingClientRect();
+                        console.log('Parent container dimensions:', parentRect.width, 'x', parentRect.height);
+
+                        if (parentRect.width === 0 || parentRect.height === 0) {
+                            console.warn('Parent container has zero dimensions, forcing size');
+                            parentContainer.style.width = '100%';
+                            parentContainer.style.minHeight = '400px';
+                        }
+                    } else {
+                        console.warn('Parent container #map-container not found');
+                    }
+                }
+
+                // Force Leaflet to recalculate the map size and position
+                mapInstance.invalidateSize(true);
                 mapInstance.setView([lat, lng], 15, {animate: false});
-            }, 100);
+
+                // Check the map's container element
+                console.log('Map container element:', mapInstance.getContainer());
+                console.log('Map size:', mapInstance.getSize());
+
+                // Force another resize after a longer delay
+                setTimeout(function() {
+                    console.log('Forcing another map resize');
+                    mapInstance.invalidateSize(true);
+
+                    // Final check to ensure the map is rendered properly
+                    const mapContainer = mapInstance.getContainer();
+                    console.log('Final map container check:', mapContainer);
+
+                    // Check if the map's panes are created
+                    const mapPanes = mapInstance.getPanes();
+                    console.log('Map panes:', mapPanes);
+
+                    // Check if the tile layer is added to the map
+                    let layersAdded = false;
+                    mapInstance.eachLayer(function(layer) {
+                        console.log('Map layer:', layer);
+                        layersAdded = true;
+                    });
+
+                    if (!layersAdded) {
+                        console.warn('No layers found on map, attempting to re-add tile layer');
+                        tileLayer.addTo(mapInstance);
+                    }
+
+                    // Force the map to be visible with inline styles on the container
+                    if (mapContainer) {
+                        // Use setAttribute to set important styles
+                        mapContainer.setAttribute('style', 
+                            'display: block !important; ' +
+                            'visibility: visible !important; ' +
+                            'opacity: 1 !important; ' +
+                            'height: 400px !important; ' +
+                            'width: 100% !important; ' +
+                            'position: relative !important; ' +
+                            'z-index: 1 !important;'
+                        );
+
+                        // Force all child elements to be visible
+                        const mapChildren = mapContainer.querySelectorAll('*');
+                        mapChildren.forEach(function(child) {
+                            child.setAttribute('style', 
+                                'visibility: visible !important; ' +
+                                'opacity: 1 !important;'
+                            );
+                        });
+
+                        // Also add a class to the map container for additional styling
+                        mapContainer.classList.add('force-visible');
+
+                        // Also apply force-visible class to the parent container
+                        const parentContainer = document.getElementById('map-container');
+                        if (parentContainer) {
+                            console.log('Applying force-visible class to parent container');
+                            parentContainer.classList.add('force-visible');
+                            parentContainer.setAttribute('style', 
+                                'display: block !important; ' +
+                                'visibility: visible !important; ' +
+                                'opacity: 1 !important; ' +
+                                'min-height: 400px !important; ' +
+                                'width: 100% !important; ' +
+                                'position: relative !important; ' +
+                                'z-index: 5 !important;'
+                            );
+                        }
+                    }
+                }, 500);
+            }, 300);
 
             // Mark the map as initialized
             mapInitialized = true;

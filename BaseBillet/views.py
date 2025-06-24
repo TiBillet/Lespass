@@ -30,10 +30,7 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
-from rest_framework.renderers import JSONRenderer
-from rest_framework.request import Request
 from rest_framework.response import Response
-# from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
 from AuthBillet.models import TibilletUser, Wallet, HumanUser
@@ -1010,7 +1007,7 @@ class EventMVT(viewsets.ViewSet):
     def show_map(self, request, pk=None):
         """HTMX endpoint to load the map for an event"""
         # Get the event by slug or pk
-        event = get_object_or_404(Event, slug=pk)
+        event = get_object_or_404(Event, pk=pk)
 
         # Return the map partial template with the event data
         return render(request, "reunion/views/event/partial/geoloc.html", context={'event': event})
