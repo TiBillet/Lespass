@@ -1003,15 +1003,6 @@ class EventMVT(viewsets.ViewSet):
 
         return render(request, "reunion/views/event/retrieve.html", context=template_context)
 
-    @action(detail=True, methods=['GET'])
-    def show_map(self, request, pk=None):
-        """HTMX endpoint to load the map for an event"""
-        # Get the event by slug or pk
-        event = get_object_or_404(Event, pk=pk)
-
-        # Return the map partial template with the event data
-        return render(request, "reunion/views/event/partial/geoloc.html", context={'event': event})
-
     @action(detail=True, methods=['POST'], permission_classes=[permissions.IsAuthenticated])
     def action_reservation(self, request, pk=None):
         event = get_object_or_404(Event, pk=pk)

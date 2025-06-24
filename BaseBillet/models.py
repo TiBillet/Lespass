@@ -233,7 +233,7 @@ class PostalAddress(models.Model):
     )
 
     def __str__(self):
-        return f"{self.street_address}, {self.address_locality}, {self.address_country}"
+        return f"{self.name}"
 
     class Meta:
         verbose_name = _("Postal address")

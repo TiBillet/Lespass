@@ -61,24 +61,7 @@
                     </li>
                 </ul>
                 {% if event.postal_address.latitude and event.postal_address.longitude %}
-                    <div class="text-center mt-4">
-                        <div id="map-button-container">
-                            <button class="btn btn-lg btn-primary"
-                                    hx-get="/event/{{ event.pk }}/show_map/"
-                                    hx-target="#map-container"
-                                    hx-trigger="click"
-                                    hx-swap="innerHTML"
-                                    hx-indicator="#map-loading"
-                                    hx-on::after-request="this.parentElement.style.display='none';">
-                                <i class="bi bi-map"></i> {% translate "Show Map" %}
-                                <span id="map-loading" class="htmx-indicator">
-                                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                    <span class="visually-hidden">{% translate "Loading..." %}</span>
-                                </span>
-                            </button>
-                        </div>
-                        <div id="map-container" class="mt-3"></div>
-                    </div>
+                    {%  include "reunion/views/event/partial/geoloc.html" %}
                 {% endif %}
 
                 <div></div>

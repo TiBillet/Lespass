@@ -12,55 +12,18 @@
         crossorigin=""></script>
 
 <style>
-    #map {
+    .map-section {
+        margin: 20px 0;
+        width: 100%;
+    }
+
+    .map-container {
         height: 400px;
         width: 100%;
-        margin-top: 20px;
-        margin-bottom: 20px;
         border-radius: 8px;
         position: relative;
         z-index: 1;
-    }
-
-    /* Ensure the map container is visible */
-    #map-container {
-        min-height: 400px;
-        width: 100%;
-        position: relative;
-    }
-
-    /* Force visibility for map elements */
-    .force-visible {
-        display: block !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        height: 400px !important;
-        width: 100% !important;
-        position: relative !important;
-        z-index: 10 !important; /* Higher z-index to ensure it's above other elements */
-    }
-
-    /* Force visibility for map child elements */
-    .force-visible * {
-        visibility: visible !important;
-        opacity: 1 !important;
-    }
-
-    /* Force visibility for Leaflet-specific elements */
-    .leaflet-container {
-        visibility: visible !important;
-        opacity: 1 !important;
-        z-index: 10 !important;
-    }
-
-    .leaflet-tile-container {
-        visibility: visible !important;
-        opacity: 1 !important;
-    }
-
-    .leaflet-tile {
-        visibility: visible !important;
-        opacity: 1 !important;
+        display: none; /* Hide map initially */
     }
 
     .osm-link {
@@ -68,387 +31,181 @@
         margin-bottom: 10px;
         text-align: right;
     }
+
+    .map-button {
+        display: block;
+        width: 100%;
+        padding: 15px;
+        margin: 20px 0;
+        text-align: center;
+        transition: all 0.3s ease;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .map-container {
+            height: 300px;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .map-container {
+            height: 250px;
+        }
+
+        .map-button {
+            padding: 10px;
+        }
+    }
 </style>
 
-<div class="osm-link">
-    <a href="https://www.openstreetmap.org/?mlat={{ event.postal_address.latitude | safe }}&mlon={{ event.postal_address.longitude  | safe }}&zoom=15"
-       target="_blank" rel="noopener noreferrer">
-        <i class="bi bi-box-arrow-up-right"></i> {% trans "View on OpenStreetMap" %}
-    </a>
-</div>
+<section class="map-section" itemscope itemtype="http://schema.org/Place">
+    <meta itemprop="name" content="{{ event.name }}">
+    <meta itemprop="latitude" content="{{ event.postal_address.latitude | safe }}">
+    <meta itemprop="longitude" content="{{ event.postal_address.longitude | safe }}">
 
-<div id="map" aria-label="{% trans 'Map showing the location of' %} {{ event.name }}" role="application"></div>
+    <div class="osm-link">
+        <a href="https://www.openstreetmap.org/?mlat={{ event.postal_address.latitude | safe }}&mlon={{ event.postal_address.longitude | safe }}&zoom=15"
+           target="_blank" rel="noopener noreferrer" aria-label="{% trans 'View on OpenStreetMap in a new tab' %}">
+            <i class="bi bi-box-arrow-up-right"></i> {% trans "View on OpenStreetMap" %}
+        </a>
+    </div>
+
+    <div id="map-{{ event.id }}" class="map-container"
+         aria-label="{% trans 'Map showing the location of' %} {{ event.name }}" 
+         role="application"
+         aria-hidden="true"></div>
+
+    <button id="show-map-button" class="btn btn-lg btn-primary map-button" onclick="initializeMap_{{ event.id }}()">
+        <i class="bi bi-map"></i> {% translate "Show Map" %}
+    </button>
+</section>
 
 <script>
-    // Function to ensure Leaflet is loaded
-    function ensureLeafletLoaded() {
-        // Check if Leaflet script is already in the document
-        const leafletScriptExists = Array.from(document.scripts).some(script => 
-            script.src && script.src.includes('leaflet'));
+    // Use an IIFE to create a local scope and avoid global variable conflicts
+    (function() {
+        // Generate a unique ID for this map instance based on the event ID
+        const mapId = 'map-{{ event.id }}';
 
-        // Check if Leaflet CSS is already in the document
-        const leafletCSSExists = Array.from(document.styleSheets).some(styleSheet => 
-            styleSheet.href && styleSheet.href.includes('leaflet'));
+        // Make the initializeMap function available globally but with a unique name
+        window.initializeMap_{{ event.id }} = function() {
+            try {
+                console.log('Starting map initialization for event {{ event.id }}');
 
-        // If Leaflet script doesn't exist, load it dynamically
-        if (!leafletScriptExists) {
-            console.log('Leaflet script not found, loading it dynamically...');
-            const leafletScript = document.createElement('script');
-            leafletScript.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-            leafletScript.integrity = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';
-            leafletScript.crossOrigin = '';
-            document.head.appendChild(leafletScript);
-        }
+                // Get button and map elements
+                const mapButton = document.getElementById('show-map-button');
+                const mapElement = document.getElementById('map-{{ event.id }}');
 
-        // If Leaflet CSS doesn't exist, load it dynamically
-        if (!leafletCSSExists) {
-            console.log('Leaflet CSS not found, loading it dynamically...');
-            const leafletCSS = document.createElement('link');
-            leafletCSS.rel = 'stylesheet';
-            leafletCSS.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-            leafletCSS.integrity = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=';
-            leafletCSS.crossOrigin = '';
-            document.head.appendChild(leafletCSS);
-        }
-
-        // Wait for Leaflet to be fully loaded
-        waitForLeaflet(initializeMap);
-    }
-
-    // Initialize the map when the DOM is loaded
-    document.addEventListener('DOMContentLoaded', function() {
-        ensureLeafletLoaded();
-    });
-
-    // Also initialize when this content is swapped in via HTMX
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
-        // If the document is already loaded, initialize immediately
-        setTimeout(function() {
-            ensureLeafletLoaded();
-        }, 100);
-    }
-
-    // Handle HTMX content swaps
-    document.addEventListener('htmx:afterSwap', function(event) {
-        console.log('HTMX afterSwap event triggered');
-
-        // Check if our map element is in the swapped content
-        const mapElement = event.detail.target.querySelector('#map');
-        if (mapElement) {
-            console.log('Map element found in HTMX swapped content');
-
-            // Force a small delay to ensure the DOM is fully updated
-            setTimeout(function() {
-                console.log('Initializing map after HTMX swap');
-
-                // Check if Leaflet is already loaded
-                if (typeof L !== 'undefined') {
-                    console.log('Leaflet is already loaded, initializing map directly');
-                    initializeMap();
-                } else {
-                    console.log('Leaflet not loaded yet, ensuring it gets loaded');
-                    ensureLeafletLoaded();
-                }
-            }, 200); // Slightly longer delay to ensure DOM is ready
-        } else {
-            console.log('Map element not found in HTMX swapped content');
-        }
-    });
-
-    // Handle HTMX load event (triggered when HTMX loads new content)
-    document.addEventListener('htmx:load', function(event) {
-        console.log('HTMX load event triggered');
-
-        // Check if our map element exists in the document
-        const mapElement = document.getElementById('map');
-        if (mapElement) {
-            console.log('Map element found after HTMX load');
-
-            // Force a small delay to ensure the DOM is fully updated
-            setTimeout(function() {
-                console.log('Initializing map after HTMX load');
-
-                // Check if Leaflet is already loaded
-                if (typeof L !== 'undefined') {
-                    console.log('Leaflet is already loaded, initializing map directly');
-                    initializeMap();
-                } else {
-                    console.log('Leaflet not loaded yet, ensuring it gets loaded');
-                    ensureLeafletLoaded();
-                }
-            }, 300); // Slightly longer delay to ensure DOM is ready
-        }
-    });
-
-    // Function to wait for Leaflet to be fully loaded
-    function waitForLeaflet(callback, attempts = 0, maxAttempts = 20) {
-        // If Leaflet is loaded, call the callback
-        if (typeof L !== 'undefined' && L.map && L.tileLayer && L.marker) {
-            console.log('Leaflet is loaded, initializing map');
-            callback();
-            return;
-        }
-
-        // If we've reached the maximum number of attempts, log an error
-        if (attempts >= maxAttempts) {
-            console.error('Failed to load Leaflet after ' + maxAttempts + ' attempts');
-            return;
-        }
-
-        // Calculate delay with exponential backoff (100ms, 200ms, 400ms, etc.)
-        const delay = Math.min(100 * Math.pow(1.5, attempts), 2000);
-
-        console.log('Waiting for Leaflet to load, attempt ' + (attempts + 1) + ', next try in ' + delay + 'ms');
-
-        // Try again after the delay
-        setTimeout(function() {
-            waitForLeaflet(callback, attempts + 1, maxAttempts);
-        }, delay);
-    }
-
-    // Global variable to track if the map has been initialized
-    let mapInitialized = false;
-    let mapInstance = null;
-
-    // Function to remove any existing map instance
-    function removeExistingMap() {
-        if (mapInstance) {
-            console.log('Removing existing map instance');
-            mapInstance.remove();
-            mapInstance = null;
-            mapInitialized = false;
-        }
-    }
-
-    function initializeMap() {
-        // If map is already initialized, don't initialize it again
-        if (mapInitialized) {
-            console.log('Map already initialized, skipping initialization');
-            return;
-        }
-
-        try {
-            console.log('Starting map initialization');
-
-            // Double-check if Leaflet is loaded (just to be safe)
-            if (typeof L === 'undefined') {
-                console.error('Leaflet not loaded, cannot initialize map');
-                return;
-            }
-
-            // Get coordinates from the event's postal address
-            const lat = {{ event.postal_address.latitude | safe }};
-            const lng = {{ event.postal_address.longitude | safe }};
-            console.log('Map coordinates:', lat, lng);
-
-            // Check if coordinates are valid
-            if (isNaN(lat) || isNaN(lng)) {
-                console.error('Invalid coordinates:', lat, lng);
-                return;
-            }
-
-            // Get the map element
-            const mapElement = document.getElementById('map');
-            if (!mapElement) {
-                console.error('Map container not found');
-                return;
-            }
-            console.log('Map container found');
-
-            // Check if the map container already has a map instance
-            if (mapElement._leaflet_id) {
-                console.log('Map container already has a map instance, removing it');
-                removeExistingMap();
-            }
-
-            // Create map with precise coordinates
-            console.log('Creating new map instance');
-            mapInstance = L.map('map', {
-                center: [lat, lng],
-                zoom: 15,
-                zoomControl: true,
-                attributionControl: true
-            });
-
-            // Add the OpenStreetMap tile layer
-            const tileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19,
-                attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            });
-
-            // Add event listeners to debug tile loading
-            tileLayer.on('loading', function() {
-                console.log('Tile layer loading started');
-            });
-
-            tileLayer.on('load', function() {
-                console.log('Tile layer loaded successfully');
-            });
-
-            tileLayer.on('tileerror', function(error) {
-                console.error('Tile error:', error);
-            });
-
-            tileLayer.addTo(mapInstance);
-
-            // Add a marker at the exact coordinates
-            const marker = L.marker([lat, lng], {
-                alt: "{{ event.name }}"
-            }).addTo(mapInstance);
-
-            // Add a popup with the event's name and address
-            marker.bindPopup(`
-                <strong>{{ event.name }}</strong><br>
-                {{ event.postal_address.street_address }}<br>
-                {{ event.postal_address.postal_code }} {{ event.postal_address.address_locality }}
-            `).openPopup();
-
-            // Force a resize and recenter after a delay to handle cases where the map is in a hidden container initially
-            setTimeout(function () {
-                console.log('Resizing and recentering map');
-
-                // Ensure the map container is visible
-                const mapContainer = document.getElementById('map');
-                if (mapContainer) {
-                    // Force the map container to be visible with explicit styles
-                    mapContainer.style.display = 'block';
-                    mapContainer.style.visibility = 'visible';
-                    mapContainer.style.height = '400px';
-
-                    // Check if the map container is actually visible in the DOM
-                    const rect = mapContainer.getBoundingClientRect();
-                    console.log('Map container dimensions:', rect.width, 'x', rect.height);
-
-                    if (rect.width === 0 || rect.height === 0) {
-                        console.warn('Map container has zero dimensions, forcing size');
-                        mapContainer.style.width = '100%';
-                        mapContainer.style.height = '400px';
-                    }
-
-                    // Check if the parent container is visible
-                    const parentContainer = document.getElementById('map-container');
-                    if (parentContainer) {
-                        console.log('Parent container found');
-                        parentContainer.style.display = 'block';
-                        parentContainer.style.visibility = 'visible';
-                        parentContainer.style.minHeight = '400px';
-
-                        const parentRect = parentContainer.getBoundingClientRect();
-                        console.log('Parent container dimensions:', parentRect.width, 'x', parentRect.height);
-
-                        if (parentRect.width === 0 || parentRect.height === 0) {
-                            console.warn('Parent container has zero dimensions, forcing size');
-                            parentContainer.style.width = '100%';
-                            parentContainer.style.minHeight = '400px';
-                        }
-                    } else {
-                        console.warn('Parent container #map-container not found');
-                    }
+                if (!mapElement) {
+                    console.error('Map container not found');
+                    return;
                 }
 
-                // Force Leaflet to recalculate the map size and position
-                mapInstance.invalidateSize(true);
-                mapInstance.setView([lat, lng], 15, {animate: false});
+                // Double-check if Leaflet is loaded
+                if (typeof L === 'undefined') {
+                    console.error('Leaflet not loaded, cannot initialize map');
+                    return;
+                }
 
-                // Check the map's container element
-                console.log('Map container element:', mapInstance.getContainer());
-                console.log('Map size:', mapInstance.getSize());
+                // Get coordinates from the event's postal address
+                const lat = {{ event.postal_address.latitude | safe }};
+                const lng = {{ event.postal_address.longitude | safe }};
+                console.log('Map coordinates:', lat, lng);
 
-                // Force another resize after a longer delay
-                setTimeout(function() {
-                    console.log('Forcing another map resize');
-                    mapInstance.invalidateSize(true);
+                // Check if coordinates are valid
+                if (isNaN(lat) || isNaN(lng)) {
+                    console.error('Invalid coordinates:', lat, lng);
+                    return;
+                }
 
-                    // Final check to ensure the map is rendered properly
-                    const mapContainer = mapInstance.getContainer();
-                    console.log('Final map container check:', mapContainer);
+                // Show the map container
+                mapElement.style.display = 'block';
+                mapElement.setAttribute('aria-hidden', 'false');
 
-                    // Check if the map's panes are created
-                    const mapPanes = mapInstance.getPanes();
-                    console.log('Map panes:', mapPanes);
+                // Hide the button
+                if (mapButton) {
+                    mapButton.style.display = 'none';
+                    mapButton.setAttribute('aria-hidden', 'true');
+                }
 
-                    // Check if the tile layer is added to the map
-                    let layersAdded = false;
-                    mapInstance.eachLayer(function(layer) {
-                        console.log('Map layer:', layer);
-                        layersAdded = true;
-                    });
+                // Check if the map container already has a map instance
+                if (mapElement._leaflet_id) {
+                    console.log('Map already initialized');
+                    return;
+                }
 
-                    if (!layersAdded) {
-                        console.warn('No layers found on map, attempting to re-add tile layer');
-                        tileLayer.addTo(mapInstance);
+                // Create map with precise coordinates
+                console.log('Creating new map instance');
+                const mapInstance = L.map('map-{{ event.id }}', {
+                    center: [lat, lng],
+                    zoom: 15,
+                    zoomControl: true,
+                    attributionControl: true
+                });
+
+                // Add the OpenStreetMap tile layer
+                const tileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                });
+
+                // Add event listeners for tile loading
+                tileLayer.on('loading', function () {
+                    console.log('Tile layer loading started');
+                });
+
+                tileLayer.on('load', function () {
+                    console.log('Tile layer loaded successfully');
+                    // Ensure map is visible after tiles are loaded
+                    mapElement.style.display = 'block';
+                    // Trigger a resize event to ensure the map renders correctly
+                    setTimeout(function() {
+                        window.dispatchEvent(new Event('resize'));
+                    }, 100);
+                });
+
+                tileLayer.on('tileerror', function (error) {
+                    console.error('Tile error:', error);
+                });
+
+                tileLayer.addTo(mapInstance);
+
+                // Add a marker at the exact coordinates
+                const marker = L.marker([lat, lng], {
+                    alt: "{{ event.name }}"
+                }).addTo(mapInstance);
+
+                // Add a popup with the event's name and address
+                marker.bindPopup(`
+                    <strong>{{ event.name }}</strong><br>
+                    {{ event.postal_address.street_address }}<br>
+                    {{ event.postal_address.postal_code }} {{ event.postal_address.address_locality }}
+                `).openPopup();
+
+                console.log('Map initialized successfully');
+
+                // Add resize handler for this specific map
+                const resizeHandler = function() {
+                    if (mapInstance) {
+                        mapInstance.invalidateSize();
                     }
+                };
 
-                    // Force the map to be visible with inline styles on the container
-                    if (mapContainer) {
-                        // Use setAttribute to set important styles
-                        mapContainer.setAttribute('style', 
-                            'display: block !important; ' +
-                            'visibility: visible !important; ' +
-                            'opacity: 1 !important; ' +
-                            'height: 400px !important; ' +
-                            'width: 100% !important; ' +
-                            'position: relative !important; ' +
-                            'z-index: 1 !important;'
-                        );
+                // Add event listener for window resize
+                window.addEventListener('resize', resizeHandler);
 
-                        // Force all child elements to be visible
-                        const mapChildren = mapContainer.querySelectorAll('*');
-                        mapChildren.forEach(function(child) {
-                            child.setAttribute('style', 
-                                'visibility: visible !important; ' +
-                                'opacity: 1 !important;'
-                            );
-                        });
+                // Store the resize handler reference for potential cleanup
+                mapElement.dataset.resizeHandler = true;
 
-                        // Also add a class to the map container for additional styling
-                        mapContainer.classList.add('force-visible');
-
-                        // Also apply force-visible class to the parent container
-                        const parentContainer = document.getElementById('map-container');
-                        if (parentContainer) {
-                            console.log('Applying force-visible class to parent container');
-                            parentContainer.classList.add('force-visible');
-                            parentContainer.setAttribute('style', 
-                                'display: block !important; ' +
-                                'visibility: visible !important; ' +
-                                'opacity: 1 !important; ' +
-                                'min-height: 400px !important; ' +
-                                'width: 100% !important; ' +
-                                'position: relative !important; ' +
-                                'z-index: 5 !important;'
-                            );
-                        }
-                    }
-                }, 500);
-            }, 300);
-
-            // Mark the map as initialized
-            mapInitialized = true;
-            console.log('Map initialized successfully');
-        } catch (error) {
-            console.error('Error initializing map:', error);
-            mapInitialized = false;
-            mapInstance = null;
-        }
-    }
-
-    // Direct initialization as a fallback
-    // This will run immediately when the script is executed
-    console.log('Direct initialization as fallback');
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
-        // If the document is already loaded, initialize immediately
-        console.log('Document already loaded, initializing map directly');
-        setTimeout(function() {
-            ensureLeafletLoaded();
-        }, 500); // Longer delay to ensure everything else has had a chance to run
-    } else {
-        // If the document is not yet loaded, wait for it to load
-        console.log('Document not yet loaded, waiting for DOMContentLoaded');
-        document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(function() {
-                ensureLeafletLoaded();
-            }, 500);
-        });
-    }
+            } catch (error) {
+                console.error('Error initializing map:', error);
+                // Show error message to user
+                const errorMapElement = document.getElementById('map-{{ event.id }}');
+                if (errorMapElement) {
+                    errorMapElement.innerHTML = '<div class="alert alert-danger">{% trans "Unable to load map. Please try again later." %}</div>';
+                    errorMapElement.style.display = 'block';
+                }
+            }
+        };
+    })();
 </script>
