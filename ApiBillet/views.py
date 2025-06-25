@@ -896,7 +896,7 @@ class Webhook_stripe(APIView):
                 return Response(f"Ce checkout est pour fedow.", status=status.HTTP_205_RESET_CONTENT)
 
             if not payload["data"]["object"]["metadata"].get('tenant'):
-                logger.error(f"Webhook_stripe Pas de tenant dans metadata --> {payload}")
+                logger.warning(f"Webhook_stripe Pas de tenant dans metadata --> {payload}")
                 return Response(f"Pas de tenant dans metadata, pas pour nous ? {payload}",
                                 status=status.HTTP_204_NO_CONTENT)
 
