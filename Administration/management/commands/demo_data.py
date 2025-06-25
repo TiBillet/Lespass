@@ -90,20 +90,35 @@ class Command(BaseCommand):
                 # config.federated_with.add(tenant2)
 
                 postal_address = PostalAddress.objects.create(
-                    name="Le Coeur en Or",
+                    name="Manapany",
                     street_address=fake.street_address(),
                     address_locality=fake.city(),
                     address_region=fake.region(),
                     postal_code='69100',
                     address_country='FR',
-                    latitude=fake.latitude(),
-                    longitude=fake.longitude(),
+                    latitude=43.90545495459708,
+                    longitude=7.532343890994476,
                     comment="Bus 42 et métro : Arrêt D. Adams. Merci d'eteindre votre moteur d'improbabilité infinie.",
                     is_main=True,
                 )
 
                 config.postal_address = postal_address
                 config.save()
+
+
+                postal_address_2 = PostalAddress.objects.create(
+                    name="Libre Roya",
+                    street_address=fake.street_address(),
+                    address_locality=fake.city(),
+                    address_region=fake.region(),
+                    postal_code=fake.postcode(),
+                    address_country='France',
+                    latitude=-21.37271167192088,
+                    longitude=55.58819666101755,
+                    comment="Parking sur le col des Aravis. Boisson offerte si vous venez à velo. Paix et prospérité.",
+                    is_main=False,
+                )
+
 
                 # Configuration de Formbricks
                 formbricks_config = FormbricksConfig.get_solo()
@@ -112,18 +127,6 @@ class Command(BaseCommand):
                     formbricks_config.set_api_key(formbricks_api_key)
                     formbricks_config.save()
 
-                postal_address_2 = PostalAddress.objects.create(
-                    name="Le Discovery",
-                    street_address=fake.street_address(),
-                    address_locality=fake.city(),
-                    address_region=fake.region(),
-                    postal_code=fake.postcode(),
-                    address_country='France',
-                    latitude=fake.latitude(),
-                    longitude=fake.longitude(),
-                    comment="Parking sur le col des Aravis. Boisson offerte si vous venez à velo. Paix et prospérité.",
-                    is_main=False,
-                )
 
                 ### LINK TO FEDOW
                 ## Liaison tenant avec Fedow
