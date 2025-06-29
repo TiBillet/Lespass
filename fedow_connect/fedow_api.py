@@ -165,7 +165,7 @@ class AssetFedow():
             config = Configuration.get_solo()
             asset = {
                 "uuid": f"{product.pk}",
-                "name": f"{product.name} {config.organisation}",
+                "name": f"{product.name}",
                 "currency_code": f"{product.name[:2]}{product.categorie_article[1:]}".upper(),
                 "category": f"{product.fedow_category()}",
                 "created_at": timezone.now().isoformat()

@@ -33,7 +33,7 @@ from weasyprint.text.fonts import FontConfiguration
 from ApiBillet.serializers import LigneArticleSerializer
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, Ticket, Configuration, Membership, Webhook, LigneArticle, \
-    GhostConfig, BrevoConfig
+    GhostConfig, BrevoConfig, Product
 from MetaBillet.models import WaitingConfiguration
 from TiBillet.celery import app
 
@@ -1055,6 +1055,27 @@ def membership_renewal_reminder():
                     logger.error(
                         f"ERROR {timezone.now()} Erreur lors de l'envoi de membership_renewal_reminder à {email}: {e}")
                     return False
+
+
+
+@app.task
+def trigger_product_update_tasks(product_pk):
+    time.sleep(1)
+    product = Product.objects.get(pk=product_pk)
+    config = Configuration.get_solo()
+    if config.check_serveur_cashless() and product:
+        send_to_laboutik = requests.post(
+            f'{config.server_cashless}/api/trigger_product_update',
+            headers={
+                'Authorization': f'Api-Key {config.key_cashless}',
+                'Origin': config.domain(),
+            },
+            data={"product_pk": product.pk},
+            timeout=1,
+            verify=bool(not settings.DEBUG),
+        )
+        logger.info(f"    send_to_laboutik : {send_to_laboutik.status_code} {send_to_laboutik.text}")
+
 
 @app.task
 def test_logger():

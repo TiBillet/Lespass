@@ -8,12 +8,14 @@ from django.db.models import Q
 from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
 from django.utils import timezone
+from jedi.inference.value import instance
 
 from ApiBillet.serializers import get_or_create_price_sold
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, LigneArticle, Ticket, Paiement_stripe, Product, Price, \
     PaymentMethod, Membership, SaleOrigin, Configuration
-from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation
+from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation, \
+    trigger_product_update_tasks
 from BaseBillet.triggers import TRIGGER_LigneArticlePaid_ActionByCategorie
 from fedow_connect.fedow_api import AssetFedow
 from fedow_connect.models import FedowConfig
@@ -349,7 +351,7 @@ def unpublish_if_archived(sender, instance, **kwargs):
         instance.publish = False
 
 
-@receiver(post_save, sender=Product)
+@receiver(post_save, sender=Product) # Attention, les post_save depuis l'admin sont atomic
 def send_membership_and_badge_product_to_fedow(sender, instance: Product, created, **kwargs):
     logger.info(f"send_membership_product_to_fedow")
     # Est ici pour éviter les double imports
@@ -366,21 +368,13 @@ def send_membership_and_badge_product_to_fedow(sender, instance: Product, create
             # L'instance est archivé, on le notifie à Fedow :
             fedow_asset.archive_asset(instance)
 
-        # Idem pour LaBoutik, on envoie l'info de création pour qu'il fasse un get_accepted_assets() depuis Fedow
-        config = Configuration.get_solo()
-        if config.check_serveur_cashless():
-            send_to_laboutik = requests.get(
-                f'{config.server_cashless}/api/trigger_new_product_created',
-                headers={
-                    'Authorization': f'Api-Key {config.key_cashless}',
-                    'Origin': config.domain(),
-                },
-                timeout=1,
-                verify=bool(not settings.DEBUG),
-            )
-            logger.info(f"    send_to_laboutik : {send_to_laboutik.status_code} {send_to_laboutik.text}")
 
-
+@receiver(post_save, sender=Product) # Attention, les post_save depuis l'admin sont atomic
+def trigger_product_update(sender, instance: Product, created, **kwargs):
+    # Pour LaBoutik, on envoie l'info de création pour qu'il fasse un get_accepted_assets() depuis Fedow
+    # On le lance en async pour bien que le produit soit en DB avant que LaBoutik ne réclame les info par une requete
+    product_pk = instance.pk
+    trigger_product_update_tasks.delay(product_pk)
 
 
 @receiver(pre_save, sender=Price)

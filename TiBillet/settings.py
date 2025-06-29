@@ -754,9 +754,7 @@ if DEBUG:
                                  "hash_hexdigest", "rsa_encrypt_string", "rsa_decrypt_string")),
         (("cryptography.hazmat.primitives"), ("serialization",)),
         (("BaseBillet.tasks"), ("test_logger",)),
-        (("BaseBillet.tests"), ("BaseBilletTest",)),
         (("ApiBillet.serializers"), ("get_or_create_price_sold",)),
-
         (("fedow_connect.fedow_api"), ("FedowAPI",)),
         (("django.db"), ("connection",)),
 
