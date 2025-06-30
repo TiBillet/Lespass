@@ -86,7 +86,22 @@ if os.environ.get('ADDITIONAL_DOMAINS'):
         CSRF_TRUSTED_ORIGINS.append(f'https://{domain}')
         CSRF_TRUSTED_ORIGINS.append(f'https://*.{domain}')
 
-CORS_ORIGIN_WHITELIST = CSRF_TRUSTED_ORIGINS
+# CORS_ORIGIN_WHITELIST = CSRF_TRUSTED_ORIGINS
+CORS_ORIGIN_WHITELIST = CSRF_TRUSTED_ORIGINS + ['http://localhost', 'http://localhost:8000', 'http://localhost:8080']
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
+CORS_EXPOSE_HEADERS = ['Content-Type', 'X-CSRFToken', 'Authorization']
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
 
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 
