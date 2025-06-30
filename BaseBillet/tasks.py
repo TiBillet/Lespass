@@ -945,7 +945,7 @@ def send_to_ghost_email(email, name=None):
                     members = j['members']
                     logger.info(f"Le nouveau membre a été créé avec succès : {members}")
                 else:
-                    logger.error(f"Erreur lors de la création du nouveau membre : {response.text}")
+                    logger.warning(f"Erreur lors de la création du nouveau membre : {response.text}")
             else:
                 # Afficher la liste des membres
                 logger.info(f"Le membre {email} existe déja dans : {members}")
