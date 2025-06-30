@@ -10,6 +10,21 @@ from BaseBillet.models import ScannerAPIKey, ScanApp
 from BaseBillet.permissions import HasScanApi
 
 
+
+class CORSResponseMixin:
+    """
+    Mixin that adds permissive CORS headers to responses.
+    This is specifically for the ScanTicket class which is used by a Cordova application
+    running in a webview on localhost.
+    """
+    def finalize_response(self, request, response, *args, **kwargs):
+        response = super().finalize_response(request, response, *args, **kwargs)
+        response["Access-Control-Allow-Origin"] = "*"
+        response["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+        return response
+
+
 class check_api_scan(APIView):
     permission_classes = [HasScanApi]
 
@@ -17,7 +32,11 @@ class check_api_scan(APIView):
         """Retrieve a project based on the request API key."""
         key = request.META["HTTP_AUTHORIZATION"].split()[1]
         api_key = ScannerAPIKey.objects.get_from_key(key)
-        return Response({"scan_app": api_key.scan_app.name})
+        response = Response({"scan_app": api_key.scan_app.name})
+        response["Access-Control-Allow-Origin"] = "*"
+        response["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+        return response
 
 
 class Pair(APIView):
@@ -34,13 +53,18 @@ class Pair(APIView):
             scannapp.save()
 
             # Return success response with API key
-            return Response({
+            response = Response({
                 "success": True,
                 "message": "Device successfully paired",
                 "api_key": api_key_string,
                 "device_uuid": str(scannapp.uuid),
                 "device_name": scannapp.name
             }, status=status.HTTP_200_OK)
+            response["Access-Control-Allow-Origin"] = "*"
+            response["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+            response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+            return response
+
 
         except Exception as e:
             return Response(
