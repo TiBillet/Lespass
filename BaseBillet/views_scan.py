@@ -11,6 +11,10 @@ from BaseBillet.permissions import HasScanApi
 
 
 
+class check_allow_any(APIView):
+    permission_classes = [AllowAny]
+    def get(self, request):
+        return Response({"allow_any": True})
 
 class check_api_scan(APIView):
     permission_classes = [HasScanApi]
