@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from django.core.signing import TimestampSigner
 from django.utils.http import urlsafe_base64_decode
 from rest_framework import status
@@ -75,6 +77,7 @@ class check_ticket(APIView):
         try:
             # Get the QR code data from the request
             qrcode_data = request.data.get('qrcode_data')
+
             if not qrcode_data:
                 return Response(
                     {"error": "QR code data is required"},
@@ -115,6 +118,8 @@ class check_ticket(APIView):
                     {"error": "Ticket not found"},
                     status=status.HTTP_404_NOT_FOUND
                 )
+
+
 
             # Verify the signature using the event's public key
             from fedow_connect.utils import verify_signature
@@ -166,6 +171,14 @@ class ticket(APIView):
         try:
             # Get the QR code data from the request
             qrcode_data = request.data.get('qrcode_data')
+            event_uuid = request.data.get('event_uuid')
+
+            if not event_uuid:
+                return Response(
+                    {"error": "Event uuid is required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             if not qrcode_data:
                 return Response(
                     {"error": "QR code data is required"},
@@ -205,6 +218,14 @@ class ticket(APIView):
                 return Response(
                     {"error": "Ticket not found"},
                     status=status.HTTP_404_NOT_FOUND
+                )
+
+            try :
+                assert ticket.reservation.event.uuid == UUID(event_uuid)
+            except Exception as e:
+                return Response(
+                    {"error": "Event error"},
+                    status=status.HTTP_406_NOT_ACCEPTABLE
                 )
 
             # Verify the signature using the event's public key

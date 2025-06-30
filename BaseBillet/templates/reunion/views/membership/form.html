@@ -40,17 +40,36 @@
 
         {% if user.is_anonymous %}
             <div class="form-floating mb-3">
-                <input name="email" type="email" class="form-control" placeholder="adresse@exemple.fr" role="textbox"
+                <input id="membership-email" name="email" type="email" class="form-control" placeholder="adresse@exemple.fr" role="textbox"
                        aria-label="{% trans 'Email address' %}" required>
                 <label for="email">{% trans 'Email address' %}</label>
             </div>
 
             <div class="form-floating mb-3">
-                <input name="confirm-email" type="email" class="form-control" placeholder="adresse@exemple.fr"
+                <input id="confirm-email" name="confirm-email" type="email" class="form-control" placeholder="adresse@exemple.fr"
                        role="textbox"
                        aria-label="{% trans 'Email confirmation' %}" required>
                 <label for="confirm-email">{% trans 'Email confirmation' %}</label>
             </div>
+
+            <div id="email-error" class="invalid-feedback" role="heading" style="display: block"></div>
+            <script>
+                document.getElementById("membership-form").addEventListener("htmx:configRequest", function (event) {
+                    const email = document.getElementById("membership-email").value;
+                    console.log(email);
+                    const confirmEmail = document.getElementById("confirm-email").value;
+                    const errorDiv = document.getElementById("email-error");
+                    console.log(confirmEmail);
+
+                    if (email !== confirmEmail) {
+                        event.preventDefault(); // empêche l’envoi de la requête HTMX
+                        errorDiv.textContent = "Les emails ne correspondent pas.";
+                    } else {
+                        errorDiv.textContent = ""; // nettoyage si c’est bon
+                    }
+                });
+            </script>
+
         {% elif user.is_active %}
             <div class="form-floating mb-3">
                 <input name="email" type="email" class="form-control" placeholder="adresse@exemple.fr" role="textbox"

@@ -18,16 +18,19 @@
                     <form id="linkform" role="form" hx-post="/qr/link/"
                           hx-indicator="#tibillet-spinner">
                         <div class="form-floating mb-3">
-                            <input name="email" type="email" class="form-control" placeholder="adresse@exemple.fr"
+                            <input name="email" id="link_email" type="email" class="form-control"
+                                   placeholder="adresse@exemple.fr"
                                    role="textbox" aria-label="{% trans 'Email address' %}" required>
                             <label for="email">{% trans 'Email address' %}</label>
                         </div>
+                        <div id="email-error" class="invalid-feedback" role="heading" style="display: block"></div>
                         <div class="form-floating mb-3">
-                            <input name="emailConfirmation" type="email" class="form-control"
+                            <input name="emailConfirmation" id="confirm-email" type="email" class="form-control"
                                    placeholder="adresse@exemple.fr" role="textbox"
                                    aria-label="{% trans 'Email confirmation' %}" required>
                             <label for="emailConfirmation">{% trans 'Email confirmation' %}</label>
                         </div>
+                        <div  class="invalid-feedback"></div>
                         {% include 'reunion/partials/field_errors.html' %}
 
                         {% if config.need_name %}
@@ -80,4 +83,20 @@
             </div>
         </div>
     </div>
+    <script>
+        document.getElementById("linkform").addEventListener("htmx:configRequest", function (event) {
+            const email = document.getElementById("link_email").value;
+            console.log(email);
+            const confirmEmail = document.getElementById("confirm-email").value;
+            const errorDiv = document.getElementById("email-error");
+            console.log(confirmEmail);
+
+            if (email !== confirmEmail) {
+                event.preventDefault(); // empêche l’envoi de la requête HTMX
+                errorDiv.textContent = "Les emails ne correspondent pas.";
+            } else {
+                errorDiv.textContent = ""; // nettoyage si c’est bon
+            }
+        });
+    </script>
 {% endblock %}
