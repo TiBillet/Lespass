@@ -151,7 +151,7 @@ class AssetFedow():
                 return serialized_assets.validated_data
             logger.error(serialized_assets.errors)
             raise Exception(f"{serialized_assets.errors}")
-        logger.error(response_asset)
+        logger.warning(response_asset)
         raise Exception(f"{response_asset.status_code}")
 
     def get_or_create_asset(self, product: Product = None):
