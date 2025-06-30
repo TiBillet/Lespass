@@ -200,6 +200,8 @@ class ScanAppAdmin(ModelAdmin):
             token = urlsafe_base64_encode(signer.sign(f"{obj.uuid}").encode('utf8'))
             qrcode_data = f"{base_url}/scan/{token}/pair"
 
+            logger.info(qrcode_data)
+
             ### VERIFICATION SIGNATURE AVANT D'ENVOYER
             scanapp_uuid = signer.unsign(urlsafe_base64_decode(token).decode('utf8'), max_age=(300))  # 5 min
             sc = ScanApp.objects.get(uuid=scanapp_uuid)
