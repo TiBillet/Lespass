@@ -24,9 +24,9 @@ urlpatterns = [
     ### SCAN TICKET API
     path('scan/check_api_scan/', views_scan.check_api_scan.as_view(), name='check_api_scan'),
     path('scan/check_allow_any/', views_scan.check_allow_any.as_view(), name='check_allow_any'),
+    path('scan/check_allow_any_widlcard/', views_scan.check_allow_any_widlcard.as_view(), name='check_allow_any_widlcard'),
     path('scan/<str:pk>/pair/', views_scan.Pair.as_view(), name='check_api_scan'),
     path('scan/check_ticket/', views_scan.check_ticket.as_view(), name='check_ticket'),
-
     # Test routes for error templates
     path('test-errors/404/', test_404, name='test_404'),
     path('test-errors/500/', test_500, name='test_500'),

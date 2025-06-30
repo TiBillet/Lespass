@@ -20,6 +20,14 @@ class check_allow_any(APIView):
         # response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
         return response
 
+class check_allow_any_widlcard(APIView):
+    permission_classes = [AllowAny]
+    def get(self, request):
+        response = Response({"allow_any": True})
+        response["Access-Control-Allow-Origin"] = "*"
+        response["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+        return response
 
 class check_api_scan(APIView):
     permission_classes = [HasScanApi]
