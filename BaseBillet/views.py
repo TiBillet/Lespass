@@ -1631,52 +1631,9 @@ class CORSResponseMixin:
         return response
 
 
+
+
 class ScanTicket(CORSResponseMixin, viewsets.ViewSet):
-
-    @action(detail=True, methods=['GET'])
-    def pair(self, request, pk):
-        try:
-            signer = TimestampSigner()
-            scanapp_uuid = signer.unsign(urlsafe_base64_decode(pk).decode('utf8'), max_age=(300000))
-            scannapp = get_object_or_404(ScanApp, uuid=scanapp_uuid, claimed=False)
-
-            scannapp.claimed = True
-            scannapp.key, api_key_string = ScannerAPIKey.objects.create_key(name=f"{scannapp.uuid}")
-            scannapp.save()
-
-            # Return success response with API key
-            return Response({
-                "success": True,
-                "message": "Device successfully paired",
-                "api_key": api_key_string,
-                "device_uuid": str(scannapp.uuid),
-                "device_name": scannapp.name
-            }, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-    @action(detail=False, methods=['GET'])
-    def test_api(self, request):
-        scan_app: ScanApp = request.scan_app  # grâce à HasScanApi
-        return Response({
-            "success": True,
-            "message": "API key is valid",
-            "device_info": {
-                "uuid": str(scan_app.uuid),
-                "name": scan_app.name,
-                "claimed": scan_app.claimed,
-                "archived": scan_app.archive
-            },
-            "server_info": {
-                "tenant": connection.tenant.name,
-                "domain": connection.tenant.get_primary_domain().domain,
-                "timestamp": timezone.now().isoformat()
-            }
-        }, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['POST'])
     def check_ticket(self, request):
@@ -1885,7 +1842,8 @@ class ScanTicket(CORSResponseMixin, viewsets.ViewSet):
             )
 
     def get_permissions(self):
-        if self.action in ['pair', 'options']:
+        if self.action in ['pair', 'options', 'test_api']:
+            import ipdb; ipdb.set_trace()
             # L'api Key de l'organisation au minimum
             permission_classes = [permissions.AllowAny]
         else:
