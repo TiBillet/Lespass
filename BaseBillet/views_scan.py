@@ -15,9 +15,9 @@ class check_allow_any(APIView):
     permission_classes = [AllowAny]
     def get(self, request):
         response = Response({"allow_any": True})
-        response["Access-Control-Allow-Origin"] = "*"
-        response["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+        # response["Access-Control-Allow-Origin"] = "*"
+        # response["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        # response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
         return response
 
 
