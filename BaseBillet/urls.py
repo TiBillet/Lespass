@@ -25,6 +25,7 @@ urlpatterns = [
     path('scan/check_api_scan/', views_scan.check_api_scan.as_view(), name='check_api_scan'),
     path('scan/check_allow_any/', views_scan.check_allow_any.as_view(), name='check_allow_any'),
     path('scan/<str:pk>/pair/', views_scan.Pair.as_view(), name='check_api_scan'),
+    path('scan/check_ticket/', views_scan.check_ticket.as_view(), name='check_ticket'),
 
     # Test routes for error templates
     path('test-errors/404/', test_404, name='test_404'),

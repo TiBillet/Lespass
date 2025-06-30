@@ -16,7 +16,6 @@ class HasScanApi(BaseHasAPIKey):
 
     def has_permission(self, request: HttpRequest, view: typing.Any) -> bool:
         key = self.get_key(request)
-        logger.info(f"has_permission {key}")
         try :
             api_key = ScannerAPIKey.objects.get_from_key(key)
             scan_app: ScanApp = api_key.scan_app
