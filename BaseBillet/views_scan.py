@@ -11,19 +11,6 @@ from BaseBillet.permissions import HasScanApi
 
 
 
-class CORSResponseMixin:
-    """
-    Mixin that adds permissive CORS headers to responses.
-    This is specifically for the ScanTicket class which is used by a Cordova application
-    running in a webview on localhost.
-    """
-    def finalize_response(self, request, response, *args, **kwargs):
-        response = super().finalize_response(request, response, *args, **kwargs)
-        response["Access-Control-Allow-Origin"] = "*"
-        response["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        return response
-
 
 class check_api_scan(APIView):
     permission_classes = [HasScanApi]
