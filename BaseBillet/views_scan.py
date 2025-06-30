@@ -15,9 +15,6 @@ class check_allow_any(APIView):
     permission_classes = [AllowAny]
     def get(self, request):
         response = Response({"allow_any": True})
-        # response["Access-Control-Allow-Origin"] = "*"
-        # response["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-        # response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
         return response
 
 class check_allow_any_widlcard(APIView):
@@ -81,7 +78,7 @@ class check_ticket(APIView):
             if not qrcode_data:
                 return Response(
                     {"error": "QR code data is required"},
-                    status=status.HTTP_400_BAD_REQUEST
+                    status=status.HTTP_406_NOT_ACCEPTABLE
                 )
 
             # Split the QR code data to get the base64-encoded JSON and the signature
@@ -150,6 +147,123 @@ class check_ticket(APIView):
                     "product": ticket.pricesold.productsold.product.name if ticket.pricesold and hasattr(
                         ticket.pricesold, 'productsold') else None,
                     "scanned_by": str(ticket.scanned_by.uuid) if ticket.scanned_by else None
+                },
+                "reservation": {
+                    "uuid": str(ticket.reservation.uuid),
+                    "tickets_count": reservation_tickets_count
+                }
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class ticket(APIView):
+    permission_classes = [HasScanApi]
+    def ticket(self, request):
+        try:
+            # Get the QR code data from the request
+            qrcode_data = request.data.get('qrcode_data')
+            if not qrcode_data:
+                return Response(
+                    {"error": "QR code data is required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Split the QR code data to get the base64-encoded JSON and the signature
+            try:
+                data_b64, signature = qrcode_data.split(':')
+            except ValueError:
+                return Response(
+                    {"error": "Invalid QR code format"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Decode the base64 JSON to get the ticket UUID
+            try:
+                import json
+                import base64
+                data_json = json.loads(base64.b64decode(data_b64).decode('utf-8'))
+                ticket_uuid = data_json.get('uuid')
+                if not ticket_uuid:
+                    return Response(
+                        {"error": "Ticket UUID not found in QR code data"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            except Exception as e:
+                return Response(
+                    {"error": f"Error decoding QR code data: {str(e)}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Find the ticket by UUID
+            try:
+                ticket = Ticket.objects.get(uuid=ticket_uuid)
+            except Ticket.DoesNotExist:
+                return Response(
+                    {"error": "Ticket not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # Verify the signature using the event's public key
+            from fedow_connect.utils import verify_signature
+            data_b64_bytes = data_b64.encode('utf-8')
+            if not verify_signature(
+                    ticket.reservation.event.get_public_key(),
+                    data_b64_bytes,
+                    signature
+            ):
+                return Response(
+                    {"error": "Invalid ticket signature"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Count the number of tickets in the same reservation
+            reservation_tickets_count = ticket.reservation.tickets.count()
+
+            # Check if the ticket is already scanned
+            if ticket.status == Ticket.SCANNED:
+                return Response({
+                    "success": False,
+                    "message": "Ticket already scanned",
+                    "ticket": {
+                        "uuid": str(ticket.uuid),
+                        "status": ticket.get_status_display(),
+                        "event": ticket.reservation.event.name,
+                        "first_name": ticket.first_name,
+                        "last_name": ticket.last_name,
+                        "price": ticket.pricesold.price.name if ticket.pricesold else None,
+                        "product": ticket.pricesold.productsold.product.name if ticket.pricesold and hasattr(
+                            ticket.pricesold, 'productsold') else None,
+                        "scanned_by": str(ticket.scanned_by.uuid) if ticket.scanned_by else None
+                    },
+                    "reservation": {
+                        "uuid": str(ticket.reservation.uuid),
+                        "tickets_count": reservation_tickets_count
+                    }
+                }, status=status.HTTP_200_OK)
+
+            # Update the ticket's status to SCANNED and set the scanned_by field
+            scan_app = request.scan_app  # Set by HasScanApi permission
+            ticket.status = Ticket.SCANNED
+            ticket.scanned_by = scan_app
+            ticket.save()
+
+            # Return a JSON response with the ticket details
+            return Response({
+                "success": True,
+                "message": "Ticket successfully scanned",
+                "ticket": {
+                    "uuid": str(ticket.uuid),
+                    "status": ticket.get_status_display(),
+                    "event": ticket.reservation.event.name,
+                    "first_name": ticket.first_name,
+                    "last_name": ticket.last_name,
+                    "price": ticket.pricesold.price.name if ticket.pricesold else None,
+                    "product": ticket.pricesold.productsold.product.name if ticket.pricesold and hasattr(
+                        ticket.pricesold, 'productsold') else None
                 },
                 "reservation": {
                     "uuid": str(ticket.reservation.uuid),
