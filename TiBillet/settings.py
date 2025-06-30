@@ -87,8 +87,8 @@ if os.environ.get('ADDITIONAL_DOMAINS'):
         CSRF_TRUSTED_ORIGINS.append(f'https://*.{domain}')
 
 
-# CORS_ORIGIN_WHITELIST = CSRF_TRUSTED_ORIGINS
-CORS_ORIGIN_WHITELIST = CSRF_TRUSTED_ORIGINS + ['http://localhost', 'http://localhost:8000', 'http://localhost:8080']
+CORS_ORIGIN_WHITELIST = CSRF_TRUSTED_ORIGINS
+# CORS_ORIGIN_WHITELIST = CSRF_TRUSTED_ORIGINS + ['http://localhost', ]
 """
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True

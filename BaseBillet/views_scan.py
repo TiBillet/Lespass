@@ -20,7 +20,7 @@ class check_api_scan(APIView):
         key = request.META["HTTP_AUTHORIZATION"].split()[1]
         api_key = ScannerAPIKey.objects.get_from_key(key)
         response = Response({"scan_app": api_key.scan_app.name})
-        response["Access-Control-Allow-Origin"] = "*"
+        response["Access-Control-Allow-Origin"] = 'http://localhost'
         response["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
         return response
