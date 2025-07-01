@@ -807,6 +807,7 @@ def webhook_membership(membership_pk, solo_webhook_pk=None):
             "uuid": f"{membership.uuid}",
             "state": str(membership.get_status_display()),
             "datetime": str(membership.date_added),
+            "deadline": str(membership.deadline),
             "email": str(membership.email()),
             "first_name": str(membership.first_name),
             "last_name": str(membership.last_name),
