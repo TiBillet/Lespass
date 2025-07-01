@@ -189,6 +189,7 @@ class PriceSerializer(serializers.ModelSerializer):
             'adhesion_obligatoire',
             'subscription_type',
             'recurring_payment'
+            'publish',
         ]
 
         read_only_fields = [
