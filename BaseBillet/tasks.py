@@ -805,7 +805,7 @@ def webhook_membership(membership_pk, solo_webhook_pk=None):
             "object": "membership",
             "pk": str(membership.pk),
             "uuid": f"{membership.uuid}",
-            "state": str(membership.status),
+            "state": str(membership.get_status_display()),
             "datetime": str(membership.date_added),
             "email": str(membership.email()),
             "first_name": str(membership.first_name),
@@ -814,7 +814,7 @@ def webhook_membership(membership_pk, solo_webhook_pk=None):
             "price": str(membership.price_name()),
             # "user_id": str(membership.user.id), # Utile ?
             "organisation": f"{configuration.organisation}",
-            "organisation_id": f"{configuration.uuid}",
+            "organisation_id": f"{configuration.uuid()}",
         }
 
         # Si plusieurs webhook :
