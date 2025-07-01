@@ -188,7 +188,7 @@ class PriceSerializer(serializers.ModelSerializer):
             'max_per_user',
             'adhesion_obligatoire',
             'subscription_type',
-            'recurring_payment'
+            'recurring_payment',
             'publish',
         ]
 
