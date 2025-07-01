@@ -812,8 +812,10 @@ def webhook_membership(membership_pk, solo_webhook_pk=None):
             "first_name": str(membership.first_name),
             "last_name": str(membership.last_name),
             "pseudo": str(membership.pseudo),
-            "price": str(membership.price_name()),
-            # "user_id": str(membership.user.id), # Utile ?
+            "price_name": f"{membership.price.name}" if membership.price else None,
+            "price_uuid": f"{membership.price.uuid}" if membership.price else None,
+            "product_name": str(membership.price.product.name) if membership.price else None,
+            "product_uuid": str(membership.price.product.uuid) if membership.price else None,
             "organisation": f"{configuration.organisation}",
             "organisation_id": f"{configuration.uuid()}",
         }
