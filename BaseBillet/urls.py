@@ -9,12 +9,12 @@ router = routers.DefaultRouter()
 router.register(r'memberships', base_view.MembershipMVT, basename='membership_mvt')
 router.register(r'badge', base_view.Badge, basename='badge')
 router.register(r'tenant', base_view.Tenant, basename='tenant')
+router.register(r'federation', base_view.FederationViewset, basename='federation')
 
 router.register(r'my_account', base_view.MyAccount, basename='my_account')
 router.register(r'qr', base_view.ScanQrCode, basename='scan_qrcode')
 router.register(r'event', base_view.EventMVT, basename='event')
 router.register(r'home', base_view.HomeViewset, basename='home')
-
 
 urlpatterns = [
     # Dynamic robots.txt - Access at: https://yourdomain.com/robots.txt
@@ -24,13 +24,13 @@ urlpatterns = [
     ### SCAN TICKET API
     path('scan/check_api_scan/', views_scan.check_api_scan.as_view(), name='check_api_scan'),
     path('scan/check_allow_any/', views_scan.check_allow_any.as_view(), name='check_allow_any'),
-    path('scan/check_allow_any_widlcard/', views_scan.check_allow_any_widlcard.as_view(), name='check_allow_any_widlcard'),
+    path('scan/check_allow_any_widlcard/', views_scan.check_allow_any_widlcard.as_view(),
+         name='check_allow_any_widlcard'),
     path('scan/<str:pk>/pair/', views_scan.Pair.as_view(), name='check_api_scan'),
     path('scan/check_ticket/', views_scan.check_ticket.as_view(), name='check_ticket'),
     path('scan/ticket/', views_scan.ticket.as_view(), name='ticket'),
 
     # Test routes for error templates
-
 
     ### END SCAN TICKET API
 

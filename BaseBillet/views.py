@@ -770,6 +770,16 @@ def index(request):
     return render(request, "reunion/views/home.html", context=template_context)
 
 
+
+class FederationViewset(viewsets.ViewSet):
+    authentication_classes = [SessionAuthentication, ]
+    permission_classes = [permissions.AllowAny]
+
+    def list(self, request):
+        template_context = get_context(request)
+        return render(request, "reunion/views/federation/list.html", context=template_context)
+
+
 class HomeViewset(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
