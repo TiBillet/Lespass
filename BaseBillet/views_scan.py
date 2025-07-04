@@ -167,7 +167,7 @@ class check_ticket(APIView):
 
 class ticket(APIView):
     permission_classes = [HasScanApi]
-    def ticket(self, request):
+    def post(self, request):
         try:
             # Get the QR code data from the request
             qrcode_data = request.data.get('qrcode_data')
