@@ -120,7 +120,7 @@ def get_context(request):
             {'name': 'memberships_mvt', 'url': '/memberships/',
              'label': config.membership_menu_name if config.membership_menu_name else _('Subscriptions'),
              'icon': 'person-badge'},
-            # {'name': 'network', 'url': '/network/', 'label': 'Réseau local', 'icon': 'arrow-repeat'},
+            # {'name': 'federation', 'url': '/federation/', 'label': 'Local network', 'icon': 'diagram-2-fill'},
         ]
     }
     return context
