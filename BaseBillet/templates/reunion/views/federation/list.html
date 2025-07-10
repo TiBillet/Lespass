@@ -1,7 +1,7 @@
 {% extends base_template %}
 {% load tibitags i18n %}
 
-{% block title %}{% translate 'Home' %}{% endblock %}
+{% block title %}{% translate 'Local network' %}{% endblock %}
 {% block meta_description %}{{ config.short_description|striptags|default:config.organisation }} - {% translate 'Welcome to our platform' %}{% endblock %}
 {% block og_title %}{{ config.organisation }}{% endblock %}
 {% block og_description %}{{ config.short_description|striptags|default:config.organisation }} - {% translate 'Welcome to our platform' %}{% endblock %}
@@ -11,5 +11,50 @@
 {% block twitter_image_alt %}{{ config.organisation }} - {% translate 'Home page' %}{% endblock %}
 
 {% block main %}
-
+<main class="container-lg py-5">
+    <h1>{% translate 'Local network members' %}</h1>
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-3 mb-5">
+        <div class="col">
+            <article class="card h-100">
+                <div class="card-body">
+                    <h3 class="card-title">Association Chantefrein</h3>
+                    <p class="card-text">
+                        Association de travail du bois, organisé autour de trois
+                        pôles : menuiserie, sculpture et formation à
+                        l'utilisation des machines. Gère l'atelier bois du
+                        Fusible.
+                    </p>
+                </div>
+                <div class="card-footer p-0">
+                    <table class="table mb-0">
+                        <tbody>
+                            <tr>
+                                <th scope="row">Accepte</th>
+                                <td>
+                                    <span class="badge text-bg-info">
+                                        <i class="bi bi-cash"></i>
+                                        Euro
+                                    </span>
+                                    <span class="badge text-bg-info">
+                                        <i class="bi bi-hourglass"></i>
+                                        Heure Lumière
+                                    </span>
+                                    <span class="badge text-bg-warning">
+                                        <i class="bi bi-person-badge"></i>
+                                        Adhésion Chantefrein
+                                    </span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="p-3">
+                        <a href="#" class="btn btn-primary d-block my-3">
+                            Espace en ligne Chantefrein
+                        </a>
+                    </div>
+                </div>
+            </article>
+        </div>
+    </div>
+</main>
 {% endblock main %}
