@@ -13,7 +13,7 @@ poetry run python /DjangoFiles/manage.py migrate
 # Création des tenant publics et agenda
 poetry run python /DjangoFiles/manage.py install
 
-if [ "$DEMO" = "1" ]; then
+if [ "$TEST" = "1" ]; then
   poetry run python manage.py demo_data
 fi
 
