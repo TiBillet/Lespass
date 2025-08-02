@@ -809,6 +809,7 @@ def webhook_membership(membership_pk, solo_webhook_pk=None):
             "datetime": str(membership.date_added),
             "deadline": str(membership.deadline),
             "email": str(membership.email()),
+            "comment": f"{membership.commentaire}",
             "first_name": str(membership.first_name),
             "last_name": str(membership.last_name),
             "pseudo": str(membership.pseudo),
