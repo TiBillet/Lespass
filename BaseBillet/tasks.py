@@ -1029,7 +1029,9 @@ def membership_renewal_reminder():
     """
     for tenant in get_tenant_model().objects.exclude(schema_name='public'):
         with tenant_context(tenant):
-            memberships = Membership.objects.filter(deadline__lt=timezone.now() + timezone.timedelta(days=1))
+            memberships = Membership.objects.filter(deadline__gte=timezone.now(),
+                                                    deadline__lte=timezone.now() + timezone.timedelta(days=1))
+
             for membership in memberships:
                 config = Configuration.get_solo()
                 user = membership.user
@@ -1041,7 +1043,7 @@ def membership_renewal_reminder():
                     'now': timezone.now(),
                     'objet': _(f"Votre adhésion {config.organisation} arrive à expiration"),
                     'image_url': "https://tibillet.org/fr/img/design/logo-couleur.svg",
-                    'renewal_url' : f"https://{tenant.get_primary_domain().domain}/memberships/"
+                    'renewal_url': f"https://{tenant.get_primary_domain().domain}/memberships/"
                 }
 
                 try:
@@ -1058,7 +1060,6 @@ def membership_renewal_reminder():
                     logger.error(
                         f"ERROR {timezone.now()} Erreur lors de l'envoi de membership_renewal_reminder à {email}: {e}")
                     return False
-
 
 
 @app.task
