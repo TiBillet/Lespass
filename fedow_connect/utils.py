@@ -14,11 +14,12 @@ from cryptography.hazmat.backends import default_backend
 
 
 def dround(value):
-    # Si c'est un entier, on divise par 100
-    if type(value) == int:
-        return Decimal(value / 100).quantize(Decimal('1.00'))
-    return value.quantize(Decimal('1.00'))
-
+    if value :
+        # Si c'est un entier, on divise par 100
+        if type(value) == int:
+            return Decimal(value / 100).quantize(Decimal('1.00'))
+        return value.quantize(Decimal('1.00'))
+    return value
 
 
 def data_to_b64(data: dict or list) -> bytes:
