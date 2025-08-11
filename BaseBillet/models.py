@@ -81,6 +81,7 @@ class PaymentMethod(models.TextChoices):
     CC = "CC", _("Credit card: POS terminal")
     CASH = "CA", _("Cash")
     CHEQUE = "CH", _("Check")
+    QRCODE_MA = "QR", _("QrCode on my account")
     TRANSFER = "TR", _("Bank transfer")
     STRIPE_FED = "SF", _("Online: federated Stripe")
     STRIPE_NOFED = "SN", _("Online: Stripe account")
@@ -684,6 +685,7 @@ class Product(models.Model):
     NONE, BILLET, PACK, RECHARGE_CASHLESS = 'N', 'B', 'P', 'R'
     RECHARGE_FEDERATED, VETEMENT, MERCH, ADHESION, BADGE = 'S', 'T', 'M', 'A', 'G'
     DON, FREERES, NEED_VALIDATION = 'D', 'F', 'V'
+    QRCODE_MA = 'Q'
 
     CATEGORIE_ARTICLE_CHOICES = [
         (NONE, _('Select a category')),
@@ -696,6 +698,7 @@ class Product(models.Model):
         # (MERCH, _('Merchandasing')),
         (ADHESION, _('Subscription or membership')),
         (BADGE, _('Punchclock')),
+        (QRCODE_MA, _('QrCode paiement on my account')),
         # (DON, _('Don')),
         # (NEED_VALIDATION, _('Nécessite une validation manuelle'))
     ]
@@ -844,7 +847,7 @@ class Price(models.Model):
     #     return True
 
     class Meta:
-        unique_together = ('name', 'product')
+        # unique_together = ('name', 'product')
         ordering = ('order',)
         verbose_name = _('Rate')
         verbose_name_plural = _('Rates')
@@ -1805,6 +1808,7 @@ class LigneArticle(models.Model):
 
     qty = models.SmallIntegerField()
     amount = models.IntegerField(default=0, verbose_name=_("Value"))  # Centimes en entier (50.10€ = 5010)
+
     vat = models.DecimalField(max_digits=4, decimal_places=2, default=0, verbose_name=_("VAT"))
 
     carte = models.ForeignKey(CarteCashless, on_delete=models.PROTECT, blank=True, null=True)
@@ -1831,6 +1835,8 @@ class LigneArticle(models.Model):
                               verbose_name=_("Product entry status"))
 
     sended_to_laboutik = models.BooleanField(default=False, verbose_name=_("Sended to LaBoutik"))
+
+    metadata = models.JSONField(blank=True, null=True)
 
     class Meta:
         ordering = ('-datetime',)

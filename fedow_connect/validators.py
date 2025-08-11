@@ -75,9 +75,12 @@ class TransactionSimpleValidator(serializers.Serializer):
     previous_transaction = serializers.UUIDField()
 
     FIRST, SALE, CREATION, REFILL, TRANSFER, SUBSCRIBE, BADGE, FUSION, REFUND, VOID = 'FST', 'SAL', 'CRE', 'REF', 'TRF', 'SUB', 'BDG', 'FUS', 'RFD', 'VID'
+    QRCODE_SALE = 'QRS'
+
     TYPE_ACTION = (
         (FIRST, _("First block")),
         (SALE, _("Product sale")),
+        (QRCODE_SALE, "Vente via QrCode"),
         (CREATION, _('Currency creation')),
         (REFILL, _('Refill')),
         (TRANSFER, _('Transfer')),
@@ -179,9 +182,12 @@ class TransactionValidator(serializers.Serializer):
     previous_transaction = serializers.UUIDField()
 
     FIRST, SALE, CREATION, REFILL, TRANSFER, SUBSCRIBE, BADGE, FUSION, REFUND, VOID, DEPOSIT = 'FST', 'SAL', 'CRE', 'REF', 'TRF', 'SUB', 'BDG', 'FUS', 'RFD', 'VID', 'BNK'
+    QRCODE_SALE = 'QRS'
+
     TYPE_ACTION = (
         (FIRST, _("First block")),
         (SALE, _("Product sale")),
+        (QRCODE_SALE, "Vente via QrCode"),
         (CREATION, _('Currency creation')),
         (REFILL, _('Refill')),
         (TRANSFER, _('Transfer')),

@@ -2,6 +2,7 @@ import json
 import logging
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 import requests
@@ -18,7 +19,7 @@ from AuthBillet.models import TibilletUser, Wallet, HumanUser
 from BaseBillet.models import Configuration, Membership, Product
 from Customers.models import Client
 from fedow_connect.models import FedowConfig
-from fedow_connect.utils import sign_message, data_to_b64, verify_signature, rsa_decrypt_string
+from fedow_connect.utils import sign_message, data_to_b64, verify_signature, rsa_decrypt_string, dround
 from fedow_connect.validators import WalletValidator, AssetValidator, TransactionValidator, \
     PaginatedTransactionValidator, CardValidator, QrCardValidator
 
@@ -338,6 +339,46 @@ class WalletFedow():
             return serialized_transaction
         raise Exception(f"{serialized_transaction.errors}")
 
+    def get_total_euro_token(self, user) -> Decimal:
+        serialized_wallet = self.cached_retrieve_by_signature(user).validated_data
+        total_euro = 0
+        # Itération sur tous les tokens du wallet
+        try :
+            for token in serialized_wallet['tokens']:
+                # fed : Stripe asset
+                if token['asset_category'] == 'FED' :
+                    total_euro += token['value']
+                elif token['asset_category'] == 'TLF' :
+                    # token local fidicaire avec pour origine le lieu
+                    if token['asset']['place_origin']['uuid'] == self.fedow_config.fedow_place_uuid:
+                        total_euro += token['value']
+
+        except KeyError as e:
+            logger.warning(f"get_total_fed_token : {e} - fetch from fedow without cache.")
+        except Exception as e:
+            logger.error(f"get_total_fed_token : {e}")
+            raise e
+
+        return total_euro
+
+    def get_total_fed_token(self, user) -> Decimal:
+        # Récupération du wallet mis en cache
+        serialized_wallet = self.cached_retrieve_by_signature(user).validated_data
+        total_fed = 0
+        # Itération sur tout les tokens du wallet, on s'arrete lorsqu'on trouve le Token Fédéré
+        try :
+            for token in serialized_wallet['tokens']:
+                if token['asset_category'] == 'FED' :
+                    total_fed = token['value']
+                    break
+        except KeyError as e:
+            logger.warning(f"get_total_fed_token : {e} - fetch from fedow without cache.")
+        except Exception as e:
+            logger.error(f"get_total_fed_token : {e}")
+            raise e
+
+        return total_fed
+
     def cached_retrieve_by_signature(self, user):
         if not user.wallet:
             wallet = self.get_or_create_wallet(user)
@@ -371,6 +412,8 @@ class WalletFedow():
 
         wallet_serialized = WalletValidator(data=response_link.json())
         if wallet_serialized.is_valid():
+            # On cache le resultat
+            cache.set(f"wallet_user_{user.wallet.uuid}", wallet_serialized, 10)
             return wallet_serialized
         else:
             logger.error(f"retrieve_by_signature wallet_serialized ERRORS : {wallet_serialized.errors}")
@@ -559,6 +602,8 @@ class PlaceFedow():
         logger.info(f"Place and Fedow linked : wallet {new_place_data['wallet']}")
 
 
+
+
 class NFCcardFedow():
     def __init__(self, fedow_config: FedowConfig or None = None):
         self.fedow_config: FedowConfig = fedow_config
@@ -691,6 +736,52 @@ class TransactionFedow():
             logger.error(f"retrieve_by_signature wallet_serialized ERRORS : {paginated_transactions_serialized.errors}")
             raise Exception(
                 f"retrieve_by_signature wallet_serialized ERRORS : {paginated_transactions_serialized.errors}")
+
+
+    def to_place_from_qrcode(self,
+                 user: TibilletUser = None,
+                 amount: int = None,
+                 asset_type: uuid4 = None, # peut être EURO, CADEAU, etc ....
+                 comment: str = None,
+                 metadata: json = None,
+                 ):
+
+        if not user.wallet:
+            wallet_fedow = WalletFedow(self.fedow_config)
+            user.wallet, created = wallet_fedow.get_or_create_wallet(user)
+        # Transaction depuis une carte cashless vers un lieu
+
+        transaction_w2w = {
+            "amount": amount,
+            "sender": f"{user.wallet.uuid}",
+            "receiver": f"{self.fedow_config.wallet.uuid}",
+            "asset_type": f"{asset_type}",
+            "comment": comment,
+            "metadata": metadata,
+        }
+        response_w2w = _post(
+            fedow_config=self.fedow_config,
+            user=user,
+            data=transaction_w2w,
+            path='transaction/qrcodescanpay')
+
+        if response_w2w.status_code == 201:
+            serialized_transaction = TransactionValidator(data=response_w2w.json(), many=True)
+
+            if serialized_transaction.is_valid():
+                logger.info(f"retrieve_by_signature : {response_w2w.status_code} : {response_w2w.content}")
+                # On mets à jour le wallet du user:
+                wallet_fedow = WalletFedow(self.fedow_config)
+                wallet_fedow.retrieve_by_signature(user)
+                return serialized_transaction.validated_data
+
+            logger.error(serialized_transaction.errors)
+            raise Exception(response_w2w.json())
+
+        else:
+            logger.error(response_w2w.json())
+            raise Exception(response_w2w.json())
+
 
 
 # from fedow_connect.fedow_api import FedowAPI

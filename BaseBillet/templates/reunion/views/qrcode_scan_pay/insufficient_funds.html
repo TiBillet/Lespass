@@ -1,0 +1,41 @@
+{% load i18n static %}
+<div class="container" id="qrscanpay-container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h3 class="text-center">{% translate 'Insufficient Funds' %}</h3>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning mb-4">
+                        <h5>{% translate 'Payment could not be processed' %}:</h5>
+                        <p class="lead">{% translate 'You do not have enough funds in your wallet to complete this payment.' %}</p>
+                        <p><strong>{% translate 'Required amount' %}:</strong> <span class="fs-4">{{ amount | dround }}€</span></p>
+                        <p><strong>{% translate 'Your balance' %}:</strong> <span class="fs-4">{{ user_balance | dround }}€</span></p>
+                    </div>
+
+                    <!-- FALC / Easy-to-read notice -->
+                    <div class="alert alert-dark" role="alert">
+                        <p class="m-0 fw-bold">{% translate 'Simple message' %}: {% translate 'Your wallet is too low. Please add money to pay.' %}</p>
+                    </div>
+                    
+                    <div class="text-center">
+                        <i class="bi bi-wallet2 text-warning" style="font-size: 4rem;"></i>
+                        <p class="mt-3">{% translate 'Please recharge your wallet to continue.' %}</p>
+                    </div>
+                    
+                    <div class="d-grid gap-2 mt-4">
+                        <a href="{% url 'my_account-list' %}" class="btn btn-primary btn-lg">
+                            <i class="bi bi-plus-circle-fill me-2"></i>
+                            {% translate 'Recharge My Wallet' %}
+                        </a>
+                        
+                        <a href="{% url 'qrcodescanpay-list' %}" class="btn btn-outline-secondary">
+                            {% translate 'Cancel Payment' %}
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

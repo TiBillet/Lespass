@@ -1,0 +1,188 @@
+{% extends 'reunion/account_base.html' %}
+{% load i18n static %}
+
+{% block title %}{% translate 'Scan a QrCode' %}{% endblock %}
+
+{% block account_page %}
+    <div class="container" id="qrscanpay-container">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                {% if qrcode_processed %}
+                    <!-- Display processed QR code result -->
+                    <div class="card">
+                        <div class="card-header bg-success text-white">
+                            <h3 class="text-center">{% translate 'QR Code Processed' %}</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-success">
+                                <h5>{% translate 'QR Code Content' %}:</h5>
+                                <p class="mb-3">{{ qrcode_content }}</p>
+                            </div>
+                            
+                            <div class="d-flex justify-content-center">
+                                <a href="{% url 'qrcodescanpay-list' %}" class="btn btn-primary">
+                                    {% translate 'Scan Another QR Code' %}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                {% else %}
+                    <!-- QR Code Scanner -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="text-center">{% translate 'Scan a QR Code' %}</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="text-center mb-3">
+                                <p>{% translate 'Position the QR code in front of your camera' %}</p>
+                            </div>
+                            
+                            <!-- Video element for the camera feed -->
+                            <div class="d-flex justify-content-center mb-4">
+                                <video id="qr-video" class="border" style="max-width: 100%; height: auto;"></video>
+                            </div>
+                            
+                            <!-- Controls -->
+                            <div class="d-flex justify-content-center mb-3">
+                                <button id="start-button" class="btn btn-primary me-2">{% translate 'Start Camera' %}</button>
+                                <button id="stop-button" class="btn btn-secondary" disabled>{% translate 'Stop Camera' %}</button>
+                            </div>
+                            
+                            <!-- Result display -->
+                            <div id="scan-result-container" class="mt-4 d-none">
+                                <div class="alert alert-success">
+                                    <h5>{% translate 'QR Code Detected' %}:</h5>
+                                    <p id="scan-result" class="mb-0"></p>
+                                </div>
+                                
+                                <!-- Form to submit the result via HTMX -->
+                                <form hx-post="{% url 'qrcodescanpay-list' %}" hx-swap="outerHTML"
+                                      hx-target="#qrscanpay-container"
+                                      class="mt-3" id="form-qrcode-scan">
+                                    {% csrf_token %}
+                                    <input type="hidden" id="qrcode-content" name="qrcode_content">
+                                    <button type="submit" class="btn btn-success w-100" >
+                                        <span class="htmx-indicator-none">{% translate 'Process QR Code' %}</span>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {% if not qrcode_processed %}
+    <!-- QR Scanner Script - Only load when not in processed mode -->
+    <script type="module">
+        import QrScanner from "{% static 'reunion/js/qr-scanner.min.js' %}";
+        
+        // DOM elements
+        const video = document.getElementById('qr-video');
+        const startButton = document.getElementById('start-button');
+        const stopButton = document.getElementById('stop-button');
+        const scanResultContainer = document.getElementById('scan-result-container');
+        const scanResult = document.getElementById('scan-result');
+        const qrcodeContentInput = document.getElementById('qrcode-content');
+        
+        // Create scanner instance
+        const qrScanner = new QrScanner(
+            video,
+            result => {
+                // Handle successful scan
+                scanResultContainer.classList.remove('d-none');
+                scanResult.textContent = result.data;
+                qrcodeContentInput.value = result.data;
+                console.log('QR code detected:', result.data);
+                
+                // Stop scanning after successful detection
+                qrScanner.stop();
+                updateButtonStates(false);
+                
+                // Play a success sound if desired
+                // new Audio('success-sound.mp3').play();
+                
+                // Check if the scanned URL matches the current site's base URL
+                try {
+                    // Get the current site's base URL
+                    const currentUrl = window.location.origin;
+                    const currentDomain = new URL(currentUrl).hostname;
+                    
+                    // Get the scanned URL's base URL
+                    const scannedUrl = result.data;
+                    const scannedUrlObj = new URL(scannedUrl);
+                    const scannedDomain = scannedUrlObj.hostname;
+                    
+                    console.log('Current domain:', currentDomain);
+                    console.log('Scanned domain:', scannedDomain);
+                    
+                    // If the domains match, redirect directly to the scanned URL
+                    if (currentDomain === scannedDomain) {
+                        const autoSubmitMessage = document.createElement('div');
+                        autoSubmitMessage.className = 'alert alert-info mt-2';
+                        autoSubmitMessage.innerHTML = `{% translate "URL matches current site. Redirecting..." %}`;
+                        scanResultContainer.appendChild(autoSubmitMessage);
+                        
+                        // Redirect after a short delay
+                        setTimeout(() => {
+                            window.location.href = scannedUrl;
+                        }, 800);
+                        return;
+                    }
+                } catch (error) {
+                    console.error('Error comparing URLs:', error);
+                    // If there's an error in URL comparison, fall back to form submission
+                }
+                
+                // If domains don't match or there was an error, continue with form submission
+                const autoSubmitMessage = document.createElement('div');
+                autoSubmitMessage.className = 'alert alert-info mt-2';
+                autoSubmitMessage.innerHTML = '{% translate "Automatically submitting QR code..." %}';
+                scanResultContainer.appendChild(autoSubmitMessage);
+
+                // Automatically submit the form after a short delay
+                setTimeout(() => {
+                    const form = document.querySelector('#form-qrcode-scan');
+                    form.requestSubmit();
+                }, 800);
+            },
+            {
+                returnDetailedScanResult: true,
+                highlightScanRegion: true,
+                highlightCodeOutline: true,
+            }
+        );
+        
+        // Button event listeners
+        startButton.addEventListener('click', () => {
+            qrScanner.start().then(() => {
+                updateButtonStates(true);
+                scanResultContainer.classList.add('d-none');
+            });
+        });
+        
+        stopButton.addEventListener('click', () => {
+            qrScanner.stop();
+            updateButtonStates(false);
+        });
+        
+        // Helper function to update button states
+        function updateButtonStates(isScanning) {
+            startButton.disabled = isScanning;
+            stopButton.disabled = !isScanning;
+        }
+        
+        // Auto-start camera if supported
+        document.addEventListener('DOMContentLoaded', () => {
+            // Check if camera access is likely to be supported
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                // Start the camera automatically after a short delay
+                setTimeout(() => {
+                    startButton.click();
+                }, 500);
+            }
+        });
+    </script>
+    {% endif %}
+{% endblock %}

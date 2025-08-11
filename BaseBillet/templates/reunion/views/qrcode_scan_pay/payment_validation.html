@@ -1,0 +1,73 @@
+{% extends base_template %}
+
+{% load static tibitags i18n %}
+
+{% block title %}{% translate 'Payment Validation' %}{% endblock %}
+
+{% block main %}
+    <div class="container" id="qrscanpay-container">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h3 class="text-center">{% translate 'Payment Validation' %}</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info mb-4">
+                            <h5>{% translate 'Payment Details' %}:</h5>
+                            <p><strong>{% translate 'Location' %}:</strong> {{ payment_location }}</p>
+                            <p><strong>{% translate 'Amount' %}:</strong> <span class="fs-4">{{ amount | dround }}€</span></p>
+                            <p class="mb-0"><strong>{% translate 'Available balance in your wallet' %}:</strong> <span class="fs-4">{{ user_balance | dround }}€</span></p>
+                        </div>
+
+                        {% if insufficient_funds %}
+                            <div class="alert alert-warning" role="alert">
+                                <p class="m-0 fw-bold">{% translate 'Your wallet is too low. Please add money to pay.' %}</p>
+                            </div>
+                            <div class="d-grid gap-2">
+                                <a href="{% url 'my_account-list' %}" class="btn btn-primary btn-lg">
+                                    <i class="bi bi-plus-circle-fill me-2"></i>
+                                    {% translate 'Recharge My Wallet' %}
+                                </a>
+                                <a href="{% url 'qrcodescanpay-list' %}" class="btn btn-outline-secondary">
+                                    {% translate 'Cancel' %}
+                                </a>
+                            </div>
+                        {% else %}
+                            <form hx-post="{% url 'qrcodescanpay-valid-payment' %}" hx-swap="outerHTML"
+                                  hx-indicator="#loading-indicator" hx-target="#qrscanpay-container">
+                                {% csrf_token %}
+                                <input type="hidden" name="ligne_article_uuid_hex" value="{{ ligne_article_uuid_hex }}">
+
+{#                                <div class="mb-4">#}
+{#                                    <label for="pin-code"#}
+{#                                           class="form-label">{% translate 'Enter your PIN code to confirm payment' %}</label>#}
+{#                                    <input type="password"#}
+{#                                           class="form-control form-control-lg text-center"#}
+{#                                           id="pin-code"#}
+{#                                           name="pin_code"#}
+{#                                           maxlength="6"#}
+{#                                           pattern="[0-9]*"#}
+{#                                           inputmode="numeric"#}
+{#                                           autocomplete="off"#}
+{#                                           required>#}
+{#                                    <div class="form-text">{% translate 'Enter the PIN code associated with your account' %}</div>#}
+{#                                </div>#}
+
+                                <div class="d-grid gap-2">
+                                    <button type="submit" class="btn btn-success btn-lg">
+                                        <span>{% translate 'Confirm Payment' %}</span>
+                                    </button>
+
+                                    <a href="{% url 'qrcodescanpay-list' %}" class="btn btn-outline-secondary">
+                                        {% translate 'Cancel' %}
+                                    </a>
+                                </div>
+                            </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

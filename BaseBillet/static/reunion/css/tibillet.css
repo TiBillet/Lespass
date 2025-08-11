@@ -93,3 +93,37 @@ figure[data-trix-attachment] img {
     height: auto;
     width: 100%;
 }
+
+/* Square buttons for currency section */
+.square-btn {
+    aspect-ratio: 1/1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 0.5rem;
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+}
+
+.square-btn i {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+/* Desktop styles for square buttons */
+@media (min-width: 768px) {
+    .square-btn {
+        aspect-ratio: auto;
+        height: auto;
+        flex-direction: row;
+        padding: 0.75rem 1.25rem;
+        font-size: 1rem;
+    }
+    .square-btn i {
+        font-size: 1.25rem;
+        margin-bottom: 0;
+        margin-right: 0.5rem;
+    }
+}

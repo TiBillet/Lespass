@@ -18,7 +18,8 @@
         <div class="offcanvas-start offcanvas" tabindex="-1" id="refundPanel" aria-labelledby="refundPanelLabel">
             <div class="offcanvas-header">
                 <h5 class="offcanvas-title" id="refundPanelLabel">{% trans "Request a refund" %}</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% trans 'Close' %}"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="offcanvas"
+                        aria-label="{% trans 'Close' %}"></button>
             </div>
             <div class="offcanvas-body">
                 <div class="d-flex flex-column justify-content-between h-100">
@@ -26,24 +27,24 @@
                         <div class="alert  alert-primary" role="alert">
                             <h4>{% trans "Don't panic! You've got time left…" %}</h4>
                             {% blocktranslate %}
-                            <p>
-                                TiBillet works on a
-                                <a href="https://tibillet.org/docs/presentation/philosophy/">
-                                    melting funds
-                                </a> principle.
-                                You can get your leftover balance back for 14
-                                months after your last Pass card use. We send a
-                                reminder a month before expiration.
-                            </p>
-                            <p>
-                                You will also soon be able to donate the leftover
-                                balance to the collective that issued this card.
-                            </p>
-                            <p>
-                                Your Pass card itself and your account are yours
-                                for life and can be used with every TiBillet
-                                collective!
-                            </p>
+                                <p>
+                                    TiBillet works on a
+                                    <a href="https://tibillet.org/docs/presentation/philosophy/">
+                                        melting funds
+                                    </a> principle.
+                                    You can get your leftover balance back for 14
+                                    months after your last Pass card use. We send a
+                                    reminder a month before expiration.
+                                </p>
+                                <p>
+                                    You will also soon be able to donate the leftover
+                                    balance to the collective that issued this card.
+                                </p>
+                                <p>
+                                    Your Pass card itself and your account are yours
+                                    for life and can be used with every TiBillet
+                                    collective!
+                                </p>
                             {% endblocktranslate %}
                         </div>
                     </div>
@@ -57,15 +58,17 @@
                         <button type="button" class="btn btn-primary d-block w-100 mb-3"
                                 data-bs-dismiss="offcanvas" aria-label="{% trans 'Close' %}"
                                 hx-get="/my_account/refund_online/" hx-indicator="#tibillet-spinner">
-                                {% trans "Send request" %}</button>
+                            {% trans "Send request" %}</button>
                         {# TODO: lien don #}
-                        <button disabled type="button" class="btn btn-secondary d-block w-100 mb-3" {# data-bs-dismiss="offcanvas" aria-label="Close" #}>
+                        <button disabled type="button" class="btn btn-secondary d-block w-100 mb-3"
+                                {# data-bs-dismiss="offcanvas" aria-label="Close" #}>
                             {% trans "Gift my leftover balance to" %} {{ config.organisation }}
                         </button>
                         <p class="alert alert-warning">
                             {% trans "The collective donation feature is being developed, coming soon!" %}
                         </p>
-                        <button type="button" class="btn btn-danger d-block w-100" data-bs-dismiss="offcanvas" aria-label="{% trans 'Close' %}">
+                        <button type="button" class="btn btn-danger d-block w-100" data-bs-dismiss="offcanvas"
+                                aria-label="{% trans 'Close' %}">
                             {% trans "Cancel" %}
                         </button>
                     </div>
@@ -73,37 +76,63 @@
             </div>
         </div>
 
-        <div class="row g-0">
-            <div class="col-md bg-body-tertiary p-3">
+        <div class="row g-0" id="button_tirelire">
+            <div class="col-12 bg-body-tertiary p-3">
                 <h3>{% trans "Currencies" %}</h3>
 
-                {% comment %} HIDE: total cumulé des sous utilisables dans le lieu, total global
-                <p class="lead">
-                    {# TODO: total utilisable avec l'orga et total toutes instances #}
-                    <strong>40,25</strong> tibillets utilisables avec
-                    <em>{{ config.organisation }}</em> <br />
-                    <span class="opacity-50"><strong>80,25</strong> tibillets en tout</span>
-                </p>
-                {% endcomment %}
 
-                <a href="#" hx-get="/my_account/refill_wallet" hx-indicator="#tibillet-spinner"
-                   class="btn btn-primary d-block mb-3">
-                    {% trans "Refill TiBillets" %}
-                </a>
-                <a href="#detail-monnaies" class="btn btn-secondary d-block mb-3 d-md-none">
-                    {% trans "Show currency list" %}
-                </a>
+                <div class="row g-2">
+                    <div class="col-6 col-md-auto me-md-2">
+                        <a href="#" hx-get="/my_account/refill_wallet" hx-indicator="#tibillet-spinner"
+                           class="btn btn-primary square-btn w-100">
+                            <i class="bi bi-plus-circle"></i>
+                            {% trans "Refill TiBillets" %}
+                        </a>
+                    </div>
+                    {% if user.email_valid %}
+                        <div class="col-6 col-md-auto me-md-2">
+                            <a href="/qrcodescanpay/" class="btn btn-primary square-btn w-100">
+                                <i class="bi bi-qr-code-scan"></i>
+                                {% trans "Scan a payment QR Code" %}
+                            </a>
+                        </div>
+                    {% else %}
+                        <div class="col-6 col-md-auto me-md-2">
+                            <a href="" class="btn btn-secondary square-btn w-100">
+                                <i class="bi bi-qr-code-scan"></i>
+                                {% trans "Please valid your email to scan a payment QR Code" %}
+                            </a>
+                        </div>
+                    {% endif %}
+                    {% if profile.admin_this_tenant %}
+                        <div class="col-6 col-md-auto me-md-2">
+                            <a href="{% url 'qrcodescanpay-get-generator' %}" class="btn btn-warning square-btn w-100">
+                                <i class="bi bi-qr-code"></i>
+                                {% trans "Generate a payment QR Code" %}
+                            </a>
+                        </div>
+                    {% endif %}
+                    <div class="col-6 col-md-auto me-md-2">
+                        <a href="#detail-monnaies"
+                           class="btn btn-secondary square-btn w-100 d-md-none">
+                            <i class="bi bi-list-ul"></i>
+                            {% trans "Show currency list" %}
+                        </a>
+                    </div>
+                    <div class="col-6 col-md-auto">
+                        <button class="btn btn-secondary square-btn w-100"
+                                type="button"
+                                id="button-filters"
+                                data-bs-toggle="offcanvas"
+                                data-bs-target="#refundPanel"
+                                aria-controls="refundPanel">
+                            <i class="bi bi-arrow-return-left"></i>
+                            {% trans "Request a refund" %}
+                        </button>
+                    </div>
+                </div>
 
-                <button class="btn btn-secondary w-100 mb-3"
-                        type="button"
-                        id="button-filters"
-                        data-bs-toggle="offcanvas"
-                        data-bs-target="#refundPanel"
-                        aria-controls="refundPanel">
-                    {# TODO: temps restant pour rembourser #}
-                    {% trans "Request a refund" %}
-                </button>
-                <p class="opacity-50 m-0">
+                <p class="opacity-50 m-0 mt-2">
                     {% trans 'TiBillets are the only currency we can refund online. For local currencies, ask the collective that issued them.' %}
                 </p>
             </div>

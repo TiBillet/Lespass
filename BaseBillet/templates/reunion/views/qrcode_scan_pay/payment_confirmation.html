@@ -1,0 +1,36 @@
+{% load i18n static tibitags %}
+<div class="container" id="qrscanpay-container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h3 class="text-center">{% translate 'Payment Confirmed' %}</h3>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-success mb-4">
+                        <h5>{% translate 'Payment Successfully Processed' %}:</h5>
+                        <p><strong>{% translate 'Location' %}:</strong> {{ payment_location }}</p>
+                        <p><strong>{% translate 'Amount' %}:</strong> <span class="fs-4">{{ amount | dround }}</span></p>
+                        <p class="mt-3 mb-0">{% translate 'Transaction completed at' %}: {{ payment_time }}</p>
+                        <p class="mb-0"><strong>{% translate 'Available balance in your wallet' %}:</strong> <span class="fs-4">{{ user_balance | dround }}€</span></p>
+                    </div>
+                    
+                    <div class="text-center">
+                        <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
+                        <p class="lead mt-3">{% translate 'Thank you for your payment!' %}</p>
+                    </div>
+                    
+                    <div class="d-grid gap-2 mt-4">
+                        <a href="{% url 'my_account-list' %}" class="btn btn-primary btn-lg">
+                            {% translate 'Return to My Account' %}
+                        </a>
+                        
+                        <a href="{% url 'qrcodescanpay-list' %}" class="btn btn-outline-secondary">
+                            {% translate 'Scan Another QR Code' %}
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

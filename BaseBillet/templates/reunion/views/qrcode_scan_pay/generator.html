@@ -1,0 +1,122 @@
+{% extends base_template %}
+
+{% load static tibitags i18n %}
+
+{% block title %}{% translate 'Generate QR Code' %}{% endblock %}
+
+{% block main %}
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                {% if qrcode_generated %}
+                    <!-- Display generated QR code -->
+                    <div class="card">
+                        <div class="card-header bg-success text-white">
+                            <h3 class="text-center">{% translate 'QR Code Generated' %}</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-success mb-4">
+                                <h5>{% translate 'Payment Details' %}:</h5>
+                                <p><strong>{% translate 'Amount' %}:</strong> <span class="fs-4">{{ amount | dround }}</span></p>
+                                <p><strong>{% translate 'Asset Type' %}:</strong> <span class="fs-4">{{ asset_type }}</span></p>
+                                <p>{% translate 'Direct link' %}: <a href="{{ qrcode_content }}" target="_blank">{{ qrcode_content }}</a></p>
+                            </div>
+                            
+                            <!-- QR Code Display -->
+                            <div class="d-flex justify-content-center align-items-center mb-4" style="min-height: 300px; width: 100%;">
+                                <div class="qr-code-container" style="width: 75%; min-width: 200px; max-width: 400px; overflow: hidden; padding: 10px; border-radius: 8px; background-color: white; box-shadow: 0 0 10px rgba(0,0,0,0.1); box-sizing: border-box;">
+                                    <style>
+                                        .qr-code-container svg {
+                                            width: 100%;
+                                            height: auto;
+                                            display: block;
+                                            margin: 0 auto;
+                                            max-height: 100%;
+                                            object-fit: contain;
+                                            aspect-ratio: 1/1;
+                                        }
+                                        
+                                        /* Responsive adjustments */
+                                        @media (max-width: 576px) {
+                                            .qr-code-container {
+                                                width: 90% !important;
+                                                min-width: 150px !important;
+                                                padding: 8px;
+                                            }
+                                        }
+                                        
+                                        @media (min-width: 992px) {
+                                            .qr-code-container {
+                                                max-width: 450px !important;
+                                            }
+                                        }
+                                    </style>
+                                    {{ qrcode_svg|safe }}
+                                </div>
+                            </div>
+                            
+                            <div class="d-grid gap-2">
+                                <a href="{% url 'qrcodescanpay-get-generator' %}" class="btn btn-primary">
+                                    {% translate 'Generate Another QR Code' %}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                {% else %}
+                    <!-- QR Code Generator Form -->
+                    <div class="card">
+                        <div class="card-header bg-primary text-white">
+                            <h3 class="text-center">{% translate 'Generate Payment QR Code' %}</h3>
+                        </div>
+                        <div class="card-body">
+                            <p class="lead text-center mb-4">
+                                {% translate 'Fill in the details below to generate a payment QR code' %}
+                            </p>
+                            
+                            <form method="post" action="{% url 'qrcodescanpay-generate-qrcode' %}">
+                                {% csrf_token %}
+                                
+                                <div class="mb-4">
+                                    <label for="amount" class="form-label">{% translate 'Amount' %}</label>
+                                    <div class="input-group">
+                                        <input type="number" 
+                                               class="form-control form-control-lg" 
+                                               id="amount" 
+                                               name="amount" 
+                                               min="0.01" 
+                                               step="0.01" 
+                                               placeholder="0.00" 
+                                               required>
+                                        <span class="input-group-text">€</span>
+                                    </div>
+                                    <div class="form-text">{% translate 'Enter the payment amount' %}</div>
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <label for="asset_type" class="form-label">{% translate 'Asset Type' %}</label>
+                                    <select class="form-select form-select-lg" id="asset_type" name="asset_type" required>
+                                        <option value="EURO" selected>{% translate 'EURO' %}</option>
+                                        <option value="CADEAU" disabled>{% translate 'CADEAU' %}</option>
+                                        <option value="TEMPS" disabled>{% translate 'TEMPS' %}</option>
+                                    </select>
+                                    <div class="form-text">{% translate 'Select the type of asset for this payment' %}</div>
+                                </div>
+                                
+                                <div class="d-grid gap-2">
+                                    <button type="submit" class="btn btn-success btn-lg">
+                                        <i class="bi bi-qr-code me-2"></i>
+                                        {% translate 'Generate QR Code' %}
+                                    </button>
+                                    
+                                    <a href="{% url 'my_account-list' %}" class="btn btn-outline-secondary">
+                                        {% translate 'Cancel' %}
+                                    </a>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+{% endblock %}

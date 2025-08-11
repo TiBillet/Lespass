@@ -12,10 +12,10 @@ router.register(r'tenant', base_view.Tenant, basename='tenant')
 router.register(r'federation', base_view.FederationViewset, basename='federation')
 
 router.register(r'my_account', base_view.MyAccount, basename='my_account')
+router.register(r'qrcodescanpay', base_view.QrCodeScanPay, basename='qrcodescanpay')
 router.register(r'qr', base_view.ScanQrCode, basename='scan_qrcode')
 router.register(r'event', base_view.EventMVT, basename='event')
 router.register(r'home', base_view.HomeViewset, basename='home')
-
 urlpatterns = [
     # Dynamic robots.txt - Access at: https://yourdomain.com/robots.txt
     # This automatically includes a reference to the sitemap at: https://yourdomain.com/sitemap.xml

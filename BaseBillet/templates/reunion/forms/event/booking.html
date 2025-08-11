@@ -36,7 +36,7 @@
                     }
                 });
             </script>
-{#            <p><code>{{ user.email }}</code></p>#}
+            {#            <p><code>{{ user.email }}</code></p>#}
         {% elif user.is_active %}
             <div class="mb-3">
                 <label for="booking-email" class="form-label">{% trans "Email" %}</label>
@@ -88,6 +88,7 @@
                                     step="1" min="0"
                                     max="
 
+
                                             {% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% else %}{{ price.max_per_user }}{% endif %}"
                                     class="flex-grow-1 js-order-amount"
                             ></bs-counter>
@@ -102,6 +103,7 @@
                                     name="{{ price.uuid }}"
                                     step="1" min="0"
                                     max="
+
 
                                             {% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% else %}{{ price.max_per_user }}{% endif %}"
                                     class="flex-grow-1 js-order-amount"
@@ -145,10 +147,8 @@
             </span>
         </h4>
         <p>
-            {% blocktranslate %}
-                Maximum capacity of {{ event.jauge_max }} people and tickets limited to
-            {% endblocktranslate %}
-            <span class="js-max-amount">{{ event.max_per_user }}</span> {% trans 'per buyer' %}.
+            {% trans "Maximum capacity of tickets limited to" %}<span
+                class="js-max-amount"> {{ event.max_per_user }} </span>{% trans 'per buyer' %}.
         </p>
     </div>
 
