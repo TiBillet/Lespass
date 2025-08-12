@@ -45,7 +45,7 @@ from BaseBillet.models import Configuration, Ticket, Product, Event, Paiement_st
     Price, ProductSold, PaymentMethod
 from BaseBillet.permissions import HasScanApi
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, new_tenant_mailer, \
-    contact_mailer, new_tenant_after_stripe_mailer, send_to_ghost_email
+    contact_mailer, new_tenant_after_stripe_mailer, send_to_ghost_email, send_sale_to_laboutik
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
     ReservationValidator, ContactValidator
 from Customers.models import Client, Domain
@@ -805,9 +805,9 @@ class QrCodeScanPay(viewsets.ViewSet):
             return redirect('qrcodescanpay-get-generator')
 
         # Create product and price entries
-        product = Product.objects.get_or_create(name='qrcode_product', categorie_article=Product.QRCODE_MA)[0]
+        product = Product.objects.get_or_create(name=_('Sale via QR code link'), categorie_article=Product.QRCODE_MA)[0]
         product_sold = ProductSold.objects.get_or_create(product=product)[0]
-        price = Price.objects.get_or_create(name="qrcode_price", product=product, prix=dround(amount))[0]
+        price = Price.objects.get_or_create(name=f"{dround(amount)}€", product=product, prix=dround(amount))[0]
         price_sold = PriceSold.objects.get_or_create(productsold=product_sold, price=price, prix=dround(amount))[0]
         
         # Create LigneArticle with metadata containing admin email
@@ -937,8 +937,6 @@ class QrCodeScanPay(viewsets.ViewSet):
 
         template_context = get_context(request)
 
-        # Get the PIN code and QR code content
-        # pin_code = data.get('pin_code')
         ligne_article_uuid_hex = data.get('ligne_article_uuid_hex')
         try:
             from uuid import UUID
@@ -970,7 +968,7 @@ class QrCodeScanPay(viewsets.ViewSet):
         user = request.user
         from fedow_connect.fedow_api import FedowAPI
         fedow_api = FedowAPI()
-        fedow_api.wallet.get_or_create_wallet(user)
+        wallet, created = fedow_api.wallet.get_or_create_wallet(user)
         user_balance = fedow_api.wallet.get_total_euro_token(user)
 
         if user_balance < amount:
@@ -991,17 +989,39 @@ class QrCodeScanPay(viewsets.ViewSet):
                 asset_type=asset_type,
                 user=user,
             )
+            assert transactions is not None
+            assert type(transactions) is list
+            # on supprime la ligne article pour la recréer en fonction de la ou des transactions
+            total_amount = ligne_article.amount
+            metadata['transactions'] = transactions
+            pricesold = ligne_article.pricesold
+            ligne_article.delete()
+            for transaction in transactions:
+                # On récupère les infos de l'asset :
+                asset_used = fedow_api.asset.retrieve(str(transaction['asset']))
+                if asset_used['category'] == 'FED':
+                    mp = PaymentMethod.STRIPE_FED
+                elif asset_used['category'] == 'TLF':
+                    mp = PaymentMethod.LOCAL_EURO
+                else:
+                    raise Exception("Unknown asset category")
 
-            # Add wallet UUID and RSA signature to LigneArticle metadata
-            metadata = json.loads(ligne_article.metadata) if ligne_article.metadata else {}
-            metadata["transactions"] = transactions
+                # Create LigneArticle with metadata containing admin email
+                ligne_article = LigneArticle.objects.create(
+                    pricesold=pricesold,
+                    qty=dround(Decimal(transaction['amount']/total_amount)),
+                    amount=transaction['amount'],
+                    payment_method=mp,
+                    status=LigneArticle.VALID,
+                    metadata=json.dumps(metadata, cls=DjangoJSONEncoder),
+                    asset=transaction['asset'],
+                    wallet=wallet,
+                )
 
-            # Update LigneArticle
-            ligne_article.metadata = json.dumps(metadata, cls=DjangoJSONEncoder)
-            ligne_article.status = LigneArticle.VALID
-            ligne_article.save()
+                # import ipdb; ipdb.set_trace()
+                # Chaque transaction doit être bien enregistré sur LaBoutik avec le bon Asset indiqué
+                send_sale_to_laboutik.delay(ligne_article.uuid)
 
-            logger.info(f"Payment validated: LigneArticle {ligne_article_uuid} set to VALID")
 
             # Set the payment details in the template context
             tenant = connection.tenant
@@ -1009,6 +1029,7 @@ class QrCodeScanPay(viewsets.ViewSet):
             template_context['amount'] = amount
             template_context['payment_time'] = timezone.now().strftime("%d/%m/%Y %H:%M")
             template_context['user_balance'] = fedow_api.wallet.get_total_euro_token(user)
+
 
             return render(request, "reunion/views/qrcode_scan_pay/payment_confirmation.html", context=template_context)
 
@@ -1018,83 +1039,6 @@ class QrCodeScanPay(viewsets.ViewSet):
             template_context['error_message'] = _("Error validating payment")
             return render(request, "reunion/views/qrcode_scan_pay/payment_error.html", context=template_context)
 
-        """
-        if settings.DEBUG:
-        # Simulate different payment scenarios (in a real app, this would be actual payment processing)
-        # For demo purposes, we'll use the PIN code to determine the outcome:
-        # - PIN "123456" = success
-        # - PIN "000000" = insufficient funds
-        # - Any other PIN = general error
-            if pin_code == "123456":
-                # Successful payment - Update LigneArticle status to VALID
-                try:
-                    # Get the user's wallet
-                    user = request.user
-                    if not user.wallet:
-                        # Create wallet if user doesn't have one
-                        from fedow_connect.fedow_api import FedowAPI
-                        fedow_api = FedowAPI()
-                        wallet, created = fedow_api.wallet.get_or_create_wallet(user)
-                        logger.info(f"Created new wallet for user {user}: {wallet.uuid}")
-                    else:
-                        wallet = user.wallet
-
-                    # Add wallet UUID and RSA signature to LigneArticle metadata
-                    metadata = json.loads(ligne_article.metadata) if ligne_article.metadata else {}
-                    metadata["scanner_wallet_uuid"] = str(wallet.uuid)
-                    metadata["scanner_email"] = user.email
-
-                    # Add RSA signature
-                    from fedow_connect.utils import sign_utf8_string
-                    data_to_sign = f"{ligne_article_uuid_hex}:{wallet.uuid}"
-                    if not user.rsa_key:
-                        # Generate RSA key if user doesn't have one
-                        user.get_private_key()
-
-                    # Get private key and sign data
-                    user_private_pem = user.rsa_key.private_pem
-                    rsa_signature = sign_utf8_string(data_to_sign, user_private_pem)
-                    metadata["scanner_signature"] = rsa_signature
-
-                    # Update LigneArticle
-                    ligne_article.metadata = json.dumps(metadata)
-                    ligne_article.status = LigneArticle.VALID
-                    ligne_article.save()
-
-                    logger.info(f"Payment validated: LigneArticle {ligne_article_uuid} set to VALID")
-
-                    # Format the payment amount with currency symbol
-                    formatted_amount = f"{dround(amount)} €"
-                    
-                    # Set the payment details in the template context
-                    tenant = connection.tenant
-                    template_context['payment_location'] = tenant.name
-                    template_context['payment_amount'] = formatted_amount
-                    template_context['payment_time'] = timezone.now().strftime("%d/%m/%Y %H:%M")
-
-                    return render(request, "reunion/views/qrcode_scan_pay/payment_confirmation.html", context=template_context)
-
-                except Exception as e:
-                    logger.error(f"Error validating payment: {str(e)}")
-                    template_context['error_message'] = _("Error validating payment")
-                    return render(request, "reunion/views/qrcode_scan_pay/payment_error.html", context=template_context)
-
-            elif pin_code == "000000":
-                # Insufficient funds scenario
-                # Format the payment amount with currency symbol
-                formatted_amount = f"{dround(amount)} €"
-                
-                # Set the payment details in the template context
-                tenant = connection.tenant
-                template_context['payment_location'] = tenant.name
-                template_context['payment_amount'] = formatted_amount
-                template_context['user_balance'] = 0  # Example balance
-                return render(request, "reunion/views/qrcode_scan_pay/insufficient_funds.html", context=template_context)
-            else:
-                # General error scenario
-                template_context['error_message'] = _("Invalid PIN code or payment processing error")
-                return render(request, "reunion/views/qrcode_scan_pay/payment_error.html", context=template_context)
-        """
 
 @require_GET
 def index(request):

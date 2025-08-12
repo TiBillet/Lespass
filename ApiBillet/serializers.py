@@ -1384,6 +1384,9 @@ class LigneArticleSerializer(serializers.ModelSerializer):
             'datetime',
             'payment_method',
             'amount',
+            'metadata',
+            'asset',
+            'wallet',
             # 'paiement_stripe_uuid',
             # 'user_uuid_wallet',
         ]

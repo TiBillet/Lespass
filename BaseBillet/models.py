@@ -74,6 +74,7 @@ class SaleOrigin(models.TextChoices):
     LABOUTIK = "LB", _("Cash register")
     ADMIN = "AD", _("Administration")
     EXTERNAL = "EX", _("External")
+    QRCODE_MA = "QR", _("QrCode on my account")
 
 
 class PaymentMethod(models.TextChoices):
@@ -86,6 +87,8 @@ class PaymentMethod(models.TextChoices):
     STRIPE_FED = "SF", _("Online: federated Stripe")
     STRIPE_NOFED = "SN", _("Online: Stripe account")
     STRIPE_RECURENT = "SR", _("Recurring: Stripe account")
+    LOCAL_EURO = 'LE', _("Asset local fiat")
+    LOCAL_GIFT = 'LG', _("Asset local gift")
 
     @classmethod
     def online(cls):
@@ -159,7 +162,8 @@ class PostalAddress(models.Model):
                             'social_card': (1200, 630, True),
                         },
                         delete_orphans=True, verbose_name=_("Main image"),
-                        help_text=_("The main image of the adress, displayed in the head of the event page if no image on event.")
+                        help_text=_(
+                            "The main image of the adress, displayed in the head of the event page if no image on event.")
                         )
 
     sticker_img = StdImageField(upload_to='images/',
@@ -176,7 +180,6 @@ class PostalAddress(models.Model):
                                 help_text=_(
                                     "The small image displayed in the events list if not img on event. If None, Main img will be displayed. 4x3 ratio.")
                                 )
-
 
     street_address = models.TextField(
         verbose_name=_("Street address"),
@@ -753,11 +756,12 @@ def post_save_Product(sender, instance: Product, created, **kwargs):
             instance.poids = len(Product.objects.all()) + 1
         instance.save()
 
-    if instance.categorie_article == Product.FREERES :
-        try :
+    if instance.categorie_article == Product.FREERES:
+        try:
             Price.objects.get(product=instance, prix=0, publish=True)
         except Price.DoesNotExist:
             Price.objects.create(product=instance, name="Tarif gratuit", prix=0, publish=True)
+
 
 """
 Un autre post save existe dans .signals.py : send_membership_and_badge_product_to_fedow
@@ -890,10 +894,12 @@ class Event(models.Model):
 
     options_radio = models.ManyToManyField(OptionGenerale, blank=True, related_name="options_radio",
                                            verbose_name=_("Single choice menu"),
-                                           help_text=_("Des cases à cocher pendant la reservation. Un seul choix possible.")
+                                           help_text=_(
+                                               "Des cases à cocher pendant la reservation. Un seul choix possible.")
                                            )
     options_checkbox = models.ManyToManyField(OptionGenerale, blank=True, related_name="options_checkbox",
-                                              verbose_name=_("Des cases à cocher pendant la reservation. Plusieurs choix possibles."),)
+                                              verbose_name=_(
+                                                  "Des cases à cocher pendant la reservation. Plusieurs choix possibles."), )
 
     # cashless = models.BooleanField(default=False, verbose_name="Proposer la recharge cashless")
     minimum_cashless_required = models.SmallIntegerField(default=0,
@@ -912,7 +918,8 @@ class Event(models.Model):
                             'social_card': (1200, 630, True),
                         },
                         delete_orphans=True, verbose_name=_("Main image"),
-                        help_text=_("The main image of the event, displayed in the head of the event page and for social shares. If empty, the address image is displayed.")
+                        help_text=_(
+                            "The main image of the event, displayed in the head of the event page and for social shares. If empty, the address image is displayed.")
                         )
 
     def get_img(self):
@@ -1004,7 +1011,6 @@ class Event(models.Model):
 
     categorie = models.CharField(max_length=3, choices=TYPE_CHOICES, default=CONCERT,
                                  verbose_name=_("Event category"))
-
 
     # La relation parent / enfant
     parent = models.ForeignKey(
@@ -1119,7 +1125,7 @@ class Event(models.Model):
         """
 
         valid_tickets_count = self.valid_tickets_count()
-        under_purchase =self.under_purchase()
+        under_purchase = self.under_purchase()
 
         if valid_tickets_count + under_purchase >= self.jauge_max:
             return True
@@ -1564,7 +1570,7 @@ class Ticket(models.Model):
     payment_method = models.CharField(max_length=2, choices=PaymentMethod.choices, blank=True, null=True,
                                       verbose_name=_("Payment method"))
 
-    scanned_by = models.ForeignKey(ScanApp, on_delete=models.PROTECT, blank=True, null=True,)
+    scanned_by = models.ForeignKey(ScanApp, on_delete=models.PROTECT, blank=True, null=True, )
 
     def paid(self):
         if self.pricesold:
@@ -1806,7 +1812,7 @@ class LigneArticle(models.Model):
     # L'objet price sold. Contient l'id Stripe
     pricesold = models.ForeignKey(PriceSold, on_delete=models.CASCADE, verbose_name=_("Product sold"))
 
-    qty = models.SmallIntegerField()
+    qty = models.DecimalField(max_digits=12, decimal_places=6)
     amount = models.IntegerField(default=0, verbose_name=_("Value"))  # Centimes en entier (50.10€ = 5010)
 
     vat = models.DecimalField(max_digits=4, decimal_places=2, default=0, verbose_name=_("VAT"))
@@ -1820,6 +1826,10 @@ class LigneArticle(models.Model):
 
     payment_method = models.CharField(max_length=2, choices=PaymentMethod.choices, blank=True, null=True,
                                       verbose_name=_("Payment method"))
+
+    asset = models.UUIDField(blank=True, null=True, verbose_name=_("Asset"))
+    wallet = models.ForeignKey("AuthBillet.Wallet", blank=True, null=True, on_delete=models.PROTECT,
+                               verbose_name=_("Wallet from"))
 
     CANCELED, CREATED, UNPAID, PAID, FREERES, VALID, = 'C', 'O', 'U', 'P', 'F', 'V'
     TYPE_CHOICES = [
@@ -2162,7 +2172,6 @@ class FederatedPlace(models.Model):
 
     def __str__(self):
         return self.tenant.name
-
 
 
 class History(models.Model):
