@@ -339,6 +339,7 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
             'fields': (
                 #         'need_name',
                 'fuseau_horaire',
+                'language',
                 'jauge_max',
                 'allow_concurrent_bookings',
                 'currency_code',

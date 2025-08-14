@@ -36,6 +36,7 @@ from BaseBillet.models import Reservation, Ticket, Configuration, Membership, We
     GhostConfig, BrevoConfig, Product
 from MetaBillet.models import WaitingConfiguration
 from TiBillet.celery import app
+from fedow_connect.utils import dround
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +148,7 @@ def report_to_pdf(report):
 
 def create_membership_invoice_pdf(membership: Membership):
     config = Configuration.get_solo()
+    activate(config.language)
     template_name = 'invoice/invoice.html'
     font_config = FontConfiguration()
     template = get_template(template_name)
@@ -161,7 +163,6 @@ def create_membership_invoice_pdf(membership: Membership):
     }
 
     html = template.render(context)
-    activate('fr')
     css = CSS(string=
               '''
                 @font-face {
@@ -199,13 +200,12 @@ def create_membership_invoice_pdf(membership: Membership):
 
 def context_for_membership_email(membership: "Membership"):
     config = Configuration.get_solo()
-
+    activate(config.language)
     domain = connection.tenant.get_primary_domain().domain
     image_url = "https://tibillet.org/fr/img/design/logo-couleur.svg"
     if hasattr(config.img, 'med'):
         image_url = f"https://{domain}{config.img.med.url}"
 
-    activate("fr")
     membership.refresh_from_db()
     context = {
         'username': membership.member_name(),
@@ -412,6 +412,7 @@ def create_ticket_pdf(ticket: Ticket):
     qr.save(buffer_svg, kind='svg', scale=4.6)
 
     config = Configuration.get_solo()
+    activate(config.language)
 
     context = {
         'ticket': ticket,
@@ -423,7 +424,6 @@ def create_ticket_pdf(ticket: Ticket):
     # template_name = 'ticket/ticket_V2.html'
 
     # template_name = 'ticket/example_flight_ticket.html'
-    activate('fr')
     font_config = FontConfiguration()
     template = get_template(template_name)
     html = template.render(context)
@@ -499,7 +499,6 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
     :type tenant_name: str
     """
     logger.info(f'WORKDER CELERY app.task connexion_celery_mailer : {user_email}')
-    activate('fr')
 
     User = get_user_model()
     user = User.objects.get(email=user_email)
@@ -517,6 +516,7 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
     connexion_url = f"{base_url}/emailconfirmation/{token}"
     logger.info("connexion_celery_mailer -> connection.tenant.schema_name : {connection.tenant.schema_name}")
     config = Configuration.get_solo()
+    activate(config.language)
     organisation = config.organisation
 
     # Premier mail ou config non renseignée, on mets TiBIllet
@@ -590,7 +590,9 @@ def new_tenant_mailer(waiting_config_uuid: str):
         p_domain = connection.tenant.get_primary_domain().domain
         connexion_url = f"https://{p_domain}/tenant/{token}/emailconfirmation_tenant"
 
-        activate('fr')
+        config = Configuration.get_solo()
+        activate(config.language)
+
         mail = CeleryMailerClass(
             waiting_config.email,
             _("TiBillet : Creation of a new instance."),
@@ -1082,6 +1084,84 @@ def trigger_product_update_tasks(product_pk):
                 verify=bool(not settings.DEBUG),
             )
             logger.info(f"    send_to_laboutik : {send_to_laboutik.status_code} {send_to_laboutik.text}")
+
+
+@app.task
+def send_payment_success_admin(amount: int, payment_time_str: str, place: str, user_email: str):
+    """
+    Envoie un email à l'admin de l'instance pour confirmer la réception d'un paiement.
+    """
+    config = Configuration.get_solo()
+    activate(config.language)
+    admin_email = config.email
+    title = f"{config.organisation.capitalize()} - {str(dround(amount))}€ : " + _("Payment received via QR code.")
+
+    # Variables sémantiques pour le template
+    try:
+        dt = datetime.datetime.strptime(payment_time_str, '%d/%m/%Y %H:%M')
+        aware_dt = timezone.make_aware(dt, timezone.get_current_timezone())
+        payment_time_iso = aware_dt.isoformat()
+    except Exception:
+        payment_time_iso = timezone.now().isoformat()
+    currency_symbol = "€"
+    context = {
+        'title': title,
+        'amount': amount,
+        'payment_time': payment_time_str,
+        'payment_time_iso': payment_time_iso,
+        'place': place,
+        'user_email': user_email,
+        'organisation': config.organisation,
+        'now': timezone.now(),
+        'image_url': "https://tibillet.org/fr/img/design/logo-couleur.svg",
+        'currency_symbol': currency_symbol,
+    }
+    mail = CeleryMailerClass(
+        admin_email,
+        title,
+        template="reunion/views/qrcode_scan_pay/email/payment_success_admin.html",
+        context=context,
+    )
+    mail.send()
+    return bool(mail.sended)
+
+
+@app.task
+def send_payment_success_user(user_email: str, amount: int, payment_time_str: str, place: str):
+    """
+    Envoie un email à l'utilisateur pour confirmer que son paiement est bien passé.
+    """
+    config = Configuration.get_solo()
+    activate(config.language)
+
+    title = f"{config.organisation.capitalize()} - {str(dround(amount))}€ : " + _("Your payment has been validated.")
+    # Variables sémantiques pour le template
+    try:
+        dt = datetime.datetime.strptime(payment_time_str, '%d/%m/%Y %H:%M')
+        aware_dt = timezone.make_aware(dt, timezone.get_current_timezone())
+        payment_time_iso = aware_dt.isoformat()
+    except Exception:
+        payment_time_iso = timezone.now().isoformat()
+    currency_symbol = "€"
+    context = {
+        'title': title,
+        'amount': amount,
+        'payment_time': payment_time_str,
+        'payment_time_iso': payment_time_iso,
+        'place': place,
+        'organisation': config.organisation,
+        'now': timezone.now(),
+        'image_url': "https://tibillet.org/fr/img/design/logo-couleur.svg",
+        'currency_symbol': currency_symbol,
+    }
+    mail = CeleryMailerClass(
+        user_email,
+        title,
+        template="reunion/views/qrcode_scan_pay/email/payment_success_user.html",
+        context=context,
+    )
+    mail.send()
+    return bool(mail.sended)
 
 
 @app.task

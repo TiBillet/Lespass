@@ -45,7 +45,8 @@ from BaseBillet.models import Configuration, Ticket, Product, Event, Paiement_st
     Price, ProductSold, PaymentMethod
 from BaseBillet.permissions import HasScanApi
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, new_tenant_mailer, \
-    contact_mailer, new_tenant_after_stripe_mailer, send_to_ghost_email, send_sale_to_laboutik
+    contact_mailer, new_tenant_after_stripe_mailer, send_to_ghost_email, send_sale_to_laboutik, \
+    send_payment_success_admin, send_payment_success_user
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
     ReservationValidator, ContactValidator
 from Customers.models import Client, Domain
@@ -1030,6 +1031,16 @@ class QrCodeScanPay(viewsets.ViewSet):
             template_context['payment_time'] = timezone.now().strftime("%d/%m/%Y %H:%M")
             template_context['user_balance'] = fedow_api.wallet.get_total_euro_token(user)
 
+            # Envoi des emails de confirmation (admin et utilisateur)
+            try:
+                payment_time_str = template_context['payment_time']
+                place = tenant.name
+                # Email admin
+                send_payment_success_admin.delay(amount, payment_time_str, place, user.email)
+                # Email user
+                send_payment_success_user.delay(user.email, amount, payment_time_str, place)
+            except Exception as e_mail:
+                logger.error(f"Error sending payment confirmation emails: {e_mail}")
 
             return render(request, "reunion/views/qrcode_scan_pay/payment_confirmation.html", context=template_context)
 

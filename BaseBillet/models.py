@@ -362,6 +362,12 @@ class Configuration(SingletonModel):
                                       choices=TZ_CHOICES,
                                       verbose_name=_("Timezone"),
                                       )
+    FRENCH, ENGLISH = 'fr', 'en'
+    LANGUAGE_CHOICES = [
+        (FRENCH, _('French')),
+        (ENGLISH, _('English')),
+    ]
+    language = models.CharField(max_length=2, choices=LANGUAGE_CHOICES, default=FRENCH)
 
     # noinspection PyUnresolvedReferences
     def img_variations(self):

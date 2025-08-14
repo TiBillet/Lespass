@@ -1,0 +1,51 @@
+{% extends 'emails/base.html' %}
+{% load humanize static i18n l10n tibitags %}
+
+{% block content %}
+<tr>
+  <td class="pt-28 td_content" style="background:#fff; padding:44px 64px 57px; border:1px solid #dcdcd9; border-radius:8px;">
+    <table align="center" cellpadding="0" cellspacing="0" class="w-100p" style="max-width:472px; margin:0 auto;" width="472">
+      <table>
+        <tr>
+          <td>
+            <table style="border-spacing: 0px;">
+              <tr>
+                <td valign="middle">
+                  <span style="font-weight:bold;color:#636360;font:10px Arial-Bold, Helvetica-Bold, sans-serif;text-transform:uppercase;">{% trans "Payment confirmed" %}</span>
+                  <span style="color:transparent;display:none;height:0;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;visibility:hidden;width:0;">&nbsp;|&nbsp;</span>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <h1 style="font-weight:400;style:regular;color:#1d1d1b;font:24px/32px Arial, Helvetica, sans-serif;margin: 30px 0 30px;">{% trans "Your payment has been successfully processed." %}</h1>
+          <td style="padding: 24px 0 24px 0; ">
+            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 16px 0;">
+              {% trans "Hello" %},
+            </p>
+            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 16px 0;">
+              {% trans "We confirm that your payment has been validated." %}
+            </p>
+            <ul style="color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 16px 0;">
+              <li><b>{% trans "Amount" %}</b> : <data value="{{ amount|dround }}" data-currency="€">{{ amount|dround }} €</data></li>
+              <li><b>{% trans "Time" %}</b> : <time datetime="{{ payment_time_iso }}">{{ payment_time }}</time></li>
+              <li><b>{% trans "Place" %}</b> : {{ place }}</li>
+            </ul>
+          </td>
+        </tr>
+
+        <tr>
+          <td>
+            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;padding-top:16px;">
+              {% trans "Thanks for trusting us." %},<br/>{{ organisation }}
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </table>
+  </td>
+</tr>
+{% endblock %}
