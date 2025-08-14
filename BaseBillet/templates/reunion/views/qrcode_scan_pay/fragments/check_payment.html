@@ -1,0 +1,12 @@
+<div class="text-center mb-3" id="check-payment-button">
+  {% if is_valid %}
+    <span class="badge bg-success">paiement validé</span>
+  {% else %}
+    <button class="btn btn-outline-warning"
+            hx-get="{% url 'qrcodescanpay-check-payment' pk=ligne_article_uuid_hex %}"
+            hx-target="#check-payment-button"
+            hx-swap="outerHTML">
+      paiement toujours en attente. Cliquez pour vérifier de nouveaux
+    </button>
+  {% endif %}
+</div>

@@ -54,6 +54,16 @@
                                     {{ qrcode_svg|safe }}
                                 </div>
                             </div>
+
+                            <!-- Payment status check button using HTMX -->
+                            <div class="text-center mb-3" id="check-payment-button">
+                                <button class="btn btn-outline-success"
+                                        hx-target="#check-payment-button"
+                                        hx-get="{% url 'qrcodescanpay-check-payment' pk=ligne_article_uuid_hex %}"
+                                        hx-swap="outerHTML">
+                                    Vérifier le paiement
+                                </button>
+                            </div>
                             
                             <div class="d-grid gap-2">
                                 <a href="{% url 'qrcodescanpay-get-generator' %}" class="btn btn-primary">

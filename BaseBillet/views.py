@@ -772,6 +772,26 @@ class QrCodeScanPay(viewsets.ViewSet):
     permission_classes = [permissions.IsAuthenticated, ]
 
 
+    @action(detail=True, methods=['GET'])
+    def check_payment(self, request: HttpRequest, pk=None):
+        user = request.user
+        this_tenant: Client = connection.tenant
+        if not user.is_tenant_admin(this_tenant):
+            return HttpResponse(status=403)
+
+        la_uuid = uuid.UUID(pk)
+        is_valid = False
+        try:
+            is_valid = LigneArticle.objects.filter(uuid=la_uuid, status=LigneArticle.VALID).exists()
+        except Exception:
+            pass
+
+        context = {
+            "is_valid": is_valid,
+            "ligne_article_uuid_hex": la_uuid.hex,
+        }
+        return render(request, "reunion/views/qrcode_scan_pay/fragments/check_payment.html", context=context)
+
     @action(detail=False, methods=['GET'])
     def get_generator(self, request: HttpRequest):
 
@@ -843,6 +863,7 @@ class QrCodeScanPay(viewsets.ViewSet):
         template_context['asset_type'] = asset_type
         template_context['qrcode_svg'] = svg_data
         template_context['qrcode_content'] = qr_code_content
+        template_context['ligne_article_uuid_hex'] = qr_data
 
         return render(request, "reunion/views/qrcode_scan_pay/generator.html", context=template_context)
 
@@ -996,6 +1017,7 @@ class QrCodeScanPay(viewsets.ViewSet):
             total_amount = ligne_article.amount
             metadata['transactions'] = transactions
             pricesold = ligne_article.pricesold
+            ex_ligne_article_uuid = ligne_article.uuid
             ligne_article.delete()
             for transaction in transactions:
                 # On récupère les infos de l'asset :
@@ -1009,6 +1031,7 @@ class QrCodeScanPay(viewsets.ViewSet):
 
                 # Create LigneArticle with metadata containing admin email
                 ligne_article = LigneArticle.objects.create(
+                    uuid = ex_ligne_article_uuid if transactions.index(transaction) == 0 else uuid.uuid4(),
                     pricesold=pricesold,
                     qty=dround(Decimal(transaction['amount']/total_amount)),
                     amount=transaction['amount'],
