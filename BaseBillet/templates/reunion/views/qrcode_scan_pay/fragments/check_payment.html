@@ -1,12 +1,20 @@
-<div class="text-center mb-3" id="check-payment-button">
+<div class="my-3" id="check-payment-button" role="status" aria-live="polite">
   {% if is_valid %}
-    <span class="badge bg-success">paiement validé</span>
+    <div class="d-grid">
+      <div class="bg-success text-white fw-bold text-center mb-0 py-3 rounded-3">
+        Paiement validé
+      </div>
+    </div>
   {% else %}
-    <button class="btn btn-outline-warning"
-            hx-get="{% url 'qrcodescanpay-check-payment' pk=ligne_article_uuid_hex %}"
-            hx-target="#check-payment-button"
-            hx-swap="outerHTML">
-      paiement toujours en attente. Cliquez pour vérifier de nouveaux
-    </button>
+    <div class="d-grid">
+      <button type="button"
+              class="btn btn-warning btn-lg py-3 fw-bold w-100 text-dark"
+              hx-get="{% url 'qrcodescanpay-check-payment' pk=ligne_article_uuid_hex %}"
+              hx-target="#check-payment-button"
+              hx-swap="outerHTML"
+              aria-label="Vérifier le statut du paiement">
+        Paiement en attente. Vérifier maintenant
+      </button>
+    </div>
   {% endif %}
 </div>

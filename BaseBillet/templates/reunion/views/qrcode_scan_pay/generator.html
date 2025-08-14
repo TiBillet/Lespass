@@ -34,6 +34,14 @@
                                             max-height: 100%;
                                             object-fit: contain;
                                             aspect-ratio: 1/1;
+                                            background-color: #ffffff; /* keep white even if parent goes dark */
+                                            filter: none !important; /* avoid dark-mode inversion */
+                                        }
+
+                                        /* Ensure the QR container stays white in all themes */
+                                        .qr-code-container {
+                                            background-color: #ffffff !important;
+                                            filter: none !important;
                                         }
                                         
                                         /* Responsive adjustments */
@@ -50,23 +58,38 @@
                                                 max-width: 450px !important;
                                             }
                                         }
+
+                                        /* Dark mode reinforcement */
+                                        @media (prefers-color-scheme: dark) {
+                                            .qr-code-container,
+                                            .qr-code-container svg {
+                                                background-color: #ffffff !important;
+                                                filter: none !important;
+                                            }
+                                        }
                                     </style>
                                     {{ qrcode_svg|safe }}
                                 </div>
                             </div>
 
                             <!-- Payment status check button using HTMX -->
-                            <div class="text-center mb-3" id="check-payment-button">
-                                <button class="btn btn-outline-success"
-                                        hx-target="#check-payment-button"
-                                        hx-get="{% url 'qrcodescanpay-check-payment' pk=ligne_article_uuid_hex %}"
-                                        hx-swap="outerHTML">
-                                    Vérifier le paiement
-                                </button>
+                            <div class="my-3" id="check-payment-button" role="status" aria-live="polite">
+                                <div class="d-grid">
+                                    <button type="button"
+                                            class="btn btn-warning btn-lg py-3 fw-bold w-100 text-dark"
+                                            hx-target="#check-payment-button"
+                                            hx-get="{% url 'qrcodescanpay-check-payment' pk=ligne_article_uuid_hex %}"
+                                            hx-swap="outerHTML"
+                                            aria-label="Vérifier le statut du paiement">
+                                        Vérifier le paiement
+                                    </button>
+                                </div>
                             </div>
                             
                             <div class="d-grid gap-2">
-                                <a href="{% url 'qrcodescanpay-get-generator' %}" class="btn btn-primary">
+                                <a href="{% url 'qrcodescanpay-get-generator' %}"
+                                   class="btn btn-primary btn-lg py-3 w-100 fw-bold text-white"
+                                   aria-label="{% translate 'Generate Another QR Code' %}">
                                     {% translate 'Generate Another QR Code' %}
                                 </a>
                             </div>

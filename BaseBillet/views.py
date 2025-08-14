@@ -852,7 +852,7 @@ class QrCodeScanPay(viewsets.ViewSet):
         
         # Create SVG QR code
         buffer = BytesIO()
-        qr.save(buffer, kind='svg', scale=8)
+        qr.save(buffer, kind='svg', scale=8, dark='#000000', light='#FFFFFF')
         buffer.seek(0)
         svg_data = buffer.getvalue().decode('utf-8')
         

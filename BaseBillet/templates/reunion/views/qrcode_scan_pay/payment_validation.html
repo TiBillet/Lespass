@@ -25,11 +25,11 @@
                                 <p class="m-0 fw-bold">{% translate 'Your wallet is too low. Please add money to pay.' %}</p>
                             </div>
                             <div class="d-grid gap-2">
-                                <a href="{% url 'my_account-list' %}" class="btn btn-primary btn-lg">
+                                <a href="{% url 'my_account-list' %}" class="btn btn-primary btn-lg py-3 w-100 fw-bold text-white" aria-label="{% translate 'Recharge My Wallet' %}">
                                     <i class="bi bi-plus-circle-fill me-2"></i>
                                     {% translate 'Recharge My Wallet' %}
                                 </a>
-                                <a href="{% url 'qrcodescanpay-list' %}" class="btn btn-outline-secondary">
+                                <a href="{% url 'qrcodescanpay-list' %}" class="btn btn-danger btn-lg py-3 w-100 fw-bold text-white" aria-label="{% translate 'Cancel' %}">
                                     {% translate 'Cancel' %}
                                 </a>
                             </div>
@@ -55,11 +55,11 @@
 {#                                </div>#}
 
                                 <div class="d-grid gap-2">
-                                    <button type="submit" class="btn btn-success btn-lg">
+                                    <button type="submit" class="btn btn-success btn-lg py-3 w-100 fw-bold" aria-label="{% translate 'Confirm Payment' %}">
                                         <span>{% translate 'Confirm Payment' %}</span>
                                     </button>
 
-                                    <a href="{% url 'qrcodescanpay-list' %}" class="btn btn-outline-secondary">
+                                    <a href="{% url 'qrcodescanpay-list' %}" class="btn btn-danger btn-lg py-3 w-100 fw-bold text-white" aria-label="{% translate 'Cancel' %}">
                                         {% translate 'Cancel' %}
                                     </a>
                                 </div>
