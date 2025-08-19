@@ -76,6 +76,7 @@ class TransactionSimpleValidator(serializers.Serializer):
 
     FIRST, SALE, CREATION, REFILL, TRANSFER, SUBSCRIBE, BADGE, FUSION, REFUND, VOID = 'FST', 'SAL', 'CRE', 'REF', 'TRF', 'SUB', 'BDG', 'FUS', 'RFD', 'VID'
     QRCODE_SALE = 'QRS'
+    DEPOSIT = 'BNK'
 
     TYPE_ACTION = (
         (FIRST, _("First block")),
@@ -89,6 +90,7 @@ class TransactionSimpleValidator(serializers.Serializer):
         (FUSION, _('Wallet merge')),
         (REFUND, _('Refund')),
         (VOID, 'Pass card / wallet dissociation'),
+        (DEPOSIT, 'Remise en banque'),
     )
     action = serializers.ChoiceField(choices=TYPE_ACTION)
     get_action_display = serializers.CharField()
