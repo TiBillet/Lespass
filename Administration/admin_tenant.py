@@ -15,7 +15,7 @@ from django.core.signing import TimestampSigner
 from django.db import models, connection, IntegrityError
 from django.contrib import admin
 from django.contrib import messages
-from django.db.models import Model
+from django.db.models import Model, Sum, F, IntegerField, ExpressionWrapper, Count, Q, Prefetch
 from django.forms import ModelForm, TextInput, Form, modelformset_factory
 from django.forms.utils import ErrorList
 from django.http import HttpResponse, HttpRequest, HttpResponseRedirect
@@ -35,6 +35,7 @@ from solo.admin import SingletonModelAdmin
 
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.components import register_component, BaseComponent
+from unfold.sections import TableSection, TemplateSection
 from unfold.decorators import display, action
 from unfold.sites import UnfoldAdminSite
 # from unfold.widgets import UnfoldAdminTextInputWidget, UnfoldAdminEmailInputWidget, UnfoldAdminSelectWidget, \
@@ -1450,12 +1451,82 @@ class EventForm(ModelForm):
             logger.error(f"set gauge max error : {e}")
             pass
 
-        # Filtrage des produits : uniquement des produits adhésions.
-        # Possible facilement car Foreign Key (voir get_search_results dans ProductAdmin)
-        # self.fields['adhesion_obligatoire'].queryset = Product.objects.filter(
-        #     categorie_article=Product.ADHESION,
-        #     archive=False,
-        # )
+
+
+class EventPricesSummaryTable(TableSection):
+    verbose_name = _("Résumé par tarif")
+    height = 240
+    related_name = "pricesold_for_sections"  # Event property returning Ticket queryset with annotations
+    fields = ["price_name", "qty_reserved", "total_euros"]
+
+    def price_name(self, instance: Ticket):
+        # Prefer annotated name to avoid extra queries
+        name = getattr(instance, "section_price_name", None)
+        if name:
+            return name
+        try:
+            return instance.pricesold.price.name if instance.pricesold and instance.pricesold.price else "—"
+        except Exception:
+            return "—"
+
+    def qty_reserved(self, instance: Ticket):
+        qty = getattr(instance, "section_qty_reserved", None)
+        if qty is None:
+            qty = 0
+        try:
+            from decimal import Decimal
+            if isinstance(qty, Decimal):
+                return int(qty) if qty == qty.to_integral() else qty
+            return int(qty) if float(qty).is_integer() else qty
+        except Exception:
+            return qty
+
+    def total_euros(self, instance: Ticket):
+        euros = getattr(instance, "section_euros_total", None)
+        if euros is None:
+            euros = 0
+        try:
+            from decimal import Decimal
+            return (Decimal(euros)).quantize(Decimal("1.00"))
+        except Exception:
+            return 0
+
+
+class ChildActionsSummaryTable(TableSection):
+    verbose_name = _("Action bénévoles")
+    height = 240
+    related_name = "children_pricesold_for_sections"
+    fields = ["price_name", "qty_reserved"]
+
+    def price_name(self, instance: Ticket):
+        name = getattr(instance, "section_price_name", None)
+        if name:
+            return name
+        try:
+            return instance.reservation.event.name if instance.reservation and instance.reservation.event else "Oups"
+        except Exception:
+            return "—"
+
+    def qty_reserved(self, instance: Ticket):
+        qty = getattr(instance, "section_qty_reserved", None)
+        if qty is None:
+            qty = 0
+        try:
+            from decimal import Decimal
+            if isinstance(qty, Decimal):
+                return int(qty) if qty == qty.to_integral() else qty
+            return int(qty) if float(qty).is_integer() else qty
+        except Exception:
+            return qty
+
+    # Hide the section entirely if the event has no children
+    def render(self):
+        try:
+            if not self.instance.children.exists():
+                return ""
+        except Exception:
+            return ""
+        return super().render()
 
 
 @admin.register(Event, site=staff_admin_site)
@@ -1463,6 +1534,13 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     form = EventForm
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
+
+    # Unfold sections (expandable rows)
+    list_sections = [
+        EventPricesSummaryTable,
+        ChildActionsSummaryTable,
+    ]
+    list_per_page = 20
 
     resource_classes = [EventImportResource]
     export_form_class = ExportForm
@@ -1558,8 +1636,27 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
         # Les events action et les events children doivent s'afficher dans un inline
-        return queryset.exclude(categorie=Event.ACTION).exclude(parent__isnull=False).select_related(
-            'postal_address').prefetch_related('tag', 'options_radio', 'options_checkbox', 'carrousel', 'products')
+        return (
+            queryset
+            .exclude(categorie=Event.ACTION)
+            .exclude(parent__isnull=False)
+            .select_related('postal_address')
+            .prefetch_related(
+                'tag', 'options_radio', 'options_checkbox', 'carrousel', 'products',
+                Prefetch(
+                    'reservation',
+                    queryset=Reservation.objects.select_related('user_commande')
+                    .only('pk', 'datetime', 'status', 'user_commande__email', 'event')
+                ),
+            )
+            .annotate(
+                valid_tickets_count_annotated=Count(
+                    'reservation__tickets',
+                    filter=~Q(reservation__tickets__status__in=[Ticket.CREATED, Ticket.NOT_ACTIV]),
+                    distinct=True,
+                )
+            )
+        )
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
@@ -1578,7 +1675,12 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
 
     @display(description=_("Valid tickets"))
     def display_valid_tickets_count(self, instance: Event):
-        return f"{instance.valid_tickets_count()} / {instance.jauge_max}"
+        # Use annotated value to avoid N+1; fallback to method if not present (e.g., detail page)
+        count = getattr(instance, 'valid_tickets_count_annotated', None)
+        if count is None:
+            count = instance.valid_tickets_count()
+        return f"{count} / {instance.jauge_max}"
+
 
     @action(
         description=_("Duplicate (day+1)"),

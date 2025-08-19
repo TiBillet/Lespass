@@ -1157,6 +1157,58 @@ class Event(models.Model):
     def published_prices(self) -> QuerySet:
         return Price.objects.filter(product__in=self.products.all(), publish=True)
 
+    @property
+    def pricesold_for_sections(self):
+        from django.db.models import Q, F, Count, Sum, Window
+        # Tickets-based rows: one row per price (using Ticket queryset with window aggregates)
+        valid_statuses = [Ticket.NOT_SCANNED, Ticket.SCANNED]
+        return (
+            Ticket.objects
+            .filter(reservation__event=self, status__in=valid_statuses)
+            .select_related('pricesold__price')
+            .annotate(
+                section_price_uuid=F('pricesold__price__uuid'),
+                section_price_name=F('pricesold__price__name'),
+                section_qty_reserved=Window(
+                    expression=Count('pk'),
+                    partition_by=[F('pricesold__price_id')],
+                ),
+                section_euros_total=Window(
+                    expression=Sum(F('pricesold__price__prix')),
+                    partition_by=[F('pricesold__price_id')],
+                ),
+            )
+            .order_by('pricesold__price_id')
+            .distinct('pricesold__price_id')
+        )
+
+    @property
+    def children_pricesold_for_sections(self):
+        from django.db.models import F, Count, Window
+        # Render only when there are children; otherwise return empty queryset
+        try:
+            if not self.children.exists():
+                return Ticket.objects.none()
+        except Exception:
+            return Ticket.objects.none()
+
+        valid_statuses = [Ticket.NOT_SCANNED, Ticket.SCANNED]
+        return (
+            Ticket.objects
+            .filter(reservation__event__parent=self, status__in=valid_statuses)
+            .select_related('pricesold__price')
+            .annotate(
+                section_price_uuid=F('pricesold__price__uuid'),
+                section_price_name=F('pricesold__price__name'),
+                section_qty_reserved=Window(
+                    expression=Count('pk'),
+                    partition_by=[F('pricesold__price_id')],
+                ),
+            )
+            .order_by('pricesold__price_id')
+            .distinct('pricesold__price_id')
+        )
+
     def save(self, *args, **kwargs):
         """
         Transforme le titre de l'evenemennt en slug, pour en faire une url lisible
@@ -1497,8 +1549,8 @@ class Reservation(models.Model):
         total_paid = 0
         for ligne_article in self.articles_paid():
             ligne_article: LigneArticle
-            total_paid += dround(ligne_article.amount * ligne_article.qty)
-        return total_paid
+            total_paid += int(ligne_article.amount * ligne_article.qty) # int car on multiplie un int par un float
+        return dround(total_paid)
 
     def __str__(self):
         return f"{self.user_commande.email} - {str(self.uuid).partition('-')[0]}"
