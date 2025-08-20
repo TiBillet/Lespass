@@ -328,6 +328,64 @@ def send_stripe_bank_deposit_to_laboutik(self, payload):
     except MaxRetriesExceededError:
         logger.error(f"La tâche a échoué après plusieurs tentatives pour {url}")
 
+@shared_task(bind=True, max_retries=20)
+def send_refund_to_laboutik(self, ligne_article_pk):
+    # Le max de temps entre deux retries : 24 heures
+    MAX_RETRY_TIME = 86400  # 24 * 60 * 60 seconds = 24 h
+    config = Configuration.get_solo()
+
+    # On check si le serveur cashless est bien opérationnel :
+    try:
+        if not config.check_serveur_cashless():
+            logger.warning(f"No serveur cashless on config. Article not sended")
+            return True
+    except Exception as exc:
+        logger.error(f"Erreur lors de config.check_serveur_cashless() Serveur down ?")
+        # Ajoute un backoff exponentiel pour les autres erreurs
+        retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
+        raise self.retry(exc=exc, countdown=retry_delay)
+    except MaxRetriesExceededError:
+        logger.error(f"La tâche a échoué après plusieurs tentatives pour {config.check_serveur_cashless()}")
+
+    # Tache lancé sur un celery. Le save n'est peut être pas encore réalisé coté trigger.
+    ligne_article = LigneArticle.objects.get(pk=ligne_article_pk)
+    logger.info(f"send_refund_to_laboutik -> ligne_article status : {ligne_article.get_status_display()}")
+
+    serialized_ligne_article = LigneArticleSerializer(ligne_article).data
+    json_data = json.dumps(serialized_ligne_article, cls=DjangoJSONEncoder)
+
+    url = f'{config.server_cashless}/api/refundfromlespass'
+    try:
+        logger.info(f"start celery_post_request to {url}")
+        response = requests.post(
+            url,
+            headers={
+                "Authorization": f"Api-Key {config.key_cashless}",
+                "Content-type": "application/json",
+            },
+            data=json_data,
+            verify=bool(not settings.DEBUG),
+            timeout=2,
+        )
+
+        # Si la réponse est 404, on déclenche un retry
+        if response.status_code == 404:
+            # Augmente le délai de retry avec un backoff exponentiel
+            retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
+            raise self.retry(countdown=retry_delay)
+
+    except requests.exceptions.RequestException as exc:
+        # Log et retry en cas d’erreur réseau ou autre exception
+        logger.error(f"Erreur lors de l'envoi de la requête POST à {url}: {exc}")
+
+        # Ajoute un backoff exponentiel pour les autres erreurs
+        retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
+        raise self.retry(exc=exc, countdown=retry_delay)
+
+    except MaxRetriesExceededError:
+        logger.error(f"La tâche a échoué après plusieurs tentatives pour {url}")
+
+
 
 # @app.task
 @shared_task(bind=True, max_retries=20)
@@ -359,7 +417,6 @@ def send_sale_to_laboutik(self, ligne_article_pk):
         ligne_article.refresh_from_db()
         logger.info(f"send_sale_to_laboutik -> Ligne Article is Valid ? : {ligne_article.get_status_display()}")
 
-    # import ipdb; ipdb.set_trace()
     serialized_ligne_article = LigneArticleSerializer(ligne_article).data
     json_data = json.dumps(serialized_ligne_article, cls=DjangoJSONEncoder)
 

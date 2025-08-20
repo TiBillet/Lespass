@@ -15,7 +15,7 @@ from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, LigneArticle, Ticket, Paiement_stripe, Product, Price, \
     PaymentMethod, Membership, SaleOrigin, Configuration
 from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation, \
-    trigger_product_update_tasks
+    trigger_product_update_tasks, send_sale_to_laboutik, send_refund_to_laboutik
 from BaseBillet.triggers import TRIGGER_LigneArticlePaid_ActionByCategorie
 from fedow_connect.fedow_api import AssetFedow
 from fedow_connect.models import FedowConfig
@@ -115,6 +115,10 @@ def ligne_article_paid(old_instance: LigneArticle, new_instance: LigneArticle):
     # Si toutes les lignes sont validées, ça met le paiement stripe en valid.
     set_paiement_stripe_valid(old_instance, new_instance)
 
+def ligne_article_refunded(old_instance: LigneArticle, new_instance: LigneArticle):
+    logger.info(
+        f"    LIGNE ARTICLE ligne_article_refunded {new_instance} -> {old_instance.status} to {new_instance.status}")
+    send_refund_to_laboutik(new_instance.pk)
 
 ######################## SIGNAL RESERVATION ########################
 
@@ -272,7 +276,7 @@ PRE_SAVE_TRANSITIONS = {
         },
         LigneArticle.VALID: {
             LigneArticle.VALID: no_change,
-            LigneArticle.REFUNDED: no_change,
+            LigneArticle.REFUNDED: ligne_article_refunded,
             # après send_to_laboutik, on re-enregistre la ligne_article avec le status VALID
             '_else_': error_regression,
         }
