@@ -253,7 +253,8 @@ PRE_SAVE_TRANSITIONS = {
             '_else_': error_regression,
         },
         Paiement_stripe.VALID: {
-            '_all_': error_regression,
+            Paiement_stripe.REFUNDED: no_change,
+            '_else_': error_regression,
         }
     },
 
@@ -271,6 +272,7 @@ PRE_SAVE_TRANSITIONS = {
         },
         LigneArticle.VALID: {
             LigneArticle.VALID: no_change,
+            LigneArticle.REFUNDED: no_change,
             # après send_to_laboutik, on re-enregistre la ligne_article avec le status VALID
             '_else_': error_regression,
         }
@@ -297,7 +299,8 @@ PRE_SAVE_TRANSITIONS = {
             '_else_': error_regression,
         },
         Reservation.VALID: {
-            '_all_': error_regression,
+            Reservation.CANCELED: no_change,
+            '_else_': error_regression,
         }
     },
 

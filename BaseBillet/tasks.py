@@ -1170,3 +1170,51 @@ def test_logger():
     logger.info(f"{timezone.now()} info")
     logger.warning(f"{timezone.now()} warning")
     logger.error(f"{timezone.now()} error")
+
+
+
+@app.task
+def send_reservation_cancellation_user(reservation_uuid: str):
+    """
+    Envoie un email à l'utilisateur pour confirmer l'annulation de sa réservation.
+    """
+    config = Configuration.get_solo()
+    activate(config.language)
+
+    try:
+        reservation = Reservation.objects.get(pk=reservation_uuid)
+    except Reservation.DoesNotExist:
+        logger.error(f"send_reservation_cancellation_user: reservation {reservation_uuid} does not exist")
+        return False
+
+    title = f"{config.organisation.capitalize()} - " + _("Your reservation has been cancelled.")
+
+    # Image/logo du lieu
+    image_url_place = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    try:
+        domain = connection.tenant.get_primary_domain().domain
+        if hasattr(config, 'img') and hasattr(config.img, 'med') and config.img.med:
+            image_url_place = f"https://{domain}{config.img.med.url}"
+    except Exception:
+        pass
+
+    currency_symbol = "€"
+    context = {
+        'title': title,
+        'organisation': config.organisation,
+        'reservation': reservation,
+        'cancel_text': reservation.cancel_text(),
+        'refund_amount': reservation.total_paid(),
+        'currency_symbol': currency_symbol,
+        'now': timezone.now(),
+        'image_url_place': image_url_place,
+    }
+
+    mail = CeleryMailerClass(
+        reservation.user_commande.email,
+        title,
+        template="emails/reservation_cancellation.html",
+        context=context,
+    )
+    mail.send()
+    return bool(mail.sended)

@@ -19,6 +19,7 @@ from django.db.models import JSONField, SET_NULL, Sum
 from django.db.models import Q
 from django.db.models.query import QuerySet
 from django.db.models.signals import post_save
+from django.db.transaction import atomic
 from django.dispatch import receiver
 from django.urls import reverse
 from django.utils import timezone
@@ -1027,6 +1028,10 @@ class Event(models.Model):
         on_delete=models.CASCADE
     )
 
+    refund_deadline = models.PositiveSmallIntegerField(default=7, verbose_name=_("Refund deadline (days)"),
+                                                       help_text=_(
+                                                           "Number of days before the event to obtain a refund."))
+
     easy_reservation = models.BooleanField(default=False, verbose_name=_("Quick booking"),
                                            help_text=_("One-click booking for logged-in user."))
 
@@ -1539,9 +1544,9 @@ class Reservation(models.Model):
     def articles_paid(self):
         articles_paid = []
         for paiement in self.paiements.all():
-            for ligne in paiement.lignearticles.filter(
-                    Q(status=LigneArticle.PAID) | Q(status=LigneArticle.VALID)
-            ):
+            for ligne in paiement.lignearticles.filter(status__in=[
+                LigneArticle.PAID, LigneArticle.VALID, LigneArticle.REFUNDED
+            ]):
                 articles_paid.append(ligne)
         return articles_paid
 
@@ -1549,8 +1554,65 @@ class Reservation(models.Model):
         total_paid = 0
         for ligne_article in self.articles_paid():
             ligne_article: LigneArticle
-            total_paid += int(ligne_article.amount * ligne_article.qty) # int car on multiplie un int par un float
+            total_paid += int(ligne_article.amount * ligne_article.qty)  # int car on multiplie un int par un float
         return dround(total_paid)
+
+    def can_refund(self):
+        return timezone.localtime() < (self.event.datetime - timedelta(days=self.event.refund_deadline))
+
+    def cancel_text(self):
+        if self.can_refund():
+            return _("You will be refunded to the credit card used to make the reservation.") + " " + _(
+                "A 2 % fee will be applied for the bank transaction.")
+        else:
+            return _("The deadline for getting a refund has passed.")
+
+    @atomic
+    def cancel_and_refund(self):
+        if self.tickets.filter(status=Ticket.SCANNED).exists():
+            raise Exception(_("You cannot cancel a reservation that has been scanned."))
+
+        if self.total_paid() > 0 and self.can_refund():
+            config = Configuration.get_solo()
+            # stripe.api_key = config.get_stripe_api()
+            stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+            for paiement in self.paiements.all():
+                paiement: Paiement_stripe
+                checkout = paiement.get_checkout_session()
+                payment_intent = checkout.payment_intent
+                # On applique un 2% de frais pour rembourser les frais stripe de paiement
+                # ( les remboursements sont gratuit, mais quand même...)
+                amount = int(checkout.amount_total - (checkout.amount_total * Decimal(0.02)))
+
+                try:
+                    refund = stripe.Refund.create(
+                        payment_intent=payment_intent,
+                        reason='requested_by_customer',
+                        amount=amount,
+                        stripe_account=config.get_stripe_connect_account()
+                    )
+                    logger.info(f"Refund stripe : {refund.status}")
+                    paiement.status = Paiement_stripe.REFUNDED
+                    paiement.save()
+
+                    for lignearticle in paiement.lignearticles.all():
+                        lignearticle.status = LigneArticle.REFUNDED
+                        lignearticle.save()
+
+                except InvalidRequestError as e:
+                    logger.error(f"CheckoutStripe Refund InvalidRequestError {e}")
+                    raise Exception(f"CheckoutStripe Refund InvalidRequestError {e}")
+                except Exception as e:
+                    logger.error(f"CheckoutStripe Refund Exception : {e}")
+                    raise e
+
+        self.status = Reservation.CANCELED
+        for ticket in self.tickets.all():
+            ticket.status = Ticket.CANCELED
+            ticket.save()
+        self.save()
+
+        return self.cancel_text()
 
     def __str__(self):
         return f"{self.user_commande.email} - {str(self.uuid).partition('-')[0]}"
@@ -1610,12 +1672,13 @@ class Ticket(models.Model):
 
     pricesold = models.ForeignKey(PriceSold, on_delete=models.CASCADE, blank=True, null=True)
 
-    CREATED, NOT_ACTIV, NOT_SCANNED, SCANNED = 'C', 'N', 'K', 'S'
+    CREATED, NOT_ACTIV, NOT_SCANNED, SCANNED, CANCELED = 'C', 'N', 'K', 'S', 'R'
     SCAN_CHOICES = [
         (CREATED, _('Created')),
         (NOT_ACTIV, _('Inactive')),
         (NOT_SCANNED, _('Valid and not scanned')),
         (SCANNED, _('Valid and scanned')),
+        (CANCELED, _('Canceled')),
     ]
 
     status = models.CharField(max_length=1, choices=SCAN_CHOICES, default=CREATED,
@@ -1732,7 +1795,7 @@ class Paiement_stripe(models.Model):
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, blank=True, null=True)
 
-    NON, OPEN, PENDING, EXPIRE, PAID, VALID, NOTSYNC, CANCELED = 'N', 'O', 'W', 'E', 'P', 'V', 'S', 'C'
+    NON, OPEN, PENDING, EXPIRE, PAID, VALID, NOTSYNC, CANCELED, REFUNDED = 'N', 'O', 'W', 'E', 'P', 'V', 'S', 'C', 'R'
     STATUS_CHOICES = (
         (NON, 'Payment link not generated'),
         (OPEN, 'Sent to Stripe'),
@@ -1742,6 +1805,7 @@ class Paiement_stripe(models.Model):
         (VALID, 'Paid and confirmed'),  # envoyé sur serveur cashless
         (NOTSYNC, 'Paid but issues with Stripe sync'),  # envoyé sur serveur cashless qui retourne une erreur
         (CANCELED, 'Cancelled'),
+        (REFUNDED, 'Refunded'),
     )
     status = models.CharField(max_length=1, choices=STATUS_CHOICES, default=NON, verbose_name="Order status")
 
@@ -1779,7 +1843,11 @@ class Paiement_stripe(models.Model):
         if self.source == self.TRANSFERT:  # c'est un transfert de compte stripe
             payload = json.loads(self.metadata_stripe)
             return dround(payload["data"]["object"]["amount"])
-        return dround(self.lignearticles.all().aggregate(Sum('amount'))['amount__sum']) or 0
+
+        total = 0
+        for ligne in self.lignearticles.all():
+            total += int(ligne.amount * ligne.qty)
+        return dround(total)
 
     def uuid_8(self):
         return f"{self.uuid}".partition('-')[0]
@@ -1794,7 +1862,7 @@ class Paiement_stripe(models.Model):
     def articles(self):
         return " - ".join(
             [
-                f"{ligne.pricesold.productsold.product.name} / {ligne.pricesold.price.name} / {dround(ligne.qty * ligne.amount)}€"
+                f"{ligne.pricesold.productsold.product.name} / {ligne.pricesold.price.name} / {dround(int(ligne.qty * ligne.amount))}€"
                 for ligne in self.lignearticles.all()])
 
     def get_checkout_session(self):
@@ -1889,9 +1957,10 @@ class LigneArticle(models.Model):
     wallet = models.ForeignKey("AuthBillet.Wallet", blank=True, null=True, on_delete=models.PROTECT,
                                verbose_name=_("Wallet from"))
 
-    CANCELED, CREATED, UNPAID, PAID, FREERES, VALID, = 'C', 'O', 'U', 'P', 'F', 'V'
+    CANCELED, REFUNDED, CREATED, UNPAID, PAID, FREERES, VALID, = 'C', 'R', 'O', 'U', 'P', 'F', 'V'
     TYPE_CHOICES = [
         (CANCELED, _('Cancelled')),
+        (REFUNDED, _('Refunded')),
         (CREATED, _('Not sent to payment')),
         (UNPAID, _('Not paid')),
         (FREERES, _('Free booking')),

@@ -26,8 +26,28 @@
     <div id="ticketPanelBody" class="offcanvas-body"></div>
 </div>
 
+<script src="{% static 'mvt_htmx/js/sweetalert2@11.js' %}"></script>
+<script>
+  document.addEventListener("htmx:confirm", function(e) {
+    if (!e.detail.question) return;
+    e.preventDefault();
+    Swal.fire({
+      title: "Confirmer ?",
+      text: e.detail.question,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Oui",
+      cancelButtonText: "Non"
+    }).then(function(result) {
+      if (result.isConfirmed) {
+        e.detail.issueRequest(true);
+      }
+    });
+  });
+</script>
+
 {% for resa in reservations %}
-<div class="card my-5">
+<div class="card my-5 reservation-card">
     <div class="row g-0">
         <div class="col-md-4">
             {% include 'reunion/partials/picture.html' with img=resa.event.img alt=resa.event.name class='rounded-start' %}
@@ -51,6 +71,17 @@
                     <div class="p-2">{{ resa.total_paid }} €</div>
                     <div class="vr"></div>
                     <div class="p-2">{{ resa.get_status_display }}</div>
+                    <div class="vr"></div>
+                    <div class="p-2">
+                        <button
+                            class="btn btn-outline-danger btn-sm"
+                            hx-post="/my_account/{{ resa.uuid }}/cancel_reservation/"
+                            hx-confirm="{% if resa.total_paid > 0 %}{{ resa.cancel_text }}{% else %}J'annule ma reservation{% endif %}"
+                            hx-target="closest .reservation-card"
+                            hx-swap="delete">
+                            J'annule ma reservation
+                        </button>
+                    </div>
                 </div>
                 {% if resa.options.all|length > 0 %}
                 <p>

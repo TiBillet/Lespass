@@ -1580,6 +1580,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
                 'max_per_user',
                 'products',
                 'custom_confirmation_message',
+                'refund_deadline',
             ),
         }),
         (_('Publish'), {
@@ -2165,6 +2166,7 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
             return True, obj.get_status_display()
         elif obj.status == Ticket.SCANNED:
             return 'scanned', obj.get_status_display()
+        logger.info(f"state: {obj.status} - {obj.get_status_display()}")
         return None, obj.get_status_display()
 
     # noinspection PyTypeChecker

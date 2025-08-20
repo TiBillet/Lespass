@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+{% load i18n %}
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ title }}</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #111; }
+        .container { max-width: 640px; margin: 0 auto; padding: 24px; }
+        .header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+        .header img { height: 42px; }
+        .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 18px; }
+        .muted { color: #6b7280; font-size: 14px; }
+        .title { font-size: 20px; font-weight: 600; margin: 0 0 8px; }
+        .btn { display: inline-block; background: #111827; color: #fff; padding: 10px 16px; border-radius: 8px; text-decoration: none; }
+        .divider { height: 1px; background: #e5e7eb; margin: 16px 0; }
+        .list { margin: 0; padding-left: 18px; }
+        .footer { margin-top: 24px; color: #6b7280; font-size: 12px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        {% if image_url_place %}<img src="{{ image_url_place }}" alt="{{ organisation }}" />{% endif %}
+        <div>
+            <div class="title">{{ organisation }}</div>
+            <div class="muted">{{ now|date:"d/m/Y H:i" }}</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h1 class="title" style="margin-top:0">{{ title }}</h1>
+        <p>
+            {% if reservation.event %}
+                {% trans "Event:" %} <strong>{{ reservation.event.name }}</strong><br/>
+                {% if reservation.event.datetime %}{% trans "Date:" %} {{ reservation.event.datetime|date:"d/m/Y H:i" }}<br/>{% endif %}
+            {% endif %}
+            {% trans "Reservation ref:" %} <code>{{ reservation.uuid }}</code>
+        </p>
+
+        <div class="divider"></div>
+
+        <p>{% trans "Cancellation details:" %}</p>
+        <ul class="list">
+            <li>{{ cancel_text }}</li>
+            {% if refund_amount is not None %}
+            <li>{% trans "Amount concerned:" %} {{ refund_amount }}{{ currency_symbol }}</li>
+            {% endif %}
+        </ul>
+
+        <p class="muted">
+            {% trans "If you have any questions, simply reply to this email." %}
+        </p>
+    </div>
+
+    <div class="footer">
+        {{ organisation }} – {{ now|date:"c" }}
+    </div>
+</div>
+</body>
+</html>

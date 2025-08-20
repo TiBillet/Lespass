@@ -46,7 +46,7 @@ from BaseBillet.models import Configuration, Ticket, Product, Event, Paiement_st
 from BaseBillet.permissions import HasScanApi
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, new_tenant_mailer, \
     contact_mailer, new_tenant_after_stripe_mailer, send_to_ghost_email, send_sale_to_laboutik, \
-    send_payment_success_admin, send_payment_success_user
+    send_payment_success_admin, send_payment_success_user, send_reservation_cancellation_user
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
     ReservationValidator, ContactValidator
 from Customers.models import Client, Domain
@@ -530,6 +530,28 @@ class MyAccount(viewsets.ViewSet):
         context['account_tab'] = 'reservations'
 
         return render(request, "reunion/views/account/reservations.html", context=context)
+
+    @action(detail=True, methods=['POST'])
+    def cancel_reservation(self, request, pk):
+        resa = get_object_or_404(Reservation, pk=pk, user_commande=request.user)
+        # Prevent cancel if any ticket already scanned
+        if resa.tickets.filter(status=Ticket.SCANNED).exists():
+            messages.add_message(request, messages.ERROR, _("You cannot cancel a reservation with scanned tickets."))
+            return HttpResponseClientRedirect('/my_account/my_reservations/')
+        # Mark reservation as canceled
+        try:
+            cancel_text =resa.cancel_and_refund()
+            messages.add_message(request, messages.SUCCESS, _("Your reservation has been cancelled.") + f" {cancel_text}")
+            # Trigger email notification to the user via Celery
+            try:
+                send_reservation_cancellation_user.delay(str(resa.uuid))
+            except Exception as ce:
+                logger.error(f"Failed to queue cancellation email for reservation {resa.uuid}: {ce}")
+            return HttpResponseClientRedirect('/my_account/my_reservations/')
+        except Exception as e:
+            logger.error(f"Error canceling reservation {pk}: {e}")
+            messages.add_message(request, messages.ERROR, _("An error occurred while cancelling your reservation.") + f" : {e}")
+            return HttpResponseClientRedirect('/my_account/my_reservations/')
 
     @action(detail=False, methods=['GET'])
     def resend_activation_email(self, request):
