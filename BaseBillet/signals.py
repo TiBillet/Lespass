@@ -118,7 +118,7 @@ def ligne_article_paid(old_instance: LigneArticle, new_instance: LigneArticle):
 def ligne_article_refunded(old_instance: LigneArticle, new_instance: LigneArticle):
     logger.info(
         f"    LIGNE ARTICLE ligne_article_refunded {new_instance} -> {old_instance.status} to {new_instance.status}")
-    send_refund_to_laboutik(new_instance.pk)
+    send_refund_to_laboutik.delay(new_instance.pk)
 
 ######################## SIGNAL RESERVATION ########################
 
@@ -265,6 +265,7 @@ PRE_SAVE_TRANSITIONS = {
     'LIGNEARTICLE': {
         LigneArticle.CREATED: {
             LigneArticle.PAID: ligne_article_paid,
+            LigneArticle.REFUNDED: ligne_article_refunded, # dans le cas ou on ajoute une nouvelle ligne pour annoncer un remboursement de billet
         },
         LigneArticle.UNPAID: {
             LigneArticle.PAID: ligne_article_paid,
@@ -276,7 +277,6 @@ PRE_SAVE_TRANSITIONS = {
         },
         LigneArticle.VALID: {
             LigneArticle.VALID: no_change,
-            LigneArticle.REFUNDED: ligne_article_refunded,
             # après send_to_laboutik, on re-enregistre la ligne_article avec le status VALID
             '_else_': error_regression,
         }

@@ -1118,8 +1118,8 @@ class Event(models.Model):
         Renvoie la quantité de tous les ticket valide d'un évènement.
         Compte les billets achetés/réservés.
         """
-        return Ticket.objects.filter(reservation__event__pk=self.pk) \
-            .exclude(status__in=[Ticket.CREATED, Ticket.NOT_ACTIV]) \
+        return Ticket.objects.filter(reservation__event__pk=self.pk,
+                                     status__in=[Ticket.SCANNED, Ticket.NOT_SCANNED]) \
             .distinct().count()
 
     def under_purchase(self):
@@ -1562,13 +1562,12 @@ class Reservation(models.Model):
 
     def cancel_text(self):
         if self.can_refund():
-            return _("You will be refunded to the credit card used to make the reservation.") + " " + _(
-                "A 2 % fee will be applied for the bank transaction.")
+            return _("You will be refunded to the credit card used to make the reservation.")
         else:
             return _("The deadline for getting a refund has passed.")
 
     @atomic
-    def cancel_and_refund(self):
+    def cancel_and_refund_resa(self):
         if self.tickets.filter(status=Ticket.SCANNED).exists():
             raise Exception(_("You cannot cancel a reservation that has been scanned."))
 
@@ -1582,23 +1581,38 @@ class Reservation(models.Model):
                 payment_intent = checkout.payment_intent
                 # On applique un 2% de frais pour rembourser les frais stripe de paiement
                 # ( les remboursements sont gratuit, mais quand même...)
-                amount = int(checkout.amount_total - (checkout.amount_total * Decimal(0.02)))
+                # amount = int(checkout.amount_total - (checkout.amount_total * Decimal(0.02)))
 
                 try:
                     refund = stripe.Refund.create(
                         payment_intent=payment_intent,
                         reason='requested_by_customer',
-                        amount=amount,
+                        amount=checkout.amount_total,
                         stripe_account=config.get_stripe_connect_account()
                     )
                     logger.info(f"Refund stripe : {refund.status}")
                     paiement.status = Paiement_stripe.REFUNDED
                     paiement.save()
 
-                    for lignearticle in paiement.lignearticles.all():
-                        lignearticle.status = LigneArticle.REFUNDED
-                        lignearticle.save()
-
+                    for lignearticle in paiement.lignearticles.filter(status=LigneArticle.VALID):
+                        metadata = lignearticle.metadata if lignearticle.metadata else {}
+                        metadata['original_lignearticle_uuid'] = str(lignearticle.uuid)
+                        refunded_line = LigneArticle.objects.create(
+                            datetime=timezone.now(),
+                            pricesold=lignearticle.pricesold,
+                            qty=-lignearticle.qty,  # ! Attention negative
+                            amount=lignearticle.amount,
+                            vat=lignearticle.vat,
+                            paiement_stripe=paiement,
+                            payment_method=lignearticle.payment_method,
+                            asset=lignearticle.asset,
+                            wallet=lignearticle.wallet,
+                            status=LigneArticle.CREATED,
+                            sended_to_laboutik=False,
+                            metadata=metadata,
+                        )
+                        refunded_line.status = LigneArticle.REFUNDED  # pour envoyer le trigger qui va informer LaBoutik
+                        refunded_line.save()
                 except InvalidRequestError as e:
                     logger.error(f"CheckoutStripe Refund InvalidRequestError {e}")
                     raise Exception(f"CheckoutStripe Refund InvalidRequestError {e}")
@@ -1613,6 +1627,86 @@ class Reservation(models.Model):
         self.save()
 
         return self.cancel_text()
+
+    @atomic
+    def cancel_and_refund_ticket(self, ticket):
+        """
+        Cancel and refund a single ticket of this reservation.
+        - Refunds only the matching LigneArticle amount via Stripe (partial refund)
+        - Sets the LigneArticle to REFUNDED (if it was VALID) so signals trigger send_refund_to_laboutik
+        - Sets the Ticket status to CANCELED
+        """
+        # Basic guards
+        if ticket.reservation != self:
+            raise Exception(_("Ticket does not belong to this reservation."))
+        if ticket.status == Ticket.SCANNED:
+            raise Exception(_("You cannot cancel a ticket that has been scanned."))
+
+        refunded = False
+        # If reservation had a payment and refund deadline allows it, try partial refund
+        if self.total_paid() > 0 and self.can_refund():
+            config = Configuration.get_solo()
+            stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+
+            # Find the paiement/lignearticle corresponding to this ticket
+            for paiement in self.paiements.all():
+                try:
+                    checkout = paiement.get_checkout_session()
+                    payment_intent = checkout.payment_intent
+                except Exception:
+                    payment_intent = paiement.payment_intent_id
+
+                ligne = paiement.lignearticles.filter(
+                    pricesold=ticket.pricesold,
+                    status__in=[LigneArticle.PAID, LigneArticle.VALID]
+                ).first()
+                if not ligne:
+                    raise Exception(_("Ticket does not have a matching LigneArticle."))
+
+                amount = ligne.amount * 1  # un seul ticket !
+                try:
+                    if amount > 0 and payment_intent:
+                        refund = stripe.Refund.create(
+                            payment_intent=payment_intent,
+                            reason='requested_by_customer',
+                            amount=amount,
+                            stripe_account=config.get_stripe_connect_account()
+                        )
+                        logger.info(f"Partial refund stripe for one ticket: {refund.status}")
+                    # Update accounting line status to REFUNDED if it was VALID to trigger signals
+                    if ligne.status == LigneArticle.VALID:
+                        metadata = ligne.metadata if ligne.metadata else {}
+                        metadata['original_lignearticle_uuid'] = str(ligne.uuid)
+                        refunded_line = LigneArticle.objects.create(
+                            datetime=timezone.now(),
+                            pricesold=ligne.pricesold,
+                            qty=-1,  # ! Attention negative
+                            amount=ligne.amount,
+                            vat=ligne.vat,
+                            paiement_stripe=paiement,
+                            payment_method=ligne.payment_method,
+                            asset=ligne.asset,
+                            wallet=ligne.wallet,
+                            status=LigneArticle.CREATED,
+                            sended_to_laboutik=False,
+                            metadata=metadata,
+                        )
+                        refunded_line.status = LigneArticle.REFUNDED  # pour envoyer le trigger qui va informer LaBoutik
+                        refunded_line.save()
+                    refunded = True
+                    break
+                except InvalidRequestError as e:
+                    logger.error(f"Partial Refund InvalidRequestError {e}")
+                    raise Exception(f"Stripe refund error: {e}")
+                except Exception as e:
+                    logger.error(f"Partial Refund Exception : {e}")
+                    raise e
+
+        # Cancel the ticket regardless of refund result
+        ticket.status = Ticket.CANCELED
+        ticket.save()
+
+        return self.cancel_text() if refunded else _("Ticket cancelled.")
 
     def __str__(self):
         return f"{self.user_commande.email} - {str(self.uuid).partition('-')[0]}"
@@ -1990,7 +2084,7 @@ class LigneArticle(models.Model):
             if self.paiement_stripe.status in [Paiement_stripe.PAID, Paiement_stripe.VALID]:
                 logger.info("Total == 0. free price ? go -> update_amount()")
                 self.update_amount()
-        return self.amount * self.qty
+        return int(self.amount * self.qty)
 
     def total_decimal(self):
         return dround(self.total())

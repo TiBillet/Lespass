@@ -79,7 +79,8 @@ from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Pai
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
     FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel, BrevoConfig, ScanApp
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
-    webhook_membership, create_ticket_pdf, ticket_celery_mailer
+    webhook_membership, create_ticket_pdf, ticket_celery_mailer, send_ticket_cancellation_user, \
+    send_reservation_cancellation_user
 from Customers.models import Client
 from MetaBillet.models import WaitingConfiguration
 from fedow_connect.utils import dround
@@ -1653,7 +1654,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
             .annotate(
                 valid_tickets_count_annotated=Count(
                     'reservation__tickets',
-                    filter=~Q(reservation__tickets__status__in=[Ticket.CREATED, Ticket.NOT_ACTIV]),
+                    filter=Q(reservation__tickets__status__in=[Ticket.SCANNED, Ticket.NOT_SCANNED]),
                     distinct=True,
                 )
             )
@@ -1910,7 +1911,7 @@ class ReservationAdmin(ModelAdmin):
 
     @display(description=_("Ticket count"))
     def tickets_count(self, instance: Reservation):
-        return instance.tickets.count()
+        return instance.tickets.filter(status__in=[Ticket.SCANNED, Ticket.NOT_SCANNED]).count()
 
     @display(description=_("Options"))
     def options_str(self, instance: Reservation):
@@ -2216,7 +2217,7 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
     def ticket(self, instance: Ticket):
         return f"{instance.reservation.user_commande.email} {str(instance.uuid)[:8]}"
 
-    actions_row = ["get_pdf", "unscan"]
+    actions_row = ["get_pdf", "unscan", "cancel_refund_ticket", "cancel_refund_reservation"]
 
     @action(description=_("PDF"),
             url_path="ticket_pdf",
@@ -2247,6 +2248,61 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
                 request,
                 messages.SUCCESS,
                 _("Ticket unscanned successfully.")
+            )
+        return redirect(request.META["HTTP_REFERER"]) 
+
+    @action(
+        description=_("Cancel ONE"),
+        url_path="cancel_refund_ticket",
+        permissions=["custom_actions_row"],
+    )
+    def cancel_refund_ticket(self, request, object_id):
+        ticket = get_object_or_404(Ticket, pk=object_id)
+        try:
+            msg = ticket.reservation.cancel_and_refund_ticket(ticket)
+            # Trigger email notification to the user via Celery
+            try:
+                send_ticket_cancellation_user.delay(str(ticket.uuid))
+            except Exception as ce:
+                logger.error(f"Failed to queue cancellation email for ticket {ticket.uuid}: {ce}")
+
+            messages.add_message(
+                request,
+                messages.SUCCESS,
+                _("Ticket cancelled and refund processed where applicable.") + (f" {msg}" if msg else "")
+            )
+        except Exception as e:
+            messages.add_message(
+                request,
+                messages.ERROR,
+                _(f"Error while cancelling/refunding this ticket: {e}")
+            )
+        return redirect(request.META["HTTP_REFERER"]) 
+
+    @action(
+        description=_("Cancel ALL"),
+        url_path="cancel_refund_reservation",
+        permissions=["custom_actions_row"],
+    )
+    def cancel_refund_reservation(self, request, object_id):
+        ticket = get_object_or_404(Ticket, pk=object_id)
+        try:
+            msg = ticket.reservation.cancel_and_refund_resa()
+            # Trigger email notification to the user via Celery
+            try:
+                send_reservation_cancellation_user.delay(str(ticket.reservation.uuid))
+            except Exception as ce:
+                logger.error(f"Failed to queue cancellation email for reservation {ticket.reservation.uuid}: {ce}")
+            messages.add_message(
+                request,
+                messages.SUCCESS,
+                _("Reservation cancelled and refund processed where applicable.") + (f" {msg}" if msg else "")
+            )
+        except Exception as e:
+            messages.add_message(
+                request,
+                messages.ERROR,
+                _(f"Error while cancelling/refunding this reservation: {e}")
             )
         return redirect(request.META["HTTP_REFERER"])
 

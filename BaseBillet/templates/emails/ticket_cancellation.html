@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+{% load i18n %}
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ title }}</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #111; }
+        .container { max-width: 640px; margin: 0 auto; padding: 24px; }
+        .header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+        .header img { height: 42px; }
+        .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 18px; }
+        .muted { color: #6b7280; font-size: 14px; }
+        .title { font-size: 20px; font-weight: 600; margin: 0 0 8px; }
+        .divider { height: 1px; background: #e5e7eb; margin: 16px 0; }
+        .list { margin: 0; padding-left: 18px; }
+        .footer { margin-top: 24px; color: #6b7280; font-size: 12px; }
+        .label { color: #374151; font-weight: 600; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        {% if image_url_place %}<img src="{{ image_url_place }}" alt="{{ organisation }}" />{% endif %}
+        <div>
+            <div class="title">{{ organisation }}</div>
+            <div class="muted">{{ now|date:"d/m/Y H:i" }}</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h1 class="title" style="margin-top:0">{{ title }}</h1>
+        <p>
+            {% if event %}
+                <span class="label">{% trans "Event:" %}</span> <strong>{{ event.name }}</strong><br/>
+                {% if event_datetime %}<span class="label">{% trans "Date:" %}</span> {{ event_datetime|date:"d/m/Y H:i" }}<br/>{% endif %}
+            {% endif %}
+            <span class="label">{% trans "Ticket ref:" %}</span> <code>{{ ticket.numero_uuid }}</code><br/>
+            {% if ticket.seat %}<span class="label">{% trans "Seat:" %}</span> {{ ticket.seat }}<br/>{% endif %}
+            {% if ticket.first_name or ticket.last_name %}
+                <span class="label">{% trans "Holder:" %}</span> {{ ticket.first_name }} {{ ticket.last_name }}
+            {% endif %}
+        </p>
+
+        <div class="divider"></div>
+
+        <p class="label">{% trans "Cancellation details:" %}</p>
+        <ul class="list">
+            <li>{{ cancel_text }}</li>
+            {% if refund_amount %}
+            <li>{% trans "Amount concerned:" %} {{ refund_amount }}{{ currency_symbol }}</li>
+            {% endif %}
+        </ul>
+
+        <p class="muted">
+            {% trans "If you have any questions, simply reply to this email." %}
+        </p>
+    </div>
+
+    <div class="footer">
+        {{ organisation }} – {{ now|date:"c" }}
+    </div>
+</div>
+</body>
+</html>

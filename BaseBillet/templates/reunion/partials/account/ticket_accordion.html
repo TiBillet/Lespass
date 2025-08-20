@@ -4,6 +4,7 @@
 
 <div class="accordion accordion-flush" id="resa{{ resa.uuid }}Accordion">
     {% for ticket in resa.tickets.all %}
+        {% if ticket.status == ticket.NOT_SCANNED or ticket.status == ticket.SCANNED  %}
         <div class="accordion-item">
             <h4 class="accordion-header">
                 <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
@@ -82,6 +83,16 @@
                         aria-controls="ticketPanel">
                         {% translate "Display ticket" %}
                     </button>
+                    {% if ticket.status == ticket.NOT_SCANNED %}
+                    <button
+                        class="btn btn-outline-danger w-100 mt-3"
+                        hx-post="/my_account/{{ ticket.uuid }}/cancel_ticket/"
+                        hx-confirm="{% if ticket.reservation.total_paid > 0 %}{{ ticket.reservation.cancel_text }}{% else %}J'annule ce billet{% endif %}"
+                        hx-target="closest .accordion-item"
+                        hx-swap="delete">
+                        {% translate "Cancel this ticket" %}
+                    </button>
+                    {% endif %}
                     {% comment %}
                     <div class="row">
                         <div class="col-sm">
@@ -99,5 +110,6 @@
                 </div>
             </div>
         </div>
+        {% endif %}
     {% endfor %}
 </div>

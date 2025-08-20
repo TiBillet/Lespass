@@ -46,7 +46,7 @@ from BaseBillet.models import Configuration, Ticket, Product, Event, Paiement_st
 from BaseBillet.permissions import HasScanApi
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, new_tenant_mailer, \
     contact_mailer, new_tenant_after_stripe_mailer, send_to_ghost_email, send_sale_to_laboutik, \
-    send_payment_success_admin, send_payment_success_user, send_reservation_cancellation_user
+    send_payment_success_admin, send_payment_success_user, send_reservation_cancellation_user, send_ticket_cancellation_user
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
     ReservationValidator, ContactValidator
 from Customers.models import Client, Domain
@@ -540,7 +540,7 @@ class MyAccount(viewsets.ViewSet):
             return HttpResponseClientRedirect('/my_account/my_reservations/')
         # Mark reservation as canceled
         try:
-            cancel_text =resa.cancel_and_refund()
+            cancel_text =resa.cancel_and_refund_resa()
             messages.add_message(request, messages.SUCCESS, _("Your reservation has been cancelled.") + f" {cancel_text}")
             # Trigger email notification to the user via Celery
             try:
@@ -551,6 +551,27 @@ class MyAccount(viewsets.ViewSet):
         except Exception as e:
             logger.error(f"Error canceling reservation {pk}: {e}")
             messages.add_message(request, messages.ERROR, _("An error occurred while cancelling your reservation.") + f" : {e}")
+            return HttpResponseClientRedirect('/my_account/my_reservations/')
+
+    @action(detail=True, methods=['POST'])
+    def cancel_ticket(self, request, pk):
+        ticket = get_object_or_404(Ticket, pk=pk, reservation__user_commande=request.user)
+        try:
+            msg = ticket.reservation.cancel_and_refund_ticket(ticket)
+            messages.add_message(request, messages.SUCCESS, _("Your ticket has been cancelled.") + (f" {msg}" if msg else ""))
+            # Trigger email notification to the user via Celery
+            try:
+                send_ticket_cancellation_user.delay(str(ticket.uuid))
+            except Exception as ce:
+                logger.error(f"Failed to queue cancellation email for ticket {ticket.uuid}: {ce}")
+            if request.headers.get('HX-Request'):
+                return HttpResponse("")
+            return HttpResponseClientRedirect('/my_account/my_reservations/')
+        except Exception as e:
+            logger.error(f"Error canceling ticket {pk}: {e}")
+            messages.add_message(request, messages.ERROR, _("An error occurred while cancelling your ticket.") + f" : {e}")
+            if request.headers.get('HX-Request'):
+                return HttpResponse("", status=400)
             return HttpResponseClientRedirect('/my_account/my_reservations/')
 
     @action(detail=False, methods=['GET'])

@@ -369,6 +369,10 @@ def send_refund_to_laboutik(self, ligne_article_pk):
         )
 
         # Si la réponse est 404, on déclenche un retry
+        if response.status_code == 200:
+            logger.info("sended_to_laboutik = True")
+            ligne_article.sended_to_laboutik = True
+            ligne_article.save()
         if response.status_code == 404:
             # Augmente le délai de retry avec un backoff exponentiel
             retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
@@ -1255,13 +1259,22 @@ def send_reservation_cancellation_user(reservation_uuid: str):
     except Exception:
         pass
 
+    # Montant potentiel associé à ce ticket (indicatif)
+    refund_amount = 0
+    try:
+        if reservation.can_refund():
+            for ticket in reservation.tickets.all():
+                refund_amount += ticket.paid()
+    except Exception:
+        refund_amount = None
+
     currency_symbol = "€"
     context = {
         'title': title,
         'organisation': config.organisation,
         'reservation': reservation,
         'cancel_text': reservation.cancel_text(),
-        'refund_amount': reservation.total_paid(),
+        'refund_amount': refund_amount,
         'currency_symbol': currency_symbol,
         'now': timezone.now(),
         'image_url_place': image_url_place,
@@ -1271,6 +1284,71 @@ def send_reservation_cancellation_user(reservation_uuid: str):
         reservation.user_commande.email,
         title,
         template="emails/reservation_cancellation.html",
+        context=context,
+    )
+    mail.send()
+    return bool(mail.sended)
+
+
+
+@app.task
+def send_ticket_cancellation_user(ticket_uuid: str):
+    """
+    Envoie un email à l'utilisateur pour confirmer l'annulation d'un billet (ticket) individuel,
+    avec indication sur le remboursement selon la politique en vigueur.
+    """
+    config = Configuration.get_solo()
+    activate(config.language)
+
+    try:
+        ticket = Ticket.objects.get(pk=ticket_uuid)
+    except Ticket.DoesNotExist:
+        logger.error(f"send_ticket_cancellation_user: ticket {ticket_uuid} does not exist")
+        return False
+
+    reservation = ticket.reservation
+
+    title = f"{config.organisation.capitalize()} - " + _("Your ticket has been cancelled.")
+
+    # Image/logo du lieu
+    image_url_place = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    try:
+        domain = connection.tenant.get_primary_domain().domain
+        if hasattr(config, 'img') and hasattr(config.img, 'med') and config.img.med:
+            image_url_place = f"https://{domain}{config.img.med.url}"
+    except Exception:
+        pass
+
+    # Texte d'annulation (remboursement ou pas) réutilise la logique de réservation
+    cancel_text = reservation.cancel_text()
+
+    # Montant potentiel associé à ce ticket (indicatif)
+    refund_amount = None
+    try:
+        if reservation.can_refund():
+            refund_amount = ticket.paid()
+    except Exception:
+        refund_amount = None
+
+    currency_symbol = "€"
+    context = {
+        'title': title,
+        'organisation': config.organisation,
+        'reservation': reservation,
+        'ticket': ticket,
+        'event': reservation.event,
+        'event_datetime': reservation.event.datetime if reservation.event else None,
+        'cancel_text': cancel_text,
+        'refund_amount': refund_amount,
+        'currency_symbol': currency_symbol,
+        'now': timezone.now(),
+        'image_url_place': image_url_place,
+    }
+
+    mail = CeleryMailerClass(
+        reservation.user_commande.email,
+        title,
+        template="emails/ticket_cancellation.html",
         context=context,
     )
     mail.send()
