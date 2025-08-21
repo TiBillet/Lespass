@@ -863,7 +863,7 @@ def webhook_membership(membership_pk, solo_webhook_pk=None):
     if len(webhooks) > 0:
         membership = Membership.objects.get(pk=membership_pk)
         configuration = Configuration.get_solo()
-        # TODO: remplacer par un choix de champs sur l'admin
+        # TODO: remplacer par un choix de champs sur l'admin et un Serializer
         return_body = {
             "object": "membership",
             "pk": str(membership.pk),

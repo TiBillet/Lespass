@@ -46,7 +46,8 @@ from BaseBillet.models import Configuration, Ticket, Product, Event, Paiement_st
 from BaseBillet.permissions import HasScanApi
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, new_tenant_mailer, \
     contact_mailer, new_tenant_after_stripe_mailer, send_to_ghost_email, send_sale_to_laboutik, \
-    send_payment_success_admin, send_payment_success_user, send_reservation_cancellation_user, send_ticket_cancellation_user
+    send_payment_success_admin, send_payment_success_user, send_reservation_cancellation_user, \
+    send_ticket_cancellation_user, webhook_membership
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
     ReservationValidator, ContactValidator
 from Customers.models import Client, Domain
@@ -434,6 +435,9 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
                 user__isnull=True,
                 card_number=card_number).update(
                 user=user, first_name=user.first_name, last_name=user.last_name)
+            # Lancement du Webhook Membership
+            for membership in Membership.objects.filter(card_number=card_number):
+                webhook_membership.delay(membership.pk)
 
         return HttpResponseClientRedirect(request.headers['Referer'])
 

@@ -206,12 +206,13 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
         logger.info(f"    TRIGGER_A ADHESION PAID -> envoi à LaBoutik?")
         send_sale_to_laboutik.delay(self.ligne_article.pk)
 
-        # Envoi des webhooks
-        webhook_membership(membership.pk)
 
         # Si tout est passé plus haut, on VALID La ligne :
         # Tout ceci se déroule dans un pre_save signal.pre_save_signal_status()
         logger.info(f"    TRIGGER_A ADHESION PAID -> set ligne_article VALID")
         self.ligne_article.status = LigneArticle.VALID
+
+        # Envoi des webhooks
+        webhook_membership.delay(membership.pk)
 
         logger.info(f"END    TRIGGER_A ADHESION PAID\n")
