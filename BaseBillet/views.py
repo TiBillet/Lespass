@@ -431,13 +431,14 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
         # On check si des adhésions n'ont pas été faites avec la carte en wallet ephemère
         card_number = linked_serialized_card.get('number_printed')
         if card_number:
-            Membership.objects.filter(
+            for membership in Membership.objects.filter(
                 user__isnull=True,
-                card_number=card_number).update(
-                user=user, first_name=user.first_name, last_name=user.last_name)
-            # Lancement du Webhook Membership
-            for membership in Membership.objects.filter(card_number=card_number):
-                webhook_membership.delay(membership.pk)
+                card_number=card_number):
+                membership.user = user
+                membership.first_name = user.first_name
+                membership.last_name = user.last_name
+                membership.save()
+
 
         return HttpResponseClientRedirect(request.headers['Referer'])
 

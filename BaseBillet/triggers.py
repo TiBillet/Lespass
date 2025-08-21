@@ -212,7 +212,7 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
         logger.info(f"    TRIGGER_A ADHESION PAID -> set ligne_article VALID")
         self.ligne_article.status = LigneArticle.VALID
 
-        # Envoi des webhooks
-        webhook_membership.delay(membership.pk)
+        # Envoi des webhooks lors du save membership
+        # webhook_membership.delay(membership.pk)
 
         logger.info(f"END    TRIGGER_A ADHESION PAID\n")

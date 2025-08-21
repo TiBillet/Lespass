@@ -15,7 +15,7 @@ from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, LigneArticle, Ticket, Paiement_stripe, Product, Price, \
     PaymentMethod, Membership, SaleOrigin, Configuration
 from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation, \
-    trigger_product_update_tasks, send_sale_to_laboutik, send_refund_to_laboutik
+    trigger_product_update_tasks, send_sale_to_laboutik, send_refund_to_laboutik, webhook_membership
 from BaseBillet.triggers import TRIGGER_LigneArticlePaid_ActionByCategorie
 from fedow_connect.fedow_api import AssetFedow
 from fedow_connect.models import FedowConfig
@@ -416,6 +416,7 @@ def create_lignearticle_if_membership_created_on_admin(sender, instance: Members
         vente.status = LigneArticle.PAID
         vente.save()
 
+    webhook_membership.delay(membership.pk)
 
 @receiver(post_save, sender=Ticket)
 def create_lignearticle_if_ticket_created_on_admin(sender, instance: Ticket, created, **kwargs):
