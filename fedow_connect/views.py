@@ -63,6 +63,11 @@ class Membership_fwh(viewsets.ViewSet):
         now = localtime()
         new_membership = Membership.objects.create(
             user=user,
+            first_name=user.first_name if user else None,
+            last_name=user.last_name if user else None,
+            phone=user.phone if user else None,
+            postal_code=user.postal_code if user else None,
+            birth_date=user.birth_date if user else None,
             price=price,
             card_number=transaction_serialized['card']['number_printed'] if transaction_serialized.get('card') else None,
             asset_fedow=asset_uuid,
