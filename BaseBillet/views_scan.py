@@ -10,6 +10,8 @@ from rest_framework.views import APIView
 
 from BaseBillet.models import ScannerAPIKey, ScanApp, Ticket
 from BaseBillet.permissions import HasScanApi
+from django.db.models import Q, CharField
+from django.db.models.functions import Cast
 
 
 
@@ -297,3 +299,72 @@ class ticket(APIView):
                 {"error": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class search_ticket(APIView):
+    permission_classes = [HasScanApi]
+
+    def post(self, request):
+        try:
+            search = request.data.get('search')
+            event_uuid = request.data.get('event_uuid')
+
+            if not event_uuid:
+                return Response({"error": "Event uuid is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+            if search is None or str(search).strip() == "":
+                return Response({"error": "Search string is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Validate UUID format (will raise ValueError if bad)
+            try:
+                _ = UUID(str(event_uuid))
+            except Exception:
+                return Response({"error": "Invalid event uuid"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Base queryset restricted to the event
+            qs = Ticket.objects.filter(reservation__event__uuid=event_uuid)
+
+            # Annotate uuids as text for prefix search
+            qs = qs.annotate(
+                uuid_text=Cast('uuid', CharField()),
+                reservation_uuid_text=Cast('reservation__uuid', CharField()),
+            )
+
+            # Build OR filters for the search string
+            s = str(search).strip()
+            filters = (
+                Q(uuid_text__istartswith=s) |
+                Q(first_name__icontains=s) |
+                Q(last_name__icontains=s) |
+                Q(reservation__user_commande__email__icontains=s) |
+                Q(pricesold__price__name__icontains=s) |
+                Q(pricesold__productsold__product__name__icontains=s) |
+                Q(reservation_uuid_text__istartswith=s)
+            )
+
+            qs = qs.filter(filters).select_related(
+                'reservation', 'reservation__event', 'reservation__user_commande',
+                'pricesold', 'pricesold__price', 'pricesold__productsold', 'pricesold__productsold__product'
+            ).order_by('last_name', 'first_name')[:50]
+
+            results = []
+            for t in qs:
+                results.append({
+                    "uuid": str(t.uuid),
+                    "first_name": t.first_name,
+                    "last_name": t.last_name,
+                    "email": getattr(getattr(t.reservation, 'user_commande', None), 'email', None),
+                    "price": t.pricesold.price.name if t.pricesold else None,
+                    "product": t.pricesold.productsold.product.name if t.pricesold and getattr(t.pricesold, 'productsold', None) else None,
+                    "reservation_uuid": str(t.reservation.uuid),
+                    "status": t.get_status_display(),
+                })
+
+            return Response({
+                "success": True,
+                "count": len(results),
+                "results": results,
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

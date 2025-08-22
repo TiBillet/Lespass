@@ -29,6 +29,7 @@ urlpatterns = [
     path('scan/<str:pk>/pair/', views_scan.Pair.as_view(), name='check_api_scan'),
     path('scan/check_ticket/', views_scan.check_ticket.as_view(), name='check_ticket'),
     path('scan/ticket/', views_scan.ticket.as_view(), name='ticket'),
+    path('scan/search_ticket/', views_scan.search_ticket.as_view(), name='search_ticket'),
 
     # Test routes for error templates
 

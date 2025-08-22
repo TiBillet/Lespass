@@ -416,6 +416,7 @@ def create_lignearticle_if_membership_created_on_admin(sender, instance: Members
         vente.status = LigneArticle.PAID
         vente.save()
 
+    # if all([membership.])
     webhook_membership.delay(membership.pk)
 
 @receiver(post_save, sender=Ticket)
