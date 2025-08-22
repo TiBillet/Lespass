@@ -2364,7 +2364,11 @@ class ExternalApiKey(models.Model):
 
 class Webhook(models.Model):
     active = models.BooleanField(default=False)
-    url = models.URLField()
+    url = models.URLField(
+        help_text=_(
+            "Astuce Dev' : pour tester un webhook, lancez un petit serveur HTTP qui affiche le contenu de la requete : https://gist.github.com/mdonkers/63e115cc0c79b4f6b8b3a6b797e485c7"
+        )
+    )
 
     RESERVATION_V, MEMBERSHIP_V = "RV", "MV"
     EVENT_CHOICES = [

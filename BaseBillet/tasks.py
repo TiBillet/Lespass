@@ -30,7 +30,7 @@ from django_tenants.utils import get_tenant_model, tenant_context
 from weasyprint import HTML, CSS
 from weasyprint.text.fonts import FontConfiguration
 
-from ApiBillet.serializers import LigneArticleSerializer
+from ApiBillet.serializers import LigneArticleSerializer, MembershipSerializer
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, Ticket, Configuration, Membership, Webhook, LigneArticle, \
     GhostConfig, BrevoConfig, Product
@@ -862,33 +862,18 @@ def webhook_membership(membership_pk, solo_webhook_pk=None):
 
     if len(webhooks) > 0:
         membership = Membership.objects.get(pk=membership_pk)
-        configuration = Configuration.get_solo()
-        # TODO: remplacer par un choix de champs sur l'admin et un Serializer
-        return_body = {
-            "object": "membership",
-            "pk": str(membership.pk),
-            "uuid": f"{membership.uuid}",
-            "state": str(membership.get_status_display()),
-            "datetime": str(membership.date_added),
-            "deadline": str(membership.deadline),
-            "email": str(membership.email()),
-            "comment": f"{membership.commentaire}",
-            "first_name": str(membership.first_name),
-            "last_name": str(membership.last_name),
-            "pseudo": str(membership.pseudo),
-            "price_name": f"{membership.price.name}" if membership.price else None,
-            "price_uuid": f"{membership.price.uuid}" if membership.price else None,
-            "product_name": str(membership.price.product.name) if membership.price else None,
-            "product_uuid": str(membership.price.product.uuid) if membership.price else None,
-            "organisation": f"{configuration.organisation}",
-            "organisation_id": f"{configuration.uuid()}",
-        }
+        # Build payload with DRF serializer
+        data_sended = json.dumps(MembershipSerializer(membership).data, cls=DjangoJSONEncoder)
 
         # Si plusieurs webhook :
         for webhook in webhooks:
             try:
-                response = requests.request("POST", webhook.url, json=return_body, timeout=2,
+                response = requests.request("POST", webhook.url, data=data_sended, timeout=2,
                                             verify=bool(not settings.DEBUG))
+                logger.info(f"############### webhook_membership ###############\n")
+                logger.info(f"data sended : {data_sended}\n")
+                logger.info(f"response : {response.content}")
+                logger.info(f"############### webhook_membership ###############\n")
                 webhook.last_response = f"{timezone.now()} - status code {response.status_code} - {response.content}"
                 if not response.ok:
                     logger.error(f"webhook_membership ERROR : {membership_pk} {timezone.now()} {response.content}")

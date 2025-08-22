@@ -11,7 +11,7 @@ from django_tenants.utils import tenant_context
 from rest_framework import serializers
 from rest_framework.generics import get_object_or_404
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, Paiement_stripe, \
-    PriceSold, ProductSold, Artist_on_event, OptionGenerale, Tag
+    PriceSold, ProductSold, Artist_on_event, OptionGenerale, Tag, Membership
 from Customers.models import Client
 from PaiementStripe.views import CreationPaiementStripe
 
@@ -1395,3 +1395,118 @@ class LigneArticleSerializer(serializers.ModelSerializer):
 
 class EmailSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
+
+
+
+class MembershipSerializer(serializers.ModelSerializer):
+    option_generale = OptionsSerializer(many=True, read_only=True)
+    object = serializers.CharField(read_only=True, default='membership')
+    pk = serializers.SerializerMethodField()
+    state = serializers.SerializerMethodField()
+    state_display = serializers.SerializerMethodField()
+    datetime = serializers.SerializerMethodField()
+    deadline = serializers.SerializerMethodField()
+    email = serializers.SerializerMethodField()
+    comment = serializers.SerializerMethodField()
+    price_name = serializers.SerializerMethodField()
+    price_uuid = serializers.SerializerMethodField()
+    product_name = serializers.SerializerMethodField()
+    product_uuid = serializers.SerializerMethodField()
+    organisation = serializers.SerializerMethodField()
+    organisation_id = serializers.SerializerMethodField()
+    payment_method_name = serializers.SerializerMethodField()
+    member_name = serializers.SerializerMethodField()
+    is_valid = serializers.SerializerMethodField()
+    contribution_value = serializers.SerializerMethodField()
+    product_img = serializers.SerializerMethodField()
+    option_names = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Membership
+        fields = [
+            # Legacy webhook fields
+            'object', 'pk', 'uuid', 'state', 'datetime', 'deadline', 'email', 'comment',
+            'first_name', 'last_name', 'pseudo', 'price_name', 'price_uuid', 'product_name', 'product_uuid',
+            'organisation', 'organisation_id',
+            # Useful extra fields
+            'user', 'card_number', 'date_added', 'last_action', 'last_contribution',
+            'contribution_value', 'payment_method', 'payment_method_name', 'newsletter', 'postal_code', 'birth_date',
+            'phone', 'is_valid', 'asset_fedow', 'stripe_id_subscription', 'last_stripe_invoice',
+            'member_name', 'product_img', 'option_generale', 'option_names', 'state_display',
+        ]
+        read_only_fields = (
+            'uuid', 'date_added', 'last_action', 'last_contribution', 'deadline',
+            'payment_method_name', 'state', 'email', 'price_name', 'price_uuid', 'product_name', 'product_uuid',
+            'organisation', 'organisation_id', 'member_name', 'product_img', 'is_valid', 'option_generale',
+            'option_names', 'object', 'pk', 'comment', 'state_display'
+        )
+
+    def get_pk(self, obj):
+        return str(obj.pk) if obj.pk is not None else None
+
+    def get_state(self, obj):
+        return obj.status if obj.status else None
+
+    def get_state_display(self, obj):
+        return obj.get_status_display() if obj.status else None
+
+    def get_datetime(self, obj):
+        return obj.date_added.isoformat() if obj.date_added else None
+
+    def get_deadline(self, obj):
+        return obj.deadline.isoformat() if obj.deadline else None
+
+    def get_email(self, obj):
+        return str(obj.email()) if obj else None
+
+    def get_comment(self, obj):
+        return obj.commentaire
+
+    def get_price_name(self, obj):
+        return obj.price.name if obj.price else None
+
+    def get_price_uuid(self, obj):
+        return str(obj.price.uuid) if obj.price else None
+
+    def get_product_name(self, obj):
+        if obj.price and obj.price.product:
+            return obj.price.product.name
+        return None
+
+    def get_product_uuid(self, obj):
+        if obj.price and obj.price.product:
+            return str(obj.price.product.uuid)
+        return None
+
+    def get_organisation(self, obj):
+        configuration = Configuration.get_solo()
+        return f"{configuration.organisation}" if configuration else None
+
+    def get_organisation_id(self, obj):
+        configuration = Configuration.get_solo()
+        return f"{configuration.uuid()}" if configuration else None
+
+    def get_payment_method_name(self, obj):
+        return obj.get_payment_method_display() if obj.payment_method else None
+
+    def get_member_name(self, obj):
+        return obj.member_name()
+
+    def get_is_valid(self, obj):
+        try:
+            return bool(obj.is_valid())
+        except Exception:
+            return False
+
+    def get_contribution_value(self, obj):
+        return float(obj.contribution_value) if obj.contribution_value is not None else None
+
+    def get_product_img(self, obj):
+        try:
+            img = obj.product_img()
+            return str(img) if img is not None else None
+        except Exception:
+            return None
+
+    def get_option_names(self, obj):
+        return [opt.name for opt in obj.option_generale.all()]

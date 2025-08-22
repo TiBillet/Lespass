@@ -265,6 +265,7 @@ class WebhookAdmin(ModelAdmin):
         permissions=["custom_actions_detail"],
     )
     def test_webhook(self, request, object_id):
+        # import ipdb; ipdb.set_trace()
         # Lancement d'un test de webhook :
         webhook = Webhook.objects.get(pk=object_id)
         try:
