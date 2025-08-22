@@ -418,7 +418,7 @@ def create_lignearticle_if_membership_created_on_admin(sender, instance: Members
 
     # On envoi un webhook. Si deadline, ça veut dire que l'adhésion est valide
     if membership.deadline:
-        webhook_membership(membership.pk)
+        webhook_membership.delay(membership.pk)
 
 @receiver(post_save, sender=Ticket)
 def create_lignearticle_if_ticket_created_on_admin(sender, instance: Ticket, created, **kwargs):
