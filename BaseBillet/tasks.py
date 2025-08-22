@@ -869,7 +869,7 @@ def webhook_membership(membership_pk, solo_webhook_pk=None):
         for webhook in webhooks:
             try:
                 response = requests.request("POST", webhook.url, data=data_sended, timeout=2,
-                                            verify=bool(not settings.DEBUG))
+                                            headers={"Content-type": "application/json"}, verify=bool(not settings.DEBUG))
                 logger.info(f"############### webhook_membership ###############\n")
                 logger.info(f"data sended : {data_sended}\n")
                 logger.info(f"response : {response.content}")

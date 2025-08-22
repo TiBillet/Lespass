@@ -23,7 +23,7 @@ from rest_framework.views import APIView
 from rest_framework.viewsets import ViewSet
 
 from ApiBillet.permissions import TenantAdminApiPermission, TibilletUser, get_apikey_valid
-from ApiBillet.serializers import EventSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
+from ApiBillet.serializers import EventSerializer, EventWriteSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
     ReservationValidator, ConfigurationSerializer, TicketSerializer, \
     OptionsSerializer, ProductCreateSerializer, EmailSerializer
 from AuthBillet.models import HumanUser
@@ -237,7 +237,36 @@ class EventsViewSet(viewsets.ViewSet):
     permission_classes = [permissions.AllowAny]
 
     def list(self, request):
-        events = Event.objects.filter(published=True).order_by('-datetime')
+        events = Event.objects.filter(
+            published=True,
+            parent__isnull=True,
+        ).order_by('-datetime')
+        serializer = EventSerializer(events, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='future', permission_classes=[permissions.AllowAny])
+    def future(self, request):
+        """
+        Liste uniquement les événements futurs (à partir de la veille de timezone.now()).
+        """
+        cutoff = timezone.now() - timedelta(days=1)
+        events = Event.objects.filter(
+            published=True,
+            parent__isnull=True,
+            datetime__gte=cutoff).order_by('-datetime')
+        serializer = EventSerializer(events, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='actions', permission_classes=[permissions.AllowAny])
+    def actions(self, request):
+        """
+        Liste les événements de catégorie ACTION ayant un parent non nul.
+        """
+        events = Event.objects.filter(
+            published=True,
+            categorie=Event.ACTION,
+            parent__isnull=False,
+        ).order_by('-datetime')
         serializer = EventSerializer(events, many=True)
         return Response(serializer.data)
 
@@ -245,6 +274,29 @@ class EventsViewSet(viewsets.ViewSet):
         event = get_object_or_404(Event, pk=pk)
         serializer = EventSerializer(event)
         return Response(serializer.data)
+
+    def create(self, request):
+        validator = EventWriteSerializer(data=request.data)
+        if validator.is_valid():
+            event = validator.save()
+            return Response(EventSerializer(event).data, status=status.HTTP_201_CREATED)
+        return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, pk=None):
+        queryset = Event.objects.all().order_by('-datetime')
+        event = get_object_or_404(queryset, pk=pk)
+        partial = request.method.lower() == 'patch'
+        validator = EventWriteSerializer(event, data=request.data, partial=partial)
+        if validator.is_valid():
+            event = validator.save()
+            return Response(EventSerializer(event).data, status=status.HTTP_200_OK)
+        return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def partial_update(self, request, pk=None):
+        return self.update(request, pk)
+
+    def get_permissions(self):
+        return get_permission_Api_LR_Any_CU_Admin(self)
 
     """
     def create(self, request):

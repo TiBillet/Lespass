@@ -11,7 +11,7 @@ from django_tenants.utils import tenant_context
 from rest_framework import serializers
 from rest_framework.generics import get_object_or_404
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, Paiement_stripe, \
-    PriceSold, ProductSold, Artist_on_event, OptionGenerale, Tag, Membership
+    PriceSold, ProductSold, Artist_on_event, OptionGenerale, Tag, Membership, PostalAddress
 from Customers.models import Client
 from PaiementStripe.views import CreationPaiementStripe
 
@@ -593,10 +593,11 @@ class EventSerializer(serializers.ModelSerializer):
     url = serializers.URLField(source='full_url', read_only=True)
     eventStatus = serializers.SerializerMethodField()
     publicKeyPem = serializers.SerializerMethodField()
-    # location = serializers.SerializerMethodField()
+    image = serializers.SerializerMethodField()
+    location = serializers.SerializerMethodField()
+    organizer = serializers.SerializerMethodField()
+    childrens = serializers.SerializerMethodField()
     # offers = serializers.SerializerMethodField()
-    # organizer = serializers.SerializerMethodField()
-    # image = serializers.SerializerMethodField()
 
     def get_eventStatus(self, obj):
         if obj.published:
@@ -605,6 +606,70 @@ class EventSerializer(serializers.ModelSerializer):
 
     def get_publicKeyPem(self, obj):
         return obj.get_public_pem()
+
+    def get_image(self, obj):
+        try:
+            img = obj.get_img()
+            if img:
+                return img.url
+        except Exception:
+            pass
+        return None
+
+    def get_location(self, obj):
+        pa = getattr(obj, 'postal_address', None)
+        if not pa:
+            return None
+        address = {
+            "@type": "PostalAddress",
+            "streetAddress": pa.street_address,
+            "addressLocality": pa.address_locality,
+            "postalCode": pa.postal_code,
+            "addressCountry": pa.address_country,
+        }
+        if pa.address_region:
+            address["addressRegion"] = pa.address_region
+        place = {
+            "@type": "Place",
+            "address": address,
+        }
+        if pa.latitude is not None and pa.longitude is not None:
+            try:
+                place["geo"] = {
+                    "@type": "GeoCoordinates",
+                    "latitude": float(pa.latitude),
+                    "longitude": float(pa.longitude),
+                }
+            except Exception:
+                pass
+        return place
+
+    def get_organizer(self, obj):
+        try:
+            config = Configuration.get_solo()
+            organizer = {"@type": "Organization", "name": config.organisation}
+            if getattr(config, 'site_web', None):
+                organizer["url"] = config.site_web
+            return organizer
+        except Exception:
+            return None
+
+    def get_childrens(self, obj):
+        try:
+            children_qs = obj.children.filter(published=True).order_by('datetime')
+        except Exception:
+            return []
+        data = []
+        for c in children_qs:
+            data.append({
+                "uuid": str(c.uuid),
+                "name": c.name,
+                "slug": c.slug,
+                "startDate": c.datetime.isoformat() if c.datetime else None,
+                "endDate": c.end_datetime.isoformat() if c.end_datetime else None,
+                "url": c.full_url,
+            })
+        return data
 
     class Meta:
         model = Event
@@ -619,6 +684,10 @@ class EventSerializer(serializers.ModelSerializer):
             'url',
             'eventStatus',
             'publicKeyPem',
+            'image',
+            'location',
+            'organizer',
+            'childrens',
         ]
 
 
@@ -1504,9 +1573,149 @@ class MembershipSerializer(serializers.ModelSerializer):
     def get_product_img(self, obj):
         try:
             img = obj.product_img()
-            return str(img) if img is not None else None
+            return str(img.url) if img is not None else None
         except Exception:
             return None
 
     def get_option_names(self, obj):
         return [opt.name for opt in obj.option_generale.all()]
+
+
+class EventWriteSerializer(serializers.Serializer):
+    """
+    Write/validation serializer for creating and updating Event via API using schema.org-like input names
+    aligned with the read EventSerializer.
+    Accepts:
+      - name: string
+      - startDate: datetime -> Event.datetime
+      - endDate: datetime (optional) -> Event.end_datetime
+      - disambiguatingDescription: string (optional) -> Event.short_description
+      - description: string (optional) -> Event.long_description
+      - image: URL string (optional) -> saved to Event.img
+      - location: dict Place with address (PostalAddress) and optional geo -> Event.postal_address
+      - superEvent: string (uuid or slug) to set parent event (enables ACTION children automatically via model)
+    Notes:
+      - This serializer is separate from the read serializer for stricter control on inputs.
+    """
+
+    name = serializers.CharField(required=False, max_length=200)
+    startDate = serializers.DateTimeField(required=False)
+    endDate = serializers.DateTimeField(required=False, allow_null=True)
+    disambiguatingDescription = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=250)
+    description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    image = serializers.CharField(required=False, allow_blank=True)
+    location = serializers.DictField(required=False)
+    superEvent = serializers.CharField(required=False, allow_blank=True)
+
+    def _require_on_create(self, attrs, field_name):
+        if self.instance is None and not attrs.get(field_name):
+            raise serializers.ValidationError({field_name: 'This field is required.'})
+
+    def validate_image(self, value: str):
+        if value:
+            try:
+                self.img_name, self.img_img = get_img_from_url(value)
+            except Exception as e:
+                raise serializers.ValidationError(f'Unable to download image: {e}')
+        return value
+
+    def validate_location(self, value: dict):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError('location must be an object')
+        address = value.get('address') or {}
+        if not isinstance(address, dict):
+            raise serializers.ValidationError('location.address must be an object')
+        street = address.get('streetAddress')
+        locality = address.get('addressLocality')
+        postal = address.get('postalCode')
+        country = address.get('addressCountry')
+        if not all([street, locality, postal, country]):
+            raise serializers.ValidationError('location.address missing required fields')
+        address_region = address.get('addressRegion')
+        name = value.get('name')
+        geo = value.get('geo') or {}
+        lat = geo.get('latitude') if isinstance(geo, dict) else None
+        lng = geo.get('longitude') if isinstance(geo, dict) else None
+
+        # Build defaults for get_or_create
+        pa_defaults = {
+            'name': name,
+            'address_region': address_region,
+            'latitude': lat,
+            'longitude': lng,
+        }
+        self._postal_address, _ = PostalAddress.objects.get_or_create(
+            street_address=street,
+            address_locality=locality,
+            postal_code=postal,
+            address_country=country,
+            defaults=pa_defaults
+        )
+        # If exists, optionally update optional fields if provided
+        updated = False
+        for field, val in pa_defaults.items():
+            if val is not None and getattr(self._postal_address, field) != val:
+                setattr(self._postal_address, field, val)
+                updated = True
+        if updated:
+            self._postal_address.save()
+        return value
+
+    def validate_superEvent(self, value: str):
+        if not value:
+            return value
+        parent = None
+        # Try by UUID
+        try:
+            parent = Event.objects.get(pk=value)
+        except Exception:
+            # Try by slug
+            try:
+                parent = Event.objects.get(slug=value)
+            except Event.DoesNotExist:
+                raise serializers.ValidationError(f'superEvent not found: {value}')
+        self._parent_event = parent
+        return value
+
+    def validate(self, attrs):
+        # Enforce required on create
+        self._require_on_create(attrs, 'name')
+        self._require_on_create(attrs, 'startDate')
+        return attrs
+
+    def create(self, validated_data):
+        event_data = {
+            'name': validated_data.get('name'),
+            'datetime': validated_data.get('startDate'),
+            'end_datetime': validated_data.get('endDate'),
+            'short_description': validated_data.get('disambiguatingDescription'),
+            'long_description': validated_data.get('description'),
+        }
+        if hasattr(self, '_postal_address'):
+            event_data['postal_address'] = self._postal_address
+        if hasattr(self, '_parent_event'):
+            event_data['parent'] = self._parent_event
+        event = Event.objects.create(**event_data)
+        if getattr(self, 'img_img', None):
+            event.img.save(self.img_name, self.img_img.fp)
+        return event
+
+    def update(self, instance: Event, validated_data):
+        if 'name' in validated_data:
+            instance.name = validated_data.get('name')
+        if 'startDate' in validated_data:
+            instance.datetime = validated_data.get('startDate')
+        if 'endDate' in validated_data:
+            instance.end_datetime = validated_data.get('endDate')
+        if 'disambiguatingDescription' in validated_data:
+            instance.short_description = validated_data.get('disambiguatingDescription')
+        if 'description' in validated_data:
+            instance.long_description = validated_data.get('description')
+        if hasattr(self, '_postal_address') and 'location' in validated_data:
+            instance.postal_address = self._postal_address
+        if hasattr(self, '_parent_event') and 'superEvent' in validated_data:
+            instance.parent = self._parent_event
+        instance.save()
+        if getattr(self, 'img_img', None) and 'image' in validated_data:
+            instance.img.save(self.img_name, self.img_img.fp)
+        return instance
