@@ -343,12 +343,12 @@ class WalletFedow():
         serialized_wallet = self.cached_retrieve_by_signature(user).validated_data
         total_euro = 0
         # Itération sur tous les tokens du wallet
-        try :
+        try:
             for token in serialized_wallet['tokens']:
                 # fed : Stripe asset
-                if token['asset_category'] == 'FED' :
+                if token['asset_category'] == 'FED':
                     total_euro += token['value']
-                elif token['asset_category'] == 'TLF' :
+                elif token['asset_category'] == 'TLF':
                     # token local fidicaire avec pour origine le lieu
                     if token['asset']['place_origin']['uuid'] == self.fedow_config.fedow_place_uuid:
                         total_euro += token['value']
@@ -366,9 +366,9 @@ class WalletFedow():
         serialized_wallet = self.cached_retrieve_by_signature(user).validated_data
         total_fed = 0
         # Itération sur tout les tokens du wallet, on s'arrete lorsqu'on trouve le Token Fédéré
-        try :
+        try:
             for token in serialized_wallet['tokens']:
-                if token['asset_category'] == 'FED' :
+                if token['asset_category'] == 'FED':
                     total_fed = token['value']
                     break
         except KeyError as e:
@@ -602,8 +602,6 @@ class PlaceFedow():
         logger.info(f"Place and Fedow linked : wallet {new_place_data['wallet']}")
 
 
-
-
 class NFCcardFedow():
     def __init__(self, fedow_config: FedowConfig or None = None):
         self.fedow_config: FedowConfig = fedow_config
@@ -737,14 +735,13 @@ class TransactionFedow():
             raise Exception(
                 f"retrieve_by_signature wallet_serialized ERRORS : {paginated_transactions_serialized.errors}")
 
-
     def to_place_from_qrcode(self,
-                 user: TibilletUser = None,
-                 amount: int = None,
-                 asset_type: uuid4 = None, # peut être EURO, CADEAU, etc ....
-                 comment: str = None,
-                 metadata: json = None,
-                 ):
+                             user: TibilletUser = None,
+                             amount: int = None,
+                             asset_type: uuid4 = None,  # peut être EURO, CADEAU, etc ....
+                             comment: str = None,
+                             metadata: json = None,
+                             ):
 
         if not user.wallet:
             wallet_fedow = WalletFedow(self.fedow_config)
@@ -782,6 +779,47 @@ class TransactionFedow():
             logger.error(response_w2w.json())
             raise Exception(response_w2w.json())
 
+    def refill_from_lespass_to_user_wallet(self,
+                                           user: TibilletUser = None,
+                                           product: Product = None,
+                                           metadata: json = None,
+                                           ):
+        """
+        Send tokens from current place wallet to the given user wallet for specified asset.
+        Amount is expected in raw integer units as Fedow expects (like cents or token base unit).
+        """
+        if not user.wallet:
+            wallet_fedow = WalletFedow(self.fedow_config)
+            user.wallet, created = wallet_fedow.get_or_create_wallet(user)
+
+        if not product.fedow_reward_enabled :
+            raise Exception("Product not enabled for Fedow")
+
+        transaction = {
+            "amount": int(dround(product.fedow_reward_amount) * 100),
+            "sender": f"{self.fedow_config.fedow_place_wallet_uuid}",
+            "receiver": f"{user.wallet.uuid}",
+            "asset": f"{product.fedow_reward_asset.uuid}",
+            "metadata": metadata,
+        }
+        response = _post(
+            fedow_config=self.fedow_config,
+            user=user,
+            data=transaction,
+            path='transaction/refill_from_lespass_to_user_wallet')
+
+        if response.status_code == 201:
+            serialized_transaction = TransactionValidator(data=response.json())
+            if serialized_transaction.is_valid():
+                # Update wallet cache
+                wallet_fedow = WalletFedow(self.fedow_config)
+                wallet_fedow.retrieve_by_signature(user)
+                return serialized_transaction.validated_data
+            logger.error(serialized_transaction.errors)
+            raise Exception(response.json())
+        else:
+            logger.error(response.json())
+            raise Exception(response.json())
 
 
 # from fedow_connect.fedow_api import FedowAPI

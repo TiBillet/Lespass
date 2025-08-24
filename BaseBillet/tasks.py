@@ -870,10 +870,10 @@ def webhook_membership(membership_pk, solo_webhook_pk=None):
             try:
                 response = requests.request("POST", webhook.url, data=data_sended, timeout=2,
                                             headers={"Content-type": "application/json"}, verify=bool(not settings.DEBUG))
-                logger.info(f"############### webhook_membership ###############\n")
-                logger.info(f"data sended : {data_sended}\n")
-                logger.info(f"response : {response.content}")
-                logger.info(f"############### webhook_membership ###############\n")
+                logger.debug(f"############### webhook_membership ###############\n")
+                logger.debug(f"data sended : {data_sended}\n")
+                logger.debug(f"response : {response.content}")
+                logger.debug(f"############### webhook_membership ###############\n")
                 webhook.last_response = f"{timezone.now()} - status code {response.status_code} - {response.content}"
                 if not response.ok:
                     logger.error(f"webhook_membership ERROR : {membership_pk} {timezone.now()} {response.content}")

@@ -2,6 +2,7 @@ from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 from AuthBillet.models import Wallet
 from BaseBillet.models import FedowTransaction
+from fedow_connect.models import Asset
 
 
 class PlaceValidator(serializers.Serializer):
@@ -25,26 +26,9 @@ class AssetValidator(serializers.Serializer):
     name = serializers.CharField()
     currency_code = serializers.CharField(max_length=3)
     place_origin = PlaceValidator(many=False, required=False, allow_null=True)
+    wallet_origin = serializers.UUIDField(required=False, allow_null=True)
 
-    STRIPE_FED_FIAT = 'FED'
-    TOKEN_LOCAL_FIAT = 'TLF'
-    TOKEN_LOCAL_NOT_FIAT = 'TNF'
-    TIME = 'TIM'
-    FIDELITY = 'FID'
-    BADGE = 'BDG'
-    SUBSCRIPTION = 'SUB'
-
-    CATEGORIES = [
-        (TOKEN_LOCAL_FIAT, _('Local currency')),
-        (TOKEN_LOCAL_NOT_FIAT, _('Gift currency')),
-        (STRIPE_FED_FIAT, _('TiBillets')),
-        (TIME, _("Time-based currency")),
-        (FIDELITY, _("Loyalty points")),
-        (BADGE, _("Punchclock")),
-        (SUBSCRIPTION, _('Subscription')),
-    ]
-
-    category = serializers.ChoiceField(choices=CATEGORIES)
+    category = serializers.ChoiceField(choices=Asset.CATEGORIES)
     get_category_display = serializers.CharField()
 
     created_at = serializers.DateTimeField()
@@ -57,6 +41,22 @@ class AssetValidator(serializers.Serializer):
     total_in_place = serializers.IntegerField(required=False, allow_null=True)
     total_in_wallet_not_place = serializers.IntegerField(required=False, allow_null=True)
 
+    def validate(self, attrs):
+        try:
+            self.asset = Asset.objects.get(uuid=attrs['uuid'])
+        except Asset.DoesNotExist:
+            if attrs.get('wallet_origin'):
+                wallet, created = Wallet.objects.get_or_create(uuid=attrs['wallet_origin'])
+                self.asset = Asset.objects.create(
+                    uuid=attrs['uuid'],
+                    name=attrs['name'],
+                    currency_code=attrs['currency_code'],
+                    created_at=attrs['created_at'],
+                    last_update=attrs['last_update'],
+                    wallet_origin=wallet,
+                    category=attrs['category'],
+                )
+        return attrs
 
 class TransactionSimpleValidator(serializers.Serializer):
     # IDEM que TransactionValidator mais sans les objets associés
@@ -115,7 +115,7 @@ class TokenValidator(serializers.Serializer):
 
     asset_uuid = serializers.UUIDField()
     asset_name = serializers.CharField()
-    asset_category = serializers.ChoiceField(choices=AssetValidator.CATEGORIES)
+    asset_category = serializers.ChoiceField(choices=Asset.CATEGORIES)
 
     is_primary_stripe_token = serializers.BooleanField()
 
@@ -128,7 +128,7 @@ class TokenValidator(serializers.Serializer):
     def validate(self, attrs):
         # On check ici les tokens adhésions pour entrer en db s'il n'existe pas :
         # il peut avoir été créé sur laboutik
-        if attrs['asset_category'] == AssetValidator.SUBSCRIPTION:
+        if attrs['asset_category'] == Asset.SUBSCRIPTION:
             last_transaction = attrs.get('last_transaction')
             if last_transaction :
                 pass

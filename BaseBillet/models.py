@@ -734,6 +734,25 @@ class Product(models.Model):
     #                                        help_text="Produit checké par le serveur cashless.",
     #                                        )
 
+    # Fedow reward after successful payment (membership products first)
+    fedow_reward_enabled = models.BooleanField(
+        default=False,
+        verbose_name=_("Top-up user wallet on payment (Fedow)"),
+        help_text=_("If enabled, after a successful payment, the user wallet will receive tokens."),
+    )
+    fedow_reward_asset = models.ForeignKey("fedow_connect.Asset", on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        verbose_name=_("Fedow Asset"),
+        help_text=_("Asset to send from the place to the user wallet."),
+    )
+    fedow_reward_amount = models.DecimalField(max_digits=10, decimal_places=2,
+        blank=True,
+        null=True,
+        verbose_name=_("Token amount to send"),
+        help_text=_("Raw token amount."),
+    )
+
     def fedow_category(self):
         self_category_map = {
             self.ADHESION: 'SUB',

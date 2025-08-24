@@ -33,7 +33,7 @@ from rest_framework.response import Response
 from rest_framework_api_key.models import APIKey
 from solo.admin import SingletonModelAdmin
 
-from unfold.admin import ModelAdmin, TabularInline
+from unfold.admin import ModelAdmin, TabularInline, StackedInline
 from unfold.components import register_component, BaseComponent
 from unfold.sections import TableSection, TemplateSection
 from unfold.decorators import display, action
@@ -84,6 +84,7 @@ from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invo
 from Customers.models import Client
 from MetaBillet.models import WaitingConfiguration
 from fedow_connect.utils import dround
+from fedow_connect.models import Asset
 
 logger = logging.getLogger(__name__)
 
@@ -536,12 +537,14 @@ class PriceInline(TabularInline):
     fk_name = 'product'
     form = PriceInlineChangeForm
     # hide_title = True
+    # collapsible = True # usefull for StackedInline
 
     # ordering_field = "weight"
     # max_num = 1
     extra = 0
     show_change_link = True
-    tab = True
+
+    # tab = True # don't set to false : comment or the tab title will be visible
 
     # Surcharger la méthode pour désactiver la suppression
     def has_delete_permission(self, request, obj=None):
@@ -574,6 +577,10 @@ class ProductAdminCustomForm(ModelForm):
             "legal_link",
             'publish',
             'archive',
+            # Fedow reward fields
+            'fedow_reward_enabled',
+            'fedow_reward_asset',
+            'fedow_reward_amount',
         )
         help_texts = {
             'img': _('Product image is displayed at a 16/9 ratio.'),
@@ -604,6 +611,30 @@ class ProductAdminCustomForm(ModelForm):
             except Exception as e:
                 raise forms.ValidationError(_("Please add at least one rate to this product."))
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Limit the Asset choices to local tokens, time, and fidelity
+        try:
+            self.fields['fedow_reward_asset'].queryset = Asset.objects.filter(
+                category__in=[
+                Asset.TOKEN_LOCAL_FIAT,
+                Asset.TOKEN_LOCAL_NOT_FIAT,
+                Asset.TIME,
+                Asset.FIDELITY,
+            ],
+                archive=False,
+            )
+            # Improve display label: show name, currency and category
+            def _label(obj):
+                try:
+                    return f"{obj.name} ({obj.currency_code}) - {obj.get_category_display()}"
+                except Exception:
+                    return str(obj)
+            self.fields['fedow_reward_asset'].label_from_instance = _label
+        except Exception:
+            # Field may not be present in some contexts; ignore
+            pass
+
 
 @register_component
 class CheckStripeComponent(BaseComponent):
@@ -628,6 +659,42 @@ class ProductAdmin(ModelAdmin):
     list_before_template = "admin/product/product_list_before.html"  # appelle le component CheckStripe plus haut pour le contexte
 
     form = ProductAdminCustomForm
+
+    fieldsets = (
+        (_('General'), {
+            'fields': (
+                'name',
+                'categorie_article',
+                'img',
+                'poids',
+                'short_description',
+                'long_description',
+                'validate_button_text',
+                'legal_link',
+                'publish',
+                'archive',
+            ),
+            'classes': ['tab'],
+
+        }),
+        (_('Options'), {
+            'fields': (
+                'option_generale_radio',
+                'option_generale_checkbox',
+            ),
+            'classes': ['tab'],
+
+        }),
+        (_('Triggers'), {
+            'fields': (
+                'fedow_reward_enabled',
+                'fedow_reward_asset',
+                'fedow_reward_amount',
+            ),
+            'classes': ['tab'],
+        }),
+    )
+
     list_display = (
         'name',
         'img',
@@ -1454,7 +1521,6 @@ class EventForm(ModelForm):
             pass
 
 
-
 class EventPricesSummaryTable(TableSection):
     verbose_name = _("Résumé par tarif")
     height = 240
@@ -1683,7 +1749,6 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         if count is None:
             count = instance.valid_tickets_count()
         return f"{count} / {instance.jauge_max}"
-
 
     @action(
         description=_("Duplicate (day+1)"),
@@ -2250,7 +2315,7 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
                 messages.SUCCESS,
                 _("Ticket unscanned successfully.")
             )
-        return redirect(request.META["HTTP_REFERER"]) 
+        return redirect(request.META["HTTP_REFERER"])
 
     @action(
         description=_("Cancel ONE"),
@@ -2278,7 +2343,7 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
                 messages.ERROR,
                 _(f"Error while cancelling/refunding this ticket: {e}")
             )
-        return redirect(request.META["HTTP_REFERER"]) 
+        return redirect(request.META["HTTP_REFERER"])
 
     @action(
         description=_("Cancel ALL"),
@@ -2395,8 +2460,8 @@ class TenantAdmin(ModelAdmin):
 
 @admin.register(FederatedPlace, site=staff_admin_site)
 class FederatedPlaceAdmin(ModelAdmin):
-    list_display = ["tenant", "str_tag_filter", "str_tag_exclude", "membership_visible",]
-    fields = ["tenant", "tag_filter", "tag_exclude", "membership_visible",]
+    list_display = ["tenant", "str_tag_filter", "str_tag_exclude", "membership_visible", ]
+    fields = ["tenant", "tag_filter", "tag_exclude", "membership_visible", ]
     autocomplete_fields = ["tag_filter", "tag_exclude", ]
 
     def get_queryset(self, request):
@@ -2457,6 +2522,7 @@ class GhostConfigChangeform(ModelForm):
         model = GhostConfig
         fields = ['ghost_last_log']
 
+
 class GhostConfigAddform(ModelForm):
     class Meta:
         model = GhostConfig
@@ -2485,7 +2551,6 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
             defaults['form'] = self.add_form
         defaults.update(kwargs)
         return super().get_form(request, obj, **defaults)
-
 
     def test_api_ghost(self, ghost_url, ghost_key):
         import datetime
@@ -2530,7 +2595,6 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
             # Always save the model, even in error cases
             super().save_model(request, obj, form, change)
 
-
     @action(description=_("Test Api"),
             url_path="test_api_ghost_admin_button",
             permissions=["custom_actions_detail"])
@@ -2561,7 +2625,6 @@ class GhostConfigAdmin(SingletonModelAdmin, ModelAdmin):
             messages.error(request, _(f"Error testing Ghost API: {type(e).__name__} - {str(e)}"))
 
         return redirect(request.META["HTTP_REFERER"])
-
 
     def has_custom_actions_detail_permission(self, request, object_id):
         return TenantAdminPermissionWithRequest(request)

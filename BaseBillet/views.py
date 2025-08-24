@@ -1991,37 +1991,4 @@ class Tenant(viewsets.ViewSet):
         # return redirect('/tenant/new/')
 
 
-class CORSResponseMixin:
-    """
-    Mixin that adds permissive CORS headers to responses.
-    This is specifically for the ScanTicket class which is used by a Cordova application
-    running in a webview on localhost.
-    """
-    def finalize_response(self, request, response, *args, **kwargs):
-        response = super().finalize_response(request, response, *args, **kwargs)
-        response["Access-Control-Allow-Origin"] = "*"
-        response["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        return response
 
-
-
-
-class ScanTicket(CORSResponseMixin, viewsets.ViewSet):
-
-    def get_permissions(self):
-        if self.action in ['pair', 'options', 'test_api']:
-            import ipdb; ipdb.set_trace()
-            # L'api Key de l'organisation au minimum
-            permission_classes = [permissions.AllowAny]
-        else:
-            permission_classes = [HasScanApi]
-        return [permission() for permission in permission_classes]
-
-    @action(detail=False, methods=['OPTIONS'])
-    def options(self, request, *args, **kwargs):
-        """
-        Handle OPTIONS requests for CORS preflight.
-        """
-        response = Response(status=status.HTTP_200_OK)
-        return response
