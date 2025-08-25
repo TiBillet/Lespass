@@ -208,6 +208,9 @@ def context_for_membership_email(membership: "Membership"):
         image_url = f"https://{domain}{config.img.med.url}"
 
     additionnal_text_3 = None
+    if membership.price.fedow_reward_enabled:
+        if membership.price.fedow_reward_amount > 0 and membership.price.fedow_reward_asset :
+            additionnal_text_3 = _("Your membership entitles you to ") + f"{dround(membership.price.fedow_reward_amount)} {membership.price.fedow_reward_asset.name.upper()} " + _("credited to your TiBillet wallet. You can check your balance in the ‘My Account’ section.")
 
     membership.refresh_from_db()
     context = {

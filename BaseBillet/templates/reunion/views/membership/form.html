@@ -1,4 +1,4 @@
-{% load i18n static %}
+{% load i18n static tibitags %}
 <form id="membership-form" hx-post="/memberships/" hx-target="#target_formbricks"
       class="d-flex flex-column justify-content-between h-100">
     <div>
@@ -32,6 +32,12 @@
                             {% else %}
                                 {{ price.name }} - {{ price.prix }}€
                             {% endif %}
+                            {% if price.fedow_reward_enabled %}
+                                <span>
+                                    <em>{% trans " : This price will give you " %}{{ price.fedow_reward_amount | dround }}
+                                    {{ price.fedow_reward_asset.name }} {% trans "credited to your TiBillet wallet !" %}</em>
+                                </span>
+                            {% endif %}
                         </label>
                     </div>
                 {% endif %}
@@ -40,13 +46,15 @@
 
         {% if user.is_anonymous %}
             <div class="form-floating mb-3">
-                <input id="membership-email" name="email" type="email" class="form-control" placeholder="adresse@exemple.fr" role="textbox"
+                <input id="membership-email" name="email" type="email" class="form-control"
+                       placeholder="adresse@exemple.fr" role="textbox"
                        aria-label="{% trans 'Email address' %}" required>
                 <label for="email">{% trans 'Email address' %}</label>
             </div>
 
             <div class="form-floating mb-3">
-                <input id="confirm-email" name="confirm-email" type="email" class="form-control" placeholder="adresse@exemple.fr"
+                <input id="confirm-email" name="confirm-email" type="email" class="form-control"
+                       placeholder="adresse@exemple.fr"
                        role="textbox"
                        aria-label="{% trans 'Email confirmation' %}" required>
                 <label for="confirm-email">{% trans 'Email confirmation' %}</label>
