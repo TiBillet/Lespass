@@ -1,23 +1,18 @@
-import base64
 import logging
 from datetime import timedelta
 from decimal import Decimal
 from typing import Any, Optional, Dict
-from unicodedata import category
 
 import requests
 import segno
-import unfold.widgets
 from django import forms
 from django.conf import settings
-from django.core.exceptions import MultipleObjectsReturned
-from django.core.signing import TimestampSigner
-from django.db import models, connection, IntegrityError
 from django.contrib import admin
 from django.contrib import messages
-from django.db.models import Model, Sum, F, IntegerField, ExpressionWrapper, Count, Q, Prefetch
-from django.forms import ModelForm, TextInput, Form, modelformset_factory
-from django.forms.utils import ErrorList
+from django.core.signing import TimestampSigner
+from django.db import models, connection, IntegrityError
+from django.db.models import Model, Count, Q, Prefetch
+from django.forms import ModelForm, Form
 from django.http import HttpResponse, HttpRequest, HttpResponseRedirect
 from django.shortcuts import redirect, get_object_or_404
 from django.template.defaultfilters import slugify
@@ -28,33 +23,13 @@ from django.utils.html import format_html
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
+from import_export.admin import ImportExportModelAdmin, ExportActionModelAdmin
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework_api_key.models import APIKey
 from solo.admin import SingletonModelAdmin
-
-from unfold.admin import ModelAdmin, TabularInline, StackedInline
+from unfold.admin import ModelAdmin, TabularInline
 from unfold.components import register_component, BaseComponent
-from unfold.sections import TableSection, TemplateSection
-from unfold.decorators import display, action
-from unfold.sites import UnfoldAdminSite
-# from unfold.widgets import UnfoldAdminTextInputWidget, UnfoldAdminEmailInputWidget, UnfoldAdminSelectWidget, \
-#     UnfoldAdminSelectMultipleWidget, UnfoldAdminRadioSelectWidget, UnfoldAdminCheckboxSelectMultiple
-
-from Administration.importers.event_importers import EventImportResource
-from Administration.importers.ticket_exporter import TicketExportResource
-
-from unfold.widgets import (
-    UnfoldAdminCheckboxSelectMultiple,
-    UnfoldAdminEmailInputWidget,
-    UnfoldAdminRadioSelectWidget,
-    UnfoldAdminColorInputWidget,
-    UnfoldAdminSelectWidget,
-    UnfoldAdminSplitDateTimeWidget,
-    UnfoldAdminTextInputWidget,
-)
-
-from unfold.contrib.forms.widgets import WysiwygWidget
 from unfold.contrib.filters.admin import (
     # AutocompleteSelectMultipleFilter,
     # ChoicesDropdownFilter,
@@ -65,13 +40,21 @@ from unfold.contrib.filters.admin import (
     # SingleNumericFilter,
     # TextFilter,
 )
-# from simple_history.admin import SimpleHistoryAdmin
+from unfold.contrib.forms.widgets import WysiwygWidget
+from unfold.contrib.import_export.forms import ExportForm, ImportForm
+from unfold.decorators import display, action
+from unfold.sections import TableSection
+from unfold.sites import UnfoldAdminSite
+from unfold.widgets import (
+    UnfoldAdminCheckboxSelectMultiple,
+    UnfoldAdminEmailInputWidget,
+    UnfoldAdminRadioSelectWidget,
+    UnfoldAdminColorInputWidget,
+    UnfoldAdminSelectWidget,
+    UnfoldAdminTextInputWidget,
+)
 
-from import_export import resources, fields
-from import_export.admin import ImportExportModelAdmin, ExportActionModelAdmin
-
-from unfold.contrib.import_export.forms import ExportForm, ImportForm, SelectableFieldsExportForm
-
+from Administration.importers.ticket_exporter import TicketExportResource
 from ApiBillet.permissions import TenantAdminPermissionWithRequest, RootPermissionWithRequest
 from AuthBillet.models import HumanUser, TibilletUser
 from AuthBillet.utils import get_or_create_user
@@ -83,8 +66,10 @@ from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invo
     send_reservation_cancellation_user
 from Customers.models import Client
 from MetaBillet.models import WaitingConfiguration
-from fedow_connect.utils import dround
 from fedow_connect.models import Asset
+from fedow_connect.utils import dround
+
+# from simple_history.admin import SimpleHistoryAdmin
 
 logger = logging.getLogger(__name__)
 
@@ -577,10 +562,6 @@ class ProductAdminCustomForm(ModelForm):
             "legal_link",
             'publish',
             'archive',
-            # Fedow reward fields
-            'fedow_reward_enabled',
-            'fedow_reward_asset',
-            'fedow_reward_amount',
         )
         help_texts = {
             'img': _('Product image is displayed at a 16/9 ratio.'),
@@ -611,29 +592,7 @@ class ProductAdminCustomForm(ModelForm):
             except Exception as e:
                 raise forms.ValidationError(_("Please add at least one rate to this product."))
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Limit the Asset choices to local tokens, time, and fidelity
-        try:
-            self.fields['fedow_reward_asset'].queryset = Asset.objects.filter(
-                category__in=[
-                Asset.TOKEN_LOCAL_FIAT,
-                Asset.TOKEN_LOCAL_NOT_FIAT,
-                Asset.TIME,
-                Asset.FIDELITY,
-            ],
-                archive=False,
-            )
-            # Improve display label: show name, currency and category
-            def _label(obj):
-                try:
-                    return f"{obj.name} ({obj.currency_code}) - {obj.get_category_display()}"
-                except Exception:
-                    return str(obj)
-            self.fields['fedow_reward_asset'].label_from_instance = _label
-        except Exception:
-            # Field may not be present in some contexts; ignore
-            pass
+
 
 
 @register_component
@@ -674,24 +633,12 @@ class ProductAdmin(ModelAdmin):
                 'publish',
                 'archive',
             ),
-            'classes': ['tab'],
-
         }),
         (_('Options'), {
             'fields': (
                 'option_generale_radio',
                 'option_generale_checkbox',
             ),
-            'classes': ['tab'],
-
-        }),
-        (_('Triggers'), {
-            'fields': (
-                'fedow_reward_enabled',
-                'fedow_reward_asset',
-                'fedow_reward_amount',
-            ),
-            'classes': ['tab'],
         }),
     )
 
@@ -803,6 +750,10 @@ class PriceChangeForm(ModelForm):
             'publish',
             'adhesion_obligatoire',
             'stock',
+            # topup when paid :
+            'fedow_reward_enabled',
+            'fedow_reward_asset',
+            'fedow_reward_amount',
         )
 
     def clean_prix(self):
@@ -822,12 +773,60 @@ class PriceChangeForm(ModelForm):
             archive=False,
         )
 
+        # Limit the Asset choices to local tokens, time, and fidelity
+        try:
+            self.fields['fedow_reward_asset'].queryset = Asset.objects.filter(
+                category__in=[
+                Asset.TOKEN_LOCAL_FIAT,
+                Asset.TOKEN_LOCAL_NOT_FIAT,
+                Asset.TIME,
+                Asset.FIDELITY,
+            ],
+                archive=False,
+            )
+            # Improve display label: show name, currency and category
+            def _label(obj):
+                try:
+                    return f"{obj.name} ({obj.currency_code}) - {obj.get_category_display()}"
+                except Exception:
+                    return str(obj)
+            self.fields['fedow_reward_asset'].label_from_instance = _label
+        except Exception:
+            # Field may not be present in some contexts; ignore
+            pass
+
 
 @admin.register(Price, site=staff_admin_site)
 class PriceAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
     form = PriceChangeForm
+
+    fieldsets = (
+        (_('General'), {
+            'fields': (
+                'name',
+                'product',
+                'prix',
+                'free_price',
+                'max_per_user',
+                'subscription_type',
+                'order',
+                'publish',
+                'adhesion_obligatoire',
+                'stock',
+            ),
+            'classes': ['tab'],
+        }),
+        (_('Triggers'), {
+            'fields': (
+                'fedow_reward_enabled',
+                'fedow_reward_asset',
+                'fedow_reward_amount',
+            ),
+            'classes': ['tab'],
+        }),
+    )
 
     def has_delete_permission(self, request, obj=None):
         return False
@@ -1128,10 +1127,7 @@ class HumanUserAdmin(ModelAdmin):
 
 from Administration.importers.membership_importers import (
     MembershipExportResource,
-    MembershipImportResource,
-    EmailUserForeignKeyWidget,
-    PriceForeignKeyWidget,
-    OptionsManyToManyWidgetWidget
+    MembershipImportResource
 )
 
 
@@ -1610,7 +1606,6 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     ]
     list_per_page = 20
 
-    resource_classes = [EventImportResource]
     export_form_class = ExportForm
     import_form_class = ImportForm
 

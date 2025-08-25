@@ -7,7 +7,7 @@ from django.utils import timezone
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import LigneArticle, Product, Membership, Price, Configuration, Paiement_stripe
 from BaseBillet.tasks import send_to_ghost, send_membership_invoice_to_email, send_sale_to_laboutik, webhook_membership, \
-    send_to_brevo
+    send_to_brevo, refill_from_lespass_to_user_wallet_from_price_solded
 from BaseBillet.templatetags.tibitags import dround
 from fedow_connect.fedow_api import FedowAPI
 from root_billet.models import RootConfiguration
@@ -202,62 +202,8 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
         serialized_transaction = fedowAPI.membership.create(membership=membership)
 
         # Optional Fedow reward to user wallet (product setting)
-        try:
-            product: Product = ligne_article.pricesold.productsold.product
-            if getattr(product, "fedow_reward_enabled", False):
-                asset_uuid = getattr(product, "fedow_reward_asset", None)
-                amount = getattr(product, "fedow_reward_amount", None)
-                if asset_uuid and amount and membership.user:
-                    from fedow_connect.models import FedowConfig
-                    if FedowConfig.get_solo().can_fedow():
-                        logger.info("    TRIGGER_A ADHESION PAID -> Fedow reward enabled: sending tokens to user wallet")
-                        metadata = {
-                            "ligne_article_uuid": str(ligne_article.uuid),
-                            "membership_uuid": str(membership.uuid),
-                            "product_uuid": str(product.uuid),
-                            "checkout_session_id_stripe": ligne_article.paiement_stripe.checkout_session_id_stripe,
-                            "reason": f"Membership reward for {product.name}",
-                        }
-                        # Prevent duplicate reward if metadata already present
-                        already_sent = False
-                        if ligne_article.metadata and isinstance(ligne_article.metadata, dict):
-                            already_sent = bool(ligne_article.metadata.get("fedow_reward"))
-                        if not already_sent:
-                            import ipdb; ipdb.set_trace()
-                            reward_tx = fedowAPI.transaction.refill_from_lespass_to_user_wallet(
-                                user=membership.user,
-                                product=product,
-                                metadata=metadata,
-                            )
-                            # Link transaction to membership and payment for traceability
-                            try:
-                                from BaseBillet.models import FedowTransaction
-                                fedow_tx = FedowTransaction.objects.get(pk=reward_tx.get("uuid"))
-                                membership.fedow_transactions.add(fedow_tx)
-                                if membership.stripe_paiement.exists():
-                                    membership.stripe_paiement.latest('last_action').fedow_transactions.add(fedow_tx)
-                            except Exception as e:
-                                logger.warning(f"Could not link Fedow reward transaction: {e}")
-                            # Mark on ligne_article to avoid duplicates
-                            try:
-                                meta = ligne_article.metadata or {}
-                                meta["fedow_reward"] = {
-                                    "transaction_uuid": str(reward_tx.get("uuid")),
-                                    "hash": reward_tx.get("hash"),
-                                    "asset": str(asset_uuid),
-                                    "amount": int(amount),
-                                    "sent_at": timezone.now().isoformat(),
-                                }
-                                ligne_article.metadata = meta
-                                ligne_article.save(update_fields=["metadata"])
-                            except Exception as e:
-                                logger.warning(f"Could not save fedow_reward metadata on LigneArticle: {e}")
-                        else:
-                            logger.info("    TRIGGER_A ADHESION PAID -> Fedow reward already sent for this line, skipping")
-                else:
-                    logger.info("    TRIGGER_A ADHESION PAID -> Fedow reward config incomplete or no user, skipping")
-        except Exception as e:
-            logger.error(f"Fedow reward error: {e}")
+        refill_from_lespass_to_user_wallet_from_price_solded.delay(ligne_article.pk)
+
 
         # Envoi de la vente à LaBoutik
         logger.info(f"    TRIGGER_A ADHESION PAID -> envoi à LaBoutik?")

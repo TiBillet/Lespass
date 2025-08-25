@@ -33,9 +33,10 @@ from weasyprint.text.fonts import FontConfiguration
 from ApiBillet.serializers import LigneArticleSerializer, MembershipSerializer
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, Ticket, Configuration, Membership, Webhook, LigneArticle, \
-    GhostConfig, BrevoConfig, Product
+    GhostConfig, BrevoConfig, Product, Price
 from MetaBillet.models import WaitingConfiguration
 from TiBillet.celery import app
+from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.utils import dround
 
 logger = logging.getLogger(__name__)
@@ -206,6 +207,8 @@ def context_for_membership_email(membership: "Membership"):
     if hasattr(config.img, 'med'):
         image_url = f"https://{domain}{config.img.med.url}"
 
+    additionnal_text_3 = None
+
     membership.refresh_from_db()
     context = {
         'username': membership.member_name(),
@@ -216,7 +219,7 @@ def context_for_membership_email(membership: "Membership"):
         'sub_title': _("Welcome aboard !"),
         'main_text': _("Your payment for ") + f"{membership.price.product.name}" + _(" has been received."),
         'main_text_2': config.additional_text_in_membership_mail,
-        # 'main_text_3': _("Dans le cas contraire, vous pouvez main_text_3. Merci de contacter l'équipe d'administration via : contact@tibillet.re au moindre doute."),
+        'main_text_3': additionnal_text_3,
         'table_info': {
             _('Receipt for:'): f'{membership.member_name()}',
             _('Product'): f'{membership.price.product.name} - {membership.price.name}',
@@ -328,6 +331,7 @@ def send_stripe_bank_deposit_to_laboutik(self, payload):
     except MaxRetriesExceededError:
         logger.error(f"La tâche a échoué après plusieurs tentatives pour {url}")
 
+
 @shared_task(bind=True, max_retries=20)
 def send_refund_to_laboutik(self, ligne_article_pk):
     # Le max de temps entre deux retries : 24 heures
@@ -388,7 +392,6 @@ def send_refund_to_laboutik(self, ligne_article_pk):
 
     except MaxRetriesExceededError:
         logger.error(f"La tâche a échoué après plusieurs tentatives pour {url}")
-
 
 
 # @app.task
@@ -869,7 +872,8 @@ def webhook_membership(membership_pk, solo_webhook_pk=None):
         for webhook in webhooks:
             try:
                 response = requests.request("POST", webhook.url, data=data_sended, timeout=2,
-                                            headers={"Content-type": "application/json"}, verify=bool(not settings.DEBUG))
+                                            headers={"Content-type": "application/json"},
+                                            verify=bool(not settings.DEBUG))
                 logger.debug(f"############### webhook_membership ###############\n")
                 logger.debug(f"data sended : {data_sended}\n")
                 logger.debug(f"response : {response.content}")
@@ -1133,6 +1137,78 @@ def trigger_product_update_tasks(product_pk):
 
 
 @app.task
+def refill_from_lespass_to_user_wallet_from_price_solded(ligne_article_pk):
+    time.sleep(1)  # wait for trigger pre_save
+    ligne_article = LigneArticle.objects.get(pk=ligne_article_pk)
+
+    try:
+        product: Product = ligne_article.pricesold.productsold.product
+        price: Price = ligne_article.pricesold.price
+
+        if getattr(price, "fedow_reward_enabled", False) and getattr(price, "fedow_reward_asset", None) and getattr(
+                price, "fedow_reward_amount", None):
+            fedowAPI = FedowAPI()
+
+            asset = getattr(price, "fedow_reward_asset", None)
+            float_amount = getattr(price, "fedow_reward_amount", None)
+            amount = int(dround(float_amount) * 100)
+
+            membership = ligne_article.membership
+            if asset and amount and membership.user:
+                from fedow_connect.models import FedowConfig
+                if FedowConfig.get_solo().can_fedow():
+                    logger.info("    TRIGGER_A ADHESION PAID -> Fedow reward enabled: sending tokens to user wallet")
+                    metadata = {
+                        "ligne_article_uuid": str(ligne_article.uuid),
+                        "membership_uuid": str(membership.uuid),
+                        "product_uuid": str(product.uuid),
+                        "price_uuid": str(price.uuid),
+                        "checkout_session_id_stripe": ligne_article.paiement_stripe.checkout_session_id_stripe,
+                        "reason": f"Membership reward for {product.name} - {price.name} : {float_amount} {asset.name} ",
+                    }
+                    # Prevent duplicate reward if metadata already present
+                    already_sent = False
+                    if ligne_article.metadata and isinstance(ligne_article.metadata, dict):
+                        already_sent = bool(ligne_article.metadata.get("fedow_reward"))
+                    if not already_sent:
+                        reward_tx = fedowAPI.transaction.refill_from_lespass_to_user_wallet(
+                            user=membership.user,
+                            amount=amount,
+                            asset=asset,
+                            metadata=metadata,
+                        )
+                        # Link transaction to membership and payment for traceability
+                        try:
+                            from BaseBillet.models import FedowTransaction
+                            fedow_tx = FedowTransaction.objects.get(pk=reward_tx.get("uuid"))
+                            membership.fedow_transactions.add(fedow_tx)
+                            if membership.stripe_paiement.exists():
+                                membership.stripe_paiement.latest('last_action').fedow_transactions.add(fedow_tx)
+                        except Exception as e:
+                            logger.warning(f"Could not link Fedow reward transaction: {e}")
+                        # Mark on ligne_article to avoid duplicates
+                        try:
+                            meta = ligne_article.metadata or {}
+                            meta["fedow_reward"] = {
+                                "transaction_uuid": str(reward_tx.get("uuid")),
+                                "hash": reward_tx.get("hash"),
+                                "asset": str(asset.uuid),
+                                "amount": int(amount),
+                                "sent_at": timezone.now().isoformat(),
+                            }
+                            ligne_article.metadata = meta
+                            ligne_article.save(update_fields=["metadata"])
+                        except Exception as e:
+                            logger.warning(f"Could not save fedow_reward metadata on LigneArticle: {e}")
+                    else:
+                        logger.info("    TRIGGER_A ADHESION PAID -> Fedow reward already sent for this line, skipping")
+            else:
+                logger.info("    TRIGGER_A ADHESION PAID -> Fedow reward config incomplete or no user, skipping")
+    except Exception as e:
+        logger.error(f"Fedow reward error: {e}")
+
+
+@app.task
 def send_payment_success_admin(amount: int, payment_time_str: str, place: str, user_email: str):
     """
     Envoie un email à l'admin de l'instance pour confirmer la réception d'un paiement.
@@ -1218,7 +1294,6 @@ def test_logger():
     logger.error(f"{timezone.now()} error")
 
 
-
 @app.task
 def send_reservation_cancellation_user(reservation_uuid: str):
     """
@@ -1273,7 +1348,6 @@ def send_reservation_cancellation_user(reservation_uuid: str):
     )
     mail.send()
     return bool(mail.sended)
-
 
 
 @app.task

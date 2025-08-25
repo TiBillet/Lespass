@@ -18,7 +18,7 @@ from django_tenants.utils import tenant_context
 from AuthBillet.models import TibilletUser, Wallet, HumanUser
 from BaseBillet.models import Configuration, Membership, Product
 from Customers.models import Client
-from fedow_connect.models import FedowConfig
+from fedow_connect.models import FedowConfig, Asset
 from fedow_connect.utils import sign_message, data_to_b64, verify_signature, rsa_decrypt_string, dround
 from fedow_connect.validators import WalletValidator, AssetValidator, TransactionValidator, \
     PaginatedTransactionValidator, CardValidator, QrCardValidator
@@ -781,7 +781,8 @@ class TransactionFedow():
 
     def refill_from_lespass_to_user_wallet(self,
                                            user: TibilletUser = None,
-                                           product: Product = None,
+                                           amount: int = None,
+                                           asset: Asset = None,
                                            metadata: json = None,
                                            ):
         """
@@ -792,14 +793,16 @@ class TransactionFedow():
             wallet_fedow = WalletFedow(self.fedow_config)
             user.wallet, created = wallet_fedow.get_or_create_wallet(user)
 
-        if not product.fedow_reward_enabled :
-            raise Exception("Product not enabled for Fedow")
+        if not isinstance(amount, int) or amount < 0:
+            raise Exception("Amount must be an positive integer")
+        if not isinstance(asset, Asset):
+            raise Exception("asset must be an Asset object")
 
         transaction = {
-            "amount": int(dround(product.fedow_reward_amount) * 100),
+            "amount": amount,
             "sender": f"{self.fedow_config.fedow_place_wallet_uuid}",
             "receiver": f"{user.wallet.uuid}",
-            "asset": f"{product.fedow_reward_asset.uuid}",
+            "asset": f"{asset.uuid}",
             "metadata": metadata,
         }
         response = _post(
