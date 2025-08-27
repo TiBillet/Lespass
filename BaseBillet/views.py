@@ -493,10 +493,63 @@ class TiBilletLogin(viewsets.ViewSet):
 
     @action(detail=True, methods=['GET'], permission_classes=[permissions.IsAuthenticated])
     def redirect_session_to_another_tenant(self, request, pk):
-        url_another_domain_wanted = pk
-        # TODO: récupère la session actuelle, vérifie que le domain demandé existe bien dans Client et redirige vers la page demandé mais en étant loggué
-        # ex : Domain.objects.filter(
-        pass
+        """
+        Cross-tenant session handoff.
+        pk is a base64url-encoded absolute URL (the original QR code URL on another tenant).
+        We verify the current session is authenticated, ensure the target domain exists in our multi-tenant Domains,
+        then redirect the browser to the target tenant's emailconfirmation endpoint with a one-time token and a
+        signed "next" back to the requested QR code URL. The login will be transparent for the user.
+        """
+        # 1) Decode base64url-encoded target URL
+        import base64
+        from urllib.parse import urlparse
+
+        def b64url_decode(data: str) -> str:
+            # restore padding
+            padding = '=' * ((4 - len(data) % 4) % 4)
+            data_padded = (data + padding).encode('utf-8')
+            return base64.urlsafe_b64decode(data_padded).decode('utf-8')
+
+        try:
+            target_url = b64url_decode(pk)
+        except Exception as e:
+            logger.error(f"redirect_session_to_another_tenant: invalid encoded URL: {e}")
+            messages.add_message(request, messages.ERROR, _("Invalid redirect target"))
+            return redirect('/')
+
+        # 2) Validate URL and domain
+        parsed = urlparse(target_url)
+        if not parsed.scheme or not parsed.netloc:
+            messages.add_message(request, messages.ERROR, _("Invalid redirect target"))
+            return redirect('/')
+        # remove potential port when comparing with Domain.domain
+        host = parsed.netloc.split(':')[0]
+
+        if not Domain.objects.filter(domain=host).exists():
+            logger.warning(f"redirect_session_to_another_tenant: domain not managed: {host}")
+            messages.add_message(request, messages.ERROR, _("Unknown destination domain"))
+            return redirect('/')
+
+        # 3) Generate a one-time token for the current user
+        user: TibilletUser = request.user
+        try:
+            token = user.get_connect_token()
+        except Exception as e:
+            logger.error(f"redirect_session_to_another_tenant: cannot generate token: {e}")
+            messages.add_message(request, messages.ERROR, _("Unable to prepare login on destination"))
+            return redirect('/')
+
+        # 4) Sign the next URL so that emailconfirmation accepts it
+        try:
+            signed_next = signing.dumps(target_url)
+        except Exception as e:
+            logger.error(f"redirect_session_to_another_tenant: cannot sign next URL: {e}")
+            messages.add_message(request, messages.ERROR, _("Unable to prepare redirection"))
+            return redirect('/')
+
+        # 5) Redirect to the destination tenant's emailconfirmation with the token and next
+        redirect_url = f"https://{host}/emailconfirmation/{token}?next={signed_next}"
+        return HttpResponseRedirect(redirect_url)
 
 
 class MyAccount(viewsets.ViewSet):
@@ -981,6 +1034,48 @@ class QrCodeScanPay(viewsets.ViewSet):
         if request.method == 'POST' : # C'est le résultat du scanner
             import ipdb; ipdb.set_trace()
 
+    @action(methods=['POST'], detail=False, permission_classes=[permissions.IsAuthenticated, ])
+    def process_with_nfc(self, request):
+        user = request.user
+        # Accept JSON or form data
+        try:
+            data = request.data
+        except Exception:
+            try:
+                data = json.loads(request.body.decode('utf-8'))
+            except Exception:
+                data = {}
+
+        tag_serial = data.get('tagSerial') or data.get('serialNumber') or None
+        records = data.get('records') or []
+        la_hex = data.get('ligne_article_uuid_hex') or data.get('ligne_article') or None
+
+        logger.info(f"NFC read by {user.email if user.is_authenticated else 'anonymous'}: serial={tag_serial}, la={la_hex}, records={records}")
+
+        updated = False
+        if la_hex:
+            try:
+                la_uuid = uuid.UUID(la_hex)
+                la = LigneArticle.objects.get(uuid=la_uuid)
+                metadata = json.loads(la.metadata) if la.metadata else {}
+                metadata['nfc'] = {
+                    'tagSerial': tag_serial,
+                    'records': records,
+                    'read_at': timezone.now().isoformat(),
+                    'reader': user.email if user.is_authenticated else None,
+                }
+                la.metadata = json.dumps(metadata, cls=DjangoJSONEncoder)
+                la.save(update_fields=['metadata'])
+                updated = True
+            except Exception as e:
+                logger.error(f"Failed to attach NFC info to LigneArticle {la_hex}: {e}")
+
+        return Response({
+            'status': 'ok',
+            'tagSerial': tag_serial,
+            'ligne_article_uuid_hex': la_hex,
+            'updated': updated,
+        })
 
     @action(detail=True, methods=['GET'], permission_classes=[permissions.AllowAny, ]) # on permet a tout le monde de scanner un qrcode, mais si tu n'est pas loggué, on te redirige
     def process_qrcode(self, request: HttpRequest, pk):

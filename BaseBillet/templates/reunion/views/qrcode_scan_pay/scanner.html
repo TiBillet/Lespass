@@ -86,6 +86,17 @@
         const scanResult = document.getElementById('scan-result');
         const qrcodeContentInput = document.getElementById('qrcode-content');
         
+        // Helper to base64url-encode a string (for safe path segment)
+        function base64UrlEncode(str) {
+            try {
+                const base64 = btoa(unescape(encodeURIComponent(str)));
+                return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            } catch (e) {
+                console.error('base64UrlEncode error:', e);
+                return '';
+            }
+        }
+        
         // Create scanner instance
         const qrScanner = new QrScanner(
             video,
@@ -128,6 +139,11 @@
                         setTimeout(() => {
                             window.location.href = scannedUrl;
                         }, 800);
+                        return;
+                    } else {
+                        // Different tenant: perform cross-tenant session handoff via backend redirect
+                        const encoded = base64UrlEncode(scannedUrl);
+                        window.location.replace(`/login/${encoded}/redirect_session_to_another_tenant/`);
                         return;
                     }
                 } catch (error) {
