@@ -16,6 +16,7 @@ router.register(r'qrcodescanpay', base_view.QrCodeScanPay, basename='qrcodescanp
 router.register(r'qr', base_view.ScanQrCode, basename='scan_qrcode')
 router.register(r'event', base_view.EventMVT, basename='event')
 router.register(r'home', base_view.HomeViewset, basename='home')
+router.register(r'login', base_view.TiBilletLogin, basename='login-viewset')
 urlpatterns = [
     # Dynamic robots.txt - Access at: https://yourdomain.com/robots.txt
     # This automatically includes a reference to the sitemap at: https://yourdomain.com/sitemap.xml

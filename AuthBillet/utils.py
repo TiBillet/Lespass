@@ -25,7 +25,7 @@ def get_client_ip(request):
 
 
 
-def sender_mail_connect(email, subject_mail=None):
+def sender_mail_connect(email, subject_mail=None, next_url=None):
     # Mail de confirmation de création de compte
     try :
         base_url = connection.tenant.get_primary_domain().domain
@@ -35,7 +35,7 @@ def sender_mail_connect(email, subject_mail=None):
 
     try:
         logger.info(f"sender_mail_connect : {email} - {base_url}")
-        connexion_celery_mailer.delay(email, f"https://{base_url}", subject_mail)
+        connexion_celery_mailer.delay(email, f"https://{base_url}", subject_mail, next_url=next_url)
         # connexion_celery_mailer(email, f"https://{base_url}", subject_mail)
     except Exception as e:
         logger.error(f"validate_email_and_return_user erreur pour récuperer config : {email} - {base_url} : {e}")
@@ -46,6 +46,7 @@ def get_or_create_user(email: str,
                        set_active=False,
                        send_mail=True,
                        force_mail=False,
+                       next_url=None,
                        ) -> "TibilletUser" or None:
     """
     If user not created, set it inactive.
@@ -83,7 +84,7 @@ def get_or_create_user(email: str,
 
         if bool(send_mail):
             logger.info(f"created & bool(send_mail) == {send_mail}, -> sender_mail_connect({user.email})")
-            sender_mail_connect(user.email)
+            sender_mail_connect(user.email, next_url=next_url)
 
 
     else:
@@ -92,13 +93,13 @@ def get_or_create_user(email: str,
             return None
 
         if force_mail:
-            sender_mail_connect(user.email)
+            sender_mail_connect(user.email, next_url=next_url)
         elif user.email_valid == False:
             # L'utilisateur n'a pas encore validé son email
             # On relance le mail de validation.
             if bool(send_mail):
                 logger.info("utilisateur est inactif, il n'a pas encore validé son mail, on lance le mail de validation")
-                sender_mail_connect(user.email)
+                sender_mail_connect(user.email, next_url=next_url)
 
     return user
 

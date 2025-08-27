@@ -89,6 +89,11 @@ class TenantAdminApiPermission(permissions.BasePermission):
         # Vérifie que l'user de la requête est bien admin du tenant
         return TenantAdminPermissionWithRequest(request)
 
+class TenantAdminPermission(permissions.BasePermission):
+    # Pour les routes sans API, principalement pour les viewset
+    message = 'User no admin in tenant'
+    def has_permission(self, request, view):
+        return TenantAdminPermissionWithRequest(request)
 
 """
 class TerminalScanPermission(permissions.BasePermission):

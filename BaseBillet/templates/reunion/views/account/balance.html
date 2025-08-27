@@ -91,7 +91,7 @@
                     </div>
                     {% if user.email_valid %}
                         <div class="col-6 col-md-auto me-md-2">
-                            <a href="/qrcodescanpay/" class="btn btn-primary square-btn w-100">
+                            <a href="{% url 'qrcodescanpay-get-scanner' %}" class="btn btn-primary square-btn w-100">
                                 <i class="bi bi-qr-code-scan"></i>
                                 {% trans "Scan a payment QR Code" %}
                             </a>

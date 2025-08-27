@@ -1,0 +1,11 @@
+{% extends base_template %}
+{% load i18n %}
+
+{% block title %}{% translate 'Login' %}{% endblock %}
+{% block meta_description %}{% translate 'Access your account using a one-time email link.' %}{% endblock %}
+
+{% block main %}
+<div id="login-main">
+  {% include 'reunion/views/login/partials/fullpage_inner.html' %}
+</div>
+{% endblock %}

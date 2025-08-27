@@ -1,0 +1,32 @@
+{% load i18n %}
+<title hx-swap-oob="true">{% translate 'Check your email' %} | {{ config.organisation }}</title>
+
+<div class="d-flex min-vh-100 align-items-center justify-content-center py-5 login-fullpage-bg flex-fill">
+  <main class="container px-3">
+    <div class="mx-auto" style="max-width: 520px;">
+      <div class="card shadow-sm bg-body border-0 rounded-4">
+        <div class="card-body p-4 p-md-5 text-center">
+          <div class="display-6 mb-3">📬</div>
+          <h1 class="h3 mb-3">{% trans "Check your email" %}</h1>
+          <p class="text-secondary mb-4">
+            {% trans "We have sent you a sign-in link. Please click the link in the email to access your account. Don't forget to check your spam folder." %}
+          </p>
+
+          <div class="d-grid gap-2">
+            <a href="/" hx-get="/" hx-target="body" hx-push-url="true" class="btn btn-primary">
+              {% trans "Back to home" %}
+            </a>
+            <a href="/login/login_fullpage/" hx-get="/login/login_fullpage/" hx-target="#login-main" hx-push-url="true" class="btn btn-outline-secondary">
+              {% trans "Use a different email" %}
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<style>
+  [data-bs-theme="light"] .login-fullpage-bg { background-color: #f8f9fa; }
+  [data-bs-theme="dark"] .login-fullpage-bg { background-color: #212529; }
+</style>

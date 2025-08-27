@@ -1,0 +1,55 @@
+{% load i18n %}
+<title hx-swap-oob="true">{% translate 'Login' %} | {{ config.organisation }}</title>
+
+<div class="d-flex min-vh-100 align-items-center justify-content-center py-5 login-fullpage-bg flex-fill">
+  <main class="container px-3">
+    <div class="mx-auto" style="max-width: 520px;">
+      <div class="card shadow-sm bg-body border-0 rounded-4">
+        <div class="card-body p-4 p-md-5">
+          <h1 class="h3 mb-3">{% if config.organisation %}{{ config.organisation }}{% else %}{% trans 'Welcome' %}{% endif %}</h1>
+          <p class="text-secondary mb-4">{% trans "Enter your email to receive a secure login link. No password needed." %}</p>
+
+          <form id="login-fullpage-form"
+                method="post"
+                hx-post="/login/login_fullpage/{% if next %}?next={{ next }}{% endif %}/"
+                hx-target="#login-main"
+                hx-swap="innerHTML"
+                novalidate>
+            {% csrf_token %}
+
+            <div class="mb-3">
+              <label for="loginEmail" class="form-label">{% trans "Email address" %}</label>
+              <input type="email" name="email" id="loginEmail" class="form-control {% if errors and errors.email %}is-invalid{% endif %}"
+                     placeholder="nom@exemple.fr" required value="{{ email|default:'' }}">
+              {% if errors and errors.email %}
+                <div class="invalid-feedback">
+                  {{ errors.email.0 }}
+                </div>
+              {% endif %}
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100 mb-3">
+              {% trans "Request login link" %}
+            </button>
+
+            <p class="small text-secondary mb-0">
+              {% trans "We will send you a sign-in link. Please check your inbox and spam folder." %}
+            </p>
+          </form>
+        </div>
+      </div>
+
+      <div class="text-center mt-4">
+        <a href="/" hx-get="/" hx-target="body" hx-push-url="true" class="text-decoration-none">
+          &larr; {% trans "Back to home" %}
+        </a>
+      </div>
+    </div>
+  </main>
+</div>
+
+<style>
+  /* Light/Dark adaptive background for the full page */
+  [data-bs-theme="light"] .login-fullpage-bg { background-color: #f8f9fa; }
+  [data-bs-theme="dark"] .login-fullpage-bg { background-color: #212529; }
+</style>

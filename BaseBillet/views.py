@@ -11,6 +11,7 @@ import stripe
 from django.contrib import messages
 from django.contrib.auth import logout, login
 from django.contrib.messages import MessageFailure
+from django.core import signing
 from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.core.serializers.json import DjangoJSONEncoder
@@ -36,6 +37,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from ApiBillet.permissions import TenantAdminPermission
 from AuthBillet.models import TibilletUser, Wallet, HumanUser
 from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
@@ -286,9 +288,18 @@ def connexion(request):
 
 
 def emailconfirmation(request, token):
-    activate(request, token)
-    return redirect('index')
-
+    try :
+        activate(request, token)
+        next_url = request.GET.get('next', None)
+        if next_url:
+            while next_url.endswith('/'):
+                next_url = next_url[:-1]
+            # l'url est signé par Django
+            next_url = signing.loads(next_url)
+            return HttpResponseRedirect(next_url)
+        return redirect('index')
+    except Exception as e:
+        raise Http404("Error on email confirmation")
 
 class ScanQrCode(viewsets.ViewSet):  # /qr
     authentication_classes = [SessionAuthentication, ]
@@ -445,6 +456,47 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
     def get_permissions(self):
         permission_classes = [permissions.AllowAny]
         return [permission() for permission in permission_classes]
+
+
+class TiBilletLogin(viewsets.ViewSet):
+    authentication_classes = [SessionAuthentication, ]
+
+    @action(detail=False, methods=['GET', 'POST'], permission_classes=[permissions.AllowAny])
+    def login_fullpage(self, request):
+        template_context = get_context(request)
+        next_url = request.GET.get('next', None)
+        logger.info(f"login_fullpage next_url : {next_url}")
+        if request.method == 'GET':  # Render email form or confirmation page
+            # Optional next parameter sended in the email confirm button
+            if next_url:
+                template_context['next'] = next_url
+            if request.htmx:
+                return render(request, "reunion/views/login/partials/fullpage_inner.html", context=template_context)
+            return render(request, "reunion/views/login/fullpage.html", context=template_context)
+
+
+        # POST: email submitted
+        validator = LoginEmailValidator(data=request.POST)
+        if not validator.is_valid():
+            logger.error(validator.errors)
+            template_context['errors'] = validator.errors
+            template_context['email'] = request.POST.get('email', '')
+            if request.htmx:
+                return render(request, "reunion/views/login/partials/fullpage_inner.html", context=template_context)
+            return render(request, "reunion/views/login/fullpage.html", context=template_context)
+
+        email = validator.validated_data['email']
+        user = get_or_create_user(email=email, send_mail=True, force_mail=True, next_url=next_url)
+
+        # On success: swap only main content for HTMX and push URL
+        return render(request, "reunion/views/login/partials/confirmation_inner.html", context=template_context)
+
+    @action(detail=True, methods=['GET'], permission_classes=[permissions.IsAuthenticated])
+    def redirect_session_to_another_tenant(self, request, pk):
+        url_another_domain_wanted = pk
+        # TODO: récupère la session actuelle, vérifie que le domain demandé existe bien dans Client et redirige vers la page demandé mais en étant loggué
+        # ex : Domain.objects.filter(
+        pass
 
 
 class MyAccount(viewsets.ViewSet):
@@ -817,10 +869,8 @@ class MyAccount(viewsets.ViewSet):
 
 class QrCodeScanPay(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
-    permission_classes = [permissions.IsAuthenticated, ]
 
-
-    @action(detail=True, methods=['GET'])
+    @action(detail=True, methods=['GET'], permission_classes=[TenantAdminPermission, ])
     def check_payment(self, request: HttpRequest, pk=None):
         user = request.user
         this_tenant: Client = connection.tenant
@@ -840,7 +890,7 @@ class QrCodeScanPay(viewsets.ViewSet):
         }
         return render(request, "reunion/views/qrcode_scan_pay/fragments/check_payment.html", context=context)
 
-    @action(detail=False, methods=['GET'])
+    @action(detail=False, methods=['GET'], permission_classes=[TenantAdminPermission, ])
     def get_generator(self, request: HttpRequest):
 
         user = request.user
@@ -853,7 +903,7 @@ class QrCodeScanPay(viewsets.ViewSet):
         template_context = get_context(request)
         return render(request, "reunion/views/qrcode_scan_pay/generator.html", context=template_context)
 
-    @action(detail=False, methods=['POST'])
+    @action(detail=False, methods=['POST'], permission_classes=[TenantAdminPermission, ])
     def generate_qrcode(self, request: HttpRequest):
         # POST de la route /qrcodegenerator qui génère le qrcode
         data = request.POST
@@ -915,20 +965,32 @@ class QrCodeScanPay(viewsets.ViewSet):
 
         return render(request, "reunion/views/qrcode_scan_pay/generator.html", context=template_context)
 
-    def list(self, request: HttpRequest):
-        user = request.user
-        if not user.email_valid:
-            messages.add_message(request, messages.ERROR, _("Please validate your email address."))
-            return redirect('/my_account/')
+    @action(detail=False, methods=['GET', 'POST'], permission_classes=[permissions.IsAuthenticated, ])
+    def get_scanner(self, request: HttpRequest):
+        if request.method == 'GET': # On demande le scanner
+            user = request.user
+            if not user.email_valid:
+                messages.add_message(request, messages.ERROR, _("Please validate your email address."))
+                return redirect('/my_account/')
 
-        # GET de la route /qrcodescanpay
-        # On livre le template qui lance la caméra pour scanner un qrcode
-        template_context = get_context(request)
-        return render(request, "reunion/views/qrcode_scan_pay/scanner.html", context=template_context)
+            # GET de la route /qrcodescanpay
+            # On livre le template qui lance la caméra pour scanner un qrcode
+            template_context = get_context(request)
+            return render(request, "reunion/views/qrcode_scan_pay/scanner.html", context=template_context)
 
-    @action(detail=True, methods=['GET'])
+        if request.method == 'POST' : # C'est le résultat du scanner
+            import ipdb; ipdb.set_trace()
+
+
+    @action(detail=True, methods=['GET'], permission_classes=[permissions.AllowAny, ]) # on permet a tout le monde de scanner un qrcode, mais si tu n'est pas loggué, on te redirige
     def process_qrcode(self, request: HttpRequest, pk):
         user = request.user
+        if not user.is_authenticated:
+            # On redirige vers la page de login full page avec un next vers ici
+            signed_next_url =  signing.dumps(request.get_full_path())
+            logger.info(f"process_qrcode no auth, need redirect. signed_next_url : {signed_next_url}")
+            return redirect(f'/login/login_fullpage?next={signed_next_url}')
+
         if not user.email_valid:
             messages.add_message(request, messages.ERROR, _("Please validate your email address."))
             return redirect('/my_account/')
@@ -994,7 +1056,7 @@ class QrCodeScanPay(viewsets.ViewSet):
         # Render the payment validation template
         return render(request, "reunion/views/qrcode_scan_pay/payment_validation.html", context=template_context)
 
-    @action(detail=False, methods=['POST'])
+    @action(detail=False, methods=['POST'], permission_classes=[permissions.IsAuthenticated, ])
     def valid_payment(self, request: HttpRequest):
         user = request.user
         if not user.email_valid:
@@ -1121,6 +1183,21 @@ class QrCodeScanPay(viewsets.ViewSet):
             template_context['error_message'] = _("Error validating payment")
             return render(request, "reunion/views/qrcode_scan_pay/payment_error.html", context=template_context)
 
+    '''
+    def get_permissions(self):
+        if self.action in [ # Action de création et de vérification du lien de paiement, reservé a un admin de lieu
+            'check_payment',
+            'get_generator',
+            'generate_qrcode',
+        ]:
+            permission_classes = [TenantAdminPermission,]
+        elif self.action in [
+            "list"
+        ]:
+            permission_classes = [permissions.IsAuthenticated]
+        # else:
+        return [permission() for permission in permission_classes]
+    '''
 
 @require_GET
 def index(request):

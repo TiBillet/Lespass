@@ -558,7 +558,11 @@ def contact_mailer(sender, subject, message):
 
 
 @app.task
-def connexion_celery_mailer(user_email, base_url, title=None, template=None):
+def connexion_celery_mailer(user_email,
+                            base_url,
+                            title=None,
+                            template=None,
+                            next_url=None,):
     """
     :param title: Sujet de l'email
     :type user_email: str
@@ -581,7 +585,14 @@ def connexion_celery_mailer(user_email, base_url, title=None, template=None):
     # token = default_token_generator.make_token(user, )
 
     connexion_url = f"{base_url}/emailconfirmation/{token}"
-    logger.info("connexion_celery_mailer -> connection.tenant.schema_name : {connection.tenant.schema_name}")
+    if next_url:
+        logger.info(f"next_url : {next_url}")
+        connexion_url += f"?next={next_url}"
+
+
+    logger.info(f"connexion_celery_mailer -> connection.tenant.schema_name : {connection.tenant.schema_name}")
+    logger.info(f"{connexion_url}")
+
     config = Configuration.get_solo()
     activate(config.language)
     organisation = config.organisation
