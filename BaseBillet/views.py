@@ -996,23 +996,14 @@ class QrCodeScanPay(viewsets.ViewSet):
         qr_data = ligne_article.uuid.hex
 
         # Generate QR code
-        import segno
         base_url = connection.tenant.get_primary_domain().domain
         qr_code_content = f"https://{base_url}/qrcodescanpay/{qr_data}/process_qrcode"
-        qr = segno.make(qr_code_content, micro=False)
-        
-        # Create SVG QR code
-        buffer = BytesIO()
-        qr.save(buffer, kind='svg', scale=8, dark='#000000', light='#FFFFFF')
-        buffer.seek(0)
-        svg_data = buffer.getvalue().decode('utf-8')
-        
+
         # Prepare context for template
         template_context = get_context(request)
         template_context['qrcode_generated'] = True
         template_context['amount'] = amount
         template_context['asset_type'] = asset_type
-        template_context['qrcode_svg'] = svg_data
         template_context['qrcode_content'] = qr_code_content
         template_context['ligne_article_uuid_hex'] = qr_data
 

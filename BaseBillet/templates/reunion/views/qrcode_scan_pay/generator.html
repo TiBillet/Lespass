@@ -83,7 +83,43 @@
                                             }
                                         }
                                     </style>
-                                    {{ qrcode_svg|safe }}
+                                    <div id="qrcode-js" class="d-flex justify-content-center"></div>
+                                    <script src="{% static 'reunion/js/qrcode.min.js' %}"></script>
+                                    <script>
+                                    (function(){
+                                      const content = "{{ qrcode_content }}";
+                                      const container = document.querySelector('.qr-code-container');
+                                      const holder = document.getElementById('qrcode-js');
+                                      if(!container || !holder || !content){ return; }
+                                      function sizePx(){
+                                        const w = container.clientWidth || 256;
+                                        const s = Math.max(128, Math.min(512, Math.floor(w - 20)));
+                                        return s;
+                                      }
+                                      let currentSize = 0;
+                                      let qri = null;
+                                      function render(){
+                                        const s = sizePx();
+                                        if(Math.abs(s - currentSize) < 16 && qri){ return; }
+                                        currentSize = s;
+                                        holder.innerHTML = "";
+                                        qri = new QRCode(holder, {
+                                          text: content,
+                                          width: s,
+                                          height: s,
+                                          colorDark : "#000000",
+                                          colorLight : "#ffffff",
+                                          correctLevel : QRCode.CorrectLevel.H
+                                        });
+                                      }
+                                      render();
+                                      let to=null;
+                                      window.addEventListener('resize', function(){
+                                        clearTimeout(to);
+                                        to=setTimeout(render, 150);
+                                      });
+                                    })();
+                                    </script>
                                 </div>
                             </div>
 
