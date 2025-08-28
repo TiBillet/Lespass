@@ -16,21 +16,26 @@
                         </div>
                         <div class="card-body">
                             <div class="alert alert-success mb-4">
-                                <h5>{% translate 'Payment Details' %}:</h5>
-                                <p><strong>{% translate 'Amount' %}:</strong> <span class="fs-4">{{ amount | dround }}</span></p>
-                                <p><strong>{% translate 'Asset Type' %}:</strong> <span class="fs-4">{{ asset_type }}</span></p>
-                                <p>{% translate 'Direct link' %}: <a href="{{ qrcode_content }}" target="_blank">{{ qrcode_content }}</a></p>
-                            </div>
-                            
-                            <!-- NFC Scan Button -->
-                            <div class="mb-3 d-grid">
-                                <button id="nfc-scan-btn" type="button" class="btn btn-outline-primary btn-lg fw-bold">
-                                    Lecture carte NFC TiBillet
-                                </button>
-                                <div id="nfc-compat-message" class="form-text mt-2 text-danger" style="display:none;">
-                                    Lecteur NFC non disponible sur ce navigateur, utilisez Chrome sur Android.
+                                <h5 class="mb-3">💳 Paiement simple</h5>
+                                <p class="mb-2">Montant: <strong class="fs-4">{{ amount | dround }}</strong> — Devise: <strong class="fs-5">{{ asset_type }}</strong></p>
+                                <hr>
+                                <p class="mb-2">Il y a 3 façons de faire payer la personne (FALC):</p>
+                                <ul class="mb-3 ps-3">
+                                    <li class="mb-1">📷 Lui faire scanner le QR code ci‑dessous.</li>
+                                    <li class="mb-1">🪪 Lire sa carte TiBillet si possible (Chrome ou Opera sous Android).</li>
+                                    <li class="mb-1">🔗 Copier le lien de paiement et l’envoyer par message.</li>
+                                </ul>
+                                <div class="d-grid gap-2">
+                                    <button id="copy-pay-link-btn" type="button" class="btn btn-outline-success btn-lg fw-bold" aria-label="Copier le lien de paiement" data-link="{{ qrcode_content }}">
+                                        🔗 Copier le lien de paiement
+                                    </button>
+                                    <small class="text-muted">Astuce: collez ensuite dans SMS, WhatsApp, Signal, etc.</small>
+                                    <button id="nfc-scan-btn" type="button" class="btn btn-outline-primary btn-lg fw-bold" aria-label="Lire la carte TiBillet (NFC)">
+                                        🪪 Lire la carte TiBillet (NFC)
+                                    </button>
                                 </div>
                             </div>
+                            
 
                             <!-- QR Code Display -->
                             <div class="d-flex justify-content-center align-items-center mb-4" style="min-height: 300px; width: 100%;">
@@ -88,12 +93,10 @@
                             (function(){
                               const btn = document.getElementById('nfc-scan-btn');
                               if(!btn) return;
-                              const compatMsg = document.getElementById('nfc-compat-message');
                               const supported = 'NDEFReader' in window;
                               if(!supported){
                                 btn.disabled = true;
-                                btn.textContent = 'Lecteur NFC non disponible';
-                                if(compatMsg){ compatMsg.style.display='block'; }
+                                btn.textContent = 'NFC: marche sur Android avec Chrome ou Opéra.';
                                 return;
                               }
                               function getCookie(name){
@@ -153,6 +156,51 @@
                                   Swal.fire('Erreur', 'Impossible de démarrer la lecture NFC: ' + (err && err.message ? err.message : err), 'error');
                                   return;
                                 }
+                              });
+                            })();
+                            </script>
+
+                            <script>
+                            (function(){
+                              function copyText(text){
+                                if(navigator.clipboard && navigator.clipboard.writeText){
+                                  return navigator.clipboard.writeText(text);
+                                }
+                                return new Promise(function(resolve, reject){
+                                  try{
+                                    const ta = document.createElement('textarea');
+                                    ta.value = text;
+                                    ta.style.position = 'fixed';
+                                    ta.style.left = '-9999px';
+                                    document.body.appendChild(ta);
+                                    ta.focus();
+                                    ta.select();
+                                    const ok = document.execCommand('copy');
+                                    document.body.removeChild(ta);
+                                    ok ? resolve() : reject(new Error('copy failed'));
+                                  }catch(e){ reject(e); }
+                                });
+                              }
+                              document.addEventListener('click', function(ev){
+                                const btn = ev.target.closest('#copy-pay-link-btn');
+                                if(!btn) return;
+                                const link = btn.getAttribute('data-link');
+                                if(!link) return;
+                                copyText(link)
+                                  .then(()=>{
+                                    if(window.Swal){
+                                      Swal.fire({icon:'success', title:'Lien copié', text:'Le lien de paiement est dans le presse‑papier.', timer:1500, showConfirmButton:false});
+                                    }else{
+                                      alert('Lien copié dans le presse‑papier');
+                                    }
+                                  })
+                                  .catch((err)=>{
+                                    if(window.Swal){
+                                      Swal.fire({icon:'error', title:'Erreur', text:'Impossible de copier le lien: ' + (err && err.message ? err.message : err)});
+                                    }else{
+                                      alert('Impossible de copier le lien');
+                                    }
+                                  });
                               });
                             })();
                             </script>
