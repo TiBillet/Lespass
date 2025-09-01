@@ -91,11 +91,19 @@ def randCardImg(value):
 
 @register.filter(name='dict_key')
 def dict_key(d, k):
+    logger.info(d, k)
     '''Returns the given key from a dictionary.'''
     try :
         return d[k]
     except KeyError:
         return ""
+
+@register.filter(name='get_choice_string')
+def get_choice_string(value: str, choice: tuple):
+    # Le dictionnaire des choix : {clé: libellé}
+    choice_dict = dict(choice)
+    # Retourner le libellé s’il existe, sinon la valeur brute
+    return choice_dict.get(value, value)
 
 @register.filter(name='brightness')
 def brightness(color):

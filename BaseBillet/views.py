@@ -58,6 +58,7 @@ from TiBillet import settings
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
 from fedow_connect.utils import dround
+from fedow_connect.validators import TransactionSimpleValidator
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
@@ -832,7 +833,9 @@ class MyAccount(viewsets.ViewSet):
         next_url = paginated_list_by_wallet_signature.get('next')
         previous_url = paginated_list_by_wallet_signature.get('previous')
 
+
         context = {
+            'actions_choices':  TransactionSimpleValidator.TYPE_ACTION,
             'config': config,
             'transactions': transactions,
             'next_url': next_url,

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-08-25 12:56+0000\n"
+"POT-Creation-Date: 2025-09-01 06:23+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -18,7 +18,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: Administration/admin_tenant.py:82 BaseBillet/views.py:465
+#: Administration/admin_tenant.py:82 BaseBillet/views.py:571
 msgid "Please login to access this page."
 msgstr "Veuillez vous connecter pour accéder à cet espace."
 
@@ -156,7 +156,7 @@ msgstr ""
 #: BaseBillet/templates/reunion/views/membership/list.html:7
 #: BaseBillet/templates/reunion/views/membership/list.html:11
 #: BaseBillet/templates/reunion/views/membership/list.html:22
-#: BaseBillet/views.py:128 TiBillet/settings.py:497 TiBillet/settings.py:577
+#: BaseBillet/views.py:131 TiBillet/settings.py:497 TiBillet/settings.py:577
 msgid "Subscriptions"
 msgstr ""
 
@@ -507,39 +507,6 @@ msgstr ""
 
 #: Administration/templates/admin/index.html:34
 msgid "Last 7 days"
-msgstr ""
-
-#: Administration/templates/admin/index.html:50
-msgid "Product performance in last 28 days"
-msgstr ""
-
-#: Administration/templates/admin/index.html:55
-msgid "The most trending products in last 2 weeks"
-msgstr ""
-
-#: Administration/templates/admin/index.html:61
-#, python-format
-msgid ""
-"\n"
-"                            Total revenue between\n"
-"                            <strong class=\"font-semibold text-font-"
-"important-light dark:text-font-important-dark dark:text-white\">1 - 31 "
-"October</strong>.\n"
-"                            Increase <span class=\"text-green-700 font-"
-"semibold dark:text-green-400\">+3.14%%</span>\n"
-"                            comparing to previous month\n"
-"                            <strong class=\"font-semibold text-font-"
-"important-light dark:text-font-important-dark dark:text-white\">1 - 30 "
-"September</strong>.\n"
-"                        "
-msgstr ""
-
-#: Administration/templates/admin/index.html:82
-msgid "View detailed analytics"
-msgstr ""
-
-#: Administration/templates/admin/index.html:92
-msgid "Current system health"
 msgstr ""
 
 #: Administration/templates/admin/membership/get_wallet_info.html:6
@@ -1476,7 +1443,7 @@ msgstr ""
 #: BaseBillet/models.py:710
 #: BaseBillet/templates/reunion/views/account/punchclock.html:6
 #: BaseBillet/templates/reunion/views/account/punchclock.html:11
-#: fedow_connect/validators.py:89 fedow_connect/validators.py:197
+#: fedow_connect/validators.py:89
 msgid "Punchclock"
 msgstr ""
 
@@ -2016,7 +1983,6 @@ msgid "LaBoutik"
 msgstr ""
 
 #: BaseBillet/models.py:2231 fedow_connect/validators.py:88
-#: fedow_connect/validators.py:196
 msgid "Subscription"
 msgstr ""
 
@@ -2168,53 +2134,53 @@ msgstr ""
 msgid "Marvin, the TiBillet robot"
 msgstr ""
 
-#: BaseBillet/tasks.py:665
+#: BaseBillet/tasks.py:676
 msgid "TiBillet : Creation of a new instance."
 msgstr ""
 
-#: BaseBillet/tasks.py:693
+#: BaseBillet/tasks.py:704
 #, python-brace-format
 msgid ""
 "{waiting_config.organisation} & TiBillet : Lespass tenant creation request. "
 "ROOT admin action requested"
 msgstr ""
 
-#: BaseBillet/tasks.py:726
+#: BaseBillet/tasks.py:737
 #, python-brace-format
 msgid "TiBillet sales report - {configuration.organisation}"
 msgstr ""
 
-#: BaseBillet/tasks.py:1059
+#: BaseBillet/tasks.py:1070
 msgid "Bienvenue sur TiBillet"
 msgstr ""
 
-#: BaseBillet/tasks.py:1062
+#: BaseBillet/tasks.py:1073
 msgid "Bienvenue"
 msgstr ""
 
-#: BaseBillet/tasks.py:1097
+#: BaseBillet/tasks.py:1108
 #, python-brace-format
 msgid "Votre adhésion au collectif {config.organisation} arrive à expiration"
 msgstr ""
 
-#: BaseBillet/tasks.py:1100
+#: BaseBillet/tasks.py:1111
 #, python-brace-format
 msgid "Votre adhésion {config.organisation} arrive à expiration"
 msgstr ""
 
-#: BaseBillet/tasks.py:1222
+#: BaseBillet/tasks.py:1233
 msgid "Payment received via QR code."
 msgstr ""
 
-#: BaseBillet/tasks.py:1262
+#: BaseBillet/tasks.py:1273
 msgid "Your payment has been validated."
 msgstr ""
 
-#: BaseBillet/tasks.py:1314 BaseBillet/views.py:549
+#: BaseBillet/tasks.py:1325 BaseBillet/views.py:655
 msgid "Your reservation has been cancelled."
 msgstr ""
 
-#: BaseBillet/tasks.py:1373 BaseBillet/views.py:566
+#: BaseBillet/tasks.py:1384 BaseBillet/views.py:672
 msgid "Your ticket has been cancelled."
 msgstr ""
 
@@ -2260,7 +2226,6 @@ msgstr ""
 #: BaseBillet/templates/reunion/base.html:36
 #: BaseBillet/templates/reunion/headless.html:4
 #: BaseBillet/templates/reunion/views/home.html:4
-#: templates/admin/send_invitation.html:16
 msgid "Home"
 msgstr ""
 
@@ -2702,7 +2667,7 @@ msgstr ""
 #: BaseBillet/templates/reunion/forms/event/booking.html:157
 #: BaseBillet/templates/reunion/views/account/balance.html:72
 #: BaseBillet/templates/reunion/views/membership/form.html:177
-#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:145
+#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:314
 #: BaseBillet/templates/reunion/views/qrcode_scan_pay/payment_validation.html:32
 #: BaseBillet/templates/reunion/views/qrcode_scan_pay/payment_validation.html:33
 #: BaseBillet/templates/reunion/views/qrcode_scan_pay/payment_validation.html:62
@@ -2777,6 +2742,7 @@ msgstr ""
 
 #: BaseBillet/templates/reunion/forms/login.html:8
 #: BaseBillet/templates/reunion/views/account/preferences.html:49
+#: BaseBillet/templates/reunion/views/login/partials/fullpage_inner.html:21
 #: BaseBillet/templates/reunion/views/membership/form.html:51
 #: BaseBillet/templates/reunion/views/membership/form.html:52
 #: BaseBillet/templates/reunion/views/membership/form.html:84
@@ -2962,6 +2928,8 @@ msgid "Toggle menu"
 msgstr ""
 
 #: BaseBillet/templates/reunion/partials/navbar.html:77
+#: BaseBillet/templates/reunion/views/login/fullpage.html:4
+#: BaseBillet/templates/reunion/views/login/partials/fullpage_inner.html:2
 msgid "Login"
 msgstr ""
 
@@ -3316,8 +3284,55 @@ msgstr ""
 msgid "Local network members"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/home.html:25 BaseBillet/views.py:125
+#: BaseBillet/templates/reunion/views/home.html:25 BaseBillet/views.py:128
 msgid "Calendar"
+msgstr ""
+
+#: BaseBillet/templates/reunion/views/login/confirmation.html:4
+#: BaseBillet/templates/reunion/views/login/partials/confirmation_inner.html:2
+#: BaseBillet/templates/reunion/views/login/partials/confirmation_inner.html:10
+msgid "Check your email"
+msgstr ""
+
+#: BaseBillet/templates/reunion/views/login/confirmation.html:5
+msgid "A login link has been sent to your email address."
+msgstr ""
+
+#: BaseBillet/templates/reunion/views/login/fullpage.html:5
+msgid "Access your account using a one-time email link."
+msgstr ""
+
+#: BaseBillet/templates/reunion/views/login/partials/confirmation_inner.html:12
+msgid ""
+"We have sent you a sign-in link. Please click the link in the email to "
+"access your account. Don't forget to check your spam folder."
+msgstr ""
+
+#: BaseBillet/templates/reunion/views/login/partials/confirmation_inner.html:17
+#: BaseBillet/templates/reunion/views/login/partials/fullpage_inner.html:44
+#: BaseBillet/templates/reunion/views/membership/404.html:14
+msgid "Back to home"
+msgstr ""
+
+#: BaseBillet/templates/reunion/views/login/partials/confirmation_inner.html:20
+msgid "Use a different email"
+msgstr ""
+
+#: BaseBillet/templates/reunion/views/login/partials/fullpage_inner.html:9
+msgid "Welcome"
+msgstr ""
+
+#: BaseBillet/templates/reunion/views/login/partials/fullpage_inner.html:10
+msgid "Enter your email to receive a secure login link. No password needed."
+msgstr ""
+
+#: BaseBillet/templates/reunion/views/login/partials/fullpage_inner.html:32
+msgid "Request login link"
+msgstr ""
+
+#: BaseBillet/templates/reunion/views/login/partials/fullpage_inner.html:36
+msgid ""
+"We will send you a sign-in link. Please check your inbox and spam folder."
 msgstr ""
 
 #: BaseBillet/templates/reunion/views/membership/404.html:4
@@ -3336,10 +3351,6 @@ msgstr ""
 
 #: BaseBillet/templates/reunion/views/membership/404.html:13
 msgid "See all memberships"
-msgstr ""
-
-#: BaseBillet/templates/reunion/views/membership/404.html:14
-msgid "Back to home"
 msgstr ""
 
 #: BaseBillet/templates/reunion/views/membership/form.html:37
@@ -3399,8 +3410,7 @@ msgstr ""
 
 #: BaseBillet/templates/reunion/views/qrcode_scan_pay/email/payment_success_admin.html:32
 #: BaseBillet/templates/reunion/views/qrcode_scan_pay/email/payment_success_user.html:32
-#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:20
-#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:113
+#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:282
 #: BaseBillet/templates/reunion/views/qrcode_scan_pay/payment_confirmation.html:13
 #: BaseBillet/templates/reunion/views/qrcode_scan_pay/payment_validation.html:19
 msgid "Amount"
@@ -3433,7 +3443,7 @@ msgid "Thanks for trusting us."
 msgstr ""
 
 #: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:5
-#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:141
+#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:310
 msgid "Generate QR Code"
 msgstr ""
 
@@ -3441,50 +3451,40 @@ msgstr ""
 msgid "QR Code Generated"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:19
-#: BaseBillet/templates/reunion/views/qrcode_scan_pay/payment_validation.html:17
-msgid "Payment Details"
-msgstr ""
-
-#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:21
-#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:129
-msgid "Asset Type"
-msgstr ""
-
-#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:22
-msgid "Direct link"
-msgstr ""
-
-#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:92
-#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:93
+#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:261
+#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:262
 msgid "Generate Another QR Code"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:102
+#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:271
 msgid "Generate Payment QR Code"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:106
+#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:275
 msgid "Fill in the details below to generate a payment QR code"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:125
+#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:294
 msgid "Enter the payment amount"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:131
+#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:298
+msgid "Asset Type"
+msgstr ""
+
+#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:300
 msgid "EURO"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:132
+#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:301
 msgid "CADEAU"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:133
+#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:302
 msgid "TEMPS"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:135
+#: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:304
 msgid "Select the type of asset for this payment"
 msgstr ""
 
@@ -3589,6 +3589,10 @@ msgstr ""
 msgid "Payment Validation"
 msgstr ""
 
+#: BaseBillet/templates/reunion/views/qrcode_scan_pay/payment_validation.html:17
+msgid "Payment Details"
+msgstr ""
+
 #: BaseBillet/templates/reunion/views/qrcode_scan_pay/payment_validation.html:58
 #: BaseBillet/templates/reunion/views/qrcode_scan_pay/payment_validation.html:59
 msgid "Confirm Payment"
@@ -3630,11 +3634,11 @@ msgstr ""
 msgid "Process QR Code"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/qrcode_scan_pay/scanner.html:124
+#: BaseBillet/templates/reunion/views/qrcode_scan_pay/scanner.html:135
 msgid "URL matches current site. Redirecting..."
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/qrcode_scan_pay/scanner.html:141
+#: BaseBillet/templates/reunion/views/qrcode_scan_pay/scanner.html:157
 msgid "Automatically submitting QR code..."
 msgstr ""
 
@@ -4038,206 +4042,222 @@ msgstr ""
 msgid "This name is not available"
 msgstr ""
 
-#: BaseBillet/views.py:146
+#: BaseBillet/views.py:149
 msgid "Payment confirmed. Tickets are being generated and sent to your email."
 msgstr ""
 
-#: BaseBillet/views.py:151
+#: BaseBillet/views.py:154
 msgid "Payment rejected."
 msgstr ""
 
-#: BaseBillet/views.py:158 BaseBillet/views.py:203 BaseBillet/views.py:1460
+#: BaseBillet/views.py:161 BaseBillet/views.py:206 BaseBillet/views.py:1626
 msgid ""
 "Payment confirmed. Tickets sent to your email. You can also view your "
 "tickets through \"My account > Bookings\"."
 msgstr ""
 
-#: BaseBillet/views.py:177
+#: BaseBillet/views.py:180
 #, python-brace-format
 msgid "Stripe invoice : {invoice.status} - payment : {paiement_stripe.status}"
 msgstr ""
 
-#: BaseBillet/views.py:186
+#: BaseBillet/views.py:189
 msgid "Recurring payment and bill generated."
 msgstr ""
 
-#: BaseBillet/views.py:258
+#: BaseBillet/views.py:261
 msgid "Logout successful"
 msgstr ""
 
-#: BaseBillet/views.py:270
+#: BaseBillet/views.py:273
 msgid ""
 "To access your space, please validate\n"
 "your email address. Don't forget to check your spam!"
 msgstr ""
 
-#: BaseBillet/views.py:416
+#: BaseBillet/views.py:428
 msgid ""
 "You seem to already have a TiBillet card linked to your wallet. Please "
 "revoke it first in your profile area to link a new one."
 msgstr ""
 
-#: BaseBillet/views.py:424
+#: BaseBillet/views.py:436
 msgid "Not valid"
 msgstr ""
 
-#: BaseBillet/views.py:478
+#: BaseBillet/views.py:518 BaseBillet/views.py:524
+msgid "Invalid redirect target"
+msgstr ""
+
+#: BaseBillet/views.py:531
+msgid "Unknown destination domain"
+msgstr ""
+
+#: BaseBillet/views.py:540
+msgid "Unable to prepare login on destination"
+msgstr ""
+
+#: BaseBillet/views.py:548
+msgid "Unable to prepare redirection"
+msgstr ""
+
+#: BaseBillet/views.py:584
 msgid ""
 "Please validate your email to access all the features of your profile area."
 msgstr ""
 
-#: BaseBillet/views.py:544
+#: BaseBillet/views.py:650
 msgid "You cannot cancel a reservation with scanned tickets."
 msgstr ""
 
-#: BaseBillet/views.py:558
+#: BaseBillet/views.py:664
 msgid "An error occurred while cancelling your reservation."
 msgstr ""
 
-#: BaseBillet/views.py:577
+#: BaseBillet/views.py:683
 msgid "An error occurred while cancelling your ticket."
 msgstr ""
 
-#: BaseBillet/views.py:588
+#: BaseBillet/views.py:694
 msgid "Mail sent, please check spam too!"
 msgstr ""
 
-#: BaseBillet/views.py:602 BaseBillet/views.py:615
+#: BaseBillet/views.py:708 BaseBillet/views.py:721
 msgid ""
 "Your wallet has been detached from this card. You can scan a new one to link "
 "it again."
 msgstr ""
 
-#: BaseBillet/views.py:605 BaseBillet/views.py:618
+#: BaseBillet/views.py:711 BaseBillet/views.py:724
 msgid "Error when detaching your card. Contact an administrator."
 msgstr ""
 
-#: BaseBillet/views.py:621
+#: BaseBillet/views.py:727
 msgid "User email not active"
 msgstr ""
 
-#: BaseBillet/views.py:632
+#: BaseBillet/views.py:738
 msgid ""
 "You do not have a federated wallet. Maybe you loaded money directly at a "
 "register?"
 msgstr ""
 
-#: BaseBillet/views.py:638
+#: BaseBillet/views.py:744
 msgid "Your wallet is already empty."
 msgstr ""
 
-#: BaseBillet/views.py:646
+#: BaseBillet/views.py:752
 msgid "A refund has been made to the provided account. Thank you!"
 msgstr ""
 
-#: BaseBillet/views.py:650
+#: BaseBillet/views.py:756
 msgid ""
 "Apologies, it seems you need to manually request a refund. You can go to one "
 "of the collective's register, or send ar email to: contact@tibillet.re ."
 msgstr ""
 
-#: BaseBillet/views.py:793
+#: BaseBillet/views.py:901
 msgid "Not available. Contact an admin."
 msgstr ""
 
-#: BaseBillet/views.py:807
+#: BaseBillet/views.py:915
 msgid "Refilled wallet"
 msgstr ""
 
-#: BaseBillet/views.py:809 BaseBillet/views.py:811
+#: BaseBillet/views.py:917 BaseBillet/views.py:919
 msgid "Payment verification error"
 msgstr ""
 
-#: BaseBillet/views.py:849 BaseBillet/views.py:865
+#: BaseBillet/views.py:955 BaseBillet/views.py:971
 #, fuzzy
 #| msgid "Please login to access this page."
 msgid "You are not authorized to access this page."
 msgstr "Veuillez vous connecter pour accéder à cet espace."
 
-#: BaseBillet/views.py:873
+#: BaseBillet/views.py:979
 msgid "Amount and asset type are required"
 msgstr ""
 
-#: BaseBillet/views.py:877
+#: BaseBillet/views.py:983
 msgid "Sale via QR code link"
 msgstr ""
 
-#: BaseBillet/views.py:921 BaseBillet/views.py:933 BaseBillet/views.py:1001
+#: BaseBillet/views.py:1020 BaseBillet/views.py:1084 BaseBillet/views.py:1152
 msgid "Please validate your email address."
 msgstr ""
 
-#: BaseBillet/views.py:940
+#: BaseBillet/views.py:1091
 msgid "No QR code content received"
 msgstr ""
 
-#: BaseBillet/views.py:970
+#: BaseBillet/views.py:1121
 msgid "This payment has already been processed"
 msgstr ""
 
-#: BaseBillet/views.py:977 BaseBillet/views.py:1019
+#: BaseBillet/views.py:1128 BaseBillet/views.py:1170
 msgid "Invalid QR code: payment not found"
 msgstr ""
 
-#: BaseBillet/views.py:982 BaseBillet/views.py:1024
+#: BaseBillet/views.py:1133 BaseBillet/views.py:1175
 msgid "Invalid QR code format"
 msgstr ""
 
-#: BaseBillet/views.py:1028
+#: BaseBillet/views.py:1179
 msgid "Missing QR code content"
 msgstr ""
 
-#: BaseBillet/views.py:1121
+#: BaseBillet/views.py:1272
 msgid "Error validating payment"
 msgstr ""
 
-#: BaseBillet/views.py:1165
+#: BaseBillet/views.py:1331
 msgid "Message sent, you have been sent a copy. Thank you!"
 msgstr ""
 
-#: BaseBillet/views.py:1389
+#: BaseBillet/views.py:1555
 msgid "You have already checked for an action on this event."
 msgstr ""
 
-#: BaseBillet/views.py:1393
+#: BaseBillet/views.py:1559
 msgid "Please log in first."
 msgstr ""
 
-#: BaseBillet/views.py:1407
+#: BaseBillet/views.py:1573
 msgid "Thank you! You are going to receive a validation email.."
 msgstr ""
 
-#: BaseBillet/views.py:1463 BaseBillet/views.py:1714
+#: BaseBillet/views.py:1629 BaseBillet/views.py:1880
 msgid "Your payment is awaiting validation."
 msgstr ""
 
-#: BaseBillet/views.py:1466 BaseBillet/views.py:1717
+#: BaseBillet/views.py:1632 BaseBillet/views.py:1883
 msgid "An error has occurred, please contact the administrator."
 msgstr ""
 
-#: BaseBillet/views.py:1552
+#: BaseBillet/views.py:1718
 msgid "Check in registered!"
 msgstr ""
 
-#: BaseBillet/views.py:1560
+#: BaseBillet/views.py:1726
 msgid "Check out registered!"
 msgstr ""
 
-#: BaseBillet/views.py:1709
+#: BaseBillet/views.py:1875
 msgid ""
 "Your payment has been validated and is being processed. Thank you very much!"
 msgstr ""
 
-#: BaseBillet/views.py:1712
+#: BaseBillet/views.py:1878
 msgid ""
 "Your subscription has been validated. You will receive a confirmation email. "
 "Thank you very much!"
 msgstr ""
 
-#: BaseBillet/views.py:1735
+#: BaseBillet/views.py:1901
 msgid "PDF generation error"
 msgstr ""
 
-#: BaseBillet/views.py:1840
+#: BaseBillet/views.py:2006
 msgid "Invalid token. Please request a new confirmation email."
 msgstr ""
 
@@ -4429,30 +4449,30 @@ msgstr ""
 msgid "Adhésion ou abonnement"
 msgstr ""
 
-#: fedow_connect/validators.py:82 fedow_connect/validators.py:190
+#: fedow_connect/validators.py:82
 msgid "First block"
 msgstr ""
 
-#: fedow_connect/validators.py:83 fedow_connect/validators.py:191
+#: fedow_connect/validators.py:83
 msgid "Product sale"
 msgstr ""
 
-#: fedow_connect/validators.py:85 fedow_connect/validators.py:193
+#: fedow_connect/validators.py:85
 msgid "Currency creation"
 msgstr ""
 
-#: fedow_connect/validators.py:86 fedow_connect/validators.py:194
+#: fedow_connect/validators.py:86
 msgid "Refill"
 msgstr ""
 
-#: fedow_connect/validators.py:87 fedow_connect/validators.py:195
+#: fedow_connect/validators.py:87
 msgid "Transfer"
 msgstr ""
 
-#: fedow_connect/validators.py:90 fedow_connect/validators.py:198
-msgid "Wallet merge"
+#: fedow_connect/validators.py:90
+msgid "Email link to card"
 msgstr ""
 
-#: fedow_connect/validators.py:91 fedow_connect/validators.py:199
+#: fedow_connect/validators.py:91
 msgid "Refund"
 msgstr ""

@@ -7,42 +7,39 @@
         <thead>
         <th>{% trans "Value" %}</th>
         <th>{% trans "Action" %}</th>
-        <th>{% trans "Path" %}</th>
         <th>{% trans "Date" %}</th>
+        <th>{% trans "Path" %}</th>
         </thead>
         <tbody>
 
         {% for tr in transactions %}
             <tr class="test-return-{{ tr.serialized_asset.name | slugify }}-{{ tr.amount | dround | slugify }}-content">
                 <td>
-                    <strong>{{ tr.amount | dround }}</strong>
-                    {% if tr.serialized_asset.is_stripe_primary %}
-                    TiBillets
-                    {% else %}
-                    {{ tr.serialized_asset.name }}
+                    {% if tr.action != "FUS" %}
+                        <strong>{{ tr.amount | dround }}</strong>
+                        {% if tr.serialized_asset.is_stripe_primary %}
+                            TiBillets
+
+                        {% else %}
+                            {{ tr.serialized_asset.name }}
+                        {% endif %}
                     {% endif %}
                 </td>
-                <td>{{ tr.get_action_display }}</td>
+                <td>{{ tr.action|get_choice_string:actions_choices }}</td>
+                <td>{{ tr.datetime }} : {{ tr.datetime|naturaltime }}</td>
                 <td>
-                    {% if tr.serialized_sender.uuid == user.wallet.uuid %}
-                    {% translate "Wallet" %}
-                    {% elif tr.serialized_sender.get_name == 'Primary Wallet' %}
-                    {% trans 'Lèspass platform' %}
-                    {% else %}
-                    {% trans 'LaBoutik register' %}
-                    {#{ tr.serialized_sender.get_name }#}
-                    {% endif %}
-                    <i class="bi bi-arrow-right"></i>
-                    {% if tr.serialized_receiver.uuid == user.wallet.uuid %}
-                    {% translate "Wallet" %}
-                    {% elif tr.serialized_sender.get_name == 'Primary Wallet' %}
-                    {% trans 'Lèspass platform' %}
-                    {% else %}
-                    {% trans 'LaBoutik register' %}
-                    {#{ tr.serialized_receiver.get_name }#}
+                    {% if tr.action != "FUS" %}
+
+                        {% if tr.serialized_sender.uuid == user.wallet.uuid %}
+                            {% translate "Wallet" %}
+                        {% elif tr.serialized_sender.get_name == 'Primary Wallet' %}
+                            {% trans 'Lèspass platform' %}
+                        {% else %}
+                            {% trans 'LaBoutik register' %}
+                            {#{ tr.serialized_sender.get_name }#}
+                        {% endif %}
                     {% endif %}
                 </td>
-                <td>{{ tr.datetime }}</td>
             </tr>
         {% endfor %}
         </tbody>
