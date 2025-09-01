@@ -757,7 +757,7 @@ class MyAccount(viewsets.ViewSet):
                 amount_eur = value
             context = {
                 'username': user.full_name() or user.email,
-                'title': "Remboursement initié",
+                'title': f"Remboursement de {amount_eur} € initié",
                 'sub_title': "TiBillet",
                 'main_text': f"La demande de remboursement de la somme {amount_eur} € a été envoyée à notre prestataire bancaire (Stripe).",
                 'main_text_2': "Environ 10 jours peuvent s'écouler avant qu'il n'apparaisse sur votre relevé. Si passé ce délai vous n'avez pas été remboursé, veuillez nous contacter sur contact@tibillet.re.",
