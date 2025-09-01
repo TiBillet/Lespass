@@ -751,10 +751,7 @@ class MyAccount(viewsets.ViewSet):
             messages.add_message(request, messages.SUCCESS,
                                  _("A refund has been made to the provided account. Thank you!"))
             # Send confirmation email to the user via Celery
-            try:
-                amount_eur = dround(Decimal(value))
-            except Exception:
-                amount_eur = value
+            amount_eur = dround(value)
             context = {
                 'username': user.full_name() or user.email,
                 'title': f"Remboursement de {amount_eur} € initié",
