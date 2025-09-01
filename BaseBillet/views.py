@@ -49,7 +49,7 @@ from BaseBillet.permissions import HasScanApi
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, new_tenant_mailer, \
     contact_mailer, new_tenant_after_stripe_mailer, send_to_ghost_email, send_sale_to_laboutik, \
     send_payment_success_admin, send_payment_success_user, send_reservation_cancellation_user, \
-    send_ticket_cancellation_user, webhook_membership
+    send_ticket_cancellation_user, webhook_membership, send_email_generique
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
     ReservationValidator, ContactValidator
 from Customers.models import Client, Domain
@@ -750,6 +750,22 @@ class MyAccount(viewsets.ViewSet):
             cache.delete(f"wallet_user_{user.wallet.uuid}")
             messages.add_message(request, messages.SUCCESS,
                                  _("A refund has been made to the provided account. Thank you!"))
+            # Send confirmation email to the user via Celery
+            try:
+                amount_eur = dround(Decimal(value))
+            except Exception:
+                amount_eur = value
+            context = {
+                'username': user.full_name() or user.email,
+                'title': "Remboursement initié",
+                'sub_title': "TiBillet",
+                'main_text': f"La demande de remboursement de la somme {amount_eur} € a été envoyée à notre prestataire bancaire (Stripe).",
+                'main_text_2': "Environ 10 jours peuvent s'écouler avant qu'il n'apparaisse sur votre relevé. Si passé ce délai vous n'avez pas été remboursé, veuillez nous contacter sur contact@tibillet.re.",
+                'table_info': {'Montant remboursé': f'{amount_eur} €'},
+                'end_text': "À bientôt !",
+                'signature': "Marvin, le robot TiBillet",
+            }
+            send_email_generique.delay(context=context, email=user.email)
             return HttpResponseClientRedirect('/my_account/')
         else:
             messages.add_message(request, messages.WARNING,
