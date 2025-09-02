@@ -156,11 +156,21 @@ def create_membership_invoice_pdf(membership: Membership):
 
     user = membership.user
 
+    # Determine recipient email safely; membership may be anonymous (no linked user)
+    email = None
+    try:
+        email = getattr(user, 'email', None)
+    except Exception:
+        email = None
+    # As a last resort, leave empty string to avoid AttributeError downstream
+    if not email:
+        email = ''
+
     context = {
         'config': config,
         'paiement': membership.stripe_paiement.first(),
         'membership': membership,
-        'email': user.email,
+        'email': email,
     }
 
     html = template.render(context)
@@ -557,8 +567,8 @@ def contact_mailer(sender, subject, message):
     logger.info(f"mail.sended : {mail.sended}")
 
 
-@app.task
-def connexion_celery_mailer(user_email,
+@app.task(bind=True, autoretry_for=(smtplib.SMTPException, smtplib.SMTPServerDisconnected, smtplib.SMTPAuthenticationError, ConnectionError, TimeoutError), retry_backoff=True, retry_backoff_max=600, retry_jitter=True, max_retries=6)
+def connexion_celery_mailer(self, user_email,
                             base_url,
                             title=None,
                             template=None,

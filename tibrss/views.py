@@ -78,8 +78,39 @@ class LatestEntriesEvent(Feed):
         return item.created
 
     def item_enclosures(self, item: Event):
-        if item.img :
-            url_img = self.base_url + item.img.med.url
-            return [feedgenerator.Enclosure(url_img, str(item.img.size), "image/jpg")]
+        # Build an enclosure only if an image URL can be resolved without touching the filesystem.
+        try:
+            if not item.img:
+                return ""
 
-        return ""
+            # Prefer a resized/variant URL if available, else fallback to the original URL.
+            url_path = None
+            med = getattr(item.img, "med", None)
+            if med and getattr(med, "url", None):
+                url_path = med.url
+            elif getattr(item.img, "url", None):
+                url_path = item.img.url
+            else:
+                return ""
+
+            # Ensure absolute URL based on base_url
+            if url_path.startswith("/"):
+                url_img = f"{self.base_url}{url_path}"
+            else:
+                url_img = f"{self.base_url}/{url_path}"
+
+            # Determine a reasonable MIME type from the file extension without opening the file
+            mime = "image/jpeg"
+            lower_path = url_path.lower()
+            if lower_path.endswith(".png"):
+                mime = "image/png"
+            elif lower_path.endswith(".gif"):
+                mime = "image/gif"
+            elif lower_path.endswith(".webp"):
+                mime = "image/webp"
+
+            # Do not call item.img.size to avoid filesystem access; RSS allows a length of 0
+            return [feedgenerator.Enclosure(url_img, "0", mime)]
+        except Exception:
+            # In case of any problem (e.g., missing file), do not break the whole feed
+            return ""
