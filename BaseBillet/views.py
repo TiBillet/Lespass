@@ -2002,6 +2002,12 @@ class Tenant(viewsets.ViewSet):
             wc.email_confirmed = True
             wc.save()
 
+            # Idempotent behavior: if the tenant was already created, redirect directly
+            if wc.tenant:
+                primary_domain = f"https://{wc.tenant.get_primary_domain().domain}"
+                user = get_or_create_user(wc.email, send_mail=True)
+                return redirect(primary_domain)
+
             # Si assez de tenant en attentent de création existent :
             if Client.objects.filter(categorie=Client.WAITING_CONFIG).exists():
                 tenant = wc.create_tenant()
