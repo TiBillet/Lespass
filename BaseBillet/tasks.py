@@ -1024,6 +1024,9 @@ def send_to_ghost_email(email, name=None):
                     j = response.json()
                     members = j['members']
                     logger.info(f"Le nouveau membre a été créé avec succès : {members}")
+                elif response.status_code == 422 and 'Member already exists' in response.text:
+                    # Idempotent case: member already exists in Ghost, treat as success
+                    logger.info(f"Le membre {email} existe déjà (détection via 422), aucune action nécessaire.")
                 else:
                     logger.warning(f"Erreur lors de la création du nouveau membre : {response.text}")
             else:
@@ -1034,7 +1037,11 @@ def send_to_ghost_email(email, name=None):
 
         # On met à jour les logs pour debug
         try:
-            ghost_config.ghost_last_log = f"{timezone.now()} : {response.text}"
+            if response is not None and response.status_code == 422 and 'Member already exists' in response.text:
+                # Ne pas enregistrer le message d'erreur complet pour un doublon, message explicite et bénin
+                ghost_config.ghost_last_log = f"{timezone.now()} : Membre déjà existant (aucune action nécessaire)."
+            else:
+                ghost_config.ghost_last_log = f"{timezone.now()} : {response.text}"
             ghost_config.save()
         except Exception as e:
             logger.error(f"Erreur lors de la mise à jour du log : {e}")
