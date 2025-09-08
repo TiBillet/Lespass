@@ -19,20 +19,20 @@
                                 <h5 class="mb-3">💳 Paiement simple</h5>
                                 <p class="mb-2">Montant: <strong class="fs-4">{{ amount | dround }}</strong> — Devise: <strong class="fs-5">{{ asset_type }}</strong></p>
                                 <hr>
-                                <p class="mb-2">Il y a 3 façons de faire payer la personne:</p>
+                                <p class="mb-2">Il y a 2 façons de faire payer la personne:</p>
                                 <ul class="mb-3 ps-3">
                                     <li class="mb-1">📷 Lui faire scanner le QR code ci‑dessous.</li>
-                                    <li class="mb-1">🪪 Lire sa carte TiBillet si possible (Chrome ou Opera sous Android).</li>
                                     <li class="mb-1">🔗 Copier le lien de paiement et l’envoyer par message.</li>
+{#                                    <li class="mb-1">🪪 Lire sa carte TiBillet si possible (Chrome ou Opera sous Android).</li>#}
                                 </ul>
                                 <div class="d-grid gap-2">
                                     <button id="copy-pay-link-btn" type="button" class="btn btn-outline-success btn-lg fw-bold" aria-label="Copier le lien de paiement" data-link="{{ qrcode_content }}">
                                         🔗 Copier le lien de paiement
                                     </button>
                                     <small class="text-muted">Astuce: collez ensuite dans SMS, WhatsApp, Signal, etc.</small>
-                                    <button id="nfc-scan-btn" type="button" class="btn btn-outline-primary btn-lg fw-bold" aria-label="Lire la carte TiBillet (NFC)">
-                                        🪪 Lire la carte TiBillet (NFC)
-                                    </button>
+{#                                    <button id="nfc-scan-btn" type="button" class="btn btn-outline-primary btn-lg fw-bold" aria-label="Lire la carte TiBillet (NFC)" disabled>#}
+{#                                        🪪 Lire la carte TiBillet (NFC)#}
+{#                                    </button>#}
                                 </div>
                             </div>
                             
