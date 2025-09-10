@@ -35,7 +35,8 @@ def update_sale_if_free_price(ligne_article):
     return ligne_article
 
 def update_membership_state_after_stripe_paiement(ligne_article):
-    paiement_stripe = ligne_article.paiement_stripe
+
+    paiement_stripe: Paiement_stripe = ligne_article.paiement_stripe
     membership: Membership = paiement_stripe.membership.first()
 
     price: Price = ligne_article.pricesold.price

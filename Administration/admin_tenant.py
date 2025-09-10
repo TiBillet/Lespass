@@ -2,6 +2,7 @@ import logging
 from datetime import timedelta
 from decimal import Decimal
 from typing import Any, Optional, Dict
+from unicodedata import category
 
 import requests
 import segno
@@ -9,6 +10,8 @@ from django import forms
 from django.conf import settings
 from django.contrib import admin
 from django.contrib import messages
+from django.core.exceptions import ValidationError
+from django.contrib.admin import AdminSite
 from django.core.signing import TimestampSigner
 from django.db import models, connection, IntegrityError
 from django.db.models import Model, Count, Q, Prefetch
@@ -66,7 +69,8 @@ from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invo
     send_reservation_cancellation_user
 from Customers.models import Client
 from MetaBillet.models import WaitingConfiguration
-from fedow_connect.models import Asset
+from fedow_connect.fedow_api import AssetFedow
+from fedow_connect.models import Asset, FedowConfig
 from fedow_connect.utils import dround
 
 # from simple_history.admin import SimpleHistoryAdmin
@@ -593,8 +597,6 @@ class ProductAdminCustomForm(ModelForm):
                 raise forms.ValidationError(_("Please add at least one rate to this product."))
 
 
-
-
 @register_component
 class CheckStripeComponent(BaseComponent):
     def get_context_data(self, **kwargs):
@@ -746,6 +748,8 @@ class PriceChangeForm(ModelForm):
             'free_price',
             'max_per_user',
             'subscription_type',
+            'recurring_payment',
+            'iteration',
             'order',
             'publish',
             'adhesion_obligatoire',
@@ -756,11 +760,29 @@ class PriceChangeForm(ModelForm):
             'fedow_reward_amount',
         )
 
+    def clean_recurring_payment(self):
+        data = self.data  # récupère les data sans les avoir validé
+        if data.get('recurring_payment') and data.get('free_price'):
+            raise forms.ValidationError(_("Un tarif ne peut être récurent et libre."), code="invalid")
+
+        cleaned_data = self.cleaned_data  # récupère les donnée au fur et a mesure des validation, attention a l'ordre des fields
+        product: Product = self.cleaned_data['product']
+        if product.categorie_article != Product.ADHESION:
+            raise forms.ValidationError(
+                _("Un tarif en mode paiement récurrent doit être avoir un produit de type adhésion."), code="invalid")
+
+        if data.get('subscription_type') not in [Price.DAY, Price.WEEK, Price.MONTH, Price.CAL_MONTH, Price.YEAR]:
+            raise forms.ValidationError(_("Un paiement récurent ne peut être que : day, week, month, year"),
+                                        code="invalid")
+
+        return cleaned_data['recurring_payment']
+
     def clean_prix(self):
-        cleaned_data = self.cleaned_data
+        cleaned_data = self.cleaned_data  # récupère les donnée au fur et a mesure des validation, attention a l'ordre des fields
         prix = cleaned_data.get('prix')
         if 0 < prix < 1:
             raise forms.ValidationError(_("A rate cannot be between 0€ and 1€"), code="invalid")
+
         return prix
 
     def __init__(self, *args, **kwargs):
@@ -777,19 +799,21 @@ class PriceChangeForm(ModelForm):
         try:
             self.fields['fedow_reward_asset'].queryset = Asset.objects.filter(
                 category__in=[
-                Asset.TOKEN_LOCAL_FIAT,
-                Asset.TOKEN_LOCAL_NOT_FIAT,
-                Asset.TIME,
-                Asset.FIDELITY,
-            ],
+                    Asset.TOKEN_LOCAL_FIAT,
+                    Asset.TOKEN_LOCAL_NOT_FIAT,
+                    Asset.TIME,
+                    Asset.FIDELITY,
+                ],
                 archive=False,
             )
+
             # Improve display label: show name, currency and category
             def _label(obj):
                 try:
                     return f"{obj.name} ({obj.currency_code}) - {obj.get_category_display()}"
                 except Exception:
                     return str(obj)
+
             self.fields['fedow_reward_asset'].label_from_instance = _label
         except Exception:
             # Field may not be present in some contexts; ignore
@@ -811,6 +835,7 @@ class PriceAdmin(ModelAdmin):
                 'free_price',
                 'max_per_user',
                 'subscription_type',
+                ('recurring_payment', 'iteration'),
                 'order',
                 'publish',
                 'adhesion_obligatoire',
@@ -1287,6 +1312,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
         'is_valid',
         'status',
         'payment_method',
+        'state_display',
         # 'commentaire',
     )
 
@@ -1313,7 +1339,20 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
 
     # Pour les bouton en haut de la vue change
     # chaque decorateur @action génère une nouvelle route
-    actions_detail = ["send_invoice", "get_invoice"]
+    actions_detail = ["send_invoice", "get_invoice", "admin_accept", "admin_refuse"]
+
+    def changeform_view(self, request: HttpRequest, object_id: Optional[str] = None, form_url: str = "",
+                        extra_context: Optional[Dict[str, bool]] = None):
+        extra_context = extra_context or {}
+        show_validation_buttons = False
+        if object_id:
+            try:
+                membership = Membership.objects.get(pk=object_id)
+                show_validation_buttons = bool(membership.need_admin_validation)
+            except Membership.DoesNotExist:
+                show_validation_buttons = False
+        extra_context["show_validation_buttons"] = show_validation_buttons
+        return super().changeform_view(request, object_id, form_url, extra_context)
 
     @action(
         description=_("Send an receipt through email"),
@@ -1344,7 +1383,46 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
         #     request,
         #     _(f"Facture générée"),
         # )
-        # return redirect(request.META["HTTP_REFERER"])
+        # return redirect(request.META["HTTP_REFERER"]) 
+
+    @display(description=_("State"))
+    def state_display(self, instance: Membership):
+        # Show human-readable label for state, possibly with icon/color later
+        return instance.get_state_display()
+
+    @action(
+        description=_("ACCEPTER L'ADHESION"),
+        url_path="admin_accept",
+        permissions=["custom_actions_detail"],
+    )
+    def admin_accept(self, request, object_id):
+        membership = get_object_or_404(Membership, pk=object_id)
+        if not membership.need_admin_validation:
+            messages.info(request, _("Adhésion déjà valide"))
+            return redirect(
+                request.META.get("HTTP_REFERER", reverse("admin:BaseBillet_membership_change", args=[object_id])))
+        membership.state = Membership.ADMIN_VALID
+        membership.save(update_fields=["state"])
+        messages.success(request, _("Adhésion confirmée par l'administration"))
+        return redirect(
+            request.META.get("HTTP_REFERER", reverse("admin:BaseBillet_membership_change", args=[object_id])))
+
+    @action(
+        description=_("REFUSER L'ADHESION"),
+        url_path="admin_refuse",
+        permissions=["custom_actions_detail"],
+    )
+    def admin_refuse(self, request, object_id):
+        membership = get_object_or_404(Membership, pk=object_id)
+        if not membership.need_admin_validation:
+            messages.info(request, _("Adhésion déjà valide"))
+            return redirect(
+                request.META.get("HTTP_REFERER", reverse("admin:BaseBillet_membership_change", args=[object_id])))
+        membership.state = Membership.ADMIN_CANCELED
+        membership.save(update_fields=["state"])
+        messages.warning(request, _("Adhésion refusée par l'administration"))
+        return redirect(
+            request.META.get("HTTP_REFERER", reverse("admin:BaseBillet_membership_change", args=[object_id])))
 
     def has_custom_actions_detail_permission(self, request, object_id):
         return TenantAdminPermissionWithRequest(request)
@@ -2911,6 +2989,118 @@ class BrevoConfigAdmin(SingletonModelAdmin, ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
+
+
+@admin.register(Asset, site=staff_admin_site)
+class AssetAdmin(ModelAdmin):
+    compressed_fields = True  # Default: False
+    warn_unsaved_form = True  # Default: False
+
+    list_display = [
+        "name",
+        "currency_code",
+        "archive",
+        "category",
+        "federated_places",
+    ]
+
+    readonly_fields = [
+        'created_at',
+        'wallet_origin',
+        'archive',
+    ]
+
+    # On affiche que les asset non adhésions
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request).exclude(category__in=[
+            Asset.STRIPE_FED_FIAT,
+            Asset.BADGE,
+            Asset.SUBSCRIPTION,
+        ])
+        return queryset
+
+    def save_model(self, request: HttpRequest, obj: Asset, form: Form, change: Any) -> None:
+        # Vérifie si l'objet est nouveau
+        is_new = not change or not getattr(obj, 'pk', None)
+        if not is_new:
+            messages.error(request, _("L'Asset ne peut pas être modifié après création."))
+            raise ValidationError("Asset change forbidden")
+
+        # Vérifie les champs choisis (ici, la catégorie) selon le contexte
+        allowed_on_create = {Asset.TOKEN_LOCAL_FIAT, Asset.TOKEN_LOCAL_NOT_FIAT, Asset.TIME, Asset.FIDELITY}
+        if obj.category not in allowed_on_create:
+            messages.error(request, _("Catégorie non autorisée pour une création."))
+            raise ValidationError("Invalid category on create")
+
+        fedow_config = FedowConfig.get_solo()
+        fedow_asset = AssetFedow(fedow_config=fedow_config)
+        try:
+            asset, created = fedow_asset.get_or_create_token_asset(obj)
+        except Exception as e:
+            messages.error(request, f"{e}")
+            raise ValidationError(str(e))
+
+        if not created:
+            messages.error(request, _("Asset already exists"))
+            raise ValidationError("Asset already exists")
+
+        # super().save_model(request, obj, form, change)
+        return True  # L'asset n'est pas créé ici, mais depuis le Serializer Fedow invoqué dans get_or_create_token_asset
+
+    @display(description=_("Federated with"))
+    def federated_places(self, obj: Asset):
+        # Fetch federated place UUIDs from Fedow
+        try:
+            fedow_asset = AssetFedow()
+            data = fedow_asset.cached_retrieve(uuid=f"{obj.uuid}")
+            uuids = data.get('place_uuid_federated_with') or []
+        except Exception as e:
+            return "—"
+
+        if not uuids:
+            return "—"
+
+        names = []
+        try:
+            # Lazy import to avoid circulars and keep admin light
+            from BaseBillet.views import MyAccount
+            for pu in uuids:
+                info = MyAccount.get_place_cached_info(pu)
+                if info and info.get('organisation'):
+                    names.append(info.get('organisation'))
+        except Exception:
+            # If anything fails, fall back to raw UUIDs
+            names = [str(u) for u in uuids]
+
+        return ", ".join(names) if names else "—"
+
+    def get_form(self, request, obj=None, **kwargs):
+        # Limit category choices on add form to TOKEN_LOCAL_FIAT and TOKEN_LOCAL_NOT_FIAT
+        form = super().get_form(request, obj, **kwargs)
+        try:
+            if obj is None and 'category' in form.base_fields:
+                allowed = [
+                    (Asset.TOKEN_LOCAL_FIAT, dict(Asset.CATEGORIES)[Asset.TOKEN_LOCAL_FIAT]),
+                    (Asset.TOKEN_LOCAL_NOT_FIAT, dict(Asset.CATEGORIES)[Asset.TOKEN_LOCAL_NOT_FIAT]),
+                    (Asset.TIME, dict(Asset.CATEGORIES)[Asset.TIME]),
+                    (Asset.FIDELITY, dict(Asset.CATEGORIES)[Asset.FIDELITY]),
+                ]
+                form.base_fields['category'].choices = allowed
+        except Exception:
+            pass
+        return form
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 ### UNFOLD ADMIN

@@ -1,6 +1,5 @@
 import json
 import logging
-from decimal import Decimal
 
 import stripe
 from django.contrib.auth import get_user_model
@@ -10,7 +9,8 @@ from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 from stripe.error import InvalidRequestError
 
-from BaseBillet.models import Configuration, LigneArticle, Paiement_stripe, Reservation, Price, PriceSold, PaymentMethod
+from BaseBillet.models import Configuration, LigneArticle, Paiement_stripe, Reservation, Price, PriceSold, \
+    PaymentMethod, Membership
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
@@ -118,16 +118,18 @@ class CreationPaiementStripe():
     def _mode(self):
         """
         Mode Stripe payment ou subscription
+        Si c'est une subscription avec itération, on le modifiera dans le retour stripe
         :return: string
         """
-
-        subscription_types = [Price.MONTH, Price.YEAR]
         mode = 'payment'
         for ligne in self.liste_ligne_article:
+            ligne : LigneArticle
             price = ligne.pricesold.price
-            if price.subscription_type in subscription_types and price.recurring_payment:
+            if price.recurring_payment:
                 mode = 'subscription'
+                break
         logger.info(f"Stripe payment method: {mode}")
+
         return mode
 
     def dict_checkout_creator(self):
@@ -204,11 +206,12 @@ class CreationPaiementStripe():
             return None
 
 
-def new_entry_from_stripe_invoice(user, id_invoice):
+def new_entry_from_stripe_subscription_invoice(user, id_invoice, membership):
     stripe.api_key = Configuration.get_solo().get_stripe_api()
-    invoice = stripe.Invoice.retrieve(id_invoice)
+    stripe_invoice = stripe.Invoice.retrieve(id_invoice)
+    tenant = connection.tenant
 
-    lines = invoice.lines
+    lines = stripe_invoice.lines
     lignes_articles = []
     for line in lines['data']:
         ligne_article = LigneArticle.objects.create(
@@ -216,12 +219,18 @@ def new_entry_from_stripe_invoice(user, id_invoice):
             payment_method=PaymentMethod.STRIPE_RECURENT,
             amount=line.amount,
             qty=line.quantity,
+            membership=membership,
         )
         lignes_articles.append(ligne_article)
 
     metadata = {
-        'tenant': f'{connection.tenant.uuid}',
-        'from_stripe_invoice': f"{invoice.id}",
+        'tenant_uuid': f'{tenant.uuid}',
+        'tenant_name': f'{tenant.name}',
+        'price_uuid': f"{membership.price.uuid}",
+        'product_price_name': f"{membership.price.product.name} {membership.price.name}",
+        'membership_uuid': f"{membership.uuid}",
+        'user': f"{user.pk}",
+        'from_stripe_invoice': f"{stripe_invoice.id}",
     }
 
     new_paiement_stripe = CreationPaiementStripe(
@@ -230,7 +239,7 @@ def new_entry_from_stripe_invoice(user, id_invoice):
         metadata=metadata,
         reservation=None,
         source=Paiement_stripe.INVOICE,
-        invoice=invoice,
+        invoice=stripe_invoice,
         absolute_domain=None,
     )
 

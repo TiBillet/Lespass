@@ -429,14 +429,19 @@ class MembershipValidator(serializers.Serializer):
         membership: Membership = self.membership
         price: Price = membership.price
         user: TibilletUser = membership.user
-        tenant = connection.tenant
+        tenant: Client = connection.tenant
 
+        # besoin pour le retour webhook classique et renouvellement abonnement : ApiBillet.views.Webhook_stripe.post
         metadata = {
             'tenant': f'{tenant.uuid}',
-            'price': f"{price.pk}",
-            'membership': f"{membership.pk}",
+            'tenant_name': f'{tenant.name}',
+            'price_uuid': f"{price.uuid}",
+            'product_price_name': f"{membership.price.product.name} {membership.price.name}",
+            'membership_uuid': f"{membership.uuid}",
             'user': f"{user.pk}",
         }
+
+
         ligne_article_adhesion = LigneArticle.objects.create(
             pricesold=get_or_create_price_sold(price),
             membership=membership,

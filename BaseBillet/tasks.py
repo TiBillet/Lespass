@@ -250,6 +250,11 @@ def context_for_membership_email(membership: "Membership"):
         'end_text': _('See you soon!'),
         'signature': _("Marvin, the TiBillet robot"),
     }
+
+    if membership.price.recurring_payment:
+        context['table_info'][_('Recurring payment')] = _("Yes")
+        context['table_info'][_('Next payment withdrawal')] = date_format(membership.get_deadline(), format='DATE_FORMAT', use_l10n=True)
+
     # Ajout des options str si il y en a :
     if membership.option_generale.count() > 0:
         context['table_info']['Options'] = f"{membership.options()}"
@@ -1114,7 +1119,9 @@ def membership_renewal_reminder():
     for tenant in get_tenant_model().objects.exclude(schema_name='public'):
         with tenant_context(tenant):
             memberships = Membership.objects.filter(deadline__gte=timezone.now(),
-                                                    deadline__lte=timezone.now() + timezone.timedelta(days=1))
+                                                    deadline__lte=timezone.now() + timezone.timedelta(days=1),
+                                                    price__recurring_payment=False, # on ne prend pas les adhésions avec paiement récurents
+                                                    )
 
             for membership in memberships:
                 config = Configuration.get_solo()

@@ -1,8 +1,10 @@
 # import os
+import calendar
 import json
 import logging
 import uuid
-from datetime import timedelta, datetime
+from calendar import month
+from datetime import timedelta, datetime, tzinfo
 from decimal import Decimal
 from time import localtime
 from uuid import uuid4
@@ -363,6 +365,10 @@ class Configuration(SingletonModel):
                                       choices=TZ_CHOICES,
                                       verbose_name=_("Timezone"),
                                       )
+
+    def get_tzinfo(self):
+        return pytz.timezone(self.fuseau_horaire)
+
     FRENCH, ENGLISH = 'fr', 'en'
     LANGUAGE_CHOICES = [
         (FRENCH, _('French')),
@@ -734,8 +740,6 @@ class Product(models.Model):
     #                                        help_text="Produit checké par le serveur cashless.",
     #                                        )
 
-
-
     def fedow_category(self):
         self_category_map = {
             self.ADHESION: 'SUB',
@@ -825,12 +829,16 @@ class Price(models.Model):
                                                  "Rate available to suscribers only: "),
                                              blank=True, null=True)
 
-    NA, YEAR, MONTH, DAY, HOUR, CIVIL, SCHOLAR = 'N', 'Y', 'M', 'D', 'H', 'C', 'S'
+    NA, YEAR, MONTH = 'N', 'Y', 'M'
+    CAL_MONTH, DAY, HOUR = 'O', 'D', 'H'
+    WEEK, CIVIL, SCHOLAR = 'W', 'C', 'S'
     SUB_CHOICES = [
         (NA, _('Non applicable')),
         (HOUR, _('1 hour')),
         (DAY, _('1 day')),
-        (MONTH, _('30 days')),
+        (WEEK, _('1 week')),
+        (MONTH, _('1 Month')),
+        (CAL_MONTH, _('1st of the month')),
         (YEAR, _("365 days")),
         (CIVIL, _('Calendar year : 1st of January')),
         (SCHOLAR, _('School year: 1st of September')),
@@ -843,11 +851,14 @@ class Price(models.Model):
                                          )
 
     recurring_payment = models.BooleanField(default=False,
-                                            verbose_name="Monthly fee",
-                                            help_text="Monthly payment through Stripe, "
-                                                      "limited to one product at checkout.",
+                                            verbose_name=_("Recurring payment"),
+                                            help_text=_(
+                                                "Monthly payment through Stripe, limited to one product at checkout."),
                                             )
-
+    iteration = models.PositiveSmallIntegerField(blank=True, null=True,
+                                                 verbose_name=_("Max number of recurrences"),
+                                                 help_text=_(
+                                                     "A rate with a monthly period and iterations=2 will last two months with two payments: one on day D and another the following month."))
     # Fedow reward after successful payment (membership products first)
     fedow_reward_enabled = models.BooleanField(
         default=False,
@@ -855,17 +866,17 @@ class Price(models.Model):
         help_text=_("If enabled, after a successful payment, the user wallet will receive tokens."),
     )
     fedow_reward_asset = models.ForeignKey("fedow_connect.Asset", on_delete=models.SET_NULL,
-        blank=True,
-        null=True,
-        verbose_name=_("Fedow Asset"),
-        help_text=_("Asset to send from the place to the user wallet."),
-    )
+                                           blank=True,
+                                           null=True,
+                                           verbose_name=_("Fedow Asset"),
+                                           help_text=_("Asset to send from the place to the user wallet."),
+                                           )
     fedow_reward_amount = models.DecimalField(max_digits=10, decimal_places=2,
-        blank=True,
-        null=True,
-        verbose_name=_("Token amount to send"),
-        help_text=_("Raw token amount."),
-    )
+                                              blank=True,
+                                              null=True,
+                                              verbose_name=_("Token amount to send"),
+                                              help_text=_("Raw token amount."),
+                                              )
 
     # def range_max(self):
     #     return range(self.max_per_user + 1)
@@ -1455,28 +1466,26 @@ class PriceSold(models.Model):
             product_stripe = self.productsold.get_id_product_stripe(force=True)
 
         data_stripe = {
-            'unit_amount': f"{int(Decimal(self.prix) * 100)}",
-            'currency': "eur",
-            'product': product_stripe,
-            'stripe_account': Configuration.get_solo().get_stripe_connect_account(),
-            'nickname': f"{self.price.name}",
+            "unit_amount": f"{int(Decimal(self.prix) * 100)}",
+            "currency": "eur",
+            "product": product_stripe,
+            "stripe_account": Configuration.get_solo().get_stripe_connect_account(),
+            "nickname": f"{self.price.name}",
         }
 
-        if self.price.subscription_type == Price.MONTH \
-                and self.price.recurring_payment:
-            data_stripe['recurring'] = {
-                "interval": "month",
+        if self.price.recurring_payment:
+            data_stripe["recurring"] = {
                 "interval_count": 1
             }
+            if self.price.subscription_type == Price.DAY:
+                data_stripe["recurring"]["interval"] = "day"
+            elif self.price.subscription_type in [Price.MONTH, Price.CAL_MONTH]:
+                data_stripe["recurring"]["interval"] = "month"
+            elif self.price.subscription_type == Price.YEAR:
+                data_stripe["recurring"]["interval"] = "year"
 
-        elif self.price.subscription_type == Price.YEAR \
-                and self.price.recurring_payment:
-            data_stripe['recurring'] = {
-                "interval": "year",
-                "interval_count": 1
-            }
 
-        if self.price.free_price:
+        elif self.price.free_price:
             data_stripe.pop('unit_amount')
             data_stripe['billing_scheme'] = "per_unit"
             data_stripe['custom_unit_amount'] = {
@@ -2018,9 +2027,17 @@ class Paiement_stripe(models.Model):
             if checkout_session.mode == 'subscription':
                 if bool(checkout_session.subscription):
                     self.subscription = checkout_session.subscription
-                    subscription = stripe.Subscription.retrieve(
-                        checkout_session.subscription,
-                        stripe_account=Configuration.get_solo().get_stripe_connect_account()
+
+                    # subscription = stripe.Subscription.retrieve(
+                    #     checkout_session.subscription,
+                    #     stripe_account=Configuration.get_solo().get_stripe_connect_account()
+                    # )
+
+                    # Ajout des metadata du checkout pour les futur webhook de renouvellement
+                    subscription = stripe.Subscription.modify(
+                        f"{checkout_session.subscription}",
+                        stripe_account=Configuration.get_solo().get_stripe_connect_account(),
+                        metadata=checkout_session.metadata,
                     )
                     self.invoice_stripe = subscription.latest_invoice
 
@@ -2209,6 +2226,18 @@ class Membership(models.Model):
     status = models.CharField(max_length=1, choices=STATUS_CHOICES, default=ONCE,
                               verbose_name=_("Origin"))
 
+    ### Pour le cas des adhésions à validation manuelle
+    need_admin_validation = models.BooleanField(default=False)
+    ADMIN_CANCELED, ADMIN_VALID, ADMIN_WAITING, NO_ADMIN_VALID = "CA", "VA", "WA", "AU"
+    STATE_CHOICES = [
+        (ADMIN_CANCELED, _('Cancelled')),
+        (ADMIN_VALID, _('Waiting for admin validation')),
+        (ADMIN_WAITING, _('Confirmed by admin')),
+        (NO_ADMIN_VALID, _('Confirmed by system')),
+    ]
+    state = models.CharField(max_length=2, choices=STATE_CHOICES, default=NO_ADMIN_VALID,
+                             verbose_name=_("State"))
+
     option_generale = models.ManyToManyField(OptionGenerale,
                                              blank=True,
                                              related_name="membership_options")
@@ -2246,25 +2275,32 @@ class Membership(models.Model):
 
     def set_deadline(self):
         deadline = None
+        dt = self.last_contribution
+        tenant_tzinfo = Configuration.get_solo().get_tzinfo()
         if self.last_contribution and self.price:
             if self.price.subscription_type == Price.HOUR:
-                deadline = self.last_contribution + timedelta(hours=1)
+                deadline = dt + timedelta(hours=1)
             elif self.price.subscription_type == Price.DAY:
-                deadline = self.last_contribution + timedelta(days=1)
+                deadline = dt + timedelta(days=1)
+            elif self.price.subscription_type == Price.WEEK:
+                deadline = dt + timedelta(weeks=1)
             elif self.price.subscription_type == Price.MONTH:
-                deadline = self.last_contribution + timedelta(days=31)
+                deadline = dt + relativedelta(months=1)
+            elif self.price.subscription_type == Price.CAL_MONTH:  # Valide uniquement jusqu'a la fin du mois en cours
+                last_day = calendar.monthrange(dt.year, dt.month)[1]
+                deadline = datetime(dt.year, dt.month, last_day, 23, 59, 59, 999999, tzinfo=tenant_tzinfo)
             elif self.price.subscription_type == Price.YEAR:
-                deadline = self.last_contribution + timedelta(days=365)
+                deadline = dt + timedelta(days=365)
             elif self.price.subscription_type == Price.CIVIL:
                 # jusqu'au 31 decembre de cette année
-                deadline = datetime.strptime(f'{self.last_contribution.year}-12-31', '%Y-%m-%d')
+                deadline = datetime.strptime(f'{dt.year}-12-31', '%Y-%m-%d')
             elif self.price.subscription_type == Price.SCHOLAR:
                 # Si la date de contribustion est avant septembre, alors on prend l'année de la contribution.
-                if self.last_contribution.month < 9:
-                    deadline = datetime.strptime(f'{self.last_contribution.year}-08-31', '%Y-%m-%d')
+                if dt.month < 9:
+                    deadline = datetime.strptime(f'{dt.year}-08-31', '%Y-%m-%d')
                 # Si elle est après septembre, on prend l'année prochaine
                 else:
-                    deadline = datetime.strptime(f'{self.last_contribution.year + 1}-08-31', '%Y-%m-%d')
+                    deadline = datetime.strptime(f'{dt.year + 1}-08-31', '%Y-%m-%d')
         self.deadline = deadline
         self.save()
         return deadline
@@ -2276,7 +2312,7 @@ class Membership(models.Model):
 
     def is_valid(self):
         if self.get_deadline():
-            if timezone.localtime() < self.deadline:
+            if timezone.localtime() <= self.deadline:
                 return True
         return False
 

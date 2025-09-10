@@ -155,7 +155,38 @@ class AssetFedow():
         logger.warning(response_asset)
         raise Exception(f"{response_asset.status_code}")
 
-    def get_or_create_asset(self, product: Product = None):
+    def cached_retrieve(self, uuid: uuid4 = None):
+        try :
+            return cache.get_or_set(f"asset_fedow_{uuid}", lambda: self.retrieve(uuid), 60*60*24)
+        except Exception as e:
+            logger.warning(f"cached_retrieve : {e} - fetch from fedow without cache.")
+            return self.retrieve(uuid)
+
+    def get_or_create_token_asset(self, asset: Asset):
+        try:
+            asset_serialized = self.retrieve(uuid=f"{asset.uuid}")
+            return asset_serialized, False
+        # Asset n'existe pas, on l'envoie
+        except Exception as e:
+            logger.info(f"Création de l'asset pour le produit {asset.name}")
+            asset = {
+                "uuid": f"{asset.uuid}",
+                "name": f"{asset.name}",
+                "currency_code": f"{asset.currency_code}".upper(),
+                "category": f"{asset.category}",
+                "created_at": timezone.now().isoformat()
+            }
+            response_asset = _post(self.fedow_config, path='asset/create_token_asset', data=asset)
+            if response_asset.status_code == 201:
+                serialized_assets = AssetValidator(data=response_asset.json(), many=False)
+                if serialized_assets.is_valid():
+                    return serialized_assets.validated_data, True
+                logger.error(serialized_assets.errors)
+                raise Exception(f"{serialized_assets.errors}")
+            logger.error(response_asset)
+            raise Exception(f"{response_asset.status_code} {response_asset.content}")
+
+    def get_or_create_membership_asset(self, product: Product = None):
         try:
             asset_serialized = self.retrieve(uuid=f"{product.uuid}")
             return asset_serialized, False
@@ -163,7 +194,6 @@ class AssetFedow():
         # Asset n'existe pas, on l'envoie
         except Exception as e:
             logger.info(f"Création de l'asset pour le produit {product.name}")
-            config = Configuration.get_solo()
             asset = {
                 "uuid": f"{product.pk}",
                 "name": f"{product.name}",
@@ -238,7 +268,7 @@ class MembershipFedow():
         # Vérification de l'uuid membership présent coté Fedow
         if not membership.asset_fedow and membership.price:
             fedow_asset = AssetFedow(fedow_config=self.fedow_config)
-            serialized_asset, created = fedow_asset.get_or_create_asset(membership.price.product)
+            serialized_asset, created = fedow_asset.get_or_create_membership_asset(membership.price.product)
             asset_fedow = f"{serialized_asset['uuid']}"
             membership.asset_fedow = asset_fedow
         if not membership.asset_fedow:

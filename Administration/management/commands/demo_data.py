@@ -12,8 +12,8 @@ from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Product, OptionGenerale, Price, Configuration, Event, Tag, PostalAddress, FormbricksConfig, FormbricksForms
 from Customers.models import Client, Domain
-from fedow_connect.fedow_api import FedowAPI
-from fedow_connect.models import FedowConfig
+from fedow_connect.fedow_api import FedowAPI, AssetFedow
+from fedow_connect.models import FedowConfig, Asset
 
 logger = logging.getLogger(__name__)
 
@@ -237,6 +237,39 @@ class Command(BaseCommand):
                     recurring_payment=True,
                     subscription_type=Price.MONTH,
                 )
+
+                ### Produit avec validation par admin
+
+                # Création de l'asset Fiduciaire pour l'ASS
+                fedow_config = FedowConfig.get_solo()
+                fedow_asset = AssetFedow(fedow_config=fedow_config)
+                asset, created = fedow_asset.get_or_create_token_asset(Asset(
+                    name="Caisse Sociale Alimentaire",
+                    currency_code="CSA",
+                    category=Asset.TOKEN_LOCAL_FIAT,
+                ))
+
+                ssa, created = Product.objects.get_or_create(
+                    name=f"Caisse de sécurité sociale alimentaire",
+                    short_description=f"Payez selon vos moyens, recevez selon vos besoins !",
+                    long_description="Payez ce que vous pouvez : l'adhésion à la SSA vous donne droit à 150€ sur votre carte à dépenser dans tout les lieux participants. Une validation par un.e administrateur.ice est nécéssaire. Engagement demandé de 3 mois minimum.",
+                    categorie_article=Product.ADHESION,
+                )
+
+                ssa_trimestrielle, created = Price.objects.get_or_create(
+                    product=ssa,
+                    name="Mensuelle",
+                    short_description="Adhésion pour 3 mois. Paiement mensuel récurent.",
+                    free_price=False,
+                    prix=50,
+                    recurring_payment=True,
+                    iteration=3,
+                    subscription_type=Price.CAL_MONTH,
+                    fedow_reward_enabled=True,
+                    fedow_reward_asset=Asset.objects.get(uuid=asset['uuid']),
+                    fedow_reward_amount=150,
+                )
+
 
                 ### BADGEUSE ###
 

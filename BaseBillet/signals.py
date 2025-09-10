@@ -368,7 +368,7 @@ def send_membership_and_badge_product_to_fedow(sender, instance: Product, create
         fedow_asset = AssetFedow(fedow_config=fedow_config)
         if not instance.archive:
             # Si l'adhésion n'est pas archivé, on vérifie qu'elle existe bien :
-            asset, created = fedow_asset.get_or_create_asset(instance)
+            asset, created = fedow_asset.get_or_create_membership_asset(instance)
             logger.info(f"send_membership_product_to_fedow : created : {created} - asset {asset}")
 
         if instance.archive:
