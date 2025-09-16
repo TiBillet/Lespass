@@ -143,6 +143,14 @@ class AssetFedow():
     #         logger.error(serialized_assets.errors)
     #         raise Exception(f"{serialized_assets.errors}")
 
+    def retrieve_total_by_place(self, uuid: uuid4 = None) -> dict:
+        response_asset = _get(self.fedow_config, path=f'asset/{UUID(uuid)}/retrieve_total_by_place')
+        if not response_asset.status_code == 200:
+            logger.warning(response_asset)
+            raise Exception(f"{response_asset.status_code}")
+        logger.info(response_asset.json())
+        return response_asset.json()
+
     def retrieve(self, uuid: uuid4 = None):
         response_asset = _get(self.fedow_config, path=f'asset/{UUID(uuid)}/retrieve_membership_asset')
 

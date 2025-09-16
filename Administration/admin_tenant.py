@@ -72,10 +72,87 @@ from MetaBillet.models import WaitingConfiguration
 from fedow_connect.fedow_api import AssetFedow
 from fedow_connect.models import Asset, FedowConfig
 from fedow_connect.utils import dround
+import nh3
+from urllib.parse import urlparse
 
 # from simple_history.admin import SimpleHistoryAdmin
 
 logger = logging.getLogger(__name__)
+
+
+## SANITIZER
+
+
+ALLOWED_TAGS = [
+    "p", "br", "strong", "em", "u",
+    "ul", "ol", "li",
+    "blockquote", "code", "pre",
+    "h1", "h2", "h3", "h4", "h5", "h6",
+    "a", "img", "span"
+]
+ALLOWED_ATTRIBUTES = {
+    "a": ["href", "title", "rel"],
+    "img": ["src", "alt", "title"],
+}
+
+# Disallow image URLs pointing to potentially dangerous internal routes
+DISALLOWED_IMAGE_PATH_PREFIXES = (
+    "/admin",
+    "/logout",
+    "/deconnexion",
+    "/signout",
+)
+
+
+def _attribute_filter(tag: str, attr: str, value: str) -> Optional[str]:
+    """Filter attributes during sanitization.
+    - For <img src>, remove the attribute if it targets problematic internal routes
+      like /admin or logout endpoints (even if relative URLs).
+    Returning None removes the attribute.
+    """
+    try:
+        if tag == "img" and attr == "src" and isinstance(value, str):
+            parsed = urlparse(value)
+            path = (parsed.path or "").lower()
+            # Only consider regular http/https/relative URLs; schemes are filtered elsewhere
+            for prefix in DISALLOWED_IMAGE_PATH_PREFIXES:
+                if path.startswith(prefix):
+                    return None  # drop src attribute
+        return value
+    except Exception:
+        # On any parsing error, drop the attribute to be safe
+        return None
+
+
+def clean_html(html: str) -> str:
+    # Use nh3 (ammonia) to sanitize HTML; explicitly restrict URL schemes and strip comments.
+    url_schemes = {"http", "https", "mailto", "tel"}
+    # nh3 expects sets for tags and attributes values
+    tags = set(ALLOWED_TAGS)
+    attributes = {k: set(v) for k, v in ALLOWED_ATTRIBUTES.items()}
+    return nh3.clean(
+        html,
+        tags=tags,
+        attributes=attributes,
+        url_schemes=url_schemes,
+        attribute_filter=_attribute_filter,
+        strip_comments=True,
+        link_rel=None,  # allow existing rel and don't auto-insert
+    )
+
+
+def sanitize_textfields(instance: models.Model) -> None:
+    """Sanitize all TextField values on a model instance in-place using clean_html.
+    Only string values are sanitized; None and non-string values are ignored.
+    """
+    # pass
+    for field in instance._meta.get_fields():
+        if isinstance(field, models.TextField):
+            field_name = field.name
+            if hasattr(instance, field_name):
+                value = getattr(instance, field_name)
+                if isinstance(value, str) and value:
+                    setattr(instance, field_name, clean_html(value))
 
 
 class StaffAdminSite(UnfoldAdminSite):
@@ -372,6 +449,9 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
 
     def save_model(self, request, obj, form, change):
         obj: Configuration
+        # Sanitize all TextField inputs to avoid XSS via WYSIWYG/TextField
+        sanitize_textfields(obj)
+
         if obj.server_cashless and obj.key_cashless:
             if obj.check_serveur_cashless():
                 messages.add_message(request, messages.INFO, _(f"Cashless server ONLINE"))
@@ -703,6 +783,11 @@ class ProductAdmin(ModelAdmin):
                     Product.FREERES,
                 ]).exclude(archive=True)
         return queryset, use_distinct
+
+    def save_model(self, request, obj: Product, form, change):
+        # Sanitize all TextField inputs to avoid XSS via WysiwYG/TextField
+        sanitize_textfields(obj)
+        super().save_model(request, obj, form, change)
 
     # def save_model(self, request, obj, form, change):
     #     try:
@@ -1799,6 +1884,11 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
                 )
             )
         )
+
+    def save_model(self, request, obj: Event, form, change):
+        # Sanitize all TextField inputs to avoid XSS via WysiwYG/TextField
+        sanitize_textfields(obj)
+        super().save_model(request, obj, form, change)
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
