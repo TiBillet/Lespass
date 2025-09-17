@@ -19,7 +19,7 @@
         {% for is_valid, list_membership in memberships_dict.items %}
             {% for membership in list_membership %}
 
-                {% include 'reunion/partials/membership_card.html' with membership=membership %}
+                {% include 'reunion/views/account/membership/membership_card.html' with membership=membership %}
             {% endfor %}
         {% endfor %}
     </div>

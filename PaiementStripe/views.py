@@ -210,7 +210,7 @@ def new_entry_from_stripe_subscription_invoice(user, id_invoice, membership):
     stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
     stripe_invoice = stripe.Invoice.retrieve(
         id_invoice,
-        # stripe_account=Configuration.get_solo().get_stripe_connect_account()
+        stripe_account=Configuration.get_solo().get_stripe_connect_account()
     )
     tenant = connection.tenant
 

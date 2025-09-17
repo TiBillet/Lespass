@@ -205,7 +205,7 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
         serialized_transaction = fedowAPI.membership.create(membership=membership)
 
         # Optional Fedow reward to user wallet (price setting)
-        refill_from_lespass_to_user_wallet_from_price_solded(ligne_article.pk)
+        refill_from_lespass_to_user_wallet_from_price_solded.delay(ligne_article.pk)
 
 
         # Envoi de la vente à LaBoutik

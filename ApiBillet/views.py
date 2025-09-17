@@ -12,10 +12,11 @@ from django.core.cache import cache
 
 from django.db import connection
 from django.http import Http404, HttpResponse
+from django.template.loader import render_to_string
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django_tenants.utils import tenant_context, schema_context
-from rest_framework import viewsets, permissions, status
+from rest_framework import viewsets, permissions, status, serializers
 from rest_framework.decorators import permission_classes, action
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
@@ -487,30 +488,110 @@ def borne_temps_4h():
         return debut_jour, lendemain_quatre_heure
 
 
-@permission_classes([permissions.IsAuthenticated])
+class CancelSubscriptionInput(serializers.Serializer):
+    uuid_membership = serializers.UUIDField(required=True)
+
+
 class CancelSubscription(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
     def post(self, request):
         user = request.user
-        price = request.data.get('uuid_price')
+        is_htmx = request.headers.get('HX-Request') == 'true'
+        # Important: we must use the membership UUID here rather than the price UUID.
+        # Rationale:
+        # - A parent can purchase multiple memberships for several children under the same price.
+        #   In that scenario, (user, price) is not unique and cannot safely target a single record.
+        # - Exposing membership.uuid is acceptable in this context and avoids ambiguity.
+        # - We still enforce ownership by looking up the membership by (uuid, user).
+        validator = CancelSubscriptionInput(data=request.data)
+        if not validator.is_valid():
+            if is_htmx:
+                # Can't render a specific card without a valid UUID → keep JSON error
+                return HttpResponse(render_to_string(
+                    'reunion/views/account/membership/membership_card.html',
+                    {
+                        # no membership to render; return a minimal error block instead
+                        'message_error': _('Invalid request.'),
+                        'membership': None,
+                    }
+                ), status=400)
+            return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
+        membership_uuid = validator.validated_data['uuid_membership']
 
-        membership = Membership.objects.get(
-            user=user,
-            price=price
-        )
+        membership = None
+        try:
+            membership = Membership.objects.get(uuid=membership_uuid, user=user)
+        except Membership.DoesNotExist:
+            if is_htmx:
+                # Without membership, we cannot render its card; return a small alert
+                html = f"""
+                <div class=\"alert alert-danger\" role=\"alert\">{_('Subscription not found for this user')}</div>
+                """
+                return HttpResponse(html, status=404)
+            return Response(_('Subscription not found for this user'), status=status.HTTP_404_NOT_FOUND)
 
-        if membership.status == Membership.AUTO:
-            stripe.api_key = Configuration.get_solo().get_stripe_api()
-            stripe.Subscription.delete(
+        if membership.status != Membership.AUTO:
+            if is_htmx:
+                html = render_to_string('reunion/views/account/membership/membership_card.html', {
+                    'membership': membership,
+                    'message_error': _('No automatic renewal on this.'),
+                })
+                return HttpResponse(html, status=200)
+            return Response(_('No automatic renewal on this.'), status=status.HTTP_406_NOT_ACCEPTABLE)
+
+        if not membership.stripe_id_subscription:
+            if is_htmx:
+                html = render_to_string('reunion/views/account/membership/membership_card.html', {
+                    'membership': membership,
+                    'message_error': _('Stripe subscription ID missing'),
+                })
+                return HttpResponse(html, status=200)
+            return Response(_('Stripe subscription ID missing'), status=status.HTTP_409_CONFLICT)
+
+        # Use Stripe best practice: cancel at period end instead of immediate deletion
+        try:
+            stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+            # If using Connect in other places, add account param here as needed.
+            sub = stripe.Subscription.modify(
                 membership.stripe_id_subscription,
-                # stripe_account=config.get_stripe_connect_account(),
+                cancel_at_period_end=True,
+                stripe_account=Configuration.get_solo().get_stripe_connect_account(),
             )
-            membership.status = Membership.CANCELED
-            membership.save()
+        except stripe.error.InvalidRequestError as e:
+            logging.getLogger(__name__).exception("Stripe InvalidRequestError while canceling subscription")
+            if is_htmx:
+                html = render_to_string('reunion/views/account/membership/membership_card.html', {
+                    'membership': membership,
+                    'message_error': _('Stripe error'),
+                })
+                return HttpResponse(html, status=200)
+            return Response({'detail': _('Stripe error'), 'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logging.getLogger(__name__).exception("Unexpected error while canceling subscription")
+            if is_htmx:
+                html = render_to_string('reunion/views/account/membership/membership_card.html', {
+                    'membership': membership,
+                    'message_error': _('Unexpected error'),
+                })
+                return HttpResponse(html, status=200)
+            return Response({'detail': _('Unexpected error'), 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            # TODO: envoyer un mail de confirmation d'annulation
-            return Response(_('Automatic renewal turned off.'), status=status.HTTP_200_OK)
+        # Mark as canceled (no more auto-renew). Keep benefits until period end.
+        membership.status = Membership.CANCELED
+        membership.save(update_fields=['status', 'last_action'])
 
-        return Response(_('No automatic renewal on this.'), status=status.HTTP_406_NOT_ACCEPTABLE)
+        # HTMX response: re-render the updated card with a success message
+        success_message = _('Automatic renewal turned off. Your subscription remains active until the end of the current period.')
+        if is_htmx:
+            html = render_to_string('reunion/views/account/membership/membership_card.html', {
+                'membership': membership,
+                'message_success': success_message,
+            })
+            return HttpResponse(html, status=200)
+
+        # Fallback JSON API response
+        return Response({'detail': str(success_message), 'stripe': {'id': sub.id, 'cancel_at_period_end': sub.cancel_at_period_end}}, status=status.HTTP_200_OK)
 
 
 @permission_classes([TenantAdminApiPermission])
@@ -652,7 +733,7 @@ def paiment_stripe_validator(request, paiement_stripe: Paiement_stripe):
         paiement_stripe.traitement_en_cours = True
         invoice = stripe.Invoice.retrieve(
             paiement_stripe.invoice_stripe,
-            # stripe_account=config.get_stripe_connect_account()
+            stripe_account=config.get_stripe_connect_account()
         )
 
         if invoice.status == 'paid':

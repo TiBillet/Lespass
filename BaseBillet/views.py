@@ -883,7 +883,7 @@ class MyAccount(viewsets.ViewSet):
                         memberships_dict[False].append(membership)
 
         context['memberships_dict'] = memberships_dict
-        return render(request, "reunion/views/account/memberships.html", context=context)
+        return render(request, "reunion/views/account/membership/memberships.html", context=context)
 
     @action(detail=False, methods=['GET'])
     def card(self, request: HttpRequest) -> HttpResponse:
