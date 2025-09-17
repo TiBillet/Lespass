@@ -2213,6 +2213,9 @@ class Membership(models.Model):
     phone = models.CharField(max_length=20, null=True, blank=True)
     commentaire = models.TextField(null=True, blank=True)
 
+    # Dynamic membership form data
+    custom_form = models.JSONField(null=True, blank=True, verbose_name=_('Custom Form'))
+
     CANCELED, AUTO, ONCE, ADMIN, IMPORT, LABOUTIK = 'C', 'A', 'O', 'D', 'I', 'L'
     STATUS_CHOICES = [
         (ADMIN, _("Saved through the admin")),
@@ -2349,6 +2352,7 @@ class Membership(models.Model):
 
     def status_name(self):
         return self.get_status_display()
+
 
     def __str__(self):
         if self.pseudo:
@@ -2550,3 +2554,69 @@ class BrevoConfig(SingletonModel):
     class Meta:
         verbose_name = _('Brevo setting')
         verbose_name_plural = _('Brevo settings')
+
+
+
+class ProductFormField(models.Model):
+    """Definition de champs dynamiques pour les produits d'adhésion.
+    Ces champs seront affichés dans le formulaire d'adhésion (offcanvas) et
+    les réponses seront stockées dans Membership.custom_form (JSON).
+    """
+
+    class FieldType(models.TextChoices):
+        SHORT_TEXT = 'ST', _('Short text')            # ex: pseudo
+        LONG_TEXT = 'LT', _('Long text')              # ex: description 300 caractères
+        SINGLE_SELECT = 'SS', _('Single select')      # sélecteur solo
+        MULTI_SELECT = 'MS', _('Multiple select')     # sélecteur multiple
+
+    uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
+
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name='form_fields',
+        verbose_name=_('Product')
+    )
+
+    # Identifiant machine lisible de la question/champ (clé utilisée dans le JSON Membership.custom_form)
+    name = models.SlugField(max_length=64, verbose_name=_('Key'), help_text=_('Unique per product'), editable=False)
+
+    # Libellé affiché à l’utilisateur
+    label = models.CharField(max_length=255, verbose_name=_('Label'))
+
+    help_text = models.CharField(max_length=500, blank=True, null=True, verbose_name=_('Help text'))
+    placeholder = models.CharField(max_length=255, blank=True, null=True, verbose_name=_('Placeholder'))
+
+    field_type = models.CharField(max_length=2, choices=FieldType.choices, verbose_name=_('Field type'))
+    required = models.BooleanField(default=False, verbose_name=_('Required'))
+
+    # Ordre d’affichage
+    order = models.PositiveSmallIntegerField(default=0, verbose_name=_('Display order'), db_index=True)
+
+    # Pour les champs de type sélecteur: options affichées. Liste de valeurs.
+    # Exemple: ["Rock", "Electro", "Jazz"]
+    options = models.JSONField(blank=True, null=True, verbose_name=_('Options'))
+
+    class Meta:
+        ordering = ('order', 'uuid')
+        verbose_name = _('Dynamic form field')
+        verbose_name_plural = _('Dynamic form fields')
+        constraints = [
+            models.UniqueConstraint(fields=['product', 'name'], name='uniq_product_formfield_key')
+        ]
+
+    def __str__(self):
+        return f"{self.product} • {self.label}"
+
+    def save(self, *args, **kwargs):
+        # Always derive the machine key from the label, unique per product
+        base = slugify(self.label or "")[:64] if self.label else ""
+        candidate = base or "field"
+        suffix = 1
+        # Ensure uniqueness per product by appending -2, -3 ... if needed
+        while ProductFormField.objects.filter(product=self.product, name=candidate).exclude(pk=self.pk).exists():
+            suffix += 1
+            tail = f"-{suffix}"
+            candidate = f"{base}{tail}"[:64]
+        self.name = candidate
+        super().save(*args, **kwargs)

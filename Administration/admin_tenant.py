@@ -46,7 +46,7 @@ from unfold.contrib.filters.admin import (
 from unfold.contrib.forms.widgets import WysiwygWidget
 from unfold.contrib.import_export.forms import ExportForm, ImportForm
 from unfold.decorators import display, action
-from unfold.sections import TableSection
+from unfold.sections import TableSection, TemplateSection
 from unfold.sites import UnfoldAdminSite
 from unfold.widgets import (
     UnfoldAdminCheckboxSelectMultiple,
@@ -63,7 +63,7 @@ from AuthBillet.models import HumanUser, TibilletUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
-    FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel, BrevoConfig, ScanApp
+    FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel, BrevoConfig, ScanApp, ProductFormField
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
     webhook_membership, create_ticket_pdf, ticket_celery_mailer, send_ticket_cancellation_user, \
     send_reservation_cancellation_user
@@ -629,6 +629,49 @@ class PriceInline(TabularInline):
         return TenantAdminPermissionWithRequest(request)
 
 
+class ProductFormFieldInline(TabularInline):
+    """Sortable inline for dynamic membership form fields (ProductFormField)."""
+    model = ProductFormField
+    fk_name = 'product'
+    extra = 0
+    show_change_link = True
+
+    # Unfold sortable inline settings
+    ordering_field = "order"
+    hide_ordering_field = True
+
+    # Put inline in its own tab in the Product admin change view
+    tab = True
+
+    # Columns in the inline rows (Unfold supports list_display for inlines)
+    list_display = ["label", "field_type", "required", "order"]
+
+    # Fields displayed in the inline form (key is auto-generated from label)
+    fields = (
+        "label",
+        "field_type",
+        "required",
+        "options",
+        "placeholder",
+        "help_text",
+        "order",
+    )
+
+    # Reduce JSONField textarea size (about one third of default)
+    formfield_overrides = {
+        models.JSONField: {"widget": forms.Textarea(attrs={"rows": 4})}
+    }
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+
 class ProductAdminCustomForm(ModelForm):
     class Meta:
         model = Product
@@ -695,7 +738,7 @@ class CheckStripeComponent(BaseComponent):
 class ProductAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
-    inlines = [PriceInline, ]
+    inlines = [PriceInline, ProductFormFieldInline]
 
     list_before_template = "admin/product/product_list_before.html"  # appelle le component CheckStripe plus haut pour le contexte
 
@@ -1338,6 +1381,7 @@ class MembershipChangeForm(ModelForm):
             'option_generale',
             'deadline',
             'commentaire',
+            'custom_form',
         )
 
 
@@ -1345,6 +1389,7 @@ class MembershipChangeForm(ModelForm):
 def adhesion_badge_callback(request):
     # Recherche de la quantité de nouvelles adhésions ces 14 dernièrs jours
     return f"+ {Membership.objects.filter(last_contribution__gte=timezone.localtime() - timedelta(days=7)).count()}"
+
 
 
 @register_component
@@ -1369,8 +1414,15 @@ class MembershipComponent(BaseComponent):
         return context
 
 
+class MembershipCustomFormSection(TemplateSection):
+    template_name = "admin/membership/custom_form_section.html"
+    verbose_name = _("Custom form answers")
+
+
 @admin.register(Membership, site=staff_admin_site)
 class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
+    # Expandable section to display custom form answers in changelist
+    list_sections = [MembershipCustomFormSection]
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 
@@ -1407,9 +1459,11 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        return qs.filter(last_contribution__isnull=False).select_related('user', 'price',
-                                                                         'price__product').prefetch_related(
-            'option_generale')
+        return (
+            qs.filter(last_contribution__isnull=False)
+            .select_related('user', 'price', 'price__product')
+            .prefetch_related('option_generale', 'price__product__form_fields')
+        )
 
     ### FORMULAIRES
     autocomplete_fields = ['option_generale', ]
@@ -1421,6 +1475,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
             defaults['form'] = self.add_form
         defaults.update(kwargs)
         return super().get_form(request, obj, **defaults)
+
 
     # Pour les bouton en haut de la vue change
     # chaque decorateur @action génère une nouvelle route

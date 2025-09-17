@@ -21,7 +21,7 @@ from ApiBillet.serializers import get_or_create_price_sold, dec_to_int, create_t
 from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Price, Product, OptionGenerale, Membership, Paiement_stripe, LigneArticle, Tag, Event, \
-    Reservation, PriceSold, Ticket, ProductSold, Configuration
+    Reservation, PriceSold, Ticket, ProductSold, Configuration, ProductFormField
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from PaiementStripe.views import CreationPaiementStripe
@@ -500,6 +500,51 @@ class MembershipValidator(serializers.Serializer):
         options = attrs.get('options', [])
         if options:
             membership.option_generale.set(attrs['options'])
+
+        # Collect dynamic custom form fields from request (names prefixed with 'form__')
+        request = self.context.get('request')
+        req_data = request.data if request else {}
+
+        # Build a map of expected fields for this product to validate types/required
+        custom_form = {}
+        try:
+            product = self.price.product
+            product_fields = {ff.name: ff for ff in ProductFormField.objects.filter(product=product)}
+        except Exception:
+            product_fields = {}
+
+        for name, ff in product_fields.items():
+            key = f"form__{name}"
+            value = None
+            if hasattr(req_data, 'getlist') and ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
+                value = req_data.getlist(key)
+            else:
+                value = req_data.get(key)
+                # If MULTI_SELECT but parser gave a scalar, normalize to list
+                if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
+                    if value in [None, '']:
+                        value = []
+                    elif not isinstance(value, list):
+                        value = [value]
+
+            # Enforce required
+            if ff.required:
+                if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
+                    if not value:
+                        raise serializers.ValidationError({key: [_('This field is required.')]})
+                else:
+                    if value in [None, '']:
+                        raise serializers.ValidationError({key: [_('This field is required.')]})
+
+            # Only store non-empty values
+            if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
+                if value:
+                    custom_form[name] = value
+            else:
+                if value not in [None, '']:
+                    custom_form[name] = value
+
+        membership.custom_form = custom_form or None
 
         membership.save()
         self.membership = membership

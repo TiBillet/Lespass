@@ -10,7 +10,7 @@ from faker import Faker
 
 from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
-from BaseBillet.models import Product, OptionGenerale, Price, Configuration, Event, Tag, PostalAddress, FormbricksConfig, FormbricksForms
+from BaseBillet.models import Product, OptionGenerale, Price, Configuration, Event, Tag, PostalAddress, FormbricksConfig, FormbricksForms, ProductFormField
 from Customers.models import Client, Domain
 from fedow_connect.fedow_api import FedowAPI, AssetFedow
 from fedow_connect.models import FedowConfig, Asset
@@ -269,6 +269,63 @@ class Command(BaseCommand):
                     fedow_reward_asset=Asset.objects.get(uuid=asset['uuid']),
                     fedow_reward_amount=150,
                 )
+
+                # --- Formulaire d'adhésion dynamique (tous les types d'inputs) ---
+                try:
+                    fields = [
+                        {
+                            "name": "nickname",
+                            "label": "Pseudonyme",
+                            "field_type": ProductFormField.FieldType.SHORT_TEXT,
+                            "required": True,
+                            "order": 1,
+                            "placeholder": "Choisissez un pseudonyme court (3–20 caractères)",
+                            "help_text": "Affiché à la communauté ; vous pouvez utiliser un pseudonyme.",
+                        },
+                        {
+                            "name": "about_you",
+                            "label": "À propos de vous",
+                            "field_type": ProductFormField.FieldType.LONG_TEXT,
+                            "required": False,
+                            "order": 2,
+                            "placeholder": "Parlez-nous de vous (max ~300 caractères)",
+                            "help_text": "Nous aide à mieux vous connaître.",
+                        },
+                        {
+                            "name": "favorite_style",
+                            "label": "Style préféré",
+                            "field_type": ProductFormField.FieldType.SINGLE_SELECT,
+                            "required": True,
+                            "order": 3,
+                            "options": ["Rock", "Jazz", "Musiques du monde", "Electro"],
+                            "help_text": "Choisissez-en un.",
+                        },
+                        {
+                            "name": "interests",
+                            "label": "Centres d'intérêt que vous souhaitez partager",
+                            "field_type": ProductFormField.FieldType.MULTI_SELECT,
+                            "required": False,
+                            "order": 4,
+                            "options": ["Cuisine", "Jardinage", "Musique", "Technologie", "Art", "Sport"],
+                            "help_text": "Sélectionnez autant d'options que vous le souhaitez.",
+                        },
+                    ]
+                    for f in fields:
+                        # Key is auto-generated from label by the model save(); use label for idempotency
+                        ProductFormField.objects.get_or_create(
+                            product=ssa,
+                            label=f["label"],
+                            defaults={
+                                "field_type": f["field_type"],
+                                "required": f["required"],
+                                "order": f["order"],
+                                "placeholder": f.get("placeholder"),
+                                "help_text": f.get("help_text"),
+                                "options": f.get("options"),
+                            }
+                        )
+                except Exception as e:
+                    logger.warning(f"Unable to create ProductFormField demo data: {e}")
 
 
                 ### BADGEUSE ###

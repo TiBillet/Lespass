@@ -137,6 +137,67 @@
             </div>
         {% endfor %}
 
+        <!-- dynamic product form fields -->
+        {% with fields=product.form_fields.all %}
+            {% if fields %}
+                <hr>
+                <h4 class="h5 mb-3">{% translate "Additional information" %}</h4>
+                {% for field in fields %}
+                    {% if field.field_type == 'ST' %}
+                        <div class="form-floating mb-3">
+                            <input id="ff-{{ field.uuid }}" name="form__{{ field.name }}" type="text" class="form-control"
+                                   placeholder="{{ field.placeholder|default:field.label }}" {% if field.required %}required{% endif %}>
+                            <label for="ff-{{ field.uuid }}">{{ field.label }}</label>
+                            {% if field.help_text %}
+                                <div class="form-text">{{ field.help_text }}</div>
+                            {% endif %}
+                        </div>
+                    {% elif field.field_type == 'LT' %}
+                        <div class="form-floating mb-3">
+                            <textarea id="ff-{{ field.uuid }}" name="form__{{ field.name }}" class="form-control" style="height: 120px"
+                                      placeholder="{{ field.placeholder|default:field.label }}" {% if field.required %}required{% endif %}></textarea>
+                            <label for="ff-{{ field.uuid }}">{{ field.label }}</label>
+                            {% if field.help_text %}
+                                <div class="form-text">{{ field.help_text }}</div>
+                            {% endif %}
+                        </div>
+                    {% elif field.field_type == 'SS' %}
+                        <div class="mb-3">
+                            <label class="form-label" for="ff-{{ field.uuid }}">{{ field.label }}</label>
+                            <select id="ff-{{ field.uuid }}" name="form__{{ field.name }}" class="form-select" {% if field.required %}required{% endif %}>
+                                <option value="" {% if field.required %}disabled selected{% endif %}>—</option>
+                                {% for opt in field.options %}
+                                    <option value="{{ opt }}">{{ opt }}</option>
+                                {% endfor %}
+                            </select>
+                            {% if field.help_text %}
+                                <div class="form-text">{{ field.help_text }}</div>
+                            {% endif %}
+                        </div>
+                    {% elif field.field_type == 'MS' %}
+                        <div class="mb-3">
+                            <div class="form-label">{{ field.label }}</div>
+                            {% for opt in field.options %}
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="ff-{{ field.uuid }}-{{ forloop.counter }}"
+                                           name="form__{{ field.name }}" value="{{ opt }}">
+                                    <label class="form-check-label" for="ff-{{ field.uuid }}-{{ forloop.counter }}">{{ opt }}</label>
+                                </div>
+                            {% endfor %}
+                            {% if field.help_text %}
+                                <div class="form-text">{{ field.help_text }}</div>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- newsletter opt-out -->
+        <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" role="switch" id="newsletter" name="newsletter">
+            <label class="form-check-label" for="newsletter">{% translate "I do not want to receive the newsletter." %}</label>
+        </div>
 
         {% if product.legal_link %}
             <div class="form-check form-switch mb-3">

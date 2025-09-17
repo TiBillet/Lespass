@@ -724,8 +724,6 @@ def paiment_stripe_validator(request, paiement_stripe: Paiement_stripe):
     stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
     config = Configuration.get_solo()
 
-    # stripe.api_key = Configuration.get_solo().get_stripe_api()
-
     # SI c'est une source depuis INVOICE,
     # L'object vient d'être créé, on vérifie que la facture stripe
     # est payée et on met en VALID.
