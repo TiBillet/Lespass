@@ -84,8 +84,8 @@ class CreationPaiementStripe():
 
         if self.invoice:
             dict_paiement['invoice_stripe'] = self.invoice.id
-            if bool(self.invoice.subscription):
-                dict_paiement['subscription'] = self.invoice.subscription
+            if bool(self.invoice.parent.subscription_details.subscription):
+                dict_paiement['subscription'] = self.invoice.parent.subscription_details.subscription
 
         paiementStripeDb = Paiement_stripe.objects.create(**dict_paiement)
 
@@ -207,15 +207,19 @@ class CreationPaiementStripe():
 
 
 def new_entry_from_stripe_subscription_invoice(user, id_invoice, membership):
-    stripe.api_key = Configuration.get_solo().get_stripe_api()
-    stripe_invoice = stripe.Invoice.retrieve(id_invoice)
+    stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+    stripe_invoice = stripe.Invoice.retrieve(
+        id_invoice,
+        # stripe_account=Configuration.get_solo().get_stripe_connect_account()
+    )
     tenant = connection.tenant
 
     lines = stripe_invoice.lines
     lignes_articles = []
     for line in lines['data']:
+        id_price_stripe = line.pricing.price_details.price
         ligne_article = LigneArticle.objects.create(
-            pricesold=PriceSold.objects.get(id_price_stripe=line.price.id),
+            pricesold=PriceSold.objects.get(id_price_stripe=id_price_stripe),
             payment_method=PaymentMethod.STRIPE_RECURENT,
             amount=line.amount,
             qty=line.quantity,
@@ -223,13 +227,14 @@ def new_entry_from_stripe_subscription_invoice(user, id_invoice, membership):
         )
         lignes_articles.append(ligne_article)
 
+    # on reprend les même metadata que dans BaseBillet.validators.MembershipValidator.get_checkout_stripe
     metadata = {
-        'tenant_uuid': f'{tenant.uuid}',
+        'tenant': f'{tenant.uuid}',
         'tenant_name': f'{tenant.name}',
         'price_uuid': f"{membership.price.uuid}",
         'product_price_name': f"{membership.price.product.name} {membership.price.name}",
         'membership_uuid': f"{membership.uuid}",
-        'user': f"{user.pk}",
+        'user': f"{user.email}",
         'from_stripe_invoice': f"{stripe_invoice.id}",
     }
 
@@ -245,6 +250,8 @@ def new_entry_from_stripe_subscription_invoice(user, id_invoice, membership):
 
     if new_paiement_stripe.is_valid():
         paiement_stripe: Paiement_stripe = new_paiement_stripe.paiement_stripe_db
+        membership.stripe_paiement.add(paiement_stripe)
+        # Passage à UNPAID pour lancer les triggers
         paiement_stripe.lignearticles.all().update(status=LigneArticle.UNPAID)
 
         return paiement_stripe

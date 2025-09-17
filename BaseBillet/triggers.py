@@ -38,6 +38,8 @@ def update_membership_state_after_stripe_paiement(ligne_article):
 
     paiement_stripe: Paiement_stripe = ligne_article.paiement_stripe
     membership: Membership = paiement_stripe.membership.first()
+    if not membership:
+        membership = ligne_article.membership
 
     price: Price = ligne_article.pricesold.price
     membership.contribution_value = ligne_article.pricesold.prix
@@ -203,7 +205,7 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
         serialized_transaction = fedowAPI.membership.create(membership=membership)
 
         # Optional Fedow reward to user wallet (price setting)
-        refill_from_lespass_to_user_wallet_from_price_solded.delay(ligne_article.pk)
+        refill_from_lespass_to_user_wallet_from_price_solded(ligne_article.pk)
 
 
         # Envoi de la vente à LaBoutik

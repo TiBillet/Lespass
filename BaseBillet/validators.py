@@ -409,6 +409,9 @@ class ReservationValidator(serializers.Serializer):
 
 
 class MembershipValidator(serializers.Serializer):
+    """
+    Validator reclamé lors de la réclamation d'une adhésion depuis le front Lespass
+    """
     acknowledge = serializers.BooleanField()
     price = serializers.PrimaryKeyRelatedField(
         queryset=Price.objects.filter(product__categorie_article=Product.ADHESION)
@@ -438,9 +441,8 @@ class MembershipValidator(serializers.Serializer):
             'price_uuid': f"{price.uuid}",
             'product_price_name': f"{membership.price.product.name} {membership.price.name}",
             'membership_uuid': f"{membership.uuid}",
-            'user': f"{user.pk}",
+            'user': f"{user.email}",
         }
-
 
         ligne_article_adhesion = LigneArticle.objects.create(
             pricesold=get_or_create_price_sold(price),

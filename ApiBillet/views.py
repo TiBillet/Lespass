@@ -652,7 +652,7 @@ def paiment_stripe_validator(request, paiement_stripe: Paiement_stripe):
         paiement_stripe.traitement_en_cours = True
         invoice = stripe.Invoice.retrieve(
             paiement_stripe.invoice_stripe,
-            stripe_account=config.get_stripe_connect_account()
+            # stripe_account=config.get_stripe_connect_account()
         )
 
         if invoice.status == 'paid':
@@ -1072,10 +1072,11 @@ class Webhook_stripe(APIView):
                 try :
                     # les metadata ont été généré lors de la création du checkout
                     metadata = payload_object['subscription_details']['metadata']
+                    logger.info(f"Webhook_stripe metadata --> {metadata}")
 
                     tenant_uuid = metadata['tenant']
                     membership_uuid = metadata['membership_uuid']
-                    price_uuid = metadata['price_uuid_uuid']
+                    price_uuid = metadata['price_uuid']
                     tenant = Client.objects.get(uuid=tenant_uuid)
                     logger.info(f"Webhook_stripe invoice.paid. tenant : {tenant.name}")
                     with tenant_context(tenant):
