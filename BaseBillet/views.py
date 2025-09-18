@@ -1320,26 +1320,34 @@ class FederationViewset(viewsets.ViewSet):
     def list(self, request):
         template_context = get_context(request)
 
-        federated_places = []
-        for place in FederatedPlace.objects.all():
-            with tenant_context(place.tenant):
-                config = Configuration.get_solo()
-                assets = [asset.name for asset in Asset.objects.filter(category__in=[
-                    Asset.STRIPE_FED_FIAT,
-                    Asset.TOKEN_LOCAL_FIAT,
-                    Asset.TOKEN_LOCAL_NOT_FIAT,
-                    Asset.TIME,
-                    Asset.FIDELITY,
-                ])]
-                federated_places.append({
-                    "organisation": config.organisation,
-                    "slug": config.slug,
-                    "short_description": config.short_description,
-                    "long_description": config.long_description,
-                    "img": config.img,
-                    "logo": config.logo,
-                    "assets": assets,
-                })
+        def build_federated_places():
+            results = []
+            for place in FederatedPlace.objects.all():
+                with tenant_context(place.tenant):
+                    config = Configuration.get_solo()
+                    assets = [asset.name for asset in Asset.objects.filter(category__in=[
+                        Asset.STRIPE_FED_FIAT,
+                        Asset.TOKEN_LOCAL_FIAT,
+                        Asset.TOKEN_LOCAL_NOT_FIAT,
+                        Asset.TIME,
+                        Asset.FIDELITY,
+                    ])]
+                    results.append({
+                        "organisation": config.organisation,
+                        "slug": config.slug,
+                        "short_description": config.short_description,
+                        "long_description": config.long_description,
+                        "img": config.img,
+                        "logo": config.logo,
+                        "assets": assets,
+                    })
+            return results
+
+        federated_places = cache.get_or_set(
+            f"federated_places_{connection.tenant.uuid}",
+            build_federated_places,
+            60 * 60  # cache for 1 hour
+        )
 
         template_context['federated_places'] = federated_places
         return render(request, "reunion/views/federation/list.html", context=template_context)
