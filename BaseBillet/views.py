@@ -56,7 +56,7 @@ from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from TiBillet import settings
 from fedow_connect.fedow_api import FedowAPI
-from fedow_connect.models import FedowConfig
+from fedow_connect.models import FedowConfig, Asset
 from fedow_connect.utils import dround
 from fedow_connect.validators import TransactionSimpleValidator
 from root_billet.models import RootConfiguration
@@ -1317,25 +1317,31 @@ class FederationViewset(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
     permission_classes = [permissions.AllowAny]
 
-
-
     def list(self, request):
         template_context = get_context(request)
 
-        federated_place = {}
+        federated_places = []
         for place in FederatedPlace.objects.all():
             with tenant_context(place.tenant):
                 config = Configuration.get_solo()
-                federated_place[config.organisation] = {
+                assets = [asset.name for asset in Asset.objects.filter(category__in=[
+                    Asset.STRIPE_FED_FIAT,
+                    Asset.TOKEN_LOCAL_FIAT,
+                    Asset.TOKEN_LOCAL_NOT_FIAT,
+                    Asset.TIME,
+                    Asset.FIDELITY,
+                ])]
+                federated_places.append({
                     "organisation": config.organisation,
                     "slug": config.slug,
                     "short_description": config.short_description,
                     "long_description": config.long_description,
                     "img": config.img,
                     "logo": config.logo,
-                }
+                    "assets": assets,
+                })
 
-        template_context['federated_place'] = federated_place
+        template_context['federated_places'] = federated_places
         return render(request, "reunion/views/federation/list.html", context=template_context)
 
 
