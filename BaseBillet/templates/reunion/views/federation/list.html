@@ -17,25 +17,26 @@
         {% for place in federated_places %}
         <div class="col">
             <article class="card h-100">
+                {% include 'reunion/partials/picture.html' with img=event.img alt=event.name class='card-img-top' %}
                 <div class="card-body">
                     <h3 class="card-title">{{ place.organisation }}</h3>
                     <p class="card-text">
-                        Association de travail du bois, organisé autour de trois
-                        pôles : menuiserie, sculpture et formation à
-                        l'utilisation des machines. Gère l'atelier bois du
-                        Fusible.
+                        {{ place.short_description }}
                     </p>
                 </div>
                 <div class="card-footer p-0">
                     <table class="table mb-0">
                         <tbody>
                             <tr>
-                                <th scope="row">Accepte</th>
+                                <th scope="row">{% trans "Accepts" %}</th>
                                 <td>
+                                    {% for asset in place.assets %}
                                     <span class="badge text-bg-info">
                                         <i class="bi bi-cash"></i>
-                                        Euro
+                                        {{ asset }}
                                     </span>
+                                    {% endfor %}
+                                    <!-- 
                                     <span class="badge text-bg-info">
                                         <i class="bi bi-hourglass"></i>
                                         Heure Lumière
@@ -43,16 +44,18 @@
                                     <span class="badge text-bg-warning">
                                         <i class="bi bi-person-badge"></i>
                                         Adhésion Chantefrein
-                                    </span>
+                                    </span> -->
                                 </td>
                             </tr>
                         </tbody>
                     </table>
+                    {% if place.url %}
                     <div class="p-3">
-                        <a href="#" class="btn btn-primary d-block my-3">
-                            Espace en ligne Chantefrein
+                        <a href="{{ place.url }}" target="_blank" class="btn btn-primary d-block my-3">
+                            Lèspass {{ place.organisation }}
                         </a>
                     </div>
+                    {% endif %}
                 </div>
             </article>
         </div>
