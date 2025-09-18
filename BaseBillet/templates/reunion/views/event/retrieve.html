@@ -116,7 +116,7 @@
         {#    Si l'évènement n'est pas de ce tenant, il provient d'une fédération, le bouton redigire vers la page du tenant.#}
         {#    # Todo : Garder l'user d'un dns à l'autre #}
         {% if not event_in_this_tenant %}
-            <a href="{{ event.full_url }}?openbookingPanel=true" class="btn btn-lg btn-primary d-block mt-3" role="button">
+            <a href="{{ event.full_url }}?openbookingPanel=true" target="_blank" class="btn btn-lg btn-primary d-block mt-3" role="button">
                 {% translate "I want to book one or more seats" %}
                 <i class="bi bi-box-arrow-up-right"></i>
             </a>
