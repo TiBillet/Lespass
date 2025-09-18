@@ -1,5 +1,6 @@
 import datetime
 import logging
+import json
 from decimal import Decimal
 
 import requests
@@ -1489,6 +1490,8 @@ class MembershipSerializer(serializers.ModelSerializer):
     contribution_value = serializers.SerializerMethodField()
     product_img = serializers.SerializerMethodField()
     option_names = serializers.SerializerMethodField()
+    # Ensure empty or null values do not break API consumers/writes
+    custom_form = serializers.JSONField(required=False, allow_null=True, default=dict)
 
     class Meta:
         model = Membership
@@ -1502,6 +1505,8 @@ class MembershipSerializer(serializers.ModelSerializer):
             'contribution_value', 'payment_method', 'payment_method_name', 'newsletter', 'postal_code', 'birth_date',
             'phone', 'is_valid', 'asset_fedow', 'stripe_id_subscription', 'last_stripe_invoice',
             'member_name', 'product_img', 'option_generale', 'option_names', 'state_display',
+            # Dynamic membership form data
+            'custom_form',
         ]
         read_only_fields = (
             'uuid', 'date_added', 'last_action', 'last_contribution', 'deadline',
@@ -1509,6 +1514,29 @@ class MembershipSerializer(serializers.ModelSerializer):
             'organisation', 'organisation_id', 'member_name', 'product_img', 'is_valid', 'option_generale',
             'option_names', 'object', 'pk', 'comment', 'state_display'
         )
+
+    def validate_custom_form(self, value):
+        """
+        Accepts dict/list/null. Coerces empty values to None. If a JSON string is provided,
+        attempts to parse it. This prevents crashes when frontends send "" or invalid empties.
+        """
+        if value in (None, ""):
+            return None
+        # If it's already a dict or list, keep it; also coerce empty containers to None
+        if isinstance(value, (dict, list)):
+            return value if value else None
+        # If it's a string, try to parse JSON and validate result
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+            except Exception:
+                raise serializers.ValidationError("Invalid JSON for custom_form")
+            if parsed in (None, ""):
+                return None
+            if not isinstance(parsed, (dict, list)):
+                raise serializers.ValidationError("custom_form must be a JSON object or array")
+            return parsed if parsed else None
+        raise serializers.ValidationError("custom_form must be a JSON object, array, stringified JSON, or null")
 
     def get_pk(self, obj):
         return str(obj.pk) if obj.pk is not None else None

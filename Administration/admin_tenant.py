@@ -1396,7 +1396,7 @@ def adhesion_badge_callback(request):
 class MembershipComponent(BaseComponent):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Les adhésion en cours :
+        # Les adhésions en cours :
         active_count = Membership.objects.filter(deadline__gte=timezone.localtime()).count()
         # Les user qui n'ont pas d'adhésion en cours :
         inactive_count = HumanUser.objects.exclude(
