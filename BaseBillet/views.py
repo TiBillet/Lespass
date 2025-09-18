@@ -576,12 +576,22 @@ class MyAccount(viewsets.ViewSet):
         template_context = get_context(request)
         # Pas de header sur cette page
         template_context['header'] = False
-        template_context['account_tab'] = 'balance'
+        template_context['account_tab'] = 'index'
 
         if not request.user.email_valid:
             logger.warning("User email not active")
             messages.add_message(request, messages.WARNING,
                                  _("Please validate your email to access all the features of your profile area."))
+
+        return render(request, "reunion/views/account/index.html", context=template_context)
+
+
+    @action(detail=False, methods=['GET'])
+    def balance(self, request: HttpRequest):
+        template_context = get_context(request)
+        # Pas de header sur cette page
+        template_context['header'] = False
+        template_context['account_tab'] = 'balance'
 
         return render(request, "reunion/views/account/balance.html", context=template_context)
 
