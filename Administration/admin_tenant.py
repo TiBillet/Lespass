@@ -948,6 +948,7 @@ class PriceChangeForm(ModelForm):
             pass
 
 
+
 @admin.register(Price, site=staff_admin_site)
 class PriceAdmin(ModelAdmin):
     compressed_fields = True  # Default: False

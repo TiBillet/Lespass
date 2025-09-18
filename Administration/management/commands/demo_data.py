@@ -210,6 +210,77 @@ class Command(BaseCommand):
                     subscription_type=Price.YEAR,
                 )
 
+                # New membership product with daily, weekly, monthly, and annual recurring rates
+                adhesion_recur, created = Product.objects.get_or_create(
+                    name=f"Adhésion récurrente ({tenant.name})",
+                    short_description="Adhésion avec paiements récurrents",
+                    long_description="Adhésion récurrente avec des tarifs journaliers, hebdomadaires, mensuels et annuels.",
+                    categorie_article=Product.ADHESION,
+                )
+                adhesion_recur.option_generale_checkbox.add(option_membre_actif)
+
+                Price.objects.get_or_create(
+                    product=adhesion_recur,
+                    name="Journalière",
+                    short_description="Adhésion journalière récurrente",
+                    prix=2,
+                    recurring_payment=True,
+                    subscription_type=Price.DAY,
+                )
+                Price.objects.get_or_create(
+                    product=adhesion_recur,
+                    name="Hebdomadaire",
+                    short_description="Adhésion hebdomadaire récurrente",
+                    prix=10,
+                    recurring_payment=True,
+                    subscription_type=Price.WEEK,
+                )
+                Price.objects.get_or_create(
+                    product=adhesion_recur,
+                    name="Mensuelle",
+                    short_description="Adhésion mensuelle récurrente",
+                    prix=20,
+                    recurring_payment=True,
+                    subscription_type=Price.MONTH,
+                )
+                Price.objects.get_or_create(
+                    product=adhesion_recur,
+                    name="Annuelle",
+                    short_description="Adhésion annuelle récurrente",
+                    prix=150,
+                    recurring_payment=True,
+                    subscription_type=Price.YEAR,
+                )
+
+                # Membership product with manual validation for the solidarity price only
+                adhesion_validation, created = Product.objects.get_or_create(
+                    name=f"Adhésion à validation sélective ({tenant.name})",
+                    short_description="Tarif solidaire soumis à validation manuelle",
+                    long_description="Le tarif solidaire nécessite une validation manuelle. Le plein tarif est accepté automatiquement.",
+                    categorie_article=Product.ADHESION,
+                )
+                adhesion_validation.option_generale_checkbox.add(option_membre_actif)
+
+                # Solidaire: requires manual validation
+                Price.objects.get_or_create(
+                    product=adhesion_validation,
+                    name="Solidaire",
+                    short_description="Tarif solidaire (validation manuelle)",
+                    prix=2,
+                    recurring_payment=False,
+                    subscription_type=Price.YEAR,
+                    manual_validation=True,
+                )
+                # Plein tarif: auto-accepted (no manual validation)
+                Price.objects.get_or_create(
+                    product=adhesion_validation,
+                    name="Plein tarif",
+                    short_description="Plein tarif (acceptation automatique)",
+                    prix=30,
+                    recurring_payment=False,
+                    subscription_type=Price.YEAR,
+                )
+
                 amap, created = Product.objects.get_or_create(
                     name=f"Panier AMAP ({tenant.name})",
                     short_description=f"Adhésion au panier de l'AMAP partenaire {tenant.name}",
@@ -244,7 +315,7 @@ class Command(BaseCommand):
                 fedow_config = FedowConfig.get_solo()
                 fedow_asset = AssetFedow(fedow_config=fedow_config)
                 asset, created = fedow_asset.get_or_create_token_asset(Asset(
-                    name="Caisse Sociale Alimentaire",
+                    name="CLAF-Outil",
                     currency_code="CSA",
                     category=Asset.TOKEN_LOCAL_FIAT,
                 ))

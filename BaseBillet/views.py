@@ -1335,13 +1335,13 @@ class FederationViewset(viewsets.ViewSet):
             for place in FederatedPlace.objects.all():
                 with tenant_context(place.tenant):
                     config = Configuration.get_solo()
-                    assets = [asset.name for asset in Asset.objects.filter(category__in=[
+                    assets = Asset.objects.filter(category__in=[
                         Asset.STRIPE_FED_FIAT,
                         Asset.TOKEN_LOCAL_FIAT,
                         Asset.TOKEN_LOCAL_NOT_FIAT,
                         Asset.TIME,
                         Asset.FIDELITY,
-                    ])]
+                    ])
                     results.append({
                         "organisation": config.organisation,
                         "slug": config.slug,
@@ -1350,6 +1350,7 @@ class FederationViewset(viewsets.ViewSet):
                         "img": config.img,
                         "logo": config.logo,
                         "assets": assets,
+                        "url" : config.full_url(),
                     })
             return results
 

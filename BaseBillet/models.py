@@ -415,6 +415,9 @@ class Configuration(SingletonModel):
         else:
             return []
 
+    def full_url(self):
+        return f"https://{connection.tenant.get_primary_domain().domain}/"
+
     """
     ######### OPTION GENERALES #########
     """
@@ -859,12 +862,19 @@ class Price(models.Model):
                                                  verbose_name=_("Max number of recurrences"),
                                                  help_text=_(
                                                      "A rate with a monthly period and iterations=2 will last two months with two payments: one on day D and another the following month."))
+
+    manual_validation = models.BooleanField(default=False,
+                                            verbose_name=_("Need manual validation"),
+                                            help_text=_(
+                                                "If selected, an administrator will have to manually approve the membership before sending the payment link by email. An email will be sent to the administration address."))
+
     # Fedow reward after successful payment (membership products first)
     fedow_reward_enabled = models.BooleanField(
         default=False,
         verbose_name=_("Top-up user wallet on payment (Fedow)"),
         help_text=_("If enabled, after a successful payment, the user wallet will receive tokens."),
     )
+
     fedow_reward_asset = models.ForeignKey("fedow_connect.Asset", on_delete=models.SET_NULL,
                                            blank=True,
                                            null=True,
@@ -894,6 +904,11 @@ class Price(models.Model):
         ordering = ('order',)
         verbose_name = _('Rate')
         verbose_name_plural = _('Rates')
+
+    def save(self, *args, **kwargs):
+        if self.recurring_payment:
+            self.max_per_user = 1
+        super().save(*args, **kwargs)
 
 
 class Event(models.Model):
@@ -2353,7 +2368,6 @@ class Membership(models.Model):
     def status_name(self):
         return self.get_status_display()
 
-
     def __str__(self):
         if self.pseudo:
             return self.pseudo
@@ -2459,6 +2473,10 @@ class FederatedPlace(models.Model):
     def __str__(self):
         return self.tenant.name
 
+    def save(self, *args, **kwargs):
+        cache.delete(f"federated_places_{connection.tenant.uuid}")
+        super().save(*args, **kwargs)
+
 
 class History(models.Model):
     """
@@ -2556,7 +2574,6 @@ class BrevoConfig(SingletonModel):
         verbose_name_plural = _('Brevo settings')
 
 
-
 class ProductFormField(models.Model):
     """Definition de champs dynamiques pour les produits d'adhésion.
     Ces champs seront affichés dans le formulaire d'adhésion (offcanvas) et
@@ -2564,10 +2581,10 @@ class ProductFormField(models.Model):
     """
 
     class FieldType(models.TextChoices):
-        SHORT_TEXT = 'ST', _('Short text')            # ex: pseudo
-        LONG_TEXT = 'LT', _('Long text')              # ex: description 300 caractères
-        SINGLE_SELECT = 'SS', _('Single select')      # sélecteur solo
-        MULTI_SELECT = 'MS', _('Multiple select')     # sélecteur multiple
+        SHORT_TEXT = 'ST', _('Short text')  # ex: pseudo
+        LONG_TEXT = 'LT', _('Long text')  # ex: description 300 caractères
+        SINGLE_SELECT = 'SS', _('Single select')  # sélecteur solo
+        MULTI_SELECT = 'MS', _('Multiple select')  # sélecteur multiple
 
     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
 
