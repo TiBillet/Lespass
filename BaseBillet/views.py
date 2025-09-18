@@ -1317,8 +1317,25 @@ class FederationViewset(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
     permission_classes = [permissions.AllowAny]
 
+
+
     def list(self, request):
         template_context = get_context(request)
+
+        federated_place = {}
+        for place in FederatedPlace.objects.all():
+            with tenant_context(place.tenant):
+                config = Configuration.get_solo()
+                federated_place[config.organisation] = {
+                    "organisation": config.organisation,
+                    "slug": config.slug,
+                    "short_description": config.short_description,
+                    "long_description": config.long_description,
+                    "img": config.img,
+                    "logo": config.logo,
+                }
+
+        template_context['federated_place'] = federated_place
         return render(request, "reunion/views/federation/list.html", context=template_context)
 
 
