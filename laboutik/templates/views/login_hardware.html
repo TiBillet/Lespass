@@ -1,10 +1,44 @@
 {% extends "base.html" %}
 {% load static %}
+{% load static i18n %}
 
 {% block content %}
-<div id="fond-contenu">
-	<h1>login_harware</h1>
-    {% csrf_token %}
+<!-- passing value to javascript -->
+<script data-demo="{{ demo }}">
+	const data = document.currentScript.dataset
+	const DEMO = tibilletConvDjangoToJs(data.demo)
+</script>
+<!-- login_hardware -->
+<form id="form-login-hardware" hx-post="/laboutik/login_hardware" hx-swap="none"
+	hx-on::after-request="handleLogin(event)" class="hide">
+	{% csrf_token %}
+	<input type="text" name="username" required>
+	<input type="password" name="password" required>
+	<input type="text" name="periph" required>
+	<input type="text" name="signature" required>
+	<input type="text" name="ip_lan" required>
+	<button type="submit">Login</button>
+</form>
+<!-- new_hardware -->
+<form id="form-new-harware" hx-post="/laboutik/new_hardware" hx-swap="none"
+	hx-on::after-request="handleActivation(event)" class="hide">
+	{% csrf_token %}
+	<input type="text" name="version" required>
+	<input type="text" name="username" required>
+	<input type="password" name="password" required>
+	<input type="text" name="hostname" required>
+	<input type="text" name="periph" required>
+	<input type="text" name="public_pem" required>
+	<input type="number" name="pin_code" required>
+	<input type="text" name="ip_lan" required>
+	<button type="submit">Login</button>
+</form>
+
+<div id="response-error" class="BF-col l100p h100p hide" onclick="laboutikNewPair();"></div>
+
+<div id="new-pair" class="BF-col l100p h100p hide" onclick="laboutikNewPair();">
+	<h1>{% translate "Faire un nouvel appairage" %}</h1>
+	<h1>{% translate "et cliquer" %}</h1>
 </div>
 {% endblock content %}
 
@@ -13,3 +47,21 @@
 <script src="{% static 'js/socket.io.3.0.4.js' %}"></script>
 <script type="module" src="{% static 'js/login_hardware.js' %}"></script>
 {% endblock script %}
+
+{% block css %}
+<style>
+	#response-error {
+		font-size: 2rem;
+		background-color: var(--bleu03);
+		color: var(--blanc01);
+		white-space: pre-line;
+		text-align: center;
+	}
+
+	#new-pair {
+		font-size: 2rem;
+		background-color: var(--bleu03);
+		color: var(--blanc01);
+	}
+</style>
+{% endblock css %}
