@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div id="fond-contenu">
+	<h1>login_harware</h1>
+    {% csrf_token %}
+</div>
+{% endblock content %}
+
+{% block script %}
+<!-- socket.io pour identification avec profil -->
+<script src="{% static 'js/socket.io.3.0.4.js' %}"></script>
+<script type="module" src="{% static 'js/login_hardware.js' %}"></script>
+{% endblock script %}

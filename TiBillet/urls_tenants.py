@@ -46,6 +46,9 @@ urlpatterns = [
     path('', include('BaseBillet.urls')),
 
     # path('admin/', admin.site.urls, name="public_admin_url"),
+
+		# laboutik
+		path('laboutik/', include('laboutik.urls')),
 ]
 
 if settings.DEBUG:
