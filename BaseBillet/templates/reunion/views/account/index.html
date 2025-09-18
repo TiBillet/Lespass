@@ -1,0 +1,65 @@
+{% extends 'reunion/account_base.html' %}
+{% load static i18n tibitags %}
+
+{% block title %}{% translate 'My account' %}{% endblock %}
+
+{% block account_page %}
+<div class="row row-cols-1 row-cols-md-2 g-3 text-center">
+    <div class="col">
+        <a class="w-100 btn btn-lg btn-outline-primary{% if account_tab == 'balance' %} active" aria-current="page{% endif %}"
+            href="/my_account/balance/">
+            <i class="bi bi-piggy-bank-fill fs-1"></i>
+            <span class="d-block">{% trans 'My wallet' %}</span>
+        </a>
+    </div>
+    <div class="col">
+        <a class="w-100 btn btn-lg btn-outline-secondary{% if account_tab == 'memberships' %} active" aria-current="page{% endif %}"
+            href="/my_account/membership/">
+            <i class="bi bi-person-badge-fill fs-1"></i>
+            <span class="d-block">{% trans 'My subscriptions' %}</span>
+        </a>
+    </div>
+    <div class="col">
+    <a class="w-100 btn btn-lg btn-outline-secondary{% if account_tab == 'reservations' %} active" aria-current="page{% endif %}"
+        href="/my_account/my_reservations/">
+        <i class="bi bi-ticket-perforated-fill fs-1"></i>
+        <span class="d-block">{% trans 'My bookings' %}</span>
+    </a>
+    </div>
+    <!-- <div class="col"> -->
+{#                    <a class="w-100 btn btn-lg btn-outline-secondary{% if account_tab == 'punchclock' %} active" aria-current="page{% endif %}"#}
+{#                       href="/badge/">#}
+{#                        <i class="bi bi-stopwatch-fill fs-1"></i>#}
+{#                        <span class="d-block">{% trans 'Punchclock' %}</span>#}
+{#                    </a>#}
+    <!-- </div> -->
+    <div class="col">
+        <a class="w-100 btn btn-lg btn-outline-secondary{% if account_tab == 'card' %} active" aria-current="page{% endif %}"
+            href="/my_account/card/">
+            <i class="bi bi-postcard-fill fs-1"></i>
+            <span class="d-block">{% trans 'My Pass card' %}</span>
+        </a>
+    </div>
+    <div class="col">
+        <a class="w-100 btn btn-lg btn-outline-secondary{% if account_tab == 'profile' %} active" aria-current="page{% endif %}"
+            href="/my_account/profile/">
+            <i class="bi bi-gear-fill fs-1"></i>
+            <span class="d-block">{% trans 'My settings' %}</span>
+        </a>
+    </div>
+    {% if user|can_admin %}
+    <div class="col">
+        <a class="w-100 btn btn-lg btn-outline-danger" href="/admin/" target="_blank">
+            <i class="bi bi-key-fill fs-1"></i>
+            <span class="d-block">{% trans 'Admin panel' %}</span>
+        </a>
+{% endif %}
+    </div>
+    <div class="col">
+        <a class="w-100 btn btn-lg btn-outline-secondary" href="/deconnexion/">
+            <i class="bi bi-box-arrow-right fs-1"></i>
+            <span class="d-block">{% trans 'Log out' %}</span>
+        </a>
+    </div>
+</div>
+{% endblock %}
