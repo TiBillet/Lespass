@@ -16,7 +16,7 @@
                 <button class="btn btn-success" hx-post="/memberships/{{ instance.uuid }}/admin_accept/"
                         hx-target="#admin-accept-area-{{ instance.uuid }}"
                         hx-swap="outerHTML" hx-confirm="Confirmer l'acceptation de cette adhésion ?">
-                    {% trans "Accepter l'adhésion" %} {{ instance.uuid }}
+                    {% trans "Accepter l'adhésion" %}
                 </button>
             </div>
         {% endcomponent %}

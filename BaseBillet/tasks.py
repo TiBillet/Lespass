@@ -474,9 +474,8 @@ def send_membership_payment_link_user(membership_uuid: str):
     config = Configuration.get_solo()
     activate(config.language)
 
-    # Récupérer une session checkout Stripe associée
-    from BaseBillet.validators import MembershipValidator
-    checkout_stripe_url = MembershipValidator.get_checkout_stripe(membership)
+    tenant = connection.tenant
+    tenant_url = tenant.get_primary_domain().domain
 
     # Construit l'email
     user = membership.user
@@ -498,7 +497,7 @@ def send_membership_payment_link_user(membership_uuid: str):
         'button_color': "#009058",
         'button': {
             'text': _("Payer maintenant"),
-            'url': checkout_stripe_url,
+            'url': f"https://{tenant_url}/membership/{membership.uuid}/get_checkout_for_membership",
         },
         'end_text': _("Merci !"),
         'signature': _("Marvin, le TiBillet robot"),

@@ -1943,6 +1943,15 @@ class MembershipMVT(viewsets.ViewSet):
         context['product'] = product
         return render(request, "reunion/views/membership/form.html", context=context)
 
+    @action(detail=True, methods=['GET'])
+    def get_checkout_for_membership(self, request, pk):
+        membership = get_object_or_404(Membership, uuid=uuid.UUID(pk))
+        if membership.state != Membership.ADMIN_VALID:
+            raise Exception("not admin valid state")
+        checkout_url = MembershipValidator.get_checkout_stripe(membership)
+        return HttpResponseClientRedirect(checkout_url)
+
+
     @action(detail=True, methods=['POST'])
     def admin_accept(self, request, pk):
         """Accept a membership requiring manual validation and send the checkout link to the member.
