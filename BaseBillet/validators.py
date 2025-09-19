@@ -384,10 +384,53 @@ class ReservationValidator(serializers.Serializer):
             price: Price = price_object['price']
         """
 
+        # Collect dynamic custom form fields from request (names prefixed with 'form__')
+        request = self.context.get('request')
+        req_data = request.data if request is not None else self.initial_data
+
+        # Build map of expected dynamic fields across all selected products
+        custom_form = {}
+        try:
+            selected_products = list(products_dict.keys())
+            product_fields_qs = ProductFormField.objects.filter(product__in=selected_products)
+            product_fields = {ff.name: ff for ff in product_fields_qs}
+        except Exception:
+            product_fields = {}
+
+        for name, ff in product_fields.items():
+            key = f"form__{name}"
+            if hasattr(req_data, 'getlist') and ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
+                value = req_data.getlist(key)
+            else:
+                value = req_data.get(key)
+                if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
+                    if value in [None, '']:
+                        value = []
+                    elif not isinstance(value, list):
+                        value = [value]
+
+            # Enforce required
+            if ff.required:
+                if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
+                    if not value:
+                        raise serializers.ValidationError({key: [_('This field is required.')]})
+                else:
+                    if value in [None, '']:
+                        raise serializers.ValidationError({key: [_('This field is required.')]})
+
+            # Only store non-empty values
+            if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
+                if value:
+                    custom_form[name] = value
+            else:
+                if value not in [None, '']:
+                    custom_form[name] = value
+
         # On fabrique l'objet reservation
         reservation = Reservation.objects.create(
             user_commande=user,
             event=event,
+            custom_form=custom_form or None,
         )
 
         if options:

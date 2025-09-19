@@ -548,6 +548,87 @@ class Command(BaseCommand):
                 event_payant_nominatif_tarif_asso.products.add(billet)
                 event_payant_nominatif_tarif_asso.tag.add(world)
 
+                # ÉVÈNEMENT DE DÉMO AVEC FORMULAIRE DYNAMIQUE (affiché dans l'offcanvas)
+                # Produit billet + champs dynamiques (tous types) pour démonstration
+                demo_form_product, created = Product.objects.get_or_create(
+                    name=f"Billet démo avec formulaire ({tenant.name})",
+                    short_description="Billet avec formulaire personnalisé (démo Offcanvas)",
+                    categorie_article=Product.BILLET,
+                    nominative=False,
+                )
+                Price.objects.get_or_create(
+                    product=demo_form_product,
+                    name="Tarif unique",
+                    short_description="Tarif unique",
+                    prix=12,
+                    recurring_payment=False,
+                )
+
+                try:
+                    demo_fields = [
+                        {
+                            "label": "Votre pseudo pour la soirée",
+                            "field_type": ProductFormField.FieldType.SHORT_TEXT,
+                            "required": True,
+                            "order": 1,
+                            "placeholder": "Ex.: SuperFan42",
+                            "help_text": "Sera affiché sur la liste d'invités.",
+                        },
+                        {
+                            "label": "Message pour l’organisateur·rice",
+                            "field_type": ProductFormField.FieldType.LONG_TEXT,
+                            "required": False,
+                            "order": 2,
+                            "placeholder": "Indiquez des précisions utiles (allergies, mobilité, etc.)",
+                            "help_text": "Optionnel (≈300 caractères).",
+                        },
+                        {
+                            "label": "Boisson préférée",
+                            "field_type": ProductFormField.FieldType.SINGLE_SELECT,
+                            "required": True,
+                            "order": 3,
+                            "options": ["Eau", "Jus", "Soda", "Bière sans alcool"],
+                            "help_text": "Un seul choix possible.",
+                        },
+                        {
+                            "label": "Ateliers auxquels participer",
+                            "field_type": ProductFormField.FieldType.MULTI_SELECT,
+                            "required": False,
+                            "order": 4,
+                            "options": ["Chant", "Danse", "Percussions", "Lumières", "Son"],
+                            "help_text": "Choisissez autant d'options que vous voulez.",
+                        },
+                    ]
+                    for f in demo_fields:
+                        ProductFormField.objects.get_or_create(
+                            product=demo_form_product,
+                            label=f["label"],
+                            defaults={
+                                "field_type": f["field_type"],
+                                "required": f["required"],
+                                "order": f["order"],
+                                "placeholder": f.get("placeholder"),
+                                "help_text": f.get("help_text"),
+                                "options": f.get("options"),
+                            }
+                        )
+                except Exception as e:
+                    logger.warning(f"Unable to create ProductFormField demo for event product: {e}")
+
+                tag_formulaire, _ = Tag.objects.get_or_create(name='Formulaire démo', color='#9C27B0')
+                event_offcanvas_form, created = Event.objects.get_or_create(
+                    name="Soirée découverte avec formulaire",
+                    datetime=fake.future_datetime('+9d'),
+                    jauge_max=120,
+                    max_per_user=4,
+                    short_description="Réservation avec formulaire supplémentaire (tous types d’inputs)",
+                    long_description="Cet événement affiche un formulaire dynamique dans l’offcanvas de réservation : texte court, texte long, sélecteur simple et multiple.",
+                    categorie=Event.CONCERT,
+                    postal_address=postal_address,
+                )
+                event_offcanvas_form.products.add(demo_form_product)
+                event_offcanvas_form.tag.add(tag_formulaire)
+
                 # TODO: Gratuit mais avec recharge cashless obligatoire
                 # TODO: Multi artiste
 

@@ -1455,7 +1455,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
     )
 
     ordering = ('-date_added',)
-    search_fields = ('user__email', 'user__first_name', 'user__last_name', 'card_number', 'last_contribution')
+    search_fields = ('user__email', 'user__first_name', 'user__last_name', 'card_number', 'last_contribution', 'custom_form')
     list_filter = ['price__product', 'last_contribution', 'deadline', ]
 
     def get_queryset(self, request):
@@ -2175,8 +2175,16 @@ class ReservationValidFilter(admin.SimpleListFilter):
             ).distinct()
 
 
+class ReservationCustomFormSection(TemplateSection):
+    template_name = "admin/reservation/custom_form_section.html"
+    verbose_name = _("Custom form answers")
+
+
 @admin.register(Reservation, site=staff_admin_site)
 class ReservationAdmin(ModelAdmin):
+    # Expandable section to display custom form answers in changelist
+    list_sections = [ReservationCustomFormSection]
+
     list_display = (
         'datetime',
         'user_commande',
@@ -2187,12 +2195,20 @@ class ReservationAdmin(ModelAdmin):
         'total_paid',
     )
     # readonly_fields = list_display
-    search_fields = ['event__name', 'user_commande__email', 'options__name', 'datetime']
+    search_fields = ['event__name', 'user_commande__email', 'options__name', 'datetime', 'custom_form']
     list_filter = ['event', ReservationValidFilter, 'datetime', 'options']
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        return queryset.select_related('user_commande', 'event').prefetch_related('tickets', 'options')
+        return (
+            queryset
+            .select_related('user_commande', 'event')
+            .prefetch_related(
+                'options',
+                'tickets',
+                'tickets__pricesold__price__product__form_fields',
+            )
+        )
 
     @display(description=_("Ticket count"))
     def tickets_count(self, instance: Reservation):
@@ -2311,6 +2327,50 @@ class TicketAddAdmin(ModelForm):
         if options_radio:
             reservation.options.add(options_radio)
 
+        # Collecte des champs dynamiques (prefix 'form__') pour le produit sélectionné
+        try:
+            product = pricesold.price.product
+            # Map des champs attendus pour ce produit
+            product_fields = {ff.name: ff for ff in ProductFormField.objects.filter(product=product)}
+        except Exception:
+            product_fields = {}
+
+        custom_form = {}
+        data = getattr(self, 'data', {})
+        for name, ff in product_fields.items():
+            key = f"form__{name}"
+            # Gestion des multi-select à partir de QueryDict
+            if hasattr(data, 'getlist') and ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
+                value = data.getlist(key)
+            else:
+                value = data.get(key)
+                if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
+                    if value in [None, '']:
+                        value = []
+                    elif not isinstance(value, list):
+                        value = [value]
+
+            # Champs requis
+            if ff.required:
+                if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
+                    if not value:
+                        raise ValidationError({key: [_('This field is required.')]})
+                else:
+                    if value in [None, '']:
+                        raise ValidationError({key: [_('This field is required.')]})
+
+            # Stocker uniquement les valeurs non vides
+            if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
+                if value:
+                    custom_form[name] = value
+            else:
+                if value not in [None, '']:
+                    custom_form[name] = value
+
+        if custom_form:
+            reservation.custom_form = custom_form
+            reservation.save(update_fields=['custom_form'])
+
         # Le post save BaseBillet.signals.create_lignearticle_if_membership_created_on_admin s'executera
         # # Création de la ligne Article vendu qui envera à la caisse si besoin
         return super().save(commit=commit)
@@ -2360,10 +2420,18 @@ class TicketValidFilter(admin.SimpleListFilter):
             ).distinct()
 
 
+class TicketCustomFormSection(TemplateSection):
+    template_name = "admin/ticket/custom_form_section.html"
+    verbose_name = _("Custom form answers")
+
+
 @admin.register(Ticket, site=staff_admin_site)
 class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
     resource_classes = [TicketExportResource]
     export_form_class = ExportForm
+
+    # Expandable section to display parent reservation custom form answers
+    list_sections = [TicketCustomFormSection]
 
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
@@ -2400,8 +2468,14 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        return queryset.select_related('reservation', 'reservation__event', 'reservation__event__parent',
-                                       'reservation__user_commande').prefetch_related('reservation__options')
+        return (
+            queryset
+            .select_related('reservation', 'reservation__event', 'reservation__event__parent', 'reservation__user_commande')
+            .prefetch_related(
+                'reservation__options',
+                'reservation__tickets__pricesold__price__product__form_fields',
+            )
+        )
 
     @admin.display(ordering='reservation__datetime', description=_('Booked at'))
     def reservation__datetime(self, obj):
@@ -2427,7 +2501,8 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
         'uuid',
         'first_name',
         'last_name',
-        'reservation__user_commande__email'
+        'reservation__user_commande__email',
+        'reservation__custom_form',
     )
 
     # def state(self, obj):
@@ -3159,7 +3234,6 @@ class AssetAdmin(ModelAdmin):
     # On affiche que les asset non adhésions
     def get_queryset(self, request):
         queryset = super().get_queryset(request).exclude(category__in=[
-            Asset.STRIPE_FED_FIAT,
             Asset.BADGE,
             Asset.SUBSCRIPTION,
         ])

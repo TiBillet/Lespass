@@ -125,7 +125,7 @@
                 {% translate "Full capacity: The event is sold out." %}
             </a>
         {% elif event.products.count %}
-            {% include 'reunion/partials/event/booking.html' %}
+            {% include 'reunion/views/event/partial/booking.html' %}
 {#        {% else %}#}
 {#            {% translate "Free admission" %}#}
         {% endif %}

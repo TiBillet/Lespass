@@ -38,7 +38,7 @@
                 {% blocktrans trimmed with min=event.price_min max=event.price_max %}
                 Prices ranging between {{ min }} and {{ max }} euros per ticket.
                 {% endblocktrans %}
-                
+
                 {% elif event.price_min is event.price_max and event.price_min > 0 %}
                 {% blocktrans trimmed with price=event.price_min %}
                 Priced at {{ price }} euros per ticket.
@@ -52,6 +52,14 @@
 </div>
 
 <!-- booking panel -->
+<style>
+    /* Offcanvas responsive sizing: full width on mobile, double width on desktop */
+    #bookingPanel { --bs-offcanvas-width: 100vw; }
+    @media (min-width: 992px) { /* lg and up */
+        #bookingPanel { --bs-offcanvas-width: 800px; }
+    }
+</style>
+
 <div class="offcanvas-start offcanvas" tabindex="-1" id="bookingPanel" aria-labelledby="bookingPanelLabel">
     <div class="offcanvas-header">
         <h5 class="offcanvas-title" id="bookingPanelLabel">{% translate 'Request booking' %}</h5>
@@ -59,6 +67,6 @@
     </div>
     <div class="offcanvas-body">
         {# TODO: load all forms through htmx? #}
-        {% include 'reunion/forms/event/booking.html' %}
+        {% include 'reunion/views/event/partial/booking_form.html' %}
     </div>
 </div>

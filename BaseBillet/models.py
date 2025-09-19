@@ -1574,6 +1574,7 @@ class Reservation(models.Model):
     #                                 related_name='reservation')
 
     options = models.ManyToManyField(OptionGenerale, blank=True)
+    custom_form = models.JSONField(null=True, blank=True, verbose_name=_('Custom Form'))
 
     class Meta:
         ordering = ('-datetime',)

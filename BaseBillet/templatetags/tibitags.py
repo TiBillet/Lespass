@@ -148,25 +148,28 @@ def format_answer(value):
 @register.filter(name='custom_form_table')
 def custom_form_table(custom_form, obj=None):
     """
-    Convert a membership custom_form dict into Unfold Table component data.
-    If a Membership or Product is provided via `obj`, map field keys (slugs)
-    to their user-friendly labels using ProductFormField for the related product.
+    Convert a custom_form dict into Unfold Table component data.
+    If a Membership, Reservation or Product is provided via `obj`, map field keys (slugs)
+    to their user-friendly labels using ProductFormField for the related product(s).
 
     Returns a dict: {"headers": [...], "rows": [[label_or_key, formatted_value], ...]}
     """
     try:
         # Lazy import to avoid issues on startup
         try:
-            from BaseBillet.models import ProductFormField, Product
+            from BaseBillet.models import ProductFormField, Product, Reservation
         except Exception:
             ProductFormField = None
             Product = None
+            Reservation = None
 
-        headers = [_("Field"), _("Answer")]
+        headers = _("Field"), _("Answer")
         rows = []
 
         # Build name->label map if possible
         name_to_label = {}
+
+        products = []
         product = None
         if obj is not None:
             # If we received a Membership-like object
@@ -176,25 +179,61 @@ def custom_form_table(custom_form, obj=None):
                     product = getattr(price, 'product', None)
                 except Exception:
                     product = None
-            # Or if a Product instance was passed directly
+            # If a Product instance was passed directly
             if product is None and Product is not None:
                 try:
                     if isinstance(obj, Product):
                         product = obj
                 except Exception:
                     pass
+            # If a Reservation instance was passed: collect all related products from tickets
+            if product is None and Reservation is not None:
+                try:
+                    if isinstance(obj, Reservation):
+                        # Prefer prefetched relation if available
+                        tickets = getattr(obj, 'tickets', None)
+                        qs = getattr(tickets, 'select_related', None)
+                        if callable(qs):
+                            tqs = tickets.select_related('pricesold__price__product').all()
+                            products = list({t.pricesold.price.product for t in tqs if getattr(t, 'pricesold', None) and getattr(t.pricesold, 'price', None) and getattr(t.pricesold.price, 'product', None)})
+                        # Fallback to event products if no tickets found
+                        if not products:
+                            evt = getattr(obj, 'event', None)
+                            if evt is not None:
+                                try:
+                                    products = list(getattr(evt, 'products').all())
+                                except Exception:
+                                    products = []
+                except Exception:
+                    pass
 
-        if product is not None and ProductFormField is not None:
+        # Build label map from either single product or multiple products
+        if ProductFormField is not None:
             try:
-                # Use prefetched related if available, otherwise query
-                form_fields = getattr(product, 'form_fields', None)
-                if form_fields is not None:
-                    qs = getattr(form_fields, 'all', lambda: [])()
-                else:
-                    qs = []
-                if not qs and ProductFormField is not None:
-                    qs = ProductFormField.objects.filter(product=product)
-                name_to_label = {ff.name: ff.label for ff in qs}
+                if product is not None:
+                    # Use prefetched related if available, otherwise query
+                    form_fields = getattr(product, 'form_fields', None)
+                    if form_fields is not None:
+                        qs = getattr(form_fields, 'all', lambda: [])()
+                    else:
+                        qs = []
+                    if not qs:
+                        qs = ProductFormField.objects.filter(product=product)
+                    name_to_label.update({ff.name: ff.label for ff in qs})
+                elif products:
+                    # Aggregate all form fields for involved products
+                    for prod in products:
+                        try:
+                            form_fields = getattr(prod, 'form_fields', None)
+                            if form_fields is not None:
+                                qs = getattr(form_fields, 'all', lambda: [])()
+                            else:
+                                qs = []
+                            if not qs:
+                                qs = ProductFormField.objects.filter(product=prod)
+                            name_to_label.update({ff.name: ff.label for ff in qs})
+                        except Exception:
+                            continue
             except Exception:
                 name_to_label = {}
 
@@ -210,6 +249,6 @@ def custom_form_table(custom_form, obj=None):
         for key, value in items:
             label = name_to_label.get(key, key)
             rows.append([label, format_answer(value)])
-        return {"headers": headers, "rows": rows}
+        return {"headers": list(headers), "rows": rows}
     except Exception:
         return {"headers": [_("Field"), _("Answer")], "rows": []}
