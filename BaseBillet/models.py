@@ -2246,12 +2246,13 @@ class Membership(models.Model):
                               verbose_name=_("Origin"))
 
     ### Pour le cas des adhésions à validation manuelle
-    need_admin_validation = models.BooleanField(default=False)
-    ADMIN_CANCELED, ADMIN_VALID, ADMIN_WAITING, NO_ADMIN_VALID = "CA", "VA", "WA", "AU"
+    # need_admin_validation = models.BooleanField(default=False)
+    ADMIN_CANCELED, ADMIN_VALID, ADMIN_WAITING, PAID_BY_USER, NO_ADMIN_VALID = "CA", "VA", "WA", "PA", "AU"
     STATE_CHOICES = [
         (ADMIN_CANCELED, _('Cancelled')),
-        (ADMIN_VALID, _('Waiting for admin validation')),
-        (ADMIN_WAITING, _('Confirmed by admin')),
+        (ADMIN_WAITING, _('Waiting for admin validation')),
+        (ADMIN_VALID, _('Confirmed by admin, waiting for payment')),
+        (PAID_BY_USER, _('Paid by user')),
         (NO_ADMIN_VALID, _('Confirmed by system')),
     ]
     state = models.CharField(max_length=2, choices=STATE_CHOICES, default=NO_ADMIN_VALID,
@@ -2603,7 +2604,7 @@ class ProductFormField(models.Model):
     label = models.CharField(max_length=255, verbose_name=_('Label'))
 
     help_text = models.CharField(max_length=500, blank=True, null=True, verbose_name=_('Help text'))
-    placeholder = models.CharField(max_length=255, blank=True, null=True, verbose_name=_('Placeholder'))
+    # placeholder = models.CharField(max_length=255, blank=True, null=True, verbose_name=_('Placeholder'))
 
     field_type = models.CharField(max_length=2, choices=FieldType.choices, verbose_name=_('Field type'))
     required = models.BooleanField(default=False, verbose_name=_('Required'))

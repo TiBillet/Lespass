@@ -1,12 +1,24 @@
 {% load i18n unfold tibitags %}
 <div class="p-4">
-  {% if instance.custom_form %}
-    {% with table_data=instance.custom_form|custom_form_table:instance %}
-      {% component "unfold/components/card.html" with title=_("Custom form answers") %}
-        {% component "unfold/components/table.html" with table=table_data card_included=1 striped=1 %}{% endcomponent %}
-      {% endcomponent %}
-    {% endwith %}
-  {% else %}
-    <em class="text-sm text-gray-500 dark:text-gray-400">{% translate "No custom form answers for this membership." %}</em>
-  {% endif %}
+    {% if instance.custom_form %}
+        {% with table_data=instance.custom_form|custom_form_table:instance %}
+            {% component "unfold/components/card.html" with title=_("Custom form answers") %}
+                {% component "unfold/components/table.html" with table=table_data card_included=1 striped=1 %}{% endcomponent %}
+            {% endcomponent %}
+        {% endwith %}
+    {% else %}
+        <em class="text-sm text-gray-500 dark:text-gray-400">{% translate "No custom form answers for this membership." %}</em>
+    {% endif %}
+    {% if instance.state == 'WA' %}
+        {% component "unfold/components/card.html" with title=_("Validation manuelle") %}
+            <div id="admin-accept-area-{{ instance.uuid }}">
+                <p class="mb-3 text-sm text-gray-600 dark:text-gray-300">{% trans "Cette adhésion est en attente de validation. Cliquez sur le bouton ci-dessous pour l'accepter et envoyer le lien de paiement à l'adhérent." %}</p>
+                <button class="btn btn-success" hx-post="/memberships/{{ instance.uuid }}/admin_accept/"
+                        hx-target="#admin-accept-area-{{ instance.uuid }}"
+                        hx-swap="outerHTML" hx-confirm="Confirmer l'acceptation de cette adhésion ?">
+                    {% trans "Accepter l'adhésion" %} {{ instance.uuid }}
+                </button>
+            </div>
+        {% endcomponent %}
+    {% endif %}
 </div>

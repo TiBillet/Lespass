@@ -6,6 +6,7 @@ import os
 import smtplib
 import time
 from io import BytesIO
+from uuid import UUID
 
 import jwt
 import requests
@@ -295,7 +296,224 @@ def send_membership_invoice_to_email(membership_uuid: str):
     return False
 
 
-#### SEND INFO TO LABOUTIK
+@app.task
+def send_membership_pending_admin(membership_uuid: str):
+    """Envoie un mail aux administrateurs du tenant pour prévenir d'une demande d'adhésion à valider."""
+    # Attendre un peu que l'objet soit disponible en DB
+    time.sleep(1)
+
+    attempts, max_attempts, wait_time = 0, 10, 2
+    while attempts < max_attempts:
+        try:
+            membership = Membership.objects.get(uuid=membership_uuid)
+            break
+        except Membership.DoesNotExist:
+            attempts += 1
+            if attempts >= max_attempts:
+                logger.error(f"send_membership_pending_admin: membership {membership_uuid} introuvable")
+                return False
+            time.sleep(wait_time)
+
+    config = Configuration.get_solo()
+    activate(config.language)
+
+    tenant = connection.tenant
+    domain = tenant.get_primary_domain().domain
+
+    # Récupération des emails des admins du tenant
+    try:
+        admin_emails = list(TibilletUser.objects.filter(client_admin=tenant).values_list('email', flat=True))
+    except Exception:
+        admin_emails = []
+    if not admin_emails and getattr(config, 'email', None):
+        admin_emails = [config.email]
+
+    image_url = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    try:
+        if hasattr(config, 'img') and hasattr(config.img, 'med') and config.img.med:
+            image_url = f"https://{domain}{config.img.med.url}"
+    except Exception:
+        pass
+
+    title = _(f"{config.organisation} : Nouvelle demande d'adhésion en attente")
+
+    context = {
+        'username': _("Administrateur"),
+        'now': timezone.now(),
+        'title': title,
+        'image_url': image_url,
+        'sub_title': _("Administration"),
+        'main_text': _("Une nouvelle demande d'adhésion est en attente de validation manuelle."),
+        'main_text_2': f"{membership.member_name()} — {membership.price.product.name} — {membership.price.name}",
+        'table_info': {
+            _('Adhérent'): f'{membership.member_name()}',
+            _('Produit'): f'{membership.price.product.name} - {membership.price.name}',
+            _('Email'): f"{membership.user.email if membership.user else ''}",
+            _('Date de demande'): date_format(membership.date_added, format='DATETIME_FORMAT', use_l10n=True),
+        },
+        'button_color': "#009058",
+        'button': {
+            'text': _("Ouvrir l’administration"),
+            'url': f'https://{domain}/admin/BaseBillet/membership/'
+        },
+        'end_text': _('Merci'),
+        'signature': _("Marvin, le TiBillet robot"),
+    }
+
+    try:
+        if admin_emails:
+            send_email_generique(context=context, email=admin_emails)
+            logger.info("send_membership_pending_admin: mail envoyé")
+            return True
+        else:
+            logger.warning("send_membership_pending_admin: aucun email admin trouvé")
+            return False
+    except Exception as e:
+        logger.error(f"send_membership_pending_admin: erreur d'envoi {e}")
+        return False
+
+
+@app.task
+def send_membership_pending_user(membership_uuid: str):
+    """Envoie un mail à l'utilisateur pour lui indiquer que sa demande est en attente de validation manuelle."""
+    time.sleep(1)
+    attempts, max_attempts, wait_time = 0, 10, 2
+    while attempts < max_attempts:
+        try:
+            membership = Membership.objects.get(uuid=membership_uuid)
+            break
+        except Membership.DoesNotExist:
+            attempts += 1
+            if attempts >= max_attempts:
+                logger.error(f"send_membership_pending_user: membership {membership_uuid} introuvable")
+                return False
+            time.sleep(wait_time)
+
+    config = Configuration.get_solo()
+    activate(config.language)
+    tenant = connection.tenant
+    domain = tenant.get_primary_domain().domain
+
+    user = membership.user
+    if not user or not getattr(user, 'email', None):
+        logger.warning("send_membership_pending_user: aucun destinataire")
+        return False
+
+    image_url = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    try:
+        if hasattr(config, 'img') and hasattr(config.img, 'med') and config.img.med:
+            image_url = f"https://{domain}{config.img.med.url}"
+    except Exception:
+        pass
+
+    title = _(f"{config.organisation} : Votre demande d'adhésion est en attente")
+
+    # Texte principal
+    main_text = _("Votre demande d'adhésion a bien été enregistrée.") + " " + \
+                _("Elle est maintenant en attente de validation manuelle par un administrateur.")
+
+    # Texte additionnel si prix > 0
+    main_text_2 = None
+    try:
+        if membership.price and membership.price.prix and membership.price.prix > 0:
+            main_text_2 = _("Dès validation, un lien de paiement vous sera envoyé par email.")
+    except Exception:
+        pass
+
+    # Bouton de validation d'email si nécessaire
+    button = None
+    try:
+        if hasattr(user, 'email_valid') and not user.email_valid:
+            button = {
+                'text': _("Valider mon email"),
+                'url': forge_connexion_url(user, f"https://{domain}")
+            }
+    except Exception:
+        button = None
+
+    context = {
+        'username': membership.member_name() or user.full_name() or user.email,
+        'now': timezone.now(),
+        'title': title,
+        'image_url': image_url,
+        'sub_title': _("Adhésion"),
+        'main_text': main_text,
+        'main_text_2': main_text_2,
+        'table_info': {
+            _('Produit'): f'{membership.price.product.name} - {membership.price.name}',
+            _('Tarif'): f'{membership.price.name}',
+            _('Montant'): f"{dround(membership.price.prix)} {config.currency_code}",
+            _('Date de demande'): date_format(membership.date_added, format='DATETIME_FORMAT', use_l10n=True),
+        },
+        'button_color': "#009058",
+        'button': button,
+        'next_text_1': _("Si vous n'êtes pas à l'origine de cette demande, merci de contacter l'équipe TiBillet."),
+        'end_text': _("À bientôt !"),
+        'signature': _("Marvin, le TiBillet robot"),
+    }
+
+    try:
+        send_email_generique(context=context, email=f"{user.email}")
+        logger.info("send_membership_pending_user: mail envoyé")
+        return True
+    except Exception as e:
+        logger.error(f"send_membership_pending_user: erreur d'envoi {e}")
+        return False
+
+
+@app.task
+def send_membership_payment_link_user(membership_uuid: str):
+    """Envoie un email à l'adhérent avec le lien de paiement Stripe après validation admin."""
+    time.sleep(1)
+    try:
+        membership = Membership.objects.get(uuid=UUID(membership_uuid))
+    except Membership.DoesNotExist:
+        logger.error(f"send_membership_payment_link_user: membership {membership_uuid} introuvable")
+        return False
+
+    config = Configuration.get_solo()
+    activate(config.language)
+
+    # Récupérer une session checkout Stripe associée
+    from BaseBillet.validators import MembershipValidator
+    checkout_stripe_url = MembershipValidator.get_checkout_stripe(membership)
+
+    # Construit l'email
+    user = membership.user
+    if not user or not getattr(user, 'email', None):
+        logger.warning("send_membership_payment_link_user: destinataire manquant")
+        return False
+
+    title = _(f"{config.organisation} : Paiement de votre adhésion")
+    context = {
+        'username': membership.member_name() or user.full_name() or user.email,
+        'now': timezone.now(),
+        'title': title,
+        'sub_title': _("Adhésion"),
+        'main_text': _("Votre demande a été acceptée. Vous pouvez régler votre adhésion en cliquant sur le bouton ci-dessous."),
+        'table_info': {
+            _('Produit'): f'{membership.price.product.name} - {membership.price.name}',
+            _('Montant'): f"{dround(membership.price.prix)} {config.currency_code}",
+        },
+        'button_color': "#009058",
+        'button': {
+            'text': _("Payer maintenant"),
+            'url': checkout_stripe_url,
+        },
+        'end_text': _("Merci !"),
+        'signature': _("Marvin, le TiBillet robot"),
+    }
+
+    try:
+        send_email_generique(context=context, email=f"{user.email}")
+        logger.info("send_membership_payment_link_user: mail envoyé")
+        return True
+    except Exception as e:
+        logger.error(f"send_membership_payment_link_user: erreur d'envoi {e}")
+        return False
+
+
+#### SEND INFO TO LABOUTIK"}
 
 @shared_task(bind=True, max_retries=20)
 def send_stripe_bank_deposit_to_laboutik(self, payload):
@@ -572,6 +790,20 @@ def contact_mailer(sender, subject, message):
     logger.info(f"mail.sended : {mail.sended}")
 
 
+def forge_connexion_url(user, base_url):
+    User = get_user_model()
+
+    signer = TimestampSigner()
+    token = urlsafe_base64_encode(signer.sign(f"{user.pk}").encode('utf8'))
+
+    ### VERIFICATION SIGNATURE AVANT D'ENVOYER
+    user_pk = signer.unsign(urlsafe_base64_decode(token).decode('utf8'), max_age=(3600 * 72))  # 3 jours
+    designed_user = User.objects.get(pk=user_pk)
+    assert user == designed_user
+
+    connexion_url = f"{base_url}/emailconfirmation/{token}"
+    return connexion_url
+
 @app.task(bind=True, autoretry_for=(smtplib.SMTPException, smtplib.SMTPServerDisconnected, smtplib.SMTPAuthenticationError, ConnectionError, TimeoutError), retry_backoff=True, retry_backoff_max=600, retry_jitter=True, max_retries=6)
 def connexion_celery_mailer(self, user_email,
                             base_url,
@@ -585,21 +817,9 @@ def connexion_celery_mailer(self, user_email,
     :type tenant_name: str
     """
     logger.info(f'WORKDER CELERY app.task connexion_celery_mailer : {user_email}')
-
     User = get_user_model()
     user = User.objects.get(email=user_email)
-
-    signer = TimestampSigner()
-    token = urlsafe_base64_encode(signer.sign(f"{user.pk}").encode('utf8'))
-
-    ### VERIFICATION SIGNATURE AVANT D'ENVOYER
-    user_pk = signer.unsign(urlsafe_base64_decode(token).decode('utf8'), max_age=(3600 * 72))  # 3 jours
-    designed_user = User.objects.get(pk=user_pk)
-    assert user == designed_user
-
-    # token = default_token_generator.make_token(user, )
-
-    connexion_url = f"{base_url}/emailconfirmation/{token}"
+    connexion_url = forge_connexion_url(user, base_url)
     if next_url:
         logger.info(f"next_url : {next_url}")
         connexion_url += f"?next={next_url}"

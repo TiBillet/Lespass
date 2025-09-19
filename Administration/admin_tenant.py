@@ -652,7 +652,6 @@ class ProductFormFieldInline(TabularInline):
         "field_type",
         "required",
         "options",
-        "placeholder",
         "help_text",
         "order",
     )
@@ -1410,6 +1409,7 @@ class MembershipComponent(BaseComponent):
                 "type": kwargs.get('type'),
                 "active": active_count,
                 "inactive": inactive_count,
+                "pending": Membership.objects.filter(state=Membership.ADMIN_WAITING).count(),
             },
         )
         return context
@@ -1456,13 +1456,12 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
 
     ordering = ('-date_added',)
     search_fields = ('user__email', 'user__first_name', 'user__last_name', 'card_number', 'last_contribution', 'custom_form')
-    list_filter = ['price__product', 'last_contribution', 'deadline', ]
+    list_filter = ['price__product', 'last_contribution', 'deadline', 'state', ]
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return (
-            qs.filter(last_contribution__isnull=False)
-            .select_related('user', 'price', 'price__product')
+            qs.select_related('user', 'price', 'price__product')
             .prefetch_related('option_generale', 'price__product__form_fields')
         )
 
@@ -1480,7 +1479,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
 
     # Pour les bouton en haut de la vue change
     # chaque decorateur @action génère une nouvelle route
-    actions_detail = ["send_invoice", "get_invoice", "admin_accept", "admin_refuse"]
+    actions_detail = ["send_invoice", "get_invoice",]
 
     def changeform_view(self, request: HttpRequest, object_id: Optional[str] = None, form_url: str = "",
                         extra_context: Optional[Dict[str, bool]] = None):
@@ -1489,7 +1488,8 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
         if object_id:
             try:
                 membership = Membership.objects.get(pk=object_id)
-                show_validation_buttons = bool(membership.need_admin_validation)
+                if membership.status == Membership.ADMIN_WAITING:
+                    show_validation_buttons = True
             except Membership.DoesNotExist:
                 show_validation_buttons = False
         extra_context["show_validation_buttons"] = show_validation_buttons
@@ -1531,39 +1531,6 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
         # Show human-readable label for state, possibly with icon/color later
         return instance.get_state_display()
 
-    @action(
-        description=_("ACCEPTER L'ADHESION"),
-        url_path="admin_accept",
-        permissions=["custom_actions_detail"],
-    )
-    def admin_accept(self, request, object_id):
-        membership = get_object_or_404(Membership, pk=object_id)
-        if not membership.need_admin_validation:
-            messages.info(request, _("Adhésion déjà valide"))
-            return redirect(
-                request.META.get("HTTP_REFERER", reverse("admin:BaseBillet_membership_change", args=[object_id])))
-        membership.state = Membership.ADMIN_VALID
-        membership.save(update_fields=["state"])
-        messages.success(request, _("Adhésion confirmée par l'administration"))
-        return redirect(
-            request.META.get("HTTP_REFERER", reverse("admin:BaseBillet_membership_change", args=[object_id])))
-
-    @action(
-        description=_("REFUSER L'ADHESION"),
-        url_path="admin_refuse",
-        permissions=["custom_actions_detail"],
-    )
-    def admin_refuse(self, request, object_id):
-        membership = get_object_or_404(Membership, pk=object_id)
-        if not membership.need_admin_validation:
-            messages.info(request, _("Adhésion déjà valide"))
-            return redirect(
-                request.META.get("HTTP_REFERER", reverse("admin:BaseBillet_membership_change", args=[object_id])))
-        membership.state = Membership.ADMIN_CANCELED
-        membership.save(update_fields=["state"])
-        messages.warning(request, _("Adhésion refusée par l'administration"))
-        return redirect(
-            request.META.get("HTTP_REFERER", reverse("admin:BaseBillet_membership_change", args=[object_id])))
 
     def has_custom_actions_detail_permission(self, request, object_id):
         return TenantAdminPermissionWithRequest(request)

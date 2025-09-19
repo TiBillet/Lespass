@@ -49,7 +49,8 @@ from BaseBillet.permissions import HasScanApi
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, new_tenant_mailer, \
     contact_mailer, new_tenant_after_stripe_mailer, send_to_ghost_email, send_sale_to_laboutik, \
     send_payment_success_admin, send_payment_success_user, send_reservation_cancellation_user, \
-    send_ticket_cancellation_user, webhook_membership, send_email_generique
+    send_ticket_cancellation_user, webhook_membership, send_email_generique, \
+    send_membership_pending_admin, send_membership_pending_user, send_membership_payment_link_user
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
     ReservationValidator, ContactValidator
 from Customers.models import Client, Domain
@@ -1824,7 +1825,34 @@ class MembershipMVT(viewsets.ViewSet):
         # if formbricks.api_host and formbricks.api_key:
         # Une configuration formbricks à été trouvé.
 
-        # return Http404
+        # Validation manuelle demandée ?
+        logger.info(f"membership_validator.price.manual_validation : {membership_validator.price.manual_validation}")
+        if membership_validator.price.manual_validation:
+            membership: Membership = membership_validator.membership
+            # Marque la fiche comme nécessitant une validation manuelle et place l'état sur "en attente"
+            membership.state = Membership.ADMIN_WAITING
+            membership.save(update_fields=["state"])
+
+            # Envoyer un mail à l'admin et à l'utilisateur pour les prévenir (via Celery)
+            try:
+                send_membership_pending_admin.delay(str(membership.uuid))
+            except Exception as e:
+                logger.error(f"Erreur d'enqueue send_membership_pending_admin: {e}")
+            try:
+                send_membership_pending_user.delay(str(membership.uuid))
+            except Exception as e:
+                logger.error(f"Erreur d'enqueue send_membership_pending_user: {e}")
+
+            # Message de confirmation à l'utilisateur
+            try:
+                messages.add_message(request, messages.SUCCESS, _("Votre demande d'adhésion a bien été enregistrée et est en attente de validation."))
+            except Exception:
+                pass
+
+            # Dans le cas d'une validation manuelle, on affiche un message dans l'offcanvas via un template partiel
+            context = {'membership': membership}
+            return render(request, "reunion/views/membership/pending_manual_validation.html", context=context)
+            
         return HttpResponseClientRedirect(membership_validator.checkout_stripe_url)
 
     def list(self, request: HttpRequest):
@@ -1915,6 +1943,49 @@ class MembershipMVT(viewsets.ViewSet):
         context['product'] = product
         return render(request, "reunion/views/membership/form.html", context=context)
 
+    @action(detail=True, methods=['POST'])
+    def admin_accept(self, request, pk):
+        """Accept a membership requiring manual validation and send the checkout link to the member.
+        Only accessible to tenant administrators from the admin UI.
+        """
+        user = request.user
+        tenant = request.tenant
+
+        try:
+            is_admin = user.is_authenticated and hasattr(user, 'is_tenant_admin') and user.is_tenant_admin(tenant)
+        except Exception:
+            is_admin = False
+        if not is_admin:
+            return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
+
+        membership = get_object_or_404(Membership, uuid=uuid.UUID(pk))
+        # Update state to admin validated
+        if membership.state != Membership.ADMIN_WAITING:
+            messages.add_message(request, messages.WARNING, _("Membership not in waiting state."))
+            referer = request.headers.get('Referer') or f"/admin/BaseBillet/membership/{membership.pk}/change/"
+            return HttpResponseClientRedirect(referer)
+
+        membership.state = Membership.ADMIN_VALID
+        membership.save(update_fields=["state"])
+
+        # Send payment link email to user via Celery
+        try:
+            send_membership_payment_link_user.delay(str(membership.uuid))
+        except Exception as e:
+            logger.error(f"Erreur d'enqueue send_membership_payment_link_user: {e}")
+
+        try:
+            messages.add_message(request, messages.SUCCESS, _("L'adhésion a été acceptée. Un email de paiement a été envoyé."))
+        except Exception:
+            pass
+
+        # If HTMX request, return success partial to replace the button area
+        if request.headers.get('HX-Request'):
+            return render(request, "admin/membership/partials/admin_accept_success.html", context={"membership": membership})
+
+        referer = request.headers.get('Referer') or f"/admin/BaseBillet/membership/{membership.pk}/change/"
+        return HttpResponseClientRedirect(referer)
+
     @action(detail=True, methods=['GET'])
     def stripe_return(self, request, pk, *args, **kwargs):
         # Le retour de stripe des users.
@@ -1969,8 +2040,9 @@ class MembershipMVT(viewsets.ViewSet):
         return Response("sended", status=status.HTTP_200_OK)
 
     def get_permissions(self):
-        if self.action in ['invoice_to_mail', ]:
-            permission_classes = [permissions.IsAdminUser]
+        if self.action in ['invoice_to_mail', 'admin_accept' ]:
+            permission_classes = [TenantAdminPermission,]
+
         else:
             permission_classes = [permissions.AllowAny]
         return [permission() for permission in permission_classes]

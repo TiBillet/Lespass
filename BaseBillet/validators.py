@@ -470,9 +470,9 @@ class MembershipValidator(serializers.Serializer):
     newsletter = serializers.BooleanField()
 
 
-    def get_checkout_stripe(self):
+    @staticmethod
+    def get_checkout_stripe(membership: Membership):
         # Fiche membre créée, si price payant, on crée le checkout stripe :
-        membership: Membership = self.membership
         price: Price = membership.price
         user: TibilletUser = membership.user
         tenant: Client = connection.tenant
@@ -592,7 +592,7 @@ class MembershipValidator(serializers.Serializer):
         membership.save()
         self.membership = membership
         # Création du lien de paiement
-        self.checkout_stripe_url = self.get_checkout_stripe()
+        self.checkout_stripe_url = self.get_checkout_stripe(membership)
 
         return attrs
 

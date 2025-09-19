@@ -146,7 +146,7 @@
                     {% if field.field_type == 'ST' %}
                         <div class="form-floating mb-3">
                             <input id="ff-{{ field.uuid }}" name="form__{{ field.name }}" type="text" class="form-control"
-                                   placeholder="{{ field.placeholder|default:field.label }}" {% if field.required %}required{% endif %}>
+                                   placeholder="{{ field.label }}" {% if field.required %}required{% endif %}>
                             <label for="ff-{{ field.uuid }}">{{ field.label }}</label>
                             {% if field.help_text %}
                                 <div class="form-text">{{ field.help_text }}</div>
@@ -155,7 +155,7 @@
                     {% elif field.field_type == 'LT' %}
                         <div class="form-floating mb-3">
                             <textarea id="ff-{{ field.uuid }}" name="form__{{ field.name }}" class="form-control" style="height: 120px"
-                                      placeholder="{{ field.placeholder|default:field.label }}" {% if field.required %}required{% endif %}></textarea>
+                                      placeholder="{{ field.label }}" {% if field.required %}required{% endif %}></textarea>
                             <label for="ff-{{ field.uuid }}">{{ field.label }}</label>
                             {% if field.help_text %}
                                 <div class="form-text">{{ field.help_text }}</div>
