@@ -9,7 +9,8 @@ if [ "$TEST" = "1" ]; then
   createdb $POSTGRES_DB
   echo "Database reset complete."
 
-  poetry run python manage.py migrate
+#  poetry run python manage.py migrate
+  poetry run python manage.py migrate_schemas --executor=parallel
   poetry run python manage.py install
   poetry run python manage.py demo_data
   poetry run python manage.py collectstatic --no-input
