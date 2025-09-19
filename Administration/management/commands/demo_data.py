@@ -568,7 +568,6 @@ class Command(BaseCommand):
                             "field_type": ProductFormField.FieldType.SHORT_TEXT,
                             "required": True,
                             "order": 1,
-                            "placeholder": "Ex.: SuperFan42",
                             "help_text": "Sera affiché sur la liste d'invités.",
                         },
                         {
@@ -576,7 +575,6 @@ class Command(BaseCommand):
                             "field_type": ProductFormField.FieldType.LONG_TEXT,
                             "required": False,
                             "order": 2,
-                            "placeholder": "Indiquez des précisions utiles (allergies, mobilité, etc.)",
                             "help_text": "Optionnel (≈300 caractères).",
                         },
                         {
@@ -604,7 +602,6 @@ class Command(BaseCommand):
                                 "field_type": f["field_type"],
                                 "required": f["required"],
                                 "order": f["order"],
-                                "placeholder": f.get("placeholder"),
                                 "help_text": f.get("help_text"),
                                 "options": f.get("options"),
                             }
