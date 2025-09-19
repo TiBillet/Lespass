@@ -1949,7 +1949,9 @@ class MembershipMVT(viewsets.ViewSet):
         if membership.state != Membership.ADMIN_VALID:
             raise Exception("not admin valid state")
         checkout_url = MembershipValidator.get_checkout_stripe(membership)
-        return HttpResponseClientRedirect(checkout_url)
+        logger.info(f"get_checkout_for_membership : {checkout_url}")
+        return redirect(checkout_url)
+        # return HttpResponseClientRedirect(checkout_url)
 
 
     @action(detail=True, methods=['POST'])
