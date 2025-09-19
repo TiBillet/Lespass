@@ -350,7 +350,6 @@ class Command(BaseCommand):
                             "field_type": ProductFormField.FieldType.SHORT_TEXT,
                             "required": True,
                             "order": 1,
-                            "placeholder": "Choisissez un pseudonyme court (3–20 caractères)",
                             "help_text": "Affiché à la communauté ; vous pouvez utiliser un pseudonyme.",
                         },
                         {
@@ -359,7 +358,6 @@ class Command(BaseCommand):
                             "field_type": ProductFormField.FieldType.LONG_TEXT,
                             "required": False,
                             "order": 2,
-                            "placeholder": "Parlez-nous de vous (max ~300 caractères)",
                             "help_text": "Nous aide à mieux vous connaître.",
                         },
                         {
@@ -390,7 +388,6 @@ class Command(BaseCommand):
                                 "field_type": f["field_type"],
                                 "required": f["required"],
                                 "order": f["order"],
-                                "placeholder": f.get("placeholder"),
                                 "help_text": f.get("help_text"),
                                 "options": f.get("options"),
                             }
