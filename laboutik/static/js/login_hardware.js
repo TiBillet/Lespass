@@ -77,7 +77,7 @@ function showPairAgain() {
 window.handleLogin = function (event) {
 	const responseStatus = event.detail.xhr.status
 	if (responseStatus === 200) {
-		let url = currentConfiguration.current_server + 'laboutik/home'
+		let url = currentConfiguration.current_server + 'laboutik/ask_primary_card'
 		window.location.href = url
 	}
 

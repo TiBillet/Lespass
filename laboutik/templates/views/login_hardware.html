@@ -3,11 +3,6 @@
 {% load static i18n %}
 
 {% block content %}
-<!-- passing value to javascript -->
-<script data-demo="{{ demo }}">
-	const data = document.currentScript.dataset
-	const DEMO = tibilletConvDjangoToJs(data.demo)
-</script>
 <!-- login_hardware -->
 <form id="form-login-hardware" hx-post="/laboutik/login_hardware" hx-swap="none"
 	hx-on::after-request="handleLogin(event)" class="hide">

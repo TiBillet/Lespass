@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% load static %}
+{% load static i18n %}
+
+{% block content %}
+
+	<form id="form-nfc" class="hide" hx-post="ask_primary_card" hx-trigger="nfcResult" hx-target="#retour-nfc">
+		{% csrf_token %}
+		<input id="type-action" name="type-action" value="valider_carte_maitresse" />
+		<input id="tag-id-cm" name="tag-id-cm" />
+</form>
+
+<div id="nfc-container" role="status" aria-label="waiting primary card">
+	<h1>{% translate "Attente carte primaire" %}</h1>
+</div>
+<div id="retour-nfc"></div>
+{% endblock content %}
+
+{% block script %}
+<script src="{% static 'js/socket.io.3.0.4.js' %}"></script>
+<script src="{% static 'js/nfc.js' %}?{{ version }}"></script>
+
+<!-- init lecteure nfc -->
+<script>
+	// dev
+	// tate.demo.active = false
+	document.addEventListener('DOMContentLoaded', () => {
+		const nfc = new NfcReader()
+		nfc.start()
+	})
+</script>
+{% endblock script %}
+
+
+{% block css %}
+<style>
+	#nfc-container {
+		width: 100%;
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+		background-color: var(--noir01);
+		color: var(--blanc01);;
+	}
+	.nfc-reader-simu-bt {
+		width: 200px;
+		height: 70px;
+		background-color: var(--bleu04);
+		color: var(--blanc01);
+		display: flex;
+		flex-direction: row;
+		justify-content: center;
+		align-items: center;
+		font-size: 1.5rem;
+		margin-bottom: 2rem;
+		border-radius: 8px;
+		font-weight: bold;
+		white-space: pre-line;
+		text-align: center;
+	}
+</style>
+{% endblock css %}

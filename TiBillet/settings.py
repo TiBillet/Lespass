@@ -32,8 +32,14 @@ FERNET_KEY = os.environ.get('FERNET_KEY')
 FEDOW = True
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG') == '1'
-DEMO = os.environ.get('DEMO') == '1'
 TEST = os.environ.get('TEST') == '1'
+
+DEMO = os.environ.get('DEMO') == '1'
+DEMO_TAGID_CM = os.getenv("DEMO_TAGID_CM")
+DEMO_TAGID_CLIENT1 = os.getenv("DEMO_TAGID_CLIENT1")
+DEMO_TAGID_CLIENT2 = os.getenv("DEMO_TAGID_CLIENT2")
+DEMO_TAGID_CLIENT3 = os.getenv("DEMO_TAGID_CLIENT3")
+DEMO_TAGID_UNKNOWN = 'XXXXXXXX'
 
 # Age of cookie, in seconds (default: 2 weeks).
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 7 * 12 # 12 weeks (3 month)

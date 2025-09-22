@@ -1,29 +1,32 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{{ titrePage }}</title>
-    {% load static %}
-    <link rel="stylesheet" href="{% static 'css/all_fontawesome-free-5-11-2.css' %}"/>
-    <link rel="stylesheet" href="{% static 'css/modele00.css' %}" />
-		<!-- clavier virtuel pour raspberry pi
-    <link rel="stylesheet" href="{% static 'webview/css/vk.css' %}" /> -->
-    <!-- <link rel="stylesheet" href="{% static 'webview/css/popup-row.css' %}" /> -->
-    <link rel="icon" href="{% static 'images/favicon.ico' %}" />
-    {% block css %} {% endblock css %}
-		<!-- init global value and function -->
-		<script src="{% static 'js/modules/tibilletUtils.js' %}"></script>
-    {% if not demo %}
-    <!-- <script src="https://js.sentry-cdn.com/677e4405e6f765888fdec02d174000d6.min.js" crossorigin="anonymous"></script> -->
-    {% endif %}
-  </head>
-  <body id="contenu" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
-    {% block content %} {% endblock content %}
-		<!-- en attente
-    <script>window.version = '{{ version }}'; window.language = '{{ language }}';</script> -->
-    <script src="http://localhost/cordova.js"></script>
-    <script src="{% static 'js/htmx@2.0.6.min.js' %}"></script>
-    {% block script %} {% endblock script %}
-  </body>
+
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>{{ titrePage }}</title>
+	{% load static %}
+	<link rel="stylesheet" href="{% static 'css/all_fontawesome-free-5-11-2.css' %}" />
+	<link rel="stylesheet" href="{% static 'css/modele00.css' %}" />
+	<link rel="icon" href="{% static 'images/favicon.ico' %}" />
+	{% block css %} {% endblock css %}
+
+	<!-- init global values and function -->
+	<script src="{% static 'js/modules/tibilletUtils.js' %}"></script>
+	<!-- passing django values to javascript -->
+	<script>
+		const state = JSON.parse("{{stateJson|escapejs}}")
+	</script>
+	{% if not demo %}
+	<!-- <script src="https://js.sentry-cdn.com/677e4405e6f765888fdec02d174000d6.min.js" crossorigin="anonymous"></script> -->
+	{% endif %}
+</head>
+
+<body id="contenu" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+	{% block content %} {% endblock content %}
+	<script src="http://localhost/cordova.js"></script>
+	<script src="{% static 'js/htmx@2.0.6.min.js' %}"></script>
+	{% block script %} {% endblock script %}
+</body>
+
 </html>
