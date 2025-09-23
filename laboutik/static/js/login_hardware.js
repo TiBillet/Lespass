@@ -1,4 +1,4 @@
-console.log('DEMO =', DEMO, '  --  type =', typeof (DEMO))
+console.log('DEMO =',state.demo.active, '  --  type =', typeof state.demo.active)
 
 import { generatePemKeys, signMessage } from './modules/cryptoRsa.js'
 import { readConfFile, writeConfFile, isCordovaApp } from './modules/hardwareLayer.js'
