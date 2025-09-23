@@ -2038,19 +2038,33 @@ tables = [
   }
 ]
 
-primary_cards = [
-	{"type_card": "primary_card", "tag_id": settings.DEMO_TAGID_CM},
-  {"type_card": "client_card", "tag_id": settings.DEMO_TAGID_CLIENT1},
-  {"type_card": "client_card", "tag_id": settings.DEMO_TAGID_CLIENT2},
-  {"type_card": "client_card", "tag_id": settings.DEMO_TAGID_CLIENT3},
+cards = [
+	{
+		"type_card": "primary_card",
+		"tag_id": settings.DEMO_TAGID_CM,
+		"name": "master",
+		"pvs_list": [
+			{"uuid": "0e724e72-3399-4642-8cb3-3df4eff94182", "name": "Bar 1"},
+  		{"uuid": "0877636e-dae1-411f-806b-87ce0560705d", "name": "Resto"},
+  		{"uuid": "7d4e787e-a238-4f3b-adb6-b14a9d7ccc73", "name": "Test"},
+  		{"uuid": "f5c1b847-5a13-4790-b7f6-fdeccde90a98", "name": "Adhésions"}
+		]
+	},
+  {
+		"type_card": "client_card",
+		"tag_id": settings.DEMO_TAGID_CLIENT1
+	},
+  {
+		"type_card": "client_card",
+		"tag_id": settings.DEMO_TAGID_CLIENT2
+	},
+  {
+		"type_card": "client_card",
+		"tag_id": settings.DEMO_TAGID_CLIENT3
+	},
 ]
 
-pvs_list = [
-  {"id": "0e724e72-3399-4642-8cb3-3df4eff94182", "name": "Bar 1"},
-  {"id": "0877636e-dae1-411f-806b-87ce0560705d", "name": "Resto"},
-  {"id": "7d4e787e-a238-4f3b-adb6-b14a9d7ccc73", "name": "Test"},
-  {"id": "f5c1b847-5a13-4790-b7f6-fdeccde90a98", "name": "Adhésions"},
-]
+
 
 
 responsable = {
@@ -2067,9 +2081,8 @@ configuration = {
 }
 
 def test_list_card(tag_id):
-	retour = {"type_card": "unknown", "tag_id": "unknown"}
-	for card in primary_cards:
+	retour = {"type_card": "unknown", "tag_id": "unknown", "pvs_list": []}
+	for card in cards:
 		if card["tag_id"] == tag_id:
 			retour = card
-
 	return retour

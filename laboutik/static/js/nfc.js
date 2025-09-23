@@ -40,6 +40,7 @@ let NfcReader = class {
 
 				// réinitialisation de l'état du lecteur nfc
 				this.uuidConnexion = null
+				this.stop()
 			}
 		}
 	}
@@ -67,6 +68,7 @@ let NfcReader = class {
 			// envoyer le résultat au formulaire
 			const newEvent = new CustomEvent("nfcResult", { detail: null })
 			document.querySelector('#form-nfc').dispatchEvent(newEvent)
+			this.stop()
 		}
 	}
 
@@ -116,12 +118,12 @@ let NfcReader = class {
       `
 			})
 			document.querySelector('#nfc-container').insertAdjacentHTML('beforeend', uiSimu)
-			document.querySelector('#nfc-container').addEventListener('click', this.sendSimuNfcTagId)
+			document.querySelector('#nfc-container').addEventListener('click', this.sendSimuNfcTagId.bind(this))
 		}
 	}
 
-	start(options) {
-		// console.log('0 -> startLecture  --  DEMO =', state.demo.active)
+	start() {
+		console.log('0 -> startLecture  --  DEMO =', state.demo.active)
 		try {
 			if (state.demo.active) {
 				// simule
@@ -138,7 +140,7 @@ let NfcReader = class {
 	}
 
 	stop() {
-		console.log('1 -> stopLecture')
+		// console.log('1 -> stopLecture')
 		let modeNfc = this.modeNfc
 
 		// tagId pour "un serveur nfc + front" en local
@@ -154,7 +156,7 @@ let NfcReader = class {
 		}
 
 		// simulation
-		if (mode === 'NFCSIMU') {
+		if (modeNfc === 'NFCSIMU') {
 			document.querySelector('#nfc-container').removeEventListener('click', this.sendSimuNfcTagId)
 		}
 		this.uuidConnexion = null

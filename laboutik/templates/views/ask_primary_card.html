@@ -4,28 +4,50 @@
 
 {% block content %}
 
-	<form id="form-nfc" class="hide" hx-post="ask_primary_card" hx-trigger="nfcResult" hx-target="#retour-nfc">
-		{% csrf_token %}
-		<input id="type-action" name="type-action" value="valider_carte_maitresse" />
-		<input id="tag-id-cm" name="tag-id-cm" />
+<form id="form-nfc" class="hide" hx-post="ask_primary_card" hx-trigger="nfcResult"
+	hx-swap="none" hx-on::after-request="handleNfc(event)">
+	{% csrf_token %}
+	<input id="type-action" name="type-action" value="valider_carte_maitresse" />
+	<input id="tag-id-cm" name="tag-id-cm" />
 </form>
 
 <div id="nfc-container" role="status" aria-label="waiting primary card">
-	<h1>{% translate "Attente carte primaire" %}</h1>
+	<div>
+		<h1>{% translate "Attente carte primaire" %}</h1>
+		<div id="retour-nfc"></div>
+	</div>
 </div>
-<div id="retour-nfc"></div>
 {% endblock content %}
 
 {% block script %}
 <script src="{% static 'js/socket.io.3.0.4.js' %}"></script>
 <script src="{% static 'js/nfc.js' %}?{{ version }}"></script>
 
-<!-- init lecteure nfc -->
+<!-- lecteure nfc -->
 <script>
-	// dev
-	// tate.demo.active = false
+	// Handle nfc
+	window.handleNfc = function(event) {
+		let msg = ''
+		const xhr = event.detail.xhr
+		const responseStatus = xhr.status
+		console.log('xhr =', xhr)
+		console.log('responseStatus =', responseStatus)
+		if (responseStatus === 400) {
+			msg = JSON.parse(xhr.response).msg
+			document.querySelector('#retour-nfc').innerHTML = `<h1 style="color: var(--yellow00)">${msg}</h1>`
+			// relance la lecture
+			nfc.start()
+		}
+
+		if (responseStatus === 201) {
+			const data = JSON.parse(xhr.response)
+			window.location = data.url + '?uuid_pv=' + data.uuid_pv
+		}
+	}
+
+	// lance le lecteur nfc
 	document.addEventListener('DOMContentLoaded', () => {
-		const nfc = new NfcReader()
+		window.nfc = new NfcReader()
 		nfc.start()
 	})
 </script>
@@ -42,8 +64,10 @@
 		justify-content: center;
 		align-items: center;
 		background-color: var(--noir01);
-		color: var(--blanc01);;
+		color: var(--blanc01);
+		;
 	}
+
 	.nfc-reader-simu-bt {
 		width: 200px;
 		height: 70px;
@@ -56,6 +80,15 @@
 		font-size: 1.5rem;
 		margin-bottom: 2rem;
 		border-radius: 8px;
+		font-weight: bold;
+		white-space: pre-line;
+		text-align: center;
+	}
+
+	#retour-nfc {
+		flex-direction: row;
+		justify-content: center;
+		align-items: center;
 		font-weight: bold;
 		white-space: pre-line;
 		text-align: center;

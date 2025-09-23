@@ -61,14 +61,48 @@ def new_hardware(request):
 		return JsonResponse({'msg': _("Appareil déja en cours d'utilisation. Désactivez le d'abord pour un nouvel appairage.")},status=status.HTTP_400_BAD_REQUEST)
 
 def ask_primary_card(request):
-	if request.method == 'POST':
-		if request.POST.get('type-action') == 'valider_carte_maitresse':
-			tag_id_cm = request.POST.get('tag-id-cm').upper()
-			print(f"ask_primary_card, tag_id_cm = {tag_id_cm}")
-			return JsonResponse({"msg": "ok"}, status=status.HTTP_201_CREATED)
-
+	state['demo']['active'] = False
 	context = {
 		'state': state,
     'stateJson': dumps(state)
   }
+
+	if request.method == 'POST':
+		if request.POST.get('type-action') == 'valider_carte_maitresse':
+			tag_id_cm = request.POST.get('tag-id-cm').upper()
+			print(f"ask_primary_card, tag_id_cm = {tag_id_cm}")
+			
+			# dev
+			token = 'jkjhhjjjjkmlkmlkmlkmlk'
+			carte_perdu = False
+			testCard = mockData.test_list_card(tag_id_cm)
+			print(f"laboutik - DEV | testCard = {testCard}")
+
+			# carte primaire
+			if testCard["type_card"] == "primary_card" and testCard["tag_id"] == "A49E8E2A":
+				print("laboutik - DEV | c'est une carte primaire")
+				# carte perdue
+				if carte_perdu:
+					return JsonResponse({"msg": _("Carte perdue ? On passe en non primaire")},status=status.HTTP_400_BAD_REQUEST)
+				else:
+					# trouver uuid pv 0
+					uuid_pv = testCard['pvs_list'][0]['uuid']
+					print(f"laboutik - DEV | uuid pv = {uuid_pv}")
+					# trouver responssable
+
+					return JsonResponse({"uuid_pv": uuid_pv,"token": token, "url": 'pv_route'},status=status.HTTP_201_CREATED)
+
+			# carte cliente
+			if testCard["type_card"] == "client_card":
+				print("laboutik - DEV | c'est une carte client")
+				return JsonResponse({"msg": _("Carte non primaire")},status=status.HTTP_400_BAD_REQUEST)
+			
+			# carte inconnue
+			if testCard["type_card"] == "unknown":
+				return JsonResponse({"msg": _("Carte inconnue")},status=status.HTTP_400_BAD_REQUEST)
+
 	return render(request, "views/ask_primary_card.html", context)
+
+def pv_route(request):
+	context = {}
+	return render(request, "views/test.html", context)
