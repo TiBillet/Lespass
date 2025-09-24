@@ -2038,17 +2038,24 @@ tables = [
   }
 ]
 
+responsable = {
+  "nom": ["TEST"],
+  "uuid": "17896c22-7a60-45f4-a959-175bfc8a5369",
+  "edit_mode": True,
+}
+
 cards = [
 	{
 		"type_card": "primary_card",
 		"tag_id": settings.DEMO_TAGID_CM,
 		"name": "master",
 		"pvs_list": [
-			{"uuid": "0e724e72-3399-4642-8cb3-3df4eff94182", "name": "Bar 1"},
-  		{"uuid": "0877636e-dae1-411f-806b-87ce0560705d", "name": "Resto"},
-  		{"uuid": "7d4e787e-a238-4f3b-adb6-b14a9d7ccc73", "name": "Test"},
-  		{"uuid": "f5c1b847-5a13-4790-b7f6-fdeccde90a98", "name": "Adhésions"}
-		]
+			{"uuid": "0e724e72-3399-4642-8cb3-3df4eff94182", "name": "Bar 1", "icon": "fa-beer"},
+  		{"uuid": "0877636e-dae1-411f-806b-87ce0560705d", "name": "Resto", "icon": "fa-hamburger"},
+  		{"uuid": "7d4e787e-a238-4f3b-adb6-b14a9d7ccc73", "name": "Test", "icon": None},
+  		{"uuid": "f5c1b847-5a13-4790-b7f6-fdeccde90a98", "name": "Adhésions", "icon": None}
+		],
+		'responsable': responsable
 	},
   {
 		"type_card": "client_card",
@@ -2064,15 +2071,6 @@ cards = [
 	},
 ]
 
-
-
-
-responsable = {
-  "nom": ["TEST"],
-  "uuid": "17896c22-7a60-45f4-a959-175bfc8a5369",
-  "edit_mode": True,
-}
-
 configuration = {
   "monnaie_principale_name": "TestCoin",
   "passageModeGerant": True,
@@ -2080,9 +2078,18 @@ configuration = {
   "currencyData": {"cc": "EUR", "symbol": "€", "name": "European Euro"},
 }
 
-def test_list_card(tag_id):
+def get_card_from_tagid(tag_id):
 	retour = {"type_card": "unknown", "tag_id": "unknown", "pvs_list": []}
 	for card in cards:
 		if card["tag_id"] == tag_id:
 			retour = card
+			break
+	return retour
+
+def get_pv_from_uuid(uuid):
+	retour = next
+	for pv in pvs:
+		if pv["id"] == uuid:
+			retour = pv
+			break
 	return retour

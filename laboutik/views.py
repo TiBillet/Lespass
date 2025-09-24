@@ -76,7 +76,7 @@ def ask_primary_card(request):
 			# dev
 			token = 'jkjhhjjjjkmlkmlkmlkmlk'
 			carte_perdu = False
-			testCard = mockData.test_list_card(tag_id_cm)
+			testCard = mockData.get_card_from_tagid(tag_id_cm)
 			print(f"laboutik - DEV | testCard = {testCard}")
 
 			# carte primaire
@@ -91,7 +91,7 @@ def ask_primary_card(request):
 					print(f"laboutik - DEV | uuid pv = {uuid_pv}")
 					# trouver responssable
 
-					return JsonResponse({"uuid_pv": uuid_pv,"token": token, "url": 'pv_route'},status=status.HTTP_201_CREATED)
+					return JsonResponse({"uuid_pv": uuid_pv, "tag_id_cm": tag_id_cm},status=status.HTTP_201_CREATED)
 
 			# carte cliente
 			if testCard["type_card"] == "client_card":
@@ -104,6 +104,56 @@ def ask_primary_card(request):
 
 	return render(request, "views/ask_primary_card.html", context)
 
+def main_menu(request):
+	tag_id_cm = request.GET.get('tag_id_cm')
+	card = mockData.get_card_from_tagid(tag_id_cm)
+	context = {
+		'card': card,
+	}
+	return render(request, "components/main_menu.html", context)
+
+def pvs_menu(request):
+	tag_id_cm = request.GET.get('tag_id_cm')
+	card = mockData.get_card_from_tagid(tag_id_cm)
+	context = {
+		'card': card,
+	}
+	return render(request, "components/pvs_menu.html", context)
+
+def show_pv(request):
+	uuid_pv = request.GET.get('uuid_pv')
+	pv = mockData.get_pv_from_uuid(uuid_pv)
+	context = {
+		'pv': pv,
+		'configuration': mockData.configuration
+	}
+	return render(request, "components/show_pv.html", context)
+
+
 def pv_route(request):
-	context = {}
-	return render(request, "views/test.html", context)
+	uuid_pv = request.GET.get('uuid_pv')
+	tag_id_cm = request.GET.get('tag_id_cm')
+	print(f"laboutik - DEV | uuid_pv = {uuid_pv}  --  tag_id_cm = {tag_id_cm}")
+	pv = mockData.get_pv_from_uuid(uuid_pv)
+	card = mockData.get_card_from_tagid(tag_id_cm)
+	# restaurent par défaut
+	template = 'restaurant.html'
+	
+	# service directe
+	if pv['service_direct'] == True:
+		template = 'direct_service.html'
+
+	# kiosque
+	if pv['comportement'] == 'K':
+		template = 'kiosk.html'
+
+
+	print(f"laboutik - DEV | template = {template}")
+	context = {
+		'state': state,
+    'stateJson': dumps(state),
+		'pv': pv,
+		'card': card,
+		'configuration': mockData.configuration
+	}
+	return render(request, "views/" + template, context)

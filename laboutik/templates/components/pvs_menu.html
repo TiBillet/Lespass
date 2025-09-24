@@ -1,0 +1,7 @@
+{% load static i18n %}
+{% for pv in card.pvs_list %}
+<div class="menu-burger-item menu-burger-item-content">
+	<i class="menu-burger-item-content fas {{ pv.icon }}"></i>
+	<div class="menu-burger-item-content">{{ pv.name }}</div>
+</div>
+{% endfor %}

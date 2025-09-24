@@ -34,8 +34,6 @@
 		let msg = ''
 		const xhr = event.detail.xhr
 		const responseStatus = xhr.status
-		console.log('xhr =', xhr)
-		console.log('responseStatus =', responseStatus)
 		if (responseStatus === 400) {
 			msg = JSON.parse(xhr.response).msg
 			document.querySelector('#retour-nfc').innerHTML = `<h1 style="color: var(--yellow00)">${msg}</h1>`
@@ -45,7 +43,7 @@
 
 		if (responseStatus === 201) {
 			const data = JSON.parse(xhr.response)
-			window.location = data.url + '?uuid_pv=' + data.uuid_pv
+			window.location = `pv_route?uuid_pv=${data.uuid_pv}&tag_id_cm=${data.tag_id_cm}`
 		}
 	}
 
