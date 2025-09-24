@@ -4,8 +4,8 @@
 
 {% block content %}
 
-<form id="form-nfc" class="hide" hx-post="ask_primary_card" hx-trigger="nfcResult"
-	hx-swap="none" hx-on::after-request="handleNfc(event)">
+<form id="form-nfc" class="hide" hx-post="ask_primary_card" hx-trigger="nfcResult" hx-swap="none"
+	hx-on::after-request="handleNfc(event)">
 	{% csrf_token %}
 	<input id="type-action" name="type-action" value="valider_carte_maitresse" />
 	<input id="tag-id-cm" name="tag-id-cm" />
@@ -17,6 +17,10 @@
 		<div id="retour-nfc"></div>
 	</div>
 </div>
+
+<div id="spinner-container-nfc">
+	<div class="spinner-nfc"></div>
+</div>
 {% endblock content %}
 
 {% block script %}
@@ -26,7 +30,7 @@
 <!-- lecteure nfc -->
 <script>
 	// Handle nfc
-	window.handleNfc = function(event) {
+	window.handleNfc = function (event) {
 		let msg = ''
 		const xhr = event.detail.xhr
 		const responseStatus = xhr.status
@@ -57,6 +61,11 @@
 {% block css %}
 <style>
 	#nfc-container {
+		position: absolute;
+		left: 0;
+		top: 0;
+		width: 100%;
+		height: 100%;
 		width: 100%;
 		height: 100%;
 		display: flex;
@@ -65,7 +74,6 @@
 		align-items: center;
 		background-color: var(--noir01);
 		color: var(--blanc01);
-		;
 	}
 
 	.nfc-reader-simu-bt {
@@ -92,6 +100,39 @@
 		font-weight: bold;
 		white-space: pre-line;
 		text-align: center;
+	}
+
+	#spinner-container-nfc {
+		position: absolute;
+		left: 0;
+		top: 0;
+		width: 100%;
+		height: 100%;
+		opacity: 0.5;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+		--spinner-width: 240px;
+	}
+
+	.spinner-nfc {
+		border: 16px solid var(--noir04);
+		border-top: 16px solid var(--vert01);
+		border-radius: 50%;
+		width: var(--spinner-width);
+		height: var(--spinner-width);
+		animation: spin 2s linear infinite;
+	}
+
+	@keyframes spin {
+		0% {
+			transform: rotate(0deg);
+		}
+
+		100% {
+			transform: rotate(360deg);
+		}
 	}
 </style>
 {% endblock css %}

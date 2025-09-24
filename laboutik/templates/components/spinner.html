@@ -1,0 +1,38 @@
+<div id="spinner-container">
+	<div class="spinner"></div>
+</div>
+
+<style>
+	#spinner-container {
+		position: absolute;
+		left: 0;
+		top: 0;
+		width: 100%;
+		height: 100%;
+		opacity: 0.5;
+		display: none;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+		--spinner-width: 240px;
+	}
+
+	.spinner {
+		border: 16px solid var(--noir04);
+		border-top: 16px solid var(--vert01);
+		border-radius: 50%;
+		width: var(--spinner-width);
+		height: var(--spinner-width);
+		animation: spin 2s linear infinite;
+	}
+
+	@keyframes spin {
+		0% {
+			transform: rotate(0deg);
+		}
+
+		100% {
+			transform: rotate(360deg);
+		}
+	}
+</style>

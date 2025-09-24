@@ -27,6 +27,7 @@ state =  {
 		]
 	}
 }
+
 def login_hardware(request):
 	context = {
 		'state': state,

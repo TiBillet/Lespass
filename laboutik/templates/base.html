@@ -22,8 +22,11 @@
 	{% endif %}
 </head>
 
-<body id="contenu" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+<body id="contenu" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-on::before-request="spinnerOn()" hx-on::after-request="spinnerOff()">
 	{% block content %} {% endblock content %}
+
+	{% include "components/spinner.html" %}
+
 	<script src="http://localhost/cordova.js"></script>
 	<script src="{% static 'js/htmx@2.0.6.min.js' %}"></script>
 	{% block script %} {% endblock script %}

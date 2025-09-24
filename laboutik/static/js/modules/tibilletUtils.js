@@ -41,3 +41,11 @@ function log({ tag, msg }) {
 		console.log(formatMsg)
 	}
 }
+
+function spinnerOff(){
+	document.querySelector('#spinner-container').style.display = 'none'
+}
+
+function spinnerOn(){
+	document.querySelector('#spinner-container').style.display = 'flex'
+}
