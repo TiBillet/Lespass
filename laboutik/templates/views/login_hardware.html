@@ -15,7 +15,7 @@
 	<button type="submit">Login</button>
 </form>
 <!-- new_hardware -->
-<form id="form-new-harware" hx-post="/laboutik/new_hardware" hx-swap="none"
+<form id="form-new-hardware" hx-post="/laboutik/new_hardware" hx-swap="none"
 	hx-on::after-request="handleActivation(event)" class="hide">
 	{% csrf_token %}
 	<input type="text" name="version" required>

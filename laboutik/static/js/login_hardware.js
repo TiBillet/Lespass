@@ -59,7 +59,7 @@ window.laboutikNewPair = async function () {
 	if (mobile === true) {
 		redirectionUrl = 'http://localhost/index.html'
 	}
-	console.log('result =', result)
+	// console.log('result =', result)
 	if (result === true) {
 		// redirection
 		window.location.href = redirectionUrl
@@ -73,7 +73,7 @@ function showPairAgain() {
 	document.querySelector('#new-pair').classList.remove('hide')
 }
 
-// gère le formulaire #form-new-harware après un hx-post
+// gère le formulaire #form-new-hardware après un hx-post
 window.handleLogin = function (event) {
 	const responseStatus = event.detail.xhr.status
 	if (responseStatus === 200) {
@@ -121,7 +121,7 @@ async function initLogin() {
 	}
 }
 
-// gère le formulaire #form-new-harware après un hx-post
+// gère le formulaire #form-new-hardware après un hx-post
 window.handleActivation = function (event) {
 	const responseStatus = event.detail.xhr.status
 	// console.log('-> handleActivation, responseStatus =', responseStatus)
@@ -138,7 +138,7 @@ window.handleActivation = function (event) {
 
 }
 
-// remplir le formulaire #form-new-harware et le valider
+// remplir le formulaire #form-new-hardware et le valider
 async function activateDevice(configuration) {
 	log({ tag: 'info', msg: '-> activateDevice' })
 	const configServer = configuration.servers.find(item => item.server === configuration.current_server)
@@ -150,24 +150,24 @@ async function activateDevice(configuration) {
 		configuration['keysPemCashlessClient'] = keysPemCashlessClient
 
 		// dev affiche le formulaire
-		// document.querySelector('#form-new-harware').style.display = 'block'
+		// document.querySelector('#form-new-hardware').style.display = 'block'
 
 		// remplir les inputs
-		document.querySelector('#form-new-harware input[name="version"]').value = configuration.version
-		document.querySelector('#form-new-harware input[name="username"]').value = configuration.client.username
-		document.querySelector('#form-new-harware input[name="password"]').value = configuration.client.password
-		document.querySelector('#form-new-harware input[name="hostname"]').value = configuration.hostname
-		document.querySelector('#form-new-harware input[name="periph"]').value = configuration.front_type
-		document.querySelector('#form-new-harware input[name="public_pem"]').value = configuration.keysPemCashlessClient.publicKey
-		document.querySelector('#form-new-harware input[name="pin_code"]').value = configuration.pin_code
+		document.querySelector('#form-new-hardware input[name="version"]').value = configuration.version
+		document.querySelector('#form-new-hardware input[name="username"]').value = configuration.client.username
+		document.querySelector('#form-new-hardware input[name="password"]').value = configuration.client.password
+		document.querySelector('#form-new-hardware input[name="hostname"]').value = configuration.hostname
+		document.querySelector('#form-new-hardware input[name="periph"]').value = configuration.front_type
+		document.querySelector('#form-new-hardware input[name="public_pem"]').value = configuration.keysPemCashlessClient.publicKey
+		document.querySelector('#form-new-hardware input[name="pin_code"]').value = configuration.pin_code
 		if (mobile === true) {
-			document.querySelector('#form-new-harware input[name="ip_lan"]').value = configuration.ip
+			document.querySelector('#form-new-hardware input[name="ip_lan"]').value = configuration.ip
 		} else {
-			document.querySelector('#form-new-harware input[name="ip_lan"]').value = configuration.piDevice.ip
+			document.querySelector('#form-new-hardware input[name="ip_lan"]').value = configuration.piDevice.ip
 		}
 
 		// valid form
-		document.querySelector('#form-new-harware button').click()
+		document.querySelector('#form-new-hardware button').click()
 	} catch (error) {
 		log('-> ActivateDevice,', error)
 	}

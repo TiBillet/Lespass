@@ -137,11 +137,11 @@ def pv_route(request):
 	pv = mockData.get_pv_from_uuid(uuid_pv)
 	card = mockData.get_card_from_tagid(tag_id_cm)
 	# restaurent par défaut
-	template = 'restaurant.html'
+	template = 'tables.html'
 	
 	# service directe
 	if pv['service_direct'] == True:
-		template = 'direct_service.html'
+		template = 'common_interface.html'
 
 	# kiosque
 	if pv['comportement'] == 'K':
@@ -151,7 +151,6 @@ def pv_route(request):
 	print(f"laboutik - DEV | template = {template}")
 	context = {
 		'state': state,
-    'stateJson': dumps(state),
 		'pv': pv,
 		'card': card,
 		'configuration': mockData.configuration
