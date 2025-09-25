@@ -1,12 +1,14 @@
 import logging
 import re
 
+from django.db import connection
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
 from AuthBillet.models import Wallet
 from BaseBillet.models import FedowTransaction
+from Customers.models import Client, Domain
 from fedow_public.models import AssetFedowPublic
 
 logger = logging.getLogger(__name__)
@@ -56,32 +58,46 @@ class AssetValidator(serializers.Serializer):
     total_in_wallet_not_place = serializers.IntegerField(required=False, allow_null=True)
 
     def validate(self, attrs):
-        """
-        try :
-            wallet = Wallet.objects.get(uuid=attrs['wallet_origin'])
-        except Wallet.DoesNotExist:
+        try:
+            self.asset = AssetFedowPublic.objects.get(uuid=attrs['uuid'])
+        except AssetFedowPublic.DoesNotExist:
             origin = connection.tenant
             if attrs['currency_code'] == 'FED': # première fois qu'on voit le token fédéré, c'est le ROOT le client d'origin
                 origin = Client.objects.get(categorie=Client.ROOT)
-            wallet = Wallet.objects.create(
-                uuid=attrs['wallet_origin'],
-                origin=origin,
-            )
+            elif attrs.get('place_origin'):
+                lespass_domain = attrs['place_origin'].get('lespass_domain')
+                if lespass_domain:
+                    domain = Domain.objects.filter(domain=lespass_domain)
+                    if domain.exists():
+                        origin = domain.first().tenant
+                        logger.info(f"On a le tenant origin de l'asset : {origin}")
 
-        try:
-            self.asset = Asset.objects.get(uuid=attrs['uuid'])
-        except Asset.DoesNotExist:
-            if attrs.get('wallet_origin'):
-                self.asset = Asset.objects.create(
+            try :
+                wallet = Wallet.objects.get(uuid=attrs['wallet_origin'])
+            except Wallet.DoesNotExist:
+                wallet = Wallet.objects.create(
+                    uuid=attrs['wallet_origin'],
+                    origin=origin,
+                )
+
+            logger.info(f"wallet : {wallet}")
+
+            try :
+                self.asset = AssetFedowPublic.objects.create(
                     uuid=attrs['uuid'],
                     name=attrs['name'],
                     currency_code=attrs['currency_code'],
                     created_at=attrs['created_at'],
-                    last_update=attrs['last_update'],
-                    wallet_origin=wallet,
+                    updated_at=attrs['last_update'],
                     category=attrs['category'],
+                    origin=origin,
+                    wallet_origin=wallet,
                 )
-        """
+                logger.info(f"AssetFedowPublic.objects.create : {self.asset}")
+            except Exception as e :
+                logger.error(f"AssetFedowPublic.objects.create : {e}")
+                import ipdb; ipdb.set_trace()
+
         return attrs
 
 class TransactionSimpleValidator(serializers.Serializer):

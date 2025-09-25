@@ -311,7 +311,6 @@ class Command(BaseCommand):
                 )
 
                 ### Produit avec validation par admin
-
                 # Création de l'asset Fiduciaire pour l'ASS
 
                 if tenant.name == "Le Tiers-Lustre" :
@@ -340,7 +339,7 @@ class Command(BaseCommand):
                         iteration=3,
                         subscription_type=Price.CAL_MONTH,
                         fedow_reward_enabled=True,
-                        fedow_reward_asset=asset,
+                        fedow_reward_asset=AssetFedowPublic.objects.get(uuid=asset.get('uuid')),
                         fedow_reward_amount=150,
                     )
 

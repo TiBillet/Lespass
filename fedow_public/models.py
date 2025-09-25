@@ -14,12 +14,10 @@ class AssetFedowPublic(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
     name = models.CharField(max_length=100, db_index=True)
     currency_code = models.CharField(max_length=3)
-
-    created_on = models.DateField(auto_now_add=True)
-    updated_on = models.DateField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     wallet_origin = models.ForeignKey('AuthBillet.Wallet', on_delete=models.PROTECT, related_name='assets_fedow_public')
-    fedow_place_origin_uuid = models.UUIDField() # l'uuid place utilisé par ex fedow
     origin = models.ForeignKey('Customers.Client', on_delete=models.CASCADE, related_name="assets_fedow_public") # La bonne relation a utiliser au lieu des deux précédents, relicats de la migration
 
     STRIPE_FED_FIAT = 'FED'
