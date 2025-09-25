@@ -100,8 +100,11 @@ class RsaKey(models.Model):
         )
 
 
+
 class Wallet(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, db_index=True)
+    origin = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="wallets", blank=True, null=True)
+
 
 
 class TibilletUser(AbstractUser):

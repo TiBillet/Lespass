@@ -13,15 +13,14 @@ from django.core.signing import TimestampSigner
 from django.db import connection
 from django.utils import timezone
 from django_tenants.postgresql_backend.base import FakeTenant
-from django_tenants.utils import tenant_context
 
 from AuthBillet.models import TibilletUser, Wallet, HumanUser
 from BaseBillet.models import Configuration, Membership, Product
-from Customers.models import Client
-from fedow_connect.models import FedowConfig, Asset
-from fedow_connect.utils import sign_message, data_to_b64, verify_signature, rsa_decrypt_string, dround
+from fedow_connect.models import FedowConfig
+from fedow_connect.utils import sign_message, data_to_b64, verify_signature, rsa_decrypt_string
 from fedow_connect.validators import WalletValidator, AssetValidator, TransactionValidator, \
-    PaginatedTransactionValidator, CardValidator, QrCardValidator
+    PaginatedTransactionValidator, CardValidator, QrCardValidator, validate_hex8
+from fedow_public.models import AssetFedowPublic
 
 logger = logging.getLogger(__name__)
 
@@ -170,7 +169,7 @@ class AssetFedow():
             logger.warning(f"cached_retrieve : {e} - fetch from fedow without cache.")
             return self.retrieve(uuid)
 
-    def get_or_create_token_asset(self, asset: Asset):
+    def get_or_create_token_asset(self, asset: AssetFedowPublic):
         try:
             asset_serialized = self.retrieve(uuid=f"{asset.uuid}")
             return asset_serialized, False
@@ -483,7 +482,10 @@ class WalletFedow():
         if response_link.status_code in [200, 201]:
             # Création du wallet dans la base de donnée s'il n'existe pas
             if not user.wallet:
-                user.wallet = Wallet.objects.get_or_create(uuid=UUID(response_link.json()))[0]
+                user.wallet = Wallet.objects.get_or_create(
+                    uuid=UUID(response_link.json()),
+                    origin=connection.tenant,
+                )[0]
                 user.save()
                 logger.info(f"user {user} tout neuf, on ajoute le wallet : {user.wallet}")
 
@@ -626,9 +628,10 @@ class PlaceFedow():
 
         new_place_data = request_for_new_place.json()
 
-        # Le wallet est créé par fedow
+        # Le wallet est créé par fedow, on récupère son uuid et on le créé ici.
         wallet = Wallet.objects.create(
-            uuid=new_place_data['wallet']
+            uuid=new_place_data['wallet'],
+            origin=tenant,
         )
 
         self.fedow_config.wallet = wallet
@@ -694,6 +697,33 @@ class NFCcardFedow():
             raise Exception(serialized_card.errors)
 
         return serialized_card.validated_data
+
+    def linkwallet_card_number(self, user: TibilletUser = None, card_number: str = None):
+        card_number = validate_hex8(card_number)
+        if card_number is None:
+            return None
+
+        response_link = _post(
+            fedow_config=self.fedow_config,
+            user=user,
+            data={
+                "wallet": f"{user.wallet.uuid}",
+                "card_number": f"{card_number}",
+            },
+            path='wallet/linkwallet_card_number',
+        )
+
+        if response_link.status_code != 200:
+            logger.error(f"linkwallet_card_number : {response_link.status_code} {response_link.json()}")
+            return False
+
+        validated_card = CardValidator(data=response_link.json())
+        if not validated_card.is_valid():
+            logger.error(validated_card.errors)
+            return False
+
+        return validated_card.validated_data
+
 
     def linkwallet_cardqrcode(self, user: TibilletUser = None, qrcode_uuid: uuid4 = None):
         checked_uuid = uuid.UUID(str(qrcode_uuid))
@@ -820,7 +850,7 @@ class TransactionFedow():
     def refill_from_lespass_to_user_wallet(self,
                                            user: TibilletUser = None,
                                            amount: int = None,
-                                           asset: Asset = None,
+                                           asset: AssetFedowPublic = None,
                                            metadata: json = None,
                                            ):
         """
@@ -833,7 +863,7 @@ class TransactionFedow():
 
         if not isinstance(amount, int) or amount < 0:
             raise Exception("Amount must be an positive integer")
-        if not isinstance(asset, Asset):
+        if not isinstance(asset, AssetFedowPublic):
             raise Exception("asset must be an Asset object")
 
         transaction = {

@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import uuid
-from datetime import timedelta, datetime
+from datetime import timedelta
 from decimal import Decimal
 from io import BytesIO
 
@@ -43,13 +43,12 @@ from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, Product, Event, Paiement_stripe, Membership, Reservation, \
-    FormbricksConfig, FormbricksForms, FederatedPlace, Carrousel, ScanApp, ScannerAPIKey, LigneArticle, PriceSold, \
+    FormbricksConfig, FormbricksForms, FederatedPlace, Carrousel, LigneArticle, PriceSold, \
     Price, ProductSold, PaymentMethod
-from BaseBillet.permissions import HasScanApi
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, new_tenant_mailer, \
     contact_mailer, new_tenant_after_stripe_mailer, send_to_ghost_email, send_sale_to_laboutik, \
     send_payment_success_admin, send_payment_success_user, send_reservation_cancellation_user, \
-    send_ticket_cancellation_user, webhook_membership, send_email_generique, \
+    send_ticket_cancellation_user, send_email_generique, \
     send_membership_pending_admin, send_membership_pending_user, send_membership_payment_link_user
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
     ReservationValidator, ContactValidator
@@ -57,9 +56,10 @@ from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from TiBillet import settings
 from fedow_connect.fedow_api import FedowAPI
-from fedow_connect.models import FedowConfig, Asset
+from fedow_connect.models import FedowConfig
 from fedow_connect.utils import dround
 from fedow_connect.validators import TransactionSimpleValidator
+from fedow_public.models import AssetFedowPublic
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
@@ -1336,12 +1336,12 @@ class FederationViewset(viewsets.ViewSet):
             for place in FederatedPlace.objects.all():
                 with tenant_context(place.tenant):
                     config = Configuration.get_solo()
-                    assets = Asset.objects.filter(category__in=[
-                        Asset.STRIPE_FED_FIAT,
-                        Asset.TOKEN_LOCAL_FIAT,
-                        Asset.TOKEN_LOCAL_NOT_FIAT,
-                        Asset.TIME,
-                        Asset.FIDELITY,
+                    assets = AssetFedowPublic.objects.filter(category__in=[
+                        AssetFedowPublic.STRIPE_FED_FIAT,
+                        AssetFedowPublic.TOKEN_LOCAL_FIAT,
+                        AssetFedowPublic.TOKEN_LOCAL_NOT_FIAT,
+                        AssetFedowPublic.TIME,
+                        AssetFedowPublic.FIDELITY,
                     ])
                     results.append({
                         "organisation": config.organisation,

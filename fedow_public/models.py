@@ -1,0 +1,55 @@
+from django.db import models
+from uuid import uuid4
+from django.db.models import UniqueConstraint, Q
+from django.utils.translation import gettext_lazy as _
+
+
+
+class AssetFedowPublic(models.Model):
+    """
+    Le nouveau model fédéré d'asset
+    On internalise Fedow tipatipa en attendant le grand nétoyage de la V2
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
+    name = models.CharField(max_length=100, db_index=True)
+    currency_code = models.CharField(max_length=3)
+
+    created_on = models.DateField(auto_now_add=True)
+    updated_on = models.DateField(auto_now=True)
+
+    wallet_origin = models.ForeignKey('AuthBillet.Wallet', on_delete=models.PROTECT, related_name='assets_fedow_public')
+    fedow_place_origin_uuid = models.UUIDField() # l'uuid place utilisé par ex fedow
+    origin = models.ForeignKey('Customers.Client', on_delete=models.CASCADE, related_name="assets_fedow_public") # La bonne relation a utiliser au lieu des deux précédents, relicats de la migration
+
+    STRIPE_FED_FIAT = 'FED'
+    TOKEN_LOCAL_FIAT = 'TLF'
+    TOKEN_LOCAL_NOT_FIAT = 'TNF'
+    TIME = 'TIM'
+    FIDELITY = 'FID'
+    BADGE = 'BDG'
+    SUBSCRIPTION = 'SUB'
+
+    CATEGORIES = [
+        (TOKEN_LOCAL_FIAT, _('Fiduciaire')),
+        (TOKEN_LOCAL_NOT_FIAT, _('Cadeau')),
+        (STRIPE_FED_FIAT, _('Fiduciaire fédérée')),
+        (TIME, _("Monnaie temps")),
+        (FIDELITY, _("Points de fidélité")),
+        (BADGE, _("Badgeuse/Pointeuse")),
+        (SUBSCRIPTION, _('Adhésion ou abonnement')),
+    ]
+
+    category = models.CharField(
+        max_length=3,
+        choices=CATEGORIES
+    )
+
+    federated_with = models.ManyToManyField('Customers.Client', related_name="federated_assets_fedow_public", blank=True)
+    pending_invitations = models.ManyToManyField('Customers.Client', related_name="pending_invitations_fedow_public", blank=True)
+
+    class Meta:
+        # Only one can be true :
+        constraints = [UniqueConstraint(fields=["category"],
+                                        condition=Q(category='FED'),
+                                        name="unique_primary_asset")]

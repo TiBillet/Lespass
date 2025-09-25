@@ -875,12 +875,13 @@ class Price(models.Model):
         help_text=_("If enabled, after a successful payment, the user wallet will receive tokens."),
     )
 
-    fedow_reward_asset = models.ForeignKey("fedow_connect.Asset", on_delete=models.SET_NULL,
+    fedow_reward_asset = models.ForeignKey("fedow_public.AssetFedowPublic", on_delete=models.SET_NULL,
                                            blank=True,
                                            null=True,
                                            verbose_name=_("Fedow Asset"),
                                            help_text=_("Asset to send from the place to the user wallet."),
                                            )
+
     fedow_reward_amount = models.DecimalField(max_digits=10, decimal_places=2,
                                               blank=True,
                                               null=True,
@@ -2102,6 +2103,7 @@ class LigneArticle(models.Model):
                                       verbose_name=_("Payment method"))
 
     asset = models.UUIDField(blank=True, null=True, verbose_name=_("Asset"))
+
     wallet = models.ForeignKey("AuthBillet.Wallet", blank=True, null=True, on_delete=models.PROTECT,
                                verbose_name=_("Wallet from"))
 

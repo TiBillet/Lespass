@@ -1,0 +1,44 @@
+{% load i18n unfold humanize %}
+
+<div class="p-4 flex flex-col gap-4">
+    {% if fedow_error %}
+        {% component "unfold/components/card.html" with title=_("Erreur Fedow") %}
+            {% component "unfold/components/text.html" %}
+                {{ fedow_error }}
+            {% endcomponent %}
+        {% endcomponent %}
+    {% endif %}
+
+    {% if serialized_asset %}
+        {% component "unfold/components/card.html" with title=_("Informations") %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                    <strong>{% trans "Créé le" %}:</strong>
+{#                    TODO: Naturaltime fonctionnera quand la donnée sera sérializée par un validateur#}
+                    <span>{{ serialized_asset.created_at | naturaltime }}</span>
+                </div>
+                <div>
+                    <strong>{% trans "Dernière mise à jour" %}:</strong>
+{#                    TODO: Naturaltime fonctionnera quand la donnée sera sérializée par un validateur#}
+                    <span>{{ serialized_asset.last_update | naturaltime }}</span>
+                </div>
+                {% if serialized_asset.place_origin %}
+                    <div>
+                        <strong>{% trans "Lieu d'origine" %}:</strong>
+                        <span>{{ serialized_asset.place_origin.name }}</span>
+                    </div>
+                {% endif %}
+            </div>
+        {% endcomponent %}
+    {% endif %}
+
+    {% component "unfold/components/card.html" with title=_("Ventillation par lieu") %}
+        {% if table_data_by_place and table_data_by_place.rows %}
+            {% component "unfold/components/table.html" with table=table_data_by_place card_included=1 striped=1 %}{% endcomponent %}
+        {% else %}
+            {% component "unfold/components/text.html" %}
+                {% trans "Aucune donnée disponible." %}
+            {% endcomponent %}
+        {% endif %}
+    {% endcomponent %}
+</div>

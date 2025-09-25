@@ -142,6 +142,7 @@ SHARED_APPS = (
     'MetaBillet',
     'root_billet',
     'wsocket',
+    'fedow_public',
 
     'django_extensions',
     'solo',
@@ -683,13 +684,12 @@ UNFOLD = {
                         # "badge": "Administration.admin_tenant.badge_callback",
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
                     },
-                    {
-                        "title": _("Assets"),
-                        "icon": "currency_exchange",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:fedow_connect_asset_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-                    },
+                    # {
+                    #     "title": _("Assets"),
+                    #     "icon": "currency_exchange",  # Supported icon set: https://fonts.google.com/icons
+                    #     "link": reverse_lazy("staff_admin:fedow_connect_asset_changelist"),
+                        # "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+                    # },
                 ],
             },
             {

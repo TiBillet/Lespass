@@ -3,17 +3,18 @@ import os
 from datetime import timedelta
 
 from django.core.management.base import BaseCommand
-from django.utils import timezone
 from django.utils.text import slugify
 from django_tenants.utils import tenant_context, schema_context
 from faker import Faker
 
 from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
-from BaseBillet.models import Product, OptionGenerale, Price, Configuration, Event, Tag, PostalAddress, FormbricksConfig, FormbricksForms, ProductFormField
+from BaseBillet.models import Product, OptionGenerale, Price, Configuration, Event, Tag, PostalAddress, \
+    FormbricksConfig, FormbricksForms, ProductFormField
 from Customers.models import Client, Domain
 from fedow_connect.fedow_api import FedowAPI, AssetFedow
-from fedow_connect.models import FedowConfig, Asset
+from fedow_connect.models import FedowConfig
+from fedow_public.models import AssetFedowPublic
 
 logger = logging.getLogger(__name__)
 
@@ -312,92 +313,95 @@ class Command(BaseCommand):
                 ### Produit avec validation par admin
 
                 # Création de l'asset Fiduciaire pour l'ASS
-                fedow_config = FedowConfig.get_solo()
-                fedow_asset = AssetFedow(fedow_config=fedow_config)
-                asset, created = fedow_asset.get_or_create_token_asset(Asset(
-                    name="CLAF-Outil",
-                    currency_code="CSA",
-                    category=Asset.TOKEN_LOCAL_FIAT,
-                ))
 
-                ssa, created = Product.objects.get_or_create(
-                    name=f"Caisse de sécurité sociale alimentaire",
-                    short_description=f"Payez selon vos moyens, recevez selon vos besoins !",
-                    long_description="Payez ce que vous pouvez : l'adhésion à la SSA vous donne droit à 150€ sur votre carte à dépenser dans tout les lieux participants. Une validation par un.e administrateur.ice est nécéssaire. Engagement demandé de 3 mois minimum.",
-                    categorie_article=Product.ADHESION,
-                )
+                if tenant.name == "Le Tiers-Lustre" :
+                    fedow_config = FedowConfig.get_solo()
+                    fedow_asset = AssetFedow(fedow_config=fedow_config)
+                    asset, created = fedow_asset.get_or_create_token_asset(AssetFedowPublic(
+                        name=f"CLAF-Outil",
+                        currency_code="CSA",
+                        category=AssetFedowPublic.TOKEN_LOCAL_FIAT,
+                    ))
 
-                ssa_trimestrielle, created = Price.objects.get_or_create(
-                    product=ssa,
-                    name="Mensuelle",
-                    short_description="Adhésion pour 3 mois. Paiement mensuel récurent.",
-                    free_price=False,
-                    prix=50,
-                    recurring_payment=True,
-                    iteration=3,
-                    subscription_type=Price.CAL_MONTH,
-                    fedow_reward_enabled=True,
-                    fedow_reward_asset=Asset.objects.get(uuid=asset['uuid']),
-                    fedow_reward_amount=150,
-                )
+                    ssa, created = Product.objects.get_or_create(
+                        name=f"Caisse de sécurité sociale alimentaire",
+                        short_description=f"Payez selon vos moyens, recevez selon vos besoins !",
+                        long_description="Payez ce que vous pouvez : l'adhésion à la SSA vous donne droit à 150€ sur votre carte à dépenser dans tout les lieux participants. Une validation par un.e administrateur.ice est nécéssaire. Engagement demandé de 3 mois minimum.",
+                        categorie_article=Product.ADHESION,
+                    )
 
-                # --- Formulaire d'adhésion dynamique (tous les types d'inputs) ---
-                try:
-                    fields = [
-                        {
-                            "name": "nickname",
-                            "label": "Pseudonyme",
-                            "field_type": ProductFormField.FieldType.SHORT_TEXT,
-                            "required": True,
-                            "order": 1,
-                            "help_text": "Affiché à la communauté ; vous pouvez utiliser un pseudonyme.",
-                        },
-                        {
-                            "name": "about_you",
-                            "label": "À propos de vous",
-                            "field_type": ProductFormField.FieldType.LONG_TEXT,
-                            "required": False,
-                            "order": 2,
-                            "help_text": "Nous aide à mieux vous connaître.",
-                        },
-                        {
-                            "name": "favorite_style",
-                            "label": "Style préféré",
-                            "field_type": ProductFormField.FieldType.SINGLE_SELECT,
-                            "required": True,
-                            "order": 3,
-                            "options": ["Rock", "Jazz", "Musiques du monde", "Electro"],
-                            "help_text": "Choisissez-en un.",
-                        },
-                        {
-                            "name": "interests",
-                            "label": "Centres d'intérêt que vous souhaitez partager",
-                            "field_type": ProductFormField.FieldType.MULTI_SELECT,
-                            "required": False,
-                            "order": 4,
-                            "options": ["Cuisine", "Jardinage", "Musique", "Technologie", "Art", "Sport"],
-                            "help_text": "Sélectionnez autant d'options que vous le souhaitez.",
-                        },
-                    ]
-                    for f in fields:
-                        # Key is auto-generated from label by the model save(); use label for idempotency
-                        ProductFormField.objects.get_or_create(
-                            product=ssa,
-                            label=f["label"],
-                            defaults={
-                                "field_type": f["field_type"],
-                                "required": f["required"],
-                                "order": f["order"],
-                                "help_text": f.get("help_text"),
-                                "options": f.get("options"),
-                            }
-                        )
-                except Exception as e:
-                    logger.warning(f"Unable to create ProductFormField demo data: {e}")
+                    ssa_trimestrielle, created = Price.objects.get_or_create(
+                        product=ssa,
+                        name="Mensuelle",
+                        short_description="Adhésion pour 3 mois. Paiement mensuel récurent.",
+                        free_price=False,
+                        prix=50,
+                        recurring_payment=True,
+                        iteration=3,
+                        subscription_type=Price.CAL_MONTH,
+                        fedow_reward_enabled=True,
+                        fedow_reward_asset=asset,
+                        fedow_reward_amount=150,
+                    )
+
+                    # --- Formulaire d'adhésion dynamique (tous les types d'inputs) ---
+                    try:
+                        fields = [
+                            {
+                                "name": "nickname",
+                                "label": "Pseudonyme",
+                                "field_type": ProductFormField.FieldType.SHORT_TEXT,
+                                "required": True,
+                                "order": 1,
+                                "help_text": "Affiché à la communauté ; vous pouvez utiliser un pseudonyme.",
+                            },
+                            {
+                                "name": "about_you",
+                                "label": "À propos de vous",
+                                "field_type": ProductFormField.FieldType.LONG_TEXT,
+                                "required": False,
+                                "order": 2,
+                                "help_text": "Nous aide à mieux vous connaître.",
+                            },
+                            {
+                                "name": "favorite_style",
+                                "label": "Style préféré",
+                                "field_type": ProductFormField.FieldType.SINGLE_SELECT,
+                                "required": True,
+                                "order": 3,
+                                "options": ["Rock", "Jazz", "Musiques du monde", "Electro"],
+                                "help_text": "Choisissez-en un.",
+                            },
+                            {
+                                "name": "interests",
+                                "label": "Centres d'intérêt que vous souhaitez partager",
+                                "field_type": ProductFormField.FieldType.MULTI_SELECT,
+                                "required": False,
+                                "order": 4,
+                                "options": ["Cuisine", "Jardinage", "Musique", "Technologie", "Art", "Sport"],
+                                "help_text": "Sélectionnez autant d'options que vous le souhaitez.",
+                            },
+                        ]
+                        for f in fields:
+                            # Key is auto-generated from label by the model save(); use label for idempotency
+                            ProductFormField.objects.get_or_create(
+                                product=ssa,
+                                label=f["label"],
+                                defaults={
+                                    "field_type": f["field_type"],
+                                    "required": f["required"],
+                                    "order": f["order"],
+                                    "help_text": f.get("help_text"),
+                                    "options": f.get("options"),
+                                }
+                            )
+                    except Exception as e:
+                        logger.warning(f"Unable to create ProductFormField demo data: {e}")
 
 
+                """
                 ### BADGEUSE ###
-
+                
                 badgeuse_cowork, created = Product.objects.get_or_create(
                     name=f"Badgeuse co-working ({tenant.name})",
                     short_description="Accès à l'espace de co-working.",
@@ -428,6 +432,8 @@ class Command(BaseCommand):
                 #     prix=1,
                 #     recurring_payment=False,
                 # )
+                
+                """
 
                 ### EVENTS ###
                 rock, created = Tag.objects.get_or_create(name='Rock', color='#3B71CA')
@@ -439,7 +445,7 @@ class Command(BaseCommand):
 
                 event_entree_libre, created = Event.objects.get_or_create(
                     name=f"Scène ouverte : Entrée libre",
-                    datetime=fake.future_datetime('+7d'),
+                    datetime=fake.future_datetime('+7d') + timedelta(days=360),
                     short_description="Scène ouverte Rock !",
                     long_description="Un évènement gratuit, ouvert à tous.tes sans réservation."
                                      "\nSeul les artistes annoncés et les descriptions sont affichés.",
@@ -461,7 +467,7 @@ class Command(BaseCommand):
 
                 event_gratuit_avec_free_resa, created = Event.objects.get_or_create(
                     name=f"Disco Caravane : Gratuit avec réservation",
-                    datetime=fake.future_datetime('+7d'),
+                    datetime=fake.future_datetime('+7d') + timedelta(days=360),
                     jauge_max=200,
                     max_per_user=4,
                     short_description="Attention, places limitées, pensez à réserver !",
@@ -495,7 +501,7 @@ class Command(BaseCommand):
 
                 event_prix_libre, created = Event.objects.get_or_create(
                     name=f"Concert caritatif : Entrée a prix libre",
-                    datetime=fake.future_datetime('+7d'),
+                    datetime=fake.future_datetime('+7d') + timedelta(days=360),
                     jauge_max=200,
                     max_per_user=4,
                     short_description="Attention, places limitées, pensez à réserver !",
@@ -534,7 +540,7 @@ class Command(BaseCommand):
 
                 event_payant_nominatif_tarif_asso, created = Event.objects.get_or_create(
                     name=f"What the Funk ? Spectacle payant",
-                    datetime=fake.future_datetime('+7d'),
+                    datetime=fake.future_datetime('+7d') + timedelta(days=360),
                     jauge_max=600,
                     max_per_user=10,
                     short_description="Spectacle payant avec tarif préférentiel pour les adhérents à l'association.",
@@ -612,7 +618,7 @@ class Command(BaseCommand):
                 tag_formulaire, _ = Tag.objects.get_or_create(name='Formulaire démo', color='#9C27B0')
                 event_offcanvas_form, created = Event.objects.get_or_create(
                     name="Soirée découverte avec formulaire",
-                    datetime=fake.future_datetime('+9d'),
+                    datetime=fake.future_datetime('+9d') + timedelta(days=360),
                     jauge_max=120,
                     max_per_user=4,
                     short_description="Réservation avec formulaire supplémentaire (tous types d’inputs)",
@@ -629,7 +635,7 @@ class Command(BaseCommand):
                 # Création de l'événement principal "Chantier participatif : besoin de volontaires"
                 event_chantier_participatif, created = Event.objects.get_or_create(
                     name="Chantier participatif : besoin de volontaires",
-                    datetime=fake.future_datetime('+14d'),
+                    datetime=fake.future_datetime('+14d') + timedelta(days=360),
                     short_description="Venez participer à nos chantiers collectifs !",
                     long_description="Nous avons besoin de volontaires pour différentes actions de chantier participatif. "
                                      "Inscrivez-vous aux différentes sessions selon vos disponibilités et compétences.",
@@ -644,7 +650,7 @@ class Command(BaseCommand):
                 # Création des sous-événements de type Action
                 sous_event_jardinage, created = Event.objects.get_or_create(
                     name="Jardinage et plantation",
-                    datetime=fake.future_datetime('+15d'),
+                    datetime=fake.future_datetime('+15d') + timedelta(days=360),
                     short_description="Aménagement du jardin partagé",
                     long_description="Venez nous aider à planter, désherber et aménager notre jardin partagé. "
                                      "Apportez vos gants et votre bonne humeur !",
@@ -657,7 +663,7 @@ class Command(BaseCommand):
 
                 sous_event_peinture, created = Event.objects.get_or_create(
                     name="Peinture et décoration",
-                    datetime=fake.future_datetime('+16d'),
+                    datetime=fake.future_datetime('+16d') + timedelta(days=360),
                     short_description="Rafraîchissement des murs et décorations",
                     long_description="Session de peinture pour rafraîchir les murs du local. "
                                      "Nous fournirons le matériel, venez avec des vêtements adaptés.",
@@ -670,7 +676,7 @@ class Command(BaseCommand):
 
                 sous_event_bricolage, created = Event.objects.get_or_create(
                     name="Bricolage et réparations",
-                    datetime=fake.future_datetime('+17d'),
+                    datetime=fake.future_datetime('+17d') + timedelta(days=360),
                     short_description="Petits travaux de bricolage",
                     long_description="Nous avons besoin de personnes pour effectuer divers travaux de bricolage : "
                                      "réparation de mobilier, installation d'étagères, etc. "
@@ -716,7 +722,7 @@ class Command(BaseCommand):
 
                     event_with_formbricks, created = Event.objects.get_or_create(
                         name="Atelier participatif avec formulaire personnalisé",
-                        datetime=fake.future_datetime('+10d'),
+                        datetime=fake.future_datetime('+10d') + timedelta(days=360),
                         jauge_max=30,
                         max_per_user=2,
                         short_description="Démonstration d'un événement avec formulaire Formbricks",

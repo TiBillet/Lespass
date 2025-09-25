@@ -1,10 +1,5 @@
 import logging
-import os
-import re
-import uuid
 from datetime import timedelta
-from decimal import Decimal
-from itertools import product
 
 import stripe
 from django.conf import settings
@@ -15,9 +10,8 @@ from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 from django_tenants.utils import tenant_context, schema_context
 from rest_framework import serializers
-from rest_framework.generics import get_object_or_404
 
-from ApiBillet.serializers import get_or_create_price_sold, dec_to_int, create_ticket
+from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
 from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Price, Product, OptionGenerale, Membership, Paiement_stripe, LigneArticle, Tag, Event, \
