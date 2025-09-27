@@ -3377,6 +3377,31 @@ class AssetAdmin(ModelAdmin):
                     ro.append(f)
         return ro
 
+    def save_related(self, request, form, formsets, change):
+        """Ensure only origin tenant admins can modify pending_invitations.
+        If the current tenant is not the asset origin, any attempted change to
+        pending_invitations is reverted and an error message is shown.
+        """
+        obj = form.instance
+        # Snapshot existing pending invitations before m2m save
+        prev_pending_ids = set()
+        if getattr(obj, 'pk', None):
+            try:
+                prev_pending_ids = set(obj.pending_invitations.values_list('pk', flat=True))
+            except Exception:
+                prev_pending_ids = set()
+        super().save_related(request, form, formsets, change)
+        try:
+            current_tenant_id = getattr(connection.tenant, 'pk', None)
+            origin_id = getattr(obj, 'origin_id', None)
+            if obj.pk and origin_id != current_tenant_id:
+                # Non-origin tenant is not allowed to change invitations: revert to previous
+                obj.pending_invitations.set(list(prev_pending_ids))
+                messages.error(request, _("Seul le lieu d'origine peut envoyer des invitations."))
+        except Exception:
+            # Fail-closed: if something goes wrong, keep previous state already restored above when applicable
+            pass
+
     def get_form(self, request, obj=None, **kwargs):
         # Limit category choices on add form to TOKEN_LOCAL_FIAT and TOKEN_LOCAL_NOT_FIAT
         form = super().get_form(request, obj, **kwargs)
@@ -3392,6 +3417,20 @@ class AssetAdmin(ModelAdmin):
         except Exception:
             pass
         return form
+
+    def get_fields(self, request, obj=None):
+        # Hide "Partager cet actif" (pending_invitations) unless the current tenant is the asset origin
+        fields = list(super().get_fields(request, obj))
+        try:
+            if obj is not None:
+                current_tenant = connection.tenant
+                if getattr(obj, 'origin_id', None) != getattr(current_tenant, 'pk', None):
+                    if 'pending_invitations' in fields:
+                        fields.remove('pending_invitations')
+        except Exception:
+            # In case of any unexpected issue, fall back to original fields
+            pass
+        return fields
 
     def changeform_view(self, request: HttpRequest, object_id: Optional[str] = None, form_url: str = "",
                         extra_context: Optional[Dict[str, Any]] = None):
@@ -3411,7 +3450,7 @@ class AssetAdmin(ModelAdmin):
                 serialized_asset = (fedow_data or {}).get("serialized_asset") or {}
                 # Build rows, keep deterministic order (by place name)
                 for place_name in sorted(totals_by_place.keys()):
-                    amount = totals_by_place.get(place_name)
+                    amount = dround(totals_by_place.get(place_name))
                     # Render a simple button label in the third column
                     button_html = f'<button type="button" class="font-medium flex items-center gap-2 px-3 py-2 rounded-default justify-center whitespace-nowrap cursor-pointer border border-base-200 bg-primary-600 text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-base-900">{_("Valider le retour en banque")}</button>'
                     button_cell = mark_safe(button_html)
