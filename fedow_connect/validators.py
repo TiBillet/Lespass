@@ -72,6 +72,8 @@ class AssetValidator(serializers.Serializer):
                         origin = domain.first().tenant
                         logger.info(f"On a le tenant origin de l'asset : {origin}")
 
+
+
             try :
                 wallet = Wallet.objects.get(uuid=attrs['wallet_origin'])
             except Wallet.DoesNotExist:

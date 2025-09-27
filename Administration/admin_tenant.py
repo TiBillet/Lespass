@@ -24,8 +24,10 @@ from django.shortcuts import redirect, get_object_or_404
 from django.template.defaultfilters import slugify
 from django.template.loader import render_to_string
 from django.urls import reverse, re_path
+from django.views.decorators.csrf import csrf_protect
+from django.views.decorators.http import require_POST
 from django.utils import timezone
-from django_tenants.utils import schema_context
+from django_tenants.utils import schema_context, tenant_context
 from django.utils.html import format_html
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.safestring import mark_safe
@@ -63,7 +65,8 @@ from unfold.widgets import (
 
 from Administration.importers.ticket_exporter import TicketExportResource
 from ApiBillet.permissions import TenantAdminPermissionWithRequest, RootPermissionWithRequest
-from AuthBillet.models import HumanUser, TibilletUser
+from ApiBillet.serializers import get_or_create_price_sold
+from AuthBillet.models import HumanUser, TibilletUser, Wallet
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
@@ -78,14 +81,13 @@ from fedow_connect.models import FedowConfig
 from fedow_connect.utils import dround
 from fedow_connect.validators import validate_hex8
 
-from fedow_public.models import AssetFedowPublic as Asset
+from fedow_public.models import AssetFedowPublic as Asset, AssetFedowPublic
 import nh3
 from urllib.parse import urlparse, urlencode
 
 # from simple_history.admin import SimpleHistoryAdmin
 
 logger = logging.getLogger(__name__)
-
 
 ## SANITIZER
 
@@ -954,7 +956,6 @@ class PriceChangeForm(ModelForm):
             pass
 
 
-
 @admin.register(Price, site=staff_admin_site)
 class PriceAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
@@ -1350,8 +1351,8 @@ class MembershipAddForm(ModelForm):
     def clean_card_number(self):
         cleaned_data = self.cleaned_data
         prix = cleaned_data.get('prix')
-        import ipdb; ipdb.set_trace()
-
+        import ipdb;
+        ipdb.set_trace()
 
     def clean(self):
         # On vérifie que le moyen de paiement est bien entré si > 0
@@ -1383,7 +1384,6 @@ class MembershipAddForm(ModelForm):
         card_number = self.cleaned_data.get('card_number')
         if card_number:
             self.instance.card_number = card_number
-
 
         # Flotant (FALC) vers Decimal
         contribution = self.cleaned_data.pop('contribution')
@@ -1421,7 +1421,6 @@ class MembershipChangeForm(ModelForm):
 def adhesion_badge_callback(request):
     # Recherche de la quantité de nouvelles adhésions ces 14 dernièrs jours
     return f"+ {Membership.objects.filter(last_contribution__gte=timezone.localtime() - timedelta(days=7)).count()}"
-
 
 
 @register_component
@@ -1487,7 +1486,8 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
     )
 
     ordering = ('-date_added',)
-    search_fields = ('user__email', 'user__first_name', 'user__last_name', 'card_number', 'last_contribution', 'custom_form')
+    search_fields = ('user__email', 'user__first_name', 'user__last_name', 'card_number', 'last_contribution',
+                     'custom_form')
     list_filter = ['price__product', 'last_contribution', 'deadline', 'state', ]
 
     def get_queryset(self, request):
@@ -1538,7 +1538,6 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
             initial['option_generale'] = option_ids
 
         return initial
-
 
     # Pour les bouton en haut de la vue change
     # chaque decorateur @action génère une nouvelle route
@@ -1633,7 +1632,6 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
     def state_display(self, instance: Membership):
         # Show human-readable label for state, possibly with icon/color later
         return instance.get_state_display()
-
 
     def has_custom_actions_detail_permission(self, request, object_id):
         return TenantAdminPermissionWithRequest(request)
@@ -1975,7 +1973,6 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         "options_checkbox",
         "carrousel",
 
-
         # Le autocomplete fields + many2many ne permet pas de filtrage facile
         # Pour filter les produits de type billet, regarder le get_search_results dans ProductAdmin
         "products",
@@ -2015,6 +2012,12 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     def save_model(self, request, obj: Event, form, change):
         # Sanitize all TextField inputs to avoid XSS via WysiwYG/TextField
         sanitize_textfields(obj)
+
+        # Fabrication des pricesold event/prix pour pouvoir être selectionné sur le + billet
+        for product in obj.products.all():
+            for price in product.prices.all():
+                get_or_create_price_sold(price=price, event=obj)
+
         super().save_model(request, obj, form, change)
 
     def has_view_permission(self, request, obj=None):
@@ -2330,7 +2333,7 @@ class TicketAddAdmin(ModelForm):
     )
 
     pricesold = forms.ModelChoiceField(
-        queryset=PriceSold.objects.filter(productsold__event__datetime__gte=timezone.localtime() - timedelta(days=1)),
+        queryset=PriceSold.objects.filter(productsold__event__datetime__gte=timezone.localtime() - timedelta(days=1)).order_by("productsold__event__datetime"),
         # Remplis le champ select avec les objets Price
         empty_label=_("Select a product"),  # Texte affiché par défaut
         required=True,
@@ -2361,6 +2364,7 @@ class TicketAddAdmin(ModelForm):
         widget=UnfoldAdminSelectWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
         label=_("Payment method"),
     )
+
 
     class Meta:
         model = Ticket
@@ -2541,7 +2545,8 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
         queryset = super().get_queryset(request)
         return (
             queryset
-            .select_related('reservation', 'reservation__event', 'reservation__event__parent', 'reservation__user_commande')
+            .select_related('reservation', 'reservation__event', 'reservation__event__parent',
+                            'reservation__user_commande')
             .prefetch_related(
                 'reservation__options',
                 'reservation__tickets__pricesold__price__product__form_fields',
@@ -3282,148 +3287,219 @@ class BrevoConfigAdmin(SingletonModelAdmin, ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
-#
-# @admin.register(Asset, site=staff_admin_site)
-# class AssetAdmin(ModelAdmin):
-#     compressed_fields = True  # Default: False
-#     warn_unsaved_form = True  # Default: False
-#
-#     change_form_before_template = "admin/asset/asset_change_form_before.html"
-#
-#     list_display = [
-#         "name",
-#         "currency_code",
-#         "category",
-#     ]
-#
-#     readonly_fields = [
-#         'created_at',
-#         'wallet_origin',
-#         'archive',
-#         'federated_with',
-#     ]
-#
-#     fields = [
-#         "name",
-#         "currency_code",
-#         "category",
-#         "invitation_to_federated_with",
-#         "federated_with",
-#         "active",
-#     ]
-#
-#     autocomplete_fields = [
-#         'invitation_to_federated_with',
-#     ]
-#
-#     # On affiche que les asset non adhésions
-#     def get_queryset(self, request):
-#         queryset = super().get_queryset(request).exclude(category__in=[
-#             Asset.BADGE,
-#             Asset.SUBSCRIPTION,
-#         ])
-#         return queryset
-#
-#     def save_model(self, request: HttpRequest, obj: Asset, form: Form, change: Any) -> None:
-#         # Vérifie si l'objet est nouveau
-#         new = not change or not getattr(obj, 'pk', None)
-#         if not new:
-#             super().save_model(request, obj, form, change)
-#             # messages.error(request, _("L'Asset ne peut pas être modifié après création."))
-#             # raise ValidationError("Asset change forbidden")
-#         else :
-#             # Vérifie les champs choisis (ici, la catégorie) selon le contexte
-#             allowed_on_create = {Asset.TOKEN_LOCAL_FIAT, Asset.TOKEN_LOCAL_NOT_FIAT, Asset.TIME, Asset.FIDELITY}
-#             if obj.category not in allowed_on_create:
-#                 messages.error(request, _("Catégorie non autorisée pour une création."))
-#                 raise ValidationError("Invalid category on create")
-#
-#             fedow_config = FedowConfig.get_solo()
-#             fedow_asset = AssetFedow(fedow_config=fedow_config)
-#             try:
-#                 asset, created = fedow_asset.get_or_create_token_asset(obj)
-#             except Exception as e:
-#                 messages.error(request, f"{e}")
-#                 raise ValidationError(str(e))
-#
-#             if not created:
-#                 messages.error(request, _("Asset already exists"))
-#                 raise ValidationError("Asset already exists")
-#
-#             # L'asset a été créé par le le Serializer Fedow invoqué dans get_or_create_token_asset
-#             # On l'active vu que c'est créé par ce lieu, et on retourne True, pas besoin de super save
-#             Asset.objects.filter(uuid=asset.get('uuid')).update(active=True)
-#             return True  # L'asset n'est pas créé ici, mais depuis
-#
-#     def get_readonly_fields(self, request, obj=None):
-#         ro = list(super().get_readonly_fields(request, obj))
-#         if obj is not None:
-#             for f in ("name", "currency_code", "category"):
-#                 if f not in ro:
-#                     ro.append(f)
-#         return ro
-#
-#     def get_form(self, request, obj=None, **kwargs):
-#         # Limit category choices on add form to TOKEN_LOCAL_FIAT and TOKEN_LOCAL_NOT_FIAT
-#         form = super().get_form(request, obj, **kwargs)
-#         try:
-#             if obj is None and 'category' in form.base_fields:
-#                 allowed = [
-#                     (Asset.TOKEN_LOCAL_FIAT, dict(Asset.CATEGORIES)[Asset.TOKEN_LOCAL_FIAT]),
-#                     (Asset.TOKEN_LOCAL_NOT_FIAT, dict(Asset.CATEGORIES)[Asset.TOKEN_LOCAL_NOT_FIAT]),
-#                     (Asset.TIME, dict(Asset.CATEGORIES)[Asset.TIME]),
-#                     (Asset.FIDELITY, dict(Asset.CATEGORIES)[Asset.FIDELITY]),
-#                 ]
-#                 form.base_fields['category'].choices = allowed
-#         except Exception:
-#             pass
-#         return form
-#
-#     def changeform_view(self, request: HttpRequest, object_id: Optional[str] = None, form_url: str = "", extra_context: Optional[Dict[str, Any]] = None):
-#         """Inject Fedow data for the before template on change view and handle invite form POST."""
-#         extra_context = extra_context or {}
-#         table_data_by_place = {"headers": [_("Lieu"), _("Total"), _("Action")], "rows": []}
-#         serialized_asset = {}
-#         error_message = None
-#
-#         if object_id:
-#             try:
-#                 fedow = FedowAPI()
-#                 fedow_data = fedow.asset.retrieve_total_by_place(uuid=object_id)
-#                 fedow_data = json.loads(fedow_data)
-#                 # Expected structure: {"total_by_place": {"Lespass": 1500, ...}, "serialized_asset": {...}}
-#                 totals_by_place = (fedow_data or {}).get("total_by_place") or {}
-#                 serialized_asset = (fedow_data or {}).get("serialized_asset") or {}
-#                 # Build rows, keep deterministic order (by place name)
-#                 for place_name in sorted(totals_by_place.keys()):
-#                     amount = totals_by_place.get(place_name)
-#                     # Render a simple button label in the third column
-#                     button_html = f'<button type="button" class="font-medium flex items-center gap-2 px-3 py-2 rounded-default justify-center whitespace-nowrap cursor-pointer border border-base-200 bg-primary-600 text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-base-900">{_("Valider le retour en banque")}</button>'
-#                     button_cell = mark_safe(button_html)
-#                     table_data_by_place["rows"].append([place_name, amount, button_cell])
-#             except Exception as e:
-#                 error_message = str(e)
-#
-#
-#         extra_context.update({
-#             "table_data_by_place": table_data_by_place,
-#             "serialized_asset": serialized_asset,
-#             "fedow_error": error_message,
-#             "asset_pk": object_id,
-#         })
-#         return super().changeform_view(request, object_id, form_url, extra_context)
-#
-#     def has_view_permission(self, request, obj=None):
-#         return TenantAdminPermissionWithRequest(request)
-#
-#     def has_add_permission(self, request, obj=None):
-#         return TenantAdminPermissionWithRequest(request)
-#
-#     def has_change_permission(self, request, obj=None):
-#         return TenantAdminPermissionWithRequest(request)
-#
-#     def has_delete_permission(self, request, obj=None):
-#         return False
+
+@admin.register(AssetFedowPublic, site=staff_admin_site)
+class AssetAdmin(ModelAdmin):
+    compressed_fields = True  # Default: False
+    warn_unsaved_form = True  # Default: False
+
+    change_form_before_template = "admin/asset/asset_change_form_before.html"
+    list_before_template = "admin/asset/asset_list_before.html"
+
+    list_display = [
+        "name",
+        "currency_code",
+        "category",
+        "origin",
+        "_federated_with",
+    ]
+
+    readonly_fields = [
+        'created_at',
+        'wallet_origin',
+        'federated_with',
+    ]
+
+    fields = [
+        "name",
+        "currency_code",
+        "category",
+        "pending_invitations",
+        "federated_with",
+    ]
+
+    autocomplete_fields = [
+        'pending_invitations',
+    ]
+
+
+    def _federated_with(self, obj):
+        feds = [place.name for place in obj.federated_with.all()]
+        feds.append(obj.origin.name)
+        return ", ".join(feds)
+
+    # On affiche que les assets non adhésions + origin + fédéré
+    def get_queryset(self, request):
+        tenant = connection.tenant
+        queryset = (
+            super()
+            .get_queryset(request)
+            .exclude(category__in=[AssetFedowPublic.BADGE, AssetFedowPublic.SUBSCRIPTION])
+            .filter(Q(origin=tenant) | Q(federated_with=tenant))
+            .distinct()
+        )
+        return queryset
+
+    def save_model(self, request: HttpRequest, obj: Asset, form: Form, change: Any) -> None:
+        # Vérifie si l'objet est nouveau
+        new = not change or not getattr(obj, 'pk', None)
+        if new:
+            # Vérifie les champs choisis (ici, la catégorie) selon le contexte
+            allowed_on_create = {AssetFedowPublic.TOKEN_LOCAL_FIAT, AssetFedowPublic.TOKEN_LOCAL_NOT_FIAT,
+                                 AssetFedowPublic.TIME, Asset.FIDELITY}
+            if obj.category not in allowed_on_create:
+                messages.error(request, _("Catégorie non autorisée pour une création."))
+                raise ValidationError("Invalid category on create")
+
+            obj.origin = connection.tenant
+            fedow_config = FedowConfig.get_solo()
+            obj.wallet_origin = fedow_config.wallet
+            # On sauvegarde dans la base de donnée
+            super().save_model(request, obj, form, change)
+
+            try:
+                fedowAPI = FedowAPI(fedow_config=fedow_config)
+                asset, created = fedowAPI.asset.get_or_create_token_asset(obj)
+                logger.info(f"Asset créé chez fédow {asset} : {created}")
+            except Exception as e:
+                messages.error(request, f"{e}")
+                raise ValidationError(str(e))
+
+            if not created:
+                messages.error(request, _("Asset already exists"))
+                raise ValidationError("Asset already exists")
+
+    def get_readonly_fields(self, request, obj=None):
+        ro = list(super().get_readonly_fields(request, obj))
+        if obj is not None:
+            for f in ("name", "currency_code", "category"):
+                if f not in ro:
+                    ro.append(f)
+        return ro
+
+    def get_form(self, request, obj=None, **kwargs):
+        # Limit category choices on add form to TOKEN_LOCAL_FIAT and TOKEN_LOCAL_NOT_FIAT
+        form = super().get_form(request, obj, **kwargs)
+        try:
+            if obj is None and 'category' in form.base_fields:
+                allowed = [
+                    (Asset.TOKEN_LOCAL_FIAT, dict(Asset.CATEGORIES)[Asset.TOKEN_LOCAL_FIAT]),
+                    (Asset.TOKEN_LOCAL_NOT_FIAT, dict(Asset.CATEGORIES)[Asset.TOKEN_LOCAL_NOT_FIAT]),
+                    (Asset.TIME, dict(Asset.CATEGORIES)[Asset.TIME]),
+                    (Asset.FIDELITY, dict(Asset.CATEGORIES)[Asset.FIDELITY]),
+                ]
+                form.base_fields['category'].choices = allowed
+        except Exception:
+            pass
+        return form
+
+    def changeform_view(self, request: HttpRequest, object_id: Optional[str] = None, form_url: str = "",
+                        extra_context: Optional[Dict[str, Any]] = None):
+        """Inject Fedow data for the before template on change view and handle invite form POST."""
+        extra_context = extra_context or {}
+        table_data_by_place = {"headers": [_("Lieu"), _("Total"), _("Action")], "rows": []}
+        serialized_asset = {}
+        error_message = None
+
+        if object_id:
+            try:
+                fedow = FedowAPI()
+                fedow_data = fedow.asset.retrieve_total_by_place(uuid=object_id)
+                fedow_data = json.loads(fedow_data)
+                # Expected structure: {"total_by_place": {"Lespass": 1500, ...}, "serialized_asset": {...}}
+                totals_by_place = (fedow_data or {}).get("total_by_place") or {}
+                serialized_asset = (fedow_data or {}).get("serialized_asset") or {}
+                # Build rows, keep deterministic order (by place name)
+                for place_name in sorted(totals_by_place.keys()):
+                    amount = totals_by_place.get(place_name)
+                    # Render a simple button label in the third column
+                    button_html = f'<button type="button" class="font-medium flex items-center gap-2 px-3 py-2 rounded-default justify-center whitespace-nowrap cursor-pointer border border-base-200 bg-primary-600 text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-base-900">{_("Valider le retour en banque")}</button>'
+                    button_cell = mark_safe(button_html)
+                    table_data_by_place["rows"].append([place_name, amount, button_cell])
+            except Exception as e:
+                error_message = str(e)
+
+        extra_context.update({
+            "table_data_by_place": table_data_by_place,
+            "serialized_asset": serialized_asset,
+            "fedow_error": error_message,
+            "asset_pk": object_id,
+        })
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            re_path(
+                r'^accept_invitation/(?P<asset_pk>.+)/$',
+                self.admin_site.admin_view(csrf_protect(require_POST(self.accept_invitation))),
+                name='asset-accept-invitation',
+            ),
+        ]
+        return custom_urls + urls
+
+    def accept_invitation(self, request: HttpRequest, asset_pk: str):
+        # Accept an invitation for the current tenant on the given asset
+        tenant = connection.tenant
+        place_added_uuid = FedowConfig.get_solo().fedow_place_uuid
+
+        # Basic permission check for tenant admins
+        if not TenantAdminPermissionWithRequest(request):
+            messages.error(request, _("Permission refusée."))
+            return redirect(
+                reverse(f"{self.admin_site.name}:{self.model._meta.app_label}_{self.model._meta.model_name}_changelist")
+            )
+
+        asset = get_object_or_404(AssetFedowPublic, pk=asset_pk)
+
+        if request.method != 'POST':
+            return redirect(
+                reverse(f"{self.admin_site.name}:{self.model._meta.app_label}_{self.model._meta.model_name}_changelist")
+            )
+
+        if asset.pending_invitations.filter(pk=tenant.pk).exists():
+            with tenant_context(asset.origin):
+                fedowAPI = FedowAPI()
+                place_origin_uuid = FedowConfig.get_solo().fedow_place_uuid
+                federation = fedowAPI.federation.create_fed(
+                    user=request.user,
+                    asset=asset,
+                    place_added_uuid=place_added_uuid,
+                    place_origin_uuid=place_origin_uuid,
+                )
+                # Move tenant from pending to federated
+                asset.pending_invitations.remove(tenant)
+                asset.federated_with.add(tenant)
+
+            messages.success(request, _("Invitation acceptée."))
+        else:
+            messages.error(request, _("Aucune invitation en attente pour ce lieu."))
+
+        return redirect(
+            reverse(f"{self.admin_site.name}:{self.model._meta.app_label}_{self.model._meta.model_name}_changelist")
+        )
+
+    def changelist_view(self, request: HttpRequest, extra_context: Optional[Dict[str, Any]] = None):
+        # Provide invitations list for the list_before_template
+        extra_context = extra_context or {}
+        tenant = connection.tenant
+        invitations_qs = AssetFedowPublic.objects.filter(pending_invitations=tenant).select_related('origin')
+        extra_context.update({
+            'asset_invitations': invitations_qs,
+        })
+        return super().changelist_view(request, extra_context=extra_context)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 ### UNFOLD ADMIN

@@ -1,0 +1,30 @@
+{% load i18n unfold %}
+
+<div class="p-4 flex flex-col gap-4">
+    {% component "unfold/components/card.html" with title=_("Invitations d'actifs") %}
+        {% if asset_invitations and asset_invitations|length %}
+            <div class="flex flex-col divide-y divide-base-200">
+                {% for asset in asset_invitations %}
+                    <div class="py-3 flex items-center justify-between gap-4">
+                        <div class="flex flex-col">
+                            <span class="font-medium">{{ asset.name }}</span>
+                            <span class="text-sm text-base-500">
+                                {% trans "Lieu d'origine" %}: {{ asset.origin.name }}
+                            </span>
+                        </div>
+                        <form method="post" action="{% url 'staff_admin:asset-accept-invitation' asset.pk %}">
+                            {% csrf_token %}
+                            <button type="submit" class="font-medium flex items-center gap-2 px-3 py-2 rounded-default justify-center whitespace-nowrap cursor-pointer border border-base-200 bg-primary-600 text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-base-900">
+                                {% trans "ACCEPTER" %}
+                            </button>
+                        </form>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            {% component "unfold/components/text.html" %}
+                {% trans "Aucune invitation en attente." %}
+            {% endcomponent %}
+        {% endif %}
+    {% endcomponent %}
+</div>

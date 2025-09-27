@@ -34,15 +34,15 @@ logger = logging.getLogger(__name__)
 #                                  )
 #
 #     invitation_to_federated_with = models.ManyToManyField(Client,
-#                                                           verbose_name=_("Inviter un lieux à partager cet actif"),
 #                                                           related_name="invitation_to_federated_with",
 #                                                           blank=True,
+#                                                           verbose_name=_("Inviter un lieux à partager cet actif"),
 #                                                           help_text=_("Ajoutez un lieux a partager cet actif, il recevra un mail de confirmation. Une fois validé, il disparaitra de cette liste pour aller dans celle ci dessous"),
 #                                                           )
 #
 #     federated_with = models.ManyToManyField(Client,
-#                                             verbose_name=_("Lieux fédérés"),
 #                                             related_name="federated_assets",
+#                                             verbose_name=_("Lieux fédérés"),
 #                                             help_text=_("Lieux fédérés"),
 #                                             blank=True, )
 #

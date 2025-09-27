@@ -13,6 +13,7 @@ from django.core.signing import TimestampSigner
 from django.db import connection
 from django.utils import timezone
 from django_tenants.postgresql_backend.base import FakeTenant
+from django_tenants.utils import schema_context
 
 from AuthBillet.models import TibilletUser, Wallet, HumanUser
 from BaseBillet.models import Configuration, Membership, Product
@@ -749,6 +750,30 @@ class NFCcardFedow():
 
         return validated_card.validated_data
 
+class FederationFedow():
+    def __init__(self, fedow_config: FedowConfig or None = None):
+        self.fedow_config: FedowConfig = fedow_config
+        if fedow_config is None:
+            self.config = FedowConfig.get_solo()
+
+    def create_fed(self, user=None, asset=None, place_added_uuid=None, place_origin_uuid=None):
+        response_fed = _post(
+            fedow_config=self.fedow_config,
+            user=user,
+            data={
+                "place_origin": f"{place_origin_uuid}",
+                "place_added": f"{place_added_uuid}",
+                "asset": f"{asset.uuid}",
+                "name": f"{asset.name}",
+            },
+            path='federation',
+        )
+        if response_fed.status_code == 200:
+            return response_fed.json()
+
+        logger.error(response_fed.json())
+        raise Exception(response_fed.json())
+
 
 class TransactionFedow():
     def __init__(self, fedow_config: FedowConfig or None = None):
@@ -907,6 +932,7 @@ class FedowAPI():
         self.transaction = TransactionFedow(fedow_config=self.fedow_config)
         self.NFCcard = NFCcardFedow(fedow_config=self.fedow_config)
         self.badge = BadgeFedow(fedow_config=self.fedow_config)
+        self.federation = FederationFedow(fedow_config=self.fedow_config)
 
     def handshake(self):
         pass

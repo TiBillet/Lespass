@@ -19,7 +19,7 @@ def update_sale_if_free_price(ligne_article):
     price: Price = ligne_article.pricesold.price
     paiement_stripe: Paiement_stripe = ligne_article.paiement_stripe
 
-    if price.free_price:
+    if price.free_price and paiement_stripe : # pas de paiement stripe si c'est un ticket généré par l'admin
         logger.info("    START update_sale_if_free_price : mise à jour de la valeur ligne_article.amount")
         # Le montant a été entré dans stripe, on ne l'a pas entré à la création
         stripe.api_key = RootConfiguration.get_solo().get_stripe_api()

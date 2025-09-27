@@ -604,6 +604,7 @@ class Configuration(SingletonModel):
     ### FEDERATION
     """
 
+    #TODO: A virer, géré par une autre table
     federated_with = models.ManyToManyField(Client,
                                             blank=True,
                                             verbose_name=_("Federated with"),
@@ -1459,7 +1460,7 @@ class PriceSold(models.Model):
 
     def __str__(self):
         if self.productsold.event:
-            str_name = f"{self.productsold.event.name} - {self.price.name}"
+            str_name = f"{self.productsold.event.datetime.strftime('%d/%m')} - {self.productsold.event.name} - {self.price.name}"
         else:
             str_name = self.price.name
 

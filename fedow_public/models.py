@@ -4,7 +4,6 @@ from django.db.models import UniqueConstraint, Q
 from django.utils.translation import gettext_lazy as _
 
 
-
 class AssetFedowPublic(models.Model):
     """
     Le nouveau model fédéré d'asset
@@ -18,7 +17,8 @@ class AssetFedowPublic(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     wallet_origin = models.ForeignKey('AuthBillet.Wallet', on_delete=models.PROTECT, related_name='assets_fedow_public')
-    origin = models.ForeignKey('Customers.Client', on_delete=models.CASCADE, related_name="assets_fedow_public") # La bonne relation a utiliser au lieu des deux précédents, relicats de la migration
+    origin = models.ForeignKey('Customers.Client', on_delete=models.CASCADE,
+                               related_name="assets_fedow_public")  # La bonne relation a utiliser au lieu des deux précédents, relicats de la migration
 
     STRIPE_FED_FIAT = 'FED'
     TOKEN_LOCAL_FIAT = 'TLF'
@@ -43,8 +43,19 @@ class AssetFedowPublic(models.Model):
         choices=CATEGORIES
     )
 
-    federated_with = models.ManyToManyField('Customers.Client', related_name="federated_assets_fedow_public", blank=True)
-    pending_invitations = models.ManyToManyField('Customers.Client', related_name="pending_invitations_fedow_public", blank=True)
+    pending_invitations = models.ManyToManyField('Customers.Client', related_name="pending_invitations_fedow_public",
+                                                 blank=True,
+                                                 verbose_name=_("Partager cet actif"),
+                                                 help_text=_(
+                                                     "Invitez une organisation à partager cet actif, il recevra un mail de confirmation. Une fois validé, l'actif disparaitra de cette liste pour aller dans celle ci dessous"),
+                                                 )
+    federated_with = models.ManyToManyField('Customers.Client', related_name="federated_assets_fedow_public",
+                                            verbose_name=_("Lieux fédérés"),
+                                            help_text=_("Lieux fédérés"),
+                                            blank=True)
+
+    def __str__(self):
+        return self.name
 
     class Meta:
         # Only one can be true :
