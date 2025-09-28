@@ -1,8 +1,10 @@
 # import os
+import calendar
 import json
 import logging
 import uuid
-from datetime import timedelta, datetime
+from calendar import month
+from datetime import timedelta, datetime, tzinfo
 from decimal import Decimal
 from time import localtime
 from uuid import uuid4
@@ -363,6 +365,10 @@ class Configuration(SingletonModel):
                                       choices=TZ_CHOICES,
                                       verbose_name=_("Timezone"),
                                       )
+
+    def get_tzinfo(self):
+        return pytz.timezone(self.fuseau_horaire)
+
     FRENCH, ENGLISH = 'fr', 'en'
     LANGUAGE_CHOICES = [
         (FRENCH, _('French')),
@@ -408,6 +414,9 @@ class Configuration(SingletonModel):
             }
         else:
             return []
+
+    def full_url(self):
+        return f"https://{connection.tenant.get_primary_domain().domain}/"
 
     """
     ######### OPTION GENERALES #########
@@ -595,6 +604,7 @@ class Configuration(SingletonModel):
     ### FEDERATION
     """
 
+    #TODO: A virer, géré par une autre table
     federated_with = models.ManyToManyField(Client,
                                             blank=True,
                                             verbose_name=_("Federated with"),
@@ -734,8 +744,6 @@ class Product(models.Model):
     #                                        help_text="Produit checké par le serveur cashless.",
     #                                        )
 
-
-
     def fedow_category(self):
         self_category_map = {
             self.ADHESION: 'SUB',
@@ -766,9 +774,8 @@ def post_save_Product(sender, instance: Product, created, **kwargs):
         instance.save()
 
     if instance.categorie_article == Product.FREERES:
-        try:
-            Price.objects.get(product=instance, prix=0, publish=True)
-        except Price.DoesNotExist:
+        # On est sur un produit a réservation gratuite, on fabrique le price s'il n'existe pas ou s'il n'a pas été archivé
+        if not Price.objects.filter(product=instance, prix=0).exists():
             Price.objects.create(product=instance, name="Tarif gratuit", prix=0, publish=True)
 
 
@@ -825,12 +832,16 @@ class Price(models.Model):
                                                  "Rate available to suscribers only: "),
                                              blank=True, null=True)
 
-    NA, YEAR, MONTH, DAY, HOUR, CIVIL, SCHOLAR = 'N', 'Y', 'M', 'D', 'H', 'C', 'S'
+    NA, YEAR, MONTH = 'N', 'Y', 'M'
+    CAL_MONTH, DAY, HOUR = 'O', 'D', 'H'
+    WEEK, CIVIL, SCHOLAR = 'W', 'C', 'S'
     SUB_CHOICES = [
         (NA, _('Non applicable')),
         (HOUR, _('1 hour')),
         (DAY, _('1 day')),
-        (MONTH, _('30 days')),
+        (WEEK, _('1 week')),
+        (MONTH, _('1 Month')),
+        (CAL_MONTH, _('1st of the month')),
         (YEAR, _("365 days")),
         (CIVIL, _('Calendar year : 1st of January')),
         (SCHOLAR, _('School year: 1st of September')),
@@ -843,10 +854,19 @@ class Price(models.Model):
                                          )
 
     recurring_payment = models.BooleanField(default=False,
-                                            verbose_name="Monthly fee",
-                                            help_text="Monthly payment through Stripe, "
-                                                      "limited to one product at checkout.",
+                                            verbose_name=_("Recurring payment"),
+                                            help_text=_(
+                                                "Monthly payment through Stripe, limited to one product at checkout."),
                                             )
+    iteration = models.PositiveSmallIntegerField(blank=True, null=True,
+                                                 verbose_name=_("Max number of recurrences"),
+                                                 help_text=_(
+                                                     "A rate with a monthly period and iterations=2 will last two months with two payments: one on day D and another the following month."))
+
+    manual_validation = models.BooleanField(default=False,
+                                            verbose_name=_("Need manual validation"),
+                                            help_text=_(
+                                                "If selected, an administrator will have to manually approve the membership before sending the payment link by email. An email will be sent to the administration address."))
 
     # Fedow reward after successful payment (membership products first)
     fedow_reward_enabled = models.BooleanField(
@@ -854,18 +874,20 @@ class Price(models.Model):
         verbose_name=_("Top-up user wallet on payment (Fedow)"),
         help_text=_("If enabled, after a successful payment, the user wallet will receive tokens."),
     )
-    fedow_reward_asset = models.ForeignKey("fedow_connect.Asset", on_delete=models.SET_NULL,
-        blank=True,
-        null=True,
-        verbose_name=_("Fedow Asset"),
-        help_text=_("Asset to send from the place to the user wallet."),
-    )
+
+    fedow_reward_asset = models.ForeignKey("fedow_public.AssetFedowPublic", on_delete=models.SET_NULL,
+                                           blank=True,
+                                           null=True,
+                                           verbose_name=_("Fedow Asset"),
+                                           help_text=_("Asset to send from the place to the user wallet."),
+                                           )
+
     fedow_reward_amount = models.DecimalField(max_digits=10, decimal_places=2,
-        blank=True,
-        null=True,
-        verbose_name=_("Token amount to send"),
-        help_text=_("Raw token amount."),
-    )
+                                              blank=True,
+                                              null=True,
+                                              verbose_name=_("Token amount to send"),
+                                              help_text=_("Raw token amount."),
+                                              )
 
     # def range_max(self):
     #     return range(self.max_per_user + 1)
@@ -883,6 +905,11 @@ class Price(models.Model):
         ordering = ('order',)
         verbose_name = _('Rate')
         verbose_name_plural = _('Rates')
+
+    def save(self, *args, **kwargs):
+        if self.recurring_payment:
+            self.max_per_user = 1
+        super().save(*args, **kwargs)
 
 
 class Event(models.Model):
@@ -1432,7 +1459,7 @@ class PriceSold(models.Model):
 
     def __str__(self):
         if self.productsold.event:
-            str_name = f"{self.productsold.event.name} - {self.price.name}"
+            str_name = f"{self.productsold.event.datetime.strftime('%d/%m')} - {self.productsold.event.name} - {self.price.name}"
         else:
             str_name = self.price.name
 
@@ -1455,28 +1482,26 @@ class PriceSold(models.Model):
             product_stripe = self.productsold.get_id_product_stripe(force=True)
 
         data_stripe = {
-            'unit_amount': f"{int(Decimal(self.prix) * 100)}",
-            'currency': "eur",
-            'product': product_stripe,
-            'stripe_account': Configuration.get_solo().get_stripe_connect_account(),
-            'nickname': f"{self.price.name}",
+            "unit_amount": f"{int(Decimal(self.prix) * 100)}",
+            "currency": "eur",
+            "product": product_stripe,
+            "stripe_account": Configuration.get_solo().get_stripe_connect_account(),
+            "nickname": f"{self.price.name}",
         }
 
-        if self.price.subscription_type == Price.MONTH \
-                and self.price.recurring_payment:
-            data_stripe['recurring'] = {
-                "interval": "month",
+        if self.price.recurring_payment:
+            data_stripe["recurring"] = {
                 "interval_count": 1
             }
+            if self.price.subscription_type == Price.DAY:
+                data_stripe["recurring"]["interval"] = "day"
+            elif self.price.subscription_type in [Price.MONTH, Price.CAL_MONTH]:
+                data_stripe["recurring"]["interval"] = "month"
+            elif self.price.subscription_type == Price.YEAR:
+                data_stripe["recurring"]["interval"] = "year"
 
-        elif self.price.subscription_type == Price.YEAR \
-                and self.price.recurring_payment:
-            data_stripe['recurring'] = {
-                "interval": "year",
-                "interval_count": 1
-            }
 
-        if self.price.free_price:
+        elif self.price.free_price:
             data_stripe.pop('unit_amount')
             data_stripe['billing_scheme'] = "per_unit"
             data_stripe['custom_unit_amount'] = {
@@ -1550,6 +1575,7 @@ class Reservation(models.Model):
     #                                 related_name='reservation')
 
     options = models.ManyToManyField(OptionGenerale, blank=True)
+    custom_form = models.JSONField(null=True, blank=True, verbose_name=_('Custom Form'))
 
     class Meta:
         ordering = ('-datetime',)
@@ -2018,9 +2044,17 @@ class Paiement_stripe(models.Model):
             if checkout_session.mode == 'subscription':
                 if bool(checkout_session.subscription):
                     self.subscription = checkout_session.subscription
-                    subscription = stripe.Subscription.retrieve(
-                        checkout_session.subscription,
-                        stripe_account=Configuration.get_solo().get_stripe_connect_account()
+
+                    # subscription = stripe.Subscription.retrieve(
+                    #     checkout_session.subscription,
+                    #     stripe_account=Configuration.get_solo().get_stripe_connect_account()
+                    # )
+
+                    # Ajout des metadata du checkout pour les futur webhook de renouvellement
+                    subscription = stripe.Subscription.modify(
+                        f"{checkout_session.subscription}",
+                        stripe_account=Configuration.get_solo().get_stripe_connect_account(),
+                        metadata=checkout_session.metadata,
                     )
                     self.invoice_stripe = subscription.latest_invoice
 
@@ -2069,6 +2103,7 @@ class LigneArticle(models.Model):
                                       verbose_name=_("Payment method"))
 
     asset = models.UUIDField(blank=True, null=True, verbose_name=_("Asset"))
+
     wallet = models.ForeignKey("AuthBillet.Wallet", blank=True, null=True, on_delete=models.PROTECT,
                                verbose_name=_("Wallet from"))
 
@@ -2196,6 +2231,9 @@ class Membership(models.Model):
     phone = models.CharField(max_length=20, null=True, blank=True)
     commentaire = models.TextField(null=True, blank=True)
 
+    # Dynamic membership form data
+    custom_form = models.JSONField(null=True, blank=True, verbose_name=_('Custom Form'))
+
     CANCELED, AUTO, ONCE, ADMIN, IMPORT, LABOUTIK = 'C', 'A', 'O', 'D', 'I', 'L'
     STATUS_CHOICES = [
         (ADMIN, _("Saved through the admin")),
@@ -2208,6 +2246,19 @@ class Membership(models.Model):
 
     status = models.CharField(max_length=1, choices=STATUS_CHOICES, default=ONCE,
                               verbose_name=_("Origin"))
+
+    ### Pour le cas des adhésions à validation manuelle
+    # need_admin_validation = models.BooleanField(default=False)
+    ADMIN_CANCELED, ADMIN_VALID, ADMIN_WAITING, PAID_BY_USER, NO_ADMIN_VALID = "CA", "VA", "WA", "PA", "AU"
+    STATE_CHOICES = [
+        (ADMIN_CANCELED, _('Cancelled')),
+        (ADMIN_WAITING, _('Waiting for admin validation')),
+        (ADMIN_VALID, _('Confirmed by admin, waiting for payment')),
+        (PAID_BY_USER, _('Paid by user')),
+        (NO_ADMIN_VALID, _('Confirmed by system')),
+    ]
+    state = models.CharField(max_length=2, choices=STATE_CHOICES, default=NO_ADMIN_VALID,
+                             verbose_name=_("State"))
 
     option_generale = models.ManyToManyField(OptionGenerale,
                                              blank=True,
@@ -2246,25 +2297,32 @@ class Membership(models.Model):
 
     def set_deadline(self):
         deadline = None
+        dt = self.last_contribution
+        tenant_tzinfo = Configuration.get_solo().get_tzinfo()
         if self.last_contribution and self.price:
             if self.price.subscription_type == Price.HOUR:
-                deadline = self.last_contribution + timedelta(hours=1)
+                deadline = dt + timedelta(hours=1)
             elif self.price.subscription_type == Price.DAY:
-                deadline = self.last_contribution + timedelta(days=1)
+                deadline = dt + timedelta(days=1)
+            elif self.price.subscription_type == Price.WEEK:
+                deadline = dt + timedelta(weeks=1)
             elif self.price.subscription_type == Price.MONTH:
-                deadline = self.last_contribution + timedelta(days=31)
+                deadline = dt + relativedelta(months=1)
+            elif self.price.subscription_type == Price.CAL_MONTH:  # Valide uniquement jusqu'a la fin du mois en cours
+                last_day = calendar.monthrange(dt.year, dt.month)[1]
+                deadline = datetime(dt.year, dt.month, last_day, 23, 59, 59, 999999, tzinfo=tenant_tzinfo)
             elif self.price.subscription_type == Price.YEAR:
-                deadline = self.last_contribution + timedelta(days=365)
+                deadline = dt + timedelta(days=365)
             elif self.price.subscription_type == Price.CIVIL:
                 # jusqu'au 31 decembre de cette année
-                deadline = datetime.strptime(f'{self.last_contribution.year}-12-31', '%Y-%m-%d')
+                deadline = datetime.strptime(f'{dt.year}-12-31', '%Y-%m-%d')
             elif self.price.subscription_type == Price.SCHOLAR:
                 # Si la date de contribustion est avant septembre, alors on prend l'année de la contribution.
-                if self.last_contribution.month < 9:
-                    deadline = datetime.strptime(f'{self.last_contribution.year}-08-31', '%Y-%m-%d')
+                if dt.month < 9:
+                    deadline = datetime.strptime(f'{dt.year}-08-31', '%Y-%m-%d')
                 # Si elle est après septembre, on prend l'année prochaine
                 else:
-                    deadline = datetime.strptime(f'{self.last_contribution.year + 1}-08-31', '%Y-%m-%d')
+                    deadline = datetime.strptime(f'{dt.year + 1}-08-31', '%Y-%m-%d')
         self.deadline = deadline
         self.save()
         return deadline
@@ -2276,7 +2334,7 @@ class Membership(models.Model):
 
     def is_valid(self):
         if self.get_deadline():
-            if timezone.localtime() < self.deadline:
+            if timezone.localtime() <= self.deadline:
                 return True
         return False
 
@@ -2419,6 +2477,10 @@ class FederatedPlace(models.Model):
     def __str__(self):
         return self.tenant.name
 
+    def save(self, *args, **kwargs):
+        cache.delete(f"federated_places_{connection.tenant.uuid}")
+        super().save(*args, **kwargs)
+
 
 class History(models.Model):
     """
@@ -2514,3 +2576,68 @@ class BrevoConfig(SingletonModel):
     class Meta:
         verbose_name = _('Brevo setting')
         verbose_name_plural = _('Brevo settings')
+
+
+class ProductFormField(models.Model):
+    """Definition de champs dynamiques pour les produits d'adhésion.
+    Ces champs seront affichés dans le formulaire d'adhésion (offcanvas) et
+    les réponses seront stockées dans Membership.custom_form (JSON).
+    """
+
+    class FieldType(models.TextChoices):
+        SHORT_TEXT = 'ST', _('Short text')  # ex: pseudo
+        LONG_TEXT = 'LT', _('Long text')  # ex: description 300 caractères
+        SINGLE_SELECT = 'SS', _('Single select')  # sélecteur solo
+        MULTI_SELECT = 'MS', _('Multiple select')  # sélecteur multiple
+
+    uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
+
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name='form_fields',
+        verbose_name=_('Product')
+    )
+
+    # Identifiant machine lisible de la question/champ (clé utilisée dans le JSON Membership.custom_form)
+    name = models.SlugField(max_length=64, verbose_name=_('Key'), help_text=_('Unique per product'), editable=False)
+
+    # Libellé affiché à l’utilisateur
+    label = models.CharField(max_length=255, verbose_name=_('Label'))
+
+    help_text = models.CharField(max_length=500, blank=True, null=True, verbose_name=_('Help text'))
+    # placeholder = models.CharField(max_length=255, blank=True, null=True, verbose_name=_('Placeholder'))
+
+    field_type = models.CharField(max_length=2, choices=FieldType.choices, verbose_name=_('Field type'))
+    required = models.BooleanField(default=False, verbose_name=_('Required'))
+
+    # Ordre d’affichage
+    order = models.PositiveSmallIntegerField(default=0, verbose_name=_('Display order'), db_index=True)
+
+    # Pour les champs de type sélecteur: options affichées. Liste de valeurs.
+    # Exemple: ["Rock", "Electro", "Jazz"]
+    options = models.JSONField(blank=True, null=True, verbose_name=_('Options'))
+
+    class Meta:
+        ordering = ('order', 'uuid')
+        verbose_name = _('Dynamic form field')
+        verbose_name_plural = _('Dynamic form fields')
+        constraints = [
+            models.UniqueConstraint(fields=['product', 'name'], name='uniq_product_formfield_key')
+        ]
+
+    def __str__(self):
+        return f"{self.product} • {self.label}"
+
+    def save(self, *args, **kwargs):
+        # Always derive the machine key from the label, unique per product
+        base = slugify(self.label or "")[:64] if self.label else ""
+        candidate = base or "field"
+        suffix = 1
+        # Ensure uniqueness per product by appending -2, -3 ... if needed
+        while ProductFormField.objects.filter(product=self.product, name=candidate).exclude(pk=self.pk).exists():
+            suffix += 1
+            tail = f"-{suffix}"
+            candidate = f"{base}{tail}"[:64]
+        self.name = candidate
+        super().save(*args, **kwargs)

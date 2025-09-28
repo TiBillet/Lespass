@@ -6,6 +6,8 @@
     }
 </style>
 
+
+
 <form id="reservation_form" hx-post="reservation/" class="d-flex flex-column justify-content-between h-100">
     <div>
         <input type="hidden" name="event" value="{{ event.uuid }}">
@@ -138,6 +140,70 @@
                 </label>
             </div>
         {% endfor %}
+
+        {# Dynamic product form fields (same method as membership form) #}
+        {% with products=event.products.all %}
+            {% for product in products %}
+                {% with fields=product.form_fields.all %}
+                    {% if fields %}
+                        <hr>
+                        {% if products|length > 1 %}
+                            <h5 class="h6 mb-2">{{ product.name }}</h5>
+                        {% endif %}
+                        <h4 class="h5 mb-3">{% translate "Additional information" %}</h4>
+                        {% for field in fields %}
+                            {% if field.field_type == 'ST' %}
+                                <div class="mb-3">
+                                    <label class="form-label" for="ff-{{ field.uuid }}">{{ field.label }}</label>
+                                    <input id="ff-{{ field.uuid }}" name="form__{{ field.name }}" type="text" class="form-control"
+                                           placeholder="{{ field.placeholder|default:field.label }}" {% if field.required %}required{% endif %}>
+                                    {% if field.help_text %}
+                                        <div class="form-text">{{ field.help_text }}</div>
+                                    {% endif %}
+                                </div>
+                            {% elif field.field_type == 'LT' %}
+                                <div class="mb-3">
+                                    <label class="form-label" for="ff-{{ field.uuid }}">{{ field.label }}</label>
+                                    <textarea id="ff-{{ field.uuid }}" name="form__{{ field.name }}" class="form-control" style="height: 120px"
+                                              placeholder="{{ field.placeholder|default:field.label }}" {% if field.required %}required{% endif %}></textarea>
+                                    {% if field.help_text %}
+                                        <div class="form-text">{{ field.help_text }}</div>
+                                    {% endif %}
+                                </div>
+                            {% elif field.field_type == 'SS' %}
+                                <div class="mb-3">
+                                    <label class="form-label" for="ff-{{ field.uuid }}">{{ field.label }}</label>
+                                    <select id="ff-{{ field.uuid }}" name="form__{{ field.name }}" class="form-select" {% if field.required %}required{% endif %}>
+                                        <option value="" {% if field.required %}disabled selected{% endif %}>—</option>
+                                        {% for opt in field.options %}
+                                            <option value="{{ opt }}">{{ opt }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    {% if field.help_text %}
+                                        <div class="form-text">{{ field.help_text }}</div>
+                                    {% endif %}
+                                </div>
+                            {% elif field.field_type == 'MS' %}
+                                <div class="mb-3">
+                                    <div class="form-label">{{ field.label }}</div>
+                                    {% for opt in field.options %}
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="ff-{{ field.uuid }}-{{ forloop.counter }}"
+                                                   name="form__{{ field.name }}" value="{{ opt }}">
+                                            <label class="form-check-label" for="ff-{{ field.uuid }}-{{ forloop.counter }}">{{ opt }}</label>
+                                        </div>
+                                    {% endfor %}
+                                    {% if field.help_text %}
+                                        <div class="form-text">{{ field.help_text }}</div>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+            {% endfor %}
+        {% endwith %}
+
         <h4>
             {% trans 'Total&nbsp;:' %} <span class="js-total-amount">0</span> {% trans 'ticket(s)' %}
             <span class="js-total-has-price">
@@ -163,6 +229,33 @@
     import * as Spinner from '{% static "reunion/js/form-spinner.mjs" %}'
 
     // show spinner on form submission
-    Spinner.init(document.getElementById('reservation_form'))
+    const form = document.getElementById('reservation_form')
+    Spinner.init(form)
     BookingCalculator.init()
+
+    // Prevent HTMX request if no quantity selected (> 0 required)
+    form.addEventListener('htmx:configRequest', (event) => {
+        try {
+            const totalEl = document.querySelector('.js-total-amount')
+            const total = parseInt((totalEl?.textContent || '0').replace(/\D+/g, ''), 10) || 0
+            if (total <= 0) {
+                event.preventDefault()
+                // Show a simple inline error (Bootstrap alert if available)
+                let err = document.getElementById('booking-form-error')
+                if (!err) {
+                    err = document.createElement('div')
+                    err.id = 'booking-form-error'
+                    err.className = 'alert alert-danger mt-2'
+                    // Insert the error right above the submit buttons
+                    const footer = form.querySelector('.p-3')
+                    ;(footer?.parentElement || form).insertBefore(err, footer || null)
+                }
+                err.textContent = "Veuillez sélectionner au moins 1 billet avant d'envoyer la demande."
+                // Also scroll into view for visibility
+                err.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            }
+        } catch (e) {
+            // Fail open: if any unexpected error occurs, do not block the request
+        }
+    })
 </script>

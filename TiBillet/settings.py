@@ -36,7 +36,7 @@ DEBUG = os.environ.get('DEBUG') == '1'
 TEST = os.environ.get('TEST') == '1'
 
 # Age of cookie, in seconds (default: 2 weeks).
-SESSION_COOKIE_AGE = 60 * 60 * 24 * 7 * 12 # 12 weeks (3 month)
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 7 * 12  # 12 weeks (3 month)
 
 # TODO montrer ça à Sham
 # Mecanisme qui permet d'etre loggue sur toute les instances tibillet multi tenant
@@ -85,7 +85,6 @@ if os.environ.get('ADDITIONAL_DOMAINS'):
         ALLOWED_HOSTS.append(f'.{domain}')
         CSRF_TRUSTED_ORIGINS.append(f'https://{domain}')
         CSRF_TRUSTED_ORIGINS.append(f'https://*.{domain}')
-
 
 # CORS_ORIGIN_WHITELIST = CSRF_TRUSTED_ORIGINS
 CORS_ORIGIN_WHITELIST = CSRF_TRUSTED_ORIGINS + ['http://localhost', ]
@@ -143,6 +142,7 @@ SHARED_APPS = (
     'MetaBillet',
     'root_billet',
     'wsocket',
+    'fedow_public',
 
     'django_extensions',
     'solo',
@@ -189,7 +189,7 @@ CACHES = {
         'REVERSE_KEY_FUNCTION': 'django_tenants.cache.reverse_key',
     }
 }
-SOLO_CACHE='default'
+SOLO_CACHE = 'default'
 TENANT_LIMIT_SET_CALLS = True
 
 MIDDLEWARE = [
@@ -336,7 +336,6 @@ LOCALE_PATHS = (
     os.path.join(BASE_DIR, 'locale'),
 )
 
-
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/3.1/howto/static-files/
 
@@ -461,7 +460,7 @@ UNFOLD = {
     # "ENVIRONMENT_TITLE_PREFIX": "sample_app.environment_title_prefix_callback",  # environment name prefix in title tag
     "ENVIRONMENT": "Administration.admin_tenant.environment_callback",  # environment name in header
     "DASHBOARD_CALLBACK": "Administration.admin_tenant.dashboard_callback",
-    "SHOW_HISTORY": False, # show/hide "History" button, default: True
+    "SHOW_HISTORY": False,  # show/hide "History" button, default: True
     "SITE_TITLE": "TiBillet",
     "SITE_HEADER": _("TiBillet / Lèspass admin panel"),
     "SITE_DROPDOWN": [
@@ -524,13 +523,13 @@ UNFOLD = {
     ],
     "SIDEBAR": {
         "show_search": True,  # Search in applications and models names
-        "show_all_applications": True,  # Dropdown with all applications and models
+        "show_all_applications": False,  # Dropdown with all applications and models
         "navigation": [
 
             {
                 "title": _("Global information"),
                 "separator": True,  # Top border
-                "collapsible": False,  # Collapsible group of links
+                "collapsible": True,  # Collapsible group of links
                 "items": [
                     {
                         "title": _("Dashboard"),
@@ -547,13 +546,6 @@ UNFOLD = {
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
                     },
                     {
-                        "title": _("Federation"),
-                        "icon": "linked_services",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:BaseBillet_federatedplace_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-                    },
-                    {
                         "title": _("Carousel"),
                         "icon": "photo_library",
                         "link": reverse_lazy("staff_admin:BaseBillet_carrousel_changelist"),
@@ -564,7 +556,7 @@ UNFOLD = {
             {
                 "title": _("Users"),
                 "separator": True,  # Top border
-                "collapsible": False,  # Collapsible group of links
+                "collapsible": True,  # Collapsible group of links
                 "items": [
                     {
                         "title": _("User accounts"),
@@ -585,7 +577,7 @@ UNFOLD = {
             {
                 "title": _("Products"),
                 "separator": True,  # Top border
-                "collapsible": False,  # Collapsible group of links
+                "collapsible": True,  # Collapsible group of links
                 "items": [
                     {
                         "title": _("Products"),
@@ -615,7 +607,7 @@ UNFOLD = {
             {
                 "title": _("Ticketing"),
                 "separator": True,  # Top border
-                "collapsible": False,  # Collapsible group of links
+                "collapsible": True,  # Collapsible group of links
                 "items": [
                     {
                         "title": _("Addresses"),
@@ -659,7 +651,7 @@ UNFOLD = {
             {
                 "title": _("Sales"),
                 "separator": True,  # Top border
-                "collapsible": False,  # Collapsible group of links
+                "collapsible": True,  # Collapsible group of links
                 "items": [
                     {
                         "title": _("Entries"),
@@ -681,9 +673,29 @@ UNFOLD = {
                 ],
             },
             {
+                "title": _("Fédération"),
+                "separator": True,  # Top border
+                "collapsible": True,  # Collapsible group of links
+                "items": [
+                    {
+                        "title": _("Espaces"),
+                        "icon": "linked_services",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_federatedplace_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+                    },
+                    {
+                        "title": _("Assets"),
+                        "icon": "currency_exchange",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:fedow_public_assetfedowpublic_changelist"),
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+                    },
+                ],
+            },
+            {
                 "title": _("External tools"),
                 "separator": True,  # Top border
-                "collapsible": False,  # Collapsible group of links
+                "collapsible": True,  # Collapsible group of links
                 "items": [
 
                     {
@@ -731,10 +743,11 @@ UNFOLD = {
                     # },
                 ],
             },
+
             {
                 "title": _("Root Configuration"),
                 "separator": True,  # Top border
-                "collapsible": False,  # Collapsible group of links
+                "collapsible": True,  # Collapsible group of links
                 "items": [
                     {
                         "title": _("Waiting Configuration"),

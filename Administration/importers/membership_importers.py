@@ -1,3 +1,4 @@
+import json
 from django.core.exceptions import MultipleObjectsReturned
 from django.utils.translation import gettext_lazy as _
 from import_export import resources, fields
@@ -47,6 +48,23 @@ class OptionsManyToManyWidgetWidget(ManyToManyWidget):
             return objs
 
 
+class JSONKeyField(Field):
+    """A Field that exports a value from Membership.custom_form for a given key."""
+    def __init__(self, key: str, column_name: str = None):
+        # attribute isn't used for value extraction; keep None
+        super().__init__(column_name=column_name or key)
+        self.key = key
+
+    def get_value(self, obj):
+        data = getattr(obj, 'custom_form', None)
+        if isinstance(data, dict):
+            value = data.get(self.key)
+            if isinstance(value, (dict, list)):
+                return json.dumps(value, ensure_ascii=False)
+            return value
+        return None
+
+
 class MembershipExportResource(resources.ModelResource):
     email = Field(attribute='user__email', column_name='email')
     member_name = Field(attribute='member_name', column_name='member_name')
@@ -55,6 +73,44 @@ class MembershipExportResource(resources.ModelResource):
     payment_method_name = Field(attribute='payment_method_name', column_name='payment_method_name')
     options = Field(attribute='options', column_name='options')
     status_name = Field(attribute='status_name', column_name='status_name')
+
+    def before_export(self, queryset, *args, **kwargs):
+        # Collect all keys from custom_form JSON across queryset
+        keys = set()
+        for obj in queryset:
+            data = getattr(obj, 'custom_form', None)
+            if isinstance(data, dict):
+                for k in data.keys():
+                    if k is not None:
+                        keys.add(str(k))
+        # Store sorted keys for deterministic column order
+        self._custom_form_keys = sorted(keys)
+
+    def get_export_fields(self, *args, **kwargs):
+        base_fields = super().get_export_fields(*args, **kwargs)
+        # Avoid duplicates by column name
+        existing = set()
+        for f in base_fields:
+            name = getattr(f, 'column_name', None) or getattr(f, 'attribute', None)
+            if name:
+                existing.add(str(name))
+        dynamic_fields = []
+        for key in getattr(self, '_custom_form_keys', []):
+            if key not in existing:
+                dynamic_fields.append(JSONKeyField(key=key, column_name=key))
+        return base_fields + dynamic_fields
+
+    def get_export_headers(self, selected_fields=None, *args, **kwargs):
+        # Build headers directly from field column names to support dynamic fields
+        fields = selected_fields or self.get_export_fields(*args, **kwargs)
+        return [f.column_name for f in fields]
+
+    def get_field_name(self, field):
+        # Gracefully handle dynamically generated JSONKeyField instances
+        if isinstance(field, JSONKeyField):
+            # Use the column_name as the header/name for JSON dynamic fields
+            return field.column_name
+        return super().get_field_name(field)
 
     class Meta:
         model = Membership

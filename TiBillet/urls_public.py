@@ -1,8 +1,7 @@
 from django.conf.urls.static import static
 from django.urls import path, include, re_path
-# from Administration.admin_root import root_admin_site
 from ApiBillet.views import Webhook_stripe
-from TiBillet import settings
+from django.conf import settings
 
 urlpatterns = [
 

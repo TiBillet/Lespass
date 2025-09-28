@@ -5,6 +5,8 @@
         {{ active|intcomma }}
     {% elif type == 'inactive' %}
         {{ inactive|intcomma }}
+    {% elif type == 'pending' %}
+        {{ pending|intcomma }}
     {% endif %}
 
     <span class="flex flex-row gap-1 items-center font-normal text-sm tracking-tight {% if progress == "positive" %}text-green-700 dark:text-green-400{% elif progress == "negative" %}text-red-700 dark:text-red-400{% endif %}">

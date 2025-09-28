@@ -19,7 +19,7 @@ def update_sale_if_free_price(ligne_article):
     price: Price = ligne_article.pricesold.price
     paiement_stripe: Paiement_stripe = ligne_article.paiement_stripe
 
-    if price.free_price:
+    if price.free_price and paiement_stripe : # pas de paiement stripe si c'est un ticket généré par l'admin
         logger.info("    START update_sale_if_free_price : mise à jour de la valeur ligne_article.amount")
         # Le montant a été entré dans stripe, on ne l'a pas entré à la création
         stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
@@ -35,8 +35,11 @@ def update_sale_if_free_price(ligne_article):
     return ligne_article
 
 def update_membership_state_after_stripe_paiement(ligne_article):
-    paiement_stripe = ligne_article.paiement_stripe
+
+    paiement_stripe: Paiement_stripe = ligne_article.paiement_stripe
     membership: Membership = paiement_stripe.membership.first()
+    if not membership:
+        membership = ligne_article.membership
 
     price: Price = ligne_article.pricesold.price
     membership.contribution_value = ligne_article.pricesold.prix

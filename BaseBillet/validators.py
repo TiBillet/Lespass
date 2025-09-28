@@ -1,10 +1,5 @@
 import logging
-import os
-import re
-import uuid
 from datetime import timedelta
-from decimal import Decimal
-from itertools import product
 
 import stripe
 from django.conf import settings
@@ -15,13 +10,12 @@ from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 from django_tenants.utils import tenant_context, schema_context
 from rest_framework import serializers
-from rest_framework.generics import get_object_or_404
 
-from ApiBillet.serializers import get_or_create_price_sold, dec_to_int, create_ticket
+from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
 from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Price, Product, OptionGenerale, Membership, Paiement_stripe, LigneArticle, Tag, Event, \
-    Reservation, PriceSold, Ticket, ProductSold, Configuration
+    Reservation, PriceSold, Ticket, ProductSold, Configuration, ProductFormField
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from PaiementStripe.views import CreationPaiementStripe
@@ -384,10 +378,53 @@ class ReservationValidator(serializers.Serializer):
             price: Price = price_object['price']
         """
 
+        # Collect dynamic custom form fields from request (names prefixed with 'form__')
+        request = self.context.get('request')
+        req_data = request.data if request is not None else self.initial_data
+
+        # Build map of expected dynamic fields across all selected products
+        custom_form = {}
+        try:
+            selected_products = list(products_dict.keys())
+            product_fields_qs = ProductFormField.objects.filter(product__in=selected_products)
+            product_fields = {ff.name: ff for ff in product_fields_qs}
+        except Exception:
+            product_fields = {}
+
+        for name, ff in product_fields.items():
+            key = f"form__{name}"
+            if hasattr(req_data, 'getlist') and ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
+                value = req_data.getlist(key)
+            else:
+                value = req_data.get(key)
+                if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
+                    if value in [None, '']:
+                        value = []
+                    elif not isinstance(value, list):
+                        value = [value]
+
+            # Enforce required
+            if ff.required:
+                if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
+                    if not value:
+                        raise serializers.ValidationError({key: [_('This field is required.')]})
+                else:
+                    if value in [None, '']:
+                        raise serializers.ValidationError({key: [_('This field is required.')]})
+
+            # Only store non-empty values
+            if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
+                if value:
+                    custom_form[name] = value
+            else:
+                if value not in [None, '']:
+                    custom_form[name] = value
+
         # On fabrique l'objet reservation
         reservation = Reservation.objects.create(
             user_commande=user,
             event=event,
+            custom_form=custom_form or None,
         )
 
         if options:
@@ -409,6 +446,9 @@ class ReservationValidator(serializers.Serializer):
 
 
 class MembershipValidator(serializers.Serializer):
+    """
+    Validator reclamé lors de la réclamation d'une adhésion depuis le front Lespass
+    """
     acknowledge = serializers.BooleanField()
     price = serializers.PrimaryKeyRelatedField(
         queryset=Price.objects.filter(product__categorie_article=Product.ADHESION)
@@ -424,19 +464,23 @@ class MembershipValidator(serializers.Serializer):
     newsletter = serializers.BooleanField()
 
 
-    def get_checkout_stripe(self):
+    @staticmethod
+    def get_checkout_stripe(membership: Membership):
         # Fiche membre créée, si price payant, on crée le checkout stripe :
-        membership: Membership = self.membership
         price: Price = membership.price
         user: TibilletUser = membership.user
-        tenant = connection.tenant
+        tenant: Client = connection.tenant
 
+        # besoin pour le retour webhook classique et renouvellement abonnement : ApiBillet.views.Webhook_stripe.post
         metadata = {
             'tenant': f'{tenant.uuid}',
-            'price': f"{price.pk}",
-            'membership': f"{membership.pk}",
-            'user': f"{user.pk}",
+            'tenant_name': f'{tenant.name}',
+            'price_uuid': f"{price.uuid}",
+            'product_price_name': f"{membership.price.product.name} {membership.price.name}",
+            'membership_uuid': f"{membership.uuid}",
+            'user': f"{user.email}",
         }
+
         ligne_article_adhesion = LigneArticle.objects.create(
             pricesold=get_or_create_price_sold(price),
             membership=membership,
@@ -494,10 +538,55 @@ class MembershipValidator(serializers.Serializer):
         if options:
             membership.option_generale.set(attrs['options'])
 
+        # Collect dynamic custom form fields from request (names prefixed with 'form__')
+        request = self.context.get('request')
+        req_data = request.data if request else {}
+
+        # Build a map of expected fields for this product to validate types/required
+        custom_form = {}
+        try:
+            product = self.price.product
+            product_fields = {ff.name: ff for ff in ProductFormField.objects.filter(product=product)}
+        except Exception:
+            product_fields = {}
+
+        for name, ff in product_fields.items():
+            key = f"form__{name}"
+            value = None
+            if hasattr(req_data, 'getlist') and ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
+                value = req_data.getlist(key)
+            else:
+                value = req_data.get(key)
+                # If MULTI_SELECT but parser gave a scalar, normalize to list
+                if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
+                    if value in [None, '']:
+                        value = []
+                    elif not isinstance(value, list):
+                        value = [value]
+
+            # Enforce required
+            if ff.required:
+                if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
+                    if not value:
+                        raise serializers.ValidationError({key: [_('This field is required.')]})
+                else:
+                    if value in [None, '']:
+                        raise serializers.ValidationError({key: [_('This field is required.')]})
+
+            # Only store non-empty values
+            if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
+                if value:
+                    custom_form[name] = value
+            else:
+                if value not in [None, '']:
+                    custom_form[name] = value
+
+        membership.custom_form = custom_form or None
+
         membership.save()
         self.membership = membership
         # Création du lien de paiement
-        self.checkout_stripe_url = self.get_checkout_stripe()
+        self.checkout_stripe_url = self.get_checkout_stripe(membership)
 
         return attrs
 

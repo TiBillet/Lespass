@@ -8,12 +8,15 @@ import pytz
 import stripe
 from cryptography.fernet import Fernet
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
+
 from django.db import connection
 from django.http import Http404, HttpResponse
+from django.template.loader import render_to_string
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django_tenants.utils import tenant_context
-from rest_framework import viewsets, permissions, status
+from django_tenants.utils import tenant_context, schema_context
+from rest_framework import viewsets, permissions, status, serializers
 from rest_framework.decorators import permission_classes, action
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
@@ -32,6 +35,7 @@ from BaseBillet.models import Event, Price, Product, Reservation, Configuration,
     OptionGenerale, Membership
 from BaseBillet.tasks import create_ticket_pdf, send_stripe_bank_deposit_to_laboutik
 from Customers.models import Client
+from PaiementStripe.views import new_entry_from_stripe_subscription_invoice
 from TiBillet import settings
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.utils import rsa_decrypt_string, rsa_encrypt_string, get_public_key, data_to_b64
@@ -484,30 +488,110 @@ def borne_temps_4h():
         return debut_jour, lendemain_quatre_heure
 
 
-@permission_classes([permissions.IsAuthenticated])
+class CancelSubscriptionInput(serializers.Serializer):
+    uuid_membership = serializers.UUIDField(required=True)
+
+
 class CancelSubscription(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
     def post(self, request):
         user = request.user
-        price = request.data.get('uuid_price')
+        is_htmx = request.headers.get('HX-Request') == 'true'
+        # Important: we must use the membership UUID here rather than the price UUID.
+        # Rationale:
+        # - A parent can purchase multiple memberships for several children under the same price.
+        #   In that scenario, (user, price) is not unique and cannot safely target a single record.
+        # - Exposing membership.uuid is acceptable in this context and avoids ambiguity.
+        # - We still enforce ownership by looking up the membership by (uuid, user).
+        validator = CancelSubscriptionInput(data=request.data)
+        if not validator.is_valid():
+            if is_htmx:
+                # Can't render a specific card without a valid UUID → keep JSON error
+                return HttpResponse(render_to_string(
+                    'reunion/views/account/membership/membership_card.html',
+                    {
+                        # no membership to render; return a minimal error block instead
+                        'message_error': _('Invalid request.'),
+                        'membership': None,
+                    }
+                ), status=400)
+            return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
+        membership_uuid = validator.validated_data['uuid_membership']
 
-        membership = Membership.objects.get(
-            user=user,
-            price=price
-        )
+        membership = None
+        try:
+            membership = Membership.objects.get(uuid=membership_uuid, user=user)
+        except Membership.DoesNotExist:
+            if is_htmx:
+                # Without membership, we cannot render its card; return a small alert
+                html = f"""
+                <div class=\"alert alert-danger\" role=\"alert\">{_('Subscription not found for this user')}</div>
+                """
+                return HttpResponse(html, status=404)
+            return Response(_('Subscription not found for this user'), status=status.HTTP_404_NOT_FOUND)
 
-        if membership.status == Membership.AUTO:
-            stripe.api_key = Configuration.get_solo().get_stripe_api()
-            stripe.Subscription.delete(
+        if membership.status != Membership.AUTO:
+            if is_htmx:
+                html = render_to_string('reunion/views/account/membership/membership_card.html', {
+                    'membership': membership,
+                    'message_error': _('No automatic renewal on this.'),
+                })
+                return HttpResponse(html, status=200)
+            return Response(_('No automatic renewal on this.'), status=status.HTTP_406_NOT_ACCEPTABLE)
+
+        if not membership.stripe_id_subscription:
+            if is_htmx:
+                html = render_to_string('reunion/views/account/membership/membership_card.html', {
+                    'membership': membership,
+                    'message_error': _('Stripe subscription ID missing'),
+                })
+                return HttpResponse(html, status=200)
+            return Response(_('Stripe subscription ID missing'), status=status.HTTP_409_CONFLICT)
+
+        # Use Stripe best practice: cancel at period end instead of immediate deletion
+        try:
+            stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+            # If using Connect in other places, add account param here as needed.
+            sub = stripe.Subscription.modify(
                 membership.stripe_id_subscription,
-                # stripe_account=config.get_stripe_connect_account(),
+                cancel_at_period_end=True,
+                stripe_account=Configuration.get_solo().get_stripe_connect_account(),
             )
-            membership.status = Membership.CANCELED
-            membership.save()
+        except stripe.error.InvalidRequestError as e:
+            logging.getLogger(__name__).exception("Stripe InvalidRequestError while canceling subscription")
+            if is_htmx:
+                html = render_to_string('reunion/views/account/membership/membership_card.html', {
+                    'membership': membership,
+                    'message_error': _('Stripe error'),
+                })
+                return HttpResponse(html, status=200)
+            return Response({'detail': _('Stripe error'), 'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logging.getLogger(__name__).exception("Unexpected error while canceling subscription")
+            if is_htmx:
+                html = render_to_string('reunion/views/account/membership/membership_card.html', {
+                    'membership': membership,
+                    'message_error': _('Unexpected error'),
+                })
+                return HttpResponse(html, status=200)
+            return Response({'detail': _('Unexpected error'), 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            # TODO: envoyer un mail de confirmation d'annulation
-            return Response(_('Automatic renewal turned off.'), status=status.HTTP_200_OK)
+        # Mark as canceled (no more auto-renew). Keep benefits until period end.
+        membership.status = Membership.CANCELED
+        membership.save(update_fields=['status', 'last_action'])
 
-        return Response(_('No automatic renewal on this.'), status=status.HTTP_406_NOT_ACCEPTABLE)
+        # HTMX response: re-render the updated card with a success message
+        success_message = _('Automatic renewal turned off. Your subscription remains active until the end of the current period.')
+        if is_htmx:
+            html = render_to_string('reunion/views/account/membership/membership_card.html', {
+                'membership': membership,
+                'message_success': success_message,
+            })
+            return HttpResponse(html, status=200)
+
+        # Fallback JSON API response
+        return Response({'detail': str(success_message), 'stripe': {'id': sub.id, 'cancel_at_period_end': sub.cancel_at_period_end}}, status=status.HTTP_200_OK)
 
 
 @permission_classes([TenantAdminApiPermission])
@@ -639,8 +723,6 @@ def paiment_stripe_validator(request, paiement_stripe: Paiement_stripe):
 
     stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
     config = Configuration.get_solo()
-
-    # stripe.api_key = Configuration.get_solo().get_stripe_api()
 
     # SI c'est une source depuis INVOICE,
     # L'object vient d'être créé, on vérifie que la facture stripe
@@ -932,6 +1014,7 @@ class Wallet(viewsets.ViewSet):
         return Response(status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
+
 @permission_classes([permissions.AllowAny])
 class Webhook_stripe(APIView):
 
@@ -940,7 +1023,12 @@ class Webhook_stripe(APIView):
         logger.info(f" ")
         # logger.info(f"Webhook_stripe --> {payload}")
         logger.info(f"Webhook_stripe --> {payload.get('type')} - id : {payload.get('id')}")
-
+        try :
+            payload_object = payload['data']['object']
+            metadata = payload_object['metadata']
+            logger.info(f"Webhook_stripe metadata --> {metadata}")
+        except KeyError:
+            pass
 
         # c'est une requete depuis un webhook stripe
         if payload.get('type') == "checkout.session.completed":
@@ -1044,66 +1132,63 @@ class Webhook_stripe(APIView):
         #     logger.info(f"")
         #     logger.info(f"")
         #
-        # elif payload.get('type') == "invoice.paid":
-        #     # logger.info(f" ")
-        #     # logger.info(payload)
-        #     # logger.info(f" ")
-        #
-        #     logger.info(f"Webhook_stripe invoice.paid : {payload}")
-        #     payload_object = payload['data']['object']
-        #     billing_reason = payload_object.get('billing_reason')
-        #
-        #     # C'est un renouvellement d'abonnement
-        #     if billing_reason == 'subscription_cycle' \
-        #             and payload_object.get('paid'):
-        #
-        #         product_sold_stripe_id = None
-        #         for line in payload_object['lines']['data']:
-        #             product_sold_stripe_id = line['price']['product']
-        #             break
-        #
-        #         # On va chercher le tenant de l'abonnement grâce à l'id du product stripe
-        #         # dans la requete POST
-        #         with schema_context('public'):
-        #             try:
-        #                 product_from_public_tenant = ProductDirectory.objects.get(
-        #                     product_sold_stripe_id=product_sold_stripe_id,
-        #                 )
-        #                 place = product_from_public_tenant.place
-        #             except ProductDirectory.DoesNotExist:
-        #                 logger.error(
-        #                     f"Webhook_stripe invoice.paid DoesNotExist : product_sold_stripe_id {product_sold_stripe_id}, serveur de test ?")
-        #                 return Response(_('ProductDirectory does not exist, test server?'),
-        #                                 status=status.HTTP_204_NO_CONTENT)
-        #
-        #         # On a le tenant ( place ), on va chercher l'abonnement
-        #         with tenant_context(place):
-        #             invoice = payload_object['id']
-        #             try:
-        #                 membership = Membership.objects.get(
-        #                     stripe_id_subscription=payload_object['subscription']
-        #                 )
-        #                 last_stripe_invoice = membership.last_stripe_invoice
-        #
-        #                 # Même adhésion, mais facture différente :
-        #                 # C'est alors un renouvellement automatique.
-        #                 if invoice != last_stripe_invoice:
-        #                     logger.info((f'    nouvelle facture arrivée : {invoice}'))
-        #                     paiement_stripe = new_entry_from_stripe_invoice(membership.user, invoice)
-        #
-        #                     return paiment_stripe_validator(request, paiement_stripe)
-        #
-        #                 else:
-        #                     logger.info((f'    facture déja créée et comptabilisée : {invoice}'))
-        #
-        #             except Membership.DoesNotExist:
-        #                 logger.info((f'    Nouvelle adhésion, facture pas encore comptabilisée : {invoice}'))
-        #             except Exception:
-        #                 logger.error((f'    erreur dans Webhook_stripe customer.subscription.updated : {Exception}'))
-        #                 raise Exception
+
+        elif payload.get('type') == "invoice.paid": # Les abonnements
+            # logger.info(f" ")
+            # logger.info(payload)
+            # logger.info(f" ")
+
+            payload_object = payload['data']['object']
+            billing_reason = payload_object.get('billing_reason')
+
+            # C'est un renouvellement d'abonnement
+            if billing_reason == 'subscription_cycle' \
+                    and payload_object.get('paid'):
+
+                logger.info(f"Webhook_stripe invoice.paid. billing_reason : {billing_reason}")
+                # On va chercher le tenant de l'abonnement grâce au metadata inséré au moment de la création du checktout :
+                # BaseBillet.validators.MembershipValidator.get_checkout_stripe
+                try :
+                    # les metadata ont été généré lors de la création du checkout
+                    metadata = payload_object['subscription_details']['metadata']
+                    logger.info(f"Webhook_stripe metadata --> {metadata}")
+
+                    tenant_uuid = metadata['tenant']
+                    membership_uuid = metadata['membership_uuid']
+                    price_uuid = metadata['price_uuid']
+                    tenant = Client.objects.get(uuid=tenant_uuid)
+                    logger.info(f"Webhook_stripe invoice.paid. tenant : {tenant.name}")
+                    with tenant_context(tenant):
+                        membership = Membership.objects.get(
+                            uuid=membership_uuid,
+                            stripe_id_subscription=payload_object['subscription'],
+                            price__uuid=price_uuid
+                        )
+                        logger.info(f"    get membership : {membership}")
+                        invoice = payload_object['id']
+                        last_stripe_invoice = membership.last_stripe_invoice
+
+                        # Même adhésion, mais facture différente :
+                        # C'est alors un renouvellement automatique.
+                        if invoice != last_stripe_invoice:
+                            logger.info((f'    nouvelle facture arrivée : {invoice}'))
+                            paiement_stripe = new_entry_from_stripe_subscription_invoice(
+                                user=membership.user, id_invoice=invoice, membership=membership)
+
+                            return paiment_stripe_validator(request, paiement_stripe)
+
+                        else:
+                            logger.info((f'    facture déja créée et comptabilisée : {invoice}'))
+
+                except Membership.DoesNotExist:
+                    logger.info((f'    Nouvelle adhésion, facture pas encore comptabilisée : {invoice}'))
+                except Exception:
+                    logger.error((f'    erreur dans Webhook_stripe customer.subscription.updated : {Exception}'))
+                    raise Exception
 
         # Réponse pour l'api stripe qui envoie des webhook pour tout autre que la validation de paiement.
         # Si on renvoie une erreur, ils suppriment le webhook de leur côté.
+        # logger.info(f"Webhook stripe bien reçu, mais aucune action lancée. --> {payload}")
         return Response('Webhook stripe bien reçu, mais aucune action lancée.', status=status.HTTP_207_MULTI_STATUS)
 
     # def get(self, request, uuid_paiement):

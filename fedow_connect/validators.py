@@ -1,9 +1,25 @@
+import logging
+import re
+
+from django.db import connection
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
+from rest_framework.exceptions import ValidationError
+
 from AuthBillet.models import Wallet
 from BaseBillet.models import FedowTransaction
-from fedow_connect.models import Asset
+from Customers.models import Client, Domain
+from fedow_public.models import AssetFedowPublic
 
+logger = logging.getLogger(__name__)
+
+
+def validate_hex8(value):
+    logger.info(value)
+    if value in [None, ""]:
+        return
+    if not re.fullmatch(r'^[0-9A-Fa-f]{8}$', str(value)):
+        raise ValidationError(_("Card number must be exactly 8 hexadecimal characters."))
 
 class PlaceValidator(serializers.Serializer):
     uuid = serializers.UUIDField()
@@ -28,7 +44,7 @@ class AssetValidator(serializers.Serializer):
     place_origin = PlaceValidator(many=False, required=False, allow_null=True)
     wallet_origin = serializers.UUIDField(required=False, allow_null=True)
 
-    category = serializers.ChoiceField(choices=Asset.CATEGORIES)
+    category = serializers.ChoiceField(choices=AssetFedowPublic.CATEGORIES)
     get_category_display = serializers.CharField()
 
     created_at = serializers.DateTimeField()
@@ -43,19 +59,47 @@ class AssetValidator(serializers.Serializer):
 
     def validate(self, attrs):
         try:
-            self.asset = Asset.objects.get(uuid=attrs['uuid'])
-        except Asset.DoesNotExist:
-            if attrs.get('wallet_origin'):
-                wallet, created = Wallet.objects.get_or_create(uuid=attrs['wallet_origin'])
-                self.asset = Asset.objects.create(
+            self.asset = AssetFedowPublic.objects.get(uuid=attrs['uuid'])
+        except AssetFedowPublic.DoesNotExist:
+            origin = connection.tenant
+            if attrs['currency_code'] == 'FED': # première fois qu'on voit le token fédéré, c'est le ROOT le client d'origin
+                origin = Client.objects.get(categorie=Client.ROOT)
+            elif attrs.get('place_origin'):
+                lespass_domain = attrs['place_origin'].get('lespass_domain')
+                if lespass_domain:
+                    domain = Domain.objects.filter(domain=lespass_domain)
+                    if domain.exists():
+                        origin = domain.first().tenant
+                        logger.info(f"On a le tenant origin de l'asset : {origin}")
+
+
+
+            try :
+                wallet = Wallet.objects.get(uuid=attrs['wallet_origin'])
+            except Wallet.DoesNotExist:
+                wallet = Wallet.objects.create(
+                    uuid=attrs['wallet_origin'],
+                    origin=origin,
+                )
+
+            logger.info(f"wallet : {wallet}")
+
+            try :
+                self.asset = AssetFedowPublic.objects.create(
                     uuid=attrs['uuid'],
                     name=attrs['name'],
                     currency_code=attrs['currency_code'],
                     created_at=attrs['created_at'],
-                    last_update=attrs['last_update'],
-                    wallet_origin=wallet,
+                    updated_at=attrs['last_update'],
                     category=attrs['category'],
+                    origin=origin,
+                    wallet_origin=wallet,
                 )
+                logger.info(f"AssetFedowPublic.objects.create : {self.asset}")
+            except Exception as e :
+                logger.error(f"AssetFedowPublic.objects.create : {e}")
+                import ipdb; ipdb.set_trace()
+
         return attrs
 
 class TransactionSimpleValidator(serializers.Serializer):
@@ -115,7 +159,7 @@ class TokenValidator(serializers.Serializer):
 
     asset_uuid = serializers.UUIDField()
     asset_name = serializers.CharField()
-    asset_category = serializers.ChoiceField(choices=Asset.CATEGORIES)
+    asset_category = serializers.ChoiceField(choices=AssetFedowPublic.CATEGORIES)
 
     is_primary_stripe_token = serializers.BooleanField()
 
@@ -125,15 +169,6 @@ class TokenValidator(serializers.Serializer):
     last_transaction_datetime = serializers.DateTimeField(allow_null=True, required=False)
     start_membership_date = serializers.DateTimeField(allow_null=True, required=False)
 
-    def validate(self, attrs):
-        # On check ici les tokens adhésions pour entrer en db s'il n'existe pas :
-        # il peut avoir été créé sur laboutik
-        if attrs['asset_category'] == Asset.SUBSCRIPTION:
-            last_transaction = attrs.get('last_transaction')
-            if last_transaction :
-                pass
-                # import ipdb; ipdb.set_trace()
-        return attrs
 
 class WalletValidator(serializers.Serializer):
     uuid = serializers.UUIDField()
@@ -157,8 +192,8 @@ class CardValidator(serializers.Serializer):
     origin = OriginValidator()
     uuid = serializers.UUIDField()
     qrcode_uuid = serializers.UUIDField()
-    first_tag_id = serializers.CharField(min_length=8, max_length=8)
-    number_printed = serializers.CharField()
+    first_tag_id = serializers.CharField(min_length=8, max_length=8, validators=[validate_hex8])
+    number_printed = serializers.CharField(min_length=8, max_length=8, validators=[validate_hex8])
     is_wallet_ephemere = serializers.BooleanField()
 
 
@@ -172,6 +207,9 @@ class TransactionValidator(serializers.Serializer):
     subscription_start_datetime = serializers.DateTimeField(required=False, allow_null=True)
     sender = serializers.UUIDField()
     receiver = serializers.UUIDField()
+
+    sender_name = serializers.CharField(required=False, allow_null=True)
+    receiver_name = serializers.CharField(required=False, allow_null=True)
 
     asset = serializers.UUIDField()
     serialized_asset = AssetValidator(required=False, allow_null=True)

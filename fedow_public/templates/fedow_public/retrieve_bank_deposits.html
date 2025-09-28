@@ -1,0 +1,86 @@
+{% load i18n humanize tibitags %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <title>{{ asset.name }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        /* Simple, print-friendly styles */
+        :root {
+          color-scheme: light only;
+        }
+        body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; margin: 2rem; color: #111; }
+        h1,h2,h3 { margin: 0 0 .5rem; }
+        .meta { margin: 0 0 1rem; color: #555; font-size: 0.95rem; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { border: 1px solid #ddd; padding: .6rem .8rem; text-align: left; vertical-align: middle; }
+        thead th { background: #f6f6f6; font-weight: 600; }
+        tbody tr:nth-child(even) { background: #fafafa; }
+        tfoot td { font-weight: 700; }
+        @media print {
+          body { margin: 0.5cm; }
+          a { color: inherit; text-decoration: none; }
+          .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>{{ asset.name }}</h1>
+        <p class="meta">
+            {% trans "Actif" %}: <strong>{{ asset.name }}</strong>
+            {% if asset.currency_code %} • {% trans "Devise" %}: {{ asset.currency_code }}{% endif %}
+            {% if asset.get_category_display %} • {% trans "Catégorie" %}: {{ asset.get_category_display }}{% endif %}
+            <br>
+            {% trans "Généré" %} {{ now }}
+        </p>
+    </header>
+
+    {% if total_by_place_with_uuid.total_by_place %}
+        <h2>{% trans "Ventilation par lieu" %}</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">{% trans "Lieu" %}</th>
+                    <th scope="col">{% trans "Total" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in total_by_place_with_uuid.total_by_place %}
+                    <tr>
+                        <td>{{ item.place_name }}</td>
+                        <td>{{ item.total_value|dround }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>{% trans "Aucune donnée disponible." %}</p>
+    {% endif %}
+
+    <h2 style="margin-top:2rem;">{% trans "Historique des remises en banque" %}</h2>
+    {% if retrieve_bank_deposits %}
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">{% trans "Date" %}</th>
+                    <th scope="col">{% trans "Montant" %}</th>
+                    <th scope="col">{% trans "Organisation" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for tr in retrieve_bank_deposits %}
+                    <tr>
+                        <td>{% if tr.datetime %}{{ tr.datetime|date:'d/m/Y H:i' }}{% endif %}</td>
+                        <td>{{ tr.amount|dround }}</td>
+                        <td>{{ tr.sender_name }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>{% trans "Aucune remise en banque trouvée." %}</p>
+    {% endif %}
+</body>
+</html>

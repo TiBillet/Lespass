@@ -13,15 +13,15 @@ from django.core.signing import TimestampSigner
 from django.db import connection
 from django.utils import timezone
 from django_tenants.postgresql_backend.base import FakeTenant
-from django_tenants.utils import tenant_context
+from django_tenants.utils import schema_context
 
 from AuthBillet.models import TibilletUser, Wallet, HumanUser
 from BaseBillet.models import Configuration, Membership, Product
-from Customers.models import Client
-from fedow_connect.models import FedowConfig, Asset
-from fedow_connect.utils import sign_message, data_to_b64, verify_signature, rsa_decrypt_string, dround
+from fedow_connect.models import FedowConfig
+from fedow_connect.utils import sign_message, data_to_b64, verify_signature, rsa_decrypt_string
 from fedow_connect.validators import WalletValidator, AssetValidator, TransactionValidator, \
-    PaginatedTransactionValidator, CardValidator, QrCardValidator
+    PaginatedTransactionValidator, CardValidator, QrCardValidator, validate_hex8
+from fedow_public.models import AssetFedowPublic
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +143,27 @@ class AssetFedow():
     #         logger.error(serialized_assets.errors)
     #         raise Exception(f"{serialized_assets.errors}")
 
+    def retrieve_bank_deposits(self, asset:AssetFedowPublic):
+        response = _get(self.fedow_config, path=f'asset/{asset.uuid}/retrieve_bank_deposits')
+        if response.status_code == 200:
+            serialized_transaction = TransactionValidator(data=response.json(), many=True)
+            if serialized_transaction.is_valid():
+                validated_data = serialized_transaction.validated_data
+                return validated_data
+            logger.error(serialized_transaction.errors)
+            return serialized_transaction.errors
+        else:
+            logger.error(response.json())
+            return response.status_code
+
+    def total_by_place_with_uuid(self, uuid: uuid4 = None) -> dict:
+        response_asset = _get(self.fedow_config, path=f'asset/{UUID(uuid)}/total_by_place_with_uuid')
+        if not response_asset.status_code == 200:
+            logger.warning(response_asset)
+            raise Exception(f"{response_asset.status_code}")
+        logger.info(response_asset.json())
+        return response_asset.json()
+
     def retrieve(self, uuid: uuid4 = None):
         response_asset = _get(self.fedow_config, path=f'asset/{UUID(uuid)}/retrieve_membership_asset')
 
@@ -155,7 +176,38 @@ class AssetFedow():
         logger.warning(response_asset)
         raise Exception(f"{response_asset.status_code}")
 
-    def get_or_create_asset(self, product: Product = None):
+    def cached_retrieve(self, uuid: uuid4 = None):
+        try:
+            return cache.get_or_set(f"asset_fedow_{uuid}", lambda: self.retrieve(uuid), 60 * 60 * 24)
+        except Exception as e:
+            logger.warning(f"cached_retrieve : {e} - fetch from fedow without cache.")
+            return self.retrieve(uuid)
+
+    def get_or_create_token_asset(self, asset: AssetFedowPublic):
+        try:
+            asset_serialized = self.retrieve(uuid=f"{asset.uuid}")
+            return asset_serialized, False
+        # Asset n'existe pas, on l'envoie
+        except Exception as e:
+            logger.info(f"Création de l'asset pour le produit {asset.name}")
+            asset = {
+                "uuid": f"{asset.uuid}",
+                "name": f"{asset.name}",
+                "currency_code": f"{asset.currency_code}".upper(),
+                "category": f"{asset.category}",
+                "created_at": timezone.now().isoformat()
+            }
+            response_asset = _post(self.fedow_config, path='asset/create_token_asset', data=asset)
+            if response_asset.status_code == 201:
+                serialized_assets = AssetValidator(data=response_asset.json(), many=False)
+                if serialized_assets.is_valid():
+                    return serialized_assets.validated_data, True
+                logger.error(serialized_assets.errors)
+                raise Exception(f"{serialized_assets.errors}")
+            logger.error(response_asset)
+            raise Exception(f"{response_asset.status_code} {response_asset.content}")
+
+    def get_or_create_membership_asset(self, product: Product = None):
         try:
             asset_serialized = self.retrieve(uuid=f"{product.uuid}")
             return asset_serialized, False
@@ -163,7 +215,6 @@ class AssetFedow():
         # Asset n'existe pas, on l'envoie
         except Exception as e:
             logger.info(f"Création de l'asset pour le produit {product.name}")
-            config = Configuration.get_solo()
             asset = {
                 "uuid": f"{product.pk}",
                 "name": f"{product.name}",
@@ -238,7 +289,7 @@ class MembershipFedow():
         # Vérification de l'uuid membership présent coté Fedow
         if not membership.asset_fedow and membership.price:
             fedow_asset = AssetFedow(fedow_config=self.fedow_config)
-            serialized_asset, created = fedow_asset.get_or_create_asset(membership.price.product)
+            serialized_asset, created = fedow_asset.get_or_create_membership_asset(membership.price.product)
             asset_fedow = f"{serialized_asset['uuid']}"
             membership.asset_fedow = asset_fedow
         if not membership.asset_fedow:
@@ -303,6 +354,44 @@ class WalletFedow():
         self.fedow_config: FedowConfig = fedow_config
         if not fedow_config:
             self.fedow_config = FedowConfig.get_solo()
+
+    def local_asset_bank_deposit(self,
+                                 user: TibilletUser = None,
+                                 wallet_to_deposit: UUID = None,
+                                 asset: AssetFedowPublic = None
+                                 ):
+        '''
+        Remise en euro des tokens locaux en cas de remboursement par l'origin de l'asset ou par déclaration du wallet de destination.
+        ex : une SSA qui fait des virements à tout ses producteurs
+        ex : un festival qui déclare avoir bien reçu le virement de l'asset d'une association
+        '''
+        data = {
+            "wallet_to_deposit": f"{UUID(wallet_to_deposit)}",
+            "asset": f"{asset.uuid}",
+        }
+
+        # Prendre la clé du lieu permet de l'identifier sur fedow (request.place)
+        fedow_config = FedowConfig.get_solo()
+        apikey = fedow_config.get_fedow_place_admin_apikey()
+
+        tr_reponse = _post(
+            fedow_config=self.fedow_config,
+            user=user,
+            path='wallet/local_asset_bank_deposit',
+            data=data,
+            apikey=apikey,
+        )
+        if tr_reponse.status_code == 201:
+            serialized_transaction = TransactionValidator(data=tr_reponse.json())
+            if serialized_transaction.is_valid():
+                validated_data = serialized_transaction.validated_data
+                return validated_data
+            logger.error(serialized_transaction.errors)
+            raise Exception(f"{serialized_transaction.errors}")
+        else:
+            logger.error(tr_reponse.json())
+            raise Exception(f"{tr_reponse.json()}")
+
 
     def global_asset_bank_stripe_deposit(self, payload: dict):
         '''
@@ -445,7 +534,10 @@ class WalletFedow():
         if response_link.status_code in [200, 201]:
             # Création du wallet dans la base de donnée s'il n'existe pas
             if not user.wallet:
-                user.wallet = Wallet.objects.get_or_create(uuid=UUID(response_link.json()))[0]
+                user.wallet = Wallet.objects.get_or_create(
+                    uuid=UUID(response_link.json()),
+                    origin=connection.tenant,
+                )[0]
                 user.save()
                 logger.info(f"user {user} tout neuf, on ajoute le wallet : {user.wallet}")
 
@@ -588,9 +680,10 @@ class PlaceFedow():
 
         new_place_data = request_for_new_place.json()
 
-        # Le wallet est créé par fedow
+        # Le wallet est créé par fedow, on récupère son uuid et on le créé ici.
         wallet = Wallet.objects.create(
-            uuid=new_place_data['wallet']
+            uuid=new_place_data['wallet'],
+            origin=tenant,
         )
 
         self.fedow_config.wallet = wallet
@@ -657,6 +750,32 @@ class NFCcardFedow():
 
         return serialized_card.validated_data
 
+    def linkwallet_card_number(self, user: TibilletUser = None, card_number: str = None):
+        card_number = validate_hex8(card_number)
+        if card_number is None:
+            return None
+
+        response_link = _post(
+            fedow_config=self.fedow_config,
+            user=user,
+            data={
+                "wallet": f"{user.wallet.uuid}",
+                "card_number": f"{card_number}",
+            },
+            path='wallet/linkwallet_card_number',
+        )
+
+        if response_link.status_code != 200:
+            logger.error(f"linkwallet_card_number : {response_link.status_code} {response_link.json()}")
+            return False
+
+        validated_card = CardValidator(data=response_link.json())
+        if not validated_card.is_valid():
+            logger.error(validated_card.errors)
+            return False
+
+        return validated_card.validated_data
+
     def linkwallet_cardqrcode(self, user: TibilletUser = None, qrcode_uuid: uuid4 = None):
         checked_uuid = uuid.UUID(str(qrcode_uuid))
 
@@ -680,6 +799,31 @@ class NFCcardFedow():
             return False
 
         return validated_card.validated_data
+
+
+class FederationFedow():
+    def __init__(self, fedow_config: FedowConfig or None = None):
+        self.fedow_config: FedowConfig = fedow_config
+        if fedow_config is None:
+            self.config = FedowConfig.get_solo()
+
+    def create_fed(self, user=None, asset=None, place_added_uuid=None, place_origin_uuid=None):
+        response_fed = _post(
+            fedow_config=self.fedow_config,
+            user=user,
+            data={
+                "place_origin": f"{place_origin_uuid}",
+                "place_added": f"{place_added_uuid}",
+                "asset": f"{asset.uuid}",
+                "name": f"{asset.name}",
+            },
+            path='federation',
+        )
+        if response_fed.status_code == 200:
+            return response_fed.json()
+
+        logger.error(response_fed.json())
+        raise Exception(response_fed.json())
 
 
 class TransactionFedow():
@@ -782,7 +926,7 @@ class TransactionFedow():
     def refill_from_lespass_to_user_wallet(self,
                                            user: TibilletUser = None,
                                            amount: int = None,
-                                           asset: Asset = None,
+                                           asset: AssetFedowPublic = None,
                                            metadata: json = None,
                                            ):
         """
@@ -795,7 +939,7 @@ class TransactionFedow():
 
         if not isinstance(amount, int) or amount < 0:
             raise Exception("Amount must be an positive integer")
-        if not isinstance(asset, Asset):
+        if not isinstance(asset, AssetFedowPublic):
             raise Exception("asset must be an Asset object")
 
         transaction = {
@@ -839,6 +983,7 @@ class FedowAPI():
         self.transaction = TransactionFedow(fedow_config=self.fedow_config)
         self.NFCcard = NFCcardFedow(fedow_config=self.fedow_config)
         self.badge = BadgeFedow(fedow_config=self.fedow_config)
+        self.federation = FederationFedow(fedow_config=self.fedow_config)
 
     def handshake(self):
         pass

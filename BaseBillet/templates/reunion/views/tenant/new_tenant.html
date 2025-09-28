@@ -41,7 +41,7 @@
                         <div class="col">
                             <div class="form-floating mb-3">
                                 <input name="name" type="text" class="form-control" id="name-input"
-                                       placeholder="" role="textbox"
+                                       placeholder="" role="textbox" maxlength="50"
                                        aria-label="{% trans 'Name of your collective' %}" required
                                         {% if name_query_params %}
                                        value="{{ name_query_params }}"
@@ -56,7 +56,7 @@
                         <div class="col">
                             <div class="form-floating mb-3">
                                 <input name="website" type="url" class="form-control" id="website-input"
-                                       placeholder="" role="textbox"
+                                       placeholder="" role="textbox" maxlength="200"
                                        aria-label="{% trans 'Website' %}" required
                                         {% if name_query_params %}
                                        value="{{ name_query_params }}"

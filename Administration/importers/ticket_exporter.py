@@ -8,6 +8,26 @@ from BaseBillet.models import Ticket, Event, Configuration
 from unfold.contrib.import_export.forms import ExportForm
 
 
+class JSONKeyField(Field):
+    """A Field that exports a value from Reservation.custom_form for a given key."""
+    def __init__(self, key: str, column_name: str = None):
+        # attribute isn't used for value extraction; keep None
+        super().__init__(column_name=column_name or key)
+        self.key = key
+
+    def get_value(self, obj):
+        # obj is a Ticket; fetch parent reservation.custom_form
+        reservation = getattr(obj, 'reservation', None)
+        data = getattr(reservation, 'custom_form', None) if reservation else None
+        if isinstance(data, dict):
+            import json as _json
+            value = data.get(self.key)
+            if isinstance(value, (dict, list)):
+                return _json.dumps(value, ensure_ascii=False)
+            return value
+        return None
+
+
 class TicketExportResource(resources.ModelResource):
     # Define fields from related models
     event_name = Field(attribute='reservation__event__name', column_name='event_name')
@@ -25,6 +45,48 @@ class TicketExportResource(resources.ModelResource):
     email = Field(attribute='reservation__user_commande__email', column_name='email')
     user_id = Field(column_name='userId')
     reservation_uuid = Field(attribute='reservation__uuid', column_name='reservation_uuid')
+
+    # --- Dynamic columns for Reservation.custom_form ---
+    def before_export(self, queryset, *args, **kwargs):
+        # Collect all keys from parent reservation.custom_form JSON across queryset
+        keys = set()
+        try:
+            for obj in queryset:
+                reservation = getattr(obj, 'reservation', None)
+                data = getattr(reservation, 'custom_form', None) if reservation else None
+                if isinstance(data, dict):
+                    for k in data.keys():
+                        if k is not None:
+                            keys.add(str(k))
+        except Exception:
+            pass
+        # Store sorted keys for deterministic column order
+        self._custom_form_keys = sorted(keys)
+
+    def get_export_fields(self, *args, **kwargs):
+        base_fields = super().get_export_fields(*args, **kwargs)
+        # Avoid duplicates by column name
+        existing = set()
+        for f in base_fields:
+            name = getattr(f, 'column_name', None) or getattr(f, 'attribute', None)
+            if name:
+                existing.add(str(name))
+        dynamic_fields = []
+        for key in getattr(self, '_custom_form_keys', []):
+            if key not in existing:
+                dynamic_fields.append(JSONKeyField(key=key, column_name=key))
+        return base_fields + dynamic_fields
+
+    def get_export_headers(self, selected_fields=None, *args, **kwargs):
+        # Build headers directly from field column names to support dynamic fields
+        fields = selected_fields or self.get_export_fields(*args, **kwargs)
+        return [f.column_name for f in fields]
+
+    def get_field_name(self, field):
+        # Gracefully handle dynamically generated JSONKeyField instances
+        if isinstance(field, JSONKeyField):
+            return field.column_name
+        return super().get_field_name(field)
 
 
     def dehydrate_user_id(self, ticket):

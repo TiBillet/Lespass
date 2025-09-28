@@ -21,28 +21,49 @@
             </div>
             {#  <a href="{{ event.full_url }}" hx-get="{{ event.full_url }}" hx-target="body" hx-push-url="true" class="col fs-5">#}
             <div class="col">
+                
+                {% with event_domain=event.full_url|cut:"https://"|cut:"http://"|cut:"/event/"|cut:event.slug|cut:"/" %}
+                {% with current_domain=request.build_absolute_uri|cut:"https://"|cut:"http://"|cut:"/event/" %}
+                
+                {% if event_domain != current_domain %}
+                <a href="{{ event.full_url }}" class="fs-5" target="_blank">
+                    {{ event.name }}
+                    <i class="bi bi-box-arrow-up-right"></i>
+                </a>
+                {% else %}
                 <a href="/event/{{ event.slug }}/" hx-boost="true" hx-target="body" class="fs-5"
-                   {% if embed %}target="_blank" {% endif %}> <!-- Si c'est embed, on ouvre dans une page externe -->
+                    {% if embed %}target="_blank" {% endif %}> <!-- Si c'est embed, on ouvre dans une page externe -->
                     {{ event.name }}
                 </a>
-                <div class="small text-muted">
-                    {% if event.postal_address %}
-                        {% if event.postal_address.name %}
-                            <a hx-get="/event/partial_list/?page={{ page }}&search={{ event.postal_address.name }}"
-                                  hx-target="#event_list">
-                            <i class="bi bi-geo-alt-fill"></i>{{ event.postal_address.name }} -
-                            </a>
-                        {% endif %}
-                        <a hx-get="/event/partial_list/?page={{ page }}&search={{ event.postal_address.address_locality }}"
-                              hx-target="#event_list">
-                        <i class="bi bi-buildings"></i> {{ event.postal_address.address_locality }}
+                {% endif %}
+                
+                <div class="small text-muted mb-2">
+                    {% if event_domain != current_domain %}
+                        <i class="bi bi-globe"></i>
+                        {% trans "Check the event on" %}
+                        <a href="https://{{ event_domain }}" target="_blank">
+                            {{ event_domain }}
+                            <i class="bi bi-box-arrow-up-right"></i>
                         </a>
-                    {% elif event.full_url and "://" in event.full_url %}
-                        {% with domain=event.full_url|cut:"https://"|cut:"http://"|cut:"/event/"|cut:event.slug|cut:"/" %}
-                            <i class="bi bi-globe"></i> {{ domain }}
-                        {% endwith %}
+                        <br />
+                    {% endif %}
+                    {% if event.postal_address %}
+                        <i class="bi bi-geo-alt-fill"></i>
+                        {% if event.postal_address.name %}
+                            <a
+                                hx-get="/event/partial_list/?page={{ page }}&search={{ event.postal_address.name }}"
+                                hx-target="#event_list">{{ event.postal_address.name }}</a>,
+                        {% endif %}
+                        <a
+                            hx-get="/event/partial_list/?page={{ page }}&search={{ event.postal_address.address_locality }}"
+                            hx-target="#event_list">
+                            {{ event.postal_address.address_locality }}
+                        </a>
                     {% endif %}
                 </div>
+
+                {% endwith %}
+                {% endwith %}
             </div>
             <div class="col-md-auto text-md-end event-tags">
                 {% for tag in event.tag.all %}

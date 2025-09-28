@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import uuid
-from datetime import timedelta, datetime
+from datetime import timedelta
 from decimal import Decimal
 from io import BytesIO
 
@@ -43,13 +43,13 @@ from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, Product, Event, Paiement_stripe, Membership, Reservation, \
-    FormbricksConfig, FormbricksForms, FederatedPlace, Carrousel, ScanApp, ScannerAPIKey, LigneArticle, PriceSold, \
+    FormbricksConfig, FormbricksForms, FederatedPlace, Carrousel, LigneArticle, PriceSold, \
     Price, ProductSold, PaymentMethod
-from BaseBillet.permissions import HasScanApi
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, new_tenant_mailer, \
     contact_mailer, new_tenant_after_stripe_mailer, send_to_ghost_email, send_sale_to_laboutik, \
     send_payment_success_admin, send_payment_success_user, send_reservation_cancellation_user, \
-    send_ticket_cancellation_user, webhook_membership, send_email_generique
+    send_ticket_cancellation_user, send_email_generique, \
+    send_membership_pending_admin, send_membership_pending_user, send_membership_payment_link_user
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
     ReservationValidator, ContactValidator
 from Customers.models import Client, Domain
@@ -59,6 +59,7 @@ from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
 from fedow_connect.utils import dround
 from fedow_connect.validators import TransactionSimpleValidator
+from fedow_public.models import AssetFedowPublic
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
@@ -130,7 +131,7 @@ def get_context(request):
             {'name': 'memberships_mvt', 'url': '/memberships/',
              'label': config.membership_menu_name if config.membership_menu_name else _('Subscriptions'),
              'icon': 'person-badge'},
-            # {'name': 'federation', 'url': '/federation/', 'label': 'Local network', 'icon': 'diagram-2-fill'},
+            {'name': 'federation', 'url': '/federation/', 'label': 'Local network', 'icon': 'diagram-2-fill'},
         ]
     }
     return context
@@ -576,12 +577,22 @@ class MyAccount(viewsets.ViewSet):
         template_context = get_context(request)
         # Pas de header sur cette page
         template_context['header'] = False
-        template_context['account_tab'] = 'balance'
+        template_context['account_tab'] = 'index'
 
         if not request.user.email_valid:
             logger.warning("User email not active")
             messages.add_message(request, messages.WARNING,
                                  _("Please validate your email to access all the features of your profile area."))
+
+        return render(request, "reunion/views/account/index.html", context=template_context)
+
+
+    @action(detail=False, methods=['GET'])
+    def balance(self, request: HttpRequest):
+        template_context = get_context(request)
+        # Pas de header sur cette page
+        template_context['header'] = False
+        template_context['account_tab'] = 'balance'
 
         return render(request, "reunion/views/account/balance.html", context=template_context)
 
@@ -883,7 +894,7 @@ class MyAccount(viewsets.ViewSet):
                         memberships_dict[False].append(membership)
 
         context['memberships_dict'] = memberships_dict
-        return render(request, "reunion/views/account/memberships.html", context=context)
+        return render(request, "reunion/views/account/membership/memberships.html", context=context)
 
     @action(detail=False, methods=['GET'])
     def card(self, request: HttpRequest) -> HttpResponse:
@@ -1319,6 +1330,38 @@ class FederationViewset(viewsets.ViewSet):
 
     def list(self, request):
         template_context = get_context(request)
+
+        def build_federated_places():
+            results = []
+            for place in FederatedPlace.objects.all():
+                with tenant_context(place.tenant):
+                    config = Configuration.get_solo()
+                    assets = AssetFedowPublic.objects.filter(category__in=[
+                        AssetFedowPublic.STRIPE_FED_FIAT,
+                        AssetFedowPublic.TOKEN_LOCAL_FIAT,
+                        AssetFedowPublic.TOKEN_LOCAL_NOT_FIAT,
+                        AssetFedowPublic.TIME,
+                        AssetFedowPublic.FIDELITY,
+                    ])
+                    results.append({
+                        "organisation": config.organisation,
+                        "slug": config.slug,
+                        "short_description": config.short_description,
+                        "long_description": config.long_description,
+                        "img": config.img,
+                        "logo": config.logo,
+                        "assets": assets,
+                        "url" : config.full_url(),
+                    })
+            return results
+
+        federated_places = cache.get_or_set(
+            f"federated_places_{connection.tenant.uuid}",
+            build_federated_places,
+            60 * 60  # cache for 1 hour
+        )
+
+        template_context['federated_places'] = federated_places
         return render(request, "reunion/views/federation/list.html", context=template_context)
 
 
@@ -1782,7 +1825,34 @@ class MembershipMVT(viewsets.ViewSet):
         # if formbricks.api_host and formbricks.api_key:
         # Une configuration formbricks à été trouvé.
 
-        # return Http404
+        # Validation manuelle demandée ?
+        logger.info(f"membership_validator.price.manual_validation : {membership_validator.price.manual_validation}")
+        if membership_validator.price.manual_validation:
+            membership: Membership = membership_validator.membership
+            # Marque la fiche comme nécessitant une validation manuelle et place l'état sur "en attente"
+            membership.state = Membership.ADMIN_WAITING
+            membership.save(update_fields=["state"])
+
+            # Envoyer un mail à l'admin et à l'utilisateur pour les prévenir (via Celery)
+            try:
+                send_membership_pending_admin.delay(str(membership.uuid))
+            except Exception as e:
+                logger.error(f"Erreur d'enqueue send_membership_pending_admin: {e}")
+            try:
+                send_membership_pending_user.delay(str(membership.uuid))
+            except Exception as e:
+                logger.error(f"Erreur d'enqueue send_membership_pending_user: {e}")
+
+            # Message de confirmation à l'utilisateur
+            try:
+                messages.add_message(request, messages.SUCCESS, _("Votre demande d'adhésion a bien été enregistrée et est en attente de validation."))
+            except Exception:
+                pass
+
+            # Dans le cas d'une validation manuelle, on affiche un message dans l'offcanvas via un template partiel
+            context = {'membership': membership}
+            return render(request, "reunion/views/membership/pending_manual_validation.html", context=context)
+            
         return HttpResponseClientRedirect(membership_validator.checkout_stripe_url)
 
     def list(self, request: HttpRequest):
@@ -1874,6 +1944,60 @@ class MembershipMVT(viewsets.ViewSet):
         return render(request, "reunion/views/membership/form.html", context=context)
 
     @action(detail=True, methods=['GET'])
+    def get_checkout_for_membership(self, request, pk):
+        membership = get_object_or_404(Membership, uuid=uuid.UUID(pk))
+        if membership.state != Membership.ADMIN_VALID:
+            raise Exception("not admin valid state")
+        checkout_url = MembershipValidator.get_checkout_stripe(membership)
+        logger.info(f"get_checkout_for_membership : {checkout_url}")
+        return redirect(checkout_url)
+        # return HttpResponseClientRedirect(checkout_url)
+
+
+    @action(detail=True, methods=['POST'])
+    def admin_accept(self, request, pk):
+        """Accept a membership requiring manual validation and send the checkout link to the member.
+        Only accessible to tenant administrators from the admin UI.
+        """
+        user = request.user
+        tenant = request.tenant
+
+        try:
+            is_admin = user.is_authenticated and hasattr(user, 'is_tenant_admin') and user.is_tenant_admin(tenant)
+        except Exception:
+            is_admin = False
+        if not is_admin:
+            return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
+
+        membership = get_object_or_404(Membership, uuid=uuid.UUID(pk))
+        # Update state to admin validated
+        if membership.state != Membership.ADMIN_WAITING:
+            messages.add_message(request, messages.WARNING, _("Membership not in waiting state."))
+            referer = request.headers.get('Referer') or f"/admin/BaseBillet/membership/{membership.pk}/change/"
+            return HttpResponseClientRedirect(referer)
+
+        membership.state = Membership.ADMIN_VALID
+        membership.save(update_fields=["state"])
+
+        # Send payment link email to user via Celery
+        try:
+            send_membership_payment_link_user.delay(str(membership.uuid))
+        except Exception as e:
+            logger.error(f"Erreur d'enqueue send_membership_payment_link_user: {e}")
+
+        try:
+            messages.add_message(request, messages.SUCCESS, _("L'adhésion a été acceptée. Un email de paiement a été envoyé."))
+        except Exception:
+            pass
+
+        # If HTMX request, return success partial to replace the button area
+        if request.headers.get('HX-Request'):
+            return render(request, "admin/membership/partials/admin_accept_success.html", context={"membership": membership})
+
+        referer = request.headers.get('Referer') or f"/admin/BaseBillet/membership/{membership.pk}/change/"
+        return HttpResponseClientRedirect(referer)
+
+    @action(detail=True, methods=['GET'])
     def stripe_return(self, request, pk, *args, **kwargs):
         # Le retour de stripe des users.
         # Il est possible que le update_checkout_status soit déja fait en post
@@ -1927,8 +2051,9 @@ class MembershipMVT(viewsets.ViewSet):
         return Response("sended", status=status.HTTP_200_OK)
 
     def get_permissions(self):
-        if self.action in ['invoice_to_mail', ]:
-            permission_classes = [permissions.IsAdminUser]
+        if self.action in ['invoice_to_mail', 'admin_accept' ]:
+            permission_classes = [TenantAdminPermission,]
+
         else:
             permission_classes = [permissions.AllowAny]
         return [permission() for permission in permission_classes]
@@ -2001,6 +2126,12 @@ class Tenant(viewsets.ViewSet):
             wc = WaitingConfiguration.objects.get(uuid=wc_pk)
             wc.email_confirmed = True
             wc.save()
+
+            # Idempotent behavior: if the tenant was already created, redirect directly
+            if wc.tenant:
+                primary_domain = f"https://{wc.tenant.get_primary_domain().domain}"
+                user = get_or_create_user(wc.email, send_mail=True)
+                return redirect(primary_domain)
 
             # Si assez de tenant en attentent de création existent :
             if Client.objects.filter(categorie=Client.WAITING_CONFIG).exists():

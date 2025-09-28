@@ -22,6 +22,14 @@
                 {% trans 'Subscriptions' %}{% endif %}</h1>
         {% endif %}
 
+        <style>
+            /* Offcanvas responsive sizing: full width on mobile, double width on desktop */
+            #subscribePanel { --bs-offcanvas-width: 100vw; }
+            @media (min-width: 992px) { /* lg and up */
+                #subscribePanel { --bs-offcanvas-width: 800px; }
+            }
+        </style>
+
         <!-- subscription panel -->
         <div class="offcanvas-start offcanvas" tabindex="-1" id="subscribePanel" aria-labelledby="subscribePanelLabel">
             <div class="offcanvas-header">

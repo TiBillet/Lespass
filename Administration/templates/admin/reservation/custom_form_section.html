@@ -1,0 +1,12 @@
+{% load i18n unfold tibitags %}
+<div class="p-4">
+  {% if instance.custom_form %}
+    {% with table_data=instance.custom_form|custom_form_table:instance %}
+      {% component "unfold/components/card.html" with title=_("Custom form answers") %}
+        {% component "unfold/components/table.html" with table=table_data card_included=1 striped=1 %}{% endcomponent %}
+      {% endcomponent %}
+    {% endwith %}
+  {% else %}
+    <em class="text-sm text-gray-500 dark:text-gray-400">{% translate "No custom form answers for this booking." %}</em>
+  {% endif %}
+</div>
