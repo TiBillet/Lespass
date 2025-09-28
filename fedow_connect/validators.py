@@ -208,6 +208,9 @@ class TransactionValidator(serializers.Serializer):
     sender = serializers.UUIDField()
     receiver = serializers.UUIDField()
 
+    sender_name = serializers.CharField(required=False, allow_null=True)
+    receiver_name = serializers.CharField(required=False, allow_null=True)
+
     asset = serializers.UUIDField()
     serialized_asset = AssetValidator(required=False, allow_null=True)
     serialized_sender = WalletValidator(required=False, allow_null=True)

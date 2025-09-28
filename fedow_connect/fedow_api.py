@@ -143,6 +143,19 @@ class AssetFedow():
     #         logger.error(serialized_assets.errors)
     #         raise Exception(f"{serialized_assets.errors}")
 
+    def retrieve_bank_deposits(self, asset:AssetFedowPublic):
+        response = _get(self.fedow_config, path=f'asset/{asset.uuid}/retrieve_bank_deposits')
+        if response.status_code == 200:
+            serialized_transaction = TransactionValidator(data=response.json(), many=True)
+            if serialized_transaction.is_valid():
+                validated_data = serialized_transaction.validated_data
+                return validated_data
+            logger.error(serialized_transaction.errors)
+            return serialized_transaction.errors
+        else:
+            logger.error(response.json())
+            return response.status_code
+
     def total_by_place_with_uuid(self, uuid: uuid4 = None) -> dict:
         response_asset = _get(self.fedow_config, path=f'asset/{UUID(uuid)}/total_by_place_with_uuid')
         if not response_asset.status_code == 200:

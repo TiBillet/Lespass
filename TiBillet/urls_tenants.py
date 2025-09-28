@@ -39,6 +39,7 @@ urlpatterns = [
 
     # fwh : fedow Webhook
     re_path(r'fwh/', include('fedow_connect.urls')),
+    re_path(r'fedow/', include('fedow_public.urls')),
 
     # pour carte GEN1 Bisik
     # re_path(r'(?P<numero_carte>^[qsdf974]{5}$)', include('QrcodeCashless.urls')),
