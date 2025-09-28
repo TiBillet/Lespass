@@ -398,9 +398,8 @@ class Command(BaseCommand):
                         logger.warning(f"Unable to create ProductFormField demo data: {e}")
 
 
-                """
                 ### BADGEUSE ###
-                
+
                 badgeuse_cowork, created = Product.objects.get_or_create(
                     name=f"Badgeuse co-working ({tenant.name})",
                     short_description="Accès à l'espace de co-working.",
@@ -415,6 +414,7 @@ class Command(BaseCommand):
                     prix=0,
                     recurring_payment=False,
                 )
+                """
 
                 # badge_jour, created = Price.objects.get_or_create(
                 #     product=badgeuse_cowork,
