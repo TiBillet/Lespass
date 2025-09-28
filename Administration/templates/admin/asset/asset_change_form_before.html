@@ -1,4 +1,7 @@
-{% load i18n unfold humanize %}
+{% load i18n unfold humanize static tibitags %}
+
+{# HTMX for AJAX-y admin actions #}
+<script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
 
 <div class="p-4 flex flex-col gap-4">
     {% if fedow_error %}
@@ -14,12 +17,12 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <div>
                     <strong>{% trans "Créé le" %}:</strong>
-{#                    TODO: Naturaltime fonctionnera quand la donnée sera sérializée par un validateur#}
+                    {#                    TODO: Naturaltime fonctionnera quand la donnée sera sérializée par un validateur#}
                     <span>{{ serialized_asset.created_at | naturaltime }}</span>
                 </div>
                 <div>
                     <strong>{% trans "Dernière mise à jour" %}:</strong>
-{#                    TODO: Naturaltime fonctionnera quand la donnée sera sérializée par un validateur#}
+                    {#                    TODO: Naturaltime fonctionnera quand la donnée sera sérializée par un validateur#}
                     <span>{{ serialized_asset.last_update | naturaltime }}</span>
                 </div>
                 {% if serialized_asset.place_origin %}
@@ -33,8 +36,43 @@
     {% endif %}
 
     {% component "unfold/components/card.html" with title=_("Ventillation par lieu") %}
-        {% if table_data_by_place and table_data_by_place.rows %}
-            {% component "unfold/components/table.html" with table=table_data_by_place card_included=1 striped=1 %}{% endcomponent %}
+        {% if total_by_place_with_uuid.total_by_place %}
+            <div class="flex flex-col">
+                <div class="-m-6 lg:dark:border-base-800 dark:bg-base-900">
+                    <div>
+                        <table class="block border-spacing-none border-separate w-full lg:table">
+                            <thead class="text-font-important-light dark:text-font-important-dark">
+                                <tr class="bg-base-50 dark:bg-base-900">
+                                    <th class="align-middle border-b border-base-200 font-semibold py-2 text-left whitespace-nowrap hidden px-3 lg:table-cell dark:border-base-800 dark:bg-white/[.02] first:pl-6 last:pr-6">{% trans "Lieu" %}</th>
+                                    <th class="align-middle border-b border-base-200 font-semibold py-2 text-left whitespace-nowrap hidden px-3 lg:table-cell dark:border-base-800 dark:bg-white/[.02] first:pl-6 last:pr-6">{% trans "Total" %}</th>
+                                    <th class="align-middle border-b border-base-200 font-semibold py-2 text-left whitespace-nowrap hidden px-3 lg:table-cell dark:border-base-800 dark:bg-white/[.02] first:pl-6 last:pr-6">{% trans "Action" %}</th>
+                                </tr>
+                            </thead>
+
+                            <tbody class="block lg:table-row-group">
+                            {% for item in total_by_place_with_uuid.total_by_place %}
+                                <tr class="{% cycle '' 'bg-base-50 dark:bg-white/[.02]' %} block group border-b border-base-200 lg:table-row lg:border-none dark:border-base-800">
+                                    <td class="px-3 py-2 align-middle flex border-t border-base-200 font-normal gap-4 min-w-0 overflow-hidden text-left before:flex before:capitalize before:content-[attr(data-label)] before:font-semibold before:text-font-important-light dark:before:text-font-important-dark before:items-center before:mr-auto first:border-t-0 lg:before:hidden lg:py-3 lg:table-cell dark:border-base-800 lg:first:pl-6 lg:last:pr-6" data-label="{% trans 'Lieu' %}">
+                                        {{ item.place_name }}
+                                    </td>
+                                    <td class="px-3 py-2 align-middle flex border-t border-base-200 font-normal gap-4 min-w-0 overflow-hidden text-left before:flex before:capitalize before:content-[attr(data-label)] before:font-semibold before:text-font-important-light dark:before:text-font-important-dark before:items-center before:mr-auto first:border-t-0 lg:before:hidden lg:py-3 lg:table-cell dark:border-base-800 lg:first:pl-6 lg:last:pr-6" data-label="{% trans 'Total' %}">
+                                        {{ item.total_value | dround }}
+                                    </td>
+                                    <td class="px-3 py-2 align-middle flex border-t border-base-200 font-normal gap-4 min-w-0 overflow-hidden text-left before:flex before:capitalize before:content-[attr(data-label)] before:font-semibold before:text-font-important-light dark:before:text-font-important-dark before:items-center before:mr-auto first:border-t-0 lg:before:hidden lg:py-3 lg:table-cell dark:border-base-800 lg:first:pl-6 lg:last:pr-6" data-label="{% trans 'Action' %}">
+                                        <button class="font-medium flex items-center gap-2 px-3 py-2 rounded-default justify-center whitespace-nowrap cursor-pointer border border-base-200 bg-primary-600 text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-base-900"
+                                                hx-post="/admin/fedow_public/assetfedowpublic/bank_deposit/{{ asset_pk }}/{{ item.wallet_uuid }}/"
+                                                hx-swap="none"
+                                                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+                                            {% trans "Valider le retour en banque" %}
+                                        </button>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         {% else %}
             {% component "unfold/components/text.html" %}
                 {% trans "Aucune donnée disponible." %}

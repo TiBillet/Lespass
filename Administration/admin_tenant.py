@@ -63,6 +63,8 @@ from unfold.widgets import (
     UnfoldAdminTextInputWidget,
 )
 
+from django_htmx.http import HttpResponseClientRedirect
+
 from Administration.importers.ticket_exporter import TicketExportResource
 from ApiBillet.permissions import TenantAdminPermissionWithRequest, RootPermissionWithRequest
 from ApiBillet.serializers import get_or_create_price_sold
@@ -3436,30 +3438,27 @@ class AssetAdmin(ModelAdmin):
                         extra_context: Optional[Dict[str, Any]] = None):
         """Inject Fedow data for the before template on change view and handle invite form POST."""
         extra_context = extra_context or {}
-        table_data_by_place = {"headers": [_("Lieu"), _("Total"), _("Action")], "rows": []}
         serialized_asset = {}
         error_message = None
+        total_by_place_with_uuid = {}
 
         if object_id:
             try:
                 fedow = FedowAPI()
-                fedow_data = fedow.asset.retrieve_total_by_place(uuid=object_id)
-                fedow_data = json.loads(fedow_data)
-                # Expected structure: {"total_by_place": {"Lespass": 1500, ...}, "serialized_asset": {...}}
-                totals_by_place = (fedow_data or {}).get("total_by_place") or {}
-                serialized_asset = (fedow_data or {}).get("serialized_asset") or {}
-                # Build rows, keep deterministic order (by place name)
-                for place_name in sorted(totals_by_place.keys()):
-                    amount = dround(totals_by_place.get(place_name))
-                    # Render a simple button label in the third column
-                    button_html = f'<button type="button" class="font-medium flex items-center gap-2 px-3 py-2 rounded-default justify-center whitespace-nowrap cursor-pointer border border-base-200 bg-primary-600 text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-base-900">{_("Valider le retour en banque")}</button>'
-                    button_cell = mark_safe(button_html)
-                    table_data_by_place["rows"].append([place_name, amount, button_cell])
+                fedow_data = fedow.asset.total_by_place_with_uuid(uuid=object_id)
+                # fedow_data is a JSON string; parse it to dict
+                total_by_place_with_uuid = json.loads(fedow_data) if isinstance(fedow_data, (str, bytes)) else (fedow_data or {})
+                logger.info(f"fedow_data : {fedow_data}")
+
+                # Expected new structure: {"total_by_place": [{"place_name": ..., "place_uuid": ..., "total_value": ...}, ...], "serialized_asset": {...}}
+                totals_list = (total_by_place_with_uuid or {}).get("total_by_place") or []
+                serialized_asset = (total_by_place_with_uuid or {}).get("serialized_asset") or {}
+
             except Exception as e:
                 error_message = str(e)
 
         extra_context.update({
-            "table_data_by_place": table_data_by_place,
+            "total_by_place_with_uuid": total_by_place_with_uuid,
             "serialized_asset": serialized_asset,
             "fedow_error": error_message,
             "asset_pk": object_id,
@@ -3473,6 +3472,11 @@ class AssetAdmin(ModelAdmin):
                 r'^accept_invitation/(?P<asset_pk>.+)/$',
                 self.admin_site.admin_view(csrf_protect(require_POST(self.accept_invitation))),
                 name='asset-accept-invitation',
+            ),
+            re_path(
+                r'^bank_deposit/(?P<asset_pk>.+)/(?P<wallet_to_deposit>.+)/$',
+                self.admin_site.admin_view(csrf_protect(require_POST(self.bank_deposit))),
+                name='asset-bank-deposit',
             ),
         ]
         return custom_urls + urls
@@ -3517,6 +3521,33 @@ class AssetAdmin(ModelAdmin):
         return redirect(
             reverse(f"{self.admin_site.name}:{self.model._meta.app_label}_{self.model._meta.model_name}_changelist")
         )
+
+    def bank_deposit(self, request: HttpRequest, asset_pk: str, wallet_to_deposit:str):
+        """Handle HTMX POST to declare a bank deposit for a local asset.
+        Expects POST params: place (str), amount (decimal), origin_wallet (uuid optional), destination_wallet (uuid optional).
+        wallet_to_deposit : Le wallet qu'il faut vider
+        """
+        if not TenantAdminPermissionWithRequest(request):
+            return HttpResponse(status=403)
+
+        asset = get_object_or_404(AssetFedowPublic, uuid=UUID(asset_pk))
+        wallet = get_object_or_404(Wallet, uuid=UUID(wallet_to_deposit))
+        wallet_to_deposit = wallet.uuid
+
+        try:
+            fedow = FedowAPI()
+            transaction = fedow.wallet.local_asset_bank_deposit(
+                user=request.user,
+                wallet_to_deposit=f"{wallet_to_deposit}",
+                asset=asset,
+            )
+            messages.add_message(request, messages.SUCCESS, _("Remise en banque OK."))
+
+        except Exception as e:
+            logger.error(e)
+            messages.add_message(request, messages.ERROR, f"{e}")
+
+        return HttpResponseClientRedirect(request.META["HTTP_REFERER"])
 
     def changelist_view(self, request: HttpRequest, extra_context: Optional[Dict[str, Any]] = None):
         # Provide invitations list for the list_before_template

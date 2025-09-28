@@ -143,8 +143,8 @@ class AssetFedow():
     #         logger.error(serialized_assets.errors)
     #         raise Exception(f"{serialized_assets.errors}")
 
-    def retrieve_total_by_place(self, uuid: uuid4 = None) -> dict:
-        response_asset = _get(self.fedow_config, path=f'asset/{UUID(uuid)}/retrieve_total_by_place')
+    def total_by_place_with_uuid(self, uuid: uuid4 = None) -> dict:
+        response_asset = _get(self.fedow_config, path=f'asset/{UUID(uuid)}/total_by_place_with_uuid')
         if not response_asset.status_code == 200:
             logger.warning(response_asset)
             raise Exception(f"{response_asset.status_code}")
@@ -164,8 +164,8 @@ class AssetFedow():
         raise Exception(f"{response_asset.status_code}")
 
     def cached_retrieve(self, uuid: uuid4 = None):
-        try :
-            return cache.get_or_set(f"asset_fedow_{uuid}", lambda: self.retrieve(uuid), 60*60*24)
+        try:
+            return cache.get_or_set(f"asset_fedow_{uuid}", lambda: self.retrieve(uuid), 60 * 60 * 24)
         except Exception as e:
             logger.warning(f"cached_retrieve : {e} - fetch from fedow without cache.")
             return self.retrieve(uuid)
@@ -341,6 +341,44 @@ class WalletFedow():
         self.fedow_config: FedowConfig = fedow_config
         if not fedow_config:
             self.fedow_config = FedowConfig.get_solo()
+
+    def local_asset_bank_deposit(self,
+                                 user: TibilletUser = None,
+                                 wallet_to_deposit: UUID = None,
+                                 asset: AssetFedowPublic = None
+                                 ):
+        '''
+        Remise en euro des tokens locaux en cas de remboursement par l'origin de l'asset ou par déclaration du wallet de destination.
+        ex : une SSA qui fait des virements à tout ses producteurs
+        ex : un festival qui déclare avoir bien reçu le virement de l'asset d'une association
+        '''
+        data = {
+            "wallet_to_deposit": f"{UUID(wallet_to_deposit)}",
+            "asset": f"{asset.uuid}",
+        }
+
+        # Prendre la clé du lieu permet de l'identifier sur fedow (request.place)
+        fedow_config = FedowConfig.get_solo()
+        apikey = fedow_config.get_fedow_place_admin_apikey()
+
+        tr_reponse = _post(
+            fedow_config=self.fedow_config,
+            user=user,
+            path='wallet/local_asset_bank_deposit',
+            data=data,
+            apikey=apikey,
+        )
+        if tr_reponse.status_code == 201:
+            serialized_transaction = TransactionValidator(data=tr_reponse.json())
+            if serialized_transaction.is_valid():
+                validated_data = serialized_transaction.validated_data
+                return validated_data
+            logger.error(serialized_transaction.errors)
+            raise Exception(f"{serialized_transaction.errors}")
+        else:
+            logger.error(tr_reponse.json())
+            raise Exception(f"{tr_reponse.json()}")
+
 
     def global_asset_bank_stripe_deposit(self, payload: dict):
         '''
@@ -725,7 +763,6 @@ class NFCcardFedow():
 
         return validated_card.validated_data
 
-
     def linkwallet_cardqrcode(self, user: TibilletUser = None, qrcode_uuid: uuid4 = None):
         checked_uuid = uuid.UUID(str(qrcode_uuid))
 
@@ -749,6 +786,7 @@ class NFCcardFedow():
             return False
 
         return validated_card.validated_data
+
 
 class FederationFedow():
     def __init__(self, fedow_config: FedowConfig or None = None):
