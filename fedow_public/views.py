@@ -2,11 +2,14 @@ import json
 import logging
 from uuid import UUID
 
+from django.db import connection
 from django.shortcuts import render, get_object_or_404
 from rest_framework import viewsets, permissions
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 
+from Customers.models import Client
 from fedow_connect.fedow_api import FedowAPI
 from fedow_public.models import AssetFedowPublic
 from django.utils import timezone
@@ -18,10 +21,14 @@ logger = logging.getLogger(__name__)
 
 class AssetViewset(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     @action(detail=True, methods=['GET'])
     def retrieve_bank_deposits(self, request, pk):
+        this_tenant: Client = connection.tenant
+        if not request.user.is_tenant_admin(this_tenant):
+            raise PermissionDenied
+
         asset_uuid = UUID(pk) # on valide : NTUI
         asset = get_object_or_404(AssetFedowPublic, pk=asset_uuid)
 
