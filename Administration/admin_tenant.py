@@ -1333,14 +1333,14 @@ class MembershipAddForm(ModelForm):
         label=_("Payment method"),
     )
 
-    card_number = forms.CharField(
-        required=False,
-        min_length=8,
-        max_length=8,
-        label=_("Card number"),
-        validators=[validate_hex8],
-        widget=UnfoldAdminTextInputWidget(),
-    )
+    # card_number = forms.CharField(
+    #     required=False,
+    #     min_length=8,
+    #     max_length=8,
+    #     label=_("Card number"),
+    #     validators=[validate_hex8],
+    #     widget=UnfoldAdminTextInputWidget(),
+    # )
 
     class Meta:
         model = Membership
@@ -1350,11 +1350,9 @@ class MembershipAddForm(ModelForm):
             'option_generale',
         ]
 
-    def clean_card_number(self):
-        cleaned_data = self.cleaned_data
-        prix = cleaned_data.get('prix')
-        import ipdb;
-        ipdb.set_trace()
+    # def clean_card_number(self):
+    #     cleaned_data = self.cleaned_data
+    #     prix = cleaned_data.get('prix')
 
     def clean(self):
         # On vérifie que le moyen de paiement est bien entré si > 0
@@ -1383,9 +1381,9 @@ class MembershipAddForm(ModelForm):
         self.instance.user = user
 
         # Numéro de carte saisi (8 hexa) -> enregistré sur l'adhésion
-        card_number = self.cleaned_data.get('card_number')
-        if card_number:
-            self.instance.card_number = card_number
+        # card_number = self.cleaned_data.get('card_number')
+        # if card_number:
+        #     self.instance.card_number = card_number
 
         # Flotant (FALC) vers Decimal
         contribution = self.cleaned_data.pop('contribution')
@@ -1396,9 +1394,9 @@ class MembershipAddForm(ModelForm):
         self.instance.last_contribution = timezone.localtime()
         # self.instance.set_deadline()
 
-        fedowAPI = FedowAPI()
-        wallet, created = fedowAPI.wallet.get_or_create_wallet(user)
-        linked_serialized_card = fedowAPI.NFCcard.linkwallet_card_number(user=user, card_number=card_number)
+        # fedowAPI = FedowAPI()
+        # wallet, created = fedowAPI.wallet.get_or_create_wallet(user)
+        # linked_serialized_card = fedowAPI.NFCcard.linkwallet_card_number(user=user, card_number=card_number)
 
         # Le post save BaseBillet.signals.create_lignearticle_if_membership_created_on_admin s'executera
         # # Création de la ligne Article vendu qui envera à la caisse si besoin
@@ -1527,7 +1525,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
             'payment_method',
             'first_name',
             'last_name',
-            'card_number',
+            # 'card_number',
         ]:
             value = params.get(key)
             if value not in [None, ""]:

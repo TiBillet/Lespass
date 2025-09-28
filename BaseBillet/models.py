@@ -774,9 +774,8 @@ def post_save_Product(sender, instance: Product, created, **kwargs):
         instance.save()
 
     if instance.categorie_article == Product.FREERES:
-        try:
-            Price.objects.get(product=instance, prix=0, publish=True)
-        except Price.DoesNotExist:
+        # On est sur un produit a réservation gratuite, on fabrique le price s'il n'existe pas ou s'il n'a pas été archivé
+        if not Price.objects.filter(product=instance, prix=0).exists():
             Price.objects.create(product=instance, name="Tarif gratuit", prix=0, publish=True)
 
 
