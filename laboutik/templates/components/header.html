@@ -8,7 +8,7 @@
 		<div id="header-status-info1">info1</div>
 		<div id="header-status-info2">info2</div>
 	</div>
-	<div id="header-title" hx-trigger="load" hx-get="show_pv?uuid_pv={{pv.id}}" hx-target="main" hx-swap="innerHTML">
+	<div id="header-title">
 		<div>{% translate "SERVICE DIRECT" %} - {{ pv.name }} </div>
 	</div>
 	<div class="header-menu pointer" hx-trigger="click" hx-get="main_menu?uuid_pv={{pv.id}}&tag_id_cm={{card.tag_id}}"
@@ -33,13 +33,6 @@
 
 <style>
 	.header-background {
-		--header-height: 65px;
-		--header-img-width: 112px;
-		--header-status-width: 40px;
-		--header-menu-width: 56px;
-		--header-add-img-status: calc(var(--header-img-width) + var(--header-status-width));
-		--header-add-img-status-menu: calc(var(--header-add-img-status) + var(--header-menu-width));
-
 		width: 100%;
 		height: var(--header-height);
 		background-color: var(--bleu09);

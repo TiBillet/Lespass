@@ -1,4 +1,4 @@
-console.log('DEMO =',state.demo.active, '  --  type =', typeof state.demo.active)
+console.log('DEMO =', state.demo.active, '  --  type =', typeof state.demo.active)
 
 import { generatePemKeys, signMessage } from './modules/cryptoRsa.js'
 import { readConfFile, writeConfFile, isCordovaApp } from './modules/hardwareLayer.js'
@@ -10,6 +10,15 @@ const cordovaFileName = 'configLaboutik.json'
 
 // get configuration save in localstorage
 let confLocalStorage = JSON.parse(localStorage.getItem('laboutik'))
+
+async function updateConfigurationFile(configuration) {
+	if (mobile === true) {
+		result = await writeConfFile.cordova(basePath, cordovaFileName, configuration)
+	} else {
+		result = await writeConfFile.http(configuration, PORT)
+	}
+	return result
+}
 
 // delete local configuration and update configuration app
 async function deleteConfs() {
@@ -53,6 +62,12 @@ async function deleteConfs() {
 	}
 }
 
+
+function showPairAgain() {
+	localStorage.removeItem('laboutik')
+	document.querySelector('#new-pair').classList.remove('hide')
+}
+
 window.laboutikNewPair = async function () {
 	const result = await deleteConfs()
 	let redirectionUrl = `http://localhost:${PORT}`
@@ -68,34 +83,12 @@ window.laboutikNewPair = async function () {
 	}
 }
 
-function showPairAgain() {
-	localStorage.removeItem('laboutik')
-	document.querySelector('#new-pair').classList.remove('hide')
-}
-
-// gère le formulaire #form-new-hardware après un hx-post
-window.handleLogin = function (event) {
-	const responseStatus = event.detail.xhr.status
-	if (responseStatus === 200) {
-		let url = currentConfiguration.current_server + 'laboutik/ask_primary_card'
-		window.location.href = url
-	}
-
-	// console.log('response =', response)
-	if (responseStatus === 400 || responseStatus === 401) {
-		const response = JSON.parse(event.detail.xhr.responseText)
-		console.log('response =', response)
-		document.querySelector('#response-error').style.display = 'flex'
-		document.querySelector('#response-error').innerText = response.msg
-	}
-}
-
 async function initLogin() {
 	log({ tag: 'INFO', msg: '-> initLogin' })
 	const configuration = JSON.parse(localStorage.getItem('laboutik'))
-	console.log('-> configuration =', configuration)
+	// console.log('-> configuration =', configuration)
+
 	if (configuration !== null) {
-		const csrf_token = document.querySelector('input[name="csrfmiddlewaretoken"]').value
 		const signature = await signMessage(configuration.keysPemCashlessClient, configuration.password)
 
 		// dev affiche le formulaire
@@ -119,38 +112,20 @@ async function initLogin() {
 	} else {
 		showPairAgain()
 	}
-}
-
-// gère le formulaire #form-new-hardware après un hx-post
-window.handleActivation = function (event) {
-	const responseStatus = event.detail.xhr.status
-	// console.log('-> handleActivation, responseStatus =', responseStatus)
-	if (responseStatus === 201) {
-		// save config app in local storage
-		// console.log('new_hardware ok, configuration =', currentConfiguration)
-		localStorage.setItem('laboutik', JSON.stringify(currentConfiguration))
-		initLogin()
-	}
-
-	if (responseStatus === 400) {
-		showPairAgain()
-	}
 
 }
 
 // remplir le formulaire #form-new-hardware et le valider
 async function activateDevice(configuration) {
 	log({ tag: 'info', msg: '-> activateDevice' })
-	const configServer = configuration.servers.find(item => item.server === configuration.current_server)
-
 	try {
 		// generate client rsa keys pem
 		const keysPemCashlessClient = await generatePemKeys()
-		// add to configuration
-		configuration['keysPemCashlessClient'] = keysPemCashlessClient
+		// to add in local configuration
+		localStorage.setItem('keysPemCashlessClient', JSON.stringify(keysPemCashlessClient))
 
 		// dev affiche le formulaire
-		// document.querySelector('#form-new-hardware').style.display = 'block'
+		//document.querySelector('#form-new-hardware').style.display = 'block'
 
 		// remplir les inputs
 		document.querySelector('#form-new-hardware input[name="version"]').value = configuration.version
@@ -158,7 +133,7 @@ async function activateDevice(configuration) {
 		document.querySelector('#form-new-hardware input[name="password"]').value = configuration.client.password
 		document.querySelector('#form-new-hardware input[name="hostname"]').value = configuration.hostname
 		document.querySelector('#form-new-hardware input[name="periph"]').value = configuration.front_type
-		document.querySelector('#form-new-hardware input[name="public_pem"]').value = configuration.keysPemCashlessClient.publicKey
+		document.querySelector('#form-new-hardware input[name="public_pem"]').value = keysPemCashlessClient.publicKey
 		document.querySelector('#form-new-hardware input[name="pin_code"]').value = configuration.pin_code
 		if (mobile === true) {
 			document.querySelector('#form-new-hardware input[name="ip_lan"]').value = configuration.ip
@@ -173,37 +148,52 @@ async function activateDevice(configuration) {
 	}
 }
 
+
 // main
 function initMain(configuration) {
-	log({ tag: 'INFO', msg: '-> initMain' })
-	// lecture fichier de conf ok
-	if (configuration !== null) {
+	try {
+		//configuration fichier existe
+		if (configuration !== null) {
 
-		// reset confLocalStorage si "login retour" !== "login confLocalStorage"
-		if (confLocalStorage !== null && (configuration.client.password !== confLocalStorage.client.password || configuration.client.username !== confLocalStorage.client.username)) {
-			localStorage.removeItem('laboutik')
-			confLocalStorage = null
-		}
+			// configuration locale n'existe pas
+			if (confLocalStorage === null) {
+				// le périphérique n'est pas activé
+				if (activation === false) {
+					activateDevice(configuration)
+				}
+				// le périphérique est activé
+				if (activation) {
+					const keysPemCashlessClient = JSON.parse(localStorage.getItem('keysPemCashlessClient'))
+					configuration['keysPemCashlessClient'] = keysPemCashlessClient
+					// enregidtrement local de la configuration et login
+					localStorage.setItem('laboutik', JSON.stringify(configuration))
+					// supprime donnée temporaire
+					localStorage.removeItem('keysPemCashlessClient')
+					initLogin()
+				}
+			}
 
-		// login error = client null ou pas de serveur courant désigné
-		if (configuration.client === null || configuration.current_server === "") {
-			// nouvel appairage
+			// configuration locale existe
+			if (confLocalStorage !== null) {
+				// configuration = configuration locale
+				if (configuration.client.password === confLocalStorage.client.password && configuration.client.username === confLocalStorage.client.username) {
+					initLogin()
+				} else {
+					// configuration !== configuration locale
+					deleteConfs()
+					showPairAgain()
+				}
+			}
+
+			console.log('confLocalStorage =', confLocalStorage);
+
+		} else {
+			log({ msg: 'Aucune configuration' })
 			showPairAgain()
-			return
 		}
-
-		// la configuration local n'existe pas
-		if (confLocalStorage === null) {
-			// console.log('. confLocalStorage = null => activateDevice()')
-			activateDevice(configuration)
-			return
-		}
-
-		initLogin()
-	} else {
-		log({ msg: 'Aucune configuration' })
+	} catch (error) {
+		console.log('initMain - error :', error.message);
 	}
-
 }
 
 // mobile

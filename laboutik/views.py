@@ -4,6 +4,7 @@ from django.conf import settings
 from rest_framework import status
 from django.utils.translation import gettext as _
 from json import dumps
+from django_htmx.http import HttpResponseClientRedirect
 
 import sys
 from pathlib import Path
@@ -12,7 +13,11 @@ from pathlib import Path
 # Path(__file__) = /DjangoFiles/laboutik/views.py
 sys.path.append(str(Path(__file__).resolve().parent / "utils"))
 
+# dev
 import mockData
+
+# utils
+import methods
 
 state =  {
 	'version': '0.9.11',
@@ -31,76 +36,98 @@ state =  {
 def login_hardware(request):
 	context = {
 		'state': state,
-    'stateJson': dumps(state)
+		'stateJson': dumps(state)
   }
 	# dev
 	devLoginOk = 1
 	
 	if request.method == 'POST':
 		if devLoginOk == 1:
-			return JsonResponse({"user_activation": "true"}, status=status.HTTP_200_OK)
+			return HttpResponseClientRedirect('ask_primary_card')
 
 		if devLoginOk == 0:
-			return JsonResponse({"msg": _("Utilisateur non actif. Relancez l'appairage.")},status=status.HTTP_401_UNAUTHORIZED)
+			context = {
+				'error': _("Utilisateur non actif. Relancez l'appairage.")
+			}
+			return render(request, "components/new-hardware-error.html", context)
 
 		# DEBUG = AttributeError: module 'rest_framework.status' has no attribute 'HTTP_400_UNAUTHORIZED'  
 		if devLoginOk == 2:
-			return JsonResponse({"msg": _("*** login_hardware_validator.errors ***")},status=status.HTTP_400_UNAUTHORIZED)
+			context = {
+				'error': _("*** login_hardware_validator.errors ***")
+			}
+			return render(request, "components/hardware-login-error.html", context)
+
+	if request.method == 'GET':
+		activation = request.GET.get('activation')
+		context['activation'] = activation
 
 	return render(request, "views/login_hardware.html", context)
 
+
 def new_hardware(request):
 	# dev
-	devHardwareOk = 1
+	devHardwareOk = True
 
-	if devHardwareOk == 1:
-		print(f"username = {request.POST['username']}")
+	# hardware active
+	if devHardwareOk == True:
 		# Le code pin a été validé, on renvoie vers la page de login
-		return JsonResponse({"msg": "ok"}, status=status.HTTP_201_CREATED)
+		return HttpResponseClientRedirect('login_hardware?activation=1')
 
-	if devHardwareOk == 0:
-		return JsonResponse({'msg': _("Appareil déja en cours d'utilisation. Désactivez le d'abord pour un nouvel appairage.")},status=status.HTTP_400_BAD_REQUEST)
+	# error
+	if devHardwareOk == False:
+		context = {
+			'error': _("Appareil déja en cours d'utilisation. Désactivez le d'abord pour un nouvel appairage.")
+		}
+		return render(request, "components/new-hardware-error.html", context)
 
 def ask_primary_card(request):
+	# dev
 	state['demo']['active'] = False
+	
 	context = {
 		'state': state,
     'stateJson': dumps(state)
   }
 
 	if request.method == 'POST':
-		if request.POST.get('type-action') == 'valider_carte_maitresse':
-			tag_id_cm = request.POST.get('tag-id-cm').upper()
-			print(f"ask_primary_card, tag_id_cm = {tag_id_cm}")
-			
-			# dev
-			token = 'jkjhhjjjjkmlkmlkmlkmlk'
-			carte_perdu = False
-			testCard = mockData.get_card_from_tagid(tag_id_cm)
-			print(f"laboutik - DEV | testCard = {testCard}")
+		tag_id_cm = request.POST.get('tag-id-cm').upper()
+		print(f"ask_primary_card, tag_id_cm = {tag_id_cm}")
 
-			# carte primaire
-			if testCard["type_card"] == "primary_card" and testCard["tag_id"] == "A49E8E2A":
-				print("laboutik - DEV | c'est une carte primaire")
-				# carte perdue
-				if carte_perdu:
-					return JsonResponse({"msg": _("Carte perdue ? On passe en non primaire")},status=status.HTTP_400_BAD_REQUEST)
-				else:
-					# trouver uuid pv 0
-					uuid_pv = testCard['pvs_list'][0]['uuid']
-					print(f"laboutik - DEV | uuid pv = {uuid_pv}")
-					# trouver responssable
+		# dev
+		carte_perdu = False
+		testCard = mockData.get_card_from_tagid(tag_id_cm)
+		print(f"laboutik - DEV | testCard = {testCard}")
 
-					return JsonResponse({"uuid_pv": uuid_pv, "tag_id_cm": tag_id_cm},status=status.HTTP_201_CREATED)
+		# carte primaire
+		if testCard["type_card"] == "primary_card" and testCard["tag_id"] == "A49E8E2A":
+			print("laboutik - DEV | c'est une carte primaire")
+			# carte perdue
+			if carte_perdu:
+				context = {
+					'msg': _("Carte perdue ? On passe en non primaire")
+				}
+				return render(request, "components/primary_card_message.html", context)
+			else:
+				uuid_pv = testCard['pvs_list'][0]['uuid']
+				print(f"laboutik - DEV | uuid pv = {uuid_pv}")
+				return HttpResponseClientRedirect('pv_route?uuid_pv=' + uuid_pv + '&tag_id_cm=' + tag_id_cm)
 
-			# carte cliente
-			if testCard["type_card"] == "client_card":
-				print("laboutik - DEV | c'est une carte client")
-				return JsonResponse({"msg": _("Carte non primaire")},status=status.HTTP_400_BAD_REQUEST)
-			
-			# carte inconnue
-			if testCard["type_card"] == "unknown":
-				return JsonResponse({"msg": _("Carte inconnue")},status=status.HTTP_400_BAD_REQUEST)
+		# carte cliente
+		if testCard["type_card"] == "client_card":
+			print("laboutik - DEV | c'est une carte client")
+			context = {
+				'msg': _("Carte non primaire")
+			}
+			return render(request, "components/primary_card_message.html", context)
+
+		# carte inconnue
+		if testCard["type_card"] == "unknown":
+			context = {
+				'msg':  _("Carte inconnue")
+			}
+			return render(request, "components/primary_card_message.html", context)
+
 
 	return render(request, "views/ask_primary_card.html", context)
 
@@ -124,16 +151,16 @@ def show_pv(request):
 	uuid_pv = request.GET.get('uuid_pv')
 	pv = mockData.get_pv_from_uuid(uuid_pv)
 	context = {
-		'pv': pv,
-		'configuration': mockData.configuration
+		'pv': pv
 	}
 	return render(request, "components/show_pv.html", context)
 
 
 def pv_route(request):
+	id_tables = request.GET.get('id_tables')
 	uuid_pv = request.GET.get('uuid_pv')
 	tag_id_cm = request.GET.get('tag_id_cm')
-	print(f"laboutik - DEV | uuid_pv = {uuid_pv}  --  tag_id_cm = {tag_id_cm}")
+	print(f"laboutik - DEV | uuid_pv = {uuid_pv}  --  tag_id_cm = {tag_id_cm}  --  id_tables = {id_tables}")
 	pv = mockData.get_pv_from_uuid(uuid_pv)
 	card = mockData.get_card_from_tagid(tag_id_cm)
 	# restaurent par défaut
@@ -149,10 +176,24 @@ def pv_route(request):
 
 
 	print(f"laboutik - DEV | template = {template}")
+
+	state["comportement"] = pv["comportement"]
+	state["afficher_les_prix"] = pv["afficher_les_prix"]
+	state["accepte_especes"] = pv["accepte_especes"]
+	state["accepte_carte_bancaire"] = pv["accepte_carte_bancaire"]
+	state["accepte_cheque"] = pv["accepte_cheque"]
+	state["accepte_commandes"] = pv["accepte_commandes"]
+	state["service_direct"] = pv["service_direct"]
+	state["monnaie_principale_name"] = "TestCoin"
+	state["passageModeGerant"] = True
+	state["modeGerant"] = False
+	state["currencyData"] = {"cc": "EUR", "symbol": "€", "name": "European Euro"}
+
 	context = {
 		'state': state,
+		'stateJson': dumps(state),
 		'pv': pv,
 		'card': card,
-		'configuration': mockData.configuration
+		'categories': methods.filter_categories(pv)
 	}
 	return render(request, "views/" + template, context)

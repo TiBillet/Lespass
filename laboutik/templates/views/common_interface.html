@@ -6,7 +6,10 @@
 <!-- header + nav -->
 {% include "components/header.html" %}
 <main>
-
+	<nav id="categories">
+		{% include "components/categories.html" %}
+	</nav>
+	<div id="products" hx-trigger="load" hx-get="show_pv?uuid_pv={{pv.id}}" hx-target="#products" hx-swap="innerHTML"></div>
 </main>
 <footer>
 
@@ -18,6 +21,36 @@
 
 {% block css %}
 <style>
+	main {
+		display: flex;
+		flex-direction: row;
+		justify-content: start;
+		align-items: start;
+		width: 100%;
+		height: var(--main-container-height);
+		margin: 0;
+		padding: 0;
+		background-color: aqua;
+		overflow: hidden;
+	}
 
+	#categories {
+		width: var(--cat-width);
+		height: 100%;
+		background-color: var(--bleu08);
+	}
+
+	#products {
+		display: block;
+		width: calc(100% - var(--cat-width));
+		height: 100%;
+		background-color: bisque;
+	}
+
+	footer {
+		width: 100%;
+		height: var(--footer-container-height);
+		background-color: var(vert04);
+	}
 </style>
 {% endblock css %}

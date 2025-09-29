@@ -1,0 +1,41 @@
+{% load static i18n %}
+
+<div id="bt-bascule-addition" class="BF-col categories-item">
+	<i class="fas fa-list"></i>
+	<div class="categories-nom">{% translate "Sélection" %}</div>
+</div>
+
+<div id="categorie-tous" class="BF-col categories-item categories-item-active">
+	<i class="fas fa-th"></i>
+	<div class="categories-nom">{% translate "Tous" %}</div>
+</div>
+
+{% for cat in categories %}
+<div id="categorie-tous" class="BF-col categories-item active">
+	<i class="fas {{cat.icon}}"></i>
+	<div class="categories-nom">{{ cat.name }}</div>
+</div>
+{% endfor %}
+
+<style>
+	.categories-item {
+		width: 100%;
+		min-height: 60px;
+		border-bottom: 1px solid var(--noir02);
+		padding: 4px 0;
+		cursor: pointer;
+		color: var(--gris07);
+		overflow: hidden;
+		i {
+			font-size: var(--cat-font-size);
+			text-shadow: 2px 2px var(--gris07);
+		}
+	}
+
+	.categories-item-active {
+		color: var(--blanc01);
+		i {
+			text-shadow: 2px 2px var(--blanc01);
+		}
+	}
+</style>

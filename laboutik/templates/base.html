@@ -17,12 +17,9 @@
 	<script>
 		const state = JSON.parse("{{stateJson|escapejs}}")
 	</script>
-	{% if not demo %}
-	<!-- <script src="https://js.sentry-cdn.com/677e4405e6f765888fdec02d174000d6.min.js" crossorigin="anonymous"></script> -->
-	{% endif %}
 </head>
 
-<body id="contenu" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-on::before-request="spinnerOn()" hx-on::after-request="spinnerOff()">
+<body id="contenu" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-on::before-request="spinnerOn()" hx-on::after-request="spinnerOff()" style="background-color:#000000;">
 	{% block content %} {% endblock content %}
 
 	{% include "components/spinner.html" %}

@@ -3,20 +3,15 @@
 {% load static i18n %}
 
 {% block content %}
-<!-- login_hardware -->
-<form id="form-login-hardware" hx-post="/laboutik/login_hardware" hx-swap="none"
-	hx-on::after-request="handleLogin(event)" class="hide">
-	{% csrf_token %}
-	<input type="text" name="username" required>
-	<input type="password" name="password" required>
-	<input type="text" name="periph" required>
-	<input type="text" name="signature" required>
-	<input type="text" name="ip_lan" required>
-	<button type="submit">Login</button>
-</form>
+{% if activation == "1" %}
+<script>const activation = true</script>
+{% else %}
+<script>const activation = false</script>
+{% endif %}
+
 <!-- new_hardware -->
-<form id="form-new-hardware" hx-post="/laboutik/new_hardware" hx-swap="none"
-	hx-on::after-request="handleActivation(event)" class="hide">
+<form id="form-new-hardware" hx-post="/laboutik/new_hardware" hx-target="#hardware-error-container" hx-swap="outerHTML"
+	class="hide">
 	{% csrf_token %}
 	<input type="text" name="version" required>
 	<input type="text" name="username" required>
@@ -29,34 +24,59 @@
 	<button type="submit">Login</button>
 </form>
 
-<div id="response-error" class="BF-col l100p h100p hide" onclick="laboutikNewPair();"></div>
+<!-- login_hardware -->
+<form id="form-login-hardware" hx-post="/laboutik/login_hardware" hx-target="#hardware-error-container"
+	hx-swap="outerHTML" class="hide">
+	{% csrf_token %}
+	<input type="text" name="username" required>
+	<input type="password" name="password" required>
+	<input type="text" name="periph" required>
+	<input type="text" name="signature" required>
+	<input type="text" name="ip_lan" required>
+	<button type="submit">Login</button>
+</form>
 
-<div id="new-pair" class="BF-col l100p h100p hide" onclick="laboutikNewPair();">
-	<h1>{% translate "Faire un nouvel appairage" %}</h1>
-	<h1>{% translate "et cliquer" %}</h1>
+
+<div id="hardware-error-container" class="hide"></div>
+
+<div id="new-pair" class="BF-col  l100p h100p hide">
+	<button class="new-pair-bt" onclick="laboutikNewPair()">
+		{% translate "Faire un nouvel appairage" %}
+	</button>
 </div>
 {% endblock content %}
 
 {% block script %}
-<!-- socket.io pour identification avec profil -->
 <script src="{% static 'js/socket.io.3.0.4.js' %}"></script>
 <script type="module" src="{% static 'js/login_hardware.js' %}"></script>
 {% endblock script %}
 
 {% block css %}
 <style>
-	#response-error {
-		font-size: 2rem;
+	#new-pair,
+	#hardware-error-container {
+		font-size: 1rem;
 		background-color: var(--bleu03);
 		color: var(--blanc01);
+	}
+
+	.hardware-error {
 		white-space: pre-line;
 		text-align: center;
 	}
 
-	#new-pair {
-		font-size: 2rem;
-		background-color: var(--bleu03);
-		color: var(--blanc01);
+	.new-pair-bt {
+		width: 300px;
+		height: 80px;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+		font-size: 1.3rem;
+		margin: 0;
+		padding: 0;
+		cursor: pointer;
+		color: var(--noir01);
 	}
 </style>
 {% endblock css %}

@@ -2071,13 +2071,6 @@ cards = [
 	},
 ]
 
-configuration = {
-  "monnaie_principale_name": "TestCoin",
-  "passageModeGerant": True,
-  "modeGerant": False,
-  "currencyData": {"cc": "EUR", "symbol": "€", "name": "European Euro"},
-}
-
 def get_card_from_tagid(tag_id):
 	retour = {"type_card": "unknown", "tag_id": "unknown", "pvs_list": []}
 	for card in cards:

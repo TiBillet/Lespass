@@ -4,18 +4,15 @@
 
 {% block content %}
 
-<form id="form-nfc" class="hide" hx-post="ask_primary_card" hx-trigger="nfcResult" hx-swap="none"
-	hx-on::after-request="handleNfc(event)">
+<form id="form-nfc" class="hide" hx-post="ask_primary_card" hx-trigger="nfcResult" hx-target="#message-nfc"
+	hx-swap="outerHTML" hx-on::after-request="nfc.start()">
 	{% csrf_token %}
-	<input id="type-action" name="type-action" value="valider_carte_maitresse" />
 	<input id="tag-id-cm" name="tag-id-cm" />
 </form>
 
 <div id="nfc-container" role="status" aria-label="waiting primary card">
-	<div>
-		<h1>{% translate "Attente carte primaire" %}</h1>
-		<div id="retour-nfc"></div>
-	</div>
+	<h1>{% translate "Attente carte primaire" %}</h1>
+	<div id="message-nfc"></div>
 </div>
 
 <div id="spinner-container-nfc">
@@ -27,26 +24,8 @@
 <script src="{% static 'js/socket.io.3.0.4.js' %}"></script>
 <script src="{% static 'js/nfc.js' %}?{{ version }}"></script>
 
-<!-- lecteure nfc -->
+<!-- lance le lecteure nfc -->
 <script>
-	// Handle nfc
-	window.handleNfc = function (event) {
-		let msg = ''
-		const xhr = event.detail.xhr
-		const responseStatus = xhr.status
-		if (responseStatus === 400) {
-			msg = JSON.parse(xhr.response).msg
-			document.querySelector('#retour-nfc').innerHTML = `<h1 style="color: var(--yellow00)">${msg}</h1>`
-			// relance la lecture
-			nfc.start()
-		}
-
-		if (responseStatus === 201) {
-			const data = JSON.parse(xhr.response)
-			window.location = `pv_route?uuid_pv=${data.uuid_pv}&tag_id_cm=${data.tag_id_cm}`
-		}
-	}
-
 	// lance le lecteur nfc
 	document.addEventListener('DOMContentLoaded', () => {
 		window.nfc = new NfcReader()
@@ -91,7 +70,7 @@
 		text-align: center;
 	}
 
-	#retour-nfc {
+	#message-nfc {
 		flex-direction: row;
 		justify-content: center;
 		align-items: center;

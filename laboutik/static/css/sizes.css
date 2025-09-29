@@ -1,0 +1,24 @@
+:root {
+	/* header */
+	--header-height: 65px;
+	--header-img-width: 112px;
+	--header-status-width: 40px;
+	--header-menu-width: 56px;
+	--header-add-img-status: calc(var(--header-img-width) + var(--header-status-width));
+	--header-add-img-status-menu: calc(var(--header-add-img-status) + var(--header-menu-width));
+
+	/* nav category */
+	--cat-width: 80px;
+	--cat-font-size: 2.4rem;
+
+	/* footer */
+	--footer-container-height: 90px;
+
+	/* main */
+	--no-main-container-height: calc(var(--header-height) + var(--footer-container-height));
+	--main-container-height: calc(100% - var(--no-main-container-height));
+
+	/* bouton article */
+	--bt-article-width: 120px;
+	--bt-article-height: 120px;
+}
