@@ -262,18 +262,14 @@ class ReservationValidator(serializers.Serializer):
 
     def validate_email(self, value):
         logger.info(f"validate email : {value}")
-        # On vérifie que l'utilisateur connecté et l'email correspondent bien.
-        request = self.context.get('request')
+        if not hasattr(self, 'admin_created'): # Si ça n'est pas un ticket créé dans l'admin :
+            # On vérifie que l'utilisateur connecté et l'email correspondent bien.
+            request = self.context.get('request')
+            if request.user.is_authenticated:
+                if request.user.email != value:
+                    raise serializers.ValidationError(_(f"Email does not match logged-in user."))
 
-        if request.user.is_authenticated:
-            if request.user.email != value:
-                raise serializers.ValidationError(_(f"Email does not match logged-in user."))
-            user = request.user
-
-        else:
-            user = get_or_create_user(value)
-
-        self.user = user
+        self.user = get_or_create_user(value)
         return value
 
     def validate_options(self, value):
@@ -300,7 +296,14 @@ class ReservationValidator(serializers.Serializer):
         """
         logger.info(f"validate : {attrs}")
         event = self.event
-        products_dict = self.extract_products()
+
+        if not hasattr(self, 'admin_created') :
+            # Si ça n'est pas un ticket créé dans l'admin, on va chercher les produits dans le POST
+            products_dict = self.extract_products()
+        else :
+            # c'est appellé depuis ADD de l'admin ticket
+            products_dict = getattr(self, 'products_dict')
+
         user = self.user
         options = attrs.get('options')
 
@@ -326,7 +329,6 @@ class ReservationValidator(serializers.Serializer):
 
                 # Check adhésion
                 if price.adhesion_obligatoire:
-                    valid_membership = False
                     if not user.memberships.filter(price__product=price.adhesion_obligatoire, deadline__gte=timezone.now()).exists():
                         logger.warning(_(f"User is not subscribed."))
                         raise serializers.ValidationError(_(f"User is not subscribed."))
@@ -340,9 +342,10 @@ class ReservationValidator(serializers.Serializer):
             raise serializers.ValidationError(_(f'Order quantity surpasses maximum allowed per user.'))
 
         # Pour vérification plus bas que le prix libre est bien seul
-        if self.free_price:
-            if len(self.products) > 1:
-                raise serializers.ValidationError(_(f'A free price must be selected alone.'))
+        if hasattr(self, 'free_price'):
+            if self.free_price:
+                if len(self.products) > 1:
+                    raise serializers.ValidationError(_(f'A free price must be selected alone.'))
 
         # Vérification de la jauge
         valid_tickets_count = event.valid_tickets_count()
@@ -367,16 +370,6 @@ class ReservationValidator(serializers.Serializer):
             ).exists():
                 raise serializers.ValidationError(_(f'You have already booked this slot.'))
 
-        """
-        TODO: Verifier l'adhésion
-        # si un tarif à une adhésion obligatoire, on confirme que :
-        # Soit l'utilisateur est membre,
-        # Soit il paye l'adhésion en même temps que le billet :
-        all_price_buy = [price_object['price'] for price_object in self.prices_list]
-        all_product_buy = [price.product for price in all_price_buy]
-        for price_object in self.prices_list:
-            price: Price = price_object['price']
-        """
 
         # Collect dynamic custom form fields from request (names prefixed with 'form__')
         request = self.context.get('request')
@@ -438,7 +431,7 @@ class ReservationValidator(serializers.Serializer):
             reservation=reservation,
             products_dict=products_dict,
         )
-
+        self.reservation = reservation
         # On récupère le lien de paiement fabriqué dans le TicketCreator si besoin :
         self.checkout_link = self.tickets.checkout_link if self.tickets.checkout_link else None
 

@@ -76,6 +76,7 @@ from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Pai
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
     webhook_membership, create_ticket_pdf, ticket_celery_mailer, send_ticket_cancellation_user, \
     send_reservation_cancellation_user
+from BaseBillet.validators import ReservationValidator
 from Customers.models import Client
 from MetaBillet.models import WaitingConfiguration
 from fedow_connect.fedow_api import AssetFedow, FedowAPI
@@ -899,21 +900,23 @@ class PriceChangeForm(ModelForm):
         )
 
     def clean_recurring_payment(self):
-        data = self.data  # récupère les data sans les avoir validé
-        if data.get('recurring_payment') and data.get('free_price'):
-            raise forms.ValidationError(_("Un tarif ne peut être récurent et libre."), code="invalid")
-
         cleaned_data = self.cleaned_data  # récupère les donnée au fur et a mesure des validation, attention a l'ordre des fields
-        product: Product = self.cleaned_data['product']
-        if product.categorie_article != Product.ADHESION:
-            raise forms.ValidationError(
-                _("Un tarif en mode paiement récurrent doit être avoir un produit de type adhésion."), code="invalid")
+        recurring_payment = cleaned_data.get('recurring_payment')
+        if recurring_payment:
+            data = self.data  # récupère les data sans les avoir validé
+            if data.get('free_price'):
+                raise forms.ValidationError(_("Un tarif ne peut être récurent et libre."), code="invalid")
 
-        if data.get('subscription_type') not in [Price.DAY, Price.WEEK, Price.MONTH, Price.CAL_MONTH, Price.YEAR]:
-            raise forms.ValidationError(_("Un paiement récurent ne peut être que : day, week, month, year"),
-                                        code="invalid")
+            product: Product = self.cleaned_data['product']
+            if product.categorie_article != Product.ADHESION:
+                raise forms.ValidationError(
+                    _("Un tarif en mode paiement récurrent doit avoir un produit de type adhésion."), code="invalid")
 
-        return cleaned_data['recurring_payment']
+            if data.get('subscription_type') not in [Price.DAY, Price.WEEK, Price.MONTH, Price.CAL_MONTH, Price.YEAR]:
+                raise forms.ValidationError(_("Un paiement récurent ne peut être que : day, week, month, year"),
+                                            code="invalid")
+
+        return recurring_payment
 
     def clean_prix(self):
         cleaned_data = self.cleaned_data  # récupère les donnée au fur et a mesure des validation, attention a l'ordre des fields
@@ -1663,7 +1666,7 @@ class LigneArticleAdmin(ModelAdmin):
         'productsold',
         'datetime',
         'amount_decimal',
-        'qty',
+        '_qty',
         'vat',
         'total_decimal',
         'display_status',
@@ -1683,6 +1686,10 @@ class LigneArticleAdmin(ModelAdmin):
     @display(description=_("Value"))
     def amount_decimal(self, obj):
         return dround(obj.amount)
+
+    @display(description=_("Quantité"))
+    def _qty(self, obj):
+        return dround(obj.qty)
 
     @display(description=_("Total"))
     def total_decimal(self, obj: LigneArticle):
@@ -2249,6 +2256,159 @@ class ReservationValidFilter(admin.SimpleListFilter):
             ).distinct()
 
 
+
+class ReservationAddAdmin(ModelForm):
+    # Uniquement les tarif Adhésion
+    email = forms.EmailField(
+        required=True,
+        widget=UnfoldAdminEmailInputWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
+        label="Email",
+    )
+
+    pricesold = forms.ModelChoiceField(
+        queryset=PriceSold.objects.filter(
+            productsold__event__datetime__gte=timezone.localtime() - timedelta(days=1)).order_by(
+            "productsold__event__datetime"),
+        # Remplis le champ select avec les objets Price
+        empty_label=_("Select a product"),  # Texte affiché par défaut
+        required=True,
+        widget=UnfoldAdminSelectWidget(),
+        label=_("Rate")
+    )
+
+    options_checkbox = forms.ModelMultipleChoiceField(
+        # Uniquement les options qui sont utilisé dans les évènements futurs
+        required=False,
+        queryset=OptionGenerale.objects.filter(
+            options_checkbox__datetime__gte=timezone.localtime() - timedelta(days=1)),
+        widget=UnfoldAdminCheckboxSelectMultiple(),
+        label=_("Multiple choice menu"),
+    )
+
+    options_radio = forms.ModelChoiceField(
+        # Uniquement les options qui sont utilisé dans les évènements futurs
+        required=False,
+        queryset=OptionGenerale.objects.filter(options_radio__datetime__gte=timezone.localtime() - timedelta(days=1)),
+        widget=UnfoldAdminRadioSelectWidget(),
+        label=_("Single choice menu"),
+    )
+
+    payment_method = forms.ChoiceField(
+        required=False,
+        choices=PaymentMethod.not_online(),  # on retire les choix stripe
+        widget=UnfoldAdminSelectWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
+        label=_("Payment method"),
+    )
+
+    class Meta:
+        model = Reservation
+        fields = []
+            # 'first_name',
+            # 'last_name',
+        # ]
+
+    def clean_payment_method(self):
+        cleaned_data = self.cleaned_data
+        pricesold = cleaned_data.get('pricesold')
+        payment_method = cleaned_data.get('payment_method')
+        if pricesold.productsold.categorie_article == Product.FREERES and payment_method != PaymentMethod.FREE:
+            raise forms.ValidationError(_("Une reservation gratuite doit être en paiement OFFERT"), code="invalid")
+        return payment_method
+
+    def clean(self):
+        # Passage dans le même tuyaux de le front avec le validator qui va créer les tickets
+        cleaned_data = self.cleaned_data
+        email = cleaned_data.pop('email')
+        pricesold: PriceSold = cleaned_data.pop('pricesold')
+        event: Event = pricesold.productsold.event
+
+        # On va chercher les options
+        options = []
+        options_checkbox = cleaned_data.pop('options_checkbox')
+        if options_checkbox:
+            for option in options_checkbox:
+                options.append(option.uuid)
+        options_radio = cleaned_data.pop('options_radio')
+        if options_radio:
+            options.append(options_radio.uuid)
+
+        data = {
+            'email': email,
+            'event': event.uuid,
+            'options': options,
+        }
+
+
+        validator = ReservationValidator(data=data)
+        validator.admin_created = True # variable dans le validator qui bypass certaines vérifications
+        validator.products_dict = {pricesold.productsold.product : {pricesold.price: 1}}
+        validator.is_valid()
+        # Conserver le validator pour l'utiliser dans l'admin (récupérer la réservation créée)
+        self.validator = validator
+        
+        return super().clean()
+
+    def save(self, commit=True):
+        return super().save(commit=False)
+
+    def save_m2m(self):
+        # No-op: When admin.save_form returns an already-saved object (created via
+        # ReservationValidator in clean()), Django admin still calls form.save_m2m().
+        # Since we bypass form.save(), this method might not be auto-injected by
+        # ModelForm, so we provide a harmless no-op to avoid AttributeError.
+        pass
+
+        """
+        # Collecte des champs dynamiques (prefix 'form__') pour le produit sélectionné
+        try:
+            product = pricesold.price.product
+            # Map des champs attendus pour ce produit
+            product_fields = {ff.name: ff for ff in ProductFormField.objects.filter(product=product)}
+        except Exception:
+            product_fields = {}
+
+        custom_form = {}
+        data = getattr(self, 'data', {})
+        for name, ff in product_fields.items():
+            key = f"form__{name}"
+            # Gestion des multi-select à partir de QueryDict
+            if hasattr(data, 'getlist') and ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
+                value = data.getlist(key)
+            else:
+                value = data.get(key)
+                if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
+                    if value in [None, '']:
+                        value = []
+                    elif not isinstance(value, list):
+                        value = [value]
+
+            # Champs requis
+            if ff.required:
+                if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
+                    if not value:
+                        raise ValidationError({key: [_('This field is required.')]})
+                else:
+                    if value in [None, '']:
+                        raise ValidationError({key: [_('This field is required.')]})
+
+            # Stocker uniquement les valeurs non vides
+            if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
+                if value:
+                    custom_form[name] = value
+            else:
+                if value not in [None, '']:
+                    custom_form[name] = value
+
+        if custom_form:
+            reservation.custom_form = custom_form
+            reservation.save(update_fields=['custom_form'])
+        """
+
+        # Le post save BaseBillet.signals.create_lignearticle_if_ticket_created_on_admin s'executera
+        # # Création de la ligne Article vendu qui envera à la caisse si besoin
+
+
+
 class ReservationCustomFormSection(TemplateSection):
     template_name = "admin/reservation/custom_form_section.html"
     verbose_name = _("Custom form answers")
@@ -2258,6 +2418,38 @@ class ReservationCustomFormSection(TemplateSection):
 class ReservationAdmin(ModelAdmin):
     # Expandable section to display custom form answers in changelist
     list_sections = [ReservationCustomFormSection]
+
+    # Formulaire de création. A besoin de get_form pour fonctionner
+    add_form = ReservationAddAdmin
+    def get_form(self, request, obj=None, **kwargs):
+        """ Si c'est un add, on modifie le formulaire"""
+        defaults = {}
+        if obj is None:
+            defaults['form'] = self.add_form
+        defaults.update(kwargs)
+        return super().get_form(request, obj, **defaults)
+
+    def save_form(self, request, form, change):
+        """
+        Lors de l'ajout depuis l'admin, le ReservationValidator appelé dans le
+        formulaire crée déjà la Reservation et les Tickets. On renvoie donc
+        directement l'objet Reservation créé par le validator pour que l'admin
+        procède au flux standard (log_addition, response_add) sans tenter une
+        nouvelle sauvegarde via form.save().
+        """
+        if isinstance(form, ReservationAddAdmin) and hasattr(form, 'validator') and hasattr(form.validator, 'reservation'):
+            return form.validator.reservation  # déjà sauvegardé par le validator
+        return super().save_form(request, form, change)
+
+    def save_model(self, request, obj, form, change):
+        """
+        Empêche un deuxième save() lorsque l'on est sur le formulaire d'ajout
+        personnalisé: l'objet est déjà créé par le validator dans form.clean().
+        """
+        if isinstance(form, ReservationAddAdmin):
+            return  # ne rien faire, éviter un doublon
+        super().save_model(request, obj, form, change)
+
 
     list_display = (
         'datetime',
@@ -2324,133 +2516,6 @@ class ReservationAdmin(ModelAdmin):
         return False
 
 
-class TicketAddAdmin(ModelForm):
-    # Uniquement les tarif Adhésion
-    email = forms.EmailField(
-        required=True,
-        widget=UnfoldAdminEmailInputWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
-        label="Email",
-    )
-
-    pricesold = forms.ModelChoiceField(
-        queryset=PriceSold.objects.filter(productsold__event__datetime__gte=timezone.localtime() - timedelta(days=1)).order_by("productsold__event__datetime"),
-        # Remplis le champ select avec les objets Price
-        empty_label=_("Select a product"),  # Texte affiché par défaut
-        required=True,
-        widget=UnfoldAdminSelectWidget(),
-        label=_("Rate")
-    )
-
-    options_checkbox = forms.ModelMultipleChoiceField(
-        # Uniquement les options qui sont utilisé dans les évènements futurs
-        required=False,
-        queryset=OptionGenerale.objects.filter(
-            options_checkbox__datetime__gte=timezone.localtime() - timedelta(days=1)),
-        widget=UnfoldAdminCheckboxSelectMultiple(),
-        label=_("Multiple choice menu"),
-    )
-
-    options_radio = forms.ModelChoiceField(
-        # Uniquement les options qui sont utilisé dans les évènements futurs
-        required=False,
-        queryset=OptionGenerale.objects.filter(options_radio__datetime__gte=timezone.localtime() - timedelta(days=1)),
-        widget=UnfoldAdminRadioSelectWidget(),
-        label=_("Single choice menu"),
-    )
-
-    payment_method = forms.ChoiceField(
-        required=False,
-        choices=PaymentMethod.not_online(),  # on retire les choix stripe
-        widget=UnfoldAdminSelectWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
-        label=_("Payment method"),
-    )
-
-
-    class Meta:
-        model = Ticket
-        fields = [
-            'first_name',
-            'last_name',
-        ]
-
-    def clean(self):
-        return super().clean()
-
-    def save(self, commit=True):
-        cleaned_data = self.cleaned_data
-        ticket: Ticket = self.instance
-        # On indique que l'adhésion a été créé sur l'admin
-        ticket.status = Ticket.CREATED
-        ticket.sale_origin = SaleOrigin.ADMIN
-        ticket.payment_method = self.cleaned_data.pop('payment_method')
-
-        # Création de l'objet reservation avec l'user
-        email = self.cleaned_data.pop('email')
-        user = get_or_create_user(email)
-
-        # Création de l'objet reservation
-        pricesold: PriceSold = cleaned_data.pop('pricesold')
-        event: Event = pricesold.productsold.event
-        reservation = Reservation.objects.create(user_commande=user, event=event)
-        ticket.reservation = reservation
-
-        # On va chercher les options
-        options_checkbox = cleaned_data.pop('options_checkbox')
-        if options_checkbox:
-            reservation.options.set(options_checkbox)
-        options_radio = cleaned_data.pop('options_radio')
-        if options_radio:
-            reservation.options.add(options_radio)
-
-        # Collecte des champs dynamiques (prefix 'form__') pour le produit sélectionné
-        try:
-            product = pricesold.price.product
-            # Map des champs attendus pour ce produit
-            product_fields = {ff.name: ff for ff in ProductFormField.objects.filter(product=product)}
-        except Exception:
-            product_fields = {}
-
-        custom_form = {}
-        data = getattr(self, 'data', {})
-        for name, ff in product_fields.items():
-            key = f"form__{name}"
-            # Gestion des multi-select à partir de QueryDict
-            if hasattr(data, 'getlist') and ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
-                value = data.getlist(key)
-            else:
-                value = data.get(key)
-                if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
-                    if value in [None, '']:
-                        value = []
-                    elif not isinstance(value, list):
-                        value = [value]
-
-            # Champs requis
-            if ff.required:
-                if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
-                    if not value:
-                        raise ValidationError({key: [_('This field is required.')]})
-                else:
-                    if value in [None, '']:
-                        raise ValidationError({key: [_('This field is required.')]})
-
-            # Stocker uniquement les valeurs non vides
-            if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
-                if value:
-                    custom_form[name] = value
-            else:
-                if value not in [None, '']:
-                    custom_form[name] = value
-
-        if custom_form:
-            reservation.custom_form = custom_form
-            reservation.save(update_fields=['custom_form'])
-
-        # Le post save BaseBillet.signals.create_lignearticle_if_membership_created_on_admin s'executera
-        # # Création de la ligne Article vendu qui envera à la caisse si besoin
-        return super().save(commit=commit)
-
-
 class TicketChangeAdmin(ModelForm):
     class Meta:
         model = Ticket
@@ -2513,8 +2578,6 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
 
     # Formulaire de modification
     form = TicketChangeAdmin
-    # Formulaire de création. A besoin de get_form pour fonctionner
-    add_form = TicketAddAdmin
 
     list_display = [
         'ticket',
@@ -2603,7 +2666,7 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
             return True, obj.get_status_display()
         elif obj.status == Ticket.SCANNED:
             return 'scanned', obj.get_status_display()
-        logger.info(f"state: {obj.status} - {obj.get_status_display()}")
+        # logger.info(f"state: {obj.status} - {obj.get_status_display()}")
         return None, obj.get_status_display()
 
     # noinspection PyTypeChecker
@@ -2742,13 +2805,6 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
             )
         return redirect(request.META["HTTP_REFERER"])
 
-    def get_form(self, request, obj=None, **kwargs):
-        """ Si c'est un add, on modifie le formulaire"""
-        defaults = {}
-        if obj is None:
-            defaults['form'] = self.add_form
-        defaults.update(kwargs)
-        return super().get_form(request, obj, **defaults)
 
     def has_custom_actions_row_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
@@ -2757,10 +2813,10 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
     def has_change_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
+        return False
 
     def has_add_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
+        return False
 
     def has_delete_permission(self, request, obj=None):
         # return request.user.is_superuser
@@ -3322,7 +3378,6 @@ class AssetAdmin(ModelAdmin):
         'pending_invitations',
     ]
 
-
     def _federated_with(self, obj):
         feds = [place.name for place in obj.federated_with.all()]
         feds.append(obj.origin.name)
@@ -3445,7 +3500,8 @@ class AssetAdmin(ModelAdmin):
                 fedow = FedowAPI()
                 fedow_data = fedow.asset.total_by_place_with_uuid(uuid=object_id)
                 # fedow_data is a JSON string; parse it to dict
-                total_by_place_with_uuid = json.loads(fedow_data) if isinstance(fedow_data, (str, bytes)) else (fedow_data or {})
+                total_by_place_with_uuid = json.loads(fedow_data) if isinstance(fedow_data, (str, bytes)) else (
+                        fedow_data or {})
                 logger.info(f"fedow_data : {fedow_data}")
 
                 # Expected new structure: {"total_by_place": [{"place_name": ..., "place_uuid": ..., "total_value": ...}, ...], "serialized_asset": {...}}
@@ -3520,7 +3576,7 @@ class AssetAdmin(ModelAdmin):
             reverse(f"{self.admin_site.name}:{self.model._meta.app_label}_{self.model._meta.model_name}_changelist")
         )
 
-    def bank_deposit(self, request: HttpRequest, asset_pk: str, wallet_to_deposit:str):
+    def bank_deposit(self, request: HttpRequest, asset_pk: str, wallet_to_deposit: str):
         """Handle HTMX POST to declare a bank deposit for a local asset.
         Expects POST params: place (str), amount (decimal), origin_wallet (uuid optional), destination_wallet (uuid optional).
         wallet_to_deposit : Le wallet qu'il faut vider

@@ -2107,7 +2107,10 @@ class LigneArticle(models.Model):
     wallet = models.ForeignKey("AuthBillet.Wallet", blank=True, null=True, on_delete=models.PROTECT,
                                verbose_name=_("Wallet from"))
 
-    CANCELED, REFUNDED, CREATED, UNPAID, PAID, FREERES, VALID, = 'C', 'R', 'O', 'U', 'P', 'F', 'V'
+    CANCELED, REFUNDED, CREATED = 'C', 'R', 'O',
+    UNPAID, PAID, FREERES = 'U', 'P', 'F'
+    VALID = 'V'
+
     TYPE_CHOICES = [
         (CANCELED, _('Cancelled')),
         (REFUNDED, _('Refunded')),

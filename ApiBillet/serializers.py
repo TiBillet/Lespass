@@ -704,7 +704,7 @@ class EventSerializer(serializers.ModelSerializer):
         }
 
 
-class ReservationSerializer(serializers.ModelSerializer):
+class ApiReservationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Reservation
         fields = [
@@ -1162,7 +1162,7 @@ class ChargeCashlessValidator(serializers.Serializer):
         return representation
 """
 
-class ReservationValidator(serializers.Serializer):
+class ApiReservationValidator(serializers.Serializer):
     email = serializers.EmailField()
     to_mail = serializers.BooleanField(default=True, required=False)
     event = serializers.PrimaryKeyRelatedField(queryset=Event.objects.all())
@@ -1414,7 +1414,7 @@ class ReservationValidator(serializers.Serializer):
     def to_representation(self, instance):
         representation = super().to_representation(instance)
         if self.reservation:
-            representation['reservation'] = ReservationSerializer(self.reservation, read_only=True).data
+            representation['reservation'] = ApiReservationSerializer(self.reservation, read_only=True).data
         if self.checkout_session:
             logger.info(f"{self.checkout_session.url}")
             representation['checkout_url'] = self.checkout_session.url

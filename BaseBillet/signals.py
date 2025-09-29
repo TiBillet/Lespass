@@ -317,7 +317,7 @@ PRE_SAVE_TRANSITIONS = {
 
 
 # MACHINE A ETAT
-# Pour tout les modèls qui possèdent un système de status choice
+# Pour tout les models qui possèdent un système de status choice
 @receiver(pre_save)
 def pre_save_signal_status(sender, instance, **kwargs):
     # if not create
@@ -336,7 +336,7 @@ def pre_save_signal_status(sender, instance, **kwargs):
                 new_instance.status = getattr(new_instance, CALLABLE_STATUS_MODEL.get(sender_str))
 
             logger.info(
-                f"\nSTART pre_save_signal_status {sender_str} {new_instance} : {old_instance.status} to {new_instance.status}\n")
+                f"\n\nSTART MACHINE A ETAT pre_save_signal_status {sender_str} {new_instance} : {old_instance.status} to {new_instance.status}\n")
 
             transitions = dict_transition.get(old_instance.status, None)
             if transitions:
@@ -420,24 +420,13 @@ def create_lignearticle_if_membership_created_on_admin(sender, instance: Members
     if membership.deadline:
         webhook_membership.delay(membership.pk)
 
-@receiver(post_save, sender=Ticket)
-def create_lignearticle_if_ticket_created_on_admin(sender, instance: Ticket, created, **kwargs):
-    ticket: Ticket = instance
-    # Pour une nouvelle adhésion réalisée sur l'admin et non offerte, une vente est enregitrée.
-    if created and ticket.sale_origin == SaleOrigin.ADMIN:
-        logger.info(f"create_lignearticle_if_ticket_created_on_admin {instance} {created}")
 
-        vente = LigneArticle.objects.create(
-            pricesold=ticket.pricesold,
-            qty=1,
-            amount=int(ticket.pricesold.prix * 100),
-            payment_method=ticket.payment_method,
-            status=LigneArticle.CREATED,
-        )
+# @receiver(post_save, sender=Ticket)
+# def create_lignearticle_if_ticket_created_on_admin(sender, instance: Ticket, created, **kwargs):
+#     ticket: Ticket = instance
+#     # Pour une nouvelle adhésion réalisée sur l'admin et non offerte, une vente est enregitrée.
+#     if created and ticket.sale_origin == SaleOrigin.ADMIN:
+#         logger.info(f"POST SAVE TICKET : ticket.sale_origin == SaleOrigin.ADMIN")
+#         logger.info(f"POST SAVE TICKET : create_lignearticle_if_ticket_created_on_admin {instance} {created}")
+#
 
-        # import ipdb; ipdb.set_trace()
-
-        # On lance les post_save et triggers associés au adhésions en passant en PAID
-        # Envoie a la boutik, Fedow, webhook, etc ...
-        vente.status = LigneArticle.PAID
-        vente.save()

@@ -98,7 +98,7 @@ class AssetValidator(serializers.Serializer):
                 logger.info(f"AssetFedowPublic.objects.create : {self.asset}")
             except Exception as e :
                 logger.error(f"AssetFedowPublic.objects.create : {e}")
-                import ipdb; ipdb.set_trace()
+                raise e
 
         return attrs
 
