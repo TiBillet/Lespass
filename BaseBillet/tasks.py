@@ -6,6 +6,7 @@ import os
 import smtplib
 import time
 from io import BytesIO
+from time import sleep
 from uuid import UUID
 
 import jwt
@@ -1004,7 +1005,17 @@ def send_email_generique(context: dict = None, email: str = None, attached_files
 def ticket_celery_mailer(reservation_uuid: str):
     logger.info(f'      WORKDER CELERY app.task ticket_celery_mailer : {reservation_uuid}')
     config = Configuration.get_solo()
-    reservation = Reservation.objects.get(pk=reservation_uuid)
+    activate(config.language)
+
+    reservation = None
+    resa_try = 0
+    while reservation is None and resa_try < 10:
+        try :
+            logger.info(f"ticket_celery_mailer -> reservation_uuid : {reservation_uuid}")
+            reservation = Reservation.objects.get(pk=reservation_uuid)
+        except Reservation.DoesNotExist:
+            resa_try += 1
+            sleep(1)
 
     domain = connection.tenant.get_primary_domain().domain
     image_url_place = "https://tibillet.org/fr/img/design/logo-couleur.svg"

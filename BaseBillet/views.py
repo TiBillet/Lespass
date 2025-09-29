@@ -1642,6 +1642,7 @@ class EventMVT(viewsets.ViewSet):
                 messages.add_message(request, messages.ERROR, f"{validator.errors[error][0]}")
             return HttpResponseClientRedirect(request.headers['Referer'])
 
+
         # Le formulaire est valide.
         # Vérification de la demande de fomulaire supplémentaire avec Formbricks
         for product in validator.products:

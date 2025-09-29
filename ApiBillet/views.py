@@ -26,8 +26,8 @@ from rest_framework.views import APIView
 from rest_framework.viewsets import ViewSet
 
 from ApiBillet.permissions import TenantAdminApiPermission, TibilletUser, get_apikey_valid
-from ApiBillet.serializers import EventSerializer, EventWriteSerializer, PriceSerializer, ProductSerializer, ReservationSerializer, \
-    ReservationValidator, ConfigurationSerializer, TicketSerializer, \
+from ApiBillet.serializers import EventSerializer, EventWriteSerializer, PriceSerializer, ProductSerializer, ApiReservationSerializer, \
+    ApiReservationValidator, ConfigurationSerializer, TicketSerializer, \
     OptionsSerializer, ProductCreateSerializer, EmailSerializer
 from AuthBillet.models import HumanUser
 from AuthBillet.utils import get_or_create_user
@@ -424,21 +424,21 @@ class ChargeCashless(viewsets.ViewSet):
 """
 
 
-class ReservationViewset(viewsets.ViewSet):
+class ApiReservationViewset(viewsets.ViewSet):
     def list(self, request):
         queryset = Reservation.objects.all().order_by('-datetime')
-        serializer = ReservationSerializer(queryset, many=True, context={'request': request})
+        serializer = ApiReservationSerializer(queryset, many=True, context={'request': request})
         return Response(serializer.data)
 
     def retrieve(self, request, pk=None):
         queryset = Reservation.objects.all().order_by('-datetime')
         resa = get_object_or_404(queryset, pk=pk)
-        serializer = ReservationSerializer(resa)
+        serializer = ApiReservationSerializer(resa)
         return Response(serializer.data)
 
     def create(self, request):
         logger.info(f"ReservationViewset CREATE : {request.data}")
-        validator = ReservationValidator(data=request.data, context={'request': request})
+        validator = ApiReservationValidator(data=request.data, context={'request': request})
         if validator.is_valid():
             return Response(validator.data, status=status.HTTP_201_CREATED)
 
