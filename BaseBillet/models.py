@@ -1410,7 +1410,10 @@ class ProductSold(models.Model):
         # noinspection PyUnresolvedReferences
         images = []
         if self.img():
-            images = [f"https://{domain_url}{self.img().med.url}", ]
+            try :
+                images = [f"https://{domain_url}{self.img().med.url}", ]
+            except Exception:
+                images = []
 
         product = stripe.Product.create(
             name=f"{self.nickname()}",

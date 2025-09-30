@@ -2,7 +2,7 @@ from uuid import UUID
 
 from django.core.signing import TimestampSigner
 from django.utils.http import urlsafe_base64_decode
-from rest_framework import status
+from rest_framework import status, serializers
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -300,6 +300,110 @@ class ticket(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+# Allowed fields for ordering in list_tickets to prevent unsafe ORM field injection
+ALLOWED_ORDER_FIELDS = (
+    'reservation__datetime',
+    'last_name',
+    'first_name',
+    'uuid',
+    'status',
+    'reservation__uuid',
+)
+
+class ListTicketsSerializer(serializers.Serializer):
+    event_uuid = serializers.UUIDField(required=True)
+    page = serializers.IntegerField(required=False, min_value=1, default=1)
+    page_size = serializers.IntegerField(required=False, min_value=1, max_value=200, default=40)
+    order_by = serializers.ChoiceField(required=False, choices=ALLOWED_ORDER_FIELDS, default='reservation__datetime')
+    order_dir = serializers.ChoiceField(required=False, choices=("asc", "desc"), default='desc')
+
+class list_tickets(APIView):
+    permission_classes = [HasScanApi]
+
+    def post(self, request):
+        """
+        Exemple de requête (POST) avec la librairie requests et un dictionnaire de données:
+
+        import requests
+
+        url = "https://<votre-domaine>/scan/list_tickets/"
+        headers = {"Authorization": "Api-Key <VOTRE_CLE_API>", "Content-Type": "application/json"}
+        data = {
+            "event_uuid": "<UUID-EVENEMENT>",
+            "page": 1,
+            "page_size": 40,
+            "order_by": "reservation__datetime",
+            "order_dir": "desc",
+        }
+        resp = requests.post(url, headers=headers, json=data)
+        print(resp.status_code)
+        print(resp.json())
+
+        Paramètres:
+        - event_uuid (requis): UUID de l'événement.
+        - page (optionnel, défaut 1): numéro de page (> 0).
+        - page_size (optionnel, défaut 40, max 200): nombre d'éléments par page.
+        - order_by (optionnel, défaut "reservation__datetime"): champ d'ordre (whitelist).
+        - order_dir (optionnel, défaut "desc"): sens d'ordre, "asc" ou "desc".
+
+        Réponse: JSON avec métadonnées de pagination et liste des tickets.
+        """
+        try:
+            serializer = ListTicketsSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            data = serializer.validated_data
+            event_uuid = str(data.get('event_uuid'))
+            page = data.get('page', 1)
+            page_size = data.get('page_size', 40)
+            order_by = data.get('order_by', 'reservation__datetime')
+            order_dir = data.get('order_dir', 'desc')
+
+            ordering = f"{'-' if order_dir == 'desc' else ''}{order_by}"
+
+            # Base queryset restricted to the event
+            qs = Ticket.objects.filter(reservation__event__uuid=event_uuid).select_related(
+                'reservation', 'reservation__event', 'reservation__user_commande',
+                'pricesold', 'pricesold__price', 'pricesold__productsold', 'pricesold__productsold__product'
+            ).order_by(ordering)
+
+            total = qs.count()
+            start = (page - 1) * page_size
+            end = start + page_size
+            items = qs[start:end]
+
+            results = []
+            for t in items:
+                results.append({
+                    "uuid": str(t.uuid),
+                    "first_name": t.first_name,
+                    "last_name": t.last_name,
+                    "email": getattr(getattr(t.reservation, 'user_commande', None), 'email', None),
+                    "price": t.pricesold.price.name if t.pricesold else None,
+                    "product": t.pricesold.productsold.product.name if t.pricesold and getattr(t.pricesold, 'productsold', None) else None,
+                    "reservation_uuid": str(t.reservation.uuid),
+                    "status": t.get_status_display(),
+                    "reservation_datetime": getattr(t.reservation, 'datetime', None),
+                })
+
+            total_pages = (total + page_size - 1) // page_size if page_size else 1
+
+            return Response({
+                "success": True,
+                "count": len(results),
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": total_pages,
+                "ordering": {
+                    "order_by": order_by,
+                    "order_dir": order_dir,
+                },
+                "results": results,
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class search_ticket(APIView):
     permission_classes = [HasScanApi]
