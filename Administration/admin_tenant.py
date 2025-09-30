@@ -977,6 +977,7 @@ class PriceAdmin(ModelAdmin):
                 'max_per_user',
                 'subscription_type',
                 ('recurring_payment', 'iteration'),
+                'manual_validation',
                 'order',
                 'publish',
                 'adhesion_obligatoire',
