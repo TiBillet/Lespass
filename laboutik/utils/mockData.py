@@ -63,7 +63,7 @@ pvs = [
   		      "taux": "20.00"
   		    }
   		  },
-  		  "url_image": None,
+  		  "url_image": "static/images/biere_52x52_utzh7l7.thumbnail.png",
   		  "couleur_texte": None,
   		  "methode_name": "VenteArticle",
   		  "methode_choices": "VT",
@@ -2050,10 +2050,12 @@ cards = [
 		"tag_id": settings.DEMO_TAGID_CM,
 		"name": "master",
 		"pvs_list": [
-			{"uuid": "0e724e72-3399-4642-8cb3-3df4eff94182", "name": "Bar 1", "icon": "fa-beer"},
-  		{"uuid": "0877636e-dae1-411f-806b-87ce0560705d", "name": "Resto", "icon": "fa-hamburger"},
-  		{"uuid": "7d4e787e-a238-4f3b-adb6-b14a9d7ccc73", "name": "Test", "icon": None},
-  		{"uuid": "f5c1b847-5a13-4790-b7f6-fdeccde90a98", "name": "Adhésions", "icon": None}
+			{"uuid": "0e724e72-3399-4642-8cb3-3df4eff94182", "name": "Bar 1", "poid_liste": 1, "icon": "fa-beer"},
+  		{"uuid": "0877636e-dae1-411f-806b-87ce0560705d", "name": "Resto", "poid_liste": 2, "icon": "fa-hamburger"},
+  		{"uuid": "7d4e787e-a238-4f3b-adb6-b14a9d7ccc73", "name": "Test", "poid_liste": 5, "icon": None},
+			{"uuid": "789df895-e22b-4837-828e-0fe99fb43dcf", "name": "Kiosque","poid_liste": 10, "icon": None},
+			{"uuid": "12083d94-cd0e-4839-bce8-6a9838efc735", "name": "Cashless","poid_liste": 200, "icon": "fa-euro-sign"},
+  		{"uuid": "f5c1b847-5a13-4790-b7f6-fdeccde90a98", "name": "Adhésions", "poid_liste": 9, "icon": None}
 		],
 		'responsable': responsable
 	},
@@ -2080,7 +2082,7 @@ def get_card_from_tagid(tag_id):
 	return retour
 
 def get_pv_from_uuid(uuid):
-	retour = next
+	retour = {}
 	for pv in pvs:
 		if pv["id"] == uuid:
 			retour = pv

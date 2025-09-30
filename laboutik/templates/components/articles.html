@@ -1,0 +1,200 @@
+{% for article in pv.articles %}
+<div class="ele-conteneur" style="background-color:{{ article.categorie.couleur_backgr }};">
+	<!-- image -->
+	{% if article.url_image %}
+	<div class="ele-img BF-ligne">
+		<!--
+		<img src="{{ article.url_image}}" class="bouton-article-image" loading="lazy" alt=''
+			onerror="this.style.display='none'"> -->
+		<img src="{{ article.url_image}}" class="bouton-article-image" loading="lazy" alt=''>
+	</div>
+	{% endif %}
+	<div class="ele-nom"
+		style="color:{{article.categorie.couleur_texte}};text-shadow: 2px 2px 3px {{article.categorie.couleur_backgr}}">
+		{{article.name}}
+	</div>
+	<div class="article-pdp BF-ligne-g">
+		<!-- icon -->
+		<div class="ele-icon" style="color:{{article.categorie.couleur_texte}};">
+			{% if article.categorie %}
+			<i class="fas {{ article.categorie.icon }}"></i>
+			{% endif %}
+		</div>
+		{% if pv.afficher_les_prix %}
+		<div class="ele-prix BF-ligne-g" style="color:{{article.categorie.couleur_texte}};">
+			{{ article.prix }} {{ currencyData.symbol }}
+		</div>
+		{% endif %}
+		<div class="ele-nombre BF-ligne">
+			<span id="rep-nb-article${ctx.uuid}" class="badge">0</span>
+		</div>
+	</div>
+	<div id="bt-rideau"></div>
+</div>
+{% endfor %}
+
+<style>
+	.ele-conteneur {
+		position: relative;
+		width: var(--bt-article-width);
+		height: var(--bt-article-height);
+		box-sizing: border-box;
+		overflow: hidden;
+		margin: 20px 0 0 20px;
+		float: left;
+		font-family: "Luciole-regular";
+		border-radius: 15px;
+	}
+
+	.ele-nom {
+		position: absolute;
+		left: 4px;
+		top: 6px;
+		font-weight: bold;
+		height: 78px;
+		width: calc(100% - 8px);
+		font-size: 18px;
+		margin: 0;
+		padding: 0;
+		overflow: hidden;
+		text-align: center;
+	}
+
+	.ele-img {
+		position: absolute;
+		left: 0;
+		top: 0;
+		width: 100%;
+		height: 100%;
+		overflow: hidden;
+	}
+
+	.bouton-article-image {
+		opacity: 0.7;
+	}
+
+	.BF-ligne {
+		align-items: center;
+		display: flex;
+		flex-direction: row;
+		justify-content: center;
+	}
+
+	.BF-ligne-g {
+		align-items: center;
+		display: flex;
+		flex-direction: row;
+		justify-content: flex-start;
+		width: 100%;
+	}
+
+	.article-pdp {
+		position: absolute;
+		left: 8px;
+		bottom: 8px;
+	}
+
+	.ele-icon {
+		flex-basis: 25%;
+	}
+
+	.ele-prix {
+		flex-basis: 45%;
+	}
+
+	.ele-nombre {
+		flex-basis: 25%;
+	}
+
+	.badge {
+		color: #212529;
+		background-color: #f8f9fa;
+		display: inline-block;
+		padding: .25em .4em;
+		font-weight: bold;
+		line-height: 1;
+		text-align: center;
+		white-space: nowrap;
+		vertical-align: baseline;
+		border-radius: .25rem;
+		transition: color .15s ease-in-out, background-color .15s ease-in-out, border-color .15s ease-in-out, box-shadow .15s ease-in-out;
+	}
+
+	#bt-rideau {
+		position: absolute;
+		left: 0;
+		top: 0;
+		width: 100%;
+		height: 100%;
+		border-radius: 15px;
+		background-color: #2a2828;
+		opacity: 0.5;
+		cursor: default;
+		display: none;
+	}
+
+	/* pour une largeur supérieure ou égale à 599 pixels */
+	@media only screen and (min-width: 599px) {
+		:root {
+			--bt-article-width: 140px;
+		}
+	}
+
+	/* pour une largeur supérieure ou égale à 1023 pixels */
+	@media only screen and (min-width: 1023px) {
+		:root {
+			--bt-article-width: 100px;
+			--bt-article-height: 100px;
+		}
+
+		.article-pdp {
+			font-size: 0.8rem;
+		}
+
+		.ele.img {
+			width: 100px;
+			height: 100px;
+		}
+
+		.ele-nom {
+			font-size: 16px;
+		}
+
+		.ele-icon {
+			flex-basis: 20%;
+		}
+	}
+
+	/* sunmi d3mini -- pour une largeur supérieure ou égale à 1279 pixels */
+	@media only screen and (min-width: 1279px) {
+		:root {
+			width: 160px;
+			height: 160px;
+			--bt-article-width: 160px;
+			--bt-article-height: 160px;
+		}
+
+		.ele-nom {
+			font-size: 1.5rem;
+		}
+
+		.article-pdp {
+			width: 95%;
+			left: 4px;
+			font-size: 1.4rem;
+		}
+
+		.ele-icon {
+			flex-basis: 20%;
+		}
+
+		.ele-prix {
+			flex-basis: 55%;
+			overflow-wrap: break-word;
+		}
+
+		.ele-nombre {
+			flex-basis: 25%;
+		}
+	}
+</style>

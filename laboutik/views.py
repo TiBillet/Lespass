@@ -17,7 +17,7 @@ sys.path.append(str(Path(__file__).resolve().parent / "utils"))
 import mockData
 
 # utils
-import methods
+import needs
 
 state =  {
 	'version': '0.9.11',
@@ -109,6 +109,7 @@ def ask_primary_card(request):
 				}
 				return render(request, "components/primary_card_message.html", context)
 			else:
+				# carte primaire ok
 				uuid_pv = testCard['pvs_list'][0]['uuid']
 				print(f"laboutik - DEV | uuid pv = {uuid_pv}")
 				return HttpResponseClientRedirect('pv_route?uuid_pv=' + uuid_pv + '&tag_id_cm=' + tag_id_cm)
@@ -174,7 +175,6 @@ def pv_route(request):
 	if pv['comportement'] == 'K':
 		template = 'kiosk.html'
 
-
 	print(f"laboutik - DEV | template = {template}")
 
 	state["comportement"] = pv["comportement"]
@@ -188,12 +188,18 @@ def pv_route(request):
 	state["passageModeGerant"] = True
 	state["modeGerant"] = False
 	state["currencyData"] = {"cc": "EUR", "symbol": "€", "name": "European Euro"}
+	# triage par poid_liste
+	card['pvs_list'] = sorted(card['pvs_list'], key=lambda x: x['poid_liste'])
+
+	# ajoute une catégorie si non existante
+	needs.fixe_pv(pv)
 
 	context = {
 		'state': state,
 		'stateJson': dumps(state),
 		'pv': pv,
 		'card': card,
-		'categories': methods.filter_categories(pv)
+		'categories': needs.filter_categories(pv),
+		'categoriy_angry': needs.categoriy_angry
 	}
 	return render(request, "views/" + template, context)

@@ -9,7 +9,9 @@
 	<nav id="categories">
 		{% include "components/categories.html" %}
 	</nav>
-	<div id="products" hx-trigger="load" hx-get="show_pv?uuid_pv={{pv.id}}" hx-target="#products" hx-swap="innerHTML"></div>
+	<div id="products">
+		{% include "components/articles.html" %}
+	</div>
 </main>
 <footer>
 
@@ -30,7 +32,6 @@
 		height: var(--main-container-height);
 		margin: 0;
 		padding: 0;
-		background-color: aqua;
 		overflow: hidden;
 	}
 
@@ -44,7 +45,6 @@
 		display: block;
 		width: calc(100% - var(--cat-width));
 		height: 100%;
-		background-color: bisque;
 	}
 
 	footer {

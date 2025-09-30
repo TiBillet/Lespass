@@ -1,7 +1,7 @@
 {% load static i18n %}
 {% for pv in card.pvs_list %}
-<div class="menu-burger-item menu-burger-item-content" hx-trigger="load" hx-get="show_pv?uuid_pv={{pv.id}}" hx-target="#products" hx-swap="innerHTML">
+<a class="menu-burger-item menu-burger-item-content"  href="pv_route?uuid_pv={{pv.uuid}}&tag_id_cm={{card.tag_id}}">
 	<i class="menu-burger-item-content fas {{ pv.icon }}"></i>
 	<div class="menu-burger-item-content">{{ pv.name }}</div>
-</div>
+</a>
 {% endfor %}
