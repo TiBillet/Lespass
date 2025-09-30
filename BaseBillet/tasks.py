@@ -501,7 +501,7 @@ def send_membership_payment_link_user(membership_uuid: str):
             'url': f"https://{tenant_url}/memberships/{membership.uuid}/get_checkout_for_membership",
         },
         'end_text': _("Merci !"),
-        'signature': _("Marvin, le TiBillet robot"),
+        'signature': _("Marvin, le robot TiBillet"),
     }
 
     try:
