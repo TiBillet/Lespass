@@ -818,6 +818,7 @@ class Price(models.Model):
                            verbose_name=_("VAT rate"),
                            )
 
+
     stock = models.SmallIntegerField(blank=True, null=True)
     max_per_user = models.PositiveSmallIntegerField(
         default=10,

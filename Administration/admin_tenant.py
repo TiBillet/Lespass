@@ -75,7 +75,7 @@ from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Pai
     FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel, BrevoConfig, ScanApp, ProductFormField
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
     webhook_membership, create_ticket_pdf, ticket_celery_mailer, send_ticket_cancellation_user, \
-    send_reservation_cancellation_user
+    send_reservation_cancellation_user, send_sale_to_laboutik
 from BaseBillet.validators import ReservationValidator
 from Customers.models import Client
 from MetaBillet.models import WaitingConfiguration
@@ -2301,6 +2301,15 @@ class ReservationAddAdmin(ModelForm):
         label=_("Payment method"),
     )
 
+    quantity = forms.IntegerField(
+        required=False,
+        initial=1,
+        min_value=1,
+        max_value=32767,
+        widget=UnfoldAdminTextInputWidget(attrs={"type": "number", "min": "1"}),
+        label=_("Quantity"),
+    )
+
     class Meta:
         model = Reservation
         fields = []
@@ -2317,98 +2326,59 @@ class ReservationAddAdmin(ModelForm):
         return payment_method
 
     def clean(self):
-        # Passage dans le même tuyaux de le front avec le validator qui va créer les tickets
-        cleaned_data = self.cleaned_data
-        email = cleaned_data.pop('email')
-        pricesold: PriceSold = cleaned_data.pop('pricesold')
-        event: Event = pricesold.productsold.event
-
-        # On va chercher les options
-        options = []
-        options_checkbox = cleaned_data.pop('options_checkbox')
-        if options_checkbox:
-            for option in options_checkbox:
-                options.append(option.uuid)
-        options_radio = cleaned_data.pop('options_radio')
-        if options_radio:
-            options.append(options_radio.uuid)
-
-        data = {
-            'email': email,
-            'event': event.uuid,
-            'options': options,
-        }
-
-
-        validator = ReservationValidator(data=data)
-        validator.admin_created = True # variable dans le validator qui bypass certaines vérifications
-        validator.products_dict = {pricesold.productsold.product : {pricesold.price: 1}}
-        validator.is_valid()
-        # Conserver le validator pour l'utiliser dans l'admin (récupérer la réservation créée)
-        self.validator = validator
-        
         return super().clean()
 
     def save(self, commit=True):
-        return super().save(commit=False)
+        cleaned_data = self.cleaned_data
 
-    def save_m2m(self):
-        # No-op: When admin.save_form returns an already-saved object (created via
-        # ReservationValidator in clean()), Django admin still calls form.save_m2m().
-        # Since we bypass form.save(), this method might not be auto-injected by
-        # ModelForm, so we provide a harmless no-op to avoid AttributeError.
-        pass
+        email = self.cleaned_data.pop('email')
+        user = get_or_create_user(email)
 
-        """
-        # Collecte des champs dynamiques (prefix 'form__') pour le produit sélectionné
-        try:
-            product = pricesold.price.product
-            # Map des champs attendus pour ce produit
-            product_fields = {ff.name: ff for ff in ProductFormField.objects.filter(product=product)}
-        except Exception:
-            product_fields = {}
+        pricesold: PriceSold = cleaned_data.pop('pricesold')
+        event: Event = pricesold.productsold.event
 
-        custom_form = {}
-        data = getattr(self, 'data', {})
-        for name, ff in product_fields.items():
-            key = f"form__{name}"
-            # Gestion des multi-select à partir de QueryDict
-            if hasattr(data, 'getlist') and ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
-                value = data.getlist(key)
-            else:
-                value = data.get(key)
-                if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
-                    if value in [None, '']:
-                        value = []
-                    elif not isinstance(value, list):
-                        value = [value]
+        reservation: Reservation = self.instance
+        reservation.user_commande = user
+        reservation.event = event
+        reservation.status = Reservation.VALID # automatiquement en VALID,on est sur l'admin
+        # On va chercher les options
+        options_checkbox = cleaned_data.pop('options_checkbox')
+        if options_checkbox:
+            reservation.options.set(options_checkbox)
+        options_radio = cleaned_data.pop('options_radio')
+        if options_radio:
+            reservation.options.add(options_radio)
 
-            # Champs requis
-            if ff.required:
-                if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
-                    if not value:
-                        raise ValidationError({key: [_('This field is required.')]})
-                else:
-                    if value in [None, '']:
-                        raise ValidationError({key: [_('This field is required.')]})
+        reservation = super().save(commit=commit)
 
-            # Stocker uniquement les valeurs non vides
-            if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
-                if value:
-                    custom_form[name] = value
-            else:
-                if value not in [None, '']:
-                    custom_form[name] = value
+        ### Création des billets associés
+        payment_method = self.cleaned_data.pop('payment_method')
+        quantity = self.cleaned_data.pop('quantity', 1) or 1
+        for _ in range(quantity):
+            Ticket.objects.create(
+                payment_method=payment_method,
+                reservation=reservation,
+                status=Ticket.NOT_SCANNED,
+                sale_origin=SaleOrigin.ADMIN,
+                pricesold=pricesold,
+            )
 
-        if custom_form:
-            reservation.custom_form = custom_form
-            reservation.save(update_fields=['custom_form'])
-        """
+        # Création de la ligne comptables
+        vente = LigneArticle.objects.create(
+            pricesold=pricesold,
+            qty=quantity,
+            amount=int(pricesold.prix * quantity * 100),
+            payment_method=payment_method,
+            status=LigneArticle.VALID,
+        )
+        # envoie à Laboutik
+        send_sale_to_laboutik.delay(vente.pk)
 
-        # Le post save BaseBillet.signals.create_lignearticle_if_ticket_created_on_admin s'executera
-        # # Création de la ligne Article vendu qui envera à la caisse si besoin
+        # Envoie des ticket par mail
+        ticket_celery_mailer.delay(reservation.pk)
 
 
+        return reservation
 
 class ReservationCustomFormSection(TemplateSection):
     template_name = "admin/reservation/custom_form_section.html"
@@ -2429,28 +2399,6 @@ class ReservationAdmin(ModelAdmin):
             defaults['form'] = self.add_form
         defaults.update(kwargs)
         return super().get_form(request, obj, **defaults)
-
-    def save_form(self, request, form, change):
-        """
-        Lors de l'ajout depuis l'admin, le ReservationValidator appelé dans le
-        formulaire crée déjà la Reservation et les Tickets. On renvoie donc
-        directement l'objet Reservation créé par le validator pour que l'admin
-        procède au flux standard (log_addition, response_add) sans tenter une
-        nouvelle sauvegarde via form.save().
-        """
-        if isinstance(form, ReservationAddAdmin) and hasattr(form, 'validator') and hasattr(form.validator, 'reservation'):
-            return form.validator.reservation  # déjà sauvegardé par le validator
-        return super().save_form(request, form, change)
-
-    def save_model(self, request, obj, form, change):
-        """
-        Empêche un deuxième save() lorsque l'on est sur le formulaire d'ajout
-        personnalisé: l'objet est déjà créé par le validator dans form.clean().
-        """
-        if isinstance(form, ReservationAddAdmin):
-            return  # ne rien faire, éviter un doublon
-        super().save_model(request, obj, form, change)
-
 
     list_display = (
         'datetime',
@@ -2511,7 +2459,7 @@ class ReservationAdmin(ModelAdmin):
         return False
 
     def has_add_permission(self, request, obj=None):
-        return False
+        return TenantAdminPermissionWithRequest(request)
 
     def has_delete_permission(self, request, obj=None):
         return False
