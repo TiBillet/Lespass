@@ -1,7 +1,7 @@
 :root {
 	/* header */
 	--header-height: 65px;
-	--header-img-width: 112px;
+	--header-img-width: 120px;
 	--header-status-width: 40px;
 	--header-menu-width: 56px;
 	--header-add-img-status: calc(var(--header-img-width) + var(--header-status-width));

@@ -63,7 +63,7 @@ pvs = [
   		      "taux": "20.00"
   		    }
   		  },
-  		  "url_image": "static/images/biere_52x52_utzh7l7.thumbnail.png",
+  		  "url_image": "https://lespass.filaos.re/static/images/biere_52x52.png",
   		  "couleur_texte": None,
   		  "methode_name": "VenteArticle",
   		  "methode_choices": "VT",

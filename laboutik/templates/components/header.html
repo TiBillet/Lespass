@@ -1,7 +1,8 @@
 {% load static %}
 {% load static i18n %}
 <header class="header-background">
-	<div class="header-img" onclick="window.location = 'pv_route?uuid_pv={{pv.id}}&tag_id_cm={{card.tag_id}}'">
+	<!-- link = first sales point of the primary card -->
+	<div class="header-img" onclick="window.location = 'pv_route?uuid_pv={{card.pvs_list.0.uuid}}&tag_id_cm={{card.tag_id}}'">
 		<img class="pointer" alt="TiBillet" src="{% static 'images/icon-complet-blanc.svg' %}" />
 	</div>
 	<div class="header-status">
@@ -35,7 +36,7 @@
 	.header-background {
 		width: 100%;
 		height: var(--header-height);
-		background-color: var(--bleu09);
+		background-color: var(--noir03);
 		display: flex;
 		flex-direction: row;
 		justify-content: space-arround;
@@ -45,6 +46,11 @@
 
 	.header-img {
 		width: var(--header-img-width);
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
 		cursor: pointer;
 	}
 
@@ -65,7 +71,6 @@
 		flex-direction: row;
 		justify-content: center;
 		align-items: center;
-		background-color: var(--bleu05);
 		font-size: calc(0.5rem + 1.5vw);
 	}
 

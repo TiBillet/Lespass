@@ -9,12 +9,38 @@
 	<nav id="categories">
 		{% include "components/categories.html" %}
 	</nav>
-	<div id="products">
-		{% include "components/articles.html" %}
+	<div id="products-container">
+		<div id="products">
+			{% include "components/articles.html" %}
+		</div>
+		<div id="addition"></div>
 	</div>
 </main>
 <footer>
-
+	<!-- bouton Reset commandes -->
+	<div class="BF-ligne footer-bt fond-retour test-reset" onclick="vue_pv.rezet_commandes();">
+		<i class="footer-bt-icon fas fa-trash md4px"></i>
+		<div class="BF-col-deb footer-bt-text mg4px">
+			<div data-i8n="reset,uppercase">RESET</div>
+		</div>
+	</div>
+	<!-- bouton CHECK CARTE -->
+	<div class="BF-ligne footer-bt fond-normal test-check-carte" onclick="vue_pv.check_carte()">
+		<i class="footer-bt-icon fas fa-money-check-alt md4px"></i>
+		<div class="BF-col-deb footer-bt-text mg4px">
+			<div data-i8n="check,uppercase">CHECK</div>
+			<div data-i8n="card,uppercase">CARTE</div>
+		</div>
+	</div>
+	<!-- bouton valider -->
+	<div id="bt-valider" class="BF-ligne footer-bt fond-ok" ${foncBouton}>
+		<i class="footer-bt-icon fas fa-check-circle md4px"></i>
+		<div class="BF-col-deb footer-bt-text mg4px">
+			<div data-i8n="validate,uppercase">VALIDER</div>
+			<div id="bt-valider-total"><span data-i8n="total,uppercase">TOTAL</span> ${vue_pv.getTotalPointDeVentes()}
+				${getTranslate('currencySymbol', null, 'methodCurrency')}</div>
+		</div>
+	</div>
 </footer>
 {% endblock content %}
 
@@ -38,19 +64,64 @@
 	#categories {
 		width: var(--cat-width);
 		height: 100%;
-		background-color: var(--bleu08);
+		background-color: var(--noir04);
+	}
+
+	#products-container {
+		width: calc(100% - var(--cat-width));
+		height: 100%;
+		display: flex;
+		flex-direction: row;
+		justify-content: flex-start;
+		align-items: center;
 	}
 
 	#products {
-		display: block;
-		width: calc(100% - var(--cat-width));
+		/* display: block; */
+		width: 100%;
+		height: 100%;
+		background-color: var(--bleu11);
+	}
+
+	#addition {
+		display: none;
+		width: 0%;
 		height: 100%;
 	}
 
 	footer {
 		width: 100%;
 		height: var(--footer-container-height);
-		background-color: var(vert04);
+		display: flex;
+		flex-direction: row;
+		background-color: var(--vert04);
+		font-size: 2rem
+	}
+
+	.footer-bt {
+		width: 33.3333333%;
+		height: 100%;
+		color: #ffffff;
+		cursor: pointer;
+	}
+
+	/* create container products-addition */
+	#products-container {
+		container-type: inline-size;
+		container-name: products-addition;
+	}
+
+	/* show addition list */
+	@container products-addition (width > 943px) {
+		#products {
+			width: 71%;
+		}
+
+		#addition {
+			display: flex;
+			width: 29%;
+			background-color: var(--gris10);
+		}
 	}
 </style>
 {% endblock css %}
