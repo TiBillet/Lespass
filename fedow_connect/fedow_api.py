@@ -17,6 +17,7 @@ from django_tenants.utils import schema_context
 
 from AuthBillet.models import TibilletUser, Wallet, HumanUser
 from BaseBillet.models import Configuration, Membership, Product
+from Customers.models import Client
 from fedow_connect.models import FedowConfig
 from fedow_connect.utils import sign_message, data_to_b64, verify_signature, rsa_decrypt_string
 from fedow_connect.validators import WalletValidator, AssetValidator, TransactionValidator, \
@@ -428,11 +429,20 @@ class WalletFedow():
             return serialized_transaction
         raise Exception(f"{serialized_transaction.errors}")
 
-    def get_total_euro_token(self, user) -> Decimal:
+    def get_total_fiducial_and_all_federated_token(self, user) -> Decimal:
         serialized_wallet = self.cached_retrieve_by_signature(user).validated_data
         total_euro = 0
-        # Itération sur tous les tokens du wallet
+
+        # Prise en compte du tenant d'origine de la demande
+        client: Client = connection.tenant
+        fed_fid_assets = AssetFedowPublic.objects.filter(
+            category=AssetFedowPublic.TOKEN_LOCAL_FIAT,
+            federated_with=client,
+        )
+        uuid_fed_fid_assets = [asset.uuid for asset in fed_fid_assets]
+
         try:
+            # Itération sur tous les tokens du wallet
             for token in serialized_wallet['tokens']:
                 # fed : Stripe asset
                 if token['asset_category'] == 'FED':
@@ -440,6 +450,9 @@ class WalletFedow():
                 elif token['asset_category'] == 'TLF':
                     # token local fidicaire avec pour origine le lieu
                     if token['asset']['place_origin']['uuid'] == self.fedow_config.fedow_place_uuid:
+                        total_euro += token['value']
+                    # token local fidicaire non origin mais fédéré
+                    elif token['asset']['uuid'] in uuid_fed_fid_assets:
                         total_euro += token['value']
 
         except KeyError as e:

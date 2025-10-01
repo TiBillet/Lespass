@@ -1162,7 +1162,7 @@ class QrCodeScanPay(viewsets.ViewSet):
         from fedow_connect.fedow_api import FedowAPI
         fedow_api = FedowAPI()
         fedow_api.wallet.get_or_create_wallet(user)
-        user_balance = fedow_api.wallet.get_total_euro_token(user)
+        user_balance = fedow_api.wallet.get_total_fiducial_and_all_federated_token(user)
         template_context['user_balance'] = user_balance
         template_context['insufficient_funds'] = amount > user_balance
 
@@ -1214,7 +1214,7 @@ class QrCodeScanPay(viewsets.ViewSet):
         from fedow_connect.fedow_api import FedowAPI
         fedow_api = FedowAPI()
         wallet, created = fedow_api.wallet.get_or_create_wallet(user)
-        user_balance = fedow_api.wallet.get_total_euro_token(user)
+        user_balance = fedow_api.wallet.get_total_fiducial_and_all_federated_token(user)
 
         if user_balance < amount:
             # Insufficient funds scenario
@@ -1275,7 +1275,7 @@ class QrCodeScanPay(viewsets.ViewSet):
             template_context['payment_location'] = tenant.name
             template_context['amount'] = amount
             template_context['payment_time'] = timezone.now().strftime("%d/%m/%Y %H:%M")
-            template_context['user_balance'] = fedow_api.wallet.get_total_euro_token(user)
+            template_context['user_balance'] = fedow_api.wallet.get_total_fiducial_and_all_federated_token(user)
 
             # Envoi des emails de confirmation (admin et utilisateur)
             try:
