@@ -936,29 +936,27 @@ class PriceChangeForm(ModelForm):
             archive=False,
         )
 
+
+        client: Client = connection.tenant
         # Limit the Asset choices to local tokens, time, and fidelity
-        try:
-            self.fields['fedow_reward_asset'].queryset = Asset.objects.filter(
-                category__in=[
-                    Asset.TOKEN_LOCAL_FIAT,
-                    Asset.TOKEN_LOCAL_NOT_FIAT,
-                    Asset.TIME,
-                    Asset.FIDELITY,
-                ],
-                archive=False,
-            )
+        self.fields['fedow_reward_asset'].queryset = AssetFedowPublic.objects.filter(
+            category__in=[
+                Asset.TOKEN_LOCAL_FIAT,
+                Asset.TOKEN_LOCAL_NOT_FIAT,
+                Asset.TIME,
+                Asset.FIDELITY,
+            ],
+            origin=client,
+        )
 
-            # Improve display label: show name, currency and category
-            def _label(obj):
-                try:
-                    return f"{obj.name} ({obj.currency_code}) - {obj.get_category_display()}"
-                except Exception:
-                    return str(obj)
+        # Improve display label: show name, currency and category
+        def _label(obj):
+            try:
+                return f"{obj.name} ({obj.currency_code}) - {obj.get_category_display()}"
+            except Exception:
+                return str(obj)
 
-            self.fields['fedow_reward_asset'].label_from_instance = _label
-        except Exception:
-            # Field may not be present in some contexts; ignore
-            pass
+        self.fields['fedow_reward_asset'].label_from_instance = _label
 
 
 @admin.register(Price, site=staff_admin_site)
