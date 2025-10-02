@@ -13,11 +13,10 @@ from pathlib import Path
 # Path(__file__) = /DjangoFiles/laboutik/views.py
 sys.path.append(str(Path(__file__).resolve().parent / "utils"))
 
-# dev
+# data mocker - dev
 import mockData
+data_pvs = mockData.get_data_pvs()
 
-# utils
-import needs
 
 state =  {
 	'version': '0.9.11',
@@ -83,7 +82,7 @@ def new_hardware(request):
 
 def ask_primary_card(request):
 	# dev
-	state['demo']['active'] = False
+	# state['demo']['active'] = False
 	
 	context = {
 		'state': state,
@@ -150,7 +149,7 @@ def pvs_menu(request):
 
 def show_pv(request):
 	uuid_pv = request.GET.get('uuid_pv')
-	pv = mockData.get_pv_from_uuid(uuid_pv)
+	pv = mockData.get_pv_from_uuid(uuid_pv, data_pvs)
 	context = {
 		'pv': pv
 	}
@@ -158,18 +157,21 @@ def show_pv(request):
 
 
 def pv_route(request):
+	# pour un mode restaurant (non service direct)
 	id_tables = request.GET.get('id_tables')
+	# mode restaurant forcer en service direct
+	restaurant_service_direct = request.GET.get('restaurant_service_direct')
 	uuid_pv = request.GET.get('uuid_pv')
 	tag_id_cm = request.GET.get('tag_id_cm')
 	print(f"laboutik - DEV | uuid_pv = {uuid_pv}  --  tag_id_cm = {tag_id_cm}  --  id_tables = {id_tables}")
-	pv = mockData.get_pv_from_uuid(uuid_pv)
+	pv = mockData.get_pv_from_uuid(uuid_pv, data_pvs)
 	card = mockData.get_card_from_tagid(tag_id_cm)
 	# restaurent par défaut
 	template = 'tables.html'
 	
 	# service directe
 	if pv['service_direct'] == True:
-		template = 'common_interface.html'
+		template = 'service_direct.html'
 
 	# kiosque
 	if pv['comportement'] == 'K':
@@ -190,16 +192,25 @@ def pv_route(request):
 	state["currencyData"] = {"cc": "EUR", "symbol": "€", "name": "European Euro"}
 	# triage par poid_liste
 	card['pvs_list'] = sorted(card['pvs_list'], key=lambda x: x['poid_liste'])
-
-	# ajoute une catégorie si non existante
-	needs.fixe_pv(pv)
-
+	
 	context = {
 		'state': state,
 		'stateJson': dumps(state),
 		'pv': pv,
 		'card': card,
-		'categories': needs.filter_categories(pv),
-		'categoriy_angry': needs.categoriy_angry
+		'categories': mockData.filter_categories(pv),
+		'categoriy_angry': mockData.categoriy_angry,
+		'tables': mockData.tables,
+		'table_status_colors': {
+			'S': '--orange01',
+			'O': '--rouge01',
+			'L': '--vert02'
+		}
 	}
 	return render(request, "views/" + template, context)
+
+def transaction(request):
+	data = request.POST
+	print(f"laboutik - DEV | transaction, data = {data}")
+	context = {}
+	return render(request, "components/test.html", context)

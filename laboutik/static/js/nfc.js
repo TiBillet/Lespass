@@ -117,8 +117,8 @@ let NfcReader = class {
         <div class="nfc-reader-simu-bt" tag-id="${item.tag_id}">${item.name}</div>
       `
 			})
-			document.querySelector('#nfc-container').insertAdjacentHTML('beforeend', uiSimu)
-			document.querySelector('#nfc-container').addEventListener('click', this.sendSimuNfcTagId.bind(this))
+			document.querySelector('#nfc-simu-tag').innerHTML = uiSimu
+			document.querySelector('#nfc-simu-tag').addEventListener('click', this.sendSimuNfcTagId.bind(this))
 		}
 	}
 

@@ -49,3 +49,11 @@ function spinnerOff(){
 function spinnerOn(){
 	document.querySelector('#spinner-container').style.display = 'flex'
 }
+
+function bigToFloat(value) {
+	try {
+		return parseFloat(new Big(value).valueOf())
+	} catch (error) {
+		console.log('-> bigToFloat, ', error)
+	}
+}

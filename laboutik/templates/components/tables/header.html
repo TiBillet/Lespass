@@ -2,18 +2,24 @@
 {% load static i18n %}
 <header class="header-background">
 	<!-- link = first sales point of the primary card -->
-	<div class="header-img" onclick="window.location = 'pv_route?uuid_pv={{card.pvs_list.0.uuid}}&tag_id_cm={{card.tag_id}}'">
+	<div class="header-img"
+		onclick="window.location = 'pv_route?uuid_pv={{card.pvs_list.0.uuid}}&tag_id_cm={{card.tag_id}}'">
 		<img class="pointer" alt="TiBillet" src="{% static 'images/icon-complet-blanc.svg' %}" />
 	</div>
 	<div class="header-status">
-		<div id="header-status-info1">info1</div>
-		<div id="header-status-info2">info2</div>
+		<div id="header-status-info1">inf</div>
+		<div id="header-status-info2">inf</div>
 	</div>
 	<div id="header-title">
-		<div>{% translate "SERVICE DIRECT" %} - {{ pv.name }} </div>
+		<div>
+			<span>{% translate "Sélectionner une table" %}</span> : <i class="fas {{ pv.icon }}"></i> {{ pv.name }}
+		</div>
 	</div>
-	<div class="header-menu pointer" hx-trigger="click" hx-get="main_menu?uuid_pv={{pv.id}}&tag_id_cm={{card.tag_id}}"
-		hx-target="#menu-burger-container" hx-swap="innerHTML" hx-on::after-request="showMenuBurger()">&#9776;</div>
+	<div class="header-menu pointer">
+		<i class="menu-burger-icon fas fa-bars curseur-action"
+			hx-get="main_menu?uuid_pv={{pv.id}}&tag_id_cm={{card.tag_id}}" hx-target="#menu-burger-container"
+			hx-swap="innerHTML" hx-on::after-request="showMenuBurger()"></i>
+	</div>
 </header>
 <nav id="menu-burger-container" class="hide"></nav>
 <script>
@@ -71,7 +77,9 @@
 		flex-direction: row;
 		justify-content: center;
 		align-items: center;
-		font-size: calc(0.5rem + 1.5vw);
+		font-size: clamp(1rem, 3.5vw, 2.5rem);
+		overflow-wrap: break-word;
+		font-weight: bold;
 	}
 
 	.header-menu {
@@ -81,7 +89,7 @@
 		flex-direction: column;
 		justify-content: center;
 		align-items: center;
-		font-size: 5rem;
+		font-size: 2rem;
 		cursor: pointer;
 	}
 
@@ -111,5 +119,12 @@
 
 	.menu-burger-item i {
 		padding-right: 6px;
+	}
+
+	/* pour une largeur supérieure 1199 pixels */
+	@media only screen and (width > 1199px) {
+		:root {
+			--header-height: 66px;
+		}
 	}
 </style>

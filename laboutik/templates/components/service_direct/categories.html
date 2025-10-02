@@ -1,0 +1,67 @@
+{% load static i18n %}
+
+<div id="bt-bascule-addition" class="BF-col categories-item">
+	<i class="categories-icon fas fa-list"></i>
+	<div class="categories-nom">{% translate "Sélection" %}</div>
+</div>
+
+<div id="categorie-tous" class="BF-col categories-item categories-item-active">
+	<i class="categories-icon fas fa-th"></i>
+	<div class="categories-nom">{% translate "Tous" %}</div>
+</div>
+
+{% for cat in categories %}
+<div id="categorie-tous" class="BF-col categories-item active">
+	<i class="categories-icon fas {{cat.icon}}"></i>
+	<div class="categories-nom">{{ cat.name }}</div>
+</div>
+{% endfor %}
+
+<style>
+	.categories-item {
+		width: 100%;
+		height: 66px;
+		border-bottom: 1px solid var(--noir02);
+		padding: 4px 0;
+		cursor: pointer;
+		color: var(--gris07);
+		overflow: hidden;
+	}
+
+	.categories-icon {
+		font-size: var(--cat-icon-size);
+		text-shadow: 2px 2px var(--gris02)
+	}
+
+	.categorie-nom {
+		font-size: var(--cat-name-size);
+	}
+
+	.categories-item-active {
+		color: var(--blanc01);
+	}
+
+	/* pour une largeur supérieure 1022 pixels */
+	@media only screen and (width > 1022px) {
+
+		/* effacer le bouton addition */
+		#bt-bascule-addition {
+			display: none;
+		}
+	}
+
+	/* pour une largeur supérieure 1199 pixels */
+	@media only screen and (width > 1199px) {
+		.categories-item {
+			height: 90px;
+			margin: 10px 0;
+		}
+	}
+
+	/* sunmi d3mini -- pour une largeur supérieure ou égale à 1278 pixels */
+	@media only screen and (width > 1278px) {
+		:root {
+			--cat-width: 8%;
+		}
+	}
+</style>

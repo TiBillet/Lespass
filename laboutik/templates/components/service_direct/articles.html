@@ -1,10 +1,12 @@
+{% load static %}
+
 {% for article in pv.articles %}
-<div class="article-container" style="background-color:{{ article.categorie.couleur_backgr }};">
+<div data-uuid="{{article.id}}" data-prix="{{article.prix}}" class="article-container"
+	style="background-color:{{ article.categorie.couleur_backgr }};">
 	<!-- image -->
 	{% if article.url_image %}
 	<div class="article-img-layer BF-ligne">
-		<img src="{{ article.url_image}}" class="article-image" loading="lazy" alt=''
-			onerror="this.style.display='none'">
+		<img src="{{ article.url_image}}" class="article-image" loading="lazy" alt='' onerror="this.style.display='none'">
 	</div>
 	{% endif %}
 	<div class="aricle-name-layer"
@@ -27,9 +29,12 @@
 			<span id="target-article-quantity-number-{{ article.id }}" class="badge">0</span>
 		</div>
 	</div>
-	<div id="article-lock-layer"></div>
+	<!-- pour remonter au parent plus facilement -->
+	<div class="article-memory-layer"></div>
+	<div class="article-lock-layer"></div>
 </div>
 {% endfor %}
+<script src="{% static 'js/articles.js' %}"></script>
 
 <style>
 	.article-container {
@@ -39,7 +44,7 @@
 		box-sizing: border-box;
 		overflow: hidden;
 		margin: 20px 0 0 20px;
-		float: left;
+		/* float: left; */
 		font-family: "Luciole-regular";
 		border-radius: 15px;
 	}
@@ -71,13 +76,6 @@
 		width: 52px;
 		height: auto;
 		opacity: 0.7;
-	}
-
-	.BF-ligne {
-		align-items: center;
-		display: flex;
-		flex-direction: row;
-		justify-content: center;
 	}
 
 	.BF-ligne-g {
@@ -120,7 +118,15 @@
 		transition: color .15s ease-in-out, background-color .15s ease-in-out, border-color .15s ease-in-out, box-shadow .15s ease-in-out;
 	}
 
-	#article-lock-layer {
+	.article-memory-layer {
+		position: absolute;
+		left: 0;
+		top: 0;
+		width: 100%;
+		height: 100%;
+	}
+
+	.article-lock-layer {
 		position: absolute;
 		left: 0;
 		top: 0;
@@ -140,24 +146,23 @@
 		}
 	}
 
-	/* pour une largeur supérieure ou égale à 1023 pixels */
-	@media only screen and (width > 1023px) {
+	/* pour une largeur supérieure ou égale à 1022 pixels */
+	@media only screen and (width > 1022px) {
 		:root {
 			--bt-article-width: 100px;
 			--bt-article-height: 100px;
+		}
+
+		.aricle-name-layer {
+			font-size: 16px;
 		}
 
 		.article-footer-layer {
 			font-size: 0.8rem;
 		}
 
-		.ele.img {
+		.article-image {
 			width: 100px;
-			height: 100px;
-		}
-
-		.ele-nom {
-			font-size: 16px;
 		}
 
 		.article-icon {
@@ -165,8 +170,8 @@
 		}
 	}
 
-	/* sunmi d3mini -- pour une largeur supérieure ou égale à 1279 pixels */
-	@media only screen and (width > 1279px) {
+	/* sunmi d3mini -- pour une largeur supérieure ou égale à 1278 pixels */
+	@media only screen and (width > 1278px) {
 		:root {
 			width: 160px;
 			height: 160px;
@@ -174,7 +179,7 @@
 			--bt-article-height: 160px;
 		}
 
-		.ele-nom {
+		.aricle-name-layer {
 			font-size: 1.5rem;
 		}
 

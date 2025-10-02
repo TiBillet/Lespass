@@ -115,6 +115,7 @@
 	.h100v {
 		height: 100vh;
 	}
+
 	.h100p {
 		height: 100%;
 	}
@@ -129,5 +130,15 @@
 
 	.hide {
 		display: none;
+	}
+
+	/* marges droite px */
+	.md4px {
+		margin-right: 4px;
+	}
+
+	/* marges gauche px */
+	.mg4px {
+		margin-left: 4px;
 	}
 }

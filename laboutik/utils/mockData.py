@@ -2073,6 +2073,62 @@ cards = [
 	},
 ]
 
+# dummy default category, replace categorie = None
+categoriy_angry = {
+	"id": 998,
+  "name": "angry",
+  "poid_liste": 998,
+  "icon": "fa-angry",
+  "couleur_backgr": "#FFFFFF",
+  "couleur_texte": "#000000",
+  "groupements": [],
+  "tva": None
+}
+
+# maj data
+def fixe_pv(pv):
+	for article in pv['articles']:
+		# pas de categorie
+		if article['categorie'] == None:
+			article['categorie'] = categoriy_angry
+
+		# pas de fond
+		if article['categorie']['couleur_backgr'] == None:
+			article['categorie']['couleur_backgr'] = '#17a2b8'
+
+		# pas de couleur texte
+		if article['categorie']['couleur_texte'] == None:
+			article['categorie']['couleur_texte'] = '#ffffff'
+
+		# prix * 100
+		article['prix'] = article['prix'] * 100
+
+def get_data_pvs():
+	for pv in pvs:
+		fixe_pv(pv)
+	return pvs
+
+# id catégorie unique et triage par poid
+def filter_categories(pv):
+	testIdem = []	
+	categories = []
+	for article in pv['articles']:
+		# print(f"article['categorie'] = {article['categorie']}")
+		if article['categorie'] == None:
+			cat = categoriy_angry
+		else:
+			cat = article['categorie']
+
+		if cat['id'] not in testIdem:
+			testIdem.append(cat['id'])
+			categories.append(cat)
+
+	retour = sorted(categories, key=lambda x: x['poid_liste'])
+	testIdem = None
+	categories = None
+	return retour 
+
+
 def get_card_from_tagid(tag_id):
 	retour = {"type_card": "unknown", "tag_id": "unknown", "pvs_list": []}
 	for card in cards:
@@ -2081,7 +2137,7 @@ def get_card_from_tagid(tag_id):
 			break
 	return retour
 
-def get_pv_from_uuid(uuid):
+def get_pv_from_uuid(uuid, pvs):
 	retour = {}
 	for pv in pvs:
 		if pv["id"] == uuid:

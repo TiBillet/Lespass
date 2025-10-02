@@ -11,15 +11,18 @@
 	<link rel="icon" href="{% static 'images/favicon.ico' %}" />
 	{% block css %} {% endblock css %}
 
+	<!-- https://github.com/MikeMcl/big.js/tree/main -->
+	<script src="{% static 'js/big.js' %}"></script>
 	<!-- init global values and function -->
-	<script src="{% static 'js/modules/tibilletUtils.js' %}"></script>
-	<!-- passing django values to javascript -->
+	<script src="{% static 'js/tibilletUtils.js' %}"></script>
+	<!-- passing django values to javascript - ex : state.demo.active -->
 	<script>
 		const state = JSON.parse("{{stateJson|escapejs}}")
 	</script>
 </head>
 
-<body id="contenu" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-on::before-request="spinnerOn()" hx-on::after-request="spinnerOff()" style="background-color:#000000;">
+<body id="contenu" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-on::before-request="spinnerOn()"
+	hx-on::after-request="spinnerOff()" style="background-color:#000000;">
 	{% block content %} {% endblock content %}
 
 	{% include "components/spinner.html" %}

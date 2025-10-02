@@ -10,5 +10,6 @@ urlpatterns=[
 	path('pv_route',views.pv_route),
 	path('main_menu',views.main_menu),
 	path('pvs_menu',views.pvs_menu),
-	path('show_pv',views.show_pv)
+	path('show_pv',views.show_pv),
+	path('transaction',views.transaction)
 ]

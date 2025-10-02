@@ -6,9 +6,10 @@
 --rouge05: #dc6575;
 
 --vert01: #00FF00;
---vert02: #339448;
---vert03: #004134;
+--vert02: #39e80a;
+--vert03: #339448;
 --vert04: #004134;
+--vert05: #004134;
 
 --bleu01: #17a2b8;
 --bleu02: #3b567f;
@@ -46,4 +47,8 @@
 
 --yellow00: #f5e12b;
 --warning00: #f5972b;
+
+--orange01: #ce4d1a;
+--dev-test: #39e80a;
 }
+

@@ -4,14 +4,14 @@
 
 {% block content %}
 <!-- header + nav -->
-{% include "components/header.html" %}
+{% include "components/service_direct/header.html" %}
 <main>
 	<nav id="categories">
-		{% include "components/categories.html" %}
+		{% include "components/service_direct/categories.html" %}
 	</nav>
 	<div id="products-container">
 		<div id="products">
-			{% include "components/articles.html" %}
+			{% include "components/service_direct/articles.html" %}
 		</div>
 		<div id="addition"></div>
 	</div>
@@ -19,26 +19,25 @@
 <footer>
 	<!-- bouton Reset commandes -->
 	<div class="BF-ligne footer-bt fond-retour test-reset" onclick="vue_pv.rezet_commandes();">
-		<i class="footer-bt-icon fas fa-trash md4px"></i>
+		<i class="fas fa-trash md4px"></i>
 		<div class="BF-col-deb footer-bt-text mg4px">
-			<div data-i8n="reset,uppercase">RESET</div>
+			<div>{% translate "RESET" %}</div>
 		</div>
 	</div>
 	<!-- bouton CHECK CARTE -->
 	<div class="BF-ligne footer-bt fond-normal test-check-carte" onclick="vue_pv.check_carte()">
-		<i class="footer-bt-icon fas fa-money-check-alt md4px"></i>
+		<i class="fas fa-money-check-alt md4px"></i>
 		<div class="BF-col-deb footer-bt-text mg4px">
-			<div data-i8n="check,uppercase">CHECK</div>
-			<div data-i8n="card,uppercase">CARTE</div>
+			<div>{% translate "CHECK" %}</div>
+			<div>{% translate "CARTE" %}</div>
 		</div>
 	</div>
 	<!-- bouton valider -->
 	<div id="bt-valider" class="BF-ligne footer-bt fond-ok" ${foncBouton}>
-		<i class="footer-bt-icon fas fa-check-circle md4px"></i>
+		<i class="fas fa-check-circle md4px"></i>
 		<div class="BF-col-deb footer-bt-text mg4px">
-			<div data-i8n="validate,uppercase">VALIDER</div>
-			<div id="bt-valider-total"><span data-i8n="total,uppercase">TOTAL</span> ${vue_pv.getTotalPointDeVentes()}
-				${getTranslate('currencySymbol', null, 'methodCurrency')}</div>
+			<div>{% translate "VALIDER" %}</div>
+			<div id="bt-valider-total"><span>{% translate "TOTAL" %}</span></div>
 		</div>
 	</div>
 </footer>
@@ -77,10 +76,15 @@
 	}
 
 	#products {
-		/* display: block; */
 		width: 100%;
 		height: 100%;
 		background-color: var(--bleu11);
+		display: flex;
+		justify-content: flex-start;
+    align-content: flex-start;
+    flex-wrap: wrap;
+    overflow-y: auto;
+    scrollbar-width: none
 	}
 
 	#addition {
@@ -101,18 +105,34 @@
 	.footer-bt {
 		width: 33.3333333%;
 		height: 100%;
-		color: #ffffff;
+		color: var(--blanc01);
 		cursor: pointer;
+
+		i {
+			margin-right: 4px;
+			font-size: 1.5rem;
+		}
 	}
 
-	/* create container products-addition */
-	#products-container {
-		container-type: inline-size;
-		container-name: products-addition;
+	.footer-bt-text {
+		font-size: 1rem;
+		font-weight: bold;
 	}
 
-	/* show addition list */
-	@container products-addition (width > 943px) {
+	.fond-retour {
+		background-color: var(--rouge03);
+	}
+
+	.fond-normal {
+		background-color: var(--bleu02);
+	}
+
+	.fond-ok {
+		background-color: var(--vert02);
+	}
+
+	/* pour une largeur supérieure 1022 pixels */
+	@media only screen and (width > 1022px) {
 		#products {
 			width: 71%;
 		}
@@ -121,6 +141,13 @@
 			display: flex;
 			width: 29%;
 			background-color: var(--gris10);
+		}
+	}
+
+	/* pour une largeur supérieure 1199 pixels */
+	@media only screen and (width > 1199px) {
+		:root {
+			--footer-container-height: 120px;
 		}
 	}
 </style>
