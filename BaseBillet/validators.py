@@ -15,7 +15,7 @@ from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
 from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Price, Product, OptionGenerale, Membership, Paiement_stripe, LigneArticle, Tag, Event, \
-    Reservation, PriceSold, Ticket, ProductSold, Configuration, ProductFormField
+    Reservation, PriceSold, Ticket, ProductSold, Configuration, ProductFormField, PromotionalCode
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from PaiementStripe.views import CreationPaiementStripe
@@ -58,11 +58,11 @@ class LoginEmailValidator(serializers.Serializer):
 
 class TicketCreator():
 
-    def __init__(self, reservation: Reservation, products_dict: dict):
+    def __init__(self, reservation: Reservation, products_dict: dict, promo_code: PromotionalCode = None):
         self.products_dict = products_dict
         self.reservation = reservation
         self.user = reservation.user_commande
-
+        self.promo_code = promo_code
         # La liste des objets a vendre pour la création du paiement stripe
         self.list_line_article_sold = []
 
@@ -150,7 +150,10 @@ class TicketCreator():
             event = reservation.event
             # Création de l'objet article à vendre, avec la liaison event.
             # On passe de prix générique (ex : Billet a 10€ a l'objet Billet pour evenement a 10€)
-            pricesold: PriceSold = get_or_create_price_sold(price_generique, event=event)
+            pricesold: PriceSold = get_or_create_price_sold(
+                price_generique,
+                event=event,
+                promo_code=self.promo_code)
 
             # les lignes articles pour la vente
             line_article = LigneArticle.objects.create(
@@ -220,6 +223,7 @@ class ReservationValidator(serializers.Serializer):
     options = serializers.PrimaryKeyRelatedField(queryset=OptionGenerale.objects.all(), many=True, allow_null=True,
                                                  required=False)
     datetime = serializers.DateTimeField(required=False)
+    promotional_code = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     def extract_products(self):
         """
@@ -286,6 +290,30 @@ class ReservationValidator(serializers.Serializer):
                     raise serializers.ValidationError(_(f'Option {option.name} unavailable for event'))
         return value
 
+    def validate_promotional_code(self, value):
+        """
+        Validate promotional code if provided.
+        The code must exist by name and will be fully validated in validate() 
+        to ensure it's linked to a selected product.
+        """
+        # If empty or None, no validation needed (it's optional)
+        if not value:
+            return value
+        
+        # Check if promotional code exists by name
+        try:
+            promo_code = PromotionalCode.objects.get(name=value, is_active=True)
+            # Store for later validation in validate() method
+            self.promo_code = promo_code
+            logger.info(f"validate_promotional_code : {promo_code.name} found for product {promo_code.product.name}")
+            return value
+        except PromotionalCode.DoesNotExist:
+            logger.warning(f"validate_promotional_code : {value} not found or inactive")
+            raise serializers.ValidationError(_(f'Invalid or inactive promotional code.'))
+        except PromotionalCode.MultipleObjectsReturned:
+            logger.warning(f"validate_promotional_code : multiple codes with name {value}")
+            raise serializers.ValidationError(_(f'Invalid promotional code.'))
+
     def validate(self, attrs):
         """
         On vérifie ici :
@@ -314,6 +342,17 @@ class ReservationValidator(serializers.Serializer):
         if not event.easy_reservation:
             if not products_dict or len(products_dict) < 1:
                 raise serializers.ValidationError(_(f'No products.'))
+
+        # Validate promotional code is linked to a selected product
+        if hasattr(self, 'promo_code'):
+            promo_code = self.promo_code
+            selected_products = list(products_dict.keys())
+            if promo_code.product not in selected_products:
+                logger.warning(f"Promotional code {promo_code.name} not linked to selected products")
+                raise serializers.ValidationError(
+                    _(f'The promotional code is not valid for the selected products.')
+                )
+            logger.info(f"Promotional code {promo_code.name} validated for product {promo_code.product.name}")
 
         for product, price_dict in products_dict.items():
             # les produits sont prévu par l'évent ?
@@ -430,6 +469,7 @@ class ReservationValidator(serializers.Serializer):
         self.tickets = TicketCreator(
             reservation=reservation,
             products_dict=products_dict,
+            promo_code=self.promo_code if hasattr(self, 'promo_code') else None,
         )
         self.reservation = reservation
         # On récupère le lien de paiement fabriqué dans le TicketCreator si besoin :

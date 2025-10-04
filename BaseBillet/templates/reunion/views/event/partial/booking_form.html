@@ -7,7 +7,6 @@
 </style>
 
 
-
 <form id="reservation_form" hx-post="reservation/" class="d-flex flex-column justify-content-between h-100">
     <div>
         <input type="hidden" name="event" value="{{ event.uuid }}">
@@ -50,6 +49,7 @@
                 {% translate "Your email is not confirmed. Please check your spam folder :)" %}
             </div>
         {% endif %}
+
         <div class="accordion mb-3">
             {% regroup event.published_prices by free_price as price_groups %}
             {% for free_price, published_prices in price_groups %}
@@ -91,6 +91,8 @@
                                     max="
 
 
+
+
                                             {% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% else %}{{ price.max_per_user }}{% endif %}"
                                     class="flex-grow-1 js-order-amount"
                             ></bs-counter>
@@ -105,6 +107,8 @@
                                     name="{{ price.uuid }}"
                                     step="1" min="0"
                                     max="
+
+
 
 
                                             {% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% else %}{{ price.max_per_user }}{% endif %}"
@@ -155,8 +159,10 @@
                             {% if field.field_type == 'ST' %}
                                 <div class="mb-3">
                                     <label class="form-label" for="ff-{{ field.uuid }}">{{ field.label }}</label>
-                                    <input id="ff-{{ field.uuid }}" name="form__{{ field.name }}" type="text" class="form-control"
-                                           placeholder="{{ field.placeholder|default:field.label }}" {% if field.required %}required{% endif %}>
+                                    <input id="ff-{{ field.uuid }}" name="form__{{ field.name }}" type="text"
+                                           class="form-control"
+                                           placeholder="{{ field.placeholder|default:field.label }}"
+                                           {% if field.required %}required{% endif %}>
                                     {% if field.help_text %}
                                         <div class="form-text">{{ field.help_text }}</div>
                                     {% endif %}
@@ -164,8 +170,10 @@
                             {% elif field.field_type == 'LT' %}
                                 <div class="mb-3">
                                     <label class="form-label" for="ff-{{ field.uuid }}">{{ field.label }}</label>
-                                    <textarea id="ff-{{ field.uuid }}" name="form__{{ field.name }}" class="form-control" style="height: 120px"
-                                              placeholder="{{ field.placeholder|default:field.label }}" {% if field.required %}required{% endif %}></textarea>
+                                    <textarea id="ff-{{ field.uuid }}" name="form__{{ field.name }}"
+                                              class="form-control" style="height: 120px"
+                                              placeholder="{{ field.placeholder|default:field.label }}"
+                                              {% if field.required %}required{% endif %}></textarea>
                                     {% if field.help_text %}
                                         <div class="form-text">{{ field.help_text }}</div>
                                     {% endif %}
@@ -173,7 +181,8 @@
                             {% elif field.field_type == 'SS' %}
                                 <div class="mb-3">
                                     <label class="form-label" for="ff-{{ field.uuid }}">{{ field.label }}</label>
-                                    <select id="ff-{{ field.uuid }}" name="form__{{ field.name }}" class="form-select" {% if field.required %}required{% endif %}>
+                                    <select id="ff-{{ field.uuid }}" name="form__{{ field.name }}" class="form-select"
+                                            {% if field.required %}required{% endif %}>
                                         <option value="" {% if field.required %}disabled selected{% endif %}>—</option>
                                         {% for opt in field.options %}
                                             <option value="{{ opt }}">{{ opt }}</option>
@@ -188,9 +197,11 @@
                                     <div class="form-label">{{ field.label }}</div>
                                     {% for opt in field.options %}
                                         <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" id="ff-{{ field.uuid }}-{{ forloop.counter }}"
+                                            <input class="form-check-input" type="checkbox"
+                                                   id="ff-{{ field.uuid }}-{{ forloop.counter }}"
                                                    name="form__{{ field.name }}" value="{{ opt }}">
-                                            <label class="form-check-label" for="ff-{{ field.uuid }}-{{ forloop.counter }}">{{ opt }}</label>
+                                            <label class="form-check-label"
+                                                   for="ff-{{ field.uuid }}-{{ forloop.counter }}">{{ opt }}</label>
                                         </div>
                                     {% endfor %}
                                     {% if field.help_text %}
@@ -219,6 +230,20 @@
     </div>
 
     <div class="p-3">
+        {# Promotional code input - show if any product has promotional codes #}
+        {% if event.products.all %}
+            {% for product in event.products.all %}
+                {% if product.promotional_codes.exists %}
+                    <div class="mb-3">
+                        <label for="promotional-code" class="form-label">{% trans "Promotional code" %}</label>
+                        <input type="text" name="promotional_code" class="form-control" id="promotional-code"
+                               placeholder="{% trans 'Enter your promotional code' %}">
+                    </div>
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+
+
         <button type="submit" class="btn btn-primary w-100 mb-3">{% trans 'Send booking request' %}</button>
         <a href="." class="btn btn-danger d-block">{% trans 'Cancel' %}</a>
     </div>
@@ -252,7 +277,7 @@
                 }
                 err.textContent = "Veuillez sélectionner au moins 1 billet avant d'envoyer la demande."
                 // Also scroll into view for visibility
-                err.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                err.scrollIntoView({behavior: 'smooth', block: 'center'})
             }
         } catch (e) {
             // Fail open: if any unexpected error occurs, do not block the request

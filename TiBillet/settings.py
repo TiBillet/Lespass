@@ -588,6 +588,13 @@ UNFOLD = {
 
                     },
                     {
+                        "title": _("Promotional codes"),
+                        "icon": "local_offer",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:BaseBillet_promotionalcode_changelist"),
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+
+                    },
+                    {
                         "title": _("Tags"),
                         "icon": "style",  # Supported icon set: https://fonts.google.com/icons
                         "link": reverse_lazy("staff_admin:BaseBillet_tag_changelist"),

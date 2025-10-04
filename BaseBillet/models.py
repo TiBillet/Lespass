@@ -659,6 +659,8 @@ class Configuration(SingletonModel):
         return _('Settings')
 
 
+
+
 class Product(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
 
@@ -771,6 +773,61 @@ class Product(models.Model):
         verbose_name = _('Product')
         verbose_name_plural = _('Products')
         unique_together = ('categorie_article', 'name')
+
+
+class PromotionalCode(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
+
+    name = models.CharField(max_length=200, verbose_name=_("Coupon name"),
+                          help_text=_("Descriptive name for the discount coupon."))
+
+    discount_rate = models.DecimalField(max_digits=5, decimal_places=2,
+                                         verbose_name=_("Discount rate (%)"),
+                                         help_text=_("Discount percentage to apply (0-100)."))
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE,
+                               related_name="promotional_codes",
+                               verbose_name=_("Product"),
+                               help_text=_("Product to which this discount coupon applies."))
+
+    is_active = models.BooleanField(default=True, verbose_name=_("Active"))
+
+    usage_limit = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        verbose_name=_("Usage limit"),
+        help_text=_("Maximum number of times this code can be used. Leave empty for unlimited usage.")
+    )
+
+    usage_count = models.PositiveIntegerField(
+        default=0,
+        verbose_name=_("Usage count"),
+        help_text=_("Number of times this code has been used.")
+    )
+
+    date_created = models.DateTimeField(auto_now_add=True, verbose_name=_("Creation date"))
+
+    def is_usable(self):
+        """Check if the promotional code can still be used."""
+        if not self.is_active:
+            return False
+        if self.usage_limit is None:
+            return True
+        return self.usage_count < self.usage_limit
+
+    def remaining_uses(self):
+        """Return the number of remaining uses, or None if unlimited."""
+        if self.usage_limit is None:
+            return None
+        return max(0, self.usage_limit - self.usage_count)
+
+    def __str__(self):
+        return f"{self.name} - {self.discount_rate}% ({self.product.name})"
+
+    class Meta:
+        verbose_name = _('Promotional code')
+        verbose_name_plural = _('Promotional codes')
+        ordering = ('-date_created',)
 
 
 @receiver(post_save, sender=Product)

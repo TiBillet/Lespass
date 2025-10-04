@@ -72,7 +72,8 @@ from AuthBillet.models import HumanUser, TibilletUser, Wallet
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
-    FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel, BrevoConfig, ScanApp, ProductFormField
+    FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel, BrevoConfig, ScanApp, ProductFormField, \
+    PromotionalCode
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
     webhook_membership, create_ticket_pdf, ticket_celery_mailer, send_ticket_cancellation_user, \
     send_reservation_cancellation_user, send_sale_to_laboutik
@@ -865,6 +866,58 @@ class ProductAdmin(ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+    def has_add_permission(self, request):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+
+@admin.register(PromotionalCode, site=staff_admin_site)
+class PromotionalCodeAdmin(ModelAdmin):
+    compressed_fields = True
+    warn_unsaved_form = True
+
+    list_display = (
+        'name',
+        'product',
+        'discount_rate',
+        'is_active',
+        'usage_count',
+        'usage_limit',
+        'remaining_uses',
+        'date_created',
+    )
+
+    fields = (
+        'name',
+        'product',
+        'discount_rate',
+        'is_active',
+        'usage_limit',
+        'usage_count',
+    )
+
+    readonly_fields = ('usage_count',)
+
+    list_filter = ['is_active', 'product']
+    search_fields = ['name', 'product__name']
+    autocomplete_fields = ['product']
+    ordering = ('-date_created',)
+
+    @display(description=_("Remaining uses"))
+    def remaining_uses(self, obj):
+        remaining = obj.remaining_uses()
+        if remaining is None:
+            return _("Unlimited")
+        return remaining
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
     def has_add_permission(self, request):
         return TenantAdminPermissionWithRequest(request)

@@ -12,9 +12,10 @@ from django_tenants.utils import tenant_context
 from rest_framework import serializers
 from rest_framework.generics import get_object_or_404
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, Paiement_stripe, \
-    PriceSold, ProductSold, Artist_on_event, OptionGenerale, Tag, Membership, PostalAddress
+    PriceSold, ProductSold, Artist_on_event, OptionGenerale, Tag, Membership, PostalAddress, PromotionalCode
 from Customers.models import Client
 from PaiementStripe.views import CreationPaiementStripe
+from fedow_connect.utils import dround
 
 logger = logging.getLogger(__name__)
 
@@ -987,7 +988,7 @@ def create_ticket(pricesold, customer, reservation):
     return ticket
 
 
-def get_or_create_price_sold(price: Price, event: Event = None):
+def get_or_create_price_sold(price: Price, event: Event = None, promo_code:PromotionalCode = None):
     """
     Générateur des objets PriceSold pour envoi à Stripe.
     Price + Event = PriceSold
@@ -1007,6 +1008,8 @@ def get_or_create_price_sold(price: Price, event: Event = None):
         productsold.get_id_product_stripe()
 
     prix = price.prix
+    if promo_code:
+        prix = dround(prix - (prix * promo_code.discount_rate / 100))
 
     pricesold, created = PriceSold.objects.get_or_create(
         productsold=productsold,
