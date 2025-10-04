@@ -109,6 +109,14 @@ class PaymentMethod(models.TextChoices):
             choice not in [cls.STRIPE_FED, cls.STRIPE_NOFED, cls.STRIPE_RECURENT]
         ]
 
+    @classmethod
+    def classic(cls):
+        """Renvoie uniquement les choix de type 'en ligne'"""
+        return [
+            (choice, label) for choice, label in cls.choices if
+            choice in [cls.FREE, cls.CC, cls.CASH, cls.CHEQUE]
+        ]
+
 
 class Tag(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid4)
