@@ -1,12 +1,13 @@
 {% load tibitags %}
 {% load humanize i18n %}
 
+{% if tokens %}
 <table class="table">
     <thead>
-    <th>{% trans "Balance" %}</th>
-    <th>{% trans "Used in collectives" %}</th>
-    <th>{% trans "Last transaction" %}</th>
-    </thead>
+        <th>{% trans "Balance" %}</th>
+        <th>{% trans "Used in collectives" %}</th>
+        <th>{% trans "Last transaction" %}</th>
+        </thead>
     <tbody>
     {% for token in tokens %}
         <tr{% if config.organisation not in token.asset.names_of_place_federated and not token.asset.is_stripe_primary %} class="opacity-50"{% endif %}>
@@ -43,3 +44,8 @@
     {% endfor %}
     </tbody>
 </table>
+{% else %}
+<p>
+    {% trans "No currency for this card." %}
+</p>
+{% endif %}

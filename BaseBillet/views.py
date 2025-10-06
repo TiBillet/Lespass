@@ -359,9 +359,6 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
             user.is_active = True
             user.save()
 
-            # Parti pris : On logue l'user lorsqu'il scanne sa carte.
-            login(request, user)
-
             # Pour les tests :
             # On est sur le moteur de démonstration / test
             # Pour les tests fonctionnel, on a besoin de vérifier le token, on le génère ici.
@@ -370,8 +367,12 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
                 base_url = connection.tenant.get_primary_domain().domain
                 connexion_url = f"https://{base_url}/emailconfirmation/{token}"
                 messages.add_message(request, messages.INFO, format_html(f"<a href='{connexion_url}'>TEST MODE</a>"))
+    
+            # Accès limité à la carte
+            template_context = get_context(request)
+            template_context['base_template'] = 'reunion/blank_base.html'
+            return render(request, "reunion/views/account/restricted_access.html", context=template_context)
 
-            return redirect("/my_account")
 
     # @action(detail=False, methods=['POST'])
     # def link_with_email_confirm(self, request):

@@ -1,0 +1,42 @@
+{% extends base_template %}
+{% load i18n %}
+{% load tibitags %}
+
+{% block title %}{% trans 'Basic card access' %}{% endblock %}
+
+{% block main %}
+<div class="flex-fill">
+    <div class="container-lg py-5">
+        <div class="row">
+            <div class="col-md-8 offset-md-2 col-lg-6 offset-lg-3 col-xl-4 offset-xl-4">
+                <h1>{% trans 'Basic card access' %}</h1>
+
+                <div hx-get="/my_account/tokens_table/" hx-trigger="revealed" class="mt-4">
+                    <span>{% translate "Loading list" %}</span>
+                    <div class="d-flex justify-content-center align-items-center ">
+                        <div class="spinner-border text-info"
+                            role="status"
+                        ></div>
+                    </div>
+                </div>
+
+                <div class="col-6 col-md-auto me-md-2">
+                    <a href="#" hx-get="/my_account/refill_wallet" hx-indicator="#tibillet-spinner"
+                    class="btn btn-primary square-btn w-100">
+                        <i class="bi bi-plus-circle"></i>
+                        {% trans "Refill TiBillets" %}
+                    </a>
+                </div>
+                
+                <p class="alert alert-info mt-5">
+                    {% blocktranslate %}
+                        This card is already registered. Log in to access the
+                        rest of your Lèspass account.
+                    {% endblocktranslate %}
+                </p>
+                {% include "reunion/forms/login.html" %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
