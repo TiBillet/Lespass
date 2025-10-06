@@ -347,6 +347,7 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
                 logger.info("Wallet ephemere, on demande le mail")
                 template_context = get_context(request)
                 template_context['qrcode_uuid'] = qrcode_uuid
+                template_context['base_template'] = 'reunion/blank_base.html'
                 # Logout au cas où on scanne les cartes à la suite.
                 logout(request)
                 return render(request, "reunion/views/register.html", context=template_context)
