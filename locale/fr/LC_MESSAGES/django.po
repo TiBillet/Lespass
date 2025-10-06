@@ -3753,7 +3753,7 @@ msgstr "par personne"
 
 #: BaseBillet/templates/reunion/views/event/partial/booking_form.html:240
 msgid "Enter your promotional code"
-msgstr ""
+msgstr "Entrez votre code promotionnel"
 
 #: BaseBillet/templates/reunion/views/event/partial/booking_form.html:247
 msgid "Send booking request"
