@@ -1,0 +1,92 @@
+{% load static %}
+{% load i18n %}
+{% get_current_language as LANGUAGE_CODE %}
+
+<!doctype html>
+<html lang="{{ LANGUAGE_CODE }}">
+
+<head>
+    {% load i18n %}
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="
+            {% block meta_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
+    <meta name="robots" content="{% block meta_robots %}index, follow{% endblock %}">
+    <title>{% block title %}{% translate 'Home' %}{% endblock %} | {{ config.organisation }}</title>
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="{% block og_type %}website{% endblock %}">
+    <meta property="og:url" content="{{ request.build_absolute_uri }}">
+    <meta property="og:title"
+          content="{% block og_title %}{% translate 'Home' %} | {{ config.organisation }}{% endblock %}">
+    <meta property="og:description" content="
+            {% block og_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
+    <meta property="og:image" content="
+            {% block og_image %}{% if config.img %}{{ config.img.hdr.url }}{% else %}{% static 'reunion/img/favicon.png' %}{% endif %}{% endblock %}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="{% block og_image_alt %}{{ config.organisation }}{% endblock %}">
+    <meta property="og:site_name" content="{{ config.organisation }}">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="{{ request.build_absolute_uri }}">
+    <meta name="twitter:domain" content="{{ request.get_host }}">
+    <meta name="twitter:title"
+          content="{% block twitter_title %}{% translate 'Home' %} | {{ config.organisation }}{% endblock %}">
+    <meta name="twitter:description" content="
+            {% block twitter_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
+    <meta name="twitter:image" content="
+            {% block twitter_image %}{% if config.img %}{{ config.img.hdr.url }}{% else %}{% static 'reunion/img/favicon.png' %}{% endif %}{% endblock %}">
+    <meta name="twitter:image:alt" content="{% block twitter_image_alt %}{{ config.organisation }}{% endblock %}">
+    {% if config.twitter %}
+        <meta name="twitter:site"
+              content="@{{ config.twitter|cut:'https://twitter.com/'|cut:'https://x.com/'|cut:'/' }}">{% endif %}
+
+    {% block extra_meta %}{% endblock %}
+
+    <link rel="preload" as="style" href="{% static 'reunion/css/tibillet.css' %}">
+    <link rel="modulepreload" href="{% static 'reunion/js/theme-switcher.mjs' %}">
+
+    <link rel="icon" type="image/png" href="{% static 'reunion/img/favicon.png' %}">
+    <link data-bs-stylesheet="bootstrap" href="{% static 'reunion/css/bootstrap.min.5.3.3.css' %}" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <link data-bs-stylesheet="bootstrap-icons" rel="stylesheet"
+          href="{% static 'reunion/css/bootstrap-icons.min.css' %}">
+    <link rel="stylesheet" href="{% static 'reunion/css/vars.css' %}">
+    <link rel="stylesheet" href="{% static 'reunion/css/tibillet.css' %}">
+
+    <script src="{% static 'reunion/js/bootstrap.bundle.min.5.3.3.js' %}"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+            crossorigin="anonymous"></script>
+    <script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
+    <script src="{% static 'mvt_htmx/js/loading-states.js' %}"></script>
+    {% if formbricks_api_host %}
+        <script src="{{ formbricks_api_host }}/js/formbricks.umd.cjs" async></script>
+    {% endif %}
+    <script type="module">
+        import * as ThemeSwitcher from '{% static "reunion/js/theme-switcher.mjs" %}'
+
+        // components
+        import '{% static "reunion/js/bs-counter.mjs" %}'
+
+        ThemeSwitcher.init()
+    </script>
+
+</head>
+
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' class="min-vh-100 d-flex flex-column">
+
+<div class="flex-fill d-flex flex-column">
+    {% block main %}{% endblock main %}
+</div>
+
+{% include "reunion/partials/toasts.html" %}
+
+<!-- spinner -->
+{% include "reunion/loading.html" %}
+
+{% block scripts %}{% endblock scripts %}
+
+</body>
+</html>
