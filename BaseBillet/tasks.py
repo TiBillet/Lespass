@@ -450,7 +450,7 @@ def send_membership_pending_user(membership_uuid: str):
         'button': button,
         'next_text_1': _("Si vous n'êtes pas à l'origine de cette demande, merci de contacter l'équipe TiBillet."),
         'end_text': _("À bientôt !"),
-        'signature': _("Marvin, le TiBillet robot"),
+        'signature': _("Marvin, le robot TiBillet"),
     }
 
     try:
