@@ -7,12 +7,12 @@
 		<img class="pointer" alt="TiBillet" src="{% static 'images/icon-complet-blanc.svg' %}" />
 	</div>
 	<div class="header-status">
-		<div id="header-status-info1">inf</div>
-		<div id="header-status-info2">inf</div>
+		<div id="header-status-info1">info1</div>
+		<div id="header-status-info2">info2</div>
 	</div>
 	<div id="header-title">
 		<div>
-			<span>{% translate "Sélectionner une table" %}</span> : <i class="fas {{ pv.icon }}"></i> {{ pv.name }}
+			<span>{{ title }}</span> - <i class="fas {{ pv.icon }}"></i> {{ pv.name }}
 		</div>
 	</div>
 	<div class="header-menu pointer">
@@ -98,7 +98,7 @@
 		position: absolute;
 		top: calc(var(--header-height) + 2);
 		right: 0;
-		background-color: var(--bleu09);
+		background-color: var(--noir04);
 		z-index: 2;
 	}
 

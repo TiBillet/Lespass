@@ -17,7 +17,6 @@ sys.path.append(str(Path(__file__).resolve().parent / "utils"))
 import mockData
 data_pvs = mockData.get_data_pvs()
 
-
 state =  {
 	'version': '0.9.11',
 	'demo': {
@@ -157,21 +156,33 @@ def show_pv(request):
 
 
 def pv_route(request):
-	# pour un mode restaurant (non service direct)
-	id_tables = request.GET.get('id_tables')
+	# pour un mode restaurant (non service direct) / ternaire
+	id_table = int(request.GET.get('id_table')) if request.GET.get('id_table') != None else None
+	# force le service direct en mode restaurant
+	force_service_direct = True if request.GET.get('force_service_direct') == 'true' else None
+ 
 	# mode restaurant forcer en service direct
 	restaurant_service_direct = request.GET.get('restaurant_service_direct')
 	uuid_pv = request.GET.get('uuid_pv')
 	tag_id_cm = request.GET.get('tag_id_cm')
-	print(f"laboutik - DEV | uuid_pv = {uuid_pv}  --  tag_id_cm = {tag_id_cm}  --  id_tables = {id_tables}")
+	print(f"laboutik - DEV | uuid_pv = {uuid_pv}  --  tag_id_cm = {tag_id_cm}  --  id_table = {id_table}  --  type id_table = {type(id_table)}")
 	pv = mockData.get_pv_from_uuid(uuid_pv, data_pvs)
 	card = mockData.get_card_from_tagid(tag_id_cm)
-	# restaurent par défaut
+	# restaurant par défaut
+	title = _('Choisir une table')
 	template = 'tables.html'
 	
 	# service directe
-	if pv['service_direct'] == True:
+	if pv['service_direct'] == True or force_service_direct == True:
+		title = _('Service direct')
 		template = 'service_direct.html'
+
+	# commandes table
+	if id_table != None:
+		table_name = mockData.get_table_by_id(id_table)["name"]
+		print(f'table_name = {table_name}')
+		title = _('Nouvelle commande sur table ') + table_name
+		template = 'commandes_table.html'
 
 	# kiosque
 	if pv['comportement'] == 'K':
@@ -205,7 +216,8 @@ def pv_route(request):
 			'S': '--orange01',
 			'O': '--rouge01',
 			'L': '--vert02'
-		}
+		},
+		'title': title
 	}
 	return render(request, "views/" + template, context)
 

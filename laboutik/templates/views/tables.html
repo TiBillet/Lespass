@@ -1,22 +1,23 @@
 {% extends "base.html" %}
 {% load static %}
 {% load static i18n %}
+{% load table_status_colors %}
 
 {% block content %}
 <!-- header + nav -->
-{% include "components/tables/header.html" %}
+{% include "components/header.html" with title=title %}
 <main>
 	<nav id="categories">
 		cat
 	</nav>
 	<div id="tables-container">
 		{% for table in tables %}
-		<div class="BF-col-haut table-bouton ${nomClass} ${curseurAction}" data-id-table="{{table.id}}">
+		<a class="BF-col-haut table-bouton"
+			href="pv_route?uuid_pv={{pv.id}}&tag_id_cm={{card.tag_id}}&id_table={{table.id}}">
 			<div class="BF-col table-nom">{{table.name}}</div>
-			<div class="BF-ligne table-etat" style="background-color: {{table_status_colors[table.statut]}}">
-				${iconCategorie}
+			<div class="BF-ligne table-etat" style="background-color: var({{ table_status_colors|sel:table.statut }});">
 			</div>
-		</div>`
+		</a>`
 		{% endfor %}
 	</div>
 </main>
@@ -30,16 +31,19 @@
 		</div>
 	</div>
 	<!-- bouton service direct -->
-	<div class="BF-ligne footer-bt fond-coul1 test-service-direct" onclick="console.log('action en attente')">
+	<a class="BF-ligne footer-bt fond-coul1 test-service-direct" href="pv_route?uuid_pv={{pv.id}}&tag_id_cm={{card.tag_id}}&force_service_direct=true">
 		<i class="fas fa-cash-register md4px"></i>
 		<div class="BF-col-deb footer-bt-text mg4px">
 			<div>{% translate "SERVICE DIRECT" %}</div>
 		</div>
-	</div>
+	</a>
 </footer>
 {% endblock content %}
 
 {% block script %}
+<script>
+
+</script>
 {% endblock script %}
 
 {% block css %}
@@ -89,6 +93,7 @@
 		height: 100%;
 		color: var(--blanc01);
 		cursor: pointer;
+		text-decoration: none;
 
 		i {
 			margin-right: 4px;
@@ -117,6 +122,18 @@
 		font-family: 'Source Sans', sans-serif;
 		box-sizing: border-box;
 		background-color: var(--gris04);
+		text-decoration: none;
+	}
+
+	.table-nom {
+		width: 100%;
+		height: calc(100% - 24px);
+		border-radius: 15px 15px 0 0;
+		font-size: 1rem;
+		font-weight: bold;
+		color: var(--blanc01);
+		overflow: hidden;
+		padding: 2px;
 	}
 
 	.table-etat {

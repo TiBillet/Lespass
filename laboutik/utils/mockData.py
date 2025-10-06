@@ -2115,7 +2115,7 @@ def filter_categories(pv):
 	for article in pv['articles']:
 		# print(f"article['categorie'] = {article['categorie']}")
 		if article['categorie'] == None:
-			cat = categoriy_angry
+			cat = categoriy_angryretour = {"type_card": "unknown", "tag_id": "unknown", "pvs_list": []}
 		else:
 			cat = article['categorie']
 
@@ -2142,5 +2142,13 @@ def get_pv_from_uuid(uuid, pvs):
 	for pv in pvs:
 		if pv["id"] == uuid:
 			retour = pv
+			break
+	return retour
+
+def get_table_by_id(id):
+	retour = None
+	for table in tables:
+		if table["id"] == id:
+			retour = table
 			break
 	return retour
