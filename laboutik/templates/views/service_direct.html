@@ -6,14 +6,15 @@
 <!-- header + nav -->
 {% include "components/header.html" with title=title %}
 <main>
-	<nav id="categories">
-		{% include "components/categories.html" %}
-	</nav>
+	<!-- catégories -->
+	{% include "components/categories.html" %}
 	<div id="products-container">
 		<div id="products">
 			{% include "components/articles.html" %}
 		</div>
-		<div id="addition"></div>
+		<div id="addition">
+			<h1>list addition</h1>
+		</div>
 	</div>
 </main>
 <footer>
@@ -60,12 +61,6 @@
 		overflow: hidden;
 	}
 
-	#categories {
-		width: var(--cat-width);
-		height: 100%;
-		background-color: var(--noir04);
-	}
-
 	#products-container {
 		width: calc(100% - var(--cat-width));
 		height: 100%;
@@ -81,16 +76,17 @@
 		background-color: var(--bleu11);
 		display: flex;
 		justify-content: flex-start;
-    align-content: flex-start;
-    flex-wrap: wrap;
-    overflow-y: auto;
-    scrollbar-width: none
+		align-content: flex-start;
+		flex-wrap: wrap;
+		overflow-y: auto;
+		scrollbar-width: none
 	}
 
 	#addition {
 		display: none;
-		width: 0%;
+		width: 100%;
 		height: 100%;
+		color: var(--blanc01);
 	}
 
 	footer {

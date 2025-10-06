@@ -1,7 +1,7 @@
 {% load static %}
 
 {% for article in pv.articles %}
-<div data-uuid="{{article.id}}" data-prix="{{article.prix}}" class="article-container"
+<div data-uuid="{{article.id}}" data-prix="{{article.prix}}" class="article-container cat-{{ article.categorie.id}}"
 	style="background-color:{{ article.categorie.couleur_backgr }};">
 	<!-- image -->
 	{% if article.url_image %}
