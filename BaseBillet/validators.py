@@ -161,6 +161,7 @@ class TicketCreator():
                 amount=dec_to_int(pricesold.prix),
                 # pas d'objet reservation ?
                 qty=qty,
+                promotional_code=self.promo_code,
             )
             self.list_line_article_sold.append(line_article)
 
@@ -303,6 +304,9 @@ class ReservationValidator(serializers.Serializer):
         # Check if promotional code exists by name
         try:
             promo_code = PromotionalCode.objects.get(name=value, is_active=True)
+            if not promo_code.is_usable():
+                raise serializers.ValidationError(_(f'Invalid or inactive promotional code.'))
+
             # Store for later validation in validate() method
             self.promo_code = promo_code
             logger.info(f"validate_promotional_code : {promo_code.name} found for product {promo_code.product.name}")
@@ -313,6 +317,7 @@ class ReservationValidator(serializers.Serializer):
         except PromotionalCode.MultipleObjectsReturned:
             logger.warning(f"validate_promotional_code : multiple codes with name {value}")
             raise serializers.ValidationError(_(f'Invalid promotional code.'))
+
 
     def validate(self, attrs):
         """

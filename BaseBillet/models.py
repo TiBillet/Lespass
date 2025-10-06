@@ -779,7 +779,7 @@ class PromotionalCode(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
 
     name = models.CharField(max_length=200, verbose_name=_("Coupon name"),
-                          help_text=_("Descriptive name for the discount coupon."))
+                          help_text=_("Descriptive name for the discount coupon."), unique=True)
 
     discount_rate = models.DecimalField(max_digits=5, decimal_places=2,
                                          verbose_name=_("Discount rate (%)"),
@@ -2170,6 +2170,9 @@ class LigneArticle(models.Model):
 
     payment_method = models.CharField(max_length=2, choices=PaymentMethod.choices, blank=True, null=True,
                                       verbose_name=_("Payment method"))
+
+    promotional_code = models.ForeignKey(PromotionalCode, on_delete=models.PROTECT, blank=True, null=True,
+                                   verbose_name=_("Promotional code"), related_name="lignearticles")
 
     asset = models.UUIDField(blank=True, null=True, verbose_name=_("Asset"))
 
