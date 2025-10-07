@@ -175,14 +175,15 @@ def pv_route(request):
 	# service directe
 	if pv['service_direct'] == True or force_service_direct == True:
 		title = _('Service direct')
-		template = 'service_direct.html'
+		template = 'common_user_interface.html'
 
 	# commandes table
 	if id_table != None:
+		state["id_table"] = id_table
 		table_name = mockData.get_table_by_id(id_table)["name"]
 		print(f'table_name = {table_name}')
-		title = _('Nouvelle commande sur table ') + table_name
-		template = 'commandes_table.html'
+		title = _('Commande table ') + table_name
+		template = 'common_user_interface.html'
 
 	# kiosque
 	if pv['comportement'] == 'K':
@@ -200,7 +201,6 @@ def pv_route(request):
 	state["monnaie_principale_name"] = "TestCoin"
 	state["passageModeGerant"] = True
 	state["modeGerant"] = False
-	state["currencyData"] = {"cc": "EUR", "symbol": "€", "name": "European Euro"}
 	# triage par poid_liste
 	card['pvs_list'] = sorted(card['pvs_list'], key=lambda x: x['poid_liste'])
 	
@@ -217,7 +217,9 @@ def pv_route(request):
 			'O': '--rouge01',
 			'L': '--vert02'
 		},
-		'title': title
+		'title': title,
+		'currency_data': {'cc': 'EUR', 'symbol': '€', 'name': 'European Euro'},
+		'uuidArticlePaiementFractionne': '42ffe511-d880-4964-9b96-0981a9fe4071'
 	}
 	return render(request, "views/" + template, context)
 

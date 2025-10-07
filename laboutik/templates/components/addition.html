@@ -1,0 +1,80 @@
+{% load static i18n %}
+
+<div id="addition">
+	<div class="addition-legend-grid">
+		<div></div>
+		<div>{% translate "QTE" %}</div>
+		<div>{% translate "PRODUIT" %}</div>
+		<div>{% translate "PRIX" %}</div>
+	</div>
+	<div id="addition-list"></div>
+	<form id="addition-form"></form>
+</div>
+
+<style>
+	#addition {
+		display: none;
+		flex-direction: column;
+		width: 100%;
+		height: 100%;
+		color: var(--blanc01);
+	}
+
+	#addition-list {
+		width: 100%;
+		/* dev */
+		height: calc(var(--addition-list-heigh) - var(--addition-legend-heigh));
+		/* height: 100%; */
+		overflow-y: auto;
+		scrollbar-width: none
+	}
+
+	.addition-legend-grid {
+		width: 100%;
+		height: 20px;
+		display: grid;
+		grid-template-columns: 12% 12% 60% 16%;
+		font-size: 14px;
+		font-weight: 600;
+		color: var(--gris03);
+		border-bottom: 1px solid var(--gris07);
+	}
+
+	.addition-line-grid {
+		width: 100%;
+		min-height: var(--addition-line-heigh);
+		display: grid;
+		grid-template-columns: 12% 12% 60% 16%;
+		color: var(--blanc01);
+		font-size: 16px;
+		font-weight: 400;
+		margin: 8px 0;
+	}
+
+	.addition-col-bt {
+		font-size: 1.8rem;
+		/* background-color: aqua; */
+	}
+
+	.addition-col-number, .addition-col-name, .addition-col-prix {
+		overflow: hidden;
+	}
+
+	#addition-form {
+		/* display: none; */
+		width: 100%;
+		height: 30%;
+		overflow-y: auto;
+		scrollbar-width: none
+	}
+
+	/* pour une largeur supérieure 1022 pixels */
+	@media only screen and (width > 1022px) {
+		#addition {
+			display: flex;
+			flex-direction: column;
+			width: 29%;
+			background-color: var(--gris10);
+		}
+	}
+</style>

@@ -1,5 +1,65 @@
 from django.conf import settings
 
+nombreMaxSelectionArticle = 1000
+
+group_Unkown_articles = {
+	"moyens_paiement": "",
+	"besoin_tag_id": "",
+	"groupe": "groupe888",
+	"nb_commande_max": nombreMaxSelectionArticle
+}
+
+bt_groupement = [
+	{
+		"methode_name": "VenteArticle", 
+    "besoin_tag_id": "nfc",
+    "groupe": "groupe1",
+    "nb_commande_max": nombreMaxSelectionArticle
+  },
+	{
+		"methode_name": "RetourConsigne",
+    "moyens_paiement": "espece|nfc",
+    "besoin_tag_id": "nfc",
+    "groupe": "groupe2",
+    "nb_commande_max": nombreMaxSelectionArticle
+  },
+  {
+		"methode_name": "Adhesion",
+    "moyens_paiement": "espece|carte_bancaire|CH",
+    "besoin_tag_id": "tout",
+    "groupe": "groupe3",
+    "nb_commande_max": nombreMaxSelectionArticle
+  },
+  {
+		"methode_name": "AjoutMonnaieVirtuelle",
+    "moyens_paiement": "espece|carte_bancaire|CH",
+    "besoin_tag_id": "tout",
+    "groupe": "groupe4",
+    "nb_commande_max": nombreMaxSelectionArticle
+  },
+  {
+		"methode_name": "AjoutMonnaieVirtuelleCadeau",
+    "moyens_paiement": "",
+    "besoin_tag_id": "tout",
+    "groupe": "groupe5",
+    "nb_commande_max": nombreMaxSelectionArticle
+  },
+  {
+		"methode_name": "BG",
+    "moyens_paiement": "",
+    "besoin_tag_id": "tout",
+    "groupe": "groupe6",
+    "nb_commande_max": nombreMaxSelectionArticle
+  },
+  {
+		"methode_name": "ViderCarte",
+		"moyens_paiement": "",
+		"besoin_tag_id": "tout",
+		"groupe": "groupe7",
+		"nb_commande_max": 1
+	}
+]
+
 pvs = [
 	{
 		"id": "0e724e72-3399-4642-8cb3-3df4eff94182",
@@ -33,12 +93,6 @@ pvs = [
   	    "methode_name": "RetourConsigne",
   	    "methode_choices": "CR",
   	    "archive": False,
-  	    "bt_groupement": {
-  	      "moyens_paiement": "espece|nfc",
-  	      "besoin_tag_id": "nfc",
-  	      "groupe": "groupe2",
-  	      "nb_commande_max": 1000
-  	    },
   	    "afficher_les_prix": True,
   	    "nom_module": "vue_pv",
   	    "monnaie_principale_name": "TestCoin",
@@ -68,12 +122,6 @@ pvs = [
   		  "methode_name": "VenteArticle",
   		  "methode_choices": "VT",
   		  "archive": False,
-  		  "bt_groupement": {
-  		  	"moyens_paiement": "espece|carte_bancaire|nfc|CH",
-  		    "besoin_tag_id": "nfc",
-  		    "groupe": "groupe1",
-  		    "nb_commande_max": 1000
-  		  },
   		  "afficher_les_prix": True,
   		  "nom_module": "vue_pv",
   		  "monnaie_principale_name": "TestCoin",
@@ -103,12 +151,6 @@ pvs = [
   	    "methode_name": "VenteArticle",
   	    "methode_choices": "VT",
   	    "archive": False,
-  	    "bt_groupement": {
-  	      "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-  	      "besoin_tag_id": "nfc",
-  	      "groupe": "groupe1",
-  	      "nb_commande_max": 1000
-  	    },
   	    "afficher_les_prix": True,
   	    "nom_module": "vue_pv",
   	    "monnaie_principale_name": "TestCoin",
@@ -138,12 +180,6 @@ pvs = [
   	    "methode_name": "VenteArticle",
   	    "methode_choices": "VT",
   	    "archive": False,
-  	    "bt_groupement": {
-  	      "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-  	      "besoin_tag_id": "nfc",
-  	      "groupe": "groupe1",
-  	      "nb_commande_max": 1000
-  	    },
   	    "afficher_les_prix": True,
   	    "nom_module": "vue_pv",
   	    "monnaie_principale_name": "TestCoin",
@@ -173,12 +209,6 @@ pvs = [
   	    "methode_name": "VenteArticle",
   	    "methode_choices": "VT",
   	    "archive": False,
-  	    "bt_groupement": {
-  	      "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-  	      "besoin_tag_id": "nfc",
-  	      "groupe": "groupe1",
-  	      "nb_commande_max": 1000
-  	    },
   	    "afficher_les_prix": True,
   	    "nom_module": "vue_pv",
   	    "monnaie_principale_name": "TestCoin",
@@ -208,12 +238,6 @@ pvs = [
   	    "methode_name": "VenteArticle",
   	    "methode_choices": "VT",
   	    "archive": False,
-  	    "bt_groupement": {
-  	      "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-  	      "besoin_tag_id": "nfc",
-  	      "groupe": "groupe1",
-  	      "nb_commande_max": 1000
-  	    },
   	    "afficher_les_prix": True,
   	    "nom_module": "vue_pv",
   	    "monnaie_principale_name": "TestCoin",
@@ -243,12 +267,6 @@ pvs = [
   	    "methode_name": "VenteArticle",
   	    "methode_choices": "VT",
   	    "archive": False,
-  	    "bt_groupement": {
-  	      "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-  	      "besoin_tag_id": "nfc",
-  	      "groupe": "groupe1",
-  	      "nb_commande_max": 1000
-  	    },
   	    "afficher_les_prix": True,
   	    "nom_module": "vue_pv",
   	    "monnaie_principale_name": "TestCoin",
@@ -278,12 +296,6 @@ pvs = [
   	    "methode_name": "VenteArticle",
   	    "methode_choices": "VT",
   	    "archive": False,
-  	    "bt_groupement": {
-  	      "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-  	      "besoin_tag_id": "nfc",
-  	      "groupe": "groupe1",
-  	      "nb_commande_max": 1000
-  	    },
   	    "afficher_les_prix": True,
   	    "nom_module": "vue_pv",
   	    "monnaie_principale_name": "TestCoin",
@@ -313,12 +325,6 @@ pvs = [
   	    "methode_name": "VenteArticle",
   	    "methode_choices": "VT",
   	    "archive": False,
-  	    "bt_groupement": {
-  	      "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-  	      "besoin_tag_id": "nfc",
-  	      "groupe": "groupe1",
-  	      "nb_commande_max": 1000
-  	    },
   	    "afficher_les_prix": True,
   	    "nom_module": "vue_pv",
   	    "monnaie_principale_name": "TestCoin",
@@ -348,12 +354,6 @@ pvs = [
   	    "methode_name": "VenteArticle",
   	    "methode_choices": "VT",
   	    "archive": False,
-  	    "bt_groupement": {
-  	      "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-  	      "besoin_tag_id": "nfc",
-  	      "groupe": "groupe1",
-  	      "nb_commande_max": 1000
-  	    },
   	    "afficher_les_prix": True,
   	    "nom_module": "vue_pv",
   	    "monnaie_principale_name": "TestCoin",
@@ -383,12 +383,6 @@ pvs = [
   	    "methode_name": "VenteArticle",
   	    "methode_choices": "VT",
   	    "archive": False,
-  	    "bt_groupement": {
-  	      "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-  	      "besoin_tag_id": "nfc",
-  	      "groupe": "groupe1",
-  	      "nb_commande_max": 1000
-  	    },
   	    "afficher_les_prix": True,
   	    "nom_module": "vue_pv",
   	    "monnaie_principale_name": "TestCoin",
@@ -418,12 +412,6 @@ pvs = [
   	    "methode_name": "VenteArticle",
   	    "methode_choices": "VT",
   	    "archive": False,
-  	    "bt_groupement": {
-  	      "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-  	      "besoin_tag_id": "nfc",
-  	      "groupe": "groupe1",
-  	      "nb_commande_max": 1000
-  	    },
   	    "afficher_les_prix": True,
   	    "nom_module": "vue_pv",
   	    "monnaie_principale_name": "TestCoin",
@@ -453,12 +441,6 @@ pvs = [
   	    "methode_name": "VenteArticle",
   	    "methode_choices": "VT",
   	    "archive": False,
-  	    "bt_groupement": {
-  	      "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-  	      "besoin_tag_id": "nfc",
-  	      "groupe": "groupe1",
-  	      "nb_commande_max": 1000
-  	    },
   	    "afficher_les_prix": True,
   	    "nom_module": "vue_pv",
   	    "monnaie_principale_name": "TestCoin",
@@ -468,7 +450,7 @@ pvs = [
   	  {
   	    "id": "8f8bf701-10aa-4943-9368-6c1a0ccf253c",
   	    "name": "Gateau",
-  	    "prix": 8,
+  	    "prix": 900,
   	    "poid_liste": 40,
   	    "categorie": {
   	      "id": 12,
@@ -488,12 +470,6 @@ pvs = [
   	    "methode_name": "VenteArticle",
   	    "methode_choices": "VT",
   	    "archive": False,
-  	    "bt_groupement": {
-  	      "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-  	      "besoin_tag_id": "nfc",
-  	      "groupe": "groupe1",
-  	      "nb_commande_max": 1000
-  	    },
   	    "afficher_les_prix": True,
   	    "nom_module": "vue_pv",
   	    "monnaie_principale_name": "TestCoin",
@@ -535,12 +511,6 @@ pvs = [
         "methode_name": "RetourConsigne",
         "methode_choices": "CR",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|nfc",
-          "besoin_tag_id": "nfc",
-          "groupe": "groupe2",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -570,12 +540,6 @@ pvs = [
         "methode_name": "VenteArticle",
         "methode_choices": "VT",
         "archive": False,
-        "bt_group,ment": {
-          "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-          "besoin_tag_id": "nfc",
-          "groupe": "groupe1",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -605,12 +569,6 @@ pvs = [
         "methode_name": "VenteArticle",
         "methode_choices": "VT",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-          "besoin_tag_id": "nfc",
-          "groupe": "groupe1",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -640,12 +598,6 @@ pvs = [
         "methode_name": "VenteArticle",
         "methode_choices": "VT",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-          "besoin_tag_id": "nfc",
-          "groupe": "groupe1",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -675,12 +627,6 @@ pvs = [
         "methode_name": "VenteArticle",
         "methode_choices": "VT",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-          "besoin_tag_id": "nfc",
-          "groupe": "groupe1",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -710,12 +656,6 @@ pvs = [
         "methode_name": "VenteArticle",
         "methode_choices": "VT",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-          "besoin_tag_id": "nfc",
-          "groupe": "groupe1",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -745,12 +685,6 @@ pvs = [
         "methode_name": "VenteArticle",
         "methode_choices": "VT",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-          "besoin_tag_id": "nfc",
-          "groupe": "groupe1",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -780,12 +714,6 @@ pvs = [
         "methode_name": "VenteArticle",
         "methode_choices": "VT",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-          "besoin_tag_id": "nfc",
-          "groupe": "groupe1",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -815,12 +743,6 @@ pvs = [
         "methode_name": "VenteArticle",
         "methode_choices": "VT",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-          "besoin_tag_id": "nfc",
-          "groupe": "groupe1",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -850,12 +772,6 @@ pvs = [
         "methode_name": "VenteArticle",
         "methode_choices": "VT",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-          "besoin_tag_id": "nfc",
-          "groupe": "groupe1",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -885,12 +801,6 @@ pvs = [
         "methode_name": "VenteArticle",
         "methode_choices": "VT",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-          "besoin_tag_id": "nfc",
-          "groupe": "groupe1",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -920,12 +830,6 @@ pvs = [
         "methode_name": "VenteArticle",
         "methode_choices": "VT",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-          "besoin_tag_id": "nfc",
-          "groupe": "groupe1",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -955,12 +859,6 @@ pvs = [
         "methode_name": "VenteArticle",
         "methode_choices": "VT",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-          "besoin_tag_id": "nfc",
-          "groupe": "groupe1",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -990,12 +888,6 @@ pvs = [
         "methode_name": "VenteArticle",
         "methode_choices": "VT",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-          "besoin_tag_id": "nfc",
-          "groupe": "groupe1",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -1028,12 +920,6 @@ pvs = [
         "methode_name": "RetourConsigne",
         "methode_choices": "CR",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|nfc",
-          "besoin_tag_id": "nfc",
-          "groupe": "groupe2",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -1050,12 +936,6 @@ pvs = [
         "methode_name": "RetourConsigne",
         "methode_choices": "CR",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|nfc",
-          "besoin_tag_id": "nfc",
-          "groupe": "groupe2",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -1084,12 +964,6 @@ pvs = [
         "methode_name": "VenteArticle",
         "methode_choices": "VT",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-          "besoin_tag_id": "nfc",
-          "groupe": "groupe1",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -1145,12 +1019,6 @@ pvs = [
         "methode_name": "AjoutMonnaieVirtuelle",
         "methode_choices": "RE",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|carte_bancaire|CH",
-          "besoin_tag_id": "tout",
-          "groupe": "groupe4",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -1177,12 +1045,6 @@ pvs = [
         "methode_name": "AjoutMonnaieVirtuelle",
         "methode_choices": "RE",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|carte_bancaire|CH",
-          "besoin_tag_id": "tout",
-          "groupe": "groupe4",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -1209,12 +1071,6 @@ pvs = [
         "methode_name": "AjoutMonnaieVirtuelle",
         "methode_choices": "RE",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|carte_bancaire|CH",
-          "besoin_tag_id": "tout",
-          "groupe": "groupe4",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -1241,12 +1097,6 @@ pvs = [
         "methode_name": "AjoutMonnaieVirtuelle",
         "methode_choices": "RE",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|carte_bancaire|CH",
-          "besoin_tag_id": "tout",
-          "groupe": "groupe4",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -1273,12 +1123,6 @@ pvs = [
         "methode_name": "AjoutMonnaieVirtuelle",
         "methode_choices": "RE",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|carte_bancaire|CH",
-          "besoin_tag_id": "tout",
-          "groupe": "groupe4",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -1305,12 +1149,6 @@ pvs = [
         "methode_name": "AjoutMonnaieVirtuelle",
         "methode_choices": "RE",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|carte_bancaire|CH",
-          "besoin_tag_id": "tout",
-          "groupe": "groupe4",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -1337,12 +1175,6 @@ pvs = [
         "methode_name": "AjoutMonnaieVirtuelle",
         "methode_choices": "RE",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|carte_bancaire|CH",
-          "besoin_tag_id": "tout",
-          "groupe": "groupe4",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -1369,12 +1201,6 @@ pvs = [
         "methode_name": "VenteArticle",
         "methode_choices": "VT",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-          "besoin_tag_id": "nfc",
-          "groupe": "groupe1",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -1401,12 +1227,6 @@ pvs = [
         "methode_name": "RetourConsigne",
         "methode_choices": "CR",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|nfc",
-          "besoin_tag_id": "nfc",
-          "groupe": "groupe2",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -1433,12 +1253,6 @@ pvs = [
     		"methode_name": "VenteArticle",
     		"methode_choices": "HB",
     		"archive": False,
-    		"bt_groupement": {
-    		  "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-    		  "besoin_tag_id": "nfc",
-    		  "groupe": "groupe1",
-    		  "nb_commande_max": 1000
-    		},
     		"afficher_les_prix": True,
     		"nom_module": "vue_pv",
     		"monnaie_principale_name": "TestCoin",
@@ -1465,12 +1279,6 @@ pvs = [
 				"methode_name": "AjoutMonnaieVirtuelleCadeau",
 				"methode_choices": "RC",
 				"archive": False,
-				"bt_groupement": {
-					"moyens_paiement": "",
-					"besoin_tag_id": "tout",
-					"groupe": "groupe5",
-					"nb_commande_max": 1000
-				},
 				"afficher_les_prix": True,
 				"nom_module": "vue_pv",
 				"monnaie_principale_name": "TestCoin",
@@ -1497,12 +1305,6 @@ pvs = [
     		"methode_name": "AjoutMonnaieVirtuelleCadeau",
     		"methode_choices": "RC",
     		"archive": False,
-    		"bt_groupement": {
-    		  "moyens_paiement": "",
-    		  "besoin_tag_id": "tout",
-    		  "groupe": "groupe5",
-    		  "nb_commande_max": 1000
-    		},
     		"afficher_les_prix": True,
     		"nom_module": "vue_pv",
     		"monnaie_principale_name": "TestCoin",
@@ -1529,12 +1331,6 @@ pvs = [
     		"methode_name": "AjoutMonnaieVirtuelleCadeau",
     		"methode_choices": "RC",
     		"archive": False,
-    		"bt_groupement": {
-    		  "moyens_paiement": "",
-    		  "besoin_tag_id": "tout",
-    		  "groupe": "groupe5",
-    		  "nb_commande_max": 1000
-    		},
     		"afficher_les_prix": True,
     		"nom_module": "vue_pv",
     		"monnaie_principale_name": "TestCoin",
@@ -1561,12 +1357,6 @@ pvs = [
     		"methode_name": "AjoutMonnaieVirtuelleCadeau",
     		"methode_choices": "RC",
     		"archive": False,
-    		"bt_groupement": {
-    		  "moyens_paiement": "",
-    		  "besoin_tag_id": "tout",
-    		  "groupe": "groupe5",
-    		  "nb_commande_max": 1000
-    		},
     		"afficher_les_prix": True,
     		"nom_module": "vue_pv",
     		"monnaie_principale_name": "TestCoin",
@@ -1593,12 +1383,6 @@ pvs = [
     		"methode_name": "AjoutMonnaieVirtuelleCadeau",
     		"methode_choices": "RC",
     		"archive": False,
-    		"bt_groupement": {
-    		  "moyens_paiement": "",
-    		  "besoin_tag_id": "tout",
-    		  "groupe": "groupe5",
-    		  "nb_commande_max": 1000
-    		},
     		"afficher_les_prix": True,
     		"nom_module": "vue_pv",
     		"monnaie_principale_name": "TestCoin",
@@ -1625,12 +1409,6 @@ pvs = [
     		"methode_name": "AjoutMonnaieVirtuelleCadeau",
     		"methode_choices": "RC",
     		"archive": False,
-    		"bt_groupement": {
-    		  "moyens_paiement": "",
-    		  "besoin_tag_id": "tout",
-    		  "groupe": "groupe5",
-    		  "nb_commande_max": 1000
-    		},
     		"afficher_les_prix": True,
     		"nom_module": "vue_pv",
     		"monnaie_principale_name": "TestCoin",
@@ -1657,12 +1435,6 @@ pvs = [
     		"methode_name": "ViderCarte",
     		"methode_choices": "VC",
     		"archive": False,
-    		"bt_groupement": {
-    		  "moyens_paiement": "",
-    		  "besoin_tag_id": "tout",
-    		  "groupe": "groupe7",
-    		  "nb_commande_max": 1
-    		},
     		"afficher_les_prix": True,
     		"nom_module": "vue_pv",
     		"monnaie_principale_name": "TestCoin",
@@ -1689,12 +1461,6 @@ pvs = [
     		"methode_name": "ViderCarte",
     		"methode_choices": "VV",
     		"archive": False,
-    		"bt_groupement": {
-    		  "moyens_paiement": "",
-    		  "besoin_tag_id": "tout",
-    		  "groupe": "groupe7",
-    		  "nb_commande_max": 1
-    		},
     		"afficher_les_prix": True,
     		"nom_module": "vue_pv",
     		"monnaie_principale_name": "TestCoin",
@@ -1748,12 +1514,6 @@ pvs = [
         "methode_name": "BG",
         "methode_choices": "BG",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "",
-          "besoin_tag_id": "tout",
-          "groupe": "groupe6",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -1780,12 +1540,6 @@ pvs = [
         "methode_name": "Adhesion",
         "methode_choices": "AD",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|carte_bancaire|CH",
-          "besoin_tag_id": "tout",
-          "groupe": "groupe3",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -1812,12 +1566,6 @@ pvs = [
         "methode_name": "Adhesion",
         "methode_choices": "AD",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|carte_bancaire|CH",
-          "besoin_tag_id": "tout",
-          "groupe": "groupe3",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -1844,12 +1592,6 @@ pvs = [
         "methode_name": "Adhesion",
         "methode_choices": "AD",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|carte_bancaire|CH",
-          "besoin_tag_id": "tout",
-          "groupe": "groupe3",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -1876,12 +1618,6 @@ pvs = [
         "methode_name": "Adhesion",
         "methode_choices": "AD",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|carte_bancaire|CH",
-          "besoin_tag_id": "tout",
-          "groupe": "groupe3",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -1908,12 +1644,6 @@ pvs = [
         "methode_name": "Adhesion",
         "methode_choices": "AD",
         "archive": False,
-        "bt_groupement": {
-          "moyens_paiement": "espece|carte_bancaire|CH",
-          "besoin_tag_id": "tout",
-          "groupe": "groupe3",
-          "nb_commande_max": 1000
-        },
         "afficher_les_prix": True,
         "nom_module": "vue_pv",
         "monnaie_principale_name": "TestCoin",
@@ -2101,7 +1831,16 @@ def fixe_pv(pv):
 			article['categorie']['couleur_texte'] = '#ffffff'
 
 		# prix * 100
-		article['prix'] = article['prix'] * 100
+		article['prix'] = int(article['prix'] * 100)
+
+		# ajout des groupement de boutons(articles)
+		new_group = group_Unkown_articles
+		for group in bt_groupement:
+			if article['methode_name'] == group['methode_name']:
+				new_group = group
+				break
+		article['bt_groupement'] = new_group
+
 
 def get_data_pvs():
 	for pv in pvs:

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 {% load static i18n %}
-{% load table_status_colors %}
+{% load laboutik_process %}
 
 {% block content %}
 <!-- header + nav -->
@@ -23,7 +23,7 @@
 </main>
 <footer>
 	<!-- bouton CHECK CARTE -->
-	<div class="BF-ligne footer-bt fond-normal test-check-carte" onclick="console.log('action en attente')">
+	<div id="bt-check-card" class="BF-ligne footer-bt fond-normal test-check-carte">
 		<i class="fas fa-money-check-alt md4px"></i>
 		<div class="BF-col-deb footer-bt-text mg4px">
 			<div>{% translate "CHECK" %}</div>

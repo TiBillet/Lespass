@@ -9,24 +9,20 @@
 	<!-- catégories -->
 	{% include "components/categories.html" %}
 	<div id="products-container">
-		<div id="products">
 			{% include "components/articles.html" %}
-		</div>
-		<div id="addition">
-			<h1>list addition</h1>
-		</div>
+			{% include "components/addition.html" %}
 	</div>
 </main>
 <footer>
 	<!-- bouton Reset commandes -->
-	<div class="BF-ligne footer-bt fond-retour test-reset" onclick="vue_pv.rezet_commandes();">
+	<div id="bt-reset" class="BF-ligne footer-bt fond-retour test-reset">
 		<i class="fas fa-trash md4px"></i>
 		<div class="BF-col-deb footer-bt-text mg4px">
 			<div>{% translate "RESET" %}</div>
 		</div>
 	</div>
 	<!-- bouton CHECK CARTE -->
-	<div class="BF-ligne footer-bt fond-normal test-check-carte" onclick="vue_pv.check_carte()">
+	<div id="bt-check-card" class="BF-ligne footer-bt fond-normal test-check-carte">
 		<i class="fas fa-money-check-alt md4px"></i>
 		<div class="BF-col-deb footer-bt-text mg4px">
 			<div>{% translate "CHECK" %}</div>
@@ -82,12 +78,6 @@
 		scrollbar-width: none
 	}
 
-	#addition {
-		display: none;
-		width: 100%;
-		height: 100%;
-		color: var(--blanc01);
-	}
 
 	footer {
 		width: 100%;
@@ -124,19 +114,13 @@
 	}
 
 	.fond-ok {
-		background-color: var(--vert02);
+		background-color: var(--vert03);
 	}
 
 	/* pour une largeur supérieure 1022 pixels */
 	@media only screen and (width > 1022px) {
 		#products {
 			width: 71%;
-		}
-
-		#addition {
-			display: flex;
-			width: 29%;
-			background-color: var(--gris10);
 		}
 	}
 

@@ -1,39 +1,48 @@
 {% load static %}
+{% load laboutik_process %}
 
-{% for article in pv.articles %}
-<div data-uuid="{{article.id}}" data-prix="{{article.prix}}" class="article-container cat-{{ article.categorie.id}}"
-	style="background-color:{{ article.categorie.couleur_backgr }};">
-	<!-- image -->
-	{% if article.url_image %}
-	<div class="article-img-layer BF-ligne">
-		<img src="{{ article.url_image}}" class="article-image" loading="lazy" alt='' onerror="this.style.display='none'">
-	</div>
-	{% endif %}
-	<div class="aricle-name-layer"
-		style="color:{{article.categorie.couleur_texte}};text-shadow: 2px 2px 3px {{article.categorie.couleur_backgr}}">
-		{{article.name}}
-	</div>
-	<div class="article-footer-layer BF-ligne-g">
-		<!-- icon -->
-		<div class="article-icon" style="color:{{article.categorie.couleur_texte}};">
-			{% if article.categorie %}
-			<i class="fas {{ article.categorie.icon }}"></i>
-			{% endif %}
-		</div>
-		{% if pv.afficher_les_prix %}
-		<div class="article-prix BF-ligne-g" style="color:{{article.categorie.couleur_texte}};">
-			{{ article.prix }} {{ currencyData.symbol }}
+<div id="products">
+	{% for article in pv.articles %}
+	{% if article.id != uuidArticlePaiementFractionne %}
+	<div data-uuid="{{article.id}}" data-prix="{{article.prix}}" data-group="{{article.bt_groupement.groupe}}"
+		class="article-container cat-{{ article.categorie.id}}"
+		style="background-color:{{ article.categorie.couleur_backgr }};">
+		<!-- image -->
+		{% if article.url_image %}
+		<div class="article-img-layer BF-ligne">
+			<img src="{{ article.url_image}}" class="article-image" loading="lazy" alt='' onerror="this.style.display='none'">
 		</div>
 		{% endif %}
-		<div class="article-quantity BF-ligne">
-			<span id="target-article-quantity-number-{{ article.id }}" class="badge">0</span>
+		<!-- name -->
+		<div class="article-name-layer"
+			style="color:{{article.categorie.couleur_texte}};text-shadow: 2px 2px 3px {{article.categorie.couleur_backgr}}">
+			{{article.name}}
 		</div>
+		<div class="article-footer-layer BF-ligne-g">
+			<!-- icon -->
+			<div class="article-icon" style="color:{{article.categorie.couleur_texte}};">
+				{% if article.categorie %}
+				<i class="fas {{ article.categorie.icon }}"></i>
+				{% endif %}
+			</div>
+			<!-- price -->
+			{% if pv.afficher_les_prix %}
+			<div class="article-prix BF-ligne-g" style="color:{{article.categorie.couleur_texte}};">
+				{{ article.prix|divide_by:100 }} {{ currency_data.symbol }}
+			</div>
+			{% endif %}
+			<!-- quantity -->
+			<div class="article-quantity BF-ligne">
+				<span id="article-quantity-number-{{ article.id }}" class="badge">0</span>
+			</div>
+		</div>
+		<!-- pour remonter au parent plus facilement -->
+		<div class="article-touch"></div>
+		<div class="article-lock-layer"></div>
 	</div>
-	<!-- pour remonter au parent plus facilement -->
-	<div class="article-memory-layer"></div>
-	<div class="article-lock-layer"></div>
+	{% endif %}
+	{% endfor %}
 </div>
-{% endfor %}
 <script src="{% static 'js/articles.js' %}"></script>
 
 <style>
@@ -44,12 +53,11 @@
 		box-sizing: border-box;
 		overflow: hidden;
 		margin: 20px 0 0 20px;
-		/* float: left; */
 		font-family: "Luciole-regular";
 		border-radius: 15px;
 	}
 
-	.aricle-name-layer {
+	.article-name-layer {
 		position: absolute;
 		left: 4px;
 		top: 6px;
@@ -118,7 +126,7 @@
 		transition: color .15s ease-in-out, background-color .15s ease-in-out, border-color .15s ease-in-out, box-shadow .15s ease-in-out;
 	}
 
-	.article-memory-layer {
+	.article-touch {
 		position: absolute;
 		left: 0;
 		top: 0;
@@ -153,7 +161,7 @@
 			--bt-article-height: 100px;
 		}
 
-		.aricle-name-layer {
+		.article-name-layer {
 			font-size: 16px;
 		}
 
@@ -179,7 +187,7 @@
 			--bt-article-height: 160px;
 		}
 
-		.aricle-name-layer {
+		.article-name-layer {
 			font-size: 1.5rem;
 		}
 

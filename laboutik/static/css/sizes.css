@@ -26,4 +26,10 @@
 	/* tables */
 	--bt-table-width: 90px;
 	--bt-table-height: 90px;
+
+	/* addition */
+	--addition-legend-heigh: 20px;
+	--addition-line-heigh: 29px;
+	/* dev addition */
+	--addition-list-height: 50%;
 }
