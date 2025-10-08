@@ -106,12 +106,7 @@
                                     id="amount-{{ price.uuid }}"
                                     name="{{ price.uuid }}"
                                     step="1" min="0"
-                                    max="
-
-
-
-
-                                            {% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% else %}{{ price.max_per_user }}{% endif %}"
+                                    max="{% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% else %}{{ price.max_per_user }}{% endif %}"
                                     class="flex-grow-1 js-order-amount"
                             ></bs-counter>
                             {% trans 'ticket(s)' %}
@@ -157,23 +152,23 @@
                         <h4 class="h5 mb-3">{% translate "Additional information" %}</h4>
                         {% for field in fields %}
                             {% if field.field_type == 'ST' %}
-                                <div class="mb-3">
-                                    <label class="form-label" for="ff-{{ field.uuid }}">{{ field.label }}</label>
+                                <div class="form-floating mb-3">
                                     <input id="ff-{{ field.uuid }}" name="form__{{ field.name }}" type="text"
                                            class="form-control"
                                            placeholder="{{ field.placeholder|default:field.label }}"
                                            {% if field.required %}required{% endif %}>
+                                    <label for="ff-{{ field.uuid }}">{{ field.label }}</label>
                                     {% if field.help_text %}
                                         <div class="form-text">{{ field.help_text }}</div>
                                     {% endif %}
                                 </div>
                             {% elif field.field_type == 'LT' %}
-                                <div class="mb-3">
-                                    <label class="form-label" for="ff-{{ field.uuid }}">{{ field.label }}</label>
+                                <div class="form-floating mb-3">
                                     <textarea id="ff-{{ field.uuid }}" name="form__{{ field.name }}"
                                               class="form-control" style="height: 120px"
                                               placeholder="{{ field.placeholder|default:field.label }}"
                                               {% if field.required %}required{% endif %}></textarea>
+                                    <label for="ff-{{ field.uuid }}">{{ field.label }}</label>
                                     {% if field.help_text %}
                                         <div class="form-text">{{ field.help_text }}</div>
                                     {% endif %}
