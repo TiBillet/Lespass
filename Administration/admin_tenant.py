@@ -706,6 +706,18 @@ class ProductAdminCustomForm(ModelForm):
             'img': _('Product image is displayed at a 16/9 ratio.'),
         }
 
+    categorie_article = forms.ChoiceField(
+        required=False,
+        choices=[
+            (Product.NONE, _('Select a category')),
+            (Product.BILLET, _('Ticket booking')),
+            (Product.FREERES, _('Free booking')),
+            (Product.ADHESION, _('Subscription or membership')),
+            ],
+        widget=UnfoldAdminSelectWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
+        label=_("Payment method"),
+    )
+
     def clean_categorie_article(self):
         cleaned_data = self.cleaned_data
         categorie = cleaned_data.get('categorie_article')
