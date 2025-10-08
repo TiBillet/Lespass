@@ -15,216 +15,235 @@ sys.path.append(str(Path(__file__).resolve().parent / "utils"))
 
 # data mocker - dev
 import mockData
+
 data_pvs = mockData.get_data_pvs()
 
-state =  {
-	'version': '0.9.11',
-	'demo': {
-		'active': settings.DEMO,
-		'tags_id': [
-    	{'tag_id': settings.DEMO_TAGID_CM, 'name': _("Carte primaire")},
-			{'tag_id': settings.DEMO_TAGID_CLIENT1, 'name': _("Carte client 1")},
-			{'tag_id': settings.DEMO_TAGID_CLIENT2, 'name': _("Carte client 2")},
-			{'tag_id': settings.DEMO_TAGID_CLIENT3, 'name': _("Carte client 3")},
-			{'tag_id': settings.DEMO_TAGID_UNKNOWN, 'name': _("Carte client inconnu")}
-		]
-	}
+state = {
+    "version": "0.9.11",
+    "demo": {
+        "active": settings.DEMO,
+        "tags_id": [
+            {"tag_id": settings.DEMO_TAGID_CM, "name": _("Carte primaire")},
+            {"tag_id": settings.DEMO_TAGID_CLIENT1, "name": _("Carte client 1")},
+            {"tag_id": settings.DEMO_TAGID_CLIENT2, "name": _("Carte client 2")},
+            {"tag_id": settings.DEMO_TAGID_CLIENT3, "name": _("Carte client 3")},
+            {"tag_id": settings.DEMO_TAGID_UNKNOWN, "name": _("Carte client inconnu")},
+        ],
+    },
 }
 
+
 def login_hardware(request):
-	context = {
-		'state': state,
-		'stateJson': dumps(state)
-  }
-	# dev
-	devLoginOk = 1
-	
-	if request.method == 'POST':
-		if devLoginOk == 1:
-			return HttpResponseClientRedirect('ask_primary_card')
+    context = {"state": state, "stateJson": dumps(state)}
+    # dev
+    devLoginOk = 1
 
-		if devLoginOk == 0:
-			context = {
-				'error': _("Utilisateur non actif. Relancez l'appairage.")
-			}
-			return render(request, "components/new-hardware-error.html", context)
+    if request.method == "POST":
+        if devLoginOk == 1:
+            return HttpResponseClientRedirect("ask_primary_card")
 
-		# DEBUG = AttributeError: module 'rest_framework.status' has no attribute 'HTTP_400_UNAUTHORIZED'  
-		if devLoginOk == 2:
-			context = {
-				'error': _("*** login_hardware_validator.errors ***")
-			}
-			return render(request, "components/hardware-login-error.html", context)
+        if devLoginOk == 0:
+            context = {"error": _("Utilisateur non actif. Relancez l'appairage.")}
+            return render(request, "components/new-hardware-error.html", context)
 
-	if request.method == 'GET':
-		activation = request.GET.get('activation')
-		context['activation'] = activation
+        # DEBUG = AttributeError: module 'rest_framework.status' has no attribute 'HTTP_400_UNAUTHORIZED'
+        if devLoginOk == 2:
+            context = {"error": _("*** login_hardware_validator.errors ***")}
+            return render(request, "components/hardware-login-error.html", context)
 
-	return render(request, "views/login_hardware.html", context)
+    if request.method == "GET":
+        activation = request.GET.get("activation")
+        context["activation"] = activation
+
+    return render(request, "views/login_hardware.html", context)
 
 
 def new_hardware(request):
-	# dev
-	devHardwareOk = True
+    # dev
+    devHardwareOk = True
 
-	# hardware active
-	if devHardwareOk == True:
-		# Le code pin a été validé, on renvoie vers la page de login
-		return HttpResponseClientRedirect('login_hardware?activation=1')
+    # hardware active
+    if devHardwareOk == True:
+        # Le code pin a été validé, on renvoie vers la page de login
+        return HttpResponseClientRedirect("login_hardware?activation=1")
 
-	# error
-	if devHardwareOk == False:
-		context = {
-			'error': _("Appareil déja en cours d'utilisation. Désactivez le d'abord pour un nouvel appairage.")
-		}
-		return render(request, "components/new-hardware-error.html", context)
+    # error
+    if devHardwareOk == False:
+        context = {
+            "error": _(
+                "Appareil déja en cours d'utilisation. Désactivez le d'abord pour un nouvel appairage."
+            )
+        }
+        return render(request, "components/new-hardware-error.html", context)
+
 
 def ask_primary_card(request):
-	# dev
-	# state['demo']['active'] = False
-	
-	context = {
-		'state': state,
-    'stateJson': dumps(state)
-  }
+    # dev
+    # state['demo']['active'] = False
 
-	if request.method == 'POST':
-		tag_id_cm = request.POST.get('tag-id-cm').upper()
-		print(f"ask_primary_card, tag_id_cm = {tag_id_cm}")
+    context = {"state": state, "stateJson": dumps(state)}
 
-		# dev
-		carte_perdu = False
-		testCard = mockData.get_card_from_tagid(tag_id_cm)
-		print(f"laboutik - DEV | testCard = {testCard}")
+    if request.method == "POST":
+        tag_id_cm = request.POST.get("tag-id-cm").upper()
+        print(f"ask_primary_card, tag_id_cm = {tag_id_cm}")
 
-		# carte primaire
-		if testCard["type_card"] == "primary_card" and testCard["tag_id"] == "A49E8E2A":
-			print("laboutik - DEV | c'est une carte primaire")
-			# carte perdue
-			if carte_perdu:
-				context = {
-					'msg': _("Carte perdue ? On passe en non primaire")
-				}
-				return render(request, "components/primary_card_message.html", context)
-			else:
-				# carte primaire ok
-				uuid_pv = testCard['pvs_list'][0]['uuid']
-				print(f"laboutik - DEV | uuid pv = {uuid_pv}")
-				return HttpResponseClientRedirect('pv_route?uuid_pv=' + uuid_pv + '&tag_id_cm=' + tag_id_cm)
+        # dev
+        carte_perdu = False
+        testCard = mockData.get_card_from_tagid(tag_id_cm)
+        print(f"laboutik - DEV | testCard = {testCard}")
 
-		# carte cliente
-		if testCard["type_card"] == "client_card":
-			print("laboutik - DEV | c'est une carte client")
-			context = {
-				'msg': _("Carte non primaire")
-			}
-			return render(request, "components/primary_card_message.html", context)
+        # carte primaire
+        if testCard["type_card"] == "primary_card" and testCard["tag_id"] == "A49E8E2A":
+            print("laboutik - DEV | c'est une carte primaire")
+            # carte perdue
+            if carte_perdu:
+                context = {"msg": _("Carte perdue ? On passe en non primaire")}
+                return render(request, "components/primary_card_message.html", context)
+            else:
+                # carte primaire ok
+                uuid_pv = testCard["pvs_list"][0]["uuid"]
+                print(f"laboutik - DEV | uuid pv = {uuid_pv}")
+                return HttpResponseClientRedirect(
+                    "pv_route?uuid_pv=" + uuid_pv + "&tag_id_cm=" + tag_id_cm
+                )
 
-		# carte inconnue
-		if testCard["type_card"] == "unknown":
-			context = {
-				'msg':  _("Carte inconnue")
-			}
-			return render(request, "components/primary_card_message.html", context)
+        # carte cliente
+        if testCard["type_card"] == "client_card":
+            print("laboutik - DEV | c'est une carte client")
+            context = {"msg": _("Carte non primaire")}
+            return render(request, "components/primary_card_message.html", context)
 
+        # carte inconnue
+        if testCard["type_card"] == "unknown":
+            context = {"msg": _("Carte inconnue")}
+            return render(request, "components/primary_card_message.html", context)
 
-	return render(request, "views/ask_primary_card.html", context)
+    return render(request, "views/ask_primary_card.html", context)
+
 
 def main_menu(request):
-	tag_id_cm = request.GET.get('tag_id_cm')
-	card = mockData.get_card_from_tagid(tag_id_cm)
-	context = {
-		'card': card,
-	}
-	return render(request, "components/main_menu.html", context)
+    tag_id_cm = request.GET.get("tag_id_cm")
+    card = mockData.get_card_from_tagid(tag_id_cm)
+    context = {
+        "card": card,
+    }
+    return render(request, "components/main_menu.html", context)
+
 
 def pvs_menu(request):
-	tag_id_cm = request.GET.get('tag_id_cm')
-	card = mockData.get_card_from_tagid(tag_id_cm)
-	context = {
-		'card': card,
-	}
-	return render(request, "components/pvs_menu.html", context)
+    tag_id_cm = request.GET.get("tag_id_cm")
+    card = mockData.get_card_from_tagid(tag_id_cm)
+    context = {
+        "card": card,
+    }
+    return render(request, "components/pvs_menu.html", context)
+
 
 def show_pv(request):
-	uuid_pv = request.GET.get('uuid_pv')
-	pv = mockData.get_pv_from_uuid(uuid_pv, data_pvs)
-	context = {
-		'pv': pv
-	}
-	return render(request, "components/show_pv.html", context)
+    uuid_pv = request.GET.get("uuid_pv")
+    pv = mockData.get_pv_from_uuid(uuid_pv, data_pvs)
+    context = {"pv": pv}
+    return render(request, "components/show_pv.html", context)
 
 
 def pv_route(request):
-	# pour un mode restaurant (non service direct) / ternaire
-	id_table = int(request.GET.get('id_table')) if request.GET.get('id_table') != None else None
-	# force le service direct en mode restaurant
-	force_service_direct = True if request.GET.get('force_service_direct') == 'true' else None
- 
-	# mode restaurant forcer en service direct
-	restaurant_service_direct = request.GET.get('restaurant_service_direct')
-	uuid_pv = request.GET.get('uuid_pv')
-	tag_id_cm = request.GET.get('tag_id_cm')
-	print(f"laboutik - DEV | uuid_pv = {uuid_pv}  --  tag_id_cm = {tag_id_cm}  --  id_table = {id_table}  --  type id_table = {type(id_table)}")
-	pv = mockData.get_pv_from_uuid(uuid_pv, data_pvs)
-	card = mockData.get_card_from_tagid(tag_id_cm)
-	# restaurant par défaut
-	title = _('Choisir une table')
-	template = 'tables.html'
-	
-	# service directe
-	if pv['service_direct'] == True or force_service_direct == True:
-		title = _('Service direct')
-		template = 'common_user_interface.html'
+    # pour un mode restaurant (non service direct)
+    try:
+        id_table = int(request.GET.get("id_table"))
+    except:
+        id_table = None
 
-	# commandes table
-	if id_table != None:
-		state["id_table"] = id_table
-		table_name = mockData.get_table_by_id(id_table)["name"]
-		print(f'table_name = {table_name}')
-		title = _('Commande table ') + table_name
-		template = 'common_user_interface.html'
+    # force le service direct en mode restaurant
+    force_service_direct = (
+        True if request.GET.get("force_service_direct") == "true" else None
+    )
 
-	# kiosque
-	if pv['comportement'] == 'K':
-		template = 'kiosk.html'
+    # mode restaurant forcer en service direct
+    restaurant_service_direct = request.GET.get("restaurant_service_direct")
+    uuid_pv = request.GET.get("uuid_pv")
+    tag_id_cm = request.GET.get("tag_id_cm")
+    pv = mockData.get_pv_from_uuid(uuid_pv, data_pvs)
+    card = mockData.get_card_from_tagid(tag_id_cm)
+    # restaurant par défaut
+    title = _("Choisir une table")
+    template = "tables.html"
 
-	print(f"laboutik - DEV | template = {template}")
+    # service directe
+    if pv["service_direct"] == True or force_service_direct == True:
+        title = _("Service direct")
+        template = "common_user_interface.html"
 
-	state["comportement"] = pv["comportement"]
-	state["afficher_les_prix"] = pv["afficher_les_prix"]
-	state["accepte_especes"] = pv["accepte_especes"]
-	state["accepte_carte_bancaire"] = pv["accepte_carte_bancaire"]
-	state["accepte_cheque"] = pv["accepte_cheque"]
-	state["accepte_commandes"] = pv["accepte_commandes"]
-	state["service_direct"] = pv["service_direct"]
-	state["monnaie_principale_name"] = "TestCoin"
-	state["passageModeGerant"] = True
-	state["modeGerant"] = False
-	# triage par poid_liste
-	card['pvs_list'] = sorted(card['pvs_list'], key=lambda x: x['poid_liste'])
-	
-	context = {
-		'state': state,
-		'stateJson': dumps(state),
-		'pv': pv,
-		'card': card,
-		'categories': mockData.filter_categories(pv),
-		'categoriy_angry': mockData.categoriy_angry,
-		'tables': mockData.tables,
-		'table_status_colors': {
-			'S': '--orange01',
-			'O': '--rouge01',
-			'L': '--vert02'
-		},
-		'title': title,
-		'currency_data': {'cc': 'EUR', 'symbol': '€', 'name': 'European Euro'},
-		'uuidArticlePaiementFractionne': '42ffe511-d880-4964-9b96-0981a9fe4071'
-	}
-	return render(request, "views/" + template, context)
+    # commandes table
+    if id_table != None:
+        table_name = mockData.get_table_by_id(id_table)["name"]
+        print(f"table_name = {table_name}")
+        title = _("Commande table ") + table_name
+        template = "common_user_interface.html"
 
-def transaction(request):
+    # kiosque
+    if pv["comportement"] == "K":
+        template = "kiosk.html"
+
+    print(f"laboutik - DEV | template = {template}")
+
+    state["comportement"] = pv["comportement"]
+    state["afficher_les_prix"] = pv["afficher_les_prix"]
+    state["accepte_especes"] = pv["accepte_especes"]
+    state["accepte_carte_bancaire"] = pv["accepte_carte_bancaire"]
+    state["accepte_cheque"] = pv["accepte_cheque"]
+    state["accepte_commandes"] = pv["accepte_commandes"]
+    state["service_direct"] = pv["service_direct"]
+    state["monnaie_principale_name"] = "TestCoin"
+    state["passageModeGerant"] = True
+    state["modeGerant"] = False
+    # triage par poid_liste
+    card["pvs_list"] = sorted(card["pvs_list"], key=lambda x: x["poid_liste"])
+
+    context = {
+        "state": state,
+        "stateJson": dumps(state),
+        "pv": pv,
+        "card": card,
+        "categories": mockData.filter_categories(pv),
+        "categoriy_angry": mockData.categoriy_angry,
+        "tables": mockData.tables,
+        "table_status_colors": {"S": "--orange01", "O": "--rouge01", "L": "--vert02"},
+        "title": title,
+        "currency_data": {"cc": "EUR", "symbol": "€", "name": "European Euro"},
+        "uuidArticlePaiementFractionne": "42ffe511-d880-4964-9b96-0981a9fe4071",
+        "id_table": id_table,
+    }
+    return render(request, "views/" + template, context)
+
+
+def paiement(request):
+	# msg_type = success, info, error, warning
+
+	# # attention pas de test si method = post
+	# # dev
+	paiement_ok = True
 	data = request.POST
-	print(f"laboutik - DEV | transaction, data = {data}")
-	context = {}
-	return render(request, "components/test.html", context)
+	print(f"laboutik - DEV | paiement, data = {data}")
+
+	tag_id_cm = request.POST.get("tag_id_cm")
+	uuid_pv = request.POST.get("uuid_pv")
+	id_table = request.POST.get("id_table")
+
+	# TODO: ajouter test aucun article choisi
+
+	if paiement_ok:
+		context = {
+			'type_msg': 'success',
+			'msg_content': _('Paiement ok')
+		}
+
+	if paiement_ok == False:
+		context = {
+			'msg_type': "info",
+			'msg_content': "Il y a une erreur !"
+		}
+	
+	context['tag_id_cm'] = tag_id_cm
+	context['uuid_pv'] = uuid_pv
+	context['id_table'] = id_table
+	return render(request, "components/retour_paiement.html", context)

@@ -1,14 +1,25 @@
-function actuArticlesAndAddition(uuid, number) {
+function calculateTotal() {
+	total = 0
+	document.querySelectorAll('#addition-form input').forEach(input => {
+		const uuid = input.name
+		const number = parseInt(input.value)
+		const article = document.querySelector(`#products div[data-uuid="${uuid}"]`)
+		const price = parseInt(article.dataset.price)
+		total = total + (number * price)
+	})
+	// maj total
+	document.querySelector('#bt-valider-total').innerText = (total / 100)
+}
+
+function updateArticlesAndAddition(uuid, number) {
 	try {
 		// article
 		const article = document.querySelector(`#products div[data-uuid="${uuid}"]`)
-		console.log('-> actu article =', article)
 		const articleName = article.querySelector('.article-name-layer').innerText
 		const articlePrix = article.querySelector('.article-footer-layer .article-prix').innerText
 
 		// maj number
 		article.querySelector(`#article-quantity-number-${uuid}`).innerText = number
-		console.log('number =', number, '  --  articleName =', articleName);
 
 		if (number === 0) {
 			// enlever l'input
@@ -37,8 +48,9 @@ function actuArticlesAndAddition(uuid, number) {
 				document.querySelector(`#addition-line-${uuid} .addition-col-number`).innerText = number
 			}
 		}
+		calculateTotal()
 	} catch (error) {
-		console.log('-> actuArticlesAndAddition,', error)
+		console.log('-> updateArticlesAndAddition,', error)
 
 	}
 }
@@ -54,26 +66,24 @@ function addArticle(uuid, prix) {
 	}
 
 	// maj visuels
-	actuArticlesAndAddition(uuid, number)
+	updateArticlesAndAddition(uuid, number)
 }
 
 window.deleteProduct = function (uuid) {
 	// article
 	const article = document.querySelector(`#products div[data-uuid="${uuid}"]`)
 	let number = parseInt(article.querySelector('.article-footer-layer .article-quantity').innerText)
-	console.log('-> deleteProduct, number =', number);
 	number = number - 1
 	// maj visuels
-	actuArticlesAndAddition(uuid, number)
+	updateArticlesAndAddition(uuid, number)
 }
 
 function manageKey(event) {
 	const ele = event.target.parentNode
 	if (ele.classList.contains('article-container') && ele.getAttribute('data-disable') === null) {
 		const articleUuid = ele.dataset.uuid
-		const articlePrix = new Big(ele.dataset.prix.replace(',', '.'))
+		const articlePrice = new Big(ele.dataset.price.replace(',', '.'))
 		const articleGroup = ele.dataset.group
-		console.log('-> manageKey, articleUuid =', articleUuid, '  --  prix =', articlePrix, '  --  groupe =', articleGroup);
 
 		// gérer les groupes d'articles : afficher le layer-lock
 		document.querySelectorAll('#products .article-container').forEach(item => {
@@ -85,13 +95,11 @@ function manageKey(event) {
 		})
 
 		// ajouter un article
-		addArticle(articleUuid, articlePrix)
+		addArticle(articleUuid, articlePrice)
 	}
 }
 
 function manageReset() {
-	console.log('-> manageReset');
-
 	document.querySelectorAll('#products .article-container').forEach(article => {
 		const uuid = article.dataset.uuid
 		// number articles à 0
@@ -104,6 +112,8 @@ function manageReset() {
 	document.querySelector('#addition-form').innerHTML = ''
 	// vider les lignes d'addition
 	document.querySelector('#addition-list').innerHTML = ''
+	// total à 0
+	document.querySelector('#bt-valider-total').innerText = 0
 }
 
 document.addEventListener('DOMContentLoaded', () => {

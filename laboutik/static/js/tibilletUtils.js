@@ -42,11 +42,11 @@ function log({ tag, msg }) {
 	}
 }
 
-function spinnerOff(){
+function spinnerOff() {
 	document.querySelector('#spinner-container').style.display = 'none'
 }
 
-function spinnerOn(){
+function spinnerOn() {
 	document.querySelector('#spinner-container').style.display = 'flex'
 }
 
@@ -55,5 +55,22 @@ function bigToFloat(value) {
 		return parseFloat(new Big(value).valueOf())
 	} catch (error) {
 		console.log('-> bigToFloat, ', error)
+	}
+}
+/**
+ * Send custum ecent
+ * @param {string} name event name 
+ * @param {string} selector css selector
+ * @param {object} data 
+ */
+function sendEvent(name, selector, data) {
+	try {
+		const event = new CustomEvent(name, { detail: data })
+		document.querySelector(selector).dispatchEvent(event)
+		console.log(`-> sendEvent "${name}"`);
+		
+	} catch (error) {
+		console.log('sendEvent,', error);
+
 	}
 }

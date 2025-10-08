@@ -11,5 +11,5 @@ urlpatterns=[
 	path('main_menu',views.main_menu),
 	path('pvs_menu',views.pvs_menu),
 	path('show_pv',views.show_pv),
-	path('transaction',views.transaction)
+	path('paiement',views.paiement)
 ]

@@ -9,8 +9,8 @@
 	<!-- catégories -->
 	{% include "components/categories.html" %}
 	<div id="products-container">
-			{% include "components/articles.html" %}
-			{% include "components/addition.html" %}
+		{% include "components/articles.html" %}
+		{% include "components/addition.html" %}
 	</div>
 </main>
 <footer>
@@ -30,18 +30,19 @@
 		</div>
 	</div>
 	<!-- bouton valider -->
-	<div id="bt-valider" class="BF-ligne footer-bt fond-ok" ${foncBouton}>
+	<div id="bt-valider" class="BF-ligne footer-bt fond-ok" onclick="sendEvent('validerPaiement','#addition-form')">
 		<i class="fas fa-check-circle md4px"></i>
 		<div class="BF-col-deb footer-bt-text mg4px">
 			<div>{% translate "VALIDER" %}</div>
-			<div id="bt-valider-total"><span>{% translate "TOTAL" %}</span></div>
+			<!-- <div>{% translate "TOTAL" %} </div> -->
+			<div class="BF-ligne">
+				<div id="bt-valider-total" class="md4px">0</div>
+				<div> {{ currency_data.symbol }}</div>
+			</div>
 		</div>
 	</div>
 </footer>
 {% endblock content %}
-
-{% block script %}
-{% endblock script %}
 
 {% block css %}
 <style>
@@ -103,6 +104,7 @@
 	.footer-bt-text {
 		font-size: 1rem;
 		font-weight: bold;
+		text-align: center;
 	}
 
 	.fond-retour {

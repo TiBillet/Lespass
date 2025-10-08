@@ -8,7 +8,12 @@
 		<div>{% translate "PRIX" %}</div>
 	</div>
 	<div id="addition-list"></div>
-	<form id="addition-form"></form>
+	<!-- <form id="addition-form" hx-post="paiement" hx-trigger="validerPaiement"  ></form> -->
+	<!-- <form id="addition-form" hx-post="paiement" hx-include='input[name="responssable"], input[name="id_table"]' hx-trigger="validerPaiement" hx-target="#feedback-message" hx-swap="outerHTML"></form> -->
+	<form id="addition-form" hx-post="paiement" hx-include='[class="addition-include-data"]' hx-trigger="validerPaiement" hx-target="#paiement-message" hx-swap="outerHTML"></form>
+	<input class="addition-include-data" name="id_table" value="{{ id_table }}" />
+	<input class="addition-include-data" name="uuid_pv" value="{{ pv.id }}" />
+	<input class="addition-include-data" name="tag_id_cm" value="{{ card.tag_id }}" />
 </div>
 
 <style>
@@ -23,8 +28,8 @@
 	#addition-list {
 		width: 100%;
 		/* dev */
-		height: calc(var(--addition-list-heigh) - var(--addition-legend-heigh));
-		/* height: 100%; */
+		/* height: calc(var(--addition-list-heigh) - var(--addition-legend-heigh)); */
+		height: calc(100% - var(--addition-legend-heigh));
 		overflow-y: auto;
 		scrollbar-width: none
 	}
@@ -56,18 +61,23 @@
 		/* background-color: aqua; */
 	}
 
-	.addition-col-number, .addition-col-name, .addition-col-prix {
+	.addition-col-number,
+	.addition-col-name,
+	.addition-col-prix {
 		overflow: hidden;
 	}
 
 	#addition-form {
-		/* display: none; */
-		width: 100%;
+		display: none;
+		/* width: 100%;
 		height: 30%;
 		overflow-y: auto;
-		scrollbar-width: none
+		scrollbar-width: none; */
 	}
 
+	.addition-include-data {
+		display: none;
+	}
 	/* pour une largeur supérieure 1022 pixels */
 	@media only screen and (width > 1022px) {
 		#addition {

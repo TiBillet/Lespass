@@ -1769,7 +1769,7 @@ tables = [
 ]
 
 responsable = {
-  "nom": ["TEST"],
+  "name": "TERMINATOR",
   "uuid": "17896c22-7a60-45f4-a959-175bfc8a5369",
   "edit_mode": True,
 }
