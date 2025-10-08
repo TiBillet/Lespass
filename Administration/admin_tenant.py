@@ -906,8 +906,17 @@ class PromotionalCodeAdmin(ModelAdmin):
 
     list_filter = ['is_active', 'product']
     search_fields = ['name', 'product__name']
-    autocomplete_fields = ['product']
     ordering = ('-date_created',)
+
+    # pas d'auto complete sinon le formfield_for_foreignkey ne fonctionne pas, il faudra passer par le get_search_results coté ProductAdmin
+    # autocomplete_fields = ['product']
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == 'product':  # Replace 'user_field' with your actual field name
+            kwargs['queryset'] = Product.objects.filter(
+                archive=False, categorie_article=Product.BILLET
+            )
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     @display(description=_("Remaining uses"))
     def remaining_uses(self, obj):
@@ -2842,7 +2851,22 @@ class TenantAdmin(ModelAdmin):
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
         # Uniquement les client qui ont un domaine
-        return queryset.prefetch_related('domains').exclude(categorie__in=[Client.WAITING_CONFIG, Client.ROOT])
+        return queryset.prefetch_related('domains').exclude(categorie__in=[Client.WAITING_CONFIG, Client.ROOT, Client.META])
+
+    def get_search_results(self, request, queryset, search_term):
+        """
+        Pour la recherche de tenant dans la page Federation.
+        On est sur un autocomplete, il faut bidouiller la réponde de ce coté
+        Le but est que cela n'affiche dans le auto complete fields que les catégories Billets
+        """
+        queryset, use_distinct = super().get_search_results(request, queryset, search_term)
+        if request.headers.get('Referer'):
+            logger.info(request.headers.get('Referer'))
+            if ("federatedplace" in request.headers['Referer']
+                    and "admin/autocomplete" in request.path):  # Cela vient bien de l'admin event
+                queryset = queryset.exclude(categorie__in=[Client.WAITING_CONFIG, Client.ROOT, Client.META]).exclude(
+                pk=connection.tenant.pk) # on retire le client actuel
+        return queryset, use_distinct
 
     actions_row = ["go_admin", ]
 
@@ -2888,18 +2912,18 @@ class TenantAdmin(ModelAdmin):
 class FederatedPlaceAdmin(ModelAdmin):
     list_display = ["tenant", "str_tag_filter", "str_tag_exclude", "membership_visible", ]
     fields = ["tenant", "tag_filter", "tag_exclude", "membership_visible", ]
-    autocomplete_fields = ["tag_filter", "tag_exclude", ]
+    autocomplete_fields = ["tag_filter", "tag_exclude", "tenant" ]
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
         return queryset.select_related('tenant').prefetch_related('tag_filter', 'tag_exclude')
 
-    def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        if db_field.name == 'tenant':  # Replace 'user_field' with your actual field name
-            kwargs['queryset'] = Client.objects.all().exclude(
-                categorie__in=[Client.ROOT, Client.META, Client.WAITING_CONFIG]).exclude(
-                pk=connection.tenant.pk)
-        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+    # def formfield_for_foreignkey(self, db_field, request, **kwargs):
+    #     if db_field.name == 'tenant':  # Replace 'user_field' with your actual field name
+    #         kwargs['queryset'] = Client.objects.all().exclude(
+    #             categorie__in=[Client.ROOT, Client.META, Client.WAITING_CONFIG]).exclude(
+    #             pk=connection.tenant.pk)
+    #     return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     actions_row = ["connect_to", ]
 

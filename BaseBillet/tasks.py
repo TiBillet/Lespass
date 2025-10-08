@@ -411,7 +411,7 @@ def send_membership_pending_user(membership_uuid: str):
 
     # Texte principal
     main_text = _("Votre demande d'adhésion a bien été enregistrée.") + " " + \
-                _("Elle est maintenant en attente de validation manuelle par un administrateur.")
+                _("Elle est maintenant en attente de validation manuelle par un.e administrateur.ice.")
 
     # Texte additionnel si prix > 0
     main_text_2 = None
