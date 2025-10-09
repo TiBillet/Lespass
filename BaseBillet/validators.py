@@ -1,5 +1,6 @@
 import logging
 from datetime import timedelta
+from decimal import Decimal
 
 import stripe
 from django.conf import settings
@@ -19,6 +20,7 @@ from BaseBillet.models import Price, Product, OptionGenerale, Membership, Paieme
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from PaiementStripe.views import CreationPaiementStripe
+from fedow_connect.utils import dround
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
@@ -491,7 +493,7 @@ class MembershipValidator(serializers.Serializer):
     price = serializers.PrimaryKeyRelatedField(
         queryset=Price.objects.filter(product__categorie_article=Product.ADHESION)
     )
-
+    custom_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
     firstname = serializers.CharField(max_length=200)
     lastname = serializers.CharField(max_length=200)
     email = serializers.EmailField()
@@ -503,7 +505,7 @@ class MembershipValidator(serializers.Serializer):
 
 
     @staticmethod
-    def get_checkout_stripe(membership: Membership):
+    def get_checkout_stripe(membership: Membership, custom_amount: Decimal =None):
         # Fiche membre créée, si price payant, on crée le checkout stripe :
         price: Price = membership.price
         user: TibilletUser = membership.user
@@ -519,10 +521,14 @@ class MembershipValidator(serializers.Serializer):
             'user': f"{user.email}",
         }
 
+        amount = int(price.prix * 100)
+        if custom_amount :
+            amount = int(custom_amount * 100)
+
         ligne_article_adhesion = LigneArticle.objects.create(
-            pricesold=get_or_create_price_sold(price),
+            pricesold=get_or_create_price_sold(price, custom_amount=custom_amount),
             membership=membership,
-            amount=int(price.prix * 100),
+            amount=amount,
             qty=1,
         )
 
@@ -554,6 +560,9 @@ class MembershipValidator(serializers.Serializer):
 
     def validate(self, attrs):
         self.price = attrs['price']
+        custom_amount = None
+        if self.price.recurring_payment and self.price.free_price :
+            custom_amount = dround(attrs['custom_amount'])
 
         # Création de l'user après les validation champs par champ ( un robot peut spammer le POST et créer des user a la volée sinon )
         self.user = get_or_create_user(attrs['email'])
@@ -562,7 +571,8 @@ class MembershipValidator(serializers.Serializer):
         # Il peut y avoir plusieurs adhésions pour le même user (ex : parent/enfant)
         membership = Membership.objects.create(
             user=self.user,
-            price=self.price
+            price=self.price,
+            contribution_value=custom_amount, # None si pas de contribution value, sera rempli par la validation du paiement
         )
 
         membership.first_name = attrs['firstname']
@@ -624,7 +634,7 @@ class MembershipValidator(serializers.Serializer):
         membership.save()
         self.membership = membership
         # Création du lien de paiement
-        self.checkout_stripe_url = self.get_checkout_stripe(membership)
+        self.checkout_stripe_url = self.get_checkout_stripe(membership, custom_amount=custom_amount)
 
         return attrs
 

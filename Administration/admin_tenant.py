@@ -978,8 +978,8 @@ class PriceChangeForm(ModelForm):
         recurring_payment = cleaned_data.get('recurring_payment')
         if recurring_payment:
             data = self.data  # récupère les data sans les avoir validé
-            if data.get('free_price'):
-                raise forms.ValidationError(_("Un tarif ne peut être récurent et libre."), code="invalid")
+            # if data.get('free_price'):
+            #     raise forms.ValidationError(_("Un tarif ne peut être récurent et libre."), code="invalid")
 
             product: Product = self.cleaned_data['product']
             if product.categorie_article != Product.ADHESION:

@@ -1950,7 +1950,7 @@ class MembershipMVT(viewsets.ViewSet):
         membership = get_object_or_404(Membership, uuid=uuid.UUID(pk))
         if membership.state != Membership.ADMIN_VALID:
             raise Exception("not admin valid state")
-        checkout_url = MembershipValidator.get_checkout_stripe(membership)
+        checkout_url = MembershipValidator.get_checkout_stripe(membership, custom_amount=membership.contribution_value)
         logger.info(f"get_checkout_for_membership : {checkout_url}")
         return redirect(checkout_url)
         # return HttpResponseClientRedirect(checkout_url)

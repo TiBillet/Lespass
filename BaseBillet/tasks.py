@@ -484,6 +484,10 @@ def send_membership_payment_link_user(membership_uuid: str):
         logger.warning("send_membership_payment_link_user: destinataire manquant")
         return False
 
+    amount = dround(membership.price.prix)
+    if membership.contribution_value and membership.price.free_price and membership.price.recurring_payment : # c'est un montant custom
+        amount = dround(membership.contribution_value)
+
     title = _(f"{config.organisation} : Paiement de votre adhésion")
     context = {
         'username': membership.member_name() or user.full_name() or user.email,
@@ -493,7 +497,7 @@ def send_membership_payment_link_user(membership_uuid: str):
         'main_text': _("Votre demande a été acceptée. Vous pouvez régler votre adhésion en cliquant sur le bouton ci-dessous."),
         'table_info': {
             _('Produit'): f'{membership.price.product.name} - {membership.price.name}',
-            _('Montant'): f"{dround(membership.price.prix)} {config.currency_code}",
+            _('Montant'): f"{amount} {config.currency_code}",
         },
         'button_color': "#009058",
         'button': {

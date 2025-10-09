@@ -988,7 +988,8 @@ def create_ticket(pricesold, customer, reservation):
     return ticket
 
 
-def get_or_create_price_sold(price: Price, event: Event = None, promo_code:PromotionalCode = None):
+def get_or_create_price_sold(price: Price, event: Event = None,
+                             promo_code:PromotionalCode = None, custom_amount: Decimal = None,):
     """
     Générateur des objets PriceSold pour envoi à Stripe.
     Price + Event = PriceSold
@@ -1008,6 +1009,8 @@ def get_or_create_price_sold(price: Price, event: Event = None, promo_code:Promo
         productsold.get_id_product_stripe()
 
     prix = price.prix
+    if custom_amount:
+        prix = dround(custom_amount)
     if promo_code:
         prix = dround(prix - (prix * promo_code.discount_rate / 100))
 

@@ -50,6 +50,9 @@
         <li class="list-group-item px-0">
           {% trans 'Issued by' %} <strong>{{ membership.origin }}</strong>
         </li>
+          <li class="list-group-item px-0">
+          {% trans 'Contribution' %} : <strong>{{ membership.contribution_value }}</strong> €
+        </li>
         <li class="list-group-item px-0">
           {% for option in membership.option_generale.all %}
           <span class="badge text-bg-info p-2 me-1 mb-1 fs-6 fw-medium">

@@ -23,23 +23,52 @@
         <div class="mb-3 has-validation">
             {% for price in product.prices.all %}
                 {% if price.publish %}
-                    <div class="form-check me-3">
-                        <input id="price-{{ price.uuid }}" class="form-check-input" type="radio" name="price"
-                               value="{{ price.uuid }}" required>
-                        <label class="custom-control-label" for="price-{{ price.uuid }}">
-                            {% if price.free_price %}
+                    {% if price.free_price and price.recurring_payment %}
+                        <!-- Prix libre ET récurrent : input décimal avec incrémentation par 10 cts -->
+                        <div class="mb-4 p-3 border border-primary rounded bg-light">
+                            <label class="form-label fw-bold text-primary" for="price-{{ price.uuid }}">
                                 {{ price.name }}
-                            {% else %}
-                                {{ price.name }} - {{ price.prix }}€
-                            {% endif %}
+                            </label>
+                            <input id="price-{{ price.uuid }}" hidden name="price" value="{{ price.uuid }}">
+                            <input id="custom_amount-{{ price.uuid }}"
+                                   class="form-control form-control-lg" 
+                                   type="number" 
+                                   name="custom_amount"
+                                   value="{{ price.prix }}" 
+                                   min="{{ price.prix }}"
+                                   step="0.10"
+                                   placeholder="{% trans 'Enter the amount (minimum' %} {{ price.prix }}€)"
+                                   required>
+                            <small class="form-text text-muted">
+                                {% trans "Recurring payment - Enter your desired amount" %}
+                            </small>
                             {% if price.fedow_reward_enabled %}
-                                <span>
-                                    <em>{% trans " : This price will give you " %}{{ price.fedow_reward_amount | dround }}
+                                <div class="mt-2">
+                                    <em class="text-success">{% trans "This price will give you " %}{{ price.fedow_reward_amount | dround }}
                                     {{ price.fedow_reward_asset.name }} {% trans "credited to your TiBillet wallet !" %}</em>
-                                </span>
+                                </div>
                             {% endif %}
-                        </label>
-                    </div>
+                        </div>
+                    {% else %}
+                        <!-- Prix standard : bouton radio classique -->
+                        <div class="form-check me-3">
+                            <input id="price-{{ price.uuid }}" class="form-check-input" type="radio" name="price"
+                                   value="{{ price.uuid }}" required>
+                            <label class="custom-control-label" for="price-{{ price.uuid }}">
+                                {% if price.free_price %}
+                                    {{ price.name }}
+                                {% else %}
+                                    {{ price.name }} - {{ price.prix }}€
+                                {% endif %}
+                                {% if price.fedow_reward_enabled %}
+                                    <span>
+                                        <em>{% trans " : This price will give you " %}{{ price.fedow_reward_amount | dround }}
+                                        {{ price.fedow_reward_asset.name }} {% trans "credited to your TiBillet wallet !" %}</em>
+                                    </span>
+                                {% endif %}
+                            </label>
+                        </div>
+                    {% endif %}
                 {% endif %}
             {% endfor %}
         </div>

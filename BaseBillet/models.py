@@ -1564,13 +1564,16 @@ class PriceSold(models.Model):
             }
             if self.price.subscription_type == Price.DAY:
                 data_stripe["recurring"]["interval"] = "day"
+            elif self.price.subscription_type == Price.HOUR:
+                data_stripe["recurring"]["interval"] = "hour"
+            elif self.price.subscription_type == Price.WEEK:
+                data_stripe["recurring"]["interval"] = "week"
             elif self.price.subscription_type in [Price.MONTH, Price.CAL_MONTH]:
                 data_stripe["recurring"]["interval"] = "month"
             elif self.price.subscription_type == Price.YEAR:
                 data_stripe["recurring"]["interval"] = "year"
 
-
-        elif self.price.free_price:
+        elif self.price.free_price: # Si c'est récurrent et free price, le if précédent s'applique
             data_stripe.pop('unit_amount')
             data_stripe['billing_scheme'] = "per_unit"
             data_stripe['custom_unit_amount'] = {
