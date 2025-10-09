@@ -1,20 +1,22 @@
 :root {
 	--rouge01: #FF0000;
+	--error: #FF0000;
 	--rouge02: #a71d2a;
 	--rouge03: #aa3a3a;
 	--rouge04: #af6c7a;
 	--rouge05: #dc6575;
 
 	--vert01: #00FF00;
-	--success: #00FF00;
 	--vert02: #39e80a;
 	--vert03: #339448;
+	--success: #339448;
 	--vert04: #004134;
 	--vert05: #004134;
 
 	--bleu01: #17a2b8;
 	--bleu02: #3b567f;
 	--bleu03: #0345ea;
+	--info: #0345ea;
 	--bleu04: #0335b8;
 	--bleu05: #012584;
 	--bleu06: #011549;
@@ -49,6 +51,7 @@
 
 	--yellow00: #f5e12b;
 	--warning00: #f5972b;
+	--warning: #f5972b;
 
 	--orange01: #ce4d1a;
 	--dev-test: #39e80a;

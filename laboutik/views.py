@@ -215,35 +215,49 @@ def pv_route(request):
     }
     return render(request, "views/" + template, context)
 
-
 def paiement(request):
 	# msg_type = success, info, error, warning
 
 	# # attention pas de test si method = post
 	# # dev
-	paiement_ok = True
+	paiement_ok = False
+
 	data = request.POST
 	print(f"laboutik - DEV | paiement, data = {data}")
+	print(f"laboutik - DEV | paiement, nb_data = {len(data)}")
 
 	tag_id_cm = request.POST.get("tag_id_cm")
 	uuid_pv = request.POST.get("uuid_pv")
 	id_table = request.POST.get("id_table")
 
-	# TODO: ajouter test aucun article choisi
+	# ['tag_id_cm', 'uuid_pv', 'id_table', ...uuid(s) article...]
+	# 'tag_id_cm', 'uuid_pv', 'id_table' = data par defaut
+	if len(data) > 3:
+		# 
+		
+		# if paiement_ok:
+		# 	context = {
+		# 		'msg_type': 'success',
+		# 		'msg_content': _('Paiement ok')
+		# 	}
 
-	if paiement_ok:
-		context = {
-			'type_msg': 'success',
-			'msg_content': _('Paiement ok')
-		}
+		# if paiement_ok == False:
+		# 	context = {
+		# 		'msg_type': "warning",
+		# 		'msg_content': "Il y a une erreur !"
+		# 	}
+		context = {}
+		return render(request, "components/moyens_paiement.html", context)
 
-	if paiement_ok == False:
+	else:
+		# aucun article
 		context = {
-			'msg_type': "info",
-			'msg_content': "Il y a une erreur !"
+			'msg_type': 'info',
+			'msg_content': _("Aucun article n'a été selectioné")
 		}
+		return render(request, "components/messages.html", context)
+
+	# context['tag_id_cm'] = tag_id_cm
+	# context['uuid_pv'] = uuid_pv
+	# context['id_table'] = id_table
 	
-	context['tag_id_cm'] = tag_id_cm
-	context['uuid_pv'] = uuid_pv
-	context['id_table'] = id_table
-	return render(request, "components/retour_paiement.html", context)

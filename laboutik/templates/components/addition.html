@@ -10,7 +10,7 @@
 	<div id="addition-list"></div>
 	<!-- <form id="addition-form" hx-post="paiement" hx-trigger="validerPaiement"  ></form> -->
 	<!-- <form id="addition-form" hx-post="paiement" hx-include='input[name="responssable"], input[name="id_table"]' hx-trigger="validerPaiement" hx-target="#feedback-message" hx-swap="outerHTML"></form> -->
-	<form id="addition-form" hx-post="paiement" hx-include='[class="addition-include-data"]' hx-trigger="validerPaiement" hx-target="#paiement-message" hx-swap="outerHTML"></form>
+	<form id="addition-form" hx-post="paiement" hx-include='[class="addition-include-data"]' hx-trigger="validerPaiement" hx-target="#messages" hx-swap="outerHTML"></form>
 	<input class="addition-include-data" name="id_table" value="{{ id_table }}" />
 	<input class="addition-include-data" name="uuid_pv" value="{{ pv.id }}" />
 	<input class="addition-include-data" name="tag_id_cm" value="{{ card.tag_id }}" />

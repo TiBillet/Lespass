@@ -1,18 +1,18 @@
 {% load static i18n %}
 
-<div id="paiement-message" class="BF-col">
+<div id="messages" class="BF-col" style="background-color: var(--{{msg_type}});">
 	<h1>{{ msg_content }}</h1>
 
-	<a id="bt-return" class="BF-ligne" href="pv_route?uuid_pv={{uuid_pv}}&tag_id_cm={{tag_id_cm}}&id_table={{id_table}}">
+	<div id="bt-return" class="BF-ligne" onclick="document.querySelector('#messages').style.display='none';">
 		<i class="fas fa-undo md4px"></i>
 		<div class="BF-col-deb">
 			<div>{% translate "Return" %}</div>
 		</div>
-	</a>
+	</div>
 </div>
 
 <style>
-	#paiement-message {
+	#messages {
 		position: absolute;
 		left: 0;
 		top: 0;
@@ -21,16 +21,16 @@
 		z-index: 999;
 		color: var(--blanc01);
 		font-size: 1.5rem;
-		background-color: var(--noir01);
+		text-align: center;
 	}
 
 	#bt-return {
-		width: 30%;
+		width: 142px;
 		height: 90px;
 		background-color: var(--bleu02);
 		color: var(--blanc01);
 		cursor: pointer;
-		font-size: 2.5rem;
+		font-size: clamp(1.5rem, 3.5vw, 2.5rem);
 		text-decoration: none;
 		i {
 			margin-right: 4px;
