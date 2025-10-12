@@ -31,13 +31,13 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         # START MIGRATE AND INSTALL BEFORE THIS SCRIPT
         sub = os.environ['SUB']
-        try
+        try :
             tenant1 = Client.objects.get(name=sub)
         except Client.DoesNotExist:
             logger.info(f"No tenant found with {sub}, demo data already installed")
             return None
-        tenant1.name = "Le Tiers-Lustre"
 
+        tenant1.name = "Le Tiers-Lustre"
         tenant1.save()
 
         # Fabrication d'un deuxième tenant pour de la fédération
