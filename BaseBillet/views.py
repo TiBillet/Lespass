@@ -276,7 +276,7 @@ def connexion(request):
 
             # On est sur le moteur de démonstration / test
             # Pour les tests fonctionnel, on a besoin de vérifier le token, on le génère ici.
-            if settings.DEBUG and settings.TEST:
+            if settings.TEST:
                 token = user.get_connect_token()
                 base_url = connection.tenant.get_primary_domain().domain
                 connexion_url = f"https://{base_url}/emailconfirmation/{token}"
@@ -365,7 +365,7 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
             # Pour les tests :
             # On est sur le moteur de démonstration / test
             # Pour les tests fonctionnel, on a besoin de vérifier le token, on le génère ici.
-            if settings.DEBUG and settings.TEST:
+            if settings.TEST:
                 token = user.get_connect_token()
                 base_url = connection.tenant.get_primary_domain().domain
                 connexion_url = f"https://{base_url}/emailconfirmation/{token}"
