@@ -34,7 +34,7 @@ class Command(BaseCommand):
         try :
             tenant1 = Client.objects.get(name=sub)
         except Client.DoesNotExist:
-            logger.info(f"No tenant found with {sub}, demo data already installed")
+            logger.info(f"No tenant found with {sub}. Name changed : demo data already installed")
             return None
 
         tenant1.name = "Le Tiers-Lustre"

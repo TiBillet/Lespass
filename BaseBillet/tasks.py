@@ -277,12 +277,11 @@ def send_membership_invoice_to_email(membership_uuid: str):
             membership = Membership.objects.get(uuid=membership_uuid)
             user = membership.user
             # Mails de confirmation qui contient un lien vers la facture :
-            logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation par email")
+            logger.info(f"    app.task send_membership_invoice_to_email : Envoi de la confirmation par email")
             send_email_generique(
                 context=context_for_membership_email(membership),
                 email=f"{user.email}",
             )
-            logger.info(f"    update_membership_state_after_paiement : Envoi de la confirmation par email DELAY")
             return True
         except Membership.DoesNotExist:
             attempts += 1

@@ -60,6 +60,10 @@ def update_membership_state_after_stripe_paiement(ligne_article):
     membership.last_contribution = timezone.now()
     membership.stripe_paiement.add(paiement_stripe)
 
+    # Si c'est une adhésion à validation manuelle :
+    if membership.state == Membership.ADMIN_VALID:
+        membership.state = Membership.PAID_BY_USER
+
     if paiement_stripe.invoice_stripe:
         membership.last_stripe_invoice = paiement_stripe.invoice_stripe
 
@@ -68,8 +72,8 @@ def update_membership_state_after_stripe_paiement(ligne_article):
         membership.status = Membership.AUTO
 
     membership.save()
-
     logger.info(f"    update_membership_state_after_paiement : Mise à jour de la fiche membre OK")
+
     return membership
 
 
@@ -178,7 +182,8 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
             membership: Membership = update_membership_state_after_stripe_paiement(ligne_article)
 
         # Mise à jour de la deadline
-        membership.set_deadline()
+        deadline = membership.set_deadline()
+        logger.info(f"        TRIGGER_A membeshipr set_deadline() : {deadline}")
 
         # On lie le tenant à l'user, pour qu'iel soit visible dans l'admin et que les adéhsion et reservations soient visible dans my_account
         user: TibilletUser = membership.user
