@@ -40,7 +40,7 @@
                                    placeholder="{% trans 'Enter the amount (minimum' %} {{ price.prix }}€)"
                                    required>
                             <small class="form-text text-muted">
-                                {% trans "Recurring payment - Enter your desired amount" %}
+                                {% trans "Recurring payment - Enter your desired amount" %}{% if price.prix %} - {% trans "Minimum : " %} {{ price.prix }}{% endif %}
                             </small>
                             {% if price.fedow_reward_enabled %}
                                 <div class="mt-2">

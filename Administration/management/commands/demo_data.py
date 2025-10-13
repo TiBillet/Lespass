@@ -333,11 +333,11 @@ class Command(BaseCommand):
                         categorie_article=Product.ADHESION,
                     )
 
-                    ssa_trimestrielle, created = Price.objects.get_or_create(
+                    ssa_abo, created = Price.objects.get_or_create(
                         product=ssa,
                         name="Mensuelle",
                         short_description="Adhésion pour 3 mois. Paiement mensuel récurent.",
-                        free_price=False,
+                        free_price=True,
                         prix=50,
                         recurring_payment=True,
                         iteration=3,

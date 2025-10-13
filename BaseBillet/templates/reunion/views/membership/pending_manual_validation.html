@@ -16,7 +16,12 @@
                         <strong>{% trans "Produit" %}:</strong>
                         {{ membership.price.product.name }} — {{ membership.price.name }}
                     </li>
-                    {% if membership.price.prix %}
+                    {% if membership.contribution_value %}
+                        <li>
+                            <strong>{% trans "Montant" %}:</strong>
+                            {{ membership.contribution_value }} €
+                        </li>
+                    {% elif membership.price.prix %}
                         <li>
                             <strong>{% trans "Montant" %}:</strong>
                             {{ membership.price.prix }} €

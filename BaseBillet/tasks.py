@@ -415,7 +415,7 @@ def send_membership_pending_user(membership_uuid: str):
     # Texte additionnel si prix > 0
     main_text_2 = None
     try:
-        if membership.price and membership.price.prix and membership.price.prix > 0:
+        if membership.price and membership.contribution_value > 0:
             main_text_2 = _("Dès validation, un lien de paiement vous sera envoyé par email.")
     except Exception:
         pass
@@ -442,7 +442,7 @@ def send_membership_pending_user(membership_uuid: str):
         'table_info': {
             _('Produit'): f'{membership.price.product.name} - {membership.price.name}',
             _('Tarif'): f'{membership.price.name}',
-            _('Montant'): f"{dround(membership.price.prix)} {config.currency_code}",
+            _('Montant'): f"{dround(membership.contribution_value)} {config.currency_code}",
             _('Date de demande'): date_format(membership.date_added, format='DATETIME_FORMAT', use_l10n=True),
         },
         'button_color': "#009058",

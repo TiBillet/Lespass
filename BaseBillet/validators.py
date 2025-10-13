@@ -564,6 +564,13 @@ class MembershipValidator(serializers.Serializer):
         if self.price.recurring_payment and self.price.free_price :
             custom_amount = dround(attrs['custom_amount'])
 
+        if self.price.free_price :
+            if self.price.prix : # on a un tarif minimum, on vérifie que le montant est bien supérieur :
+                contribution = custom_amount or self.price.prix
+                if contribution < self.price.prix :
+                    logger.info("prix inférieur au minimum")
+                    raise serializers.ValidationError(_('The amount payed must be greater than the minimum amount payed.'))
+
         # Création de l'user après les validation champs par champ ( un robot peut spammer le POST et créer des user a la volée sinon )
         self.user = get_or_create_user(attrs['email'])
 
