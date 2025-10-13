@@ -1803,7 +1803,7 @@ msgstr "Taux TVA"
 
 #: BaseBillet/models.py:888
 msgid "Simultaneous membership possible"
-msgstr ""
+msgstr "Adhésion simultanée possible"
 
 #: BaseBillet/models.py:889
 msgid ""
@@ -4008,7 +4008,7 @@ msgstr "Voir toutes les adhésions"
 
 #: BaseBillet/templates/reunion/views/membership/form.html:27
 msgid "Out of stock."
-msgstr "Rupture de stock"
+msgstr "Rupture de stock."
 
 #: BaseBillet/templates/reunion/views/membership/form.html:44
 msgid "Enter the amount (minimum"
