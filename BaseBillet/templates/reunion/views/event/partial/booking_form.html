@@ -84,33 +84,36 @@
                                         </div>
                                     {% else %}
                                         <span class="d-flex align-items-baseline gap-3">
-                            <bs-counter
-                                    id="amount-{{ price.uuid }}"
-                                    name="{{ price.uuid }}"
-                                    step="1" min="0"
-                                    max="
-
-
-
-
-                                            {% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% else %}{{ price.max_per_user }}{% endif %}"
-                                    class="flex-grow-1 js-order-amount"
-                            ></bs-counter>
-                            {% trans 'ticket(s)' %}
-                        </span>
+                                        <bs-counter
+                                                id="amount-{{ price.uuid }}"
+                                                name="{{ price.uuid }}"
+                                                step="1" min="0"
+                                                max="{% if price.max_per_user > event.max_per_user %}
+                                                            {{ event.max_per_user }}
+                                                       {% else %}
+                                                            {{ price.max_per_user }}
+                                                       {% endif %}"
+                                                class="flex-grow-1 js-order-amount">
+                                        </bs-counter>
+                                        {% trans 'ticket(s)' %}
+                                    </span>
                                     {% endif %}
                                     <!-- Adhésion non obligatoire -->
                                 {% else %}
                                     <span class="d-flex align-items-baseline gap-3">
-                            <bs-counter
-                                    id="amount-{{ price.uuid }}"
-                                    name="{{ price.uuid }}"
-                                    step="1" min="0"
-                                    max="{% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% else %}{{ price.max_per_user }}{% endif %}"
-                                    class="flex-grow-1 js-order-amount"
-                            ></bs-counter>
-                            {% trans 'ticket(s)' %}
-                        </span>
+                                    <bs-counter
+                                            id="amount-{{ price.uuid }}"
+                                            name="{{ price.uuid }}"
+                                            step="1" min="0"
+                                            max="{% if price.max_per_user > event.max_per_user %}
+                                                        {{ event.max_per_user }}
+                                                    {% else %}
+                                                        {{ price.max_per_user }}
+                                                    {% endif %}"
+                                            class="flex-grow-1 js-order-amount"
+                                    ></bs-counter>
+                                    {% trans 'ticket(s)' %}
+                                </span>
                                 {% endif %}
                             </div>
                         {% endif %}

@@ -1805,7 +1805,7 @@ class MembershipMVT(viewsets.ViewSet):
             logger.error(f"MembershipViewset CREATE ERROR : {membership_validator.errors}")
             error_messages = [str(item) for sublist in membership_validator.errors.values() for item in sublist]
             messages.add_message(request, messages.ERROR, error_messages)
-            return Response(membership_validator.errors, status=status.HTTP_400_BAD_REQUEST)
+            return HttpResponseClientRedirect(request.headers['Referer'])
 
         # Le formulaire est valide.
         # Vérification de la demande de fomulaire supplémentaire avec Formbricks

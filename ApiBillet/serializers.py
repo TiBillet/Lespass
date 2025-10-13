@@ -1215,9 +1215,10 @@ class ApiReservationValidator(serializers.Serializer):
                     'qty': float(entry['qty']),
                 }
 
-                if entry['qty'] > price.max_per_user:
-                    raise serializers.ValidationError(
-                        _(f'Booking count above maximum for this event and rate.'))
+                if price.max_per_user:
+                    if entry['qty'] > price.max_per_user:
+                        raise serializers.ValidationError(
+                            _(f'Booking count above maximum for this event and rate.'))
 
                 if product.categorie_article in [Product.BILLET, Product.FREERES]:
                     self.nbr_ticket += entry['qty']
@@ -1269,8 +1270,9 @@ class ApiReservationValidator(serializers.Serializer):
 
         resas = event.valid_tickets_count()
 
-        if self.nbr_ticket > event.max_per_user:
-            raise serializers.ValidationError(_(f'Booking ticket count is over maximum allowed per user.'))
+        if event.max_per_user:
+            if self.nbr_ticket > event.max_per_user:
+                raise serializers.ValidationError(_(f'Booking ticket count is over maximum allowed per user.'))
 
         if resas + self.nbr_ticket > event.jauge_max:
             raise serializers.ValidationError(_(f'Only {resas} seats left.'))

@@ -368,9 +368,10 @@ class ReservationValidator(serializers.Serializer):
 
             # chaque maximum par user est respecté ?
             for price, qty in price_dict.items():
-                if qty > price.max_per_user:
-                    raise serializers.ValidationError(
-                        _(f'Bookings exceed capacity for this rate.'))
+                if price.max_per_user:
+                    if qty > price.max_per_user:
+                        raise serializers.ValidationError(
+                            _(f'Bookings exceed capacity for this rate.'))
                 total_ticket_qty += qty
 
                 # Check adhésion
@@ -384,8 +385,9 @@ class ReservationValidator(serializers.Serializer):
             raise serializers.ValidationError(_(f'No ticket.'))
 
         # Vérification du max par user sur l'event
-        if total_ticket_qty > event.max_per_user:
-            raise serializers.ValidationError(_(f'Order quantity surpasses maximum allowed per user.'))
+        if event.max_per_user:
+            if total_ticket_qty > event.max_per_user:
+                raise serializers.ValidationError(_(f'Order quantity surpasses maximum allowed per user.'))
 
         # Pour vérification plus bas que le prix libre est bien seul
         if hasattr(self, 'free_price'):
@@ -569,10 +571,20 @@ class MembershipValidator(serializers.Serializer):
                 contribution = custom_amount or self.price.prix
                 if contribution < self.price.prix :
                     logger.info("prix inférieur au minimum")
-                    raise serializers.ValidationError(_('The amount payed must be greater than the minimum amount payed.'))
+                    raise serializers.ValidationError(_('The amount must be greater than the minimum amount.'))
 
         # Création de l'user après les validation champs par champ ( un robot peut spammer le POST et créer des user a la volée sinon )
         self.user = get_or_create_user(attrs['email'])
+
+        # Vérification du max per user
+        if self.price.max_per_user:
+            user_membeshipr_count = Membership.objects.filter(
+                user=self.user,
+                price=self.price,
+                deadline__gt=timezone.localtime()).count()
+            if user_membeshipr_count >= self.price.max_per_user:
+                logger.info("max per user")
+                raise serializers.ValidationError(_(f'This product is limited in quantity per person.'))
 
         ### CREATION DE LA FICHE MEMBRE
         # Il peut y avoir plusieurs adhésions pour le même user (ex : parent/enfant)

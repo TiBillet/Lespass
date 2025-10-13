@@ -885,11 +885,17 @@ class Price(models.Model):
 
 
     stock = models.SmallIntegerField(blank=True, null=True)
+
     max_per_user = models.PositiveSmallIntegerField(
-        default=10,
-        verbose_name=_("Maximum orders per user"),
-        help_text=_("The same email can be used for multiple orders.")
+        blank=True, null=True,
+        verbose_name=_("Maximum per user"),
+        help_text=_("Limit the quantity per user. Leave this field blank if the number is unlimited. if it is a recurring payment, the maximum is necessarily 1")
     )
+
+    # gauge_max = models.PositiveSmallIntegerField(blank=True, null=True,
+    #                                                 verbose_name=_("Maximum all user"),
+    #                                                 help_text=_("Limit the maximum number of memberships for all users. Leave blank for unlimited."))
+
 
     adhesion_obligatoire = models.ForeignKey(Product, on_delete=models.PROTECT,
                                              related_name="adhesion_obligatoire",
@@ -2338,9 +2344,6 @@ class Membership(models.Model):
     state = models.CharField(max_length=2, choices=STATE_CHOICES, default=NO_ADMIN_VALID,
                              verbose_name=_("State"))
 
-    option_generale = models.ManyToManyField(OptionGenerale,
-                                             blank=True,
-                                             related_name="membership_options")
 
     stripe_paiement = models.ManyToManyField(Paiement_stripe, blank=True, related_name="membership")
     stripe_id_subscription = models.CharField(
@@ -2354,6 +2357,12 @@ class Membership(models.Model):
     )
 
     fedow_transactions = models.ManyToManyField(FedowTransaction, blank=True, related_name="membership")
+
+    # Options
+    option_generale = models.ManyToManyField(OptionGenerale,
+                                             blank=True,
+                                             related_name="membership_options")
+
 
     class Meta:
         # unique_together = ('user', 'price')
