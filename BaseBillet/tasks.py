@@ -35,7 +35,7 @@ from weasyprint.text.fonts import FontConfiguration
 from ApiBillet.serializers import LigneArticleSerializer, MembershipSerializer
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, Ticket, Configuration, Membership, Webhook, LigneArticle, \
-    GhostConfig, BrevoConfig, Product, Price
+    GhostConfig, BrevoConfig, Product, Price, Paiement_stripe
 from MetaBillet.models import WaitingConfiguration
 from TiBillet.celery import app
 from fedow_connect.fedow_api import FedowAPI
@@ -170,7 +170,7 @@ def create_membership_invoice_pdf(membership: Membership):
 
     context = {
         'config': config,
-        'paiement': membership.stripe_paiement.first(),
+        'paiement': membership.stripe_paiement.filter(status=Paiement_stripe.VALID).order_by('-datetime').first(),
         'membership': membership,
         'email': email,
     }

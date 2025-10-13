@@ -170,13 +170,13 @@
     </tr>
     </thead>
     <tbody>
-    {% for paiement in membership.stripe_paiement.all %}{% for line in paiement.lignearticles.all %}<tr>
+    {% for line in paiement.lignearticles.all %}<tr>
         <td>{{ line.pricesold.price.product.name }} / {{ line.pricesold.price.name }}</td>
         <td>{{ line.amount_decimal }}€</td>
         <td>{{ line.qty | floatformat:2 }}</td>
         <td>{{ line.vat }}%</td>
         <td>{{ line.total_decimal }}€</td>
-    </tr>{% endfor %}{% endfor %}
+    </tr>{% endfor %}
     </tbody>
 </table>
 

@@ -1657,7 +1657,11 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
         membership = Membership.objects.get(pk=object_id)
         pdf_binary = create_membership_invoice_pdf(membership)
         response = HttpResponse(pdf_binary, content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="facture.pdf"'
+        try :
+            paiement_id = f"-{membership.stripe_paiement.order_by('-datetime').first().invoice_number()}"
+        except:
+            paiement_id = ""
+        response['Content-Disposition'] = f'attachment; filename="receipt{paiement_id}.pdf"'
         return response
         # messages.success(
         #     request,
