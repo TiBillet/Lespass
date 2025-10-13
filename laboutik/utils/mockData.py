@@ -11,7 +11,8 @@ group_Unkown_articles = {
 
 bt_groupement = [
 	{
-		"methode_name": "VenteArticle", 
+		"methode_name": "VenteArticle",
+		"moyens_paiement": 'espece|carte_bancaire|nfc|CH',
     "besoin_tag_id": "nfc",
     "groupe": "groupe1",
     "nb_commande_max": nombreMaxSelectionArticle
@@ -39,7 +40,7 @@ bt_groupement = [
   },
   {
 		"methode_name": "AjoutMonnaieVirtuelleCadeau",
-    "moyens_paiement": "",
+    "moyens_paiement": '',
     "besoin_tag_id": "tout",
     "groupe": "groupe5",
     "nb_commande_max": nombreMaxSelectionArticle
@@ -1889,5 +1890,13 @@ def get_table_by_id(id):
 	for table in tables:
 		if table["id"] == id:
 			retour = table
+			break
+	return retour
+
+def get_article_from_uuid(uuid_article, pv):
+	retour = None
+	for article in pv['articles']:
+		if (uuid_article == article['id']):
+			retour = article
 			break
 	return retour

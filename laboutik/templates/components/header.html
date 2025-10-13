@@ -16,26 +16,101 @@
 		</div>
 	</div>
 	<div class="header-menu pointer">
-		<i class="menu-burger-icon fas fa-bars curseur-action"
-			hx-get="main_menu?uuid_pv={{pv.id}}&tag_id_cm={{card.tag_id}}" hx-target="#menu-burger-container"
-			hx-swap="innerHTML" hx-on::after-request="showMenuBurger()"></i>
+		<i class="menu-burger-icon fas fa-bars curseur-action" onclick="toggleMenuBurger(event)"></i>
 	</div>
 </header>
-<nav id="menu-burger-container" class="hide"></nav>
+<nav id="menu-burger-container" class="hide">
+	<div class="main-menu">
+		<div class="menu-burger-item menu-burger-item-content" onclick="showSubMenu(event, '.sub-menu-pvs')">
+			<i class="menu-burger-item-content fas fa-store"></i>
+			<div class="menu-burger-item-content">{% translate "POINTS DE VENTES" %}</div>
+		</div>
+		<div class="menu-burger-item menu-burger-item-content">
+			<i class="menu-burger-item-content fas fa-concierge-bell"></i>
+			<div class="menu-burger-item-content">{% translate "PREPARATIONS" %}</div>
+		</div>
+		<div class="menu-burger-item menu-burger-item-content">
+			<i class="menu-burger-item-content fas fa-utensils"></i>
+			<div class="menu-burger-item-content">{% translate "TABLES" %}</div>
+		</div>
+		<div class="menu-burger-item menu-burger-item-content">
+			<i class="menu-burger-item-content fas fa-concierge-bell"></i>
+			<div class="menu-burger-item-content">{% translate "VENTES" %}</div>
+		</div>
+		<div class="menu-burger-item menu-burger-item-content" onclick="showSubMenu(event, '.sub-menu-params')">
+			<i class="menu-burger-item-content fas fa-cog"></i>
+			<div class="menu-burger-item-content">{% translate "PARAMÈTRES" %}</div>
+		</div>
+	</div>
+	<!-- sub menu points de vente -->
+	<div class="sub-menu-pvs sub-menu hide">
+		{% for pv in card.pvs_list %}
+		<a class="menu-burger-item menu-burger-item-content" href="pv_route?uuid_pv={{pv.uuid}}&tag_id_cm={{card.tag_id}}"
+			style="text-decoration: none;">
+			<i class="menu-burger-item-content fas {{ pv.icon }}"></i>
+			<div class="menu-burger-item-content">{{ pv.name }}</div>
+		</a>
+		{% endfor %}
+	</div>
+	<!-- dev sub menu paramètres -->
+	<div class="sub-menu-params sub-menu hide">
+		<div class="menu-burger-item menu-burger-item-content">
+			<i class="menu-burger-item-content fas fa-utensils"></i>
+			<div class="menu-burger-item-content">params 1</div>
+		</div>
+		<div class="menu-burger-item menu-burger-item-content">
+			<i class="menu-burger-item-content fas fa-utensils"></i>
+			<div class="menu-burger-item-content">params 2</div>
+		</div>
+	</div>
+</nav>
 <script>
-	window.showMenuBurger = function () {
-		document.querySelector('#menu-burger-container').classList.remove('hide')
+	window.showSubMenu = function (event, subMenuClass) {
+		// effacer main-menu
+		document.querySelector('#menu-burger-container .main-menu').classList.add('hide')
+		// effacer touts les sub-menu
+		document.querySelectorAll('#menu-burger-container .sub-menu').forEach(ele => {
+			ele.classList.add('hide')
+		})
+		// afficher subMenuClass
+		document.querySelector(`#menu-burger-container ${subMenuClass}`).classList.remove('hide')
 	}
+
+	// effacer menu principale 
 	window.hideMenuBurger = function () {
+		// sup class active
+		document.querySelector('.menu-burger-icon').classList.remove('menu-burger-active')
+		// effacer le menu
 		document.querySelector('#menu-burger-container').classList.add('hide')
 	}
-	document.addEventListener('click', (event) => {
-		const classRep = event.target.className
-		if (!classRep.includes('menu-burger-item-content') && classRep !== 'header-menu pointer') {
+
+	window.toggleMenuBurger = function (event) {
+		const ele = event.target
+		const classRep = ele.classList
+		// afficher menu principale 
+		if (!classRep.contains('menu-burger-active')) {
+			// effacer touts les sub-menu
+			document.querySelectorAll('#menu-burger-container .sub-menu').forEach(ele => {
+				ele.classList.add('hide')
+			})
+			// afficher main-menu
+			document.querySelector('#menu-burger-container .main-menu').classList.remove('hide')
+			// ajouter class active
+			ele.classList.add('menu-burger-active')
+			// afficher le menu
+			document.querySelector('#menu-burger-container').classList.remove('hide')
+		} else {
 			hideMenuBurger()
 		}
+	}
 
+	document.addEventListener('click', (event) => {
+		const classRep = event.target.classList
+		if (!classRep.contains('menu-burger-icon') && !classRep.contains('menu-burger-item-content')) {
+			hideMenuBurger()
+		}
 	})
+
 </script>
 
 <style>
@@ -95,11 +170,13 @@
 	}
 
 	#menu-burger-container {
+		max-height: calc(var(--main-container-height) - 2px);
 		position: absolute;
-		top: calc(var(--header-height) + 2);
+		top: calc(var(--header-height) + 2px);
 		right: 0;
 		background-color: var(--noir03);
 		z-index: 2;
+		overflow-y: auto;
 	}
 
 	.menu-burger-item {

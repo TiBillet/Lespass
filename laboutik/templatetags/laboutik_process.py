@@ -11,3 +11,8 @@ def sel(value, arg):
 def divide_by(value, arg):
 	# 2 chiffre après la virgule
 	return Decimal(value / arg).quantize(Decimal('.01'))
+
+@register.filter
+def mul(value, arg):
+	# 2 chiffre après la virgule
+	return value * arg

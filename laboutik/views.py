@@ -16,6 +16,8 @@ sys.path.append(str(Path(__file__).resolve().parent / "utils"))
 # data mocker - dev
 import mockData
 
+import method
+
 data_pvs = mockData.get_data_pvs()
 
 state = {
@@ -120,32 +122,6 @@ def ask_primary_card(request):
 
     return render(request, "views/ask_primary_card.html", context)
 
-
-def main_menu(request):
-    tag_id_cm = request.GET.get("tag_id_cm")
-    card = mockData.get_card_from_tagid(tag_id_cm)
-    context = {
-        "card": card,
-    }
-    return render(request, "components/main_menu.html", context)
-
-
-def pvs_menu(request):
-    tag_id_cm = request.GET.get("tag_id_cm")
-    card = mockData.get_card_from_tagid(tag_id_cm)
-    context = {
-        "card": card,
-    }
-    return render(request, "components/pvs_menu.html", context)
-
-
-def show_pv(request):
-    uuid_pv = request.GET.get("uuid_pv")
-    pv = mockData.get_pv_from_uuid(uuid_pv, data_pvs)
-    context = {"pv": pv}
-    return render(request, "components/show_pv.html", context)
-
-
 def pv_route(request):
     # pour un mode restaurant (non service direct)
     try:
@@ -246,7 +222,26 @@ def paiement(request):
 		# 		'msg_type': "warning",
 		# 		'msg_content': "Il y a une erreur !"
 		# 	}
-		context = {}
+
+		# récupère uniquement les uuid articles
+		inputs = method.post_filter(request.POST)
+
+		# obtenir le point de vente en fonction de son uuid
+		pv = mockData.get_pv_from_uuid(uuid_pv, data_pvs)
+
+		# retourne les moyens de paiement nécessaires et filtrés par moyens de paiement acceptés
+		moyens_paiement = method.selection_moyens_paiement(pv, inputs, request.POST)
+		
+		# calcul du total de l'addition
+		total = method.calcul_total_addition(pv, inputs, request.POST)
+
+		context = {
+			"moyens_paiement": moyens_paiement,
+			"currency_data": {"cc": "EUR", "symbol": "€", "name": "European Euro"},
+			"total": total,
+			"button_width": 280,
+    	"button_height": 90
+		}
 		return render(request, "components/moyens_paiement.html", context)
 
 	else:

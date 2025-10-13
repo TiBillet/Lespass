@@ -1,8 +1,105 @@
 {% load static i18n %}
+{% load laboutik_process %}
 
 <div id="messages" class="BF-col">
 	<h1 class="message-title">{% translate "Types de paiement" %}</h1>
+	<!-- cashless -->
+	{% if 'nfc' in moyens_paiement %}
+	<div class="paiement-bt-container" style="background-color: var(--vert03);">
+		<div class="paiement-bt-icon">
+			<i class="fas fa-address-card"></i>
+		</div>
+		<div class="paiement-bt-text">
+			<div>{% translate "CASHLESS" %}</div>
+			<div class="paiement-bt-total">
+				<span>{% translate "Total" %}</span>
+				<span>{{ total }}</span>
+				<span>{{ currency_data.symbol }}</span>
+			</div>
+		</div>
+	</div>
+	{% endif %}
+
+	<!-- espèce, pas une consigne -->
+	{% if 'espece' in moyens_paiement %}
+	<div class="paiement-bt-container" style="background-color: var(--vert03);">
+		<div class="paiement-bt-icon">
+			<i class="fas fa-address-card"></i>
+		</div>
+		<div class="paiement-bt-text">
+			<div>{% translate "ESPÈCE" %}</div>
+			<div class="paiement-bt-total">
+				<span>{% translate "Total" %}</span>
+				<span>{{ total }}</span>
+				<span>{{ currency_data.symbol }}</span>
+			</div>
+		</div>
+	</div>
+	{% endif %}
+
+	<!-- TODO: espèce, une consigne: espèce à rendre, depositIsPresent -->
+	{% if 'espece' in moyens_paiement %}
+	{% endif %}
+
+	<!-- carte bancaire -->
+	{% if 'carte_bancaire' in moyens_paiement %}
+	<div class="paiement-bt-container" style="background-color: var(--vert03);">
+		<div class="paiement-bt-icon">
+			<i class="fas fa-address-card"></i>
+		</div>
+		<div class="paiement-bt-text">
+			<div>{% translate "CB" %}</div>
+			<div class="paiement-bt-total">
+				<span>{% translate "Total" %}</span>
+				<span>{{ total }}</span>
+				<span>{{ currency_data.symbol }}</span>
+			</div>
+		</div>
+	</div>
+	{% endif %}
+
+	<!-- cheque -->
+	{% if 'CH' in moyens_paiement %}
+	<div class="paiement-bt-container" style="background-color: var(--vert03);">
+		<div class="paiement-bt-icon">
+			<i class="fas fa-address-card"></i>
+		</div>
+		<div class="paiement-bt-text">
+			<div>{% translate "CH" %}</div>
+			<div class="paiement-bt-total">
+				<span>{% translate "Total" %}</span>
+				<span>{{ total }}</span>
+				<span>{{ currency_data.symbol }}</span>
+			</div>
+		</div>
+	</div>
+	{% endif %}
+
+	<!-- bouton "OFFRIR"  en mode gérant uniquement masi pas pour le point de ventes "CASHLESS" -->
+
+	<!-- pas de moyens de paiement -->
+	 {% if moyens_paiement|length == 0%}
+	 <h3 style="color: var(--warning);">{% translate "Aucun moyen de paiement" %}</h3>
+	 {% endif %}
+
+	<!-- retour -->
+	 <div id="message-bt-retour" class="paiement-bt-container" style="background-color: var(--bleu02);" 
+	 onclick="emptyMessage()">
+		<div class="paiement-bt-icon">
+			<i class="fas fa-undo-alt"></i>
+		</div>
+		<div class="paiement-bt-text">
+			<div>{% translate "RETOUR" %}</div>
+		</div>
+	</div>
 </div>
+<script>
+	function emptyMessage() {
+		const element = document.querySelector('#messages') 
+		element.innerHTML = ''
+		element.classList.add('hide')
+	}
+</script>
 
 <style>
 	#messages {
@@ -34,6 +131,67 @@
 
 		i {
 			margin-right: 4px;
+		}
+	}
+
+	/* button */
+	.paiement-bt-container {
+		width: 280px;
+		height: 90px;
+		display: flex;
+		flex-direction: row;
+		color: var(--blanc01);
+		cursor: pointer;
+		overflow: hidden;
+		font-size: 2rem;
+		margin-top: 16px;
+	}
+
+	.paiement-bt-icon {
+		width: 80px;
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+	}
+
+	.paiement-bt-icon i {
+		width: 46px;
+		height: auto;
+	}
+
+	.paiement-bt-text {
+		width: calc(100% - 80px);
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+		font-weight: bold;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+	}
+
+	.paiement-bt-total {
+		font-size: 1.5rem;
+	}
+
+	/* pour une largeur supérieure à 598 pixels */
+	@media only screen and (width > 598px) {
+
+		.paiement-bt-container {
+			width: calc(280 * 1.42)px;
+			height: calc(90 * 1.34)px;
+		}
+	}
+
+	/* pour une largeur supérieure à 1022 pixels */
+	@media only screen and (width > 1022px) {
+		.paiement-bt-container {
+			width: calc(280 * 1.4)px;
 		}
 	}
 </style>
