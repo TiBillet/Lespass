@@ -884,7 +884,22 @@ class Price(models.Model):
                            )
 
 
-    stock = models.SmallIntegerField(blank=True, null=True)
+    stock = models.SmallIntegerField(blank=True, null=True,
+                                     verbose_name=_("Simultaneous membership possible"),
+                                     help_text=_("Number of valid subscriptions or memberships possible at the same time. Only works for membership or subscription-type products."),)
+
+    def out_of_stock(self):
+        if self.stock is None or self.stock < 1 :
+            return False
+
+        if self.product.categorie_article == Product.ADHESION:
+            total_valid_subscriptions = Membership.objects.filter(
+                price=self,
+                deadline__gt=timezone.localtime()).count()
+            return self.stock <= total_valid_subscriptions
+
+        return False
+
 
     max_per_user = models.PositiveSmallIntegerField(
         blank=True, null=True,

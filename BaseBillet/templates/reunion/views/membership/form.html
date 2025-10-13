@@ -22,7 +22,11 @@
         <!-- prix -->
         <div class="mb-3 has-validation">
             {% for price in product.prices.all %}
-                {% if price.publish %}
+                {% if price.out_of_stock %}
+                    <div class="alert alert-danger" role="alert">
+                        {% trans "Out of stock." %}
+                    </div>
+                {% elif price.publish %}
                     {% if price.free_price and price.recurring_payment %}
                         <!-- Prix libre ET récurrent : input décimal avec incrémentation par 10 cts -->
                         <div class="mb-4 p-3 border border-primary rounded bg-light">
@@ -31,21 +35,23 @@
                             </label>
                             <input id="price-{{ price.uuid }}" hidden name="price" value="{{ price.uuid }}">
                             <input id="custom_amount-{{ price.uuid }}"
-                                   class="form-control form-control-lg" 
-                                   type="number" 
+                                   class="form-control form-control-lg"
+                                   type="number"
                                    name="custom_amount"
-                                   value="{{ price.prix }}" 
+                                   value="{{ price.prix }}"
                                    min="{{ price.prix }}"
                                    step="0.10"
                                    placeholder="{% trans 'Enter the amount (minimum' %} {{ price.prix }}€)"
                                    required>
                             <small class="form-text text-muted">
-                                {% trans "Recurring payment - Enter your desired amount" %}{% if price.prix %} - {% trans "Minimum : " %} {{ price.prix }}{% endif %}
+                                {% trans "Recurring payment - Enter your desired amount" %}{% if price.prix %} -
+                                    {% trans "Minimum : " %} {{ price.prix }}{% endif %}
                             </small>
                             {% if price.fedow_reward_enabled %}
                                 <div class="mt-2">
-                                    <em class="text-success">{% trans "This price will give you " %}{{ price.fedow_reward_amount | dround }}
-                                    {{ price.fedow_reward_asset.name }} {% trans "credited to your TiBillet wallet !" %}</em>
+                                    <em class="text-success">
+                                        {% trans "This price will give you " %}{{ price.fedow_reward_amount | dround }}
+                                        {{ price.fedow_reward_asset.name }} {% trans "credited to your TiBillet wallet !" %}</em>
                                 </div>
                             {% endif %}
                         </div>
@@ -174,7 +180,8 @@
                 {% for field in fields %}
                     {% if field.field_type == 'ST' %}
                         <div class="form-floating mb-3">
-                            <input id="ff-{{ field.uuid }}" name="form__{{ field.name }}" type="text" class="form-control"
+                            <input id="ff-{{ field.uuid }}" name="form__{{ field.name }}" type="text"
+                                   class="form-control"
                                    placeholder="{{ field.label }}" {% if field.required %}required{% endif %}>
                             <label for="ff-{{ field.uuid }}">{{ field.label }}</label>
                             {% if field.help_text %}
@@ -183,8 +190,10 @@
                         </div>
                     {% elif field.field_type == 'LT' %}
                         <div class="form-floating mb-3">
-                            <textarea id="ff-{{ field.uuid }}" name="form__{{ field.name }}" class="form-control" style="height: 120px"
-                                      placeholder="{{ field.label }}" {% if field.required %}required{% endif %}></textarea>
+                            <textarea id="ff-{{ field.uuid }}" name="form__{{ field.name }}" class="form-control"
+                                      style="height: 120px"
+                                      placeholder="{{ field.label }}"
+                                      {% if field.required %}required{% endif %}></textarea>
                             <label for="ff-{{ field.uuid }}">{{ field.label }}</label>
                             {% if field.help_text %}
                                 <div class="form-text">{{ field.help_text }}</div>
@@ -193,7 +202,8 @@
                     {% elif field.field_type == 'SS' %}
                         <div class="mb-3">
                             <label class="form-label" for="ff-{{ field.uuid }}">{{ field.label }}</label>
-                            <select id="ff-{{ field.uuid }}" name="form__{{ field.name }}" class="form-select" {% if field.required %}required{% endif %}>
+                            <select id="ff-{{ field.uuid }}" name="form__{{ field.name }}" class="form-select"
+                                    {% if field.required %}required{% endif %}>
                                 <option value="" {% if field.required %}disabled selected{% endif %}>—</option>
                                 {% for opt in field.options %}
                                     <option value="{{ opt }}">{{ opt }}</option>
@@ -208,9 +218,11 @@
                             <div class="form-label">{{ field.label }}</div>
                             {% for opt in field.options %}
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="ff-{{ field.uuid }}-{{ forloop.counter }}"
+                                    <input class="form-check-input" type="checkbox"
+                                           id="ff-{{ field.uuid }}-{{ forloop.counter }}"
                                            name="form__{{ field.name }}" value="{{ opt }}">
-                                    <label class="form-check-label" for="ff-{{ field.uuid }}-{{ forloop.counter }}">{{ opt }}</label>
+                                    <label class="form-check-label"
+                                           for="ff-{{ field.uuid }}-{{ forloop.counter }}">{{ opt }}</label>
                                 </div>
                             {% endfor %}
                             {% if field.help_text %}
@@ -225,7 +237,8 @@
         <!-- newsletter opt-out -->
         <div class="form-check form-switch mb-3">
             <input class="form-check-input" type="checkbox" role="switch" id="newsletter" name="newsletter">
-            <label class="form-check-label" for="newsletter">{% translate "I do not want to receive the newsletter." %}</label>
+            <label class="form-check-label"
+                   for="newsletter">{% translate "I do not want to receive the newsletter." %}</label>
         </div>
 
         {% if product.legal_link %}
