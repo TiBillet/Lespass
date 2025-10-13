@@ -46,6 +46,7 @@ class AssetViewset(viewsets.ViewSet):
         retrieve_bank_deposits = fedow.asset.retrieve_bank_deposits(asset=asset)
 
 
+
         context = {
             "asset": asset,
             "total_by_place_with_uuid": total_by_place_with_uuid,
