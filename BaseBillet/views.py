@@ -270,7 +270,9 @@ def connexion(request):
             # Création de l'user et envoie du mail de validation
             email = validator.validated_data['email']
             user = get_or_create_user(email=email, send_mail=True, force_mail=True)
-
+            if not user.wallet :
+                fedowAPI = FedowAPI()
+                fedowAPI.wallet.get_or_create_wallet(user)
             messages.add_message(request, messages.SUCCESS, _("To access your space, please validate\n"
                                                               "your email address. Don't forget to check your spam!"))
 
@@ -572,6 +574,11 @@ class MyAccount(viewsets.ViewSet):
             messages.add_message(request, messages.WARNING,
                                  _("Please login to access this page."))
             return redirect('/')
+
+        # check que le wallet existe bien :
+        if not request.user.wallet :
+            fedowAPI = FedowAPI()
+            fedowAPI.wallet.get_or_create_wallet(request.user)
         return super().dispatch(request, *args, **kwargs)
 
     def list(self, request: HttpRequest):

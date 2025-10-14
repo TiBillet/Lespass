@@ -19,6 +19,7 @@ class AssetFedowPublic(models.Model):
     wallet_origin = models.ForeignKey('AuthBillet.Wallet', on_delete=models.PROTECT, related_name='assets_fedow_public')
     origin = models.ForeignKey('Customers.Client', on_delete=models.CASCADE,
                                related_name="assets_fedow_public")  # La bonne relation a utiliser au lieu des deux précédents, relicats de la migration
+    archive = models.BooleanField(default=False)
 
     STRIPE_FED_FIAT = 'FED'
     TOKEN_LOCAL_FIAT = 'TLF'
