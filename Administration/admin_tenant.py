@@ -1405,7 +1405,7 @@ class MembershipAddForm(ModelForm):
 
     payment_method = forms.ChoiceField(
         required=False,
-        choices=PaymentMethod.not_online(),  # on retire les choix stripe
+        choices=PaymentMethod.classic(),  # on retire les choix stripe
         widget=UnfoldAdminSelectWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
         label=_("Payment method"),
     )

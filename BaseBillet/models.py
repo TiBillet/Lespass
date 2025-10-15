@@ -111,10 +111,10 @@ class PaymentMethod(models.TextChoices):
 
     @classmethod
     def classic(cls):
-        """Renvoie uniquement les choix de type 'en ligne'"""
+        """Renvoie uniquement les choix pour un paiement comptoir"""
         return [
             (choice, label) for choice, label in cls.choices if
-            choice in [cls.FREE, cls.CC, cls.CASH, cls.CHEQUE]
+            choice in [cls.FREE, cls.CC, cls.CASH, cls.CHEQUE, cls.TRANSFER]
         ]
 
 
