@@ -5,11 +5,12 @@
 	<h1 class="message-title">{% translate "Types de paiement" %}</h1>
 	<!-- cashless -->
 	{% if 'nfc' in moyens_paiement %}
-	<div class="paiement-bt-container" style="background-color: var(--vert03);">
-		<div class="paiement-bt-icon">
+	<div class="bt-basic-container bt-basic-bg-success" hx-get="read_nfc" hx-trigger="click"
+		hx-target="#messages" hx-swap="outerHTML" hx-on:click="modifyPaymentNfc()">
+		<div class="bt-basic-icon">
 			<i class="fas fa-address-card"></i>
 		</div>
-		<div class="paiement-bt-text">
+		<div class="bt-basic-text">
 			<div>{% translate "CASHLESS" %}</div>
 			<div class="paiement-bt-total">
 				<span>{% translate "Total" %}</span>
@@ -22,11 +23,12 @@
 
 	<!-- espèce, pas une consigne -->
 	{% if 'espece' in moyens_paiement %}
-	<div class="paiement-bt-container" style="background-color: var(--vert03);">
-		<div class="paiement-bt-icon">
+	<div class="bt-basic-container bt-basic-bg-success" hx-get="confirm_payment?method=espece" hx-trigger="click"
+		hx-target="#confirm" hx-swap="outerHTML">
+		<div class="bt-basic-icon">
 			<i class="fas fa-address-card"></i>
 		</div>
-		<div class="paiement-bt-text">
+		<div class="bt-basic-text">
 			<div>{% translate "ESPÈCE" %}</div>
 			<div class="paiement-bt-total">
 				<span>{% translate "Total" %}</span>
@@ -43,11 +45,12 @@
 
 	<!-- carte bancaire -->
 	{% if 'carte_bancaire' in moyens_paiement %}
-	<div class="paiement-bt-container" style="background-color: var(--vert03);">
-		<div class="paiement-bt-icon">
+	<div class="bt-basic-container bt-basic-bg-success" hx-get="confirm_payment?method=carte_bancaire" hx-trigger="click"
+		hx-target="#confirm" hx-swap="outerHTML">
+		<div class="bt-basic-icon">
 			<i class="fas fa-address-card"></i>
 		</div>
-		<div class="paiement-bt-text">
+		<div class="bt-basic-text">
 			<div>{% translate "CB" %}</div>
 			<div class="paiement-bt-total">
 				<span>{% translate "Total" %}</span>
@@ -60,11 +63,12 @@
 
 	<!-- cheque -->
 	{% if 'CH' in moyens_paiement %}
-	<div class="paiement-bt-container" style="background-color: var(--vert03);">
-		<div class="paiement-bt-icon">
+	<div class="bt-basic-container bt-basic-bg-success" hx-get="confirm_payment?method=CH" hx-trigger="click"
+		hx-target="#confirm" hx-swap="outerHTML">
+		<div class="bt-basic-icon">
 			<i class="fas fa-address-card"></i>
 		</div>
-		<div class="paiement-bt-text">
+		<div class="bt-basic-text">
 			<div>{% translate "CH" %}</div>
 			<div class="paiement-bt-total">
 				<span>{% translate "Total" %}</span>
@@ -78,26 +82,18 @@
 	<!-- bouton "OFFRIR"  en mode gérant uniquement masi pas pour le point de ventes "CASHLESS" -->
 
 	<!-- pas de moyens de paiement -->
-	 {% if moyens_paiement|length == 0%}
-	 <h3 style="color: var(--warning);">{% translate "Aucun moyen de paiement" %}</h3>
-	 {% endif %}
+	{% if moyens_paiement|length == 0%}
+	<h3 style="color: var(--warning);">{% translate "Aucun moyen de paiement" %}</h3>
+	{% endif %}
 
-	<!-- retour -->
-	 <div id="message-bt-retour" class="paiement-bt-container" style="background-color: var(--bleu02);" 
-	 onclick="emptyMessage()">
-		<div class="paiement-bt-icon">
-			<i class="fas fa-undo-alt"></i>
-		</div>
-		<div class="paiement-bt-text">
-			<div>{% translate "RETOUR" %}</div>
-		</div>
-	</div>
+	<!-- include bt_return.html -->
+	{% include "components/bt_return.html" with selector=selector layer=1 %}
 </div>
+
 <script>
-	function emptyMessage() {
-		const element = document.querySelector('#messages') 
-		element.innerHTML = ''
-		element.classList.add('hide')
+	function modifyPaymentNfc() {
+		console.log('-> modifyPaymentNfc')
+		document.querySelector('#addition-moyen-paiement').value = 'nfc'
 	}
 </script>
 
@@ -108,7 +104,6 @@
 		top: 0;
 		width: 100%;
 		height: 100%;
-		z-index: 999;
 		color: var(--blanc01);
 		font-size: 1.5rem;
 		text-align: center;
@@ -120,78 +115,9 @@
 		font-weight: bold;
 	}
 
-	#bt-return {
-		width: 142px;
-		height: 90px;
-		background-color: var(--bleu02);
-		color: var(--blanc01);
-		cursor: pointer;
-		font-size: clamp(1.5rem, 3.5vw, 2.5rem);
-		text-decoration: none;
-
-		i {
-			margin-right: 4px;
-		}
-	}
-
 	/* button */
-	.paiement-bt-container {
-		width: 280px;
-		height: 90px;
-		display: flex;
-		flex-direction: row;
-		color: var(--blanc01);
-		cursor: pointer;
-		overflow: hidden;
-		font-size: 2rem;
-		margin-top: 16px;
-	}
-
-	.paiement-bt-icon {
-		width: 80px;
-		height: 100%;
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
-		align-items: center;
-	}
-
-	.paiement-bt-icon i {
-		width: 46px;
-		height: auto;
-	}
-
-	.paiement-bt-text {
-		width: calc(100% - 80px);
-		height: 100%;
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
-		align-items: center;
-		font-weight: bold;
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
-		align-items: center;
-	}
-
 	.paiement-bt-total {
 		font-size: 1.5rem;
 	}
 
-	/* pour une largeur supérieure à 598 pixels */
-	@media only screen and (width > 598px) {
-
-		.paiement-bt-container {
-			width: calc(280 * 1.42)px;
-			height: calc(90 * 1.34)px;
-		}
-	}
-
-	/* pour une largeur supérieure à 1022 pixels */
-	@media only screen and (width > 1022px) {
-		.paiement-bt-container {
-			width: calc(280 * 1.4)px;
-		}
-	}
 </style>

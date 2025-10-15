@@ -1,12 +1,12 @@
 import mockData
 
-def selection_moyens_paiement(pv, inputs, postData):
-	# print('-> Sélection des moyens de paiement')
+def selection_moyens_paiement(pv, uuids, postData):
 	# moyens de paiement retournés par la fonction
 	moyens_paiement = []
-	for input in inputs:
+	articles = pv['articles']
+	for uuid in uuids:
 		# moyens de paiment de l'article
-		moyens_paiement_article = mockData.get_article_from_uuid(input, pv)['bt_groupement']['moyens_paiement'].split('|')
+		moyens_paiement_article = mockData.get_article_from_uuid(uuid, articles)['bt_groupement']['moyens_paiement'].split('|')
 		for paiement in moyens_paiement_article:
 			# compose la liste de moyens de paiement et la filtre par moyens de paiement accepté
 			if paiement not in moyens_paiement:
@@ -22,26 +22,27 @@ def selection_moyens_paiement(pv, inputs, postData):
 					paiement_accepte = True
 
 				moyens_paiement.append(paiement)
-		# print(f"uuid = {input}  --  qty = {postData.get(input)}")
-	
+
 	return moyens_paiement
 
-def calcul_total_addition(pv, inputs, postData):
+
+def calcul_total_addition(pv, uuids, postData):
+	articles = pv['articles']
 	total = 0
-	for input in inputs:
-		# moyens de paiment de l'article
-		prix = mockData.get_article_from_uuid(input, pv)['prix']
-		total = total + (int(postData.get(input)) * prix)
-		# print(f"uuid = {input}  --  qty = {postData.get(input)}  --  prix = {prix}  --  total = {total}")
+	for uuid in uuids:
+		# prix d'un article
+		prix = mockData.get_article_from_uuid(uuid, articles)['prix']
+		# quantité
+		qty = int(postData.get('repid-' + uuid))
+		total = total + (qty * prix)
 
 	return total / 100
 
 
-
-def post_filter(data):
-	print('-> post filter')
+def post_filter(postData):
 	retour = []
-	for input in data:
-		if input != 'id_table' and input != 'uuid_pv' and input !='tag_id_cm':
-			retour.append(input)
+	for name in postData:
+		index = name.find("repid")
+		if index != -1:
+			retour.append(name[6:])
 	return retour

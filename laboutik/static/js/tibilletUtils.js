@@ -42,13 +42,6 @@ function log({ tag, msg }) {
 	}
 }
 
-function spinnerOff() {
-	document.querySelector('#spinner-container').style.display = 'none'
-}
-
-function spinnerOn() {
-	document.querySelector('#spinner-container').style.display = 'flex'
-}
 
 function bigToFloat(value) {
 	try {
@@ -68,9 +61,17 @@ function sendEvent(name, selector, data) {
 		const event = new CustomEvent(name, { detail: data })
 		document.querySelector(selector).dispatchEvent(event)
 		console.log(`-> sendEvent "${name}"`);
-		
+
 	} catch (error) {
 		console.log('sendEvent,', error);
 
 	}
+}
+
+function hideAndEmptyElement(selector) {
+	const element = document.querySelector(selector)
+	// cache
+	element.classList.add('hide')
+	// vide
+	element.innerHTML = ''
 }

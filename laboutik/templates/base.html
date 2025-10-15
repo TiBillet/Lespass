@@ -27,10 +27,15 @@
 
 	{% include "components/spinner.html" %}
 
+	<!-- info: layer 1 -->
 	<div id="messages"></div>
+	<!-- info: layer 2 -->
+	<div id="confirm"></div>
 
 	<script src="http://localhost/cordova.js"></script>
 	<script src="{% static 'js/htmx@2.0.6.min.js' %}"></script>
+	<script src="{% static 'js/socket.io.3.0.4.js' %}"></script>
+	<script src="{% static 'js/nfc.js' %}"></script>
 	{% block script %} {% endblock script %}
 </body>
 

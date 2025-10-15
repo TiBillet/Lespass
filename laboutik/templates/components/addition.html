@@ -8,13 +8,32 @@
 		<div>{% translate "PRIX" %}</div>
 	</div>
 	<div id="addition-list"></div>
-	<!-- <form id="addition-form" hx-post="paiement" hx-trigger="validerPaiement"  ></form> -->
-	<!-- <form id="addition-form" hx-post="paiement" hx-include='input[name="responssable"], input[name="id_table"]' hx-trigger="validerPaiement" hx-target="#feedback-message" hx-swap="outerHTML"></form> -->
-	<form id="addition-form" hx-post="paiement" hx-include='[class="addition-include-data"]' hx-trigger="validerPaiement" hx-target="#messages" hx-swap="outerHTML"></form>
+	<!-- Attention aucun input dans #addition-form ne doit contenir "repid-" dans son attribut name 
+	 le formulaire est rempli automatiquement par article.js -->
+	<form id="addition-form" hx-post="display_type_payment" hx-trigger="validerPaiement" hx-target="#messages"
+		hx-swap="outerHTML" hx-include='[class="addition-include-data"]' class="hide"></form>
+	<!-- hx-include -->
 	<input class="addition-include-data" name="id_table" value="{{ id_table }}" />
 	<input class="addition-include-data" name="uuid_pv" value="{{ pv.id }}" />
+	<input class="addition-include-data" name="responsable" value="{{ card.name }}" />
 	<input class="addition-include-data" name="tag_id_cm" value="{{ card.tag_id }}" />
+	<input class="addition-include-data" id="addition-total" name="total" value="" />
+	<input class="addition-include-data" id="addition-moyen-paiement" name="moyen_paiement" value="" />
+	<input class="addition-include-data" id="addition-hostname-client" name="hostname_client" value="" />
 </div>
+
+<script>
+	document.addEventListener('DOMContentLoaded', () => {
+		// récupère le hostname du local storage
+		let hosname = ''
+		try {
+			hosname = JSON.parse(localStorage.getItem('laboutik')).hostname
+		} catch (error) {
+			console.log('Récupération du hostname:', error);
+		}
+		document.querySelector('#addition-hostname-client').value = hosname
+	})
+</script>
 
 <style>
 	#addition {
@@ -78,6 +97,7 @@
 	.addition-include-data {
 		display: none;
 	}
+
 	/* pour une largeur supérieure 1022 pixels */
 	@media only screen and (width > 1022px) {
 		#addition {

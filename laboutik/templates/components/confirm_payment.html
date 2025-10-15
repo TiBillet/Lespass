@@ -1,0 +1,90 @@
+{% load static i18n %}
+
+<div id="confirm" class="BF-col">
+	<h1>{% translate "Confirmez le paiement par" %} {{ payment_method }}</h1>
+
+	{% if method == 'espece' %}
+	<div id="given-sum-container" class="BF-col">
+		<div class="info-sum-given">{% translate "somme donnée" %}</div>
+		<input type="number" id="given-sum" class="addition-fractionnee-input">
+		<small id="given-sum-msg-erreur"></small>
+	</div>
+	{% endif %}
+
+	<div id="confirm-action-container">
+		<!-- include bt_return.html -->
+		{% include "components/bt_return.html" with selector=selector layer=2 %}
+
+		<div id="bt-valider-layer2" class="bt-basic-container bt-basic-bg-success" onclick="prepareForm('{{ method }}')">
+			<div class="bt-basic-icon">
+				<i class="fas fa-check-circle"></i>
+			</div>
+			<div class="bt-basic-text">
+				<div>{% translate "Valider" %}</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<script>
+	// maj des inputs
+	function prepareForm(method) {
+		// modifie la valeur de l'input moyen de paiement
+		document.querySelector('#addition-moyen-paiement').value = method
+
+		// modifie la valeur de l'input given-sum (somme donnée)
+		if (method === 'espece') {
+		const givenSum = document.querySelector('#given-sum').value
+		document.querySelector('#addition-form').insertAdjacentHTML('afterend', `<input class="addition-include-data" id="addition-given-sum" name="given_sum" value="${ givenSum}" />`)
+		}
+
+		// changer l'url du POST
+		const form = document.querySelector('#addition-form')
+		form.setAttribute('hx-post', 'payment')
+		// prend en compte les changement sur le formulaire
+		htmx.process(form)
+
+		hideAndEmptyElement('#confirm')
+		hideAndEmptyElement('#messages')
+		
+		// submit le formulaire
+		sendEvent('validerPaiement', '#addition-form')
+	}
+</script>
+
+<style>
+	#confirm {
+		position: absolute;
+		left: 0;
+		top: 0;
+		width: 100%;
+		height: 100%;
+		color: var(--blanc01);
+		font-size: 1.5rem;
+		text-align: center;
+		background-color: var(--bleu09);
+	}
+
+	#confirm-action-container {
+		display: flex;
+		flex-direction: row;
+		justify-content: space-around;
+		align-items: center;
+		margin-top: 2rem;
+	}
+
+	.info-sum-given {
+		font-size: 1.5rem;
+		font-weight: bold;
+	}
+
+	.addition-fractionnee-input {
+		height: 60px;
+		margin-top: 2rem;
+		font-size: 1rem;
+	}
+
+	#bt-valider-layer2 {
+		margin-left: 8px;
+	}
+</style>

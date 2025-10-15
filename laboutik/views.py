@@ -191,57 +191,35 @@ def pv_route(request):
     }
     return render(request, "views/" + template, context)
 
-def paiement(request):
-	# msg_type = success, info, error, warning
+def display_type_payment(request):
+	
 
-	# # attention pas de test si method = post
-	# # dev
-	paiement_ok = False
+	dataPost = request.POST
+	tag_id_cm = dataPost.get("tag_id_cm")
+	uuid_pv = dataPost.get("uuid_pv")
+	id_table = dataPost.get("id_table")
 
-	data = request.POST
-	print(f"laboutik - DEV | paiement, data = {data}")
-	print(f"laboutik - DEV | paiement, nb_data = {len(data)}")
+	# récupère uniquement les uuid articles
+	uuids = method.post_filter(request.POST)
 
-	tag_id_cm = request.POST.get("tag_id_cm")
-	uuid_pv = request.POST.get("uuid_pv")
-	id_table = request.POST.get("id_table")
-
-	# ['tag_id_cm', 'uuid_pv', 'id_table', ...uuid(s) article...]
-	# 'tag_id_cm', 'uuid_pv', 'id_table' = data par defaut
-	if len(data) > 3:
-		# 
-		
-		# if paiement_ok:
-		# 	context = {
-		# 		'msg_type': 'success',
-		# 		'msg_content': _('Paiement ok')
-		# 	}
-
-		# if paiement_ok == False:
-		# 	context = {
-		# 		'msg_type': "warning",
-		# 		'msg_content': "Il y a une erreur !"
-		# 	}
-
-		# récupère uniquement les uuid articles
-		inputs = method.post_filter(request.POST)
-
+	if len(uuids) > 0:
 		# obtenir le point de vente en fonction de son uuid
 		pv = mockData.get_pv_from_uuid(uuid_pv, data_pvs)
 
 		# retourne les moyens de paiement nécessaires et filtrés par moyens de paiement acceptés
-		moyens_paiement = method.selection_moyens_paiement(pv, inputs, request.POST)
-		
+		moyens_paiement = method.selection_moyens_paiement(pv, uuids, request.POST)
+
+		# import ipdb; ipdb.set_trace()
 		# calcul du total de l'addition
-		total = method.calcul_total_addition(pv, inputs, request.POST)
+		total = method.calcul_total_addition(pv, uuids, request.POST)
 
 		context = {
 			"moyens_paiement": moyens_paiement,
 			"currency_data": {"cc": "EUR", "symbol": "€", "name": "European Euro"},
 			"total": total,
-			"button_width": 280,
-    	"button_height": 90
+			"selector_bt_retour": "#messages"
 		}
+
 		return render(request, "components/moyens_paiement.html", context)
 
 	else:
@@ -252,7 +230,44 @@ def paiement(request):
 		}
 		return render(request, "components/messages.html", context)
 
-	# context['tag_id_cm'] = tag_id_cm
-	# context['uuid_pv'] = uuid_pv
-	# context['id_table'] = id_table
-	
+def read_nfc(request):
+	context = {
+		'message': _("Attente lecture carte")
+	}
+	return render(request, "components/read_nfc.html", context)
+
+def confirm_payment(request):
+	payment_method = request.GET.get("method")
+	payments = {
+		'nfc': _('cashless'),
+		'espece': _('espèce'),
+		'carte_bancaire': _('carte bancaire'),
+		'CH': _('chèque')
+	}
+	context = {
+		'method': payment_method,
+		'payment_method': payments[payment_method],
+		'selector_bt_retour': '#confirm'
+	}
+	return render(request, "components/confirm_payment.html", context)
+
+def payment(request):
+	# msg_type = success, info, error, warning
+
+	# # attention pas de test si method = post
+	# # dev
+	paiement_ok = False
+
+	if paiement_ok:
+		context = {
+			'msg_type': 'success',
+			'msg_content': _('Paiement ok')
+		}
+	if paiement_ok == False:
+		context = {
+			'msg_type': "warning",
+			'msg_content': "Il y a une erreur !",
+			'selector_bt_retour': '#messages'
+		}
+
+	return render(request, "components/messages.html", context)

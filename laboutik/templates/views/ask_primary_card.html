@@ -7,7 +7,7 @@
 <form id="form-nfc" class="hide" hx-post="ask_primary_card" hx-trigger="nfcResult" hx-target="#message-nfc"
 	hx-swap="outerHTML" hx-on::after-request="nfc.start()">
 	{% csrf_token %}
-	<input id="tag-id-cm" name="tag-id-cm" />
+	<input id="nfc-result-tag-id" name="tag-id-cm" />
 </form>
 
 <div id="nfc-container" role="status" aria-label="waiting primary card">
@@ -22,9 +22,6 @@
 {% endblock content %}
 
 {% block script %}
-<script src="{% static 'js/socket.io.3.0.4.js' %}"></script>
-<script src="{% static 'js/nfc.js' %}?{{ version }}"></script>
-
 <!-- lance le lecteure nfc -->
 <script>
 	// lance le lecteur nfc

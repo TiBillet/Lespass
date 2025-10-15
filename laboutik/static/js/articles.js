@@ -1,14 +1,22 @@
+// Attention aucun input dans #addition-form ne doit contenir "repid-" dans son attribut name
+// si ce n'est pas un uuid. 
+
+// total en centimes d'unitée
 function calculateTotal() {
 	total = 0
 	document.querySelectorAll('#addition-form input').forEach(input => {
-		const uuid = input.name
-		const number = parseInt(input.value)
-		const article = document.querySelector(`#products div[data-uuid="${uuid}"]`)
-		const price = parseInt(article.dataset.price)
-		total = total + (number * price)
+		if (input.name.includes('repid-')) {
+			const uuid = input.name.substring(6)
+			const number = parseInt(input.value)
+			const article = document.querySelector(`#products div[data-uuid="${uuid}"]`)
+			const price = parseInt(article.dataset.price)
+			total = total + (number * price)
+		}
 	})
-	// maj total
+	// maj total du bt valider en unitée (ex: €)
 	document.querySelector('#bt-valider-total').innerText = (total / 100)
+	// maj total du input de l'addition en centimes d'unitée
+	document.querySelector('#addition-total').value = total
 }
 
 function updateArticlesAndAddition(uuid, number) {
@@ -22,16 +30,16 @@ function updateArticlesAndAddition(uuid, number) {
 		article.querySelector(`#article-quantity-number-${uuid}`).innerText = number
 
 		if (number === 0) {
-			// enlever l'input
-			document.querySelector(`#addition-form input[name="${uuid}"]`).remove()
+			// enlever l'input dans le formulaire
+			document.querySelector(`#addition-form input[name="repid-${uuid}"]`).remove()
 			// enlever la ligne d'addition
 			document.querySelector(`#addition-line-${uuid}`).remove()
 		} else {
-			// addition
-			const input = document.querySelector(`#addition-form [name="${uuid}"]`)
+			// input dans le formulaire ?
+			const input = document.querySelector(`#addition-form [name="repid-${uuid}"]`)
 			if (input === null) {
 				// création du input si inexistant
-				document.querySelector('#addition-form').insertAdjacentHTML('beforeend', `<input type="number" name="${uuid}" value="1" />`)
+				document.querySelector('#addition-form').insertAdjacentHTML('beforeend', `<input type="number" name="repid-${uuid}" value="1" />`)
 				// création de la "ligne  d'addition" - css dans components/addition.html
 				const additionLine = `<div id="addition-line-${uuid}" class="addition-line-grid">
 				<div class="addition-col-bt BF-col">
@@ -57,7 +65,7 @@ function updateArticlesAndAddition(uuid, number) {
 
 function addArticle(uuid, prix) {
 	let number
-	const ele = document.querySelector(`#addition-form [name="${uuid}"]`)
+	const ele = document.querySelector(`#addition-form [name="repid-${uuid}"]`)
 
 	if (ele === null) {
 		number = 1
@@ -87,7 +95,7 @@ function manageKey(event) {
 
 		// gérer les groupes d'articles : afficher le layer-lock
 		document.querySelectorAll('#products .article-container').forEach(item => {
-			itemGroup = item.dataset.group
+			const itemGroup = item.dataset.group
 			if (itemGroup !== articleGroup) {
 				item.querySelector('.article-lock-layer').style.display = "block"
 				item.setAttribute('data-disable', 'true')

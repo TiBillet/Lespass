@@ -3,12 +3,8 @@
 <div id="messages" class="BF-col" style="background-color: var(--{{msg_type}});">
 	<h1>{{ msg_content }}</h1>
 
-	<div id="bt-return" class="BF-ligne" onclick="document.querySelector('#messages').style.display='none';">
-		<i class="fas fa-undo md4px"></i>
-		<div class="BF-col-deb">
-			<div>{% translate "Return" %}</div>
-		</div>
-	</div>
+	<!-- include bt_return.html -->
+	{% include "components/bt_return.html" with selector=selector layer=1 %}
 </div>
 
 <style>
@@ -22,18 +18,5 @@
 		color: var(--blanc01);
 		font-size: 1.5rem;
 		text-align: center;
-	}
-
-	#bt-return {
-		width: 142px;
-		height: 90px;
-		background-color: var(--bleu02);
-		color: var(--blanc01);
-		cursor: pointer;
-		font-size: clamp(1.5rem, 3.5vw, 2.5rem);
-		text-decoration: none;
-		i {
-			margin-right: 4px;
-		}
 	}
 </style>

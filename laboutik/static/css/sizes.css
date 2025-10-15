@@ -32,4 +32,10 @@
 	--addition-line-heigh: 29px;
 	/* dev addition */
 	--addition-list-height: 50%;
+
+	/* button basic */
+	--bt-basic-width: 280px;
+	--bt-basic-height: 120px;
+	--bt-basic-icon-width: 28%;
+	--bt-basic-text-width: 72%;
 }

@@ -141,4 +141,72 @@
 	.mg4px {
 		margin-left: 4px;
 	}
+
+	/* button basic */
+	.bt-basic-container {
+		width: var(--bt-basic-width);
+		height: var(--bt-basic-height);
+		display: flex;
+		flex-direction: row;
+		color: var(--blanc01);
+		cursor: pointer;
+		overflow: hidden;
+		font-size: 1.8rem;
+		margin-top: 16px;
+	}
+
+	.bt-basic-icon {
+		width: var(--bt-basic-icon-width);
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+
+		i {
+			width: 46px;
+			height: auto;
+		}
+	}
+
+	.bt-basic-text {
+		width: var(--bt-basic-text-width);
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+		font-weight: bold;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+	}
+
+
+	/* pour une largeur supérieure à 600 pixels 
+	@media only screen and (width > 600px) {
+		.bt-basic-container {
+			width: calc(var(--bt-basic-width) * 1.42);
+			height: calc(var(--bt-basic-height) * 1.34);
+		}
+	}
+*/
+
+	/* pour une largeur supérieure à 1022 pixels */
+	@media only screen and (width > 1022px) {
+		.bt-basic-container {
+			width: calc(var(--bt-basic-width) * 1.4);
+			height: calc(var(--bt-basic-height) * 1.34);
+		}
+	}
+
+	/* bt-basic color */
+	.bt-basic-bg-success {
+		background-color: var(--success);
+	}
+
+	.bt-basic-bg-return {
+		background-color: var(--bleu02);
+	}
 }

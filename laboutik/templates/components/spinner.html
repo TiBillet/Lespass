@@ -2,6 +2,16 @@
 	<div class="spinner"></div>
 </div>
 
+<script>
+	window.spinnerOff = function () {
+		document.querySelector('#spinner-container').style.display = 'none'
+	}
+
+	window.spinnerOn = function () {
+		document.querySelector('#spinner-container').style.display = 'flex'
+	}
+</script>
+
 <style>
 	#spinner-container {
 		position: absolute;

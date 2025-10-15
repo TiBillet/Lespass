@@ -34,9 +34,10 @@ let NfcReader = class {
 			// envoyer le résultat du lecteur
 			if (msgErreurs === 0) {
 				// entrer la valeur dans le formulaire
-				document.querySelector('#tag-id-cm').value = tagId
+				document.querySelector('#nfc-result-tag-id').value = tagId
 				const event = new CustomEvent("nfcResult", { detail: tagId })
-				document.querySelector('#form-nfc').dispatchEvent(event)
+				// document.querySelector('#form-nfc').dispatchEvent(event)
+				document.querySelector('body').dispatchEvent(event)
 
 				// réinitialisation de l'état du lecteur nfc
 				this.uuidConnexion = null
@@ -64,10 +65,10 @@ let NfcReader = class {
 		if (event.target.className === 'nfc-reader-simu-bt') {
 			const tagId = event.target.getAttribute('tag-id')
 			// entrer la valeur dans le formulaire
-			document.querySelector('#tag-id-cm').value = tagId
+			document.querySelector('#nfc-result-tag-id').value = tagId
 			// envoyer le résultat au formulaire
-			const newEvent = new CustomEvent("nfcResult", { detail: null })
-			document.querySelector('#form-nfc').dispatchEvent(newEvent)
+			const newEvent = new CustomEvent("nfcResult", {detail: null })
+			document.querySelector('form').dispatchEvent(newEvent)
 			this.stop()
 		}
 	}

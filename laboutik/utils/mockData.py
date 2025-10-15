@@ -1893,9 +1893,9 @@ def get_table_by_id(id):
 			break
 	return retour
 
-def get_article_from_uuid(uuid_article, pv):
+def get_article_from_uuid(uuid_article, articles):
 	retour = None
-	for article in pv['articles']:
+	for article in articles:
 		if (uuid_article == article['id']):
 			retour = article
 			break

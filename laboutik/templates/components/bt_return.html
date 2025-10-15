@@ -1,0 +1,10 @@
+{% load static i18n %}
+
+<div id="bt-retour-layer{{layer}}" class="bt-basic-container bt-basic-bg-return" onclick="hideAndEmptyElement('{{ selector_bt_retour }}')">
+	<div class="bt-basic-icon">
+		<i class="fas fa-undo-alt"></i>
+	</div>
+	<div class="bt-basic-text">
+		<div>{% translate "RETOUR" %}</div>
+	</div>
+</div>
