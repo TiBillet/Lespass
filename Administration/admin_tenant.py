@@ -1400,7 +1400,7 @@ class MembershipAddForm(ModelForm):
     contribution = forms.FloatField(
         required=False,
         widget=UnfoldAdminTextInputWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
-        label=_("Contribution"),
+        label=_("Contribution (€)"),
     )
 
     payment_method = forms.ChoiceField(
@@ -1410,14 +1410,14 @@ class MembershipAddForm(ModelForm):
         label=_("Payment method"),
     )
 
-    # card_number = forms.CharField(
-    #     required=False,
-    #     min_length=8,
-    #     max_length=8,
-    #     label=_("Card number"),
-    #     validators=[validate_hex8],
-    #     widget=UnfoldAdminTextInputWidget(),
-    # )
+    card_number = forms.CharField(
+        required=False,
+        min_length=8,
+        max_length=8,
+        label=_("Card number"),
+        # validators=[validate_hex8],
+        widget=UnfoldAdminTextInputWidget(),
+    )
 
     class Meta:
         model = Membership
@@ -1427,9 +1427,38 @@ class MembershipAddForm(ModelForm):
             'option_generale',
         ]
 
-    # def clean_card_number(self):
-    #     cleaned_data = self.cleaned_data
-    #     prix = cleaned_data.get('prix')
+    def clean_email(self):
+        cleaned_data = self.cleaned_data
+        email = cleaned_data.get('email')
+        user = get_or_create_user(email, send_mail=False)
+        self.fedowAPI = FedowAPI()
+        self.fedowAPI.wallet.get_or_create_wallet(user)
+        self.user_wallet_serialized = self.fedowAPI.wallet.cached_retrieve_by_signature(user).validated_data
+        return email
+
+    def clean_card_number(self):
+        cleaned_data = self.cleaned_data
+        card_number = cleaned_data.get('card_number')
+        if card_number:
+
+            if self.user_wallet_serialized.get('has_user_card'):
+                raise forms.ValidationError(_("A card is already linked to this email address."))
+
+            if not re.match(r'^[0-9A-Fa-f]{8}$', card_number):
+                raise forms.ValidationError(_("Card number must be exactly 8 hexadecimal characters."))
+
+            fedowApi = FedowAPI()
+            card_serialized = fedowApi.NFCcard.card_number_retrieve(card_number)
+
+            if not card_serialized:
+                raise forms.ValidationError(_("Unknown card number"))
+            if not card_serialized.get('is_wallet_ephemere'):
+                raise forms.ValidationError(_("This card is already linked to a user."))
+
+            self.card_serialized = card_serialized
+        self.card_number = card_number
+        return card_number
+
 
     def clean(self):
         # On vérifie que le moyen de paiement est bien entré si > 0
@@ -1455,6 +1484,7 @@ class MembershipAddForm(ModelForm):
         # Associez l'utilisateur au champ 'user' du formulaire
         email = self.cleaned_data.pop('email')
         user = get_or_create_user(email)
+
         self.instance.user = user
 
         # Numéro de carte saisi (8 hexa) -> enregistré sur l'adhésion
@@ -1471,9 +1501,8 @@ class MembershipAddForm(ModelForm):
         self.instance.last_contribution = timezone.localtime()
         # self.instance.set_deadline()
 
-        # fedowAPI = FedowAPI()
-        # wallet, created = fedowAPI.wallet.get_or_create_wallet(user)
-        # linked_serialized_card = fedowAPI.NFCcard.linkwallet_card_number(user=user, card_number=card_number)
+        if self.card_number:
+            linked_serialized_card = self.fedowAPI.NFCcard.linkwallet_card_number(user=user, card_number=self.card_number)
 
         # Le post save BaseBillet.signals.create_lignearticle_if_membership_created_on_admin s'executera
         # # Création de la ligne Article vendu qui envera à la caisse si besoin

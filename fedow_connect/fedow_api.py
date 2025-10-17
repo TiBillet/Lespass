@@ -537,6 +537,7 @@ class WalletFedow():
             return response_refund_fed.status_code, wallet_serialized
         return (500, wallet_serialized.errors)
 
+
     def get_or_create_wallet(self, user: TibilletUser):
         email = user.email.lower()
         response_link = _post(self.fedow_config, user=user, path='wallet/get_or_create', data={
@@ -726,15 +727,15 @@ class NFCcardFedow():
         )
 
         if not response_get_card.status_code == 200:
-            logger.error(f"retrieve_by_signature ERRORS : {response_get_card.status_code}")
-            raise Exception(f"retrieve_by_signature ERRORS : {response_get_card.status_code}")
+            logger.error(f"retrieve_card_by_signature ERRORS : {response_get_card.status_code}")
+            raise Exception(f"retrieve_card_by_signature ERRORS : {response_get_card.status_code}")
 
         card_serialized = CardValidator(data=response_get_card.json(), many=True)
         if card_serialized.is_valid():
             return card_serialized.validated_data
         else:
-            logger.error(f"retrieve_by_signature card_serialized ERRORS : {card_serialized.errors}")
-            raise Exception(f"retrieve_by_signature card_serialized ERRORS : {card_serialized.errors}")
+            logger.error(f"retrieve_card_by_signature card_serialized ERRORS : {card_serialized.errors}")
+            raise Exception(f"retrieve_card_by_signature card_serialized ERRORS : {card_serialized.errors}")
 
     def lost_my_card_by_signature(self, user, number_printed):
         response_lost_my_card = _post(
@@ -745,9 +746,22 @@ class NFCcardFedow():
         )
 
         if not response_lost_my_card.status_code == 200:
-            logger.error(f"retrieve_by_signature ERRORS : {response_lost_my_card.status_code}")
-            raise Exception(f"retrieve_by_signature ERRORS : {response_lost_my_card.status_code}")
+            logger.error(f"lost_my_card_by_signature ERRORS : {response_lost_my_card.status_code}")
+            raise Exception(f"lost_my_card_by_signature ERRORS : {response_lost_my_card.status_code}")
         return True
+
+    def card_number_retrieve(self, card_number:str):
+        response_qr = _get(self.fedow_config, path=f'card/{card_number}/card_number_retrieve')
+        if not response_qr.status_code == 200:
+            return None
+
+        serialized_card = QrCardValidator(data=response_qr.json())
+        if not serialized_card.is_valid():
+            logger.error(serialized_card.errors)
+            raise Exception(serialized_card.errors)
+
+        return serialized_card.validated_data
+
 
     def qr_retrieve(self, qrcode_uuid: uuid4):
         # On vérifie que l'uuid soit bien un uuid :
@@ -764,10 +778,6 @@ class NFCcardFedow():
         return serialized_card.validated_data
 
     def linkwallet_card_number(self, user: TibilletUser = None, card_number: str = None):
-        card_number = validate_hex8(card_number)
-        if card_number is None:
-            return None
-
         response_link = _post(
             fedow_config=self.fedow_config,
             user=user,
@@ -780,12 +790,12 @@ class NFCcardFedow():
 
         if response_link.status_code != 200:
             logger.error(f"linkwallet_card_number : {response_link.status_code} {response_link.json()}")
-            return False
+            raise Exception(f"linkwallet_card_number : {response_link.status_code} {response_link.json()}")
 
         validated_card = CardValidator(data=response_link.json())
         if not validated_card.is_valid():
             logger.error(validated_card.errors)
-            return False
+            raise Exception(validated_card.errors)
 
         return validated_card.validated_data
 
