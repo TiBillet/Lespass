@@ -214,6 +214,37 @@
                                 <div class="form-text">{{ field.help_text }}</div>
                             {% endif %}
                         </div>
+                    {% elif field.field_type == 'SR' %}
+                        <div class="mb-3">
+                            <div class="form-label">
+                                {{ field.label }}{% if field.required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}
+                            </div>
+                            {% for opt in field.options %}
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio"
+                                           id="ff-{{ field.uuid }}-{{ forloop.counter }}"
+                                           name="form__{{ field.name }}" value="{{ opt }}" {% if field.required and forloop.first %}required{% endif %}>
+                                    <label class="form-check-label" for="ff-{{ field.uuid }}-{{ forloop.counter }}">{{ opt }}</label>
+                                </div>
+                            {% endfor %}
+                            {% if field.help_text %}
+                                <div class="form-text">{{ field.help_text }}</div>
+                            {% endif %}
+                        </div>
+                    {% elif field.field_type == 'BL' %}
+                        <div class="form-check form-switch mb-3" {% if field.required %}data-bl-required="true" data-input-id="ff-{{ field.uuid }}" data-error-message="{% translate 'Please check this box.' %}"{% endif %}>
+                            <input class="form-check-input" type="checkbox" role="switch"
+                                   id="ff-{{ field.uuid }}" name="form__{{ field.name }}" value="on" {% if field.required %}required aria-required="true"{% endif %}>
+                            <label class="form-check-label" for="ff-{{ field.uuid }}">
+                                {{ field.label }}{% if field.required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}
+                            </label>
+                            {% if field.help_text %}
+                                <div class="form-text">{{ field.help_text }}</div>
+                            {% endif %}
+                            {% if field.required %}
+                                <div class="text-danger small mt-1" data-bl-error style="display:none;"></div>
+                            {% endif %}
+                        </div>
                     {% elif field.field_type == 'MS' %}
                         <div class="mb-3" {% if field.required %}data-ms-required="true" data-input-name="form__{{ field.name }}" data-error-message="{% translate 'Please select at least one option.' %}"{% endif %}>
                             <div class="form-label">
@@ -271,17 +302,47 @@
                     return ok;
                 }
 
+                function validateBlRequired() {
+                    let ok = true;
+                    const groups = form.querySelectorAll('[data-bl-required="true"]');
+                    groups.forEach(group => {
+                        const input = group.querySelector('input[type="checkbox"]');
+                        const error = group.querySelector('[data-bl-error]');
+                        if (!input) return;
+                        if (!input.checked) {
+                            ok = false;
+                            if (error) {
+                                error.textContent = group.getAttribute('data-error-message') || 'Veuillez cocher cette case.';
+                                error.style.display = 'block';
+                            }
+                            input.setAttribute('aria-invalid', 'true');
+                        } else {
+                            if (error) {
+                                error.textContent = '';
+                                error.style.display = 'none';
+                            }
+                            input.removeAttribute('aria-invalid');
+                        }
+                    });
+                    return ok;
+                }
+
                 // Validate before HTMX sends the request
                 form.addEventListener('htmx:configRequest', function (event) {
-                    if (!validateMsRequired()) {
+                    const okMs = validateMsRequired();
+                    const okBl = validateBlRequired();
+                    if (!(okMs && okBl)) {
                         event.preventDefault();
                     }
                 });
 
-                // Live update on change within a required MS group
+                // Live update on change within a required MS/BL group
                 form.addEventListener('change', function (e) {
                     if (e.target && e.target.closest('[data-ms-required="true"]')) {
                         validateMsRequired();
+                    }
+                    if (e.target && e.target.closest('[data-bl-required="true"]')) {
+                        validateBlRequired();
                     }
                 });
             })();

@@ -434,32 +434,63 @@ class ReservationValidator(serializers.Serializer):
 
         for name, ff in product_fields.items():
             key = f"form__{name}"
-            if hasattr(req_data, 'getlist') and ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
-                value = req_data.getlist(key)
-            else:
-                value = req_data.get(key)
-                if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
-                    if value in [None, '']:
-                        value = []
-                    elif not isinstance(value, list):
-                        value = [value]
 
-            # Enforce required
-            if ff.required:
-                if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
-                    if not value:
-                        raise serializers.ValidationError({key: [_('This field is required.')]})
-                else:
-                    if value in [None, '']:
-                        raise serializers.ValidationError({key: [_('This field is required.')]})
-
-            # Only store non-empty values
+            # MULTI SELECT → normalize to list
             if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
-                if value:
-                    custom_form[name] = value
-            else:
+                if hasattr(req_data, 'getlist'):
+                    value_list = req_data.getlist(key)
+                else:
+                    v = req_data.get(key)
+                    if v in [None, '']:
+                        value_list = []
+                    elif isinstance(v, list):
+                        value_list = v
+                    else:
+                        value_list = [v]
+
+                # Required
+                if ff.required and not value_list:
+                    raise serializers.ValidationError({key: [_('This field is required.')]})
+
+                # Validate options
+                if value_list:
+                    invalid = [val for val in value_list if ff.options and val not in ff.options]
+                    if invalid:
+                        raise serializers.ValidationError({key: [_('Invalid choice.')]})
+
+                if value_list:
+                    custom_form[name] = value_list
+                continue
+
+            # SINGLE SELECT (dropdown) or RADIO SELECT → scalar
+            if ff.field_type in (ProductFormField.FieldType.SINGLE_SELECT, ProductFormField.FieldType.RADIO_SELECT):
+                value = req_data.get(key)
+                if ff.required and value in [None, '']:
+                    raise serializers.ValidationError({key: [_('This field is required.')]})
                 if value not in [None, '']:
+                    if ff.options and value not in ff.options:
+                        raise serializers.ValidationError({key: [_('Invalid choice.')]})
                     custom_form[name] = value
+                continue
+
+            # BOOLEAN → always store boolean (default False if not sent)
+            if ff.field_type == ProductFormField.FieldType.BOOLEAN:
+                raw = req_data.get(key)
+                bool_val = False
+                if raw is not None:
+                    sval = str(raw).lower()
+                    bool_val = sval in ('1', 'true', 'on', 'yes', 'y')
+                if ff.required and not bool_val:
+                    raise serializers.ValidationError({key: [_('This field is required.')]})
+                custom_form[name] = bool_val
+                continue
+
+            # Default (text areas, etc.) → scalar
+            value = req_data.get(key)
+            if ff.required and value in [None, '']:
+                raise serializers.ValidationError({key: [_('This field is required.')]})
+            if value not in [None, '']:
+                custom_form[name] = value
 
         # On fabrique l'objet reservation
         reservation = Reservation.objects.create(
@@ -619,34 +650,63 @@ class MembershipValidator(serializers.Serializer):
 
         for name, ff in product_fields.items():
             key = f"form__{name}"
-            value = None
-            if hasattr(req_data, 'getlist') and ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
-                value = req_data.getlist(key)
-            else:
-                value = req_data.get(key)
-                # If MULTI_SELECT but parser gave a scalar, normalize to list
-                if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
-                    if value in [None, '']:
-                        value = []
-                    elif not isinstance(value, list):
-                        value = [value]
 
-            # Enforce required
-            if ff.required:
-                if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
-                    if not value:
-                        raise serializers.ValidationError({key: [_('This field is required.')]})
-                else:
-                    if value in [None, '']:
-                        raise serializers.ValidationError({key: [_('This field is required.')]})
-
-            # Only store non-empty values
+            # MULTI SELECT → normalize to list
             if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
-                if value:
-                    custom_form[name] = value
-            else:
+                if hasattr(req_data, 'getlist'):
+                    value_list = req_data.getlist(key)
+                else:
+                    v = req_data.get(key)
+                    if v in [None, '']:
+                        value_list = []
+                    elif isinstance(v, list):
+                        value_list = v
+                    else:
+                        value_list = [v]
+
+                # Required
+                if ff.required and not value_list:
+                    raise serializers.ValidationError({key: [_('This field is required.')]})
+
+                # Validate options
+                if value_list:
+                    invalid = [val for val in value_list if ff.options and val not in ff.options]
+                    if invalid:
+                        raise serializers.ValidationError({key: [_('Invalid choice.')]})
+
+                if value_list:
+                    custom_form[name] = value_list
+                continue
+
+            # SINGLE SELECT (dropdown) or RADIO SELECT → scalar
+            if ff.field_type in (ProductFormField.FieldType.SINGLE_SELECT, ProductFormField.FieldType.RADIO_SELECT):
+                value = req_data.get(key)
+                if ff.required and value in [None, '']:
+                    raise serializers.ValidationError({key: [_('This field is required.')]})
                 if value not in [None, '']:
+                    if ff.options and value not in ff.options:
+                        raise serializers.ValidationError({key: [_('Invalid choice.')]})
                     custom_form[name] = value
+                continue
+
+            # BOOLEAN → always store boolean (default False if not sent)
+            if ff.field_type == ProductFormField.FieldType.BOOLEAN:
+                raw = req_data.get(key)
+                bool_val = False
+                if raw is not None:
+                    sval = str(raw).lower()
+                    bool_val = sval in ('1', 'true', 'on', 'yes', 'y')
+                if ff.required and not bool_val:
+                    raise serializers.ValidationError({key: [_('This field is required.')]})
+                custom_form[name] = bool_val
+                continue
+
+            # Default (text areas, etc.) → scalar
+            value = req_data.get(key)
+            if ff.required and value in [None, '']:
+                raise serializers.ValidationError({key: [_('This field is required.')]})
+            if value not in [None, '']:
+                custom_form[name] = value
 
         membership.custom_form = custom_form or None
 

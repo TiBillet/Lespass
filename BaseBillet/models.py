@@ -2689,8 +2689,10 @@ class ProductFormField(models.Model):
     class FieldType(models.TextChoices):
         SHORT_TEXT = 'ST', _('Short text')  # ex: pseudo
         LONG_TEXT = 'LT', _('Long text')  # ex: description 300 caractères
-        SINGLE_SELECT = 'SS', _('Single select')  # sélecteur solo
+        SINGLE_SELECT = 'SS', _('Single select (menu)')  # sélecteur solo (menu déroulant)
+        RADIO_SELECT = 'SR', _('Single select (radio)')  # sélection unique via boutons radio
         MULTI_SELECT = 'MS', _('Multiple select')  # sélecteur multiple
+        BOOLEAN = 'BL', _('Switch on/off')  # question oui/non
 
     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
 
