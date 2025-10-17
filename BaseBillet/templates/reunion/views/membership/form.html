@@ -215,13 +215,15 @@
                             {% endif %}
                         </div>
                     {% elif field.field_type == 'MS' %}
-                        <div class="mb-3">
-                            <div class="form-label">{{ field.label }}</div>
+                        <div class="mb-3" {% if field.required %}data-ms-required="true" data-input-name="form__{{ field.name }}" data-error-message="{% translate 'Please select at least one option.' %}"{% endif %}>
+                            <div class="form-label">
+                                {{ field.label }}{% if field.required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}
+                            </div>
                             {% for opt in field.options %}
                                 <div class="form-check">
                                     <input class="form-check-input" type="checkbox"
                                            id="ff-{{ field.uuid }}-{{ forloop.counter }}"
-                                           name="form__{{ field.name }}" value="{{ opt }}">
+                                           name="form__{{ field.name }}" value="{{ opt }}" {% if field.required %}aria-required="true"{% endif %}>
                                     <label class="form-check-label"
                                            for="ff-{{ field.uuid }}-{{ forloop.counter }}">{{ opt }}</label>
                                 </div>
@@ -229,11 +231,61 @@
                             {% if field.help_text %}
                                 <div class="form-text">{{ field.help_text }}</div>
                             {% endif %}
+                            {% if field.required %}
+                                <div class="text-danger small mt-1" data-ms-error style="display:none;"></div>
+                            {% endif %}
                         </div>
                     {% endif %}
                 {% endfor %}
             {% endif %}
         {% endwith %}
+
+        <script>
+            (function () {
+                const form = document.getElementById('membership-form');
+                if (!form) return;
+
+                function validateMsRequired() {
+                    let ok = true;
+                    const groups = form.querySelectorAll('[data-ms-required="true"]');
+                    groups.forEach(group => {
+                        const inputName = group.getAttribute('data-input-name');
+                        const boxes = group.querySelectorAll('input[type="checkbox"][name="' + inputName + '"]');
+                        const anyChecked = Array.from(boxes).some(cb => cb.checked);
+                        const error = group.querySelector('[data-ms-error]');
+                        if (!anyChecked) {
+                            ok = false;
+                            if (error) {
+                                error.textContent = group.getAttribute('data-error-message') || 'Veuillez cocher au moins une option.';
+                                error.style.display = 'block';
+                            }
+                            boxes.forEach(cb => cb.setAttribute('aria-invalid', 'true'));
+                        } else {
+                            if (error) {
+                                error.textContent = '';
+                                error.style.display = 'none';
+                            }
+                            boxes.forEach(cb => cb.removeAttribute('aria-invalid'));
+                        }
+                    });
+                    return ok;
+                }
+
+                // Validate before HTMX sends the request
+                form.addEventListener('htmx:configRequest', function (event) {
+                    if (!validateMsRequired()) {
+                        event.preventDefault();
+                    }
+                });
+
+                // Live update on change within a required MS group
+                form.addEventListener('change', function (e) {
+                    if (e.target && e.target.closest('[data-ms-required="true"]')) {
+                        validateMsRequired();
+                    }
+                });
+            })();
+        </script>
 
         <!-- newsletter opt-out -->
         <div class="form-check form-switch mb-3">

@@ -674,6 +674,9 @@ class ProductFormFieldInline(TabularInline):
         models.JSONField: {"widget": forms.Textarea(attrs={"rows": 4})}
     }
 
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
     def has_add_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
