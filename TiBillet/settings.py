@@ -70,6 +70,7 @@ ALLOWED_HOSTS = [
     f'{os.environ["META"]}.{os.environ["DOMAIN"]}',
 ]
 
+
 CSRF_TRUSTED_ORIGINS = [
     f'https://{os.environ.get("DOMAIN")}',
     f'https://.{os.environ.get("DOMAIN")}',
@@ -78,6 +79,10 @@ CSRF_TRUSTED_ORIGINS = [
     f'https://{os.environ["SUB"]}.{os.environ["DOMAIN"]}',
     f'https://{os.environ["META"]}.{os.environ["DOMAIN"]}',
 ]
+
+if DEBUG: # pour l'inspecteur chrome sur android
+    ALLOWED_HOSTS += ['lespass.tibillet.localhost:8080', ]
+    CSRF_TRUSTED_ORIGINS += ['https://lespass.tibillet.localhost:8080', ]
 
 if os.environ.get('ADDITIONAL_DOMAINS'):
     for domain in os.environ.get('ADDITIONAL_DOMAINS').split(','):

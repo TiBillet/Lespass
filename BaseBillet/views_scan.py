@@ -310,7 +310,7 @@ ALLOWED_ORDER_FIELDS = (
     'reservation__uuid',
 )
 
-class ListTicketsSerializer(serializers.Serializer):
+class ListTicketsValidator(serializers.Serializer):
     event_uuid = serializers.UUIDField(required=True)
     page = serializers.IntegerField(required=False, min_value=1, default=1)
     page_size = serializers.IntegerField(required=False, min_value=1, max_value=200, default=40)
@@ -349,7 +349,7 @@ class list_tickets(APIView):
         Réponse: JSON avec métadonnées de pagination et liste des tickets.
         """
         try:
-            serializer = ListTicketsSerializer(data=request.data)
+            serializer = ListTicketsValidator(data=request.data)
             if not serializer.is_valid():
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -375,6 +375,7 @@ class list_tickets(APIView):
 
             results = []
             for t in items:
+                #TODO: Faire un serializer
                 results.append({
                     "uuid": str(t.uuid),
                     "first_name": t.first_name,
@@ -385,6 +386,7 @@ class list_tickets(APIView):
                     "reservation_uuid": str(t.reservation.uuid),
                     "status": t.get_status_display(),
                     "reservation_datetime": getattr(t.reservation, 'datetime', None),
+                    "qrcode": t.qrcode(),
                 })
 
             total_pages = (total + page_size - 1) // page_size if page_size else 1
@@ -462,6 +464,8 @@ class search_ticket(APIView):
                     "product": t.pricesold.productsold.product.name if t.pricesold and getattr(t.pricesold, 'productsold', None) else None,
                     "reservation_uuid": str(t.reservation.uuid),
                     "status": t.get_status_display(),
+                    "reservation_datetime": getattr(t.reservation, 'datetime', None),
+                    "qrcode": t.qrcode(),
                 })
 
             return Response({

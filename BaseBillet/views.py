@@ -51,7 +51,7 @@ from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invo
     send_ticket_cancellation_user, send_email_generique, \
     send_membership_pending_admin, send_membership_pending_user, send_membership_payment_link_user
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
-    ReservationValidator, ContactValidator
+    ReservationValidator, ContactValidator, QrCodeScanPayNfcValidator
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from TiBillet import settings
@@ -1057,8 +1057,8 @@ class QrCodeScanPay(viewsets.ViewSet):
             template_context = get_context(request)
             return render(request, "reunion/views/qrcode_scan_pay/scanner.html", context=template_context)
 
-        if request.method == 'POST' : # C'est le résultat du scanner
-            import ipdb; ipdb.set_trace()
+        # if request.method == 'POST' : # C'est le résultat du scanner
+        #     import ipdb; ipdb.set_trace()
 
     @action(methods=['POST'], detail=False, permission_classes=[permissions.IsAuthenticated, ])
     def process_with_nfc(self, request):
@@ -1072,29 +1072,41 @@ class QrCodeScanPay(viewsets.ViewSet):
             except Exception:
                 data = {}
 
-        tag_serial = data.get('tagSerial') or data.get('serialNumber') or None
+        serializer = QrCodeScanPayNfcValidator(data=data, context={'request': request})
+        if not serializer.is_valid():
+            logger.info(f"NFC validation failed: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        validated = serializer.validated_data
+        tag_serial = validated.get('tagSerial')
         records = data.get('records') or []
-        la_hex = data.get('ligne_article_uuid_hex') or data.get('ligne_article') or None
+        la = validated.get('ligne_article')
+        la_hex = data.get('ligne_article_uuid_hex') or data.get('ligne_article') or f"{la.uuid}"
+        card = validated.get('card')
 
         logger.info(f"NFC read by {user.email if user.is_authenticated else 'anonymous'}: serial={tag_serial}, la={la_hex}, records={records}")
 
+        # Attache les infos NFC et la carte sur la ligne article
         updated = False
-        if la_hex:
-            try:
-                la_uuid = uuid.UUID(la_hex)
-                la = LigneArticle.objects.get(uuid=la_uuid)
+        try:
+            # metadata peut être déjà un dict (JSONField) ou une chaîne JSON
+            if isinstance(la.metadata, dict):
+                metadata = la.metadata
+            else:
                 metadata = json.loads(la.metadata) if la.metadata else {}
-                metadata['nfc'] = {
-                    'tagSerial': tag_serial,
-                    'records': records,
-                    'read_at': timezone.now().isoformat(),
-                    'reader': user.email if user.is_authenticated else None,
-                }
-                la.metadata = json.dumps(metadata, cls=DjangoJSONEncoder)
-                la.save(update_fields=['metadata'])
-                updated = True
-            except Exception as e:
-                logger.error(f"Failed to attach NFC info to LigneArticle {la_hex}: {e}")
+            metadata['nfc'] = {
+                'tagSerial': tag_serial,
+                'records': records,
+                'read_at': timezone.now().isoformat(),
+                'reader': user.email if user.is_authenticated else None,
+            }
+            la.metadata = json.dumps(metadata, cls=DjangoJSONEncoder) if not isinstance(metadata, dict) else metadata
+            if getattr(la, 'carte_id', None) != getattr(card, 'id', None):
+                la.carte = card
+            la.save(update_fields=['metadata', 'carte'])
+            updated = True
+        except Exception as e:
+            logger.error(f"Failed to attach NFC info to LigneArticle {la_hex}: {e}")
 
         return Response({
             'status': 'ok',

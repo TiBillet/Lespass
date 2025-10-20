@@ -22,6 +22,8 @@ from MetaBillet.models import WaitingConfiguration
 from PaiementStripe.views import CreationPaiementStripe
 from fedow_connect.utils import dround
 from root_billet.models import RootConfiguration
+from QrcodeCashless.models import CarteCashless
+from fedow_connect.fedow_api import FedowAPI
 
 logger = logging.getLogger(__name__)
 
@@ -839,3 +841,92 @@ class TenantCreateValidator(serializers.Serializer):
         waiting_config.save()
 
         return tenant
+
+
+
+
+
+from uuid import UUID
+
+
+class QrCodeScanPayNfcValidator(serializers.Serializer):
+    """
+    Valide la lecture NFC pour le paiement par QR Code.
+
+    Attend un payload JSON de type:
+      {
+        "tagSerial": "62:fe:16:01",
+        "ligne_article_uuid_hex": "c351ccd3a07b477ba1dcc8d5bcae72df"
+      }
+
+    Erreurs attendues:
+      - La carte n'existe pas
+      - le format du tag n'est pas bon
+      - Il n'y a pas assez de crédit sur la carte
+    """
+    tagSerial = serializers.CharField(allow_blank=False)
+    ligne_article_uuid_hex = serializers.CharField(allow_blank=False)
+    records = serializers.ListField(child=serializers.DictField(), required=False)
+
+    def _normalize_tag(self, value: str) -> str:
+        if value is None:
+            return ''
+        v = value.strip().lower().replace(':', '').replace('-', '')
+        return v
+
+    def validate_tagSerial(self, value: str):
+        norm = self._normalize_tag(value)
+        # Doit être exactement 8 caractères hexadécimaux (4 octets)
+        if not norm or len(norm) != 8 or any(c not in '0123456789abcdef' for c in norm):
+            raise serializers.ValidationError(_('le format du tag n\'est pas bon'))
+        # stocke pour validate()
+        self.tag_id = norm
+        return value
+
+    def validate_ligne_article_uuid_hex(self, value: str):
+        try:
+            la_uuid = UUID(value)
+            la = LigneArticle.objects.get(uuid=la_uuid)
+        except Exception:
+            raise serializers.ValidationError(_('Paiement introuvable.'))
+        self.ligne_article = la
+        return value
+
+    def validate(self, attrs):
+        # Cherche la carte
+        tag_id = getattr(self, 'tag_id', None)
+        card = CarteCashless.objects.filter(tag_id=tag_id).first()
+        if not card:
+            # Erreur demandée: La carte n'existe pas
+            raise serializers.ValidationError({'tagSerial': [_('La carte n\'existe pas')]})
+
+        la: LigneArticle = getattr(self, 'ligne_article')
+
+        # Vérifie le solde de la carte via l'utilisateur lié
+        fedow_api = FedowAPI()
+        balance = Decimal(0)
+        user = getattr(card, 'user', None)
+        if user:
+            try:
+                fedow_api.wallet.get_or_create_wallet(user)
+                balance = fedow_api.wallet.get_total_fiducial_and_all_federated_token(user)
+            except Exception:
+                # En cas d'erreur d'appel, considère un solde nul
+                balance = Decimal(0)
+
+        # Montant requis en euros (amount est en centimes)
+        try:
+            required_eur = Decimal(la.amount) / Decimal(100)
+        except Exception:
+            required_eur = Decimal(0)
+
+        if required_eur > Decimal(balance):
+            # Erreur demandée: pas assez de crédit
+            raise serializers.ValidationError({'non_field_errors': [_('Il n\'y a pas assez de crédit sur la carte')]})
+
+        # Données enrichies pour la vue
+        attrs['tag_id'] = tag_id
+        attrs['card'] = card
+        attrs['ligne_article'] = la
+        attrs['tagSerial'] = attrs.get('tagSerial')
+        return attrs
