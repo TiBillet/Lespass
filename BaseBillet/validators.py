@@ -14,7 +14,7 @@ from django_tenants.utils import tenant_context, schema_context
 from rest_framework import serializers
 
 from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
-from AuthBillet.models import TibilletUser
+from AuthBillet.models import TibilletUser, Wallet
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Price, Product, OptionGenerale, Membership, Paiement_stripe, LigneArticle, Tag, Event, \
     Reservation, PriceSold, Ticket, ProductSold, Configuration, ProductFormField, PromotionalCode, PaymentMethod
@@ -54,8 +54,10 @@ class LinkQrCodeValidator(serializers.Serializer):
         emailConfirmation = attrs['emailConfirmation']
         if emailConfirmation != email:
             logger.error(_(f"Email confirmation failed: the email and its confirmation are different. A typo, maybe?"))
-            raise serializers.ValidationError(_(f"Email confirmation failed: the email and its confirmation are different. A typo, maybe?"))
+            raise serializers.ValidationError(
+                _(f"Email confirmation failed: the email and its confirmation are different. A typo, maybe?"))
         return attrs
+
 
 class LoginEmailValidator(serializers.Serializer):
     email = serializers.EmailField()
@@ -98,7 +100,7 @@ class TicketCreator():
         )
         reservation.status = Reservation.FREERES_USERACTIV if reservation.user_commande.is_active else Reservation.FREERES
         reservation.save()
-        return [ticket,]
+        return [ticket, ]
 
     # FREERES : réservation gratuite
     def method_F(self, prices_dict):
@@ -239,8 +241,8 @@ class ReservationValidator(serializers.Serializer):
         # Rercher des produits potentiels
         event = self.event
         products_dict = {}
-        self.products = [] # Pour checker si un formulaire forbricks est présent
-        self.free_price = False # Pour vérification plus bas que le prix libre est bien seul
+        self.products = []  # Pour checker si un formulaire forbricks est présent
+        self.free_price = False  # Pour vérification plus bas que le prix libre est bien seul
 
         for product in event.products.all():
             for price in product.prices.all():
@@ -248,10 +250,10 @@ class ReservationValidator(serializers.Serializer):
                 if self.initial_data.get(str(price.uuid)):
                     qty = int(self.initial_data.get(str(price.uuid)))
 
-                    if qty <= 0 : # Skip zero or negative quantities
+                    if qty <= 0:  # Skip zero or negative quantities
                         continue
 
-                    if price.free_price: # Pour vérification plus bas que le prix libre est bien seul
+                    if price.free_price:  # Pour vérification plus bas que le prix libre est bien seul
                         self.free_price = True
                     self.products.append(product)
                     if products_dict.get(product):
@@ -260,7 +262,7 @@ class ReservationValidator(serializers.Serializer):
                     else:
                         # Si le dict product n'existe pas :
                         products_dict[product] = {price: qty}
-        
+
         return products_dict
 
     def validate_event(self, value):
@@ -272,7 +274,7 @@ class ReservationValidator(serializers.Serializer):
 
     def validate_email(self, value):
         logger.info(f"validate email : {value}")
-        if not hasattr(self, 'admin_created'): # Si ça n'est pas un ticket créé dans l'admin :
+        if not hasattr(self, 'admin_created'):  # Si ça n'est pas un ticket créé dans l'admin :
             # On vérifie que l'utilisateur connecté et l'email correspondent bien.
             request = self.context.get('request')
             if request.user.is_authenticated:
@@ -284,7 +286,7 @@ class ReservationValidator(serializers.Serializer):
 
     def validate_options(self, value):
         # On check que les options sont bien dans l'event original.
-        try :
+        try:
             event: Event = self.event
         except Exception as e:
             logger.error(f"validate_options : {e}")
@@ -305,7 +307,7 @@ class ReservationValidator(serializers.Serializer):
         # If empty or None, no validation needed (it's optional)
         if not value:
             return value
-        
+
         # Check if promotional code exists by name
         try:
             promo_code = PromotionalCode.objects.get(name=value, is_active=True)
@@ -323,7 +325,6 @@ class ReservationValidator(serializers.Serializer):
             logger.warning(f"validate_promotional_code : multiple codes with name {value}")
             raise serializers.ValidationError(_(f'Invalid promotional code.'))
 
-
     def validate(self, attrs):
         """
         On vérifie ici :
@@ -335,10 +336,10 @@ class ReservationValidator(serializers.Serializer):
         logger.info(f"validate : {attrs}")
         event = self.event
 
-        if not hasattr(self, 'admin_created') :
+        if not hasattr(self, 'admin_created'):
             # Si ça n'est pas un ticket créé dans l'admin, on va chercher les produits dans le POST
             products_dict = self.extract_products()
-        else :
+        else:
             # c'est appellé depuis ADD de l'admin ticket
             products_dict = getattr(self, 'products_dict')
 
@@ -379,7 +380,8 @@ class ReservationValidator(serializers.Serializer):
 
                 # Check adhésion
                 if price.adhesion_obligatoire:
-                    if not user.memberships.filter(price__product=price.adhesion_obligatoire, deadline__gte=timezone.now()).exists():
+                    if not user.memberships.filter(price__product=price.adhesion_obligatoire,
+                                                   deadline__gte=timezone.now()).exists():
                         logger.warning(_(f"User is not subscribed."))
                         raise serializers.ValidationError(_(f"User is not subscribed."))
 
@@ -403,24 +405,24 @@ class ReservationValidator(serializers.Serializer):
         under_purchase = event.under_purchase()
         if valid_tickets_count + total_ticket_qty + under_purchase > event.jauge_max:
             remains = event.jauge_max - valid_tickets_count - under_purchase
-            raise serializers.ValidationError(_('Number of places available : ')+ f"{remains}")
+            raise serializers.ValidationError(_('Number of places available : ') + f"{remains}")
 
         # Vérification que l'utilisateur peut reserer une place s'il est déja inscrit sur un horaire
         if not Configuration.get_solo().allow_concurrent_bookings:
             start_this_event = event.datetime
             end_this_event = event.end_datetime
             if not end_this_event:
-                end_this_event = start_this_event + timedelta(hours=1) # Si ya pas de fin sur l'event, on rajoute juste une heure.
+                end_this_event = start_this_event + timedelta(
+                    hours=1)  # Si ya pas de fin sur l'event, on rajoute juste une heure.
 
             if Reservation.objects.filter(
-                user_commande=user,
+                    user_commande=user,
             ).filter(
                 Q(event__datetime__range=(start_this_event, end_this_event)) |
                 Q(event__end_datetime__range=(start_this_event, end_this_event)) |
                 Q(event__datetime__lte=start_this_event, event__end_datetime__gte=end_this_event)
             ).exists():
                 raise serializers.ValidationError(_(f'You have already booked this slot.'))
-
 
         # Collect dynamic custom form fields from request (names prefixed with 'form__')
         request = self.context.get('request')
@@ -539,9 +541,8 @@ class MembershipValidator(serializers.Serializer):
 
     newsletter = serializers.BooleanField()
 
-
     @staticmethod
-    def get_checkout_stripe(membership: Membership, custom_amount: Decimal =None):
+    def get_checkout_stripe(membership: Membership, custom_amount: Decimal = None):
         # Fiche membre créée, si price payant, on crée le checkout stripe :
         price: Price = membership.price
         user: TibilletUser = membership.user
@@ -558,7 +559,7 @@ class MembershipValidator(serializers.Serializer):
         }
 
         amount = int(price.prix * 100)
-        if custom_amount :
+        if custom_amount:
             amount = int(custom_amount * 100)
 
         ligne_article_adhesion = LigneArticle.objects.create(
@@ -597,13 +598,13 @@ class MembershipValidator(serializers.Serializer):
     def validate(self, attrs):
         self.price = attrs['price']
         custom_amount = None
-        if self.price.recurring_payment and self.price.free_price :
+        if self.price.recurring_payment and self.price.free_price:
             custom_amount = dround(attrs['custom_amount'])
 
-        if self.price.free_price :
-            if self.price.prix : # on a un tarif minimum, on vérifie que le montant est bien supérieur :
+        if self.price.free_price:
+            if self.price.prix:  # on a un tarif minimum, on vérifie que le montant est bien supérieur :
                 contribution = custom_amount or self.price.prix
-                if contribution < self.price.prix :
+                if contribution < self.price.prix:
                     logger.info("prix inférieur au minimum")
                     raise serializers.ValidationError(_('The amount must be greater than the minimum amount.'))
 
@@ -625,7 +626,8 @@ class MembershipValidator(serializers.Serializer):
         membership = Membership.objects.create(
             user=self.user,
             price=self.price,
-            contribution_value=custom_amount, # None si pas de contribution value, sera rempli par la validation du paiement
+            contribution_value=custom_amount,
+            # None si pas de contribution value, sera rempli par la validation du paiement
         )
 
         membership.first_name = attrs['firstname']
@@ -739,11 +741,11 @@ class TenantCreateValidator(serializers.Serializer):
 
     def validate_name(self, value):
         if WaitingConfiguration.objects.filter(slug=slugify(value)).exists():
-            raise serializers.ValidationError(f"{value}. "+ _('This name is not available'))
+            raise serializers.ValidationError(f"{value}. " + _('This name is not available'))
         if Client.objects.filter(name=value).exists():
-            raise serializers.ValidationError(f"{value}. "+ _('This name is not available'))
+            raise serializers.ValidationError(f"{value}. " + _('This name is not available'))
         if Domain.objects.filter(domain__icontains=f'{slugify(value)}').exists():
-            raise serializers.ValidationError(f"{value}. "+ _('This name is not available'))
+            raise serializers.ValidationError(f"{value}. " + _('This name is not available'))
 
         return value
 
@@ -761,12 +763,12 @@ class TenantCreateValidator(serializers.Serializer):
 
             slug = slugify(name)
             dns = waiting_config.dns_choice if waiting_config.dns_choice else 'tibillet.coop'
-            if settings.DEBUG :
+            if settings.DEBUG:
                 dns = "tibillet.localhost"
 
-            tenant.name=name
-            tenant.on_trial=False
-            tenant.categorie=Client.SALLE_SPECTACLE
+            tenant.name = name
+            tenant.on_trial = False
+            tenant.categorie = Client.SALLE_SPECTACLE
             tenant.save()
 
             Domain.objects.get_or_create(
@@ -774,7 +776,6 @@ class TenantCreateValidator(serializers.Serializer):
                 tenant=tenant,
                 is_primary=True
             )
-
 
         with tenant_context(tenant):
             ## Création du premier admin:
@@ -797,7 +798,7 @@ class TenantCreateValidator(serializers.Serializer):
             config.slug = slugify(name)
             config.email = user.email
 
-            try :
+            try:
                 rootConf = RootConfiguration.get_solo()
                 stripe.api_key = rootConf.get_stripe_api()
                 config.stripe_mode_test = rootConf.stripe_mode_test
@@ -844,9 +845,6 @@ class TenantCreateValidator(serializers.Serializer):
         return tenant
 
 
-
-
-
 from uuid import UUID
 
 
@@ -889,55 +887,31 @@ class QrCodeScanPayNfcValidator(serializers.Serializer):
         if not card_serialized:
             raise serializers.ValidationError(_("La carte n'existe pas"))
 
+        if card_serialized.get('is_wallet_ephemere'):
+            raise serializers.ValidationError(
+                _("La carte n'est pas liée à un.e utilisateur.ice. Merci de demander à la personne propriétaire de la lier en flashant le qrcode au dos de la carte."))
 
-        import ipdb; ipdb.set_trace()
+        wallet = Wallet.objects.get(uuid=card_serialized['wallet_uuid'])
+        if not wallet.user:
+            raise serializers.ValidationError(
+                _("Le portefeuille n'est pas liée à un.e utilisateur.ice. Merci de demander à la personne propriétaire de la lier en flashant le qrcode au dos de la carte."))
 
+        self.wallet = wallet
         return value
 
     def validate_ligne_article_uuid_hex(self, value: str):
         try:
             la_uuid = UUID(value)
-            la = LigneArticle.objects.get(uuid=la_uuid, status=LigneArticle.CREATED, payment_method=PaymentMethod.QRCODE_MA)
+            la = LigneArticle.objects.get(uuid=la_uuid, status=LigneArticle.CREATED,
+                                          payment_method=PaymentMethod.QRCODE_MA)
         except Exception:
             raise serializers.ValidationError(_('Paiement introuvable.'))
         self.ligne_article = la
         return value
 
     def validate(self, attrs):
-        # Cherche la carte
-        tag_id = getattr(self, 'tag_id', None)
-        card = CarteCashless.objects.filter(tag_id=tag_id).first()
-        if not card:
-            # Erreur demandée: La carte n'existe pas
-            raise serializers.ValidationError({'tagSerial': [_('La carte n\'existe pas')]})
+        self.user_balance = self.fedowAPI.wallet.get_total_fiducial_and_all_federated_token(self.wallet.user)
+        if self.user_balance < self.ligne_article.amount:
+            raise serializers.ValidationError(_(f'Solde insuffisant. Il reste {dround(self.user_balance)} sur le portefeuille.'))
 
-        la: LigneArticle = getattr(self, 'ligne_article')
-
-        # Vérifie le solde de la carte via l'utilisateur lié
-        fedow_api = FedowAPI()
-        balance = Decimal(0)
-        user = getattr(card, 'user', None)
-        if user:
-            try:
-                fedow_api.wallet.get_or_create_wallet(user)
-                balance = fedow_api.wallet.get_total_fiducial_and_all_federated_token(user)
-            except Exception:
-                # En cas d'erreur d'appel, considère un solde nul
-                balance = Decimal(0)
-
-        # Montant requis en euros (amount est en centimes)
-        try:
-            required_eur = Decimal(la.amount) / Decimal(100)
-        except Exception:
-            required_eur = Decimal(0)
-
-        if required_eur > Decimal(balance):
-            # Erreur demandée: pas assez de crédit
-            raise serializers.ValidationError({'non_field_errors': [_('Il n\'y a pas assez de crédit sur la carte')]})
-
-        # Données enrichies pour la vue
-        attrs['tag_id'] = tag_id
-        attrs['card'] = card
-        attrs['ligne_article'] = la
-        attrs['tagSerial'] = attrs.get('tagSerial')
         return attrs

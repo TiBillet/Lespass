@@ -1060,52 +1060,99 @@ class QrCodeScanPay(viewsets.ViewSet):
         # if request.method == 'POST' : # C'est le résultat du scanner
         #     import ipdb; ipdb.set_trace()
 
-    @action(methods=['POST'], detail=False, permission_classes=[permissions.IsAuthenticated, ])
+    @action(methods=['POST'], detail=False, permission_classes=[TenantAdminPermission, ])
     def process_with_nfc(self, request):
-        user = request.user
-        # return Response({"error":"coucou"}, status=500)
-        serializer = QrCodeScanPayNfcValidator(data=request.data, context={'request': request})
-        if not serializer.is_valid():
-            logger.info(f"NFC validation failed: {serializer.errors}")
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        nfc_validator = QrCodeScanPayNfcValidator(data=request.data, context={'request': request})
+        if not nfc_validator.is_valid():
+            logger.info(f"NFC validation failed: {nfc_validator.errors}")
+            return Response(nfc_validator.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        validated = serializer.validated_data
-        tag_serial = validated.get('tagSerial')
-        records = validated.get('records') or []
-        la = validated.get('ligne_article')
-        la_hex = validated.get('ligne_article_uuid_hex')
-        card = validated.get('card')
-
-        logger.info(f"NFC read by {user.email if user.is_authenticated else 'anonymous'}: serial={tag_serial}, la={la_hex}, records={records}")
+        # Si c'est valid, alors tout est passé, même la vérification du solde du portefeuille.
+        ligne_article: LigneArticle = nfc_validator.ligne_article
+        tag_id = nfc_validator.tag_id
+        wallet = nfc_validator.wallet
 
         # Attache les infos NFC et la carte sur la ligne article
-        updated = False
-        try:
-            # metadata peut être déjà un dict (JSONField) ou une chaîne JSON
-            if isinstance(la.metadata, dict):
-                metadata = la.metadata
-            else:
-                metadata = json.loads(la.metadata) if la.metadata else {}
-            metadata['nfc'] = {
-                'tagSerial': tag_serial,
-                'records': records,
-                'read_at': timezone.now().isoformat(),
-                'reader': user.email if user.is_authenticated else None,
-            }
-            la.metadata = json.dumps(metadata, cls=DjangoJSONEncoder) if not isinstance(metadata, dict) else metadata
-            if getattr(la, 'carte_id', None) != getattr(card, 'id', None):
-                la.carte = card
-            la.save(update_fields=['metadata', 'carte'])
-            updated = True
-        except Exception as e:
-            logger.error(f"Failed to attach NFC info to LigneArticle {la_hex}: {e}")
+        # metadata peut être déjà un dict (JSONField) ou une chaîne JSON
+        if isinstance(ligne_article.metadata, dict):
+            metadata = ligne_article.metadata
+        else:
+            metadata = json.loads(ligne_article.metadata) if ligne_article.metadata else {}
+        metadata['nfc'] = {
+            'tag_id': tag_id,
+            'read_at': timezone.now().isoformat(),
+            'reader': request.user.email,
+            'user': wallet.user.email,
+        }
+        ligne_article.metadata = json.dumps(metadata, cls=DjangoJSONEncoder) if not isinstance(metadata, dict) else metadata
+        ligne_article.save(update_fields=['metadata'])
 
+
+        # lancement de la transaction via Fedow api
+        try :
+            fedowAPI = nfc_validator.fedowAPI
+            transactions = fedowAPI.transaction.to_place_from_qrcode(
+                metadata=metadata,
+                amount=ligne_article.amount,
+                asset_type="EURO",
+                user=wallet.user,
+            )
+            assert transactions is not None
+            assert type(transactions) is list
+            # on supprime la ligne article pour la recréer en fonction de la ou des transactions
+            total_amount = ligne_article.amount
+            metadata['transactions'] = transactions
+            pricesold = ligne_article.pricesold
+            ex_ligne_article_uuid = ligne_article.uuid
+            ligne_article.delete()
+            for transaction in transactions:
+                # On récupère les infos de l'asset :
+                asset_used = fedowAPI.asset.retrieve(str(transaction['asset']))
+                if asset_used['category'] == 'FED':
+                    mp = PaymentMethod.STRIPE_FED
+                elif asset_used['category'] == 'TLF':
+                    mp = PaymentMethod.LOCAL_EURO
+                else:
+                    raise Exception("Unknown asset category")
+
+                # Create LigneArticle with metadata containing admin email
+                ligne_article = LigneArticle.objects.create(
+                    uuid = ex_ligne_article_uuid if transactions.index(transaction) == 0 else uuid.uuid4(),
+                    pricesold=pricesold,
+                    qty=dround(Decimal(transaction['amount']/total_amount)),
+                    amount=transaction['amount'],
+                    payment_method=mp,
+                    status=LigneArticle.VALID,
+                    metadata=json.dumps(metadata, cls=DjangoJSONEncoder),
+                    asset=transaction['asset'],
+                    wallet=wallet,
+                )
+
+                # import ipdb; ipdb.set_trace()
+                # Chaque transaction doit être bien enregistré sur LaBoutik avec le bon Asset indiqué
+                send_sale_to_laboutik.delay(ligne_article.uuid)
+
+            # Envoi des emails de confirmation (admin et utilisateur)
+            try:
+                place = connection.tenant.name
+                # Email admin
+                send_payment_success_admin.delay(total_amount, timezone.now(), place, request.user.email)
+                # Email user
+                send_payment_success_user.delay(wallet.user.email, total_amount, timezone.now(), place)
+            except Exception as e_mail:
+                logger.error(f"Error sending payment confirmation emails: {e_mail}")
+
+        except Exception as e:
+            logger.error(f"Error validating payment: {str(e)}")
+            raise f"Error validating payment: {str(e)}"
+
+        # C'est un retour vers une swal alert -> on fait pas de HTML pour une fois
         return Response({
-            'status': 'ok',
-            'tagSerial': tag_serial,
-            'ligne_article_uuid_hex': la_hex,
-            'updated': updated,
-        })
+            'status': 'Paiement OK',
+            'user_email': wallet.user.email,
+            'amount_paid': dround(ligne_article.amount),
+            'balance': dround(nfc_validator.user_balance - ligne_article.amount),
+        }, status=status.HTTP_202_ACCEPTED)
 
     @action(detail=True, methods=['GET'], permission_classes=[permissions.AllowAny, ]) # on permet a tout le monde de scanner un qrcode, mais si tu n'est pas loggué, on te redirige
     def process_qrcode(self, request: HttpRequest, pk):
@@ -1237,8 +1284,8 @@ class QrCodeScanPay(viewsets.ViewSet):
             template_context['user_balance'] = user_balance  # Example balance
             return render(request, "reunion/views/qrcode_scan_pay/insufficient_funds.html", context=template_context)
 
-        # lancement de la transaction via Fedow api
 
+        # lancement de la transaction via Fedow api
         try :
             transactions = fedow_api.transaction.to_place_from_qrcode(
                 metadata=metadata,

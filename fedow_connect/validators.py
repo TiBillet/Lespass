@@ -126,7 +126,7 @@ class TransactionSimpleValidator(serializers.Serializer):
     TYPE_ACTION = (
         (FIRST, _("First block")),
         (SALE, _("Product sale")),
-        (QRCODE_SALE, "Vente via QrCode"),
+        (QRCODE_SALE, _("Vente via QrCode ou NFC")),
         (CREATION, _('Currency creation')),
         (REFILL, _('Refill')),
         (TRANSFER, _('Transfer')),

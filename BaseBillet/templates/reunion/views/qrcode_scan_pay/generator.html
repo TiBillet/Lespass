@@ -193,7 +193,32 @@
                                         const msg = firstErrorMessage(out) || 'Une erreur est survenue : ' + res.status + ' ' + res.statusText + '';
                                         Swal.fire('Erreur', msg, 'error');
                                       }else{
-                                        Swal.fire('Lecture confirmée', 'Carte lue: ' + (out.tagSerial || payload.tagSerial || 'OK'), 'success');
+                                        const nf = (v)=>{
+                                          const n = typeof v === 'string' ? parseFloat(v) : (typeof v === 'number' ? v : NaN);
+                                          if(!isNaN(n)) return new Intl.NumberFormat('fr-FR', {style:'currency', currency:'EUR'}).format(n);
+                                          return v;
+                                        };
+                                        const statusTxt = out.status || 'Paiement OK';
+                                        const email = out.user_email || out.email || null;
+                                        const amount = nf(out.amount_paid);
+                                        const balance = nf(out.balance);
+                                        const tagShown = out.tag_id || out.tagSerial || payload.tagSerial || null;
+                                        const details = [
+                                          (amount !== undefined && amount !== null) ? 'Montant payé: ' + amount : null,
+                                          email ? 'Compte: ' + email : null,
+                                          (balance !== undefined && balance !== null) ? '<br>Solde restant: ' + balance : null,
+                                        ].filter(Boolean).join('<br>');
+                                        const redirectUrl = "{% url 'qrcodescanpay-get-generator' %}";
+                                        Swal.fire({
+                                          icon: 'success',
+                                          title: statusTxt,
+                                          html: details || 'Opération réalisée avec succès.',
+                                          confirmButtonText: 'OK'
+                                        }).then((result)=>{
+                                          if(result && result.isConfirmed){
+                                            window.location.href = redirectUrl;
+                                          }
+                                        });
                                       }
                                     }catch(e){
                                       Swal.fire('Erreur', 'Lecture NFC échouée: ' + (e && e.message ? e.message : e), 'error');
