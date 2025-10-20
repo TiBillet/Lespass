@@ -1063,7 +1063,7 @@ class QrCodeScanPay(viewsets.ViewSet):
     @action(methods=['POST'], detail=False, permission_classes=[permissions.IsAuthenticated, ])
     def process_with_nfc(self, request):
         user = request.user
-        return Response("polop", status=500)
+        # return Response({"error":"coucou"}, status=500)
         serializer = QrCodeScanPayNfcValidator(data=request.data, context={'request': request})
         if not serializer.is_valid():
             logger.info(f"NFC validation failed: {serializer.errors}")

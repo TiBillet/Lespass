@@ -750,6 +750,18 @@ class NFCcardFedow():
             raise Exception(f"lost_my_card_by_signature ERRORS : {response_lost_my_card.status_code}")
         return True
 
+    def card_tag_id_retrieve(self, card_number:str):
+        response_qr = _get(self.fedow_config, path=f'card/{card_number}/card_tag_id_retrieve')
+        if not response_qr.status_code == 200:
+            return None
+
+        serialized_card = QrCardValidator(data=response_qr.json())
+        if not serialized_card.is_valid():
+            logger.error(serialized_card.errors)
+            raise Exception(serialized_card.errors)
+
+        return serialized_card.validated_data
+
     def card_number_retrieve(self, card_number:str):
         response_qr = _get(self.fedow_config, path=f'card/{card_number}/card_number_retrieve')
         if not response_qr.status_code == 200:

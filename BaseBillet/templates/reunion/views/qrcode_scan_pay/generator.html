@@ -190,7 +190,7 @@
                                         return null;
                                       }
                                       if(!res.ok){
-                                        const msg = firstErrorMessage(out) || 'Une erreur est survenue.';
+                                        const msg = firstErrorMessage(out) || 'Une erreur est survenue : ' + res.status + ' ' + res.statusText + '';
                                         Swal.fire('Erreur', msg, 'error');
                                       }else{
                                         Swal.fire('Lecture confirmée', 'Carte lue: ' + (out.tagSerial || payload.tagSerial || 'OK'), 'success');

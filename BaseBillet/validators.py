@@ -17,7 +17,7 @@ from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
 from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Price, Product, OptionGenerale, Membership, Paiement_stripe, LigneArticle, Tag, Event, \
-    Reservation, PriceSold, Ticket, ProductSold, Configuration, ProductFormField, PromotionalCode
+    Reservation, PriceSold, Ticket, ProductSold, Configuration, ProductFormField, PromotionalCode, PaymentMethod
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from PaiementStripe.views import CreationPaiementStripe
@@ -872,22 +872,32 @@ class QrCodeScanPayNfcValidator(serializers.Serializer):
         if value is None:
             return ''
         v = value.strip().lower().replace(':', '').replace('-', '')
+
+        # Doit être exactement 8 caractères hexadécimaux (4 octets)
+        if not re.match(r'^[0-9A-Fa-f]{8}$', v):
+            raise serializers.ValidationError(_("le format du tag NFC n\'est pas bon"))
+
         return v.upper()
 
     def validate_tagSerial(self, value: str):
-        # Doit être exactement 8 caractères hexadécimaux (4 octets)
-        if not re.match(r'^[0-9A-Fa-f]{8}$', value):
-            raise serializers.ValidationError(_("le format du tag NFC n\'est pas bon"))
-
-        norm = self._normalize_tag(value)
+        tag_id = self._normalize_tag(value)
         # stocke pour validate()
-        self.tag_id = norm
+        self.tag_id = tag_id
+
+        self.fedowAPI = FedowAPI()
+        card_serialized = self.fedowAPI.NFCcard.card_tag_id_retrieve(tag_id)
+        if not card_serialized:
+            raise serializers.ValidationError(_("La carte n'existe pas"))
+
+
+        import ipdb; ipdb.set_trace()
+
         return value
 
     def validate_ligne_article_uuid_hex(self, value: str):
         try:
             la_uuid = UUID(value)
-            la = LigneArticle.objects.get(uuid=la_uuid, status=LigneArticle.UNPAID)
+            la = LigneArticle.objects.get(uuid=la_uuid, status=LigneArticle.CREATED, payment_method=PaymentMethod.QRCODE_MA)
         except Exception:
             raise serializers.ValidationError(_('Paiement introuvable.'))
         self.ligne_article = la
