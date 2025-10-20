@@ -386,7 +386,7 @@ class list_tickets(APIView):
                     "reservation_uuid": str(t.reservation.uuid),
                     "status": t.get_status_display(),
                     "reservation_datetime": getattr(t.reservation, 'datetime', None),
-                    "qrcode": t.qrcode(),
+                    "qrcode_data": t.qrcode(),
                 })
 
             total_pages = (total + page_size - 1) // page_size if page_size else 1
@@ -466,7 +466,7 @@ class search_ticket(APIView):
                     "reservation_uuid": str(t.reservation.uuid),
                     "status": t.get_status_display(),
                     "reservation_datetime": getattr(t.reservation, 'datetime', None),
-                    "qrcode": t.qrcode(),
+                    "qrcode_data": t.qrcode(),
                 })
 
             return Response({
