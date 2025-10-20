@@ -143,7 +143,7 @@ class check_ticket(APIView):
             return Response({
                 "success": True,
                 "message": "Ticket information retrieved",
-                "ticket": {
+                "ticket": { #TODO: utiliser un serializer
                     "uuid": str(ticket.uuid),
                     "status": ticket.get_status_display(),
                     "is_scanned": ticket.status == Ticket.SCANNED,
@@ -153,7 +153,8 @@ class check_ticket(APIView):
                     "price": ticket.pricesold.price.name if ticket.pricesold else None,
                     "product": ticket.pricesold.productsold.product.name if ticket.pricesold and hasattr(
                         ticket.pricesold, 'productsold') else None,
-                    "scanned_by": str(ticket.scanned_by.uuid) if ticket.scanned_by else None
+                    "scanned_by": str(ticket.scanned_by.uuid) if ticket.scanned_by else None,
+                    "custom_form": ticket.reservation.custom_form
                 },
                 "reservation": {
                     "uuid": str(ticket.reservation.uuid),
@@ -260,7 +261,8 @@ class ticket(APIView):
                         "price": ticket.pricesold.price.name if ticket.pricesold else None,
                         "product": ticket.pricesold.productsold.product.name if ticket.pricesold and hasattr(
                             ticket.pricesold, 'productsold') else None,
-                        "scanned_by": str(ticket.scanned_by.uuid) if ticket.scanned_by else None
+                        "scanned_by": str(ticket.scanned_by.uuid) if ticket.scanned_by else None,
+                        "custom_form": ticket.reservation.custom_form
                     },
                     "reservation": {
                         "uuid": str(ticket.reservation.uuid),
@@ -387,6 +389,7 @@ class list_tickets(APIView):
                     "status": t.get_status_display(),
                     "reservation_datetime": getattr(t.reservation, 'datetime', None),
                     "qrcode_data": t.qrcode(),
+                    "custom_form": t.reservation.custom_form,
                 })
 
             total_pages = (total + page_size - 1) // page_size if page_size else 1
@@ -467,6 +470,7 @@ class search_ticket(APIView):
                     "status": t.get_status_display(),
                     "reservation_datetime": getattr(t.reservation, 'datetime', None),
                     "qrcode_data": t.qrcode(),
+                    "custom_form": t.reservation.custom_form,
                 })
 
             return Response({
