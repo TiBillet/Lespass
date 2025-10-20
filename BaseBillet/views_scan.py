@@ -455,6 +455,7 @@ class search_ticket(APIView):
 
             results = []
             for t in qs:
+                # TODO: Faire un serializer
                 results.append({
                     "uuid": str(t.uuid),
                     "first_name": t.first_name,
