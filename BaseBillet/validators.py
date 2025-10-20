@@ -1,6 +1,7 @@
 import logging
 from datetime import timedelta
 from decimal import Decimal
+import re
 
 import stripe
 from django.conf import settings
@@ -866,19 +867,19 @@ class QrCodeScanPayNfcValidator(serializers.Serializer):
     """
     tagSerial = serializers.CharField(allow_blank=False)
     ligne_article_uuid_hex = serializers.CharField(allow_blank=False)
-    records = serializers.ListField(child=serializers.DictField(), required=False)
 
     def _normalize_tag(self, value: str) -> str:
         if value is None:
             return ''
         v = value.strip().lower().replace(':', '').replace('-', '')
-        return v
+        return v.upper()
 
     def validate_tagSerial(self, value: str):
-        norm = self._normalize_tag(value)
         # Doit être exactement 8 caractères hexadécimaux (4 octets)
-        if not norm or len(norm) != 8 or any(c not in '0123456789abcdef' for c in norm):
-            raise serializers.ValidationError(_('le format du tag n\'est pas bon'))
+        if not re.match(r'^[0-9A-Fa-f]{8}$', value):
+            raise serializers.ValidationError(_("le format du tag NFC n\'est pas bon"))
+
+        norm = self._normalize_tag(value)
         # stocke pour validate()
         self.tag_id = norm
         return value
@@ -886,7 +887,7 @@ class QrCodeScanPayNfcValidator(serializers.Serializer):
     def validate_ligne_article_uuid_hex(self, value: str):
         try:
             la_uuid = UUID(value)
-            la = LigneArticle.objects.get(uuid=la_uuid)
+            la = LigneArticle.objects.get(uuid=la_uuid, status=LigneArticle.UNPAID)
         except Exception:
             raise serializers.ValidationError(_('Paiement introuvable.'))
         self.ligne_article = la

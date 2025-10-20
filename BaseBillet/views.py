@@ -1044,7 +1044,7 @@ class QrCodeScanPay(viewsets.ViewSet):
 
         return render(request, "reunion/views/qrcode_scan_pay/generator.html", context=template_context)
 
-    @action(detail=False, methods=['GET', 'POST'], permission_classes=[permissions.IsAuthenticated, ])
+    @action(detail=False, methods=['GET'], permission_classes=[permissions.IsAuthenticated, ])
     def get_scanner(self, request: HttpRequest):
         if request.method == 'GET': # On demande le scanner
             user = request.user
@@ -1063,25 +1063,17 @@ class QrCodeScanPay(viewsets.ViewSet):
     @action(methods=['POST'], detail=False, permission_classes=[permissions.IsAuthenticated, ])
     def process_with_nfc(self, request):
         user = request.user
-        # Accept JSON or form data
-        try:
-            data = request.data
-        except Exception:
-            try:
-                data = json.loads(request.body.decode('utf-8'))
-            except Exception:
-                data = {}
-
-        serializer = QrCodeScanPayNfcValidator(data=data, context={'request': request})
+        return Response("polop", status=500)
+        serializer = QrCodeScanPayNfcValidator(data=request.data, context={'request': request})
         if not serializer.is_valid():
             logger.info(f"NFC validation failed: {serializer.errors}")
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         validated = serializer.validated_data
         tag_serial = validated.get('tagSerial')
-        records = data.get('records') or []
+        records = validated.get('records') or []
         la = validated.get('ligne_article')
-        la_hex = data.get('ligne_article_uuid_hex') or data.get('ligne_article') or f"{la.uuid}"
+        la_hex = validated.get('ligne_article_uuid_hex')
         card = validated.get('card')
 
         logger.info(f"NFC read by {user.email if user.is_authenticated else 'anonymous'}: serial={tag_serial}, la={la_hex}, records={records}")
