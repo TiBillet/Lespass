@@ -172,6 +172,7 @@ TENANT_APPS = (
     # your tenant-specific apps
     'BaseBillet',
     'ApiBillet',
+    'api_v2',
     'PaiementStripe',
     'wsocket',
     'tibrss',

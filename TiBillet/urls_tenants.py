@@ -31,6 +31,9 @@ urlpatterns = [
 
     path('api/webhook_stripe/', Webhook_stripe.as_view()),
 
+    # New semantic API v2
+    re_path(r'api/v2/', include('api_v2.urls')),
+
     re_path(r'api/', include('ApiBillet.urls')),
     # re_path(r'qr/', include('QrcodeCashless.urls')),
     re_path(r'rss/', include('tibrss.urls')),
