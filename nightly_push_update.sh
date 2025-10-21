@@ -15,10 +15,10 @@ else
   exit 1
 fi
 
-git checkout main
+git checkout PreProd
 git pull
 
-docker build -t "$DOCKER_USER/$IMAGE_NAME:latest" -t "$DOCKER_USER/$IMAGE_NAME:$VERSION" .
+docker build -t "$DOCKER_USER/$IMAGE_NAME:nightly" -t "$DOCKER_USER/$IMAGE_NAME:nightly-$VERSION" .
 
-docker push "$DOCKER_USER/$IMAGE_NAME:latest"
-docker push "$DOCKER_USER/$IMAGE_NAME:$VERSION"
+docker push "$DOCKER_USER/$IMAGE_NAME:nightly"
+docker push "$DOCKER_USER/$IMAGE_NAME:nightly-$VERSION"
