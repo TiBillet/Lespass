@@ -2528,6 +2528,8 @@ class ExternalApiKey(models.Model):
         return {
             # Basename ( regarder dans utils.py -> user_apikey_valid pour comprendre le mecanisme )
             "event": self.event,
+            # Autoriser l'accès aux adresses postales via la même permission que les events (pas de champ dédié)
+            "postaladdress": self.event,
             "product": self.product,
             "price": self.product,
             "reservation": self.reservation,

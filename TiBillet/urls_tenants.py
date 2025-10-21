@@ -1,15 +1,12 @@
-from django.contrib import admin
-from django.urls import path, include, re_path
-from django.conf.urls.static import static
 from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib.sitemaps.views import sitemap
-from Administration.admin_tenant import staff_admin_site
-from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
+from django.urls import path, include, re_path
 
+from Administration.admin_tenant import staff_admin_site
 # on modifie la creation du token pour rajouter access_token dans la réponse pour Postman
 from ApiBillet.views import Webhook_stripe
 from BaseBillet.sitemap import EventSitemap, ProductSitemap, StaticViewSitemap
-from BaseBillet.views import handler500
 
 urlpatterns = [
     # path('jet/', include('jet.urls', 'jet')),  # Django JET URLS
@@ -32,10 +29,6 @@ urlpatterns = [
 
     path('api/webhook_stripe/', Webhook_stripe.as_view()),
 
-    # OpenAPI schema and interactive documentation
-    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
-    path('api/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
-    path('api/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 
     # New semantic API v2
     re_path(r'api/v2/', include('api_v2.urls')),

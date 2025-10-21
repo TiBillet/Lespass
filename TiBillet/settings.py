@@ -169,7 +169,6 @@ TENANT_APPS = (
     'django.contrib.staticfiles',
 
     'rest_framework_api_key',
-    'drf_spectacular',
     # your tenant-specific apps
     'BaseBillet',
     'ApiBillet',
@@ -293,7 +292,6 @@ REST_FRAMEWORK = {
     # ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
-    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 #
@@ -810,13 +808,3 @@ if DEBUG:
     os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"  # only use in development
 
 
-# OpenAPI schema generation (drf-spectacular)
-SPECTACULAR_SETTINGS = {
-    'TITLE': 'TiBillet API v2',
-    'DESCRIPTION': 'Semantic, schema.org-based API for Events and Memberships.',
-    'VERSION': '2.0.0',
-    'SERVE_INCLUDE_SCHEMA': False,
-    # Only include API v2 endpoints in the generated schema to avoid legacy routes
-    # that are not DRF-GenericAPIView based and may break schema generation.
-    'SCHEMA_PATH_PREFIX': r'/api/v2',
-}

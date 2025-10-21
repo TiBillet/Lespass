@@ -25,24 +25,9 @@ import requests
 from requests import Response
 
 
-EXPECTED_EVENT_NAMES = {
-    # Noms d'évènements créés dans demo_data.py (valeurs stables)
-    "Scène ouverte : Entrée libre",
-    "Disco Caravane : Gratuit avec réservation",
-    "Concert caritatif : Entrée a prix libre",
-    "What the Funk ? Spectacle payant",
-    "Soirée découverte avec formulaire",
-    "Chantier participatif : besoin de volontaires",
-    # Sous-évènements (actions)
-    "Jardinage et plantation",
-    "Peinture et décoration",
-    "Bricolage et réparations",
-}
-
-
 @pytest.mark.integration
-def test_events_list_contains_demo_events():
-    base_url = os.getenv("API_BASE_URL", "http://lespass.tibillet.localhost").rstrip("/")
+def test_events_list_contains_created_event(request):
+    base_url = os.getenv("API_BASE_URL", "https://lespass.tibillet.localhost").rstrip("/")
     api_key = os.getenv("API_KEY", "EX2r3lfP.WGdO7Ni6fln2KZGPoDrZmr0VUiLHOGS5")
 
     if not api_key:
@@ -64,6 +49,7 @@ def test_events_list_contains_demo_events():
 
     names = {item.get("name") for item in data['results'] if isinstance(item, dict)}
 
-    # On vérifie que tous les évènements de démo attendus sont bien présents
-    missing = sorted(list(EXPECTED_EVENT_NAMES - names))
-    assert not missing, f"Évènements manquants dans la liste: {missing}\nNoms retournés: {sorted(list(names))}"
+    # On vérifie uniquement la présence de l'évènement créé juste avant (via pytest cache)
+    created_name = request.config.cache.get("api_v2_event_name", None)
+    assert created_name, "Nom de l'évènement créé introuvable dans le cache de test (create doit s'exécuter avant)."
+    assert created_name in names, f"L'évènement créé ('{created_name}') n'apparaît pas dans la liste. Noms: {sorted(list(names))}"

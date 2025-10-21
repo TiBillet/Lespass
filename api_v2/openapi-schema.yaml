@@ -26,9 +26,31 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Event'
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Event'
+    post:
+      operationId: createEvent
+      summary: Create an Event (schema.org/Event)
+      tags: [Event]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Event'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
   /api/v2/events/{uuid}/:
     get:
       operationId: retrieveEvent
@@ -50,12 +72,134 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Event'
+    delete:
+      operationId: deleteEvent
+      summary: Delete an Event by UUID
+      tags: [Event]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+  /api/v2/events/{uuid}/link-address/:
+    post:
+      operationId: linkEventAddress
+      summary: Link a PostalAddress to an Event (by id or schema.org payload)
+      tags: [Event]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  properties:
+                    postalAddressId:
+                      type: integer
+                - $ref: '#/components/schemas/PostalAddress'
+      responses:
+        '200':
+          description: Updated Event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+  /api/v2/postal-addresses/:
+    get:
+      operationId: listPostalAddresses
+      summary: List PostalAddresses
+      tags: [PostalAddress]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PostalAddress'
+    post:
+      operationId: createPostalAddress
+      summary: Create PostalAddress (schema.org)
+      tags: [PostalAddress]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostalAddress'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostalAddress'
+  /api/v2/postal-addresses/{id}/:
+    get:
+      operationId: retrievePostalAddress
+      summary: Retrieve PostalAddress by id
+      tags: [PostalAddress]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostalAddress'
+    delete:
+      operationId: deletePostalAddress
+      summary: Delete PostalAddress by id
+      tags: [PostalAddress]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Deleted
 components:
   securitySchemes:
     ApiKeyAuth:
       type: apiKey
       in: header
       name: Authorization
+      bearerFormat: Api-Key
       description: |
         Pass your key as `Authorization: Api-Key <key>`.
   schemas:
