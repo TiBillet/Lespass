@@ -8,8 +8,10 @@ cd "$SCRIPT_DIR"
 readonly IMAGE_NAME="lespass"
 readonly DOCKER_USER="tibillet"
 
-git checkout PreProd
-git pull
+# Build and tag images
+docker build -f dockerfile_nightly \
+  -t "$DOCKER_USER/$IMAGE_NAME:nightly" \
+  .
 
-docker build -t "$DOCKER_USER/$IMAGE_NAME:nightly" .
+# Push
 docker push "$DOCKER_USER/$IMAGE_NAME:nightly"

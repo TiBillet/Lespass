@@ -1,0 +1,46 @@
+FROM python:3.11-bullseye
+
+## UPDATE
+RUN apt-get update && apt-get upgrade -y
+
+## POSTGRES CLIENT
+RUN mkdir -p /usr/share/man/man1
+RUN mkdir -p /usr/share/man/man7
+RUN apt-get install -y --no-install-recommends postgresql-client
+
+# Tools
+RUN apt-get install -y nano iputils-ping curl borgbackup cron gettext git
+
+# Create user and app directory with proper ownership
+RUN useradd -ms /bin/bash tibillet && mkdir -p /DjangoFiles && chown -R tibillet:tibillet /DjangoFiles
+USER tibillet
+
+ENV POETRY_NO_INTERACTION=1
+
+## PYTHON
+RUN curl -sSL https://install.python-poetry.org | python3 -
+ENV PATH="/home/tibillet/.local/bin:$PATH"
+
+# Clone PreProd branch (keeps .git to allow git pull inside container)
+RUN git clone --branch PreProd --single-branch https://github.com/TiBillet/Lespass.git /DjangoFiles
+
+# Use project-provided bashrc
+RUN cp /DjangoFiles/bashrc /home/tibillet/.bashrc
+
+WORKDIR /DjangoFiles
+
+RUN poetry install
+
+CMD ["bash", "/DjangoFiles/start.sh"]
+
+# docker build -t lespass .
+# docker tag lespass tibillet/lespass:alpha0.9
+# docker push tibillet/lespass:alpha0.9
+
+# If nightly
+# docker tag lespass tibillet/lespass:nightly
+# docker push lespass tibillet/lespass:nightly
+
+# If LTS
+# docker tag lespass tibillet/lespass:latest
+# docker push lespass tibillet/lespass:latest
