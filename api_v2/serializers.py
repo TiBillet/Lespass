@@ -42,7 +42,7 @@ class PostalAddressAsSchemaSerializer(serializers.ModelSerializer):
 
 
 class EventSchemaSerializer(serializers.ModelSerializer):
-    postal_address = PostalAddressAsSchemaSerializer(source="postal_address", read_only=True)
+    postal_address = PostalAddressAsSchemaSerializer(read_only=True)
 
     class Meta:
         model = Event

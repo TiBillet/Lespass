@@ -8,9 +8,9 @@ from .permissions import SemanticApiKeyPermission
 from .serializers import EventSchemaSerializer
 
 
-class EventViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+class EventViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
     """
-    Semantic Event API (retrieve only)
+    Semantic Event API (list + retrieve)
 
     Header: Authorization: Api-Key <key>
     Response: JSON-LD compliant with https://schema.org/Event

@@ -16,6 +16,8 @@ These guidelines define how to build the v2 API with a strong focus on semantic,
   - Granular authorization per resource/action with custom DRF permission classes defined in this folder.
   - Keys must be manageable from Django admin.
 - Testing strategy
+  - Use Poetry to run tests: `poetry install` then `poetry run pytest`.
+  - Example: `poetry run pytest -q tests/pytest/test_events_list.py`.
   - Unit/integration tests run with plain pytest (not Django `manage.py test`).
   - Prefer black-box HTTP calls against a dev hostname like `lespass.tibillet.localhost`.
   - Keep tests in standalone Python scripts under `tests/` or project-level `tests/` executed by `pytest`.
