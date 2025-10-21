@@ -16,8 +16,6 @@ Variables d'environnement utilisées:
 
 Pour lancer: pytest -q tests/test_events_list.py
 """
-from __future__ import annotations
-
 import json
 import os
 from typing import List
@@ -53,11 +51,7 @@ def test_events_list_contains_demo_events():
     url = f"{base_url}/api/v2/events/"
     headers = {"Authorization": f"Api-Key {api_key}"}
 
-    try:
-        resp: Response = requests.get(url, headers=headers, timeout=10, verify=False)
-    except Exception as e:
-        pytest.skip(f"Impossible de joindre {url} ({e}) — test ignoré.")
-
+    resp: Response = requests.get(url, headers=headers, timeout=10, verify=False)
     # Doit retourner 200 et un tableau JSON de schema.org/Event
     assert resp.status_code == 200, f"HTTP {resp.status_code}: {resp.text[:500]}"
 
@@ -66,9 +60,9 @@ def test_events_list_contains_demo_events():
     except json.JSONDecodeError:
         pytest.fail(f"Réponse non JSON: {resp.text[:500]}")
 
-    assert isinstance(data, list), "La liste des évènements doit être un tableau JSON"
+    assert isinstance(data['results'], list), "La liste des évènements doit être un tableau JSON"
 
-    names = {item.get("name") for item in data if isinstance(item, dict)}
+    names = {item.get("name") for item in data['results'] if isinstance(item, dict)}
 
     # On vérifie que tous les évènements de démo attendus sont bien présents
     missing = sorted(list(EXPECTED_EVENT_NAMES - names))

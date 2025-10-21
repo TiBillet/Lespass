@@ -11,6 +11,17 @@ Authentication
 Endpoints
 - GET /api/v2/events/{uuid}/  → Retrieve a single Event
   - Response JSON-LD (schema.org/Event)
+- GET /api/v2/events/ → List all published Events (semantic list)
+
+OpenAPI / Auto‑generated docs (drf-spectacular)
+- Schema: GET `/api/schema/` (JSON or YAML via content negotiation)
+- Swagger UI: GET `/api/schema/swagger-ui/`
+- Redoc UI: GET `/api/schema/redoc/`
+- Scope: schema generation is limited to `/api/v2/...` endpoints via `SPECTACULAR_SETTINGS['SCHEMA_PATH_PREFIX'] = r'/api/v2'`.
+
+Export the schema file (with Poetry)
+- `poetry run python manage.py spectacular --color --file api_v2/openapi-schema.yaml`
+- Add `--validate` to also validate against the OpenAPI spec
 
 Example response
 ```
