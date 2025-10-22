@@ -66,6 +66,9 @@ Notes
 
 Schema.org mapping (Event)
 - Incoming (POST /api/v2/events/) and outgoing (list/retrieve) use schema.org names:
+  - @type (schema.org subtype, e.g., MusicEvent) → internal category mapping
+  - additionalType (human-readable label, e.g., Concert, Festival, Volunteering) → internal category mapping
+  - Rule: when the resolved category is ACTION (Volunteering), superEvent (UUID of parent) is required
   - maximumAttendeeCapacity ↔︎ Event.jauge_max
   - offers.eligibleQuantity.maxValue ↔︎ Event.max_per_user
   - disambiguatingDescription ↔︎ Event.short_description

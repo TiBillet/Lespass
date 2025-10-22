@@ -44,6 +44,31 @@ class PostalAddressAsSchemaSerializer(serializers.ModelSerializer):
         return result
 
 
+# Mapping between internal category codes and schema.org Event subtypes
+CATEGORY_TO_SCHEMA_TYPE = {
+    Event.CONCERT: "MusicEvent",
+    Event.FESTIVAL: "Festival",
+    Event.REUNION: "SocialEvent",
+    Event.CONFERENCE: "EducationEvent",
+    Event.RESTAURATION: "FoodEvent",
+    Event.CHANTIER: "Event",  # no precise subtype, keep generic
+    Event.ACTION: "Event",     # action slot; modeled as Event + superEvent
+}
+SCHEMA_TYPE_TO_CATEGORY = {
+    "musicevent": Event.CONCERT,
+    "festival": Event.FESTIVAL,
+    "socialevent": Event.REUNION,
+    "educationevent": Event.CONFERENCE,
+    "foodevent": Event.RESTAURATION,
+    "event": Event.CHANTIER,  # default mapping to generic
+}
+
+# Build a normalized mapping from translated display label -> internal code
+# so that clients may pass additionalType with the human-readable label.
+_display_norm = lambda s: str(s).strip().lower() if s is not None else ""
+DISPLAY_TO_CATEGORY = { _display_norm(lbl): code for code, lbl in Event.TYPE_CHOICES }
+
+
 class EventSchemaSerializer(serializers.ModelSerializer):
     postal_address = PostalAddressAsSchemaSerializer(read_only=True)
 
@@ -108,9 +133,13 @@ class EventSchemaSerializer(serializers.ModelSerializer):
         description = data.get("long_description") or data.get("short_description")
 
         # Build schema.org JSON-LD for Event
+        # Determine schema.org subtype from internal category
+        schema_type = CATEGORY_TO_SCHEMA_TYPE.get(getattr(instance, "categorie", None), "Event")
         payload: Dict[str, Any] = {
             "@context": "https://schema.org",
-            "@type": "Event",
+            "@type": schema_type,
+            # expose semantic additionalType with the human-readable category label
+            "additionalType": getattr(instance, "get_categorie_display")() if hasattr(instance, "get_categorie_display") else None,
             "identifier": str(data.get("uuid")) if data.get("uuid") else None,
             "name": data.get("name"),
             "description": description,
@@ -120,6 +149,12 @@ class EventSchemaSerializer(serializers.ModelSerializer):
             # location may be a Place with address
             "location": None,
             "url": data.get("full_url"),
+            # parent event (schema.org: superEvent)
+            "superEvent": ({
+                "@type": "Event",
+                "identifier": str(getattr(instance.parent, "uuid", "")),
+                "name": getattr(instance.parent, "name", None),
+            } if getattr(instance, "parent", None) else None),
             # extra mapped fields
             "maximumAttendeeCapacity": getattr(instance, "jauge_max", None),
             "image": self._image_urls(instance) or None,
@@ -169,7 +204,7 @@ class EventSchemaSerializer(serializers.ModelSerializer):
 
 class EventCreateSerializer(serializers.Serializer):
     """
-    schema.org/Event input serializer for creation (semantic fields only).
+    schema.org/Event input serializer for creation (semantic fields only) + semantic @type mapping and optional 'superEvent'.
 
     Accepted (schema.org) fields:
       - name: Text (required)
@@ -198,6 +233,8 @@ class EventCreateSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=200)
     startDate = serializers.DateTimeField()
     endDate = serializers.DateTimeField(required=False, allow_null=True)
+    # Optional parent (schema.org superEvent) — UUID string; required if mapped category is ACTION
+    superEvent = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     # Simple mappings
     url = serializers.URLField(required=False, allow_blank=True, allow_null=True)
@@ -214,6 +251,9 @@ class EventCreateSerializer(serializers.Serializer):
     offers = serializers.DictField(required=False)
     additionalProperty = serializers.ListField(child=serializers.DictField(), required=False)
 
+    # Semantic category display label (schema.org/Thing.additionalType)
+    additionalType = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
     def create(self, validated_data: Dict[str, Any]) -> Event:
         # Extract top-level fields
         name: str = validated_data["name"]
@@ -224,6 +264,16 @@ class EventCreateSerializer(serializers.Serializer):
         max_cap = validated_data.get("maximumAttendeeCapacity")
         short_desc = validated_data.get("disambiguatingDescription")
         long_desc = validated_data.get("description")
+        # Determine internal category code from semantic @type
+        requested_type = (self.initial_data.get("@type") or "Event").strip()
+        cat_code = SCHEMA_TYPE_TO_CATEGORY.get(requested_type.lower(), Event.CHANTIER)
+        # Allow clients to explicitly set a human-readable category via additionalType (display label)
+        addl_type_label = validated_data.get("additionalType")
+        if addl_type_label:
+            mapped = DISPLAY_TO_CATEGORY.get(str(addl_type_label).strip().lower())
+            if mapped:
+                cat_code = mapped
+        super_event_uuid = validated_data.get("superEvent")
         event_status = (validated_data.get("eventStatus") or "").lower() if validated_data.get("eventStatus") else None
         audience = validated_data.get("audience") or {}
         keywords: List[str] = validated_data.get("keywords") or []
@@ -267,6 +317,19 @@ class EventCreateSerializer(serializers.Serializer):
         full_url = same_as or url
         is_external = bool(same_as)
 
+        # Validate category & parent (semantic rule: ACTION requires superEvent)
+        parent_obj = None
+        # If superEvent provided with generic Event, we treat it as ACTION
+        if super_event_uuid and cat_code == Event.CHANTIER and requested_type.lower() in ("event", "socialevent"):
+            cat_code = Event.ACTION
+        if cat_code == Event.ACTION and not super_event_uuid:
+            raise serializers.ValidationError({"superEvent": "Ce champ est requis quand la catégorie est ACTION."})
+        if super_event_uuid:
+            try:
+                parent_obj = Event.objects.get(uuid=super_event_uuid)
+            except Event.DoesNotExist:
+                raise serializers.ValidationError({"superEvent": "Evènement parent introuvable."})
+
         # Generate a unique slug from name to avoid unique constraint violations on repeated tests
         base_slug = slugify(name) or "event"
         slug_value = base_slug
@@ -290,6 +353,8 @@ class EventCreateSerializer(serializers.Serializer):
             private=private,
             max_per_user=max_per_user if max_per_user is not None else Event.max_per_user.field.default,
             refund_deadline=refund_days if refund_days is not None else Event.refund_deadline.field.default,
+            categorie=cat_code,
+            parent=parent_obj,
         )
 
         # keywords → tags

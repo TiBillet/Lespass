@@ -35,6 +35,7 @@ def test_event_create_with_schema_org_fields(request):
         "@type": "Event",
         "name": "API v2 — Extended Create",
         "startDate": start.isoformat(),
+        "@type": "MusicEvent",
         "maximumAttendeeCapacity": 123,
         "disambiguatingDescription": "Short blurb",
         "description": "Longer event description for API test.",
@@ -94,3 +95,23 @@ def test_event_create_with_schema_org_fields(request):
     assert det.get("identifier") == ev_id
     assert det.get("maximumAttendeeCapacity") == 123
     assert det.get("audience", {}).get("audienceType") == "private"
+
+    # Create an ACTION child event requiring a parent
+    action_payload = {
+        "@context": "https://schema.org",
+        "@type": "Event",
+        "name": "API v2 — Action Child",
+        "startDate": (start + timedelta(days=1)).isoformat(),
+        "@type": "Event",
+        "superEvent": ev_id
+    }
+    resp2 = requests.post(url, headers=headers, data=json.dumps(action_payload), timeout=10, verify=False)
+    assert resp2.status_code == 201, f"Action create failed: {resp2.status_code} {resp2.text[:300]}"
+    data2 = resp2.json()
+    child_id = data2.get("identifier")
+    assert child_id, "identifier manquant pour l'évènement ACTION"
+    # track for cleanup
+    existing2 = request.config.cache.get("api_v2_event_uuids_all", []) or []
+    if child_id not in existing2:
+        existing2.append(child_id)
+    request.config.cache.set("api_v2_event_uuids_all", existing2)

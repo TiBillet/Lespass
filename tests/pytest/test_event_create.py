@@ -40,6 +40,7 @@ def test_event_create_and_retrieve(request):
         "@type": "Event",
         "name": "API v2 — Test create",
         "startDate": start,
+        "@type": "MusicEvent"
     }
 
     # Create

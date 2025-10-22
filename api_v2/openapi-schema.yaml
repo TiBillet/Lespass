@@ -4,7 +4,6 @@ info:
   version: "2.0.0"
   description: |
     Semantic, schema.org-based API.
-    Generated with drf-spectacular (see docs in api_v2/GUIDELINES.md).
 servers:
   - url: https://{tenant}.{domain}
     variables:
@@ -44,6 +43,14 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/Event'
+            examples:
+              musicCreate:
+                summary: Create a music event
+                value:
+                  "@context": "https://schema.org"
+                  "@type": "MusicEvent"
+                  name: API v2 — Test create
+                  startDate: "2025-12-20T19:00:00Z"
       responses:
         '201':
           description: Created
@@ -268,3 +275,84 @@ components:
         url:
           type: string
           format: uri
+        additionalType:
+          type: string
+          description: Human-readable category label (schema.org/Thing.additionalType). Maps to internal category.
+        superEvent:
+          description: Parent event. Required when the resolved category is ACTION (Volunteering).
+          oneOf:
+            - type: string
+              format: uuid
+              description: UUID of the parent Event (recommended for create requests)
+            - type: object
+              properties:
+                '@type':
+                  type: string
+                  example: Event
+                identifier:
+                  type: string
+                  format: uuid
+                name:
+                  type: string
+        maximumAttendeeCapacity:
+          type: integer
+        disambiguatingDescription:
+          type: string
+        eventStatus:
+          type: string
+          description: e.g. https://schema.org/EventScheduled or https://schema.org/EventCancelled
+        audience:
+          type: object
+          properties:
+            '@type':
+              type: string
+              example: Audience
+            audienceType:
+              type: string
+              example: private
+        keywords:
+          type: array
+          items:
+            type: string
+        sameAs:
+          type: string
+          format: uri
+        offers:
+          type: object
+          properties:
+            '@type':
+              type: string
+              example: Offer
+            eligibleQuantity:
+              type: object
+              properties:
+                '@type':
+                  type: string
+                  example: QuantitativeValue
+                maxValue:
+                  type: integer
+            returnPolicy:
+              type: object
+              properties:
+                '@type':
+                  type: string
+                  example: MerchantReturnPolicy
+                merchantReturnDays:
+                  type: integer
+        additionalProperty:
+          type: array
+          items:
+            type: object
+            properties:
+              '@type':
+                type: string
+                example: PropertyValue
+              name:
+                type: string
+                example: optionsRadio
+              value:
+                oneOf:
+                  - type: array
+                    items:
+                      type: string
+                  - type: string
