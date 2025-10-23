@@ -14,6 +14,7 @@ Lancez avec Poetry:
 """
 import os
 import json
+import uuid
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -23,9 +24,9 @@ import requests
 @pytest.mark.integration
 def test_event_create_and_retrieve(request):
     base_url = os.getenv("API_BASE_URL", "https://lespass.tibillet.localhost").rstrip("/")
-    api_key = os.getenv("API_KEY", "EX2r3lfP.WGdO7Ni6fln2KZGPoDrZmr0VUiLHOGS5")
+    api_key = os.getenv("API_KEY")
     if not api_key:
-        pytest.skip("API_KEY manquant dans l'environnement — test ignoré.")
+        raise Exception("API key not set")
 
     headers = {
         "Authorization": f"Api-Key {api_key}",
@@ -37,10 +38,10 @@ def test_event_create_and_retrieve(request):
 
     payload = {
         "@context": "https://schema.org",
-        "@type": "Event",
-        "name": "API v2 — Test create",
+        "@type": "MusicEvent",
+        "name": f"API v2 — Test create {uuid.uuid4()}",
         "startDate": start,
-        "@type": "MusicEvent"
+        "keywords": ["API-Test", "Integration"],
     }
 
     # Create
@@ -49,10 +50,11 @@ def test_event_create_and_retrieve(request):
     assert resp.status_code == 201, f"Create failed ({resp.status_code}): {resp.text[:500]}"
 
     data = resp.json()
-    assert data.get("@type") == "Event"
+    assert data.get("@type") == "MusicEvent"
     identifier = data.get("identifier")
     assert identifier, f"identifier manquant dans la réponse: {data}"
     assert data.get("name") == payload["name"]
+    assert "API-Test" in (data.get("keywords") or [])
 
     # Persist for subsequent tests (ordered via conftest)
     cache = request.config.cache

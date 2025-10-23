@@ -129,6 +129,6 @@ Usage notes
   - Send header: `Authorization: Api-Key <your_key>`
 - Running tests (Poetry)
   - `poetry install`
-  - `poetry run pytest -q tests/pytest`
+  - `poetry run pytest -qs tests/pytest`
   - Tests are ordered to run in the following sequence for Event CRUD: create → list → retrieve → delete. A `conftest.py` hook enforces this order.
   - The create test also stores the created `identifier` and `name` in pytest cache; subsequent tests read from this cache to make assertions independent of demo data.

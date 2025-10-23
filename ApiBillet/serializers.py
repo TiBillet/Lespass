@@ -998,32 +998,35 @@ def get_or_create_price_sold(price: Price, event: Event = None,
     On lie le prix générique à l'event
     pour générer la clé et afficher le bon nom sur stripe
     """
-
-    productsold, created = ProductSold.objects.get_or_create(
-        event=event,
-        product=price.product
-    )
-
-    if created:
-        logger.info(f"get_or_create_price_sold -> Demande de productsold {productsold.nickname()} created : {created}")
-        productsold.get_id_product_stripe()
-
     prix = price.prix
     if custom_amount:
         prix = dround(custom_amount)
     if promo_code:
         prix = dround(prix - (prix * promo_code.discount_rate / 100))
 
-    pricesold, created = PriceSold.objects.get_or_create(
-        productsold=productsold,
-        prix=prix,
-        price=price,
-    )
+    try :
+        pricesold = PriceSold.objects.get(
+            productsold__product=price.product,
+            productsold__event=event,
+            prix=prix, price=price)
+    except PriceSold.DoesNotExist:
+        try :
+            productsold = ProductSold.objects.get(product=price.product, event=event)
+        except ProductSold.DoesNotExist:
+            productsold = ProductSold.objects.create(
+                event=event,
+                product=price.product
+            )
+        pricesold = PriceSold.objects.create(
+            productsold=productsold,
+            prix=prix,
+            price=price,
+        )
 
-    if created:
-        logger.info(f"pricesold {pricesold.price.name} created : {created}")
+    if not pricesold.id_price_stripe and price.product.categorie_article not in [Product.FREERES, Product.BADGE]:
         pricesold.get_id_price_stripe()
 
+    logger.info(f"GET_OR_CREATE_PRICESOLD {price.product.categorie_article} - prix : {pricesold.prix}, id_price_stripe : {pricesold.id_price_stripe}")
     return pricesold
 
 

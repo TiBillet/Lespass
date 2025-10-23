@@ -18,9 +18,9 @@ import requests
 @pytest.mark.integration
 def test_postal_address_crud_cycle():
     base_url = os.getenv("API_BASE_URL", "https://lespass.tibillet.localhost").rstrip("/")
-    api_key = os.getenv("API_KEY", "EX2r3lfP.WGdO7Ni6fln2KZGPoDrZmr0VUiLHOGS5")
+    api_key = os.getenv("API_KEY")
     if not api_key:
-        pytest.skip("API_KEY manquant — test ignoré.")
+        raise Exception("API key not set")
 
     headers = {
         "Authorization": f"Api-Key {api_key}",
@@ -44,6 +44,7 @@ def test_postal_address_crud_cycle():
     data = resp.json()
     assert data.get("@type") == "PostalAddress"
     assert data.get("streetAddress") == create_payload["streetAddress"]
+    assert data.get("name") == create_payload["name"]
     # we don't receive id in schema.org representation; we will list to find it back
 
     # List

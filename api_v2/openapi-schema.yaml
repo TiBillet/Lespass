@@ -216,6 +216,8 @@ components:
         '@type':
           type: string
           example: PostalAddress
+        name:
+          type: string
         streetAddress:
           type: string
         addressLocality:

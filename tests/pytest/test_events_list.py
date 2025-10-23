@@ -28,10 +28,10 @@ from requests import Response
 @pytest.mark.integration
 def test_events_list_contains_created_event(request):
     base_url = os.getenv("API_BASE_URL", "https://lespass.tibillet.localhost").rstrip("/")
-    api_key = os.getenv("API_KEY", "EX2r3lfP.WGdO7Ni6fln2KZGPoDrZmr0VUiLHOGS5")
-
+    api_key = os.getenv("API_KEY")
     if not api_key:
-        pytest.skip("API_KEY manquant dans l'environnement — test ignoré.")
+        raise Exception("API key not set")
+
 
     url = f"{base_url}/api/v2/events/"
     headers = {"Authorization": f"Api-Key {api_key}"}

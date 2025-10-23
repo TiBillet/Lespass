@@ -10,6 +10,7 @@ Lancement:
 """
 import os
 import json
+import uuid
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -19,9 +20,9 @@ import requests
 @pytest.mark.integration
 def test_event_create_with_schema_org_fields(request):
     base_url = os.getenv("API_BASE_URL", "https://lespass.tibillet.localhost").rstrip("/")
-    api_key = os.getenv("API_KEY", "EX2r3lfP.WGdO7Ni6fln2KZGPoDrZmr0VUiLHOGS5")
+    api_key = os.getenv("API_KEY")
     if not api_key:
-        pytest.skip("API_KEY manquant — test ignoré.")
+        raise Exception("API key not set")
 
     url = f"{base_url}/api/v2/events/"
     headers = {
@@ -32,8 +33,7 @@ def test_event_create_with_schema_org_fields(request):
     start = datetime.now(timezone.utc) + timedelta(days=30)
     payload = {
         "@context": "https://schema.org",
-        "@type": "Event",
-        "name": "API v2 — Extended Create",
+        "name": f"API v2 — Extended Create {uuid.uuid4()}",
         "startDate": start.isoformat(),
         "@type": "MusicEvent",
         "maximumAttendeeCapacity": 123,
@@ -64,7 +64,7 @@ def test_event_create_with_schema_org_fields(request):
         request.config.cache.set("api_v2_event_uuids_all", existing)
 
     # Vérifications minimales sur la réponse de création
-    assert data.get("@type") == "Event"
+    assert data.get("@type") == "MusicEvent"
     ev_id = data.get("identifier")
     assert ev_id, "identifier manquant dans la réponse de création"
 

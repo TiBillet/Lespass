@@ -19,9 +19,9 @@ import requests
 @pytest.mark.integration
 def test_link_address_to_event_then_retrieve():
     base_url = os.getenv("API_BASE_URL", "https://lespass.tibillet.localhost").rstrip("/")
-    api_key = os.getenv("API_KEY", "EX2r3lfP.WGdO7Ni6fln2KZGPoDrZmr0VUiLHOGS5")
+    api_key = os.getenv("API_KEY")
     if not api_key:
-        pytest.skip("API_KEY manquant — test ignoré.")
+        raise Exception("API key not set")
 
     headers = {"Authorization": f"Api-Key {api_key}", "Content-Type": "application/json"}
 
@@ -36,6 +36,7 @@ def test_link_address_to_event_then_retrieve():
     # 2) lier une nouvelle adresse
     address_payload = {
         "@type": "PostalAddress",
+        "name": "Test 42 Address",
         "streetAddress": "42 Avenue des Tests",
         "addressLocality": "DevCity",
         "addressRegion": "DC",
@@ -54,5 +55,6 @@ def test_link_address_to_event_then_retrieve():
     place = data.get("location") or {}
     addr = place.get("address") or {}
     assert addr.get("@type") == "PostalAddress"
+    assert addr.get("name") == address_payload["name"]
     assert addr.get("streetAddress") == address_payload["streetAddress"]
     assert addr.get("addressLocality") == address_payload["addressLocality"]

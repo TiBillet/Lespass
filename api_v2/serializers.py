@@ -12,6 +12,7 @@ class PostalAddressAsSchemaSerializer(serializers.ModelSerializer):
     class Meta:
         model = PostalAddress
         fields = (
+            "name",
             "street_address",
             "address_locality",
             "address_region",
@@ -26,6 +27,7 @@ class PostalAddressAsSchemaSerializer(serializers.ModelSerializer):
         # Map to schema.org/PostalAddress
         result: Dict[str, Any] = {
             "@type": "PostalAddress",
+            "name": data.get("name"),
             "streetAddress": data.get("street_address"),
             "addressLocality": data.get("address_locality"),
             "addressRegion": data.get("address_region"),

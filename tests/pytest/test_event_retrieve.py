@@ -23,10 +23,9 @@ from requests import Response
 @pytest.mark.integration
 def test_event_retrieve_by_uuid_from_list(request):
     base_url = os.getenv("API_BASE_URL", "https://lespass.tibillet.localhost").rstrip("/")
-    api_key = os.getenv("API_KEY", "EX2r3lfP.WGdO7Ni6fln2KZGPoDrZmr0VUiLHOGS5")
-
+    api_key = os.getenv("API_KEY")
     if not api_key:
-        pytest.skip("API_KEY manquant — test ignoré.")
+        raise Exception("API key not set")
 
     headers = {"Authorization": f"Api-Key {api_key}"}
 
@@ -63,6 +62,6 @@ def test_event_retrieve_by_uuid_from_list(request):
         pytest.fail(f"Réponse non JSON pour le détail: {detail_resp.text[:500]}")
 
     # Vérifications minimales du schéma Event (schema.org)
-    assert detail_data.get("@type") == "Event"
+    assert detail_data.get("@type") == "MusicEvent"
     assert detail_data.get("identifier") == event_uuid
     assert "name" in detail_data and isinstance(detail_data["name"], str) and detail_data["name"].strip()
