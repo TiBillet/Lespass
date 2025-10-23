@@ -51,6 +51,44 @@ paths:
                   "@type": "MusicEvent"
                   name: API v2 — Test create
                   startDate: "2025-12-20T19:00:00Z"
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                '@context':
+                  type: string
+                  example: https://schema.org
+                '@type':
+                  type: string
+                  example: MusicEvent
+                name:
+                  type: string
+                startDate:
+                  type: string
+                  format: date-time
+                endDate:
+                  type: string
+                  format: date-time
+                maximumAttendeeCapacity:
+                  type: integer
+                disambiguatingDescription:
+                  type: string
+                description:
+                  type: string
+                eventStatus:
+                  type: string
+                audience:
+                  type: object
+                keywords:
+                  type: array
+                  items:
+                    type: string
+                img:
+                  type: string
+                  format: binary
+                sticker_img:
+                  type: string
+                  format: binary
       responses:
         '201':
           description: Created
@@ -158,6 +196,43 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/PostalAddress'
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                '@type':
+                  type: string
+                  example: PostalAddress
+                name:
+                  type: string
+                streetAddress:
+                  type: string
+                addressLocality:
+                  type: string
+                addressRegion:
+                  type: string
+                postalCode:
+                  type: string
+                addressCountry:
+                  type: string
+                geo:
+                  type: object
+                  properties:
+                    '@type':
+                      type: string
+                      example: GeoCoordinates
+                    latitude:
+                      type: number
+                      format: float
+                    longitude:
+                      type: number
+                      format: float
+                img:
+                  type: string
+                  format: binary
+                sticker_img:
+                  type: string
+                  format: binary
       responses:
         '201':
           description: Created
@@ -240,6 +315,12 @@ components:
             longitude:
               type: number
               format: float
+        image:
+          type: array
+          description: Array of image URLs (main first, then sticker)
+          items:
+            type: string
+            format: uri
     Place:
       type: object
       properties:

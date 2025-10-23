@@ -2,6 +2,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
 from BaseBillet.models import Event, PostalAddress
 from .permissions import SemanticApiKeyPermission
@@ -23,6 +24,7 @@ class EventViewSet(viewsets.ViewSet):
 
     permission_classes = [SemanticApiKeyPermission]
     lookup_field = "uuid"
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def list(self, request):
         queryset = Event.objects.filter(published=True)
@@ -37,9 +39,23 @@ class EventViewSet(viewsets.ViewSet):
         return Response(serializer.data)
 
     def create(self, request):
-        input_serializer = EventCreateSerializer(data=request.data)
+        input_serializer = EventCreateSerializer(data=request.data, context={"request": request})
         input_serializer.is_valid(raise_exception=True)
         event = input_serializer.save()
+        # Handle optional image uploads (multipart) with strict validation
+        updated_fields = []
+        if hasattr(request, "FILES"):
+            img_f = request.FILES.get("img")
+            if img_f:
+                # validated in serializer.validate()
+                event.img = img_f
+                updated_fields.append("img")
+            sticker_f = request.FILES.get("sticker_img")
+            if sticker_f:
+                event.sticker_img = sticker_f
+                updated_fields.append("sticker_img")
+            if updated_fields:
+                event.save(update_fields=updated_fields)
         output_serializer = EventSchemaSerializer(event)
         return Response(output_serializer.data, status=status.HTTP_201_CREATED)
 
@@ -67,7 +83,7 @@ class EventViewSet(viewsets.ViewSet):
                 return Response({"detail": "postalAddressId not found"}, status=status.HTTP_400_BAD_REQUEST)
         else:
             # Try to create from schema.org body
-            pa_serializer = PostalAddressCreateSerializer(data=request.data)
+            pa_serializer = PostalAddressCreateSerializer(data=request.data, context={"request": request})
             if not pa_serializer.is_valid():
                 return Response(pa_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
             address = pa_serializer.save()
@@ -86,6 +102,7 @@ class PostalAddressViewSet(viewsets.ViewSet):
     """
 
     permission_classes = [SemanticApiKeyPermission]
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def list(self, request):
         qs = PostalAddress.objects.all()
@@ -99,9 +116,22 @@ class PostalAddressViewSet(viewsets.ViewSet):
         return Response(data)
 
     def create(self, request):
-        ser = PostalAddressCreateSerializer(data=request.data)
+        ser = PostalAddressCreateSerializer(data=request.data, context={"request": request})
         ser.is_valid(raise_exception=True)
         addr = ser.save()
+        # Handle optional image uploads (multipart)
+        if hasattr(request, "FILES"):
+            updated = []
+            img_f = request.FILES.get("img")
+            if img_f:
+                addr.img = img_f
+                updated.append("img")
+            sticker_f = request.FILES.get("sticker_img")
+            if sticker_f:
+                addr.sticker_img = sticker_f
+                updated.append("sticker_img")
+            if updated:
+                addr.save(update_fields=updated)
         out = PostalAddressAsSchemaSerializer(addr).data
         return Response(out, status=status.HTTP_201_CREATED)
 

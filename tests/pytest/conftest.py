@@ -1,4 +1,41 @@
+import os
 import pytest
+
+
+def pytest_addoption(parser):
+    """Add CLI options to inject API key and base URL into the test session.
+
+    Usage examples:
+      poetry run pytest -qs tests/pytest --api-key <KEY>
+      poetry run pytest -qs tests/pytest --api-key <KEY> --api-base-url https://lespass.tibillet.localhost
+    """
+    parser.addoption(
+        "--api-key",
+        action="store",
+        default=None,
+        help="API key to use for Authorization header (sets env var API_KEY)",
+    )
+    parser.addoption(
+        "--api-base-url",
+        action="store",
+        default=None,
+        help="Override base URL for API tests (sets env var API_BASE_URL)",
+    )
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _inject_cli_env(request):
+    """Autouse session fixture to export CLI options into environment vars.
+
+    Tests already read API_KEY and API_BASE_URL from the environment, so
+    this allows passing them via pytest CLI flags without editing tests.
+    """
+    api_key = request.config.getoption("--api-key")
+    if api_key:
+        os.environ["API_KEY"] = api_key
+    base = request.config.getoption("--api-base-url")
+    if base:
+        os.environ["API_BASE_URL"] = base.rstrip("/")
 
 
 def pytest_collection_modifyitems(config, items):

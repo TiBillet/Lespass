@@ -26,6 +26,11 @@ These guidelines define how to build the v2 API with a strong focus on semantic,
   - OpenAPI doc is maintained manually in `api_v2/openapi-schema.yaml` (drf-spectacular is not used).
   - Update the YAML when endpoints or payloads change.
 
+Image uploads (security)
+- For Event and PostalAddress create endpoints, image uploads are accepted via multipart/form-data using fields `img` and `sticker_img`.
+- The serializers perform strict validation using Pillow: only `image/*` content-types are accepted and files must open/verify as images. Non-images are rejected with 400.
+- Example (multipart): see `openapi-schema.yaml` for `POST /api/v2/events/` and `POST /api/v2/postal-addresses/`.
+
 PostalAddress endpoints (schema.org/PostalAddress)
 - Base path: /api/v2/postal-addresses/
 - Authentication: header `Authorization: Api-Key <your_key>` (same permission toggle as `event`)
@@ -132,3 +137,20 @@ Usage notes
   - `poetry run pytest -qs tests/pytest`
   - Tests are ordered to run in the following sequence for Event CRUD: create → list → retrieve → delete. A `conftest.py` hook enforces this order.
   - The create test also stores the created `identifier` and `name` in pytest cache; subsequent tests read from this cache to make assertions independent of demo data.
+
+
+
+---
+
+## Running tests with Poetry and API key
+
+You can pass the API key (and optionally the base URL) directly via pytest CLI flags.
+
+Examples:
+
+- `poetry run pytest -qs tests/pytest --api-key <YOUR_KEY>`
+- `poetry run pytest -qs tests/pytest --api-key <YOUR_KEY> --api-base-url https://lespass.tibillet.localhost`
+
+Notes:
+- The `--api-key` and `--api-base-url` flags are injected into environment variables `API_KEY` and `API_BASE_URL` by a session fixture in `tests/pytest/conftest.py`.
+- Tests also honor pre-set environment variables if you prefer `export API_KEY=...`.

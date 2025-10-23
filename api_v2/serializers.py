@@ -7,6 +7,55 @@ from django.utils.text import slugify
 
 from BaseBillet.models import Event, PostalAddress, Tag, OptionGenerale
 
+# Image validation utilities
+from PIL import Image, UnidentifiedImageError
+
+
+def _validate_uploaded_image(file_obj):
+    """Strictly validate that the uploaded object is an image and <= 10 MiB.
+    - checks declared content_type when available
+    - checks file size (<= 10 * 1024 * 1024 bytes)
+    - attempts to open via Pillow
+    - resets file pointer afterwards
+    """
+    MAX_BYTES = 10 * 1024 * 1024  # 10 MiB
+
+    # Some storages/adapters set content_type, some don't (e.g., tests)
+    content_type = getattr(file_obj, 'content_type', None)
+    if content_type and not str(content_type).lower().startswith('image/'):
+        raise serializers.ValidationError('Only image files are allowed (image/*).')
+
+    # Check size from UploadedFile when available
+    size = getattr(file_obj, 'size', None)
+    if size is None:
+        # try to derive size from stream if possible without consuming
+        try:
+            if hasattr(file_obj, 'seek') and hasattr(file_obj, 'tell'):
+                pos = file_obj.tell()
+                file_obj.seek(0, 2)  # seek to end
+                end = file_obj.tell()
+                file_obj.seek(pos)
+                size = end
+        except Exception:
+            size = None
+    if size is not None and int(size) > MAX_BYTES:
+        raise serializers.ValidationError('Image exceeds maximum size of 10 MiB.')
+
+    # Verify with Pillow
+    pos = None
+    try:
+        if hasattr(file_obj, 'tell'):
+            pos = file_obj.tell()
+        Image.open(file_obj).verify()  # type: ignore
+    except (UnidentifiedImageError, OSError):
+        raise serializers.ValidationError('Invalid image file.')
+    finally:
+        try:
+            if hasattr(file_obj, 'seek') and pos is not None:
+                file_obj.seek(pos)
+        except Exception:
+            pass
+
 
 class PostalAddressAsSchemaSerializer(serializers.ModelSerializer):
     class Meta:
@@ -21,6 +70,20 @@ class PostalAddressAsSchemaSerializer(serializers.ModelSerializer):
             "latitude",
             "longitude",
         )
+
+    def _image_urls(self, instance: PostalAddress) -> List[str]:
+        urls: List[str] = []
+        try:
+            if instance.img:
+                urls.append(instance.img.url)
+        except Exception:
+            pass
+        try:
+            if instance.sticker_img:
+                urls.append(instance.sticker_img.url)
+        except Exception:
+            pass
+        return urls
 
     def to_representation(self, instance: PostalAddress) -> Dict[str, Any]:
         data = super().to_representation(instance)
@@ -43,6 +106,10 @@ class PostalAddressAsSchemaSerializer(serializers.ModelSerializer):
                 "latitude": float(lat),
                 "longitude": float(lon),
             }
+        # Add image URLs if available
+        images = self._image_urls(instance)
+        if images:
+            result["image"] = images
         return result
 
 
@@ -256,6 +323,16 @@ class EventCreateSerializer(serializers.Serializer):
     # Semantic category display label (schema.org/Thing.additionalType)
     additionalType = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
+    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+        # Strictly validate uploaded images if present in request.FILES
+        req = self.context.get("request") if hasattr(self, 'context') else None
+        if req is not None and hasattr(req, 'FILES'):
+            for fname in ("img", "sticker_img"):
+                f = req.FILES.get(fname)
+                if f:
+                    _validate_uploaded_image(f)
+        return attrs
+
     def create(self, validated_data: Dict[str, Any]) -> Event:
         # Extract top-level fields
         name: str = validated_data["name"]
@@ -434,6 +511,16 @@ class PostalAddressCreateSerializer(serializers.Serializer):
     addressCountry = serializers.CharField()
 
     geo = serializers.DictField(required=False)
+
+    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+        # Validate uploaded images if provided via multipart request
+        req = self.context.get("request") if hasattr(self, 'context') else None
+        if req is not None and hasattr(req, 'FILES'):
+            for fname in ("img", "sticker_img"):
+                f = req.FILES.get(fname)
+                if f:
+                    _validate_uploaded_image(f)
+        return attrs
 
     def create(self, validated_data: Dict[str, Any]) -> PostalAddress:
         geo = validated_data.pop("geo", {}) or {}

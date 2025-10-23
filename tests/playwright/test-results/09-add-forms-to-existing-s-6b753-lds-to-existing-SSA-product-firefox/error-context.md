@@ -1,0 +1,153 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - navigation [ref=e5]:
+    - generic [ref=e7] [cursor=pointer]:
+      - generic [ref=e9]: settings
+      - generic [ref=e12]: TiBillet / Lèspass admin panel
+      - generic [ref=e13]: unfold_more
+    - generic [ref=e15]:
+      - generic [ref=e16]: manage_search
+      - searchbox "Filter navigation items" [ref=e17]
+      - generic [ref=e18]: t
+    - region "scrollable content" [ref=e22]:
+      - generic [ref=e23]:
+        - generic [ref=e24]:
+          - separator [ref=e25]
+          - heading "Global information chevron_right" [level=2] [ref=e26] [cursor=pointer]:
+            - text: Global information
+            - generic [ref=e27]: chevron_right
+        - generic [ref=e28]:
+          - separator [ref=e29]
+          - heading "Users chevron_right" [level=2] [ref=e30] [cursor=pointer]:
+            - text: Users
+            - generic [ref=e31]: chevron_right
+        - generic [ref=e32]:
+          - separator [ref=e33]
+          - heading "Products chevron_right" [level=2] [ref=e34] [cursor=pointer]:
+            - text: Products
+            - generic [ref=e35]: chevron_right
+          - list [ref=e36]:
+            - listitem [ref=e37]:
+              - link "storefront Products" [ref=e38] [cursor=pointer]:
+                - /url: /admin/BaseBillet/product/
+                - generic [ref=e39]: storefront
+                - generic [ref=e40]: Products
+            - listitem [ref=e41]:
+              - link "local_offer Promotional codes" [ref=e42] [cursor=pointer]:
+                - /url: /admin/BaseBillet/promotionalcode/
+                - generic [ref=e43]: local_offer
+                - generic [ref=e44]: Promotional codes
+            - listitem [ref=e45]:
+              - link "style Tags" [ref=e46] [cursor=pointer]:
+                - /url: /admin/BaseBillet/tag/
+                - generic [ref=e47]: style
+                - generic [ref=e48]: Tags
+            - listitem [ref=e49]:
+              - link "page_info Options" [ref=e50] [cursor=pointer]:
+                - /url: /admin/BaseBillet/optiongenerale/
+                - generic [ref=e51]: page_info
+                - generic [ref=e52]: Options
+        - generic [ref=e53]:
+          - separator [ref=e54]
+          - heading "Ticketing chevron_right" [level=2] [ref=e55] [cursor=pointer]:
+            - text: Ticketing
+            - generic [ref=e56]: chevron_right
+        - generic [ref=e57]:
+          - separator [ref=e58]
+          - heading "Sales chevron_right" [level=2] [ref=e59] [cursor=pointer]:
+            - text: Sales
+            - generic [ref=e60]: chevron_right
+        - generic [ref=e61]:
+          - separator [ref=e62]
+          - heading "Fédération chevron_right" [level=2] [ref=e63] [cursor=pointer]:
+            - text: Fédération
+            - generic [ref=e64]: chevron_right
+        - generic [ref=e65]:
+          - separator [ref=e66]
+          - heading "External tools chevron_right" [level=2] [ref=e67] [cursor=pointer]:
+            - text: External tools
+            - generic [ref=e68]: chevron_right
+        - generic [ref=e69]:
+          - separator [ref=e70]
+          - heading "Root Configuration chevron_right" [level=2] [ref=e71] [cursor=pointer]:
+            - text: Root Configuration
+            - generic [ref=e72]: chevron_right
+  - generic [ref=e73]:
+    - generic [ref=e77]:
+      - generic [ref=e78]:
+        - generic [ref=e80] [cursor=pointer]: dock_to_right
+        - link "arrow_back" [ref=e82] [cursor=pointer]:
+          - /url: /admin/BaseBillet/product/?q=Caisse+de+s%C3%A9curit%C3%A9+sociale+alimentaire
+          - generic [ref=e83]: arrow_back
+        - heading "Ticketing chevron_right Products chevron_right Caisse de sécurité sociale alimentaire" [level=1] [ref=e84]:
+          - link "Ticketing" [ref=e85] [cursor=pointer]:
+            - /url: /admin/BaseBillet/
+          - generic [ref=e86]: chevron_right
+          - link "Products" [ref=e87] [cursor=pointer]:
+            - /url: /admin/BaseBillet/product/
+          - generic [ref=e88]: chevron_right
+          - link "Caisse de sécurité sociale alimentaire" [ref=e89] [cursor=pointer]:
+            - /url: /admin/BaseBillet/product/5e2284ab-124e-4ddc-baa4-166910490d82/change/
+      - generic [ref=e90]:
+        - generic [ref=e92]:
+          - generic [ref=e93]: Development
+          - generic [ref=e96] [cursor=pointer]: computer
+          - generic [ref=e99] [cursor=pointer]: person
+        - link "add" [ref=e102] [cursor=pointer]:
+          - /url: /admin/BaseBillet/product/add/?_changelist_filters=q%3DCaisse%2Bde%2Bs%25C3%25A9curit%25C3%25A9%2Bsociale%2Balimentaire
+          - generic [ref=e103]: add
+    - generic [ref=e105]:
+      - navigation [ref=e107]:
+        - link "General" [ref=e108] [cursor=pointer]:
+          - /url: "#general"
+        - link "Dynamic form fields" [ref=e109] [cursor=pointer]:
+          - /url: "#form_fields"
+      - group "Dynamic form fields" [ref=e115]:
+        - region "scrollable content" [ref=e120]:
+          - table [ref=e122]:
+            - rowgroup [ref=e123]:
+              - row "Label Field type Required Options Help text Delete?" [ref=e124]:
+                - cell "Label" [ref=e125]:
+                  - generic [ref=e126]: Label
+                - cell "Field type" [ref=e127]:
+                  - generic [ref=e128]: Field type
+                - cell "Required" [ref=e129]:
+                  - generic [ref=e130]: Required
+                - cell "Options" [ref=e131]:
+                  - generic [ref=e132]: Options
+                - cell "Help text" [ref=e133]:
+                  - generic [ref=e134]: Help text
+                - cell "Delete?" [ref=e135]
+            - rowgroup [ref=e136]:
+              - row "Short text expand_more null Remove" [ref=e137]:
+                - cell [ref=e138]:
+                  - textbox [ref=e142]
+                - cell "Short text expand_more" [ref=e143]:
+                  - generic [ref=e146]:
+                    - combobox [ref=e147]:
+                      - option "Short text" [selected]
+                      - option "Long text"
+                      - option "Single select"
+                      - option "Multiple select"
+                    - generic: expand_more
+                - cell [ref=e148]:
+                  - checkbox [ref=e151] [cursor=pointer]
+                - cell "null" [ref=e152]:
+                  - textbox [ref=e155]: "null"
+                - cell [ref=e156]:
+                  - textbox [ref=e160]
+                - cell "Remove" [ref=e161]:
+                  - link "Remove" [ref=e163] [cursor=pointer]:
+                    - /url: "#"
+            - rowgroup [ref=e164]:
+              - row "Add another Dynamic form field" [ref=e165]:
+                - cell "Add another Dynamic form field" [ref=e166]:
+                  - link "Add another Dynamic form field" [active] [ref=e167] [cursor=pointer]:
+                    - /url: "#"
+    - generic [ref=e170]:
+      - button "Save" [ref=e171] [cursor=pointer]
+      - button "Save and continue editing" [ref=e172] [cursor=pointer]
+      - button "Save and add another" [ref=e173] [cursor=pointer]
+```
