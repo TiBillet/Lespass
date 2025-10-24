@@ -776,7 +776,7 @@ class MyAccount(viewsets.ViewSet):
                 'title': f"Remboursement de {amount_eur} € initié",
                 'sub_title': "TiBillet",
                 'main_text': f"La demande de remboursement de la somme {amount_eur} € a été envoyée à notre prestataire bancaire (Stripe).",
-                'main_text_2': "Environ 10 jours peuvent s'écouler avant qu'il n'apparaisse sur votre relevé. Si passé ce délai vous n'avez pas été remboursé, veuillez nous contacter sur contact@tibillet.re.",
+                'main_text_2': f"Il apparaitra sur votre relevé sous 10 jours. Passé ce délai sans remboursement, veuillez nous contacter sur contact@tibillet.re, nous pourrons vérifier ensemble.",
                 'table_info': {'Montant remboursé': f'{amount_eur} €'},
                 'end_text': "À bientôt !",
                 'signature': "Marvin, le robot TiBillet",
