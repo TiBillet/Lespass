@@ -3451,6 +3451,26 @@ class AssetAdmin(ModelAdmin):
         'pending_invitations',
     ]
 
+
+    actions_row = ["archive", ]
+
+    @action(
+        description=_("Archive"),
+        url_path="archive",
+        permissions=["changelist_row_action"],
+    )
+    def archive(self, request, object_id):
+        asset = get_object_or_404(Asset, pk=object_id)
+        fedowAPI = FedowAPI()
+        fedowAPI.asset.archive_asset(asset.uuid)
+        asset.archive = True
+        asset.save()
+        messages.success(request, _(f"{asset.name} Archived"))
+        return redirect(request.META["HTTP_REFERER"])
+
+    def has_changelist_row_action_permission(self, request: HttpRequest, *args, **kwargs):
+        return TenantAdminPermissionWithRequest(request)
+
     def _federated_with(self, obj):
         feds = [place.name for place in obj.federated_with.all()]
         feds.append(obj.origin.name)
@@ -3458,12 +3478,18 @@ class AssetAdmin(ModelAdmin):
 
     # On affiche que les assets non adhésions + origin + fédéré
     def get_queryset(self, request):
+        logger.info(f"get_queryset AssetAdmin : {request.user}")
+        fedowAPI = FedowAPI()
+        fedowAPI.asset.get_accepted_assets()
+        # On va mettre a jour les assets chez Fedow :
+
         tenant = connection.tenant
         queryset = (
             super()
             .get_queryset(request)
             .exclude(category__in=[AssetFedowPublic.BADGE, AssetFedowPublic.SUBSCRIPTION])
             .filter(Q(origin=tenant) | Q(federated_with=tenant))
+            .filter(archive=False)
             .distinct()
         )
         return queryset

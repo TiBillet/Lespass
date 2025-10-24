@@ -177,6 +177,18 @@ class AssetFedow():
         logger.warning(response_asset)
         raise Exception(f"{response_asset.status_code}")
 
+    def get_accepted_assets(self):
+        response_asset = _get(self.fedow_config, path=f'asset/get_accepted_assets')
+        if response_asset.status_code == 200:
+            serialized_assets = AssetValidator(data=response_asset.json(), many=True)
+            if serialized_assets.is_valid():
+                return serialized_assets.validated_data
+            logger.error(serialized_assets.errors)
+            raise Exception(f"{serialized_assets.errors}")
+        logger.warning(response_asset)
+        raise Exception(f"{response_asset.status_code}")
+
+
     def cached_retrieve(self, uuid: uuid4 = None):
         try:
             return cache.get_or_set(f"asset_fedow_{uuid}", lambda: self.retrieve(uuid), 60 * 60 * 24)
@@ -233,8 +245,8 @@ class AssetFedow():
             logger.error(response_asset)
             raise Exception(f"{response_asset.status_code} {response_asset.content}")
 
-    def archive_asset(self, product: Product):
-        response_archive_asset = _get(self.fedow_config, path=f'asset/{product.uuid}/archive_asset')
+    def archive_asset(self, asset_uuid: UUID):
+        response_archive_asset = _get(self.fedow_config, path=f'asset/{asset_uuid}/archive_asset')
         if response_archive_asset.status_code != 200:
             logger.error(f"archive_asset ERROR {response_archive_asset.status_code} {response_archive_asset.content}")
             raise Exception(

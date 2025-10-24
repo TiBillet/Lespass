@@ -373,7 +373,7 @@ def send_membership_and_badge_product_to_fedow(sender, instance: Product, create
 
         if instance.archive:
             # L'instance est archivé, on le notifie à Fedow :
-            fedow_asset.archive_asset(instance)
+            fedow_asset.archive_asset(instance.uuid)
 
 
 @receiver(post_save, sender=Product) # Attention, les post_save depuis l'admin sont atomic
