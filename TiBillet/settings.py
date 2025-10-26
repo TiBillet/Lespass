@@ -687,6 +687,27 @@ UNFOLD = {
                 ],
             },
             {
+                "title": _("Financement participatif"),
+                "separator": True,  # Top border
+                "collapsible": True,  # Collapsible group of links
+                "items": [
+                    {
+                        "title": _("Configuration"),
+                        "icon": "linked_services",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:crowds_crowdconfig_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+                    },
+                    {
+                        "title": _("Initiative"),
+                        "icon": "linked_services",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:crowds_initiative_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+                    },
+                ],
+            },
+            {
                 "title": _("Fédération"),
                 "separator": True,  # Top border
                 "collapsible": True,  # Collapsible group of links

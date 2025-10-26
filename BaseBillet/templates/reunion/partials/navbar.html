@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load i18n crowds_tags %}
 
 <nav class="navbar navbar-expand-xl bg-body">
     <div class="container-lg justify-content-between">
@@ -25,6 +25,19 @@
             </a>
           </li>
           {% endfor %}
+
+          {% has_initiatives as has_crowds %}
+          {% if has_crowds %}
+          <li class="nav-item">
+            <a class="nav-link{% if url_name == 'crowds-list' %} active" aria-current="page{% endif %}"
+               href="{% url 'crowds-list' %}"
+               hx-get="{% url 'crowds-list' %}" hx-target="body" hx-push-url="true">
+              <i class="bi bi-piggy-bank"></i>
+              {% translate 'Financement participatif' %}
+            </a>
+          </li>
+          {% endif %}
+
           <li class="nav-item">
             <a class="nav-link"
                 href=""

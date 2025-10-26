@@ -1,0 +1,75 @@
+{% extends base_template %}
+{% load i18n %}
+
+{% block title %}{{ crowd_config.title }}{% endblock %}
+{% block meta_description %}{{ crowd_config.description }} - {{ config.organisation }}{% endblock %}
+{% block og_title %}{{ crowd_config.title }} | {{ config.organisation }}{% endblock %}
+{% block og_description %}{{ crowd_config.description }}} - {{ config.organisation }}{% endblock %}
+{% block og_image_alt %}{{ config.organisation }} - {{ crowd_config.title }}{% endblock %}
+{% block twitter_title %}{{ crowd_config.title }} | {{ config.organisation }}{% endblock %}
+{% block twitter_description %}{{ crowd_config.description }}} - {{ config.organisation }}{% endblock %}
+{% block twitter_image_alt %}{{ config.organisation }} - {{ crowd_config.title }}{% endblock %}
+
+{% block main %}
+    {% if not embed %}
+        {% comment %} Espace de description en haut, sticky comme la liste d'événements {% endcomment %}
+        <section class="container-lg p-3 sticky-top bg-body" style="height: fit-content;">
+            <div>
+                <h1 class="mb-2">{{ crowd_config.title }}</h1>
+                <p class="text-muted mb-2">{{ crowd_config.description }}</p>
+
+                {# Légende FALC pour comprendre les deux valeurs des cartes #}
+                <div class="small bg-body-tertiary rounded p-2" role="note" aria-label="{% translate 'Explication simple des montants affichés' %}">
+                    <div class="d-flex flex-wrap gap-3 align-items-center">
+                        <span class="d-inline-flex align-items-center">
+                            <i class="bi bi-piggy-bank me-2" aria-hidden="true"></i>
+                            <strong class="me-1">{% translate 'Argent reçu' %}</strong>
+                            <span class="text-muted">{% translate 'C’est l’argent déjà donné.' %}</span>
+                        </span>
+                        <span class="d-inline-flex align-items-center">
+                            <i class="bi bi-clipboard-check me-2" aria-hidden="true"></i>
+                            <strong class="me-1">{% translate 'Demandes validées' %}</strong>
+                            <span class="text-muted">{% translate 'C’est l’argent demandé par des participant·es et validé par un·e admin.' %}</span>
+                        </span>
+                        <span class="ms-auto d-inline-flex align-items-center gap-2">
+                            <span class="rounded-circle bg-success" style="width:.75rem;height:.75rem;display:inline-block" aria-hidden="true"></span>
+                            <span class="rounded-circle bg-warning" style="width:.75rem;height:.75rem;display:inline-block" aria-hidden="true"></span>
+                            <span class="rounded-circle bg-danger" style="width:.75rem;height:.75rem;display:inline-block" aria-hidden="true"></span>
+                            <span class="text-muted">{% translate 'Point couleur : vert = ok, orange = presque, rouge = trop.' %}</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    {% endif %}
+
+    <main class="container-lg" id="crowds_list" hx-boost="true" hx-target="#crowds_list" hx-swap="outerHTML">
+        {% include "crowds/partial/list.html" %}
+    </main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.crowdsVoteRequireLogin = function() {
+    Swal.fire({
+      icon: 'info',
+      title: '{% translate "Connexion requise" %}',
+      text: '{% translate "Veuillez vous connecter pour voter." %}',
+      showCancelButton: true,
+      confirmButtonText: '{% translate "Se connecter" %}',
+      cancelButtonText: '{% translate "Annuler" %}'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        const panel = document.getElementById('loginPanel');
+        if (panel) {
+          const offcanvas = new bootstrap.Offcanvas(panel);
+          offcanvas.show();
+        } else {
+          // Fallback vers page de connexion si panel indisponible
+          window.location.href = '/accounts/login/';
+        }
+      }
+    });
+  }
+</script>
+{% endblock %}

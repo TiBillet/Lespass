@@ -1,0 +1,330 @@
+{% extends base_template %}
+{% load i18n %}
+
+{% block title %}{{ initiative.name }}{% endblock %}
+{% block meta_description %}{{ initiative.description|striptags|truncatechars:150 }} -
+    {{ config.organisation }}{% endblock %}
+{% block og_title %}{{ initiative.name }}{% endblock %}
+{% block og_description %}{{ initiative.description|striptags|truncatechars:150 }} -
+    {{ config.organisation }}{% endblock %}
+{% block og_image_alt %}{{ initiative.name }} - {{ config.organisation }}{% endblock %}
+{% block twitter_title %}{{ initiative.name }}{% endblock %}
+{% block twitter_description %}{{ initiative.description|striptags|truncatechars:150 }} -
+    {{ config.organisation }}{% endblock %}
+{% block twitter_image_alt %}{{ initiative.name }} - {{ config.organisation }}{% endblock %}
+
+{% block main %}
+    <main class="container-lg pb-5">
+        <header class="mb-3">
+            {% if initiative.image %}
+                <img src="{{ initiative.image }}" alt="{{ initiative.name }}" class="img-fluid w-100 rounded"
+                     style="max-height: 33vh; object-fit: cover;">
+            {% endif %}
+            <h1 class="mt-3">{{ initiative.name }}
+                {# compteur de votes #}
+                <span class="ms-sm-2">
+                    {% include 'crowds/partial/votes_badge.html' with initiative=initiative %}
+                </span>
+            </h1>
+
+        </header>
+
+        <p class="lead">{{ initiative.description|linebreaks }}</p>
+
+        <section class="my-4">
+            <progress value="{{ initiative.progress_percent_int }}" max="100" class="w-100"
+                      style="height: 1rem;"></progress>
+            <p class="mt-2 mb-0 text-center">
+                <strong>{{ funded_eur|floatformat:2 }} €</strong> / {{ goal_eur|floatformat:2 }} €
+            </p>
+        </section>
+
+        {# Barre de progression des demandes de participations vs financements #}
+        <section class="my-4">
+            <div class="progress">
+                <div class="progress-bar bg-{{ requested_color }}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ requested_percent_int_capped }}" style="width: 0%" data-requested-bar="1" data-width-int="{{ requested_percent_int_capped }}">
+                    <span class="visually-hidden">{{ requested_percent_int }}%</span>
+                </div>
+            </div>
+            <p class="mt-2 mb-0 text-center text-muted small">
+                {% translate "Demandé par les contributeur.ices" %}:
+                <strong>{{ requested_eur|floatformat:2 }} €</strong>
+                — {% translate "financé" %}: <strong>{{ funded_eur|floatformat:2 }} €</strong>
+                — {{ requested_percent_int }}%
+            </p>
+            <script>
+              (function(){
+                try {
+                  document.querySelectorAll('[data-requested-bar]')?.forEach(function(el){
+                    var v = parseInt(el.getAttribute('data-width-int') || '0', 10);
+                    if (isNaN(v) || v < 0) v = 0;
+                    if (v > 100) v = 100;
+                    el.style.width = v + '%';
+                  });
+                } catch(e) { /* noop */ }
+              })();
+            </script>
+        </section>
+
+        <div class="d-grid gap-2 d-sm-flex justify-content-sm-start align-items-center my-4">
+            <a href="{% url 'crowds-list' %}"
+               class="btn btn-outline-secondary"
+               hx-get="{% url 'crowds-list' %}"
+               hx-target="body"
+               hx-swap="innerHTML"
+               hx-push-url="true">
+                ← {% translate 'Retour' %}
+            </a>
+
+            {# Bouton voter #}
+            {% if user.is_authenticated %}
+                <button
+                        class="btn btn-primary"
+                        title="{% translate 'Voter pour la pertinence' %}"
+                        hx-post="{{ initiative.get_absolute_url }}vote/"
+                        hx-trigger="click"
+                        hx-target="#votes-{{ initiative.uuid }}"
+                        hx-swap="outerHTML">
+                    <i class="bi bi-hand-thumbs-up"></i>
+                    {% translate 'Voter' %}
+                </button>
+            {% else %}
+                <button
+                        class="btn btn-primary"
+                        title="{% translate 'Voter pour la pertinence' %}"
+                        onclick="crowdsVoteRequireLogin()">
+                    <i class="bi bi-hand-thumbs-up"></i>
+                    {% translate 'Voter' %}
+                </button>
+            {% endif %}
+
+            {# Participer (déclaration de participation) #}
+            {% if user.is_authenticated %}
+                <button class="btn btn-outline-primary" onclick="crowdsOpenParticipate()">
+                    <i class="bi bi-person-gear"></i>
+                    {% translate 'Participer' %}
+                </button>
+            {% else %}
+                <button class="btn btn-outline-primary" onclick="crowdsVoteRequireLogin()">
+                    <i class="bi bi-person-gear"></i>
+                    {% translate 'Participer' %}
+                </button>
+            {% endif %}
+
+            {# Placeholder CTA – flow paiement à brancher #}
+            <a href="#" class="btn btn-primary" role="button" aria-disabled="true" title="TODO: Paiement"
+               onclick="openContributionModal('{{ initiative.id }}', '{{ initiative.name }}')">
+                💸 {% translate 'Contribuer financièrement' %}
+            </a>
+        </div>
+
+
+        <section class="mt-5">
+            <h2 class="h4 mb-3">{% translate 'Votants' %}</h2>
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                    <tr>
+                        <th scope="col">{% translate 'Utilisateur' %}</th>
+                        <th scope="col">{% translate 'Date' %}</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for v in votes %}
+                        <tr>
+                            <td>{{ v.user.email }}</td>
+                            <td>{{ v.created_at|date:'Y-m-d H:i' }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="2"
+                                class="text-center text-muted py-4">{% translate 'Aucun vote pour le moment.' %}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="mt-5">
+            <h2 class="h4 mb-3">{% translate 'Contributions financières' %}</h2>
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                    <tr>
+                        <th scope="col">{% translate 'Contributeur' %}</th>
+                        <th scope="col" class="text-end">{% translate 'Montant' %}</th>
+                        <th scope="col">{% translate 'Date' %}</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for c in contributions %}
+                        <tr>
+                            <td>{{ c.contributor.email }}</td>
+                            <td class="text-end">{{ c.amount_eur|floatformat:2 }} {{ initiative.asset.currency_code }}</td>
+                            <td>{{ c.created_at|date:'Y-m-d H:i' }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="3"
+                                class="text-center text-muted py-4">{% translate 'Aucune contribution pour le moment.' %}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+
+        <section class="mt-5">
+            <h2 class="h4 mb-3">{% translate 'Participations' %}</h2>
+            <div id="participations_list">
+                {% include 'crowds/partial/participations.html' %}
+            </div>
+        </section>
+
+
+        <script>
+            function openContributionModal(initiativeId, initiativeName) {
+                Swal.fire({
+                    title: `Contribuer à « ${initiativeName} »`,
+                    input: 'number',
+                    inputLabel: 'Montant en euros',
+                    inputAttributes: {min: 1, step: 0.5},
+                    confirmButtonText: 'Continuer vers le paiement',
+                    showCancelButton: true,
+                    cancelButtonText: 'Annuler',
+                    preConfirm: (value) => {
+                        if (!value || value <= 0) {
+                            Swal.showValidationMessage('Veuillez saisir un montant valide.');
+                            return false;
+                        }
+                        // Envoi via HTMX (pas de redirection immédiate)
+                        htmx.ajax('POST', `/api/initiatives/${initiativeId}/contribute/`, {
+                            target: 'body',
+                            swap: 'none',
+                            values: {amount: Math.round(value * 100)}
+                        });
+                    }
+                });
+            }
+
+            // Gère la réponse JSON du serveur (HTMX)
+            document.body.addEventListener('htmx:afterOnLoad', function (event) {
+                const response = event.detail.xhr.responseText;
+                try {
+                    const data = JSON.parse(response);
+                    if (data.stripe_url) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Redirection vers le paiement...',
+                            showConfirmButton: false,
+                            timer: 1500
+                        });
+                        setTimeout(() => window.location.href = data.stripe_url, 1200);
+                    } else if (data.error) {
+                        Swal.fire('Erreur', data.error, 'error');
+                    }
+                } catch (e) {
+                    console.error("Réponse inattendue :", response);
+                }
+            });
+
+            // --- Vote (detail page): only login helper, swap handled by HTMX returning HTML ---
+            window.crowdsVoteRequireLogin = window.crowdsVoteRequireLogin || function () {
+                Swal.fire({
+                    icon: 'info',
+                    title: '{% translate "Connexion requise" %}',
+                    text: '{% translate "Veuillez vous connecter pour continuer." %}',
+                    showCancelButton: true,
+                    confirmButtonText: '{% translate "Se connecter" %}',
+                    cancelButtonText: '{% translate "Annuler" %}'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        const panel = document.getElementById('loginPanel');
+                        if (panel) {
+                            const offcanvas = new bootstrap.Offcanvas(panel);
+                            offcanvas.show();
+                        } else {
+                            window.location.href = '/accounts/login/';
+                        }
+                    }
+                });
+            };
+
+            // --- Participations: dialog + POST via HTMX to update partial ---
+            window.crowdsOpenParticipate = function () {
+                Swal.fire({
+                    title: '{% translate "Proposer une participation" %}',
+                    html: `
+                        <div class="mb-3 text-start">
+                            <label class="form-label">{% translate "Description de la participation" %}</label>
+                            <textarea id="part-desc" class="form-control" rows="4" placeholder="{% translate "Décrivez votre apport, rôle, tâches…" %}"></textarea>
+                        </div>
+                        <div class="mb-0 text-start">
+                            <label class="form-label">{% translate "Montant sollicité (en euros)" %}</label>
+                            <input id="part-amt" type="number" min="0" step="0.01" class="form-control" placeholder="0.00">
+                            <div class="form-text">{% translate "Ce montant correspond à votre part du budget estimé (schema.org/MonetaryAmount)." %}</div>
+                        </div>
+                    `,
+                    focusConfirm: false,
+                    showCancelButton: true,
+                    cancelButtonText: '{% translate "Annuler" %}',
+                    confirmButtonText: '{% translate "Envoyer la demande" %}',
+                    preConfirm: () => {
+                        const desc = document.getElementById('part-desc').value.trim();
+                        const amtStr = document.getElementById('part-amt').value;
+                        const amt = Math.round(parseFloat(amtStr || '0') * 100);
+                        if (!desc) {
+                            Swal.showValidationMessage('{% translate "Veuillez décrire votre participation." %}');
+                            return false;
+                        }
+                        if (!amt || amt <= 0) {
+                            Swal.showValidationMessage('{% translate "Veuillez indiquer un montant valide (> 0)." %}');
+                            return false;
+                        }
+                        // Post via HTMX and update the participations list without blink
+                        htmx.ajax('POST', '{{ initiative.get_absolute_url }}participate/', {
+                            target: '#participations_list',
+                            swap: 'outerHTML',
+                            values: {
+                                description: desc,
+                                requested_amount_cents: amt
+                            }
+                        });
+                    }
+                });
+            };
+
+            window.crowdsMarkParticipationCompleted = function (pid) {
+                Swal.fire({
+                    title: '{% translate "Marquer la participation comme terminée" %}',
+                    input: 'number',
+                    inputLabel: '{% translate "Temps passé (en minutes)" %}',
+                    inputAttributes: { min: 1, step: 1 },
+                    showCancelButton: true,
+                    cancelButtonText: '{% translate "Annuler" %}',
+                    confirmButtonText: '{% translate "Valider" %}',
+                    preConfirm: (value) => {
+                        const minutes = parseInt(value || '0');
+                        if (!minutes || minutes <= 0) {
+                            Swal.showValidationMessage('{% translate "Veuillez saisir une durée valide (> 0)." %}');
+                            return false;
+                        }
+                        htmx.ajax('POST', `{{ initiative.get_absolute_url }}participations/${pid}/complete/`, {
+                            target: '#participations_list',
+                            swap: 'outerHTML',
+                            values: { time_spent_minutes: minutes }
+                        });
+                    }
+                });
+            };
+
+            // Attach once per page load
+            document.body.addEventListener('htmx:afterRequest', window.crowdsHandleVote);
+        </script>
+
+    </main>
+
+
+{% endblock %}

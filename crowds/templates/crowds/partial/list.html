@@ -1,0 +1,50 @@
+{% load i18n %}
+<div class="py-3">
+  <div class="row g-4">
+    {% for initiative in initiatives %}
+      {% include "crowds/partial/card.html" %}
+    {% empty %}
+      <div class="col-12 text-center text-muted py-5">
+        {% translate "Aucune initiative n’est encore proposée." %}
+      </div>
+    {% endfor %}
+  </div>
+
+  {% if page_obj.has_other_pages %}
+    <nav aria-label="{% translate 'Pagination' %}" class="mt-4">
+      <ul class="pagination justify-content-center">
+        <li class="page-item {% if not page_obj.has_previous %}disabled{% endif %}">
+          <a class="page-link"
+             href="?page={{ page_obj.previous_page_number }}"
+             hx-get="?page={{ page_obj.previous_page_number }}"
+             hx-target="#crowds_list"
+             hx-push-url="true"
+             aria-label="{% translate 'Previous' %}">
+            &laquo;
+          </a>
+        </li>
+
+        {% for page_num in page_obj.paginator.page_range %}
+          <li class="page-item {% if page_num == page_obj.number %}active{% endif %}">
+            <a class="page-link"
+               href="?page={{ page_num }}"
+               hx-get="?page={{ page_num }}"
+               hx-target="#crowds_list"
+               hx-push-url="true">{{ page_num }}</a>
+          </li>
+        {% endfor %}
+
+        <li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">
+          <a class="page-link"
+             href="?page={{ page_obj.next_page_number }}"
+             hx-get="?page={{ page_obj.next_page_number }}"
+             hx-target="#crowds_list"
+             hx-push-url="true"
+             aria-label="{% translate 'Next' %}">
+            &raquo;
+          </a>
+        </li>
+      </ul>
+    </nav>
+  {% endif %}
+</div>
