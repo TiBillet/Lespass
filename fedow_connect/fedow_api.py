@@ -144,7 +144,7 @@ class AssetFedow():
     #         logger.error(serialized_assets.errors)
     #         raise Exception(f"{serialized_assets.errors}")
 
-    def retrieve_bank_deposits(self, asset:AssetFedowPublic):
+    def retrieve_bank_deposits(self, asset: AssetFedowPublic):
         response = _get(self.fedow_config, path=f'asset/{asset.uuid}/retrieve_bank_deposits')
         if response.status_code == 200:
             serialized_transaction = TransactionValidator(data=response.json(), many=True)
@@ -187,7 +187,6 @@ class AssetFedow():
             raise Exception(f"{serialized_assets.errors}")
         logger.warning(response_asset)
         raise Exception(f"{response_asset.status_code}")
-
 
     def cached_retrieve(self, uuid: uuid4 = None):
         try:
@@ -405,7 +404,6 @@ class WalletFedow():
             logger.error(tr_reponse.json())
             raise Exception(f"{tr_reponse.json()}")
 
-
     def global_asset_bank_stripe_deposit(self, payload: dict):
         '''
         Remise en euro des tokens.
@@ -548,7 +546,6 @@ class WalletFedow():
         if wallet_serialized.is_valid():
             return response_refund_fed.status_code, wallet_serialized
         return (500, wallet_serialized.errors)
-
 
     def get_or_create_wallet(self, user: TibilletUser):
         email = user.email.lower()
@@ -762,7 +759,7 @@ class NFCcardFedow():
             raise Exception(f"lost_my_card_by_signature ERRORS : {response_lost_my_card.status_code}")
         return True
 
-    def card_tag_id_retrieve(self, card_number:str):
+    def card_tag_id_retrieve(self, card_number: str):
         response_qr = _get(self.fedow_config, path=f'card/{card_number}/card_tag_id_retrieve')
         if not response_qr.status_code == 200:
             return None
@@ -774,7 +771,7 @@ class NFCcardFedow():
 
         return serialized_card.validated_data
 
-    def card_number_retrieve(self, card_number:str):
+    def card_number_retrieve(self, card_number: str):
         response_qr = _get(self.fedow_config, path=f'card/{card_number}/card_number_retrieve')
         if not response_qr.status_code == 200:
             return None
@@ -785,7 +782,6 @@ class NFCcardFedow():
             raise Exception(serialized_card.errors)
 
         return serialized_card.validated_data
-
 
     def qr_retrieve(self, qrcode_uuid: uuid4):
         # On vérifie que l'uuid soit bien un uuid :
@@ -969,6 +965,36 @@ class TransactionFedow():
         else:
             logger.error(response_w2w.json())
             raise Exception(response_w2w.json())
+
+
+    def list_by_asset(self,
+                            asset: AssetFedowPublic = None,
+                            start_date: datetime = None,
+                            end_date: datetime = None,
+                            user: TibilletUser = None
+                            ):
+
+        response = _post(
+            fedow_config=self.fedow_config,
+            user=user,
+            data={
+                "asset_uuid": f"{asset.uuid}",
+                "start_date": f"{start_date}",
+                "end_date": f"{end_date}",
+            },
+            path='transaction/list_by_asset')
+
+        if response.status_code == 200:
+            serialized_transaction = TransactionValidator(data=response.json(), many=True)
+            if serialized_transaction.is_valid():
+                return serialized_transaction.validated_data
+            logger.error(serialized_transaction.errors)
+            raise Exception(response.json())
+        else:
+            logger.error(response.json())
+            raise Exception(response.json())
+
+
 
     def refill_from_lespass_to_user_wallet(self,
                                            user: TibilletUser = None,

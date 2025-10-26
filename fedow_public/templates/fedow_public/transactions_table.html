@@ -1,0 +1,58 @@
+{% load i18n humanize tibitags %}
+
+{% if errors %}
+  <div class="errors" role="alert" style="border:1px solid #e00; background:#fee; color:#900; padding:.75rem; margin-bottom:1rem;">
+    <strong>{% trans "Erreurs de validation" %}:</strong>
+    <ul style="margin:.5rem 0 0 1.25rem;">
+      {% for field, field_errors in errors.items %}
+        <li>
+          <strong>{{ field }}:</strong>
+          {% if field_errors.0 %}
+            {{ field_errors.0 }}
+          {% else %}
+            {{ field_errors|join:', ' }}
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
+
+{% if transactions %}
+  <table>
+    <thead>
+      <tr>
+        <th scope="col">{% trans "Date" %}</th>
+        <th scope="col">{% trans "Émetteur" %}</th>
+        <th scope="col">{% trans "Bénéficiaire" %}</th>
+        <th scope="col">{% trans "Montant" %}</th>
+        <th scope="col">{% trans "Carte" %}</th>
+        <th scope="col">{% trans "Action" %}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for tr in transactions %}
+        <tr>
+          <td>{% if tr.datetime %}{{ tr.datetime|date:'d/m/Y H:i' }}{% endif %}</td>
+          <td>{{ tr.sender_name|default:'-' }}</td>
+          <td>{{ tr.receiver_name|default:'-' }}</td>
+          <td>{% if tr.amount is not None %}{{ tr.amount|dround }}{% else %}-{% endif %}</td>
+          <td>
+            {% if tr.card %}
+              {% if tr.card.number_printed %}
+                {{ tr.card.number_printed }}
+              {% elif tr.card.uuid %}
+                {{ tr.card.uuid }}
+              {% else %}
+                {{ tr.card }}
+              {% endif %}
+            {% else %}-{% endif %}
+          </td>
+          <td>{{ tr.get_action_display }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p>{% trans "Aucune transaction trouvée pour cette période." %}</p>
+{% endif %}

@@ -1490,7 +1490,7 @@ def send_payment_success_admin(amount: int, payment_time_str: str, place: str, u
     config = Configuration.get_solo()
     activate(config.language)
     admin_email = config.email
-    title = f"{config.organisation.capitalize()} - {str(dround(amount))}€ : " + _("Payment received via QR code.")
+    title = f"{config.organisation.capitalize()} - {str(dround(amount))}€ : " + _("Payment received.")
 
     # Variables sémantiques pour le template
     try:

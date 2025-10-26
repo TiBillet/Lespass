@@ -1023,6 +1023,7 @@ class PriceChangeForm(ModelForm):
                 Asset.TIME,
                 Asset.FIDELITY,
             ],
+            archive=False,
             origin=client,
         )
 
@@ -3450,7 +3451,6 @@ class AssetAdmin(ModelAdmin):
     autocomplete_fields = [
         'pending_invitations',
     ]
-
 
     actions_row = ["archive", ]
 
