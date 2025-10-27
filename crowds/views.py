@@ -53,7 +53,7 @@ class InitiativeViewSet(viewsets.ViewSet):
         """
         Affiche la liste des projets avec le thème TiBillet + HTMX (pas de blink).
         """
-        if settings.DEBUG:
+        if settings.TEST:
             seed_crowds_demo()
 
         active_slug = (request.GET.get("tag") or "").strip()
