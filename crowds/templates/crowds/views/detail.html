@@ -198,7 +198,7 @@
                     if (result.isConfirmed) {
                         htmx.ajax('POST', `{{ initiative.get_absolute_url }}contributions/${cid}/mark-paid/`, {
                             target: '#contributions_list',
-                            swap: 'outerHTML'
+                            swap: 'innerHTML'
                         })
                     }
                 })
@@ -243,7 +243,7 @@
                         }
                         htmx.ajax('POST', '{{ initiative.get_absolute_url }}contribute/', {
                             target: '#contributions_list',
-                            swap: 'outerHTML',
+                            swap: 'innerHTML',
                             values: {
                                 contributor_name: name,
                                 description: desc,
@@ -349,7 +349,7 @@
                         // Post via HTMX and update the participations list without blink
                         htmx.ajax('POST', '{{ initiative.get_absolute_url }}participate/', {
                             target: '#participations_list',
-                            swap: 'outerHTML',
+                            swap: 'innerHTML',
                             values: {
                                 description: desc,
                                 requested_amount_cents: amt
@@ -376,15 +376,13 @@
                         }
                         htmx.ajax('POST', `{{ initiative.get_absolute_url }}participations/${pid}/complete/`, {
                             target: '#participations_list',
-                            swap: 'outerHTML',
+                            swap: 'innerHTML',
                             values: {time_spent_minutes: minutes}
                         });
                     }
                 });
             };
 
-            // Attach once per page load
-            document.body.addEventListener('htmx:afterRequest', window.crowdsHandleVote);
         </script>
 
     </main>

@@ -61,7 +61,7 @@
                           title="{% translate 'Valider la demande' %}"
                           hx-post="{{ initiative.get_absolute_url }}participations/{{ p.uuid }}/approve/"
                           hx-target="#participations_list"
-                          hx-swap="outerHTML">
+                          hx-swap="innerHTML">
                     {% translate 'Approuver' %}
                   </button>
                 {% elif p.state == 'completed_user' %}
@@ -69,7 +69,7 @@
                           title="{% translate 'Valider la participation' %}"
                           hx-post="{{ initiative.get_absolute_url }}participations/{{ p.uuid }}/validate/"
                           hx-target="#participations_list"
-                          hx-swap="outerHTML">
+                          hx-swap="innerHTML">
                     {% translate 'Valider' %}
                   </button>
                 {% else %}

@@ -230,9 +230,7 @@ def seed() -> None:
     if not settings.DEBUG:
         return
 
-    asset = _get_asset()
-    if not asset:
-        return  # cannot seed without an asset
+    asset = None
 
     # Ensure tags exist with colors
     tag_objs = {}

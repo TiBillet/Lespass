@@ -41,8 +41,8 @@
         <li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">
           {% if page_obj.has_next %}
             <a class="page-link"
-               href="?page={{ page_obj.next_page_number }}{% if active_tag %}&tag={{ active_tag.slug }}{% endif %}"
-               hx-get="?page={{ page_obj.next_page_number }}{% if active_tag %}&tag={{ active_tag.slug }}{% endif %}"
+               href="?page={{ page_obj.next_page_number }}{% if active_tag %}&tag={{ active_tag.slug }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}"
+               hx-get="?page={{ page_obj.next_page_number }}{% if active_tag %}&tag={{ active_tag.slug }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}"
                hx-target="#crowds_list"
                hx-push-url="true"
                aria-label="{% translate 'Next' %}">

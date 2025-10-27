@@ -95,7 +95,8 @@ class InitiativeViewSet(viewsets.ViewSet):
         })
 
         # HTMX request: return only the list partial to avoid full reload
-        if request.headers.get("HX-Request") and request.headers.get("HX-Target") == "crowds_list":
+        hx_target = (request.headers.get("HX-Target") or "").lstrip("#")
+        if request.headers.get("HX-Request") and hx_target == "crowds_list":
             return render(request, "crowds/partial/list.html", context)
 
         return render(request, "crowds/views/list.html", context)
