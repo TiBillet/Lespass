@@ -33,7 +33,7 @@
                href="{% url 'crowds-list' %}"
                hx-get="{% url 'crowds-list' %}" hx-target="body" hx-push-url="true">
               <i class="bi bi-piggy-bank"></i>
-              {% translate 'Financement participatif' %}
+              {{ crowd_config.title }}
             </a>
           </li>
           {% endif %}

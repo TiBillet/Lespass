@@ -55,6 +55,7 @@ from BaseBillet.validators import LoginEmailValidator, MembershipValidator, Link
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from TiBillet import settings
+from crowds.models import CrowdConfig
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
 from fedow_connect.utils import dround
@@ -118,6 +119,7 @@ def get_context(request):
         "user": request.user,
         "profile": serialized_user,
         "config": config,
+        "crowd_config": CrowdConfig.get_solo(),
         "meta_url": meta_url,
         "header": True,
         # "tenant": connection.tenant,
