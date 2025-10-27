@@ -2,12 +2,12 @@
 {% load i18n %}
 
 {% block title %}{{ crowd_config.title }}{% endblock %}
-{% block meta_description %}{{ crowd_config.description | safe | default:"" }} - {{ config.organisation }}{% endblock %}
+{% block meta_description %}{{ crowd_config.description | striptags | default:"" }} - {{ config.organisation }}{% endblock %}
 {% block og_title %}{{ crowd_config.title }} | {{ config.organisation }}{% endblock %}
-{% block og_description %}{{ crowd_config.description | safe | default:"" }}} - {{ config.organisation }}{% endblock %}
+{% block og_description %}{{ crowd_config.description | striptags | default:"" }}} - {{ config.organisation }}{% endblock %}
 {% block og_image_alt %}{{ config.organisation }} - {{ crowd_config.title }}{% endblock %}
 {% block twitter_title %}{{ crowd_config.title }} | {{ config.organisation }}{% endblock %}
-{% block twitter_description %}{{ crowd_config.description | safe | default:"" }}} - {{ config.organisation }}{% endblock %}
+{% block twitter_description %}{{ crowd_config.description | striptags | default:"" }}} - {{ config.organisation }}{% endblock %}
 {% block twitter_image_alt %}{{ config.organisation }} - {{ crowd_config.title }}{% endblock %}
 
 {% block main %}
