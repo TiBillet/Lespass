@@ -227,7 +227,7 @@ def seed() -> None:
     - Idempotent: uses get_or_create by name/slug and does not duplicate
     - Assigns colored tags and a few contributions to each initiative to vary progress
     """
-    if not settings.DEBUG:
+    if not settings.TEST:
         return
 
     asset = None

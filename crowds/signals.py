@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 
+from django.conf import settings
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from django.db import connection
@@ -56,7 +57,7 @@ def contribution_paid_notify(sender, instance: Contribution, created: bool, **kw
         # paid_values = {Contribution.PaymentStatus.PAID, Contribution.PaymentStatus.PAID_ADMIN}
         # if new_status in paid_values and new_status != old_status:
 
-        if new_status == Contribution.PaymentStatus.PENDING:
+        if new_status == Contribution.PaymentStatus.PENDING and not settings.TEST:
             try:
                 schema_name = connection.schema_name
             except Exception:
