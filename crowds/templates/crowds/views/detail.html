@@ -2,24 +2,20 @@
 {% load i18n %}
 
 {% block title %}{{ initiative.name }}{% endblock %}
-{% block meta_description %}{{ initiative.description|striptags|truncatechars:150 }} -
-    {{ config.organisation }}{% endblock %}
+{% block meta_description %}{% if initiative.short_description %}{{ initiative.short_description|striptags }}{% elif initiative.description %}{{ initiative.description|safe|striptags|truncatechars:150 }}{% else %}{{ initiative.name }}{% endif %} - {{ config.organisation }}{% endblock %}
 {% block og_title %}{{ initiative.name }}{% endblock %}
-{% block og_description %}{{ initiative.description|striptags|truncatechars:150 }} -
-    {{ config.organisation }}{% endblock %}
+{% block og_description %}{% if initiative.short_description %}{{ initiative.short_description|striptags }}{% elif initiative.description %}{{ initiative.description|safe|striptags|truncatechars:150 }}{% else %}{{ initiative.name }}{% endif %} - {{ config.organisation }}{% endblock %}
+{% block og_image %}{% with image=initiative.get_img %}{% if image and image.social_card %}{{ image.social_card.url }}{% elif image and image.hdr %}{{ image.hdr.url }}{% else %}{{ block.super }}{% endif %}{% endwith %}{% endblock %}
 {% block og_image_alt %}{{ initiative.name }} - {{ config.organisation }}{% endblock %}
 {% block twitter_title %}{{ initiative.name }}{% endblock %}
-{% block twitter_description %}{{ initiative.description|striptags|truncatechars:150 }} -
-    {{ config.organisation }}{% endblock %}
+{% block twitter_description %}{% if initiative.short_description %}{{ initiative.short_description|striptags }}{% elif initiative.description %}{{ initiative.description|safe|striptags|truncatechars:150 }}{% else %}{{ initiative.name }}{% endif %} - {{ config.organisation }}{% endblock %}
+{% block twitter_image %}{% with image=initiative.get_img %}{% if image and image.social_card %}{{ image.social_card.url }}{% elif image and image.hdr %}{{ image.hdr.url }}{% else %}{{ block.super }}{% endif %}{% endwith %}{% endblock %}
 {% block twitter_image_alt %}{{ initiative.name }} - {{ config.organisation }}{% endblock %}
 
 {% block main %}
     <main class="container-lg pb-5">
         <header class="mb-3">
-            {% if initiative.image %}
-                <img src="{{ initiative.image }}" alt="{{ initiative.name }}" class="img-fluid w-100 rounded"
-                     style="max-height: 33vh; object-fit: cover;">
-            {% endif %}
+            {% include 'reunion/partials/picture.html' with img=initiative.get_img alt=initiative.name style='max-height: 33vh' %}
             <h1 class="mt-3">{{ initiative.name }}
                 {# compteur de votes #}
                 <span class="ms-sm-2">
@@ -27,9 +23,26 @@
                 </span>
             </h1>
 
+            {# Tags de l’initiative #}
+            {% if initiative.tags.all %}
+                <p class="mt-2" aria-label="Tags de l’initiative">
+                    {% for tag in initiative.tags.all %}
+                        <a class="badge rounded-pill text-decoration-none me-1 mb-1"
+                           style="{{ tag.style_attr }}"
+                           href="{% url 'crowds-list' %}?tag={{ tag.slug }}"
+                           hx-get="{% url 'crowds-list' %}?tag={{ tag.slug }}"
+                           hx-target="body"
+                           hx-swap="innerHTML"
+                           hx-push-url="true">
+                            <i class="bi bi-tag" aria-hidden="true"></i> {{ tag.name }}
+                        </a>
+                    {% endfor %}
+                </p>
+            {% endif %}
+
         </header>
 
-        <p class="lead">{{ initiative.description|linebreaks }}</p>
+        <p class="lead">{{ initiative.description |safe |default:"" }}</p>
 
         <section class="my-4">
             <progress value="{{ initiative.progress_percent_int }}" max="100" class="w-100"
@@ -42,7 +55,9 @@
         {# Barre de progression des demandes de participations vs financements #}
         <section class="my-4">
             <div class="progress">
-                <div class="progress-bar bg-{{ requested_color }}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ requested_percent_int_capped }}" style="width: 0%" data-requested-bar="1" data-width-int="{{ requested_percent_int_capped }}">
+                <div class="progress-bar bg-{{ requested_color }}" role="progressbar" aria-valuemin="0"
+                     aria-valuemax="100" aria-valuenow="{{ requested_percent_int_capped }}" style="width: 0%"
+                     data-requested-bar="1" data-width-int="{{ requested_percent_int_capped }}">
                     <span class="visually-hidden">{{ requested_percent_int }}%</span>
                 </div>
             </div>
@@ -53,16 +68,17 @@
                 — {{ requested_percent_int }}%
             </p>
             <script>
-              (function(){
-                try {
-                  document.querySelectorAll('[data-requested-bar]')?.forEach(function(el){
-                    var v = parseInt(el.getAttribute('data-width-int') || '0', 10);
-                    if (isNaN(v) || v < 0) v = 0;
-                    if (v > 100) v = 100;
-                    el.style.width = v + '%';
-                  });
-                } catch(e) { /* noop */ }
-              })();
+                (function () {
+                    try {
+                        document.querySelectorAll('[data-requested-bar]')?.forEach(function (el) {
+                            var v = parseInt(el.getAttribute('data-width-int') || '0', 10);
+                            if (isNaN(v) || v < 0) v = 0;
+                            if (v > 100) v = 100;
+                            el.style.width = v + '%';
+                        });
+                    } catch (e) { /* noop */
+                    }
+                })();
             </script>
         </section>
 
@@ -111,11 +127,18 @@
                 </button>
             {% endif %}
 
-            {# Placeholder CTA – flow paiement à brancher #}
-            <a href="#" class="btn btn-primary" role="button" aria-disabled="true" title="TODO: Paiement"
-               onclick="openContributionModal('{{ initiative.id }}', '{{ initiative.name }}')">
-                💸 {% translate 'Contribuer financièrement' %}
-            </a>
+            {# Contribution financière (formulaire Swal → HTMX) #}
+            {% if user.is_authenticated %}
+                <button type="button" class="btn btn-primary" title="{% translate 'Contribuer financièrement' %}"
+                        onclick="openContributionModal()">
+                    💸 {% translate 'Contribuer financièrement' %}
+                </button>
+            {% else %}
+                <button type="button" class="btn btn-primary" title="{% translate 'Contribuer financièrement' %}"
+                        onclick="crowdsVoteRequireLogin()">
+                    💸 {% translate 'Contribuer financièrement' %}
+                </button>
+            {% endif %}
         </div>
 
 
@@ -148,30 +171,8 @@
 
         <section class="mt-5">
             <h2 class="h4 mb-3">{% translate 'Contributions financières' %}</h2>
-            <div class="table-responsive">
-                <table class="table align-middle">
-                    <thead>
-                    <tr>
-                        <th scope="col">{% translate 'Contributeur' %}</th>
-                        <th scope="col" class="text-end">{% translate 'Montant' %}</th>
-                        <th scope="col">{% translate 'Date' %}</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {% for c in contributions %}
-                        <tr>
-                            <td>{{ c.contributor.email }}</td>
-                            <td class="text-end">{{ c.amount_eur|floatformat:2 }} {{ initiative.asset.currency_code }}</td>
-                            <td>{{ c.created_at|date:'Y-m-d H:i' }}</td>
-                        </tr>
-                    {% empty %}
-                        <tr>
-                            <td colspan="3"
-                                class="text-center text-muted py-4">{% translate 'Aucune contribution pour le moment.' %}</td>
-                        </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
+            <div id="contributions_list">
+                {% include 'crowds/partial/contributions.html' %}
             </div>
         </section>
 
@@ -185,35 +186,84 @@
 
 
         <script>
-            function openContributionModal(initiativeId, initiativeName) {
+            function crowdsConfirmMarkContributionPaid(cid) {
                 Swal.fire({
-                    title: `Contribuer à « ${initiativeName} »`,
-                    input: 'number',
-                    inputLabel: 'Montant en euros',
-                    inputAttributes: {min: 1, step: 0.5},
-                    confirmButtonText: 'Continuer vers le paiement',
+                    title: '{% translate "Confirmer le paiement" %}',
+                    text: '{% translate "Marquer cette contribution comme payée ?" %}',
+                    icon: 'question',
                     showCancelButton: true,
-                    cancelButtonText: 'Annuler',
-                    preConfirm: (value) => {
-                        if (!value || value <= 0) {
-                            Swal.showValidationMessage('Veuillez saisir un montant valide.');
+                    confirmButtonText: '{% translate "Oui, marquer payée" %}',
+                    cancelButtonText: '{% translate "Annuler" %}'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        htmx.ajax('POST', `{{ initiative.get_absolute_url }}contributions/${cid}/mark-paid/`, {
+                            target: '#contributions_list',
+                            swap: 'outerHTML'
+                        })
+                    }
+                })
+            }
+
+            function openContributionModal() {
+                Swal.fire({
+                    title: '{% translate "Contribuer financièrement" %}',
+                    html: `
+                        <div class="mb-3 text-start">
+                            <label for="contrib-name" class="form-label">{% translate "Nom du contributeur ou de l'organisation" %}</label>
+                            <input id="contrib-name" type="text" class="form-control" placeholder="{% translate "Votre nom" %}">
+                            <div class="form-text">{{ contrib_name_help }}</div>
+                        </div>
+                        <div class="mb-3 text-start">
+                            <label for="contrib-desc" class="form-label">{% translate "Message / description" %}</label>
+                            <textarea id="contrib-desc" class="form-control" rows="3" placeholder="{% translate "Un mot pour l'équipe (optionnel)" %}"></textarea>
+                            <div class="form-text">{{ contrib_desc_help }}</div>
+                        </div>
+                        <div class="mb-0 text-start">
+                            <label for="contrib-amt" class="form-label">{% translate "Montant (en euros)" %}</label>
+                            <input id="contrib-amt" type="number" min="0" step="0.01" class="form-control" placeholder="0.00">
+                            <div class="form-text">{% translate "Le montant sera converti en centimes." %}</div>
+                        </div>
+                    `,
+                    focusConfirm: false,
+                    showCancelButton: true,
+                    cancelButtonText: '{% translate "Annuler" %}',
+                    confirmButtonText: '{% translate "Valider la contribution" %}',
+                    preConfirm: () => {
+                        const name = document.getElementById('contrib-name').value.trim();
+                        const desc = document.getElementById('contrib-desc').value.trim();
+                        const amtStr = document.getElementById('contrib-amt').value;
+                        const amt = Math.round(parseFloat(amtStr || '0') * 100);
+                        if (!name) {
+                            Swal.showValidationMessage('{% translate "Veuillez indiquer votre nom." %}');
                             return false;
                         }
-                        // Envoi via HTMX (pas de redirection immédiate)
-                        htmx.ajax('POST', `/api/initiatives/${initiativeId}/contribute/`, {
-                            target: 'body',
-                            swap: 'none',
-                            values: {amount: Math.round(value * 100)}
+                        if (!amt || amt <= 0) {
+                            Swal.showValidationMessage('{% translate "Veuillez indiquer un montant valide (> 0)." %}');
+                            return false;
+                        }
+                        htmx.ajax('POST', '{{ initiative.get_absolute_url }}contribute/', {
+                            target: '#contributions_list',
+                            swap: 'outerHTML',
+                            values: {
+                                contributor_name: name,
+                                description: desc,
+                                amount: amt
+                            }
                         });
                     }
                 });
             }
 
-            // Gère la réponse JSON du serveur (HTMX)
+            // Gère uniquement les réponses JSON (paiement) et ignore le HTML (ex: vote badge)
             document.body.addEventListener('htmx:afterOnLoad', function (event) {
-                const response = event.detail.xhr.responseText;
                 try {
-                    const data = JSON.parse(response);
+                    const xhr = event.detail.xhr;
+                    const ctype = (xhr.getResponseHeader('Content-Type') || '').toLowerCase();
+                    if (!ctype.includes('application/json')) {
+                        return; // rien à faire pour les réponses HTML (partials HTMX)
+                    }
+                    const data = JSON.parse(xhr.responseText || 'null');
+                    if (!data) return;
                     if (data.stripe_url) {
                         Swal.fire({
                             icon: 'success',
@@ -226,7 +276,7 @@
                         Swal.fire('Erreur', data.error, 'error');
                     }
                 } catch (e) {
-                    console.error("Réponse inattendue :", response);
+                    // ignore
                 }
             });
 
@@ -252,6 +302,19 @@
                 });
             };
 
+            // Feedback visuel après vote via HX-Trigger
+            document.body.addEventListener('crowds:vote', function (e) {
+                const created = !!(e && e.detail && e.detail.created);
+                Swal.fire({
+                    toast: true,
+                    position: 'top',
+                    timer: 1600,
+                    showConfirmButton: false,
+                    icon: created ? 'success' : 'info',
+                    title: created ? '{% translate "Merci pour votre vote !" %}' : '{% translate "Votre vote est déjà pris en compte." %}'
+                });
+            });
+
             // --- Participations: dialog + POST via HTMX to update partial ---
             window.crowdsOpenParticipate = function () {
                 Swal.fire({
@@ -264,7 +327,7 @@
                         <div class="mb-0 text-start">
                             <label class="form-label">{% translate "Montant sollicité (en euros)" %}</label>
                             <input id="part-amt" type="number" min="0" step="0.01" class="form-control" placeholder="0.00">
-                            <div class="form-text">{% translate "Ce montant correspond à votre part du budget estimé (schema.org/MonetaryAmount)." %}</div>
+                            <div class="form-text">{% translate "Ce montant correspond à votre part du budget estimé." %}</div>
                         </div>
                     `,
                     focusConfirm: false,
@@ -301,7 +364,7 @@
                     title: '{% translate "Marquer la participation comme terminée" %}',
                     input: 'number',
                     inputLabel: '{% translate "Temps passé (en minutes)" %}',
-                    inputAttributes: { min: 1, step: 1 },
+                    inputAttributes: {min: 1, step: 1},
                     showCancelButton: true,
                     cancelButtonText: '{% translate "Annuler" %}',
                     confirmButtonText: '{% translate "Valider" %}',
@@ -314,7 +377,7 @@
                         htmx.ajax('POST', `{{ initiative.get_absolute_url }}participations/${pid}/complete/`, {
                             target: '#participations_list',
                             swap: 'outerHTML',
-                            values: { time_spent_minutes: minutes }
+                            values: {time_spent_minutes: minutes}
                         });
                     }
                 });

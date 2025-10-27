@@ -693,14 +693,14 @@ UNFOLD = {
                 "items": [
                     {
                         "title": _("Configuration"),
-                        "icon": "linked_services",  # Supported icon set: https://fonts.google.com/icons
+                        "icon": "manufacturing",  # Supported icon set: https://fonts.google.com/icons
                         "link": reverse_lazy("staff_admin:crowds_crowdconfig_changelist"),
                         # "badge": "Administration.admin_tenant.badge_callback",
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
                     },
                     {
                         "title": _("Initiative"),
-                        "icon": "linked_services",  # Supported icon set: https://fonts.google.com/icons
+                        "icon": "crowdsource",  # Supported icon set: https://fonts.google.com/icons
                         "link": reverse_lazy("staff_admin:crowds_initiative_changelist"),
                         # "badge": "Administration.admin_tenant.badge_callback",
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"

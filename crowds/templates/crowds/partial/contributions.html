@@ -1,0 +1,51 @@
+{% load i18n %}
+<div class="table-responsive">
+  <table class="table align-middle">
+    <thead>
+      <tr>
+        <th scope="col">{% translate 'Contributeur' %}</th>
+        <th scope="col">{% translate 'Description' %}</th>
+        <th scope="col" class="text-end">{% translate 'Montant' %}</th>
+        <th scope="col">{% translate 'Statut' %}</th>
+        <th scope="col">{% translate 'Date' %}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in contributions %}
+        <tr>
+          <td>{{ c.contributor_name|default:c.contributor.email }}</td>
+          <td class="small">{{ c.description|default:""|linebreaksbr }}</td>
+          <td class="text-end">{{ c.amount_eur|floatformat:2 }} {{ initiative.asset.currency_code }}</td>
+          <td>
+            {% if c.payment_status == 'pending' %}
+              {% if user.is_authenticated %}
+                {% if user.is_staff or user.is_superuser %}
+                  <button class="badge text-bg-warning border-0" style="cursor:pointer"
+                          title="{% translate 'Marquer comme payée' %}"
+                          onclick="crowdsConfirmMarkContributionPaid('{{ c.uuid }}')">
+                    {% translate 'En attente de paiement' %}
+                  </button>
+                {% else %}
+                  <span class="badge text-bg-warning">{% translate 'En attente de paiement' %}</span>
+                {% endif %}
+              {% else %}
+                <span class="badge text-bg-warning">{% translate 'En attente de paiement' %}</span>
+              {% endif %}
+            {% elif c.payment_status == 'paid' %}
+              <span class="badge text-bg-success">{% translate 'Payée en ligne' %}</span>
+            {% elif c.payment_status == 'admin_paid' %}
+              <span class="badge text-bg-success">{% translate 'Noté comme Payée' %}</span>
+            {% else %}
+              {{ c.payment_status }}
+            {% endif %}
+          </td>
+          <td>{{ c.created_at|date:'Y-m-d H:i' }}</td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="5" class="text-center text-muted py-4">{% translate 'Aucune contribution pour le moment.' %}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

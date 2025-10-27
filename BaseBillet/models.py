@@ -124,12 +124,51 @@ class Tag(models.Model):
     slug = models.CharField(max_length=50, verbose_name=_("Tag slug"), db_index=True)
     color = models.CharField(max_length=7, verbose_name=_("Tag color"), default="#0dcaf0")
 
-    def __str__(self):
-        return self.name
+    @staticmethod
+    def _clean_hex(value: str, default: str) -> str:
+        try:
+            v = (value or "").strip()
+            if not v:
+                return default
+            if not v.startswith('#'):
+                v = f"#{v}"
+            if len(v) == 4:  # #abc -> #aabbcc
+                v = f"#{v[1] * 2}{v[2] * 2}{v[3] * 2}"
+            if len(v) != 7:
+                return default
+            int(v[1:], 16)  # validate
+            return v.lower()
+        except Exception:
+            return default
+
+    @property
+    def color_bg(self):
+        return self.color
+
+    @property
+    def contrast_fg(self) -> str:
+        """Retourne '#000000' ou '#ffffff' selon le contraste avec color_bg (méthode YIQ)."""
+        bg = self._clean_hex(self.color, "#0dcaf0")
+        r = int(bg[1:3], 16)
+        g = int(bg[3:5], 16)
+        b = int(bg[5:7], 16)
+        yiq = (r * 299 + g * 587 + b * 114) / 1000
+        return "#000000" if yiq >= 128 else "#ffffff"
+
+    @property
+    def style_attr(self) -> str:
+        """Inline style pour un badge coloré accessible."""
+        bg = self._clean_hex(self.color_bg, "#0dcaf0")
+        fg = self.contrast_fg
+        return f"background-color:{bg};color:{fg};border:1px solid rgba(0,0,0,.1)"
 
     def save(self, *args, **kwargs):
-        self.slug = slugify(f"{self.name}")
+        self.slug = slugify(self.name)
+        self.color = self._clean_hex(self.color, "#0dcaf0")
         super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
 
     class Meta:
         verbose_name = _("Tag")
@@ -1376,6 +1415,10 @@ class Event(models.Model):
         # Clear the cache for get_img and get_sticker_img methods
         cache.delete(f'event_get_img_{self.pk}')
         cache.delete(f'event_get_sticker_img_{self.pk}')
+
+    def get_absolute_url(self):
+        return reverse("event-detail", args=[self.slug])
+
 
     def __str__(self):
         return f"{self.datetime.strftime('%d/%m')} {self.name}"

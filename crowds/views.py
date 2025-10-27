@@ -8,42 +8,20 @@ from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 
 from django.core.paginator import Paginator
-from django.db.models import Count
+from django.db.models import Count, Q
+from django.utils import timezone
+import json
 
 from BaseBillet.views import get_context
+from BaseBillet.models import Tag
 from fedow_public.models import AssetFedowPublic
 from .models import Initiative, Contribution, CrowdConfig, Vote, Participation
+
 from django.contrib.auth import get_user_model
+from .demo_data import seed as seed_crowds_demo
 
 User = get_user_model()
 
-def demo_data():
-    if settings.DEBUG:
-        if not Initiative.objects.all():
-            project1 = Initiative.objects.create(
-                name="Demo Project",
-                description="This is a demo project",
-                funding_goal=1000,
-                asset=AssetFedowPublic.objects.get(category=AssetFedowPublic.STRIPE_FED_FIAT),
-            )
-
-            Contribution.objects.create(
-                initiative=project1,
-                contributor=User.objects.get(email="jturbeaux@pm.me"),
-                amount=100,
-            )
-
-            project2 = Initiative.objects.create(
-                name="Demo Project 2",
-                description="This is a demo project 2",
-                funding_goal=10000,
-                asset=AssetFedowPublic.objects.get(category=AssetFedowPublic.STRIPE_FED_FIAT),
-            )
-            Contribution.objects.create(
-                initiative=project2,
-                contributor=User.objects.get(email="jturbeaux@pm.me"),
-                amount=1500,
-            )
 
 # Create your views here.
 class InitiativeViewSet(viewsets.ViewSet):
@@ -61,6 +39,13 @@ class InitiativeViewSet(viewsets.ViewSet):
             "initiative": initiative,
         }
 
+    def _contributions_context(self, initiative):
+        contributions = initiative.contributions.select_related("contributor").order_by("-created_at")
+        return {
+            "contributions": contributions,
+            "initiative": initiative,
+        }
+
     # ------------------------
     # Liste des projets
     # ------------------------
@@ -69,13 +54,32 @@ class InitiativeViewSet(viewsets.ViewSet):
         Affiche la liste des projets avec le thème TiBillet + HTMX (pas de blink).
         """
         if settings.DEBUG:
-            demo_data()
+            seed_crowds_demo()
+
+        active_slug = (request.GET.get("tag") or "").strip()
+        search_query = (request.GET.get("q") or "").strip()
 
         initiatives_qs = (
             Initiative.objects.all()
             .annotate(votes_total=Count("votes", distinct=True))
-            .order_by("-votes_total", "-created_at")
+            .prefetch_related("tags")
         )
+        # Filtering by tag
+        active_tag = None
+        if active_slug:
+            active_tag = Tag.objects.filter(slug=active_slug).first()
+            if active_tag:
+                initiatives_qs = initiatives_qs.filter(tags__slug=active_slug)
+        # Full-text lite search across name, description, tag name
+        if search_query:
+            initiatives_qs = initiatives_qs.filter(
+                Q(name__icontains=search_query)
+                | Q(description__icontains=search_query)
+                | Q(tags__name__icontains=search_query)
+            )
+        # Order by votes then date, and distinct because of M2M joins
+        initiatives_qs = initiatives_qs.order_by("-votes_total", "-created_at").distinct()
+
         paginator = Paginator(initiatives_qs, 9)
         page_number = request.GET.get("page")
         page_obj = paginator.get_page(page_number)
@@ -85,6 +89,9 @@ class InitiativeViewSet(viewsets.ViewSet):
             "crowd_config": CrowdConfig.get_solo(),
             "page_obj": page_obj,
             "initiatives": page_obj.object_list,
+            "active_tag": active_tag,
+            "all_tags": Tag.objects.all(),
+            "search_query": search_query,
         })
 
         # HTMX request: return only the list partial to avoid full reload
@@ -107,10 +114,16 @@ class InitiativeViewSet(viewsets.ViewSet):
         # Précharger les votants pour éviter le N+1
         votes = initiative.votes.select_related("user").order_by("-created_at")
         participations = initiative.participations.select_related("participant").order_by("-created_at")
+        # Help texts for Contribution form in Swal
+        from django.utils.translation import gettext as _
+        name_help = Contribution._meta.get_field("contributor_name").help_text or _("Votre nom ou celui de votre organisation (affiché publiquement)")
+        desc_help = Contribution._meta.get_field("description").help_text or _("Un petit mot pour décrire votre contribution")
         context.update({
             "crowd_config": CrowdConfig.get_solo(),
             "initiative": initiative,
             "contributions": contributions,
+            "contrib_name_help": name_help,
+            "contrib_desc_help": desc_help,
             "votes": votes,
             "voters_count": votes.count(),
             "participations": participations,
@@ -143,11 +156,21 @@ class InitiativeViewSet(viewsets.ViewSet):
             return response
 
         # Crée le vote si inexistant (idempotent)
-        Vote.objects.get_or_create(initiative=initiative, user=request.user)
-        # Retourner le badge mis à jour
+        _, created = Vote.objects.get_or_create(initiative=initiative, user=request.user)
+        # Retourner le badge mis à jour + un évènement HTMX pour feedback UI
         context = get_context(request)
         context.update({"initiative": initiative})
-        return render(request, "crowds/partial/votes_badge.html", context)
+        response = render(request, "crowds/partial/votes_badge.html", context)
+        # Déclenche un évènement custom côté client sans JSON dans le body
+        # HTMX parse automatiquement le JSON du header HX-Trigger en tant que detail
+        try:
+            response["HX-Trigger"] = json.dumps({
+                "crowds:vote": {"created": created, "uuid": str(initiative.uuid)}
+            })
+        except Exception:
+            # En cas d'erreur de sérialisation, on envoie une forme simple
+            response["HX-Trigger"] = "crowds:vote"
+        return response
 
     @action(detail=True, methods=["post"], url_path="participate")
     def participate(self, request, pk=None):
@@ -298,3 +321,71 @@ class InitiativeViewSet(viewsets.ViewSet):
         context.update(self._participations_context(initiative))
         return render(request, "crowds/partial/participations.html", context)
 
+    @action(detail=True, methods=["post"], url_path="contribute")
+    def contribute(self, request, pk=None):
+        """
+        Crée une contribution financière à une initiative.
+        Champs attendus (POST): amount (centimes), contributor_name (str), description (str, optionnel)
+        Retourne toujours du HTML: le partiel 'crowds/partial/contributions.html'.
+        """
+        initiative = get_object_or_404(Initiative, pk=pk)
+        if not request.user.is_authenticated:
+            context = get_context(request)
+            context.update(self._contributions_context(initiative))
+            response = render(request, "crowds/partial/contributions.html", context)
+            response.status_code = 401
+            return response
+        # Inputs
+        try:
+            amount = int(request.POST.get("amount") or request.POST.get("amount_cents") or 0)
+        except (TypeError, ValueError):
+            amount = 0
+        contributor_name = (request.POST.get("contributor_name") or "").strip()
+        description = (request.POST.get("description") or "").strip()
+        if amount <= 0 or not contributor_name:
+            context = get_context(request)
+            context.update(self._contributions_context(initiative))
+            response = render(request, "crowds/partial/contributions.html", context)
+            response.status_code = 400
+            return response
+        # Create
+        Contribution.objects.create(
+            initiative=initiative,
+            contributor=request.user,
+            contributor_name=contributor_name,
+            description=description,
+            amount=amount,
+        )
+        context = get_context(request)
+        context.update(self._contributions_context(initiative))
+        return render(request, "crowds/partial/contributions.html", context)
+
+    @action(detail=True, methods=["post"], url_path=r"contributions/(?P<cid>[^/.]+)/mark-paid")
+    def mark_contribution_paid(self, request, pk=None, cid=None):
+        """
+        Marque une contribution comme payée (admin/staff uniquement).
+        Retourne toujours le partiel HTML des contributions.
+        """
+        initiative = get_object_or_404(Initiative, pk=pk)
+        # Toujours renvoyer le partiel HTML (règle HTMX)
+        def _render(status_code=200):
+            ctx = get_context(request)
+            ctx.update(self._contributions_context(initiative))
+            resp = render(request, "crowds/partial/contributions.html", ctx)
+            resp.status_code = status_code
+            return resp
+        if not request.user.is_authenticated:
+            return _render(status_code=401)
+        if not (request.user.is_staff or request.user.is_superuser):
+            return _render(status_code=403)
+        contrib = get_object_or_404(Contribution, pk=cid, initiative=initiative)
+        # Met à jour seulement si nécessaire
+        try:
+            if contrib.payment_status not in [Contribution.PaymentStatus.PAID, Contribution.PaymentStatus.PAID_ADMIN]:
+                contrib.payment_status = Contribution.PaymentStatus.PAID_ADMIN
+                contrib.paid_at = timezone.now()
+                contrib.save(update_fields=["payment_status", "paid_at"]) 
+        except Exception:
+            # même en cas d'erreur, renvoyer le partiel (l'état restera inchangé)
+            pass
+        return _render(status_code=200)

@@ -1,20 +1,89 @@
 from uuid import uuid4
-
+import logging
 from django.db import models
+from django.core.cache import cache
+
 from solo.models import SingletonModel
 from django.db import models
 from django.utils import timezone
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
+from django.utils.text import slugify
+from stdimage import StdImageField
+
+from BaseBillet.models import Configuration
+
+logger = logging.getLogger(__name__)
 
 
 # Create your models here.
 
 class CrowdConfig(SingletonModel):
-    active = models.BooleanField(default=False, verbose_name="Activer")
     title = models.CharField(max_length=255, blank=True, verbose_name=_("Titre"), default="Financement participatif")
     description = models.TextField(blank=True, default="Découvrez les projets en cours de financement participatif")
-    vote_button_name = models.CharField(max_length=255, blank=True, verbose_name=_("Nom du bouton de vote"), default="Voter")
+    vote_button_name = models.CharField(max_length=255, blank=True, verbose_name=_("Nom du bouton de vote"),
+                                        default="Voter")
+
+'''
+
+class Tag(models.Model):
+    """
+    Tag simple pour classer les initiatives (schema.org: keywords/additionalType).
+    """
+    name = models.CharField(max_length=64, unique=True, verbose_name=_("Nom"))
+    slug = models.SlugField(max_length=64, unique=True, verbose_name="Slug")
+    # Couleur de fond personnalisée (hex). Le texte sera automatiquement noir ou blanc selon le contraste.
+    color_bg = models.CharField(max_length=7, blank=True, default="#6c757d", verbose_name=_("Couleur de fond (hex)"))
+
+    class Meta:
+        ordering = ("name",)
+        verbose_name = _("Tag")
+        verbose_name_plural = _("Tags")
+
+    def __str__(self) -> str:
+        return self.name
+
+    @staticmethod
+    def _clean_hex(value: str, default: str) -> str:
+        try:
+            v = (value or "").strip()
+            if not v:
+                return default
+            if not v.startswith('#'):
+                v = f"#{v}"
+            if len(v) == 4:  # #abc -> #aabbcc
+                v = f"#{v[1] * 2}{v[2] * 2}{v[3] * 2}"
+            if len(v) != 7:
+                return default
+            int(v[1:], 16)  # validate
+            return v.lower()
+        except Exception:
+            return default
+
+    @property
+    def contrast_fg(self) -> str:
+        """Retourne '#000000' ou '#ffffff' selon le contraste avec color_bg (méthode YIQ)."""
+        bg = self._clean_hex(self.color_bg, "#6c757d")
+        r = int(bg[1:3], 16)
+        g = int(bg[3:5], 16)
+        b = int(bg[5:7], 16)
+        yiq = (r * 299 + g * 587 + b * 114) / 1000
+        return "#000000" if yiq >= 128 else "#ffffff"
+
+    @property
+    def style_attr(self) -> str:
+        """Inline style pour un badge coloré accessible."""
+        bg = self._clean_hex(self.color_bg, "#6c757d")
+        fg = self.contrast_fg
+        return f"background-color:{bg};color:{fg};border:1px solid rgba(0,0,0,.1)"
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+        self.color_bg = self._clean_hex(self.color_bg, "#6c757d")
+        super().save(*args, **kwargs)
+
+'''
 
 class Initiative(models.Model):
     """
@@ -22,13 +91,19 @@ class Initiative(models.Model):
     Conforme à schema.org/Project.
     """
     uuid = models.UUIDField(primary_key=True, editable=False, default=uuid4)
-    name = models.CharField(max_length=255, verbose_name="Nom du projet")
-    description = models.TextField(blank=True, verbose_name="Description")
-    image = models.URLField(blank=True, null=True, verbose_name="Image (URL)")
-    funding_goal = models.PositiveIntegerField(verbose_name="Objectif (centimes)")
+    name = models.CharField(max_length=255, verbose_name=_("Name"), help_text=_("Name of the contributing project or initiative."))
+    description = models.TextField(blank=True, verbose_name=_("Description"))
+    short_description = models.CharField(max_length=500, blank=True, verbose_name=_("Short description"), help_text=_("Short description for the cards view and social card."))
+    funding_goal = models.PositiveIntegerField(verbose_name=_("Goal (cents)"), help_text=_("Serves only to calculate the percentage claimed by participants."))
     # funded_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Montant financé (€)")
-    created_at = models.DateTimeField(default=timezone.now)
-    asset = models.ForeignKey("fedow_public.AssetFedowPublic", on_delete=models.PROTECT, related_name="projects")
+    created_at = models.DateTimeField(default=timezone.now, verbose_name=_("Created at"))
+
+    asset = models.ForeignKey("fedow_public.AssetFedowPublic", on_delete=models.PROTECT,
+                              related_name="projects", verbose_name=_("Asset"),
+                              help_text=_("Force a specific asset for project financing. If empty, it will be in euros."),
+                              blank=True, null=True)
+
+    tags = models.ManyToManyField('BaseBillet.Tag', blank=True, related_name='initiatives', verbose_name=_('Tags'))
 
     # Type de financement : "cascade" ou "adaptatif"
     funding_mode = models.CharField(
@@ -36,6 +111,64 @@ class Initiative(models.Model):
         choices=[("cascade", "Contribution en cascade"), ("adaptative", "Contribution adaptative")],
         default="adaptative"
     )
+
+
+    image = models.URLField(blank=True, null=True, verbose_name="Image (URL)")
+    img = StdImageField(upload_to='images/',
+                        blank=True, null=True,
+                        variations={
+                            'fhd': (1920, 1920),
+                            'hdr': (1280, 1280),
+                            'med': (480, 480),
+                            'thumbnail': (150, 90),
+                            'crop_hdr': (960, 540, True),
+                            'crop': (480, 270, True),
+                            'social_card': (1200, 630, True),
+                        },
+                        delete_orphans=True, verbose_name=_("Main image"),
+                        help_text=_(
+                            "The main image of the initiative, displayed in the head of the page and for social shares. If empty, the config image is displayed.")
+                        )
+
+
+
+    def get_img(self):
+        # Cache key based on instance ID and method name
+        cache_key = f'event_get_img_{self.pk}'
+        cached_result = cache.get(cache_key)
+
+        if cached_result is not None:
+            return cached_result
+
+        # Algo pour récupérer l'image à afficher.
+        if self.img:
+            result = self.img
+        else:
+            config = Configuration.get_solo()
+            if config.img:
+                logger.info("config img")
+                result = config.img
+            else:
+                result = None
+
+        # Cache the result for 1 hour (3600 seconds)
+        cache.set(cache_key, result, 3600)
+        return result
+
+    sticker_img = StdImageField(upload_to='images/',
+                                blank=True, null=True,
+                                variations={
+                                    'fhd': (1920, 1920),
+                                    'hdr': (1280, 1280),
+                                    'med': (480, 480),
+                                    'thumbnail': (150, 90),
+                                    'crop_hdr': (960, 540, True),
+                                    'crop': (480, 270, True),
+                                },
+                                delete_orphans=True, verbose_name=_("Sticker image"),
+                                help_text=_(
+                                    "The small image displayed in the events list. If None, img will be displayed. 4x3 ratio.")
+                                )
 
     def __str__(self):
         return self.name
@@ -60,7 +193,6 @@ class Initiative(models.Model):
         except Exception:
             return 0
 
-
     # --- Sommes demandées par les participations ---
     @property
     def requested_total_cents(self) -> int:
@@ -69,11 +201,11 @@ class Initiative(models.Model):
         """
         try:
             return (
-                self.participations
-                .exclude(state=Participation.State.REQUESTED)
-                .aggregate(models.Sum("requested_amount_cents"))
-                ["requested_amount_cents__sum"]
-                or 0
+                    self.participations
+                    .exclude(state=Participation.State.REQUESTED)
+                    .aggregate(models.Sum("requested_amount_cents"))
+                    ["requested_amount_cents__sum"]
+                    or 0
             )
         except Exception:
             return 0
@@ -134,15 +266,25 @@ class Initiative(models.Model):
     def get_absolute_url(self):
         return reverse("crowds-detail", args=[self.uuid])
 
+
 class Contribution(models.Model):
     """
     Représente une contribution financière à un projet.
     Conforme à schema.org/MonetaryContribution.
     """
+    class PaymentStatus(models.TextChoices):
+        PENDING = "pending", _("En attente de paiement")
+        PAID = "paid", _("Payée")
+        PAID_ADMIN = "admin_paid", _("Indiquée comme payée")
+
     uuid = models.UUIDField(primary_key=True, editable=False, default=uuid4)
     initiative = models.ForeignKey(Initiative, related_name="contributions", on_delete=models.PROTECT)
+    contributor_name = models.CharField(max_length=255, verbose_name=_("Name"), help_text=_("Nom affiché de l'origine de la contribution"), blank=True, null=True)
+    description = models.TextField(blank=True, verbose_name=_("Decrivez ce que vous attendez de la contribution, ou envoyez un messages sympa à l'équipe !"))
     contributor = models.ForeignKey("AuthBillet.TibilletUser", related_name="contributions", on_delete=models.PROTECT)
     amount = models.PositiveIntegerField(verbose_name="Montant (centimes)")
+    payment_status = models.CharField(max_length=16, choices=PaymentStatus.choices, default=PaymentStatus.PENDING, verbose_name=_("Statut de paiement"))
+    paid_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Payée le"))
     created_at = models.DateTimeField(default=timezone.now)
 
     @property
@@ -151,6 +293,7 @@ class Contribution(models.Model):
 
     def __str__(self):
         return f"{self.contributor.email} → {self.amount / 100:.2f} {self.initiative.asset.currency_code}"
+
 
 class Vote(models.Model):
     """
@@ -178,10 +321,12 @@ class Participation(models.Model):
     - Le montant demandé est un MonetaryAmount (nous stockons en centimes: requested_amount_cents).
     - L'état se rapproche de ActionStatusType (proposé, approuvé, terminé, validé).
     """
+
     class State(models.TextChoices):
         REQUESTED = "requested", _("Demande formulée")  # proposedActionStatus
         APPROVED_ADMIN = "approved_admin", _("Demande validée par un·e admin")  # PotentialActionStatus/Approved
-        COMPLETED_USER = "completed_user", _("Participation indiquée comme terminée par l'utilisateur·ice")  # CompletedActionStatus
+        COMPLETED_USER = "completed_user", _(
+            "Participation indiquée comme terminée par l'utilisateur·ice")  # CompletedActionStatus
         VALIDATED_ADMIN = "validated_admin", _("Participation validée par un·e admin")  # Completed/Verified
 
     uuid = models.UUIDField(primary_key=True, editable=False, default=uuid4)
@@ -218,4 +363,3 @@ class Participation(models.Model):
 
     def __str__(self):
         return f"{self.participant.email} → {self.initiative.name} ({self.requested_amount_eur:.2f}€)"
-

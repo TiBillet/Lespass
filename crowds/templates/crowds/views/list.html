@@ -2,12 +2,12 @@
 {% load i18n %}
 
 {% block title %}{{ crowd_config.title }}{% endblock %}
-{% block meta_description %}{{ crowd_config.description }} - {{ config.organisation }}{% endblock %}
+{% block meta_description %}{{ crowd_config.description | safe | default:"" }} - {{ config.organisation }}{% endblock %}
 {% block og_title %}{{ crowd_config.title }} | {{ config.organisation }}{% endblock %}
-{% block og_description %}{{ crowd_config.description }}} - {{ config.organisation }}{% endblock %}
+{% block og_description %}{{ crowd_config.description | safe | default:"" }}} - {{ config.organisation }}{% endblock %}
 {% block og_image_alt %}{{ config.organisation }} - {{ crowd_config.title }}{% endblock %}
 {% block twitter_title %}{{ crowd_config.title }} | {{ config.organisation }}{% endblock %}
-{% block twitter_description %}{{ crowd_config.description }}} - {{ config.organisation }}{% endblock %}
+{% block twitter_description %}{{ crowd_config.description | safe | default:"" }}} - {{ config.organisation }}{% endblock %}
 {% block twitter_image_alt %}{{ config.organisation }} - {{ crowd_config.title }}{% endblock %}
 
 {% block main %}
@@ -16,7 +16,8 @@
         <section class="container-lg p-3 sticky-top bg-body" style="height: fit-content;">
             <div>
                 <h1 class="mb-2">{{ crowd_config.title }}</h1>
-                <p class="text-muted mb-2">{{ crowd_config.description }}</p>
+                <h4 class="text-muted mb-2">{{ crowd_config.short_description | default:"" }}</h4>
+                <p class="text-muted mb-2">{{ crowd_config.description | safe | default:"" }}</p>
 
                 {# Légende FALC pour comprendre les deux valeurs des cartes #}
                 <div class="small bg-body-tertiary rounded p-2" role="note" aria-label="{% translate 'Explication simple des montants affichés' %}">
@@ -39,9 +40,58 @@
                         </span>
                     </div>
                 </div>
+
+                {# Barre de recherche FALC: cherche dans titre, description, tags #}
+                <form class="mt-3" role="search" action="" method="get"
+                      hx-get="" hx-target="#crowds_list" hx-swap="outerHTML" hx-push-url="true"
+                      hx-trigger="keyup changed delay:500ms from:#crowds_q, submit">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-search" aria-hidden="true"></i></span>
+                        <input id="crowds_q" name="q" type="search" class="form-control"
+                               placeholder="{% translate 'Rechercher un projet, une description ou un tag' %}"
+                               value="{{ search_query|default:'' }}" aria-label="{% translate 'Recherche' %}">
+                        {% if active_tag %}
+                            <input type="hidden" name="tag" value="{{ active_tag.slug }}">
+                        {% endif %}
+                    </div>
+                    <p class="form-text mb-0">
+                        {% translate 'Tapez un mot. Exemple : vélo, jardin, numérique…' %}
+                    </p>
+                </form>
             </div>
         </section>
     {% endif %}
+
+    {# Barre de filtres par tags (FALC) #}
+    <section class="container-lg p-3" aria-label="Filtres par tags">
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <span class="text-muted me-2 small">
+                <i class="bi bi-funnel" aria-hidden="true"></i>
+                {% translate 'Filtrer par tags' %}:
+            </span>
+            {% for tag in all_tags %}
+                <a class="badge rounded-pill {% if active_tag and active_tag.slug == tag.slug %}text-bg-primary{% else %}text-bg-secondary{% endif %} text-decoration-none"
+                   href="?tag={{ tag.slug }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}"
+                   hx-get="?tag={{ tag.slug }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}"
+                   hx-target="body"
+                   hx-swap="innerHTML"
+                   hx-push-url="true"
+                   aria-label="{% blocktrans %}Filtrer par le tag {{ tag.name }}{% endblocktrans %}">
+                    <i class="bi bi-tag" aria-hidden="true"></i>
+                    {{ tag.name }}
+                </a>
+            {% empty %}
+                <span class="text-muted small">{% translate 'Aucun tag disponible.' %}</span>
+            {% endfor %}
+            {% if active_tag %}
+                <a class="ms-auto small text-decoration-none" href="{% url 'crowds-list' %}"
+                   hx-get="{% url 'crowds-list' %}"
+                   hx-target="body" hx-push-url="true">
+                    <i class="bi bi-x-circle"></i> {% translate 'Effacer le filtre' %}
+                </a>
+            {% endif %}
+        </div>
+    </section>
 
     <main class="container-lg" id="crowds_list" hx-boost="true" hx-target="#crowds_list" hx-swap="outerHTML">
         {% include "crowds/partial/list.html" %}
@@ -71,5 +121,17 @@
       }
     });
   }
+  // Feedback visuel après vote via HX-Trigger (liste)
+  document.body.addEventListener('crowds:vote', function (e) {
+    const created = !!(e && e.detail && e.detail.created);
+    Swal.fire({
+      toast: true,
+      position: 'top',
+      timer: 1600,
+      showConfirmButton: false,
+      icon: created ? 'success' : 'info',
+      title: created ? '{% translate "Merci pour votre vote !" %}' : '{% translate "Votre vote est déjà pris en compte." %}'
+    });
+  });
 </script>
 {% endblock %}

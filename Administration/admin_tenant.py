@@ -80,6 +80,7 @@ from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invo
 from BaseBillet.validators import ReservationValidator
 from Customers.models import Client
 from MetaBillet.models import WaitingConfiguration
+from crowds.models import Contribution, Vote, Participation, CrowdConfig, Initiative
 from fedow_connect.fedow_api import AssetFedow, FedowAPI
 from fedow_connect.models import FedowConfig
 from fedow_connect.utils import dround
@@ -2003,6 +2004,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     form = EventForm
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
+    date_hierarchy = "datetime"
 
     # Unfold sections (expandable rows)
     list_sections = [
@@ -3725,7 +3727,211 @@ class AssetAdmin(ModelAdmin):
         return False
 
 
-### UNFOLD ADMIN
+# ----------------------
+# ModelAdmins CROWDS
+# ----------------------
+
+
+@admin.register(CrowdConfig, site=staff_admin_site)
+class CrowdConfigAdmin(SingletonModelAdmin, ModelAdmin):
+    compressed_fields = True  # Default: False
+    warn_unsaved_form = True  # Default: False
+
+    fieldsets = (
+        (_("Affichage"), {"fields": ("title", "description", "vote_button_name")}),
+    )
+
+    formfield_overrides = {
+        models.TextField: {
+            "widget": WysiwygWidget,
+        }
+    }
+
+    def save_model(self, request, obj, form, change):
+        obj: CrowdConfig
+        # Sanitize all TextField inputs to avoid XSS via WYSIWYG/TextField
+        sanitize_textfields(obj)
+        super().save_model(request, obj, form, change)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+
+# @admin.register(CrowdTag, site=staff_admin_site)
+# class CrowdTagAdmin(ModelAdmin):
+#     list_display = ("name", "slug", "color_bg", "color_preview")
+#     search_fields = ("name", "slug")
+#     prepopulated_fields = {"slug": ("name",)}
+#     ordering = ("name",)
+#     fields = ("name", "slug", "color_bg")
+#
+#     def color_preview(self, obj):
+#         return format_html(
+#             '<span style="display:inline-block;width:2rem;height:1rem;border-radius:.25rem;vertical-align:middle;{}"></span> '
+#             '<span class="text-muted small">{}</span>',
+#             obj.style_attr + ';border:1px solid rgba(0,0,0,.2)',
+#             obj.color_bg,
+#         )
+#
+#     color_preview.short_description = _("Aperçu")
+
+# ----------------------
+# INITIATIVE CROWDS
+# ----------------------
+
+
+class ContributionInline(TabularInline):
+    model = Contribution
+    fk_name = 'initiative'
+    extra = 0
+    can_delete = False
+    fields = ("contributor_name", "amount_eur_display", "payment_status", "paid_at")
+    readonly_fields = ("amount_eur_display", "payment_status", "paid_at")
+
+    def amount_eur_display(self, obj):
+        if not obj:
+            return ""
+        return f"{obj.amount_eur:.2f} {obj.initiative.asset.currency_code}"
+
+    amount_eur_display.short_description = _("Montant")
+
+    # Surcharger la méthode pour désactiver la suppression
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+
+class VoteInline(TabularInline):
+    model = Vote
+    fk_name = 'initiative'
+    extra = 0
+    can_delete = False
+    readonly_fields = ("user", "created_at")
+    fields = ("user", "created_at")
+
+    # Surcharger la méthode pour désactiver la suppression
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+class ParticipationInline(TabularInline):
+    model = Participation
+    fk_name = 'initiative'
+    extra = 0
+    fields = (
+        "participant",
+        "description",
+        "requested_amount_cents",
+        "state",
+        "time_spent_minutes",
+        "created_at",
+        "updated_at",
+    )
+    readonly_fields = ("created_at", "updated_at")
+
+    # Surcharger la méthode pour désactiver la suppression
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+@admin.register(Initiative, site=staff_admin_site)
+class InitiativeAdmin(ModelAdmin):
+    list_display = (
+        "name",
+        "created_at",
+        "funded_amount_display",
+        "funding_goal_display",
+        "progress_percent_int",
+        "votes_count",
+        "requested_total_display",
+    )
+
+    fields =(
+        "name",
+        "short_description",
+        "description",
+        "funding_goal",
+        "img",
+    )
+
+    list_filter = ("created_at", "tags")
+    search_fields = ("name", "description", "tags__name")
+    date_hierarchy = "created_at"
+    inlines = [ContributionInline, ParticipationInline, ]
+    ordering = ("-created_at",)
+    filter_horizontal = ("tags",)
+    autocomplete_fields = ()
+
+    formfield_overrides = {
+        models.TextField: {
+            "widget": WysiwygWidget,
+        }
+    }
+
+    def save_model(self, request, obj, form, change):
+        obj: Initiative
+        # Sanitize all TextField inputs to avoid XSS via WYSIWYG/TextField
+        sanitize_textfields(obj)
+        super().save_model(request, obj, form, change)
+
+    def currency(self, obj):
+        return getattr(getattr(obj, "asset", None), "currency_code", "€")
+
+    currency.short_description = _("Devise")
+
+    def funded_amount_display(self, obj):
+        return f"{obj.funded_amount_eur:.2f} {self.currency(obj)}"
+
+    funded_amount_display.short_description = _("Financé")
+
+    def funding_goal_display(self, obj):
+        return f"{obj.funding_goal_eur:.2f} {self.currency(obj)}"
+
+    funding_goal_display.short_description = _("Objectif")
+
+    def requested_total_display(self, obj):
+        # Seules les participations approuvées par un·e admin sont comptées dans le total (voir modèle)
+        color = obj.requested_ratio_color
+        value = f"{obj.requested_total_eur:.2f} {self.currency(obj)}"
+        return format_html('<span class="badge text-bg-{}">{}</span>', color, value)
+
+    requested_total_display.short_description = _("Demandes validées")
+
+
+
+
+### UNFOLD ADMIN DASHBOARD
 def environment_callback(request):
     if settings.DEBUG:
         return [_("Development"), "primary"]

@@ -14,35 +14,43 @@
     <nav aria-label="{% translate 'Pagination' %}" class="mt-4">
       <ul class="pagination justify-content-center">
         <li class="page-item {% if not page_obj.has_previous %}disabled{% endif %}">
-          <a class="page-link"
-             href="?page={{ page_obj.previous_page_number }}"
-             hx-get="?page={{ page_obj.previous_page_number }}"
-             hx-target="#crowds_list"
-             hx-push-url="true"
-             aria-label="{% translate 'Previous' %}">
-            &laquo;
-          </a>
+          {% if page_obj.has_previous %}
+            <a class="page-link"
+               href="?page={{ page_obj.previous_page_number }}{% if active_tag %}&tag={{ active_tag.slug }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}"
+               hx-get="?page={{ page_obj.previous_page_number }}{% if active_tag %}&tag={{ active_tag.slug }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}"
+               hx-target="#crowds_list"
+               hx-push-url="true"
+               aria-label="{% translate 'Previous' %}">
+              &laquo;
+            </a>
+          {% else %}
+            <span class="page-link" aria-disabled="true" aria-label="{% translate 'Previous' %}">&laquo;</span>
+          {% endif %}
         </li>
 
         {% for page_num in page_obj.paginator.page_range %}
           <li class="page-item {% if page_num == page_obj.number %}active{% endif %}">
             <a class="page-link"
-               href="?page={{ page_num }}"
-               hx-get="?page={{ page_num }}"
+               href="?page={{ page_num }}{% if active_tag %}&tag={{ active_tag.slug }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}"
+               hx-get="?page={{ page_num }}{% if active_tag %}&tag={{ active_tag.slug }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}"
                hx-target="#crowds_list"
                hx-push-url="true">{{ page_num }}</a>
           </li>
         {% endfor %}
 
         <li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">
-          <a class="page-link"
-             href="?page={{ page_obj.next_page_number }}"
-             hx-get="?page={{ page_obj.next_page_number }}"
-             hx-target="#crowds_list"
-             hx-push-url="true"
-             aria-label="{% translate 'Next' %}">
-            &raquo;
-          </a>
+          {% if page_obj.has_next %}
+            <a class="page-link"
+               href="?page={{ page_obj.next_page_number }}{% if active_tag %}&tag={{ active_tag.slug }}{% endif %}"
+               hx-get="?page={{ page_obj.next_page_number }}{% if active_tag %}&tag={{ active_tag.slug }}{% endif %}"
+               hx-target="#crowds_list"
+               hx-push-url="true"
+               aria-label="{% translate 'Next' %}">
+              &raquo;
+            </a>
+          {% else %}
+            <span class="page-link" aria-disabled="true" aria-label="{% translate 'Next' %}">&raquo;</span>
+          {% endif %}
         </li>
       </ul>
     </nav>
