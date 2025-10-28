@@ -1,0 +1,22 @@
+{% load static i18n %}
+
+<div id="message-no-article" class="BF-col hide">
+	<h1>{% translate "Aucun article n'a été selectioné" %}</h1>
+	<!-- include bt_return.html -->
+	{% include "components/bt_return.html" with selector_bt_retour='#message-no-article' action='hide_only' layer=1 %}
+</div>
+
+<style>
+	#message-no-article {
+		position: absolute;
+		left: 0;
+		top: 0;
+		width: 100%;
+		height: 100%;
+		z-index: 999;
+		background-color: var(--bleu09);
+		color: var(--blanc01);
+		font-size: 1.5rem;
+		text-align: center;
+	}
+</style>

@@ -17,12 +17,40 @@
 	<input class="addition-include-data" name="uuid_pv" value="{{ pv.id }}" />
 	<input class="addition-include-data" name="responsable" value="{{ card.name }}" />
 	<input class="addition-include-data" name="tag_id_cm" value="{{ card.tag_id }}" />
+	<input class="addition-include-data" id="addition-comportement" name="comportement" value="{{ pv.comportement }}" />
 	<input class="addition-include-data" id="addition-total" name="total" value="" />
 	<input class="addition-include-data" id="addition-moyen-paiement" name="moyen_paiement" value="" />
 	<input class="addition-include-data" id="addition-hostname-client" name="hostname_client" value="" />
+
 </div>
 
 <script>
+	function paiementIsPossible(event) {
+		let nbArticles = 0
+		// compte le nombre d'articles dans l'addition
+		event.target.querySelectorAll('input').forEach(ele => {
+			const name = ele.getAttribute('name')
+			if (name.includes('repid-')) {
+				nbArticles++
+			}
+		})
+
+		if (nbArticles <= 0) {
+			// affiche message pas d'articles
+			document.querySelector('#message-no-article').classList.remove('hide')
+		} else {
+			// préparation post type de paiement
+			event.target.setAttribute('hx-post', 'display_type_payment')
+			event.target.setAttribute('hx-trigger', 'validerPaiement')
+			htmx.process(event.target)
+
+			// valide l'envoie du paiement
+			sendEvent('validerPaiement', '#addition-form')
+		}
+	}
+
+	document.querySelector('#addition-form').addEventListener('paymentIsPossible?', paiementIsPossible)
+
 	document.addEventListener('DOMContentLoaded', () => {
 		// récupère le hostname du local storage
 		let hosname = ''

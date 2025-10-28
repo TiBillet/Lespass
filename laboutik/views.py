@@ -171,7 +171,7 @@ def pv_route(request):
     state["service_direct"] = pv["service_direct"]
     state["monnaie_principale_name"] = "TestCoin"
     state["passageModeGerant"] = True
-    state["modeGerant"] = False
+    state["mode_gerant"] = card['mode_gerant']
     # triage par poid_liste
     card["pvs_list"] = sorted(card["pvs_list"], key=lambda x: x["poid_liste"])
 
@@ -191,9 +191,22 @@ def pv_route(request):
     }
     return render(request, "views/" + template, context)
 
-def display_type_payment(request):
-	
+def check_card(request):
+	tag_id_request = request.data.get('tag_id_client').upper()
+	card = mockData.get_card_from_tagid(tag_id_request)
+	background = '--warning'
 
+	if card['type_card'] == 'unknown':
+		background = '--rouge06'
+		error_msg =  _('Carte inconnue')
+
+	context = {
+		"card": card
+	}
+	return render(request, "components/check_card.html", context)
+
+
+def display_type_payment(request):
 	dataPost = request.POST
 	tag_id_cm = dataPost.get("tag_id_cm")
 	uuid_pv = dataPost.get("uuid_pv")

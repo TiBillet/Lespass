@@ -162,6 +162,7 @@
 		flex-direction: column;
 		justify-content: center;
 		align-items: center;
+		font-size: 2.5rem;
 
 		i {
 			width: 46px;
@@ -176,6 +177,7 @@
 		flex-direction: column;
 		justify-content: center;
 		align-items: center;
+		font-size: 2rem;
 		font-weight: bold;
 		display: flex;
 		flex-direction: column;
@@ -197,7 +199,7 @@
 	@media only screen and (width > 1022px) {
 		.bt-basic-container {
 			width: calc(var(--bt-basic-width) * 1.4);
-			height: calc(var(--bt-basic-height) * 1.34);
+			/* height: calc(var(--bt-basic-height) * 1.34); */
 		}
 	}
 

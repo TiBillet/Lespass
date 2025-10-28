@@ -34,8 +34,16 @@
 
 		// modifie la valeur de l'input given-sum (somme donnée)
 		if (method === 'espece') {
-		const givenSum = document.querySelector('#given-sum').value
-		document.querySelector('#addition-form').insertAdjacentHTML('afterend', `<input class="addition-include-data" id="addition-given-sum" name="given_sum" value="${ givenSum}" />`)
+			const givenSum = document.querySelector('#given-sum').value
+			// test input exist
+			const inputExist = document.querySelector('#addition-given-sum')
+			if (inputExist === null) {
+				// premier insertion dans le dom
+				document.querySelector('#addition-form').insertAdjacentHTML('afterend', `<input class="addition-include-data" id="addition-given-sum" name="given_sum" value="${givenSum}" />`)
+			} else {
+				// maj value uniquement
+				inputExist.value = givenSum
+			}
 		}
 
 		// changer l'url du POST
@@ -46,7 +54,7 @@
 
 		hideAndEmptyElement('#confirm')
 		hideAndEmptyElement('#messages')
-		
+
 		// submit le formulaire
 		sendEvent('validerPaiement', '#addition-form')
 	}
@@ -63,6 +71,7 @@
 		font-size: 1.5rem;
 		text-align: center;
 		background-color: var(--bleu09);
+		z-index: 900;
 	}
 
 	#confirm-action-container {

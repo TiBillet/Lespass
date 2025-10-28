@@ -11,17 +11,11 @@
 		<div class="spinner-nfc"></div>
 	</div>
 
+	<!-- include bt_return.html -->
+	{% include "components/bt_return.html" with selector_bt_retour='#messages' layer=1 %}
+
 	<!-- lance le lecteure nfc -->
 	<script>
-		const form = document.querySelector('#addition-form')
-		// change le trigger de form #addition-form pour "nfcResult"
-		form.setAttribute('hx-trigger', 'nfcResult')
-		// changer l'url du POST
-		form.setAttribute('hx-post', 'payment')
-		// prend en compte les changement sur le formulaire
-		htmx.process(form)
-		// ajouter le input réceptionnant le tag_id lue par le lecteur nfc
-		document.querySelector('#addition-form').insertAdjacentHTML('afterend', `<input class="addition-include-data" id="nfc-result-tag-id" name="tag_id" />`)
 		window.nfc = new NfcReader()
 		nfc.start()
 	</script>

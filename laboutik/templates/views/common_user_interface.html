@@ -30,7 +30,7 @@
 		</div>
 	</div>
 	<!-- bouton valider -->
-	<div id="bt-valider" class="BF-ligne footer-bt fond-ok" onclick="sendEvent('validerPaiement','#addition-form')">
+	<div id="bt-valider" class="BF-ligne footer-bt fond-ok" onclick="sendEvent('paymentIsPossible?','#addition-form')">
 		<i class="fas fa-check-circle md4px"></i>
 		<div class="BF-col-deb footer-bt-text mg4px">
 			<div>{% translate "VALIDER" %}</div>
@@ -43,10 +43,9 @@
 	</div>
 </footer>
 
-<!-- translation -->
-<div class="hide">
-	<div id="no-article-select">{% translate "Aucun article n'a été selectioné" %}</div>
-</div>
+<!-- no articles -->
+{% include "components/no_articles.html" %}
+
 {% endblock content %}
 
 {% block css %}

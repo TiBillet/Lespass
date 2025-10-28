@@ -1788,19 +1788,34 @@ cards = [
 			{"uuid": "12083d94-cd0e-4839-bce8-6a9838efc735", "name": "Cashless","poid_liste": 200, "icon": "fa-euro-sign"},
   		{"uuid": "f5c1b847-5a13-4790-b7f6-fdeccde90a98", "name": "Adhésions", "poid_liste": 9, "icon": None}
 		],
-		'responsable': responsable
+		'responsable': responsable,
+		'wallets': 0,
+		'wallets_gift': 0,
+		'mode_gerant': True
 	},
   {
 		"type_card": "client_card",
-		"tag_id": settings.DEMO_TAGID_CLIENT1
+		"tag_id": settings.DEMO_TAGID_CLIENT1,
+		'name': 'client1',
+		'wallets': 50,
+		'wallets_gift': 5,
+		'memberships': []
 	},
   {
 		"type_card": "client_card",
-		"tag_id": settings.DEMO_TAGID_CLIENT2
+		"tag_id": settings.DEMO_TAGID_CLIENT2,
+		'name': 'client2',
+		'wallets': 0,
+		'wallets_gift': 0,
+		'memberships': []
 	},
   {
 		"type_card": "client_card",
-		"tag_id": settings.DEMO_TAGID_CLIENT3
+		"tag_id": settings.DEMO_TAGID_CLIENT3,
+		'name': 'client3',
+		'wallets': 0,
+		'wallets_gift': 0,
+		'memberships': []
 	},
 ]
 
@@ -1870,7 +1885,8 @@ def filter_categories(pv):
 
 
 def get_card_from_tagid(tag_id):
-	retour = {"type_card": "unknown", "tag_id": "unknown", "pvs_list": []}
+	# retour = {"type_card": "unknown", "tag_id": "unknown", "pvs_list": []}
+	retour = {"type_card": "unknown"}
 	for card in cards:
 		if card["tag_id"] == tag_id:
 			retour = card

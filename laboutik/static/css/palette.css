@@ -5,6 +5,7 @@
 	--rouge03: #aa3a3a;
 	--rouge04: #af6c7a;
 	--rouge05: #dc6575;
+	--rouge06: #e93363;
 
 	--vert01: #00FF00;
 	--vert02: #39e80a;
@@ -45,14 +46,12 @@
 	--gris09: #ffffff80;
 	--gris10: #343a40;
 
-
 	--blanc01: #ffffff;
 	--blanc02: #d6dbdf;
 
 	--yellow00: #f5e12b;
 	--warning00: #f5972b;
-	--warning: #f5972b;
+	--warning: #b85521;
 
 	--orange01: #ce4d1a;
-	--dev-test: #39e80a;
 }

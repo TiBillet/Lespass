@@ -5,15 +5,15 @@
 	<h1 class="message-title">{% translate "Types de paiement" %}</h1>
 	<!-- cashless -->
 	{% if 'nfc' in moyens_paiement %}
-	<div class="bt-basic-container bt-basic-bg-success" hx-get="read_nfc" hx-trigger="click"
-		hx-target="#messages" hx-swap="outerHTML" hx-on:click="modifyPaymentNfc()">
+	<div class="bt-basic-container bt-basic-bg-success" hx-get="read_nfc" hx-trigger="click" hx-target="#messages"
+		hx-swap="outerHTML" hx-on:click="modifyPaymentNfc()">
 		<div class="bt-basic-icon">
 			<i class="fas fa-address-card"></i>
 		</div>
 		<div class="bt-basic-text">
 			<div>{% translate "CASHLESS" %}</div>
 			<div class="paiement-bt-total">
-				<span>{% translate "Total" %}</span>
+				<span>{% translate "TOTAL" %}</span>
 				<span>{{ total }}</span>
 				<span>{{ currency_data.symbol }}</span>
 			</div>
@@ -26,12 +26,12 @@
 	<div class="bt-basic-container bt-basic-bg-success" hx-get="confirm_payment?method=espece" hx-trigger="click"
 		hx-target="#confirm" hx-swap="outerHTML">
 		<div class="bt-basic-icon">
-			<i class="fas fa-address-card"></i>
+			<i class="fas fa-coins"></i>
 		</div>
 		<div class="bt-basic-text">
 			<div>{% translate "ESPÈCE" %}</div>
 			<div class="paiement-bt-total">
-				<span>{% translate "Total" %}</span>
+				<span>{% translate "TOTAL" %}</span>
 				<span>{{ total }}</span>
 				<span>{{ currency_data.symbol }}</span>
 			</div>
@@ -48,12 +48,12 @@
 	<div class="bt-basic-container bt-basic-bg-success" hx-get="confirm_payment?method=carte_bancaire" hx-trigger="click"
 		hx-target="#confirm" hx-swap="outerHTML">
 		<div class="bt-basic-icon">
-			<i class="fas fa-address-card"></i>
+			<i class="fas fa-credit-card"></i>
 		</div>
 		<div class="bt-basic-text">
 			<div>{% translate "CB" %}</div>
 			<div class="paiement-bt-total">
-				<span>{% translate "Total" %}</span>
+				<span>{% translate "TOTAL" %}</span>
 				<span>{{ total }}</span>
 				<span>{{ currency_data.symbol }}</span>
 			</div>
@@ -66,12 +66,12 @@
 	<div class="bt-basic-container bt-basic-bg-success" hx-get="confirm_payment?method=CH" hx-trigger="click"
 		hx-target="#confirm" hx-swap="outerHTML">
 		<div class="bt-basic-icon">
-			<i class="fas fa-address-card"></i>
+			<i class="fas fa-money-check"></i>
 		</div>
 		<div class="bt-basic-text">
-			<div>{% translate "CH" %}</div>
+			<div>{% translate "CHÈQUE" %}</div>
 			<div class="paiement-bt-total">
-				<span>{% translate "Total" %}</span>
+				<span>{% translate "TOTAL" %}</span>
 				<span>{{ total }}</span>
 				<span>{{ currency_data.symbol }}</span>
 			</div>
@@ -92,8 +92,22 @@
 
 <script>
 	function modifyPaymentNfc() {
-		console.log('-> modifyPaymentNfc')
+		// console.log('-> modifyPaymentNfc')
 		document.querySelector('#addition-moyen-paiement').value = 'nfc'
+		const form = document.querySelector('#addition-form')
+		// change le trigger de form #addition-form pour "nfcResult"
+		form.setAttribute('hx-trigger', 'nfcResult')
+		// changer l'url du POST
+		form.setAttribute('hx-post', 'payment')
+		// prend en compte les changements dynamiques sur le formulaire
+		htmx.process(form)
+
+		// test input exist
+		const inputExist = document.querySelector('#nfc-result-tag-id')
+		if (inputExist === null) {
+			// ajouter le input réceptionnant le tag_id lue par le lecteur nfc
+			document.querySelector('#addition-form').insertAdjacentHTML('afterend', `<input class="addition-include-data" id="nfc-result-tag-id" name="tag_id" />`)
+		}
 	}
 </script>
 
@@ -119,5 +133,4 @@
 	.paiement-bt-total {
 		font-size: 1.5rem;
 	}
-
 </style>

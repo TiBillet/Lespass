@@ -124,7 +124,7 @@ let NfcReader = class {
 	}
 
 	start() {
-		console.log('0 -> startLecture  --  DEMO =', state.demo.active)
+		// console.log('0 -> startLecture  --  DEMO =', state.demo.active)
 		try {
 			if (state.demo.active) {
 				// simule
@@ -158,7 +158,7 @@ let NfcReader = class {
 
 		// simulation
 		if (modeNfc === 'NFCSIMU') {
-			document.querySelector('#nfc-container').removeEventListener('click', this.sendSimuNfcTagId)
+			document.querySelector('#nfc-simu-tag').removeEventListener('click', this.sendSimuNfcTagId)
 		}
 		this.uuidConnexion = null
 	}
