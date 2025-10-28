@@ -13,7 +13,7 @@
 {% block main %}
     {% if not embed %}
         {% comment %} Espace de description en haut, sticky comme la liste d'événements {% endcomment %}
-        <section class="container-lg p-3 sticky-top bg-body" style="height: fit-content;">
+        <section class="container-lg p-3 bg-body" style="height: fit-content;">
             <div>
                 <h1 class="mb-2">{{ crowd_config.title }}</h1>
                 <h4 class="text-muted mb-2">{{ crowd_config.short_description | default:"" }}</h4>

@@ -1754,7 +1754,7 @@ class Reservation(models.Model):
         if self.tickets.filter(status=Ticket.SCANNED).exists():
             raise Exception(_("You cannot cancel a reservation that has been scanned."))
 
-        if self.total_paid() > 0 and self.can_refund():
+        if self.total_paid() > 0 :
             config = Configuration.get_solo()
             # stripe.api_key = config.get_stripe_api()
             stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
@@ -1826,8 +1826,8 @@ class Reservation(models.Model):
             raise Exception(_("You cannot cancel a ticket that has been scanned."))
 
         refunded = False
-        # If reservation had a payment and refund deadline allows it, try partial refund
-        if self.total_paid() > 0 and self.can_refund():
+        # If reservation had a payment try partial refund
+        if self.total_paid() > 0 :
             config = Configuration.get_solo()
             stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
 

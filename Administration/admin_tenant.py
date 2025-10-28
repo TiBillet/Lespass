@@ -2525,6 +2525,9 @@ class ReservationAdmin(ModelAdmin):
     search_fields = ['event__name', 'user_commande__email', 'options__name', 'datetime', 'custom_form']
     list_filter = ['event', ReservationValidFilter, 'datetime', 'options']
 
+    # Bulk actions available in changelist
+    actions = ["action_cancel_refund_reservations"]
+
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
         return (
@@ -2536,6 +2539,31 @@ class ReservationAdmin(ModelAdmin):
                 'tickets__pricesold__price__product__form_fields',
             )
         )
+
+    @admin.action(description=_("Cancel and refund selected reservations"))
+    def action_cancel_refund_reservations(self, request, queryset):
+        # Only operate on queryset of reservations; prefetch to reduce queries
+        qs = queryset.select_related('user_commande', 'event').prefetch_related('tickets')
+        success_count = 0
+        errors = []
+        for resa in qs:
+            try:
+                msg = resa.cancel_and_refund_resa()
+                try:
+                    send_reservation_cancellation_user.delay(str(resa.uuid))
+                except Exception as ce:
+                    logger.error(f"Failed to queue reservation cancellation email for {resa.uuid}: {ce}")
+                success_count += 1
+            except Exception as e:
+                errors.append(str(e))
+        if success_count:
+            messages.success(request, _("%(count)d reservation(s) cancelled and refunded.") % {"count": success_count})
+        if errors:
+            unique_errors = list(dict.fromkeys(errors))
+            preview = " | ".join(unique_errors[:5])
+            if len(unique_errors) > 5:
+                preview += _(" ... (%(more)d more)") % {"more": len(unique_errors) - 5}
+            messages.error(request, _("Some reservations failed to cancel/refund: %(errors)s") % {"errors": preview})
 
     @display(description=_("Ticket count"))
     def tickets_count(self, instance: Reservation):
@@ -2568,7 +2596,8 @@ class ReservationAdmin(ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
     def has_change_permission(self, request, obj=None):
-        return False
+        # Allow bulk actions in changelist for authorized tenant admins
+        return TenantAdminPermissionWithRequest(request)
 
     def has_add_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
@@ -2628,17 +2657,15 @@ class TicketCustomFormSection(TemplateSection):
 
 @admin.register(Ticket, site=staff_admin_site)
 class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
-    resource_classes = [TicketExportResource]
-    export_form_class = ExportForm
-
-    # Expandable section to display parent reservation custom form answers
-    list_sections = [TicketCustomFormSection]
-
-    compressed_fields = True  # Default: False
-    warn_unsaved_form = True  # Default: False
-
-    # Formulaire de modification
-    form = TicketChangeAdmin
+    ordering = ('-reservation__datetime',)
+    list_filter = ["reservation__event", TicketValidFilter, "reservation__options"]
+    search_fields = (
+        'uuid',
+        'first_name',
+        'last_name',
+        'reservation__user_commande__email',
+        'reservation__custom_form',
+    )
 
     list_display = [
         'ticket',
@@ -2652,6 +2679,92 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
         'scan',
         'reservation__datetime',
     ]
+
+
+    resource_classes = [TicketExportResource]
+    export_form_class = ExportForm
+
+    actions = ["action_unscan_selected", "action_cancel_refund_selected"]
+
+    # Expandable section to display parent reservation custom form answers
+    list_sections = [TicketCustomFormSection]
+
+    compressed_fields = True  # Default: False
+    warn_unsaved_form = True  # Default: False
+
+    # Formulaire de modification
+    form = TicketChangeAdmin
+
+    @admin.action(description=_("Unscan selected tickets"))
+    def action_unscan_selected(self, request, queryset):
+        updated = 0
+        skipped = 0
+        for ticket in queryset.select_related('reservation'):
+            if ticket.status == Ticket.SCANNED:
+                ticket.status = Ticket.NOT_SCANNED
+                ticket.save()
+                updated += 1
+            else:
+                skipped += 1
+        if updated:
+            messages.success(request, _("%(count)d ticket(s) unscanned successfully.") % {"count": updated})
+        if skipped:
+            messages.info(request, _("%(count)d ticket(s) were not scanned and were skipped.") % {"count": skipped})
+
+    @admin.action(description=_("Cancel and refund"))
+    def action_cancel_refund_selected(self, request, queryset):
+        # Group selected tickets by reservation
+        tickets = queryset.select_related('reservation')
+        res_to_tickets: Dict[str, Dict[str, Any]] = {}
+        for t in tickets:
+            resa_id = str(t.reservation_id)
+            bucket = res_to_tickets.setdefault(resa_id, {"reservation": t.reservation, "tickets": []})
+            bucket["tickets"].append(t)
+
+        resa_success = 0
+        ticket_success = 0
+        errors = []
+
+        for resa_id, bucket in res_to_tickets.items():
+            resa = bucket["reservation"]
+            selected_tickets = bucket["tickets"]
+            try:
+                total_in_resa = resa.tickets.count()
+                if len(selected_tickets) == total_in_resa:
+                    # All tickets of reservation selected -> cancel whole reservation
+                    msg = resa.cancel_and_refund_resa()
+                    try:
+                        send_reservation_cancellation_user.delay(str(resa.uuid))
+                    except Exception as ce:
+                        logger.error(f"Failed to queue reservation cancellation email for {resa.uuid}: {ce}")
+                    resa_success += 1
+                else:
+                    # Partial selection -> cancel each selected ticket
+                    for t in selected_tickets:
+                        try:
+                            msg = resa.cancel_and_refund_ticket(t)
+                            try:
+                                send_ticket_cancellation_user.delay(str(t.uuid))
+                            except Exception as ce:
+                                logger.error(f"Failed to queue ticket cancellation email for {t.uuid}: {ce}")
+                            ticket_success += 1
+                        except Exception as te:
+                            errors.append(str(te))
+            except Exception as e:
+                errors.append(str(e))
+
+        if resa_success:
+            messages.success(request, _("%(count)d reservation(s) cancelled and refunded.") % {"count": resa_success})
+        if ticket_success:
+            messages.success(request, _("%(count)d ticket(s) cancelled and refunded.") % {"count": ticket_success})
+        if errors:
+            # Deduplicate and limit message length
+            unique_errors = list(dict.fromkeys(errors))
+            preview = " | ".join(unique_errors[:5])
+            if len(unique_errors) > 5:
+                preview += _(" ... (%(more)d more)") % {"more": len(unique_errors) - 5}
+            messages.error(request, _("Some items failed to cancel/refund: %(errors)s") % {"errors": preview})
+
 
     @admin.display(ordering='pricesold__price', description=_('Price'))
     def price_name(self, obj: Ticket):
@@ -2687,38 +2800,6 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
             return f"{obj.reservation.event.parent} -> {obj.reservation.event}"
         return obj.reservation.event
 
-    # list_editable = ['status',]
-    # actions = [valider_ticket, ]
-    ordering = ('-reservation__datetime',)
-    # list_filter = [EventFilter, ]
-    # list_filter = (F
-    #     EventFilter,
-    # 'reservation__uuid'
-    # )
-    list_filter = ["reservation__event", TicketValidFilter, "reservation__options"]
-
-    search_fields = (
-        'uuid',
-        'first_name',
-        'last_name',
-        'reservation__user_commande__email',
-        'reservation__custom_form',
-    )
-
-    # def state(self, obj):
-    #     if obj.status == Ticket.NOT_SCANNED:
-    #         return format_html(
-    #             f'<button><a href="{reverse("staff_admin:ticket-scann", args=[obj.pk])}" class="button">Not scanned: scan ticket</a></button>&nbsp;',
-    #         )
-    #     elif obj.status == Ticket.SCANNED:
-    #         return 'Validated / scanned'
-    #     else:
-    #         for choice in Reservation.TYPE_CHOICES:
-    #             if choice[0] == obj.reservation.status:
-    #                 return choice[1]
-    #
-    # state.short_description = 'State'
-    # state.allow_tags = True
 
     # noinspection PyTypeChecker
     @display(description=_("State"), label={None: "danger", True: "success", 'scanned': "warning"})
@@ -2777,7 +2858,7 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
     def ticket(self, instance: Ticket):
         return f"{instance.reservation.user_commande.email} {str(instance.uuid)[:8]}"
 
-    actions_row = ["get_pdf", "unscan", "cancel_refund_ticket", "cancel_refund_reservation"]
+    actions_row = ["get_pdf"]
 
     @action(description=_("PDF"),
             url_path="ticket_pdf",
@@ -2794,77 +2875,8 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
         response['Content-Disposition'] = f'attachment; filename="{ticket.pdf_filename()}"'
         return response
 
-    @action(
-        description=_("Unscan"),
-        url_path="unscan",
-        permissions=["custom_actions_row"],
-    )
-    def unscan(self, request, object_id):
-        ticket = Ticket.objects.get(pk=object_id)
-        if ticket.status == Ticket.SCANNED:
-            ticket.status = Ticket.NOT_SCANNED
-            ticket.save()
-            messages.add_message(
-                request,
-                messages.SUCCESS,
-                _("Ticket unscanned successfully.")
-            )
-        return redirect(request.META["HTTP_REFERER"])
 
-    @action(
-        description=_("Cancel ONE"),
-        url_path="cancel_refund_ticket",
-        permissions=["custom_actions_row"],
-    )
-    def cancel_refund_ticket(self, request, object_id):
-        ticket = get_object_or_404(Ticket, pk=object_id)
-        try:
-            msg = ticket.reservation.cancel_and_refund_ticket(ticket)
-            # Trigger email notification to the user via Celery
-            try:
-                send_ticket_cancellation_user.delay(str(ticket.uuid))
-            except Exception as ce:
-                logger.error(f"Failed to queue cancellation email for ticket {ticket.uuid}: {ce}")
 
-            messages.add_message(
-                request,
-                messages.SUCCESS,
-                _("Ticket cancelled and refund processed where applicable.") + (f" {msg}" if msg else "")
-            )
-        except Exception as e:
-            messages.add_message(
-                request,
-                messages.ERROR,
-                _(f"Error while cancelling/refunding this ticket: {e}")
-            )
-        return redirect(request.META["HTTP_REFERER"])
-
-    @action(
-        description=_("Cancel ALL"),
-        url_path="cancel_refund_reservation",
-        permissions=["custom_actions_row"],
-    )
-    def cancel_refund_reservation(self, request, object_id):
-        ticket = get_object_or_404(Ticket, pk=object_id)
-        try:
-            msg = ticket.reservation.cancel_and_refund_resa()
-            # Trigger email notification to the user via Celery
-            try:
-                send_reservation_cancellation_user.delay(str(ticket.reservation.uuid))
-            except Exception as ce:
-                logger.error(f"Failed to queue cancellation email for reservation {ticket.reservation.uuid}: {ce}")
-            messages.add_message(
-                request,
-                messages.SUCCESS,
-                _("Reservation cancelled and refund processed where applicable.") + (f" {msg}" if msg else "")
-            )
-        except Exception as e:
-            messages.add_message(
-                request,
-                messages.ERROR,
-                _(f"Error while cancelling/refunding this reservation: {e}")
-            )
-        return redirect(request.META["HTTP_REFERER"])
 
 
     def has_custom_actions_row_permission(self, request, obj=None):
@@ -2874,7 +2886,8 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
     def has_change_permission(self, request, obj=None):
-        return False
+        # Allow bulk actions in changelist for authorized tenant admins
+        return TenantAdminPermissionWithRequest(request)
 
     def has_add_permission(self, request, obj=None):
         return False
