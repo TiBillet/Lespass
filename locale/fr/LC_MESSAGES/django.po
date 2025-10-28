@@ -1410,7 +1410,7 @@ msgstr "Image vignette"
 msgid ""
 "The small image displayed in the events list if not img on event. If None, "
 "Main img will be displayed. 4x3 ratio."
-msgstr "La petite image utilisé si abscente des évènements. Rapport 4x3."
+msgstr "La petite image utilisée si absente des évènements. Rapport 4x3."
 
 #: BaseBillet/models.py:235
 msgid "Street address"
