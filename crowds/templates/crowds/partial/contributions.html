@@ -15,7 +15,7 @@
         <tr>
           <td>{{ c.contributor_name|default:c.contributor.email }}</td>
           <td class="small">{{ c.description|default:""|linebreaksbr }}</td>
-          <td class="text-end">{{ c.amount_eur|floatformat:2 }} {{ initiative.asset.currency_code }}</td>
+          <td class="text-end">{{ c.amount_eur|floatformat:2 }} {{ initiative.currency }}</td>
           <td>
             {% if c.payment_status == 'pending' %}
               {% if user.is_authenticated %}

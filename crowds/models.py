@@ -19,71 +19,12 @@ logger = logging.getLogger(__name__)
 # Create your models here.
 
 class CrowdConfig(SingletonModel):
-    title = models.CharField(max_length=255, blank=True, verbose_name=_("Titre"), default="Financement participatif")
-    description = models.TextField(blank=True, default="Découvrez les projets en cours de financement participatif")
+    active = models.BooleanField(default=True, verbose_name=_("Activer Crowds"), help_text=_("Vous pouvez activer ou desactiver cette fonction pour la faire apparaitre dans le menu général."))
+    title = models.CharField(max_length=255, blank=True, verbose_name=_("Titre"), default="Contribuez")
+    description = models.TextField(blank=True, default="Découvrez les projets à financer et les budgets contributifs")
     vote_button_name = models.CharField(max_length=255, blank=True, verbose_name=_("Nom du bouton de vote"),
-                                        default="Voter")
+                                        default="Ça m'intérèsse !")
 
-'''
-
-class Tag(models.Model):
-    """
-    Tag simple pour classer les initiatives (schema.org: keywords/additionalType).
-    """
-    name = models.CharField(max_length=64, unique=True, verbose_name=_("Nom"))
-    slug = models.SlugField(max_length=64, unique=True, verbose_name="Slug")
-    # Couleur de fond personnalisée (hex). Le texte sera automatiquement noir ou blanc selon le contraste.
-    color_bg = models.CharField(max_length=7, blank=True, default="#6c757d", verbose_name=_("Couleur de fond (hex)"))
-
-    class Meta:
-        ordering = ("name",)
-        verbose_name = _("Tag")
-        verbose_name_plural = _("Tags")
-
-    def __str__(self) -> str:
-        return self.name
-
-    @staticmethod
-    def _clean_hex(value: str, default: str) -> str:
-        try:
-            v = (value or "").strip()
-            if not v:
-                return default
-            if not v.startswith('#'):
-                v = f"#{v}"
-            if len(v) == 4:  # #abc -> #aabbcc
-                v = f"#{v[1] * 2}{v[2] * 2}{v[3] * 2}"
-            if len(v) != 7:
-                return default
-            int(v[1:], 16)  # validate
-            return v.lower()
-        except Exception:
-            return default
-
-    @property
-    def contrast_fg(self) -> str:
-        """Retourne '#000000' ou '#ffffff' selon le contraste avec color_bg (méthode YIQ)."""
-        bg = self._clean_hex(self.color_bg, "#6c757d")
-        r = int(bg[1:3], 16)
-        g = int(bg[3:5], 16)
-        b = int(bg[5:7], 16)
-        yiq = (r * 299 + g * 587 + b * 114) / 1000
-        return "#000000" if yiq >= 128 else "#ffffff"
-
-    @property
-    def style_attr(self) -> str:
-        """Inline style pour un badge coloré accessible."""
-        bg = self._clean_hex(self.color_bg, "#6c757d")
-        fg = self.contrast_fg
-        return f"background-color:{bg};color:{fg};border:1px solid rgba(0,0,0,.1)"
-
-    def save(self, *args, **kwargs):
-        if not self.slug:
-            self.slug = slugify(self.name)
-        self.color_bg = self._clean_hex(self.color_bg, "#6c757d")
-        super().save(*args, **kwargs)
-
-'''
 
 class Initiative(models.Model):
     """
@@ -112,6 +53,9 @@ class Initiative(models.Model):
         default="adaptative"
     )
 
+    budget_contributif = models.BooleanField(default=False, verbose_name=_("Budget contributif"), help_text=_("Permettez a votre communauté de proposer des actions qui s'inscrivent dans un budget contributif : https://movilab.org/wiki/Coremuneration_et_budget_contributif"))
+    currency = models.CharField(max_length=250, default="€", verbose_name=_("Valeur"), help_text=_("Changez la valeur de la contribution : Comptez en €, monnaie locale, monnaie temps, bonbons ?"))
+    direct_debit = models.BooleanField(default=False, verbose_name=_("Paiement direct"), help_text=_("Réclamer le paiement de la contribution financière en ligne. Cela redirigera la personne sur Stripe pour un paiement."))
 
     image = models.URLField(blank=True, null=True, verbose_name="Image (URL)")
     img = StdImageField(upload_to='images/',

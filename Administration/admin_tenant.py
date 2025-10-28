@@ -3738,6 +3738,7 @@ class CrowdConfigAdmin(SingletonModelAdmin, ModelAdmin):
     warn_unsaved_form = True  # Default: False
 
     fieldsets = (
+        (_("Général"), {"fields": ("active",)}),
         (_("Affichage"), {"fields": ("title", "description", "vote_button_name")}),
     )
 
@@ -3882,7 +3883,10 @@ class InitiativeAdmin(ModelAdmin):
         "short_description",
         "description",
         "funding_goal",
+        "currency",
+        # "direct_debit",
         "img",
+        "budget_contributif",
     )
 
     list_filter = ("created_at", "tags")

@@ -83,7 +83,6 @@ DEMO_PROJECTS: List[DemoInit] = [
             "- Achat d'outils\n- Pièces de rechange\n- Café partagé\n\n"
             "Objectif: permettre à toutes et tous de rouler en sécurité."
         ),
-        image="https://images.unsplash.com/photo-1518459031867-a89b944bffe0?w=1200&q=80&auto=format&fit=crop",
     ),
     DemoInit(
         name="Cantine solidaire du mercredi",
@@ -93,7 +92,6 @@ DEMO_PROJECTS: List[DemoInit] = [
             "Des repas à prix libre préparés collectivement.\n\n"
             "## Dépenses prévues\n- Ingrédients bio\n- Gaz/énergie\n- Ustensiles réutilisables"
         ),
-        image="https://images.unsplash.com/photo-1555949963-aa79dcee981e?w=1200&q=80&auto=format&fit=crop",
     ),
     DemoInit(
         name="Festival micro-culture locale",
@@ -103,7 +101,6 @@ DEMO_PROJECTS: List[DemoInit] = [
             "Un petit festival participatif sur 2 jours.\n\n"
             "- Scène et sonorisation\n- Bénévolat reconnu\n- Accès prix libre"
         ),
-        image="https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=1200&q=80&auto=format&fit=crop",
     ),
     DemoInit(
         name="Bibliothèque d'objets",
@@ -113,7 +110,6 @@ DEMO_PROJECTS: List[DemoInit] = [
             "Prêter au lieu d'acheter.\n\n"
             "### Besoins\n- Étagères\n- Logiciel de prêt\n- Entretien"
         ),
-        image="https://images.unsplash.com/photo-1519682577862-22b62b24e493?w=1200&q=80&auto=format&fit=crop",
     ),
     DemoInit(
         name="Ateliers code et éthique du numérique",
@@ -122,7 +118,6 @@ DEMO_PROJECTS: List[DemoInit] = [
         description_md=(
             "Des ateliers d'initiation au code libre, à la vie privée et à l'accessibilité."
         ),
-        image="https://images.unsplash.com/photo-1518779578993-ec3579fee39f?w=1200&q=80&auto=format&fit=crop",
     ),
     DemoInit(
         name="Jardin partagé de quartier",
@@ -132,7 +127,6 @@ DEMO_PROJECTS: List[DemoInit] = [
             "Planter, arroser, récolter, ensemble.\n\n"
             "- Semences\n- Compost\n- Système d'arrosage"
         ),
-        image="https://images.unsplash.com/photo-1501004318641-b39e6451bec6?w=1200&q=80&auto=format&fit=crop",
     ),
     DemoInit(
         name="Ateliers éco-rénovation participative",
@@ -141,7 +135,6 @@ DEMO_PROJECTS: List[DemoInit] = [
         description_md=(
             "Former des équipes pour isoler et rénover des logements précaires."
         ),
-        image="https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=1200&q=80&auto=format&fit=crop",
     ),
     DemoInit(
         name="Clinique vélo mobile",
@@ -150,7 +143,6 @@ DEMO_PROJECTS: List[DemoInit] = [
         description_md=(
             "Une remorque équipée pour réparer les vélos dans différents quartiers."
         ),
-        image="https://images.unsplash.com/photo-1493238792000-8113da705763?w=1200&q=80&auto=format&fit=crop",
     ),
     DemoInit(
         name="Ateliers cuisine bas carbone",
@@ -159,7 +151,6 @@ DEMO_PROJECTS: List[DemoInit] = [
         description_md=(
             "Apprendre à cuisiner simple, bon, local et bas carbone."
         ),
-        image="https://images.unsplash.com/photo-1466637574441-749b8f19452f?w=1200&q=80&auto=format&fit=crop",
     ),
     DemoInit(
         name="Fabrique numérique citoyenne",
@@ -168,7 +159,6 @@ DEMO_PROJECTS: List[DemoInit] = [
         description_md=(
             "Impression 3D ouverte, ateliers de design libre, documentation en commun."
         ),
-        image="https://images.unsplash.com/photo-1555421689-43cad7100751?w=1200&q=80&auto=format&fit=crop",
     ),
     DemoInit(
         name="Ateliers premiers secours et santé communautaire",
@@ -177,7 +167,6 @@ DEMO_PROJECTS: List[DemoInit] = [
         description_md=(
             "Former des citoyen·nes aux gestes qui sauvent et à la prévention."
         ),
-        image="https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=1200&q=80&auto=format&fit=crop",
     ),
     DemoInit(
         name="Caisse énergie partagée",
@@ -186,7 +175,6 @@ DEMO_PROJECTS: List[DemoInit] = [
         description_md=(
             "Un fond d'entraide pour des factures énergie et des petits équipements sobres."
         ),
-        image="https://images.unsplash.com/photo-1482192505345-5655af888cc4?w=1200&q=80&auto=format&fit=crop",
     ),
 ]
 
@@ -245,24 +233,72 @@ def seed() -> None:
 
     demo_user = _get_demo_user()
 
-    for proj in DEMO_PROJECTS:
+    # Predefine special currencies: 3 time-currency projects and 2 local currency (Eusko)
+    time_currency_idx = {0, 3, 6}  # pick a few by index for determinism
+    eusko_idx = {2, 9}
+
+    for idx, proj in enumerate(DEMO_PROJECTS):
+        # Decide currency and flags
+        currency = "€"
+        desc_md = proj.description_md
+        direct_debit = True
+        if idx in time_currency_idx:
+            currency = "Monnaie-temps"
+            direct_debit = False
+            note = "\n\nNote: Cette initiative utilise une monnaie-temps (heures). C'est une action de chantier participatif; la monnaie-temps pourra être dépensée dans un fablab ou un coworking."
+            if "monnaie-temps".lower() not in (desc_md or "").lower():
+                desc_md = (desc_md or "") + note
+        elif idx in eusko_idx:
+            currency = "Eusko"
+            direct_debit = False
+            note = "\n\nNote: Cette initiative est financée en monnaie locale (Eusko)."
+            if "Eusko".lower() not in (desc_md or "").lower():
+                desc_md = (desc_md or "") + note
+
         # Create or get initiative
         initiative, created = Initiative.objects.get_or_create(
             name=proj.name,
             defaults={
-                "description": proj.description_md,  # markdown accepted as plain text, templates may render with linebreaks/markdown later
-                "short_description": _short_from_md(proj.description_md),
+                "description": desc_md,  # markdown accepted as plain text
+                "short_description": _short_from_md(desc_md),
                 "funding_goal": _eur_to_cents(proj.goal_eur),
                 "asset": asset,
+                "budget_contributif": True,
+                "currency": currency,
+                "direct_debit": direct_debit,
             },
         )
-        # Ensure short_description exists for pre-existing initiatives
-        if not created and not (initiative.short_description or "").strip():
-            initiative.short_description = _short_from_md(proj.description_md)
-            try:
-                initiative.save(update_fields=["short_description"])
-            except Exception:
-                pass
+        # Ensure fields exist for pre-existing initiatives (idempotent updates)
+        updated_fields = []
+        if not created:
+            # short_description fallback
+            if not (initiative.short_description or "").strip():
+                initiative.short_description = _short_from_md(initiative.description or desc_md)
+                updated_fields.append("short_description")
+            # budget_contributif True for demo
+            if initiative.budget_contributif is False:
+                initiative.budget_contributif = True
+                updated_fields.append("budget_contributif")
+            # currency/direct_debit according to selection
+            if (initiative.currency or "") != currency:
+                initiative.currency = currency
+                updated_fields.append("currency")
+            if initiative.direct_debit != direct_debit:
+                initiative.direct_debit = direct_debit
+                updated_fields.append("direct_debit")
+            # description note injection once
+            if currency == "Monnaie-temps" and "monnaie-temps" not in (initiative.description or "").lower():
+                initiative.description = (initiative.description or "") + "\n\nNote: Cette initiative utilise une monnaie-temps (heures). C'est une action de chantier participatif; la monnaie-temps pourra être dépensée dans un fablab ou un coworking."
+                updated_fields.append("description")
+            if currency == "Eusko" and "eusko" not in (initiative.description or "").lower():
+                initiative.description = (initiative.description or "") + "\n\nNote: Cette initiative est financée en monnaie locale (Eusko)."
+                if "description" not in updated_fields:
+                    updated_fields.append("description")
+            if updated_fields:
+                try:
+                    initiative.save(update_fields=list(set(updated_fields)))
+                except Exception:
+                    pass
 
         # Assign tags (keep existing ones)
         if proj.tags:

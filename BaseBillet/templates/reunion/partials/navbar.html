@@ -27,7 +27,7 @@
           {% endfor %}
 
           {% has_initiatives as has_crowds %}
-          {% if has_crowds %}
+          {% if has_crowds and crowd_config.active %}
           <li class="nav-item">
             <a class="nav-link{% if url_name == 'crowds-list' %} active" aria-current="page{% endif %}"
                href="{% url 'crowds-list' %}"
