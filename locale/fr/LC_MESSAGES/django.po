@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-10-28 14:34+0000\n"
+"POT-Creation-Date: 2025-10-28 14:46+0000\n"
 "PO-Revision-Date: 2025-03-12 09:37+0100\n"
 "Last-Translator: Diane Alma Kay <pro@kayathommy.fr>\n"
 "Language-Team: French\n"
@@ -420,9 +420,8 @@ msgid "Cancel and refund selected reservations"
 msgstr "Annuler et rembourser les réservations sélectionnées"
 
 #: Administration/admin_tenant.py:2560 Administration/admin_tenant.py:2757
-#| msgid "%(count)d reservation(s) cancelled and refunded."
 msgid "%(count)d reservation(s) cancelled and refunded."
-msgstr "%(count) réservation(s) annulée(s) et remboursée(s)."
+msgstr ""
 
 #: Administration/admin_tenant.py:2565 Administration/admin_tenant.py:2765
 #, python-format
@@ -454,22 +453,21 @@ msgstr "de-scanner les tickets sélectionnés"
 
 #: Administration/admin_tenant.py:2710
 msgid "%(count)d ticket(s) unscanned successfully."
-msgstr "%(count) Ticket(s) 'dé-scanné' avec succes"
+msgstr "%(count)d Ticket(s) 'dé-scanné' avec succes"
 
 #: Administration/admin_tenant.py:2712
 #, python-format
 msgid "%(count)d ticket(s) were not scanned and were skipped."
-msgstr "%(count) ticket(s) n'ont pas été scannés et ont été ignorés."
+msgstr "%(count)d ticket(s) n'ont pas été scannés et ont été ignorés."
 
 #: Administration/admin_tenant.py:2714
-#| msgid "Cancel Payment"
 msgid "Cancel and refund"
 msgstr "Annuler et rembourser"
 
 #: Administration/admin_tenant.py:2759
 #, python-format
 msgid "%(count)d ticket(s) cancelled and refunded."
-msgstr "%(count) billet(s) annulé(s) et remboursé(s)."
+msgstr "%(count)d billet(s) annulé(s) et remboursé(s)."
 
 #: Administration/admin_tenant.py:2766
 #, python-format
@@ -5420,7 +5418,6 @@ msgid "Tenants"
 msgstr "Tenants"
 
 #: crowds/models.py:22
-#| msgid "Active"
 msgid "Activer Crowds"
 msgstr ""
 
@@ -5530,7 +5527,6 @@ msgid ""
 msgstr ""
 
 #: crowds/models.py:230
-#| msgid "Stripe payment"
 msgid "Statut de paiement"
 msgstr ""
 
@@ -5823,7 +5819,6 @@ msgid "Votre nom"
 msgstr ""
 
 #: crowds/templates/crowds/views/detail.html:232
-#| msgid "Long description"
 msgid "Message / description"
 msgstr ""
 
@@ -5841,7 +5836,6 @@ msgid "Le montant sera converti en centimes."
 msgstr ""
 
 #: crowds/templates/crowds/views/detail.html:245
-#| msgid "Valid subscription"
 msgid "Valider la contribution"
 msgstr ""
 
