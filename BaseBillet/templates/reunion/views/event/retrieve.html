@@ -6,11 +6,11 @@
 {% block og_type %}event{% endblock %}
 {% block og_title %}{{ event.name }}{% endblock %}
 {% block og_description %}{% if event.short_description %}{{ event.short_description|striptags }}{% elif event.long_description %}{{ event.long_description|striptags|truncatechars:150 }}{% else %}{{ event.name }}{% endif %} - Un évènement publié sur le logiciel libre TiBillet{% endblock %}
-{% block og_image %}{{ event.get_social_card|strip_leading_slash }}{% endblock %}
+{% block og_image %}{{ event.get_social_card }}{% endblock %}
 {% block og_image_alt %}{{ event.name }} - {{ config.organisation }}{% endblock %}
 {% block twitter_title %}{{ event.name }}{% endblock %}
 {% block twitter_description %}{% if event.short_description %}{{ event.short_description|striptags }}{% elif event.long_description %}{{ event.long_description|striptags|truncatechars:150 }}{% else %}{{ event.name }}{% endif %} - Un évènement publié sur le logiciel libre TiBillet{% endblock %}
-{% block twitter_image %}{{ event.get_social_card|strip_leading_slash }}{% endblock %}
+{% block twitter_image %}{{ event.get_social_card }}{% endblock %}
 {% block twitter_image_alt %}{{ event.name }} - {{ config.organisation }}{% endblock %}
 {% block extra_meta %}
     {% if event.postal_address %}
