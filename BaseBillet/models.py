@@ -1439,7 +1439,7 @@ class Event(models.Model):
         """
         config = Configuration.get_solo()
         timezone = pytz.timezone(config.fuseau_horaire)
-        self.slug = slugify(f"{self.name} {self.datetime.astimezone(timezone).strftime('%y%m%d-%H%M')}")
+        self.slug = slugify(f"{self.name} {self.datetime.astimezone(timezone).strftime('%y%m%d-%H%M')} {self.uuid.hex[:8]}")
 
         # Génère l'url de l'évènement si il n'est pas externe.
         # Nécéssaire pour le prefetch multi tenant
@@ -1462,8 +1462,9 @@ class Event(models.Model):
         cache.delete(f'event_get_sticker_img_{self.pk}')
         cache.delete(f'event_get_social_card_{self.pk}')
 
-    def get_absolute_url(self):
-        return reverse("event-detail", args=[self.slug])
+
+    # def get_absolute_url(self):
+    #     return reverse("event-detail", args=[self.slug])
 
 
     def __str__(self):

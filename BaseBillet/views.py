@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 import uuid
 from datetime import timedelta
 from decimal import Decimal
@@ -1018,7 +1019,7 @@ class QrCodeScanPay(viewsets.ViewSet):
         product_sold = ProductSold.objects.get_or_create(product=product)[0]
         price = Price.objects.get_or_create(name=f"{dround(amount)}€", product=product, prix=dround(amount))[0]
         price_sold = PriceSold.objects.get_or_create(productsold=product_sold, price=price, prix=dround(amount))[0]
-        
+
         # Create LigneArticle with metadata containing admin email
         ligne_article = LigneArticle.objects.create(
             pricesold=price_sold,
@@ -1175,7 +1176,7 @@ class QrCodeScanPay(viewsets.ViewSet):
         if not ligne_article_uuid_hex:
             messages.add_message(request, messages.ERROR, _("No QR code content received"))
             return render(request, "reunion/views/qrcode_scan_pay/scanner.html", context=template_context)
-        
+
         # Process the QR code content
         try:
             from uuid import UUID
@@ -1212,7 +1213,7 @@ class QrCodeScanPay(viewsets.ViewSet):
             logger.error(f"No LigneArticle found with UUID: {ligne_article_uuid_hex}")
             template_context['error_message'] = _("Invalid QR code: payment not found")
             return render(request, "reunion/views/qrcode_scan_pay/payment_error.html", context=template_context)
-            
+
         except Exception as e:
             logger.error(f"Error processing QR code: {str(e)}")
             messages.add_message(request, messages.ERROR, _("Invalid QR code format"))
@@ -1263,7 +1264,7 @@ class QrCodeScanPay(viewsets.ViewSet):
         if not ligne_article_uuid_hex:
             messages.add_message(request, messages.ERROR, _("Missing QR code content"))
             return redirect('qrcodescanpay-list')
-        
+
         # Get payment information from LigneArticle
         amount = ligne_article.amount
         asset_type = "EURO"  # Default to EURO
@@ -1477,6 +1478,25 @@ class EventMVT(viewsets.ViewSet):
 
         return None
 
+
+    def federated_events_get_hex8(self, hex8):
+        for place in FederatedPlace.objects.all():
+            tenant = place.tenant
+            with tenant_context(tenant):
+                try:
+                    event = Event.objects.select_related(
+                        'postal_address',
+                    ).prefetch_related(
+                        'tag', 'products', 'products__prices',
+                    ).get(uuid__startswith=hex8)
+                    event.img = event.get_img()
+                    event.sticker_img = event.get_sticker_img()
+                    return event
+                except Event.DoesNotExist:
+                    continue
+
+        return None
+
     def federated_events_filter(self, tags=None, search=None, page=1):
         dated_events = {}
         paginated_info = {
@@ -1616,12 +1636,26 @@ class EventMVT(viewsets.ViewSet):
 
     def retrieve(self, request, pk=None):
         slug = pk
+        hex8 = None
+        match = re.search(r'([0-9a-fA-F]{8})(?:/)?$', pk)
+        if match:
+            hex8 = match.group(1)
+
+        logger.info(f"slug : {slug}")
+        logger.info(f"hex8 : {hex8}")
 
         # Si False, alors le bouton reserver renvoi vers la page event du tenant.
         event_in_this_tenant = False
         try:
-            event = Event.objects.select_related('postal_address', ).prefetch_related('tag', 'products',
-                                                                                      'products__prices').get(slug=slug)
+            if hex8 :
+                event = Event.objects.select_related('postal_address', ).prefetch_related('tag', 'products',
+                                                                                      'products__prices').get(uuid__startswith=hex8)
+                logger.info(f"event avec hex8 trouvé : {event}")
+            else:
+                event = Event.objects.select_related('postal_address', ).prefetch_related('tag', 'products',
+                                                                                      'products__prices').get(slug__startswith=slug)
+                logger.info(f"event avec slug trouvé : {event}")
+
             # selection et mise en cache des images
             event.img = event.get_img()
             event.sticker_img = event.get_sticker_img()
@@ -1641,7 +1675,10 @@ class EventMVT(viewsets.ViewSet):
         except Event.DoesNotExist:
             # L'évent n'est pas
             logger.info("Event.DoesNotExist on tenant, check to federation")
-            event = self.federated_events_get(slug)
+            if hex8 :
+                event = self.federated_events_get_hex8(hex8)
+            else :
+                event = self.federated_events_get(slug)
 
         if not event:  # Event pas trouvé, on redirige vers la page d'évènement complète
             logger.info("Event.DoesNotExist on federation, redirect")
@@ -1914,7 +1951,7 @@ class MembershipMVT(viewsets.ViewSet):
             # Dans le cas d'une validation manuelle, on affiche un message dans l'offcanvas via un template partiel
             context = {'membership': membership}
             return render(request, "reunion/views/membership/pending_manual_validation.html", context=context)
-            
+
         return HttpResponseClientRedirect(membership_validator.checkout_stripe_url)
 
     def list(self, request: HttpRequest):
