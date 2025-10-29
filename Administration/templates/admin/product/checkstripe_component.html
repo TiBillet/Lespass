@@ -1,13 +1,7 @@
 {% load unfold humanize i18n %}
 
 
-{% if stripe_payouts_enabled %} {#On affiche une alerte si le compte stripe n'est pas activé#}
-
-    <div class="flex flex-row items-center gap-3">
-        {% trans "Votre compte stripe est connecté ! Vous pouvez créer ici des produits de type adhésion et billet payant ou de type reservation gratuite." %}
-    </div>
-
-{% else %}
+{% if not stripe_payouts_enabled %} {#On affiche une alerte si le compte stripe n'est pas activé#}
     <div class="flex flex-row items-center gap-3 mt-2">
         {% trans "Votre compte Stripe ne semble pas activé : vous ne pourrez créer ici que des produits de type réservation gratuite. Pour recevoir des paiements : " %}
     </div>
