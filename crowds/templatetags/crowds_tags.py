@@ -6,4 +6,7 @@ register = template.Library()
 @register.simple_tag
 def has_initiatives():
     """Return True if at least one Initiative exists."""
-    return Initiative.objects.exists()
+    try :
+        return Initiative.objects.exists()
+    except Exception:
+        return False

@@ -74,8 +74,6 @@ class Initiative(models.Model):
                             "The main image of the initiative, displayed in the head of the page and for social shares. If empty, the config image is displayed.")
                         )
 
-
-
     def get_img(self):
         # Cache key based on instance ID and method name
         cache_key = f'event_get_img_{self.pk}'
