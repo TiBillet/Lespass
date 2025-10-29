@@ -35,8 +35,7 @@
           content="{% block twitter_title %}{% translate 'Home' %} | {{ config.organisation }}{% endblock %}">
     <meta name="twitter:description" content="
             {% block twitter_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
-    <meta name="twitter:image" content="
-            {% block twitter_image %}{% if config.img %}{{ config.img.hdr.url }}{% else %}{% static 'reunion/img/favicon.png' %}{% endif %}{% endblock %}">
+    <meta name="twitter:image" content="{{ request.build_absolute_uri }}{% block og_image %}{{ config.get_social_card|strip_leading_slash }}{% endblock %}">
     <meta name="twitter:image:alt" content="{% block twitter_image_alt %}{{ config.organisation }}{% endblock %}">
     {% if config.twitter %}
         <meta name="twitter:site"
