@@ -1,5 +1,5 @@
-{% load static %}
-{% load i18n %}
+{% load static i18n tibitags %}
+
 {% get_current_language as LANGUAGE_CODE %}
 
 <!doctype html>
@@ -21,8 +21,7 @@
           content="{% block og_title %}{% translate 'Home' %} | {{ config.organisation }}{% endblock %}">
     <meta property="og:description" content="
             {% block og_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
-    <meta property="og:image" content="
-            {% block og_image %}{% if config.img %}{{ config.img.hdr.url }}{% else %}{% static 'reunion/img/favicon.png' %}{% endif %}{% endblock %}">
+    <meta property="og:image" content="{{ request.build_absolute_uri }}{% block og_image %}{{ config.get_social_card|strip_leading_slash }}{% endblock %}">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="{% block og_image_alt %}{{ config.organisation }}{% endblock %}">

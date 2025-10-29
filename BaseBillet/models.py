@@ -401,6 +401,23 @@ class Configuration(SingletonModel):
                         verbose_name=_('Background image'),
                         )
 
+
+    @property
+    def get_social_card(self):
+        # Cache key based on instance ID and method name
+        cache_key = f'config_get_social_card_{self.pk}'
+        cached_result = cache.get(cache_key)
+        if cached_result is not None:
+            return cached_result
+
+        result = None
+        if self.img:
+            result = self.img.social_card.url
+            # Cache the result for 1 hour (3600 seconds)
+            cache.set(cache_key, result, 3600)
+        return result
+
+
     # TZ_REUNION, TZ_PARIS = "Indian/Reunion", "Europe/Paris"
     # TZ_CHOICES = [
     #     (TZ_REUNION, _('Indian/Reunion')),

@@ -13,6 +13,20 @@ from fedow_connect.utils import dround as utils_dround
 register = template.Library()
 
 @register.filter
+def strip_trailing_slash(value):
+    """Supprime les / à la fin de la chaîne"""
+    if isinstance(value, str):
+        return value.rstrip('/')
+    return value
+
+@register.filter
+def strip_leading_slash(value):
+    """Supprime les / au début de la chaîne"""
+    if isinstance(value, str):
+        return value.lstrip('/')
+    return value
+
+@register.filter
 def modulo(num, val):
     return num % val
 
