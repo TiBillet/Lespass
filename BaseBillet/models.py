@@ -1103,32 +1103,6 @@ class Event(models.Model):
                             "The main image of the event, displayed in the head of the event page and for social shares. If empty, the address image is displayed.")
                         )
 
-    def get_img(self):
-        # Cache key based on instance ID and method name
-        cache_key = f'event_get_img_{self.pk}'
-        cached_result = cache.get(cache_key)
-
-        if cached_result is not None:
-            return cached_result
-
-        # Algo pour récupérer l'image à afficher.
-        if self.img:
-            result = self.img
-        elif self.postal_address and self.postal_address.img:
-            logger.info("postal_address img")
-            result = self.postal_address.img
-        else:
-            config = Configuration.get_solo()
-            if config.img:
-                logger.info("config img")
-                result = config.img
-            else:
-                result = None
-
-        # Cache the result for 1 hour (3600 seconds)
-        cache.set(cache_key, result, 3600)
-        return result
-
     sticker_img = StdImageField(upload_to='images/',
                                 blank=True, null=True,
                                 variations={
@@ -1143,6 +1117,58 @@ class Event(models.Model):
                                 help_text=_(
                                     "The small image displayed in the events list. If None, img will be displayed. 4x3 ratio.")
                                 )
+
+
+    def get_social_card(self):
+        # Cache key based on instance ID and method name
+        cache_key = f'event_get_social_card_{self.pk}'
+        cached_result = cache.get(cache_key)
+        if cached_result is not None:
+            return cached_result
+
+        result = None
+        if self.img:
+            result = self.img.social_card.url
+        elif self.postal_address:
+            if self.postal_address.img:
+                result = self.postal_address.img.social_card.url
+        if not result:
+            config = Configuration.get_solo()
+            if config.img:
+                result = config.img.social_card.url
+
+        if result:
+            # Cache the result for 1 hour (3600 seconds)
+            cache.set(cache_key, result, 3600)
+        return result
+
+    def get_img(self):
+        # Cache key based on instance ID and method name
+        cache_key = f'event_get_img_{self.pk}'
+        cached_result = cache.get(cache_key)
+
+        if cached_result is not None:
+            return cached_result
+
+        # Algo pour récupérer l'image à afficher.
+        result = None
+        if self.img:
+            result = self.img
+        elif self.postal_address:
+            if self.postal_address.img:
+                result = self.postal_address.img
+        else:
+            config = Configuration.get_solo()
+            if config.img:
+                logger.info("config img")
+                result = config.img
+            else:
+                result = None
+
+        # Cache the result for 1 hour (3600 seconds)
+        cache.set(cache_key, result, 3600)
+        return result
+
 
     def get_sticker_img(self):
         # Cache key based on instance ID and method name
@@ -1415,6 +1441,7 @@ class Event(models.Model):
         # Clear the cache for get_img and get_sticker_img methods
         cache.delete(f'event_get_img_{self.pk}')
         cache.delete(f'event_get_sticker_img_{self.pk}')
+        cache.delete(f'event_get_social_card_{self.pk}')
 
     def get_absolute_url(self):
         return reverse("event-detail", args=[self.slug])
