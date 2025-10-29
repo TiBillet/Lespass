@@ -1,0 +1,16 @@
+{% load static i18n %}
+<c-vars layer="1" :hide_only="False" selector="#messages" />
+{% if hide_only %}
+<div id="bt-retour-layer{{layer}}" class="bt-basic-container bt-basic-bg-return" {{ attrs }}
+	onclick="document.querySelector('{{ selector }}').classList.add('hide')">
+	{% else %}
+	<div id="bt-retour-layer{{layer}}" class="bt-basic-container bt-basic-bg-return" {{ attrs }}
+		onclick="hideAndEmptyElement('{{ selector }}')">
+		{% endif %}
+		<div class="bt-basic-icon">
+			<i class="fas fa-undo-alt"></i>
+		</div>
+		<div class="bt-basic-text">
+			<div>{% translate "RETOUR" %}</div>
+		</div>
+	</div>

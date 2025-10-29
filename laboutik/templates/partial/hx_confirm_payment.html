@@ -13,7 +13,7 @@
 
 	<div id="confirm-action-container">
 		<!-- include bt_return.html -->
-		{% include "components/bt_return.html" with selector=selector layer=2 %}
+		<c-bt.return selector="#confirm" layer="2" />
 
 		<div id="bt-valider-layer2" class="bt-basic-container bt-basic-bg-success" onclick="prepareForm('{{ method }}')">
 			<div class="bt-basic-icon">
@@ -48,7 +48,7 @@
 
 		// changer l'url du POST
 		const form = document.querySelector('#addition-form')
-		form.setAttribute('hx-post', 'payment')
+		form.setAttribute('hx-post', 'hx_payment')
 		// prend en compte les changement sur le formulaire
 		htmx.process(form)
 

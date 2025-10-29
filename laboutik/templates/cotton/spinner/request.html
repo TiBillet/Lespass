@@ -1,0 +1,13 @@
+<div id="spinner-request" classe="spinner-container" style="display: none;">
+	<div class="spinner"></div>
+</div>
+
+<script>
+	window.spinnerRequestOff = function () {
+		document.querySelector('#spinner-request').style.display = 'none'
+	}
+
+	window.spinnerRequestOn = function () {
+		document.querySelector('#spinner-request').style.display = 'flex'
+	}
+</script>

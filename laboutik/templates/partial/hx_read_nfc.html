@@ -1,37 +1,22 @@
-{% extends "base.html" %}
 {% load static %}
 {% load static i18n %}
 
-{% block content %}
-<form id="form-nfc" class="hide" hx-post="ask_primary_card" hx-trigger="nfcResult" hx-target="#message-nfc"
-	hx-swap="outerHTML" hx-on::after-request="nfc.start()">
-	{% csrf_token %}
-	<input id="nfc-result-tag-id" name="tag-id-cm" />
-</form>
+<div id="confirm" role="status" aria-label="waiting primary card">
+	<h1>{{ message }}</h1>
 
-<div id="nfc-container" role="status" aria-label="waiting primary card">
 	<c-spinner.nfc />
-	<h1>{% translate "Attente carte primaire" %}</h1>
-	<div id="message-nfc"></div>
 	<div id="nfc-simu-tag" style="z-index:4;"></div>
-</div>
-{% endblock content %}
+	<c-bt.return selector="#confirm" style="z-index: 4;" />
 
-{% block script %}
 <!-- lance le lecteure nfc -->
 <script>
-	document.addEventListener('DOMContentLoaded', () => {
-		window.nfc = new NfcReader()
-		nfc.start()
-	})
+	window.nfc = new NfcReader()
+	nfc.start()
 </script>
-{% endblock script %}
 
-
-{% block css %}
 <style>
-	#nfc-container {
-		position: relative;
+	#confirm {
+		position: absolute;
 		left: 0;
 		top: 0;
 		width: 100%;
@@ -64,7 +49,6 @@
 	}
 
 	#message-nfc {
-		min-height: 120px;
 		flex-direction: row;
 		justify-content: center;
 		align-items: center;
@@ -73,4 +57,4 @@
 		text-align: center;
 	}
 </style>
-{% endblock css %}
+</div>

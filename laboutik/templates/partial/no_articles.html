@@ -2,8 +2,7 @@
 
 <div id="message-no-article" class="BF-col hide">
 	<h1>{% translate "Aucun article n'a été selectioné" %}</h1>
-	<!-- include bt_return.html -->
-	{% include "components/bt_return.html" with selector_bt_retour='#message-no-article' action='hide_only' layer=1 %}
+	<c-bt.return selector="#message-no-article" :hide_only="True" />
 </div>
 
 <style>

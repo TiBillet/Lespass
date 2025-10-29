@@ -4,13 +4,13 @@
 
 {% block content %}
 <!-- header + nav -->
-{% include "components/header.html" with title=title %}
+<c-header :title="title" />
 <main>
 	<!-- catégories -->
-	{% include "components/categories.html" %}
+	<c-categories />
 	<div id="products-container">
-		{% include "components/articles.html" %}
-		{% include "components/addition.html" %}
+	<c-articles />
+	<c-addition />
 	</div>
 </main>
 <footer>
@@ -44,7 +44,7 @@
 </footer>
 
 <!-- no articles -->
-{% include "components/no_articles.html" %}
+{% include "partial/no_articles.html" %}
 
 {% endblock content %}
 

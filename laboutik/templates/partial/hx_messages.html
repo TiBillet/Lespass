@@ -2,9 +2,7 @@
 
 <div id="messages" class="BF-col" style="background-color: var(--{{msg_type}});">
 	<h1>{{ msg_content }}</h1>
-
-	<!-- include bt_return.html -->
-	{% include "components/bt_return.html" with selector=selector layer=1 %}
+	<c-bt.return />
 </div>
 
 <style>

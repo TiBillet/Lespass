@@ -100,7 +100,7 @@ def ask_primary_card(request):
             # carte perdue
             if carte_perdu:
                 context = {"msg": _("Carte perdue ? On passe en non primaire")}
-                return render(request, "components/primary_card_message.html", context)
+                return render(request, "partial/hx_primary_card_message.html", context)
             else:
                 # carte primaire ok
                 uuid_pv = testCard["pvs_list"][0]["uuid"]
@@ -113,12 +113,12 @@ def ask_primary_card(request):
         if testCard["type_card"] == "client_card":
             print("laboutik - DEV | c'est une carte client")
             context = {"msg": _("Carte non primaire")}
-            return render(request, "components/primary_card_message.html", context)
+            return render(request, "partial/hx_primary_card_message.html", context)
 
         # carte inconnue
         if testCard["type_card"] == "unknown":
             context = {"msg": _("Carte inconnue")}
-            return render(request, "components/primary_card_message.html", context)
+            return render(request, "partial/hx_primary_card_message.html", context)
 
     return render(request, "views/ask_primary_card.html", context)
 
@@ -206,7 +206,7 @@ def check_card(request):
 	return render(request, "components/check_card.html", context)
 
 
-def display_type_payment(request):
+def hx_display_type_payment(request):
 	dataPost = request.POST
 	tag_id_cm = dataPost.get("tag_id_cm")
 	uuid_pv = dataPost.get("uuid_pv")
@@ -229,11 +229,10 @@ def display_type_payment(request):
 		context = {
 			"moyens_paiement": moyens_paiement,
 			"currency_data": {"cc": "EUR", "symbol": "€", "name": "European Euro"},
-			"total": total,
-			"selector_bt_retour": "#messages"
+			"total": total
 		}
 
-		return render(request, "components/moyens_paiement.html", context)
+		return render(request, "partial/hx_display_type_payment.html", context)
 
 	else:
 		# aucun article
@@ -243,13 +242,13 @@ def display_type_payment(request):
 		}
 		return render(request, "components/messages.html", context)
 
-def read_nfc(request):
+def hx_read_nfc(request):
 	context = {
 		'message': _("Attente lecture carte")
 	}
-	return render(request, "components/read_nfc.html", context)
+	return render(request, "partial/hx_read_nfc.html", context)
 
-def confirm_payment(request):
+def hx_confirm_payment(request):
 	payment_method = request.GET.get("method")
 	payments = {
 		'nfc': _('cashless'),
@@ -259,12 +258,11 @@ def confirm_payment(request):
 	}
 	context = {
 		'method': payment_method,
-		'payment_method': payments[payment_method],
-		'selector_bt_retour': '#confirm'
+		'payment_method': payments[payment_method]
 	}
-	return render(request, "components/confirm_payment.html", context)
+	return render(request, "partial/hx_confirm_payment.html", context)
 
-def payment(request):
+def hx_payment(request):
 	# msg_type = success, info, error, warning
 
 	# # attention pas de test si method = post
@@ -283,4 +281,4 @@ def payment(request):
 			'selector_bt_retour': '#messages'
 		}
 
-	return render(request, "components/messages.html", context)
+	return render(request, "partial/hx_messages.html", context)

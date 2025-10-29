@@ -10,8 +10,9 @@
 	<div id="addition-list"></div>
 	<!-- Attention aucun input dans #addition-form ne doit contenir "repid-" dans son attribut name 
 	 le formulaire est rempli automatiquement par article.js -->
-	<form id="addition-form" hx-post="display_type_payment" hx-trigger="validerPaiement" hx-target="#messages"
-		hx-swap="outerHTML" hx-include='[class="addition-include-data"]' class="hide"></form>
+	<form id="addition-form" class="hide" hx-post="hx_display_type_payment" hx-trigger="validerPaiement"
+		hx-target="#messages" hx-swap="outerHTML" hx-include='[class="addition-include-data"]'
+		hx-on::after-request="hideAndEmptyElement('#confirm')"></form>
 	<!-- hx-include -->
 	<input class="addition-include-data" name="id_table" value="{{ id_table }}" />
 	<input class="addition-include-data" name="uuid_pv" value="{{ pv.id }}" />
@@ -40,7 +41,7 @@
 			document.querySelector('#message-no-article').classList.remove('hide')
 		} else {
 			// préparation post type de paiement
-			event.target.setAttribute('hx-post', 'display_type_payment')
+			event.target.setAttribute('hx-post', 'hx_display_type_payment')
 			event.target.setAttribute('hx-trigger', 'validerPaiement')
 			htmx.process(event.target)
 

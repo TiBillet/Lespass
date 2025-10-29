@@ -156,6 +156,8 @@ SHARED_APPS = (
     'corsheaders',
     'django_htmx',
     'import_export',
+
+		'django_cotton',
 )
 
 if DEBUG:

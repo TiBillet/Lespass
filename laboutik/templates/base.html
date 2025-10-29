@@ -21,16 +21,16 @@
 	</script>
 </head>
 
-<body id="contenu" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-on::before-request="spinnerOn()"
-	hx-on::after-request="spinnerOff()" style="background-color:#000000;">
+<body id="contenu" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-on::before-request="spinnerRequestOn()"
+	hx-on::after-request="spinnerRequestOff()" style="background-color:#000000;">
 	{% block content %} {% endblock content %}
-
-	{% include "components/spinner.html" %}
 
 	<!-- info: layer 1 -->
 	<div id="messages"></div>
 	<!-- info: layer 2 -->
 	<div id="confirm"></div>
+
+	<c-spinner.request />
 
 	<script src="http://localhost/cordova.js"></script>
 	<script src="{% static 'js/htmx@2.0.6.min.js' %}"></script>
