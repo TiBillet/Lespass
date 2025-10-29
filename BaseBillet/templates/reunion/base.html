@@ -19,8 +19,7 @@
     <meta property="og:url" content="{{ request.build_absolute_uri }}">
     <meta property="og:title"
           content="{% block og_title %}{% translate 'Home' %} | {{ config.organisation }}{% endblock %}">
-    <meta property="og:description" content="
-            {% block og_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
     <meta property="og:image" content="{% block og_image %}{{ config.get_social_card }}{% endblock %}">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -33,8 +32,8 @@
     <meta name="twitter:domain" content="{{ request.get_host }}">
     <meta name="twitter:title"
           content="{% block twitter_title %}{% translate 'Home' %} | {{ config.organisation }}{% endblock %}">
-    <meta name="twitter:description" content="
-            {% block twitter_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
+    <meta name="twitter:description"
+          content="{% block twitter_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
     <meta name="twitter:image" content="{% block twitter_image %}{{ config.get_social_card }}{% endblock %}">
     <meta name="twitter:image:alt" content="{% block twitter_image_alt %}{{ config.organisation }}{% endblock %}">
     {% if config.twitter %}

@@ -415,6 +415,7 @@ class Configuration(SingletonModel):
             result = self.img.social_card.url
             # Cache the result for 1 hour (3600 seconds)
             cache.set(cache_key, result, 3600)
+
         return result
 
 
@@ -1142,6 +1143,7 @@ class Event(models.Model):
         cached_result = cache.get(cache_key)
         if cached_result is not None:
             return cached_result
+
 
         result = None
         if self.img:
