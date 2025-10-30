@@ -18,6 +18,7 @@ from BaseBillet.models import Price
 # def reverse(apps, schema_editor):
 #     pass
 
+
 class Migration(migrations.Migration):
 
     dependencies = [
