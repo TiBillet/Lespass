@@ -54,7 +54,7 @@ class Initiative(models.Model):
     )
 
     budget_contributif = models.BooleanField(default=False, verbose_name=_("Budget contributif"), help_text=_("Permettez a votre communauté de proposer des actions qui s'inscrivent dans un budget contributif : https://movilab.org/wiki/Coremuneration_et_budget_contributif"))
-    currency = models.CharField(max_length=250, default="€", verbose_name=_("Valeur"), help_text=_("Changez la valeur de la contribution : Comptez en €, monnaie locale, monnaie temps, bonbons ?"))
+    currency = models.CharField(max_length=250, default="€", verbose_name=_("Devise"), help_text=_("Changez la valeur de la contribution : Comptez en €, monnaie locale, monnaie temps, bonbons ?"))
     direct_debit = models.BooleanField(default=False, verbose_name=_("Paiement direct"), help_text=_("Réclamer le paiement de la contribution financière en ligne. Cela redirigera la personne sur Stripe pour un paiement."))
 
     image = models.URLField(blank=True, null=True, verbose_name="Image (URL)")
@@ -234,7 +234,7 @@ class Contribution(models.Model):
         return (self.amount or 0) / 100
 
     def __str__(self):
-        return f"{self.contributor.email} → {self.amount / 100:.2f} {self.initiative.asset.currency_code}"
+        return f"{self.contributor.email} → {self.amount / 100:.2f} {self.initiative.currency}"
 
 
 class Vote(models.Model):

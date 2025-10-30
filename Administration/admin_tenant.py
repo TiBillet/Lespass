@@ -3812,7 +3812,7 @@ class ContributionInline(TabularInline):
     def amount_eur_display(self, obj):
         if not obj:
             return ""
-        return f"{obj.amount_eur:.2f} {obj.initiative.asset.currency_code}"
+        return f"{obj.amount_eur:.2f} {obj.initiative.currency}"
 
     amount_eur_display.short_description = _("Montant")
 
@@ -3879,27 +3879,75 @@ class ParticipationInline(TabularInline):
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
+class InitiativeAdminForm(ModelForm):
+    funding_goal_eur = forms.DecimalField(
+        label=_("Objectif"),
+        help_text=_("Montant de l'objectif dans la devise de l'initiative (affiché en unités, enregistré en centimes)."),
+        decimal_places=2,
+        max_digits=12,
+        min_value=0,
+        required=True,
+        widget=UnfoldAdminTextInputWidget,
+    )
+
+    class Meta:
+        model = Initiative
+        fields = (
+            "name",
+            "short_description",
+            "description",
+            "funding_goal_eur",
+            "currency",
+            # "direct_debit",
+            "img",
+            "budget_contributif",
+        )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        inst: Initiative | None = getattr(self, "instance", None)
+        if inst and getattr(inst, "pk", None):
+            try:
+                self.fields["funding_goal_eur"].initial = (Decimal(inst.funding_goal or 0) / Decimal("100")).quantize(Decimal("0.01"))
+            except Exception:
+                self.fields["funding_goal_eur"].initial = Decimal("0.00")
+
+    def save(self, commit=True):
+        instance: Initiative = super().save(commit=False)
+        # Convert euros to integer cents safely
+        value_eur: Decimal = self.cleaned_data.get("funding_goal_eur") or Decimal("0")
+        cents = int((value_eur.quantize(Decimal("0.01")) * 100).to_integral_value())
+        instance.funding_goal = max(0, cents)
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance
+
+
 @admin.register(Initiative, site=staff_admin_site)
 class InitiativeAdmin(ModelAdmin):
+    form = InitiativeAdminForm
     list_display = (
         "name",
         "created_at",
         "funded_amount_display",
         "funding_goal_display",
         "progress_percent_int",
+        "currency",
         "votes_count",
         "requested_total_display",
     )
 
-    fields =(
+    fields = (
         "name",
         "short_description",
         "description",
-        "funding_goal",
+        "funding_goal_eur",
         "currency",
         # "direct_debit",
         "img",
         "budget_contributif",
+        "tags",
     )
 
     list_filter = ("created_at", "tags")
@@ -3908,7 +3956,7 @@ class InitiativeAdmin(ModelAdmin):
     inlines = [ContributionInline, ParticipationInline, ]
     ordering = ("-created_at",)
     filter_horizontal = ("tags",)
-    autocomplete_fields = ()
+    autocomplete_fields = ("tags", )
 
     formfield_overrides = {
         models.TextField: {
@@ -3922,13 +3970,15 @@ class InitiativeAdmin(ModelAdmin):
         sanitize_textfields(obj)
         super().save_model(request, obj, form, change)
 
-    def currency(self, obj):
-        return getattr(getattr(obj, "asset", None), "currency_code", "€")
+    def currency(self, obj: Initiative):
+        if obj.asset :
+            return obj.asset.currency_code
+        return obj.currency
 
     currency.short_description = _("Devise")
 
     def funded_amount_display(self, obj):
-        return f"{obj.funded_amount_eur:.2f} {self.currency(obj)}"
+        return f"{obj.funded_amount_eur:.2f}"
 
     funded_amount_display.short_description = _("Financé")
 
