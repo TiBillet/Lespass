@@ -2,7 +2,9 @@ from datetime import datetime
 from itertools import product
 from random import randint
 
+import requests
 from django import template
+from django.core.cache import cache
 from django.db import connection
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -91,10 +93,15 @@ def from_iso_to_date(value):
 
 @register.filter
 def randImg(value):
-    if not value :
-        return f"https://picsum.photos/{randint(1680,1920)}/{randint(1050,1200)}"
-        return f"/static/images/404-{randint(1,12)}.jpg"
-    return value
+    def get30randimg():
+        list30 = []
+        for i in range(30):
+            rq = requests.get(f'https://picsum.photos/{randint(1680,1920)}/{randint(1050,1200)}')
+            list30.append(rq.url)
+        return list30
+
+    list30 = cache.get_or_set(f"list30_randimg", lambda: get30randimg(), 60 * 60 * 24)
+    return list30[randint(0,29)]
 
 @register.filter
 def randCardImg(value):
