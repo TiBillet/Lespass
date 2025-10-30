@@ -6,17 +6,17 @@ from django_tenants.utils import tenant_context
 from BaseBillet.models import Price
 
 
-def reset_id_stripe_product(apps, schema_editor):
-    Client = apps.get_model('Customers', 'Client')
-    for client in Client.objects.all().exclude(categorie='R'):
-        with tenant_context(client):
-            ProductSold = apps.get_model('BaseBillet', 'ProductSold')
-            PriceSold = apps.get_model('BaseBillet', 'PriceSold')
-            ProductSold.objects.all().update(id_product_stripe=None)
-            PriceSold.objects.all().update(id_price_stripe=None)
-
-def reverse(apps, schema_editor):
-    pass
+# def reset_id_stripe_product(apps, schema_editor):
+#     Client = apps.get_model('Customers', 'Client')
+#     for client in Client.objects.all().exclude(categorie='R'):
+#         with tenant_context(client):
+#             ProductSold = apps.get_model('BaseBillet', 'ProductSold')
+#             PriceSold = apps.get_model('BaseBillet', 'PriceSold')
+#             ProductSold.objects.all().update(id_product_stripe=None)
+#             PriceSold.objects.all().update(id_price_stripe=None)
+#
+# def reverse(apps, schema_editor):
+#     pass
 
 class Migration(migrations.Migration):
 
@@ -35,5 +35,5 @@ class Migration(migrations.Migration):
             name='subscription_type',
             field=models.CharField(choices=[('N', 'Non applicable'), ('H', '1 Heure'), ('M', '30 Jours'), ('D', '1 Jour'), ('Y', '365 Jours'), ('C', 'Civile : 1er Janvier'), ('S', 'Scolaire : 1er septembre')], default='N', max_length=1, verbose_name="durée d'abonnement"),
         ),
-        migrations.RunPython(reset_id_stripe_product, reverse),
+        # migrations.RunPython(reset_id_stripe_product, reverse),
     ]
