@@ -91,17 +91,19 @@ def dround(value):
 def from_iso_to_date(value):
     return datetime.fromisoformat(value)
 
+def get30randimg():
+    list30 = []
+    for i in range(30):
+        rq = requests.get(f'https://picsum.photos/{randint(1680,1920)}/{randint(1050,1200)}', timeout=1)
+        list30.append(rq.url)
+    return list30
+
 @register.filter
 def randImg(value):
-    def get30randimg():
-        list30 = []
-        for i in range(30):
-            rq = requests.get(f'https://picsum.photos/{randint(1680,1920)}/{randint(1050,1200)}')
-            list30.append(rq.url)
-        return list30
+    if not value:
+        return f"/static/images/404-{randint(1, 20)}.jpg"
+    return value
 
-    list30 = cache.get_or_set(f"list30_randimg", lambda: get30randimg(), 60 * 60 * 24)
-    return list30[randint(0,29)]
 
 @register.filter
 def randCardImg(value):
