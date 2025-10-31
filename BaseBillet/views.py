@@ -1431,7 +1431,7 @@ class FederationViewset(viewsets.ViewSet):
             logger.info(f"Tenants: {tenants}")
 
             for tenant in list(set(tenants)):
-                if tenant.categorie not in [Client.WAITING_CONFIG, Client.ROOT]:
+                if tenant.categorie != Client.ROOT:
                     with tenant_context(tenant):
                         config = Configuration.get_solo()
                         assets = list()
