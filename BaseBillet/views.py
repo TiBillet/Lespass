@@ -306,6 +306,51 @@ def emailconfirmation(request, token):
 class ScanQrCode(viewsets.ViewSet):  # /qr
     authentication_classes = [SessionAuthentication, ]
 
+    @action(detail=True, methods=['GET'])
+    def token_table_qrcode(self, request, pk=None):
+        qrcode_uuid: uuid.uuid4 = uuid.UUID(pk)
+        fedowAPI = FedowAPI()
+
+        serialized_qrcode_card = fedowAPI.NFCcard.qr_retrieve(qrcode_uuid)
+        if not serialized_qrcode_card:
+            logger.warning(f"serialized_qrcode_card {qrcode_uuid} non valide")
+            raise Http404()
+
+        # La carte n'a pas d'user, on est sensé l'avoir créé juste avant : 404
+        if serialized_qrcode_card['is_wallet_ephemere']:
+            raise Http404()
+
+        wallet = Wallet.objects.get(uuid=serialized_qrcode_card['wallet_uuid'])
+        user: TibilletUser = wallet.user
+        serialized_wallet = fedowAPI.wallet.cached_retrieve_by_signature(user).validated_data
+
+        # On retire les adhésions, on les affiche dans l'autre table
+        tokens = [token for token in serialized_wallet.get('tokens') if token.get('asset_category') not in ['SUB', 'BDG']]
+
+        for token in tokens:
+            names_of_place_federated = []
+            # Recherche du logo du lieu d'origin de l'asset
+            if token['asset']['place_origin']:
+                # L'asset fédéré n'a pas d'origin
+                place_uuid_origin = token['asset']['place_origin']['uuid']
+                place_info = self.get_place_cached_info(place_uuid_origin)
+                token['asset']['logo'] = place_info.get('logo')
+                names_of_place_federated.append(place_info.get('organisation'))
+            # Recherche des noms des lieux fédérés
+
+            for place_federated in token['asset']['place_uuid_federated_with']:
+                place = self.get_place_cached_info(place_federated)
+                if place:
+                    names_of_place_federated.append(place.get('organisation'))
+            token['asset']['names_of_place_federated'] = names_of_place_federated
+
+        context = {
+            'config': Configuration.get_solo(), # pour le nom grisé ou pas
+            'tokens': tokens,
+        }
+
+        return render(request, "reunion/partials/account/token_table.html", context=context)
+
     def retrieve(self, request, pk=None):
         # TODO: Serializer ?
         try:
@@ -371,6 +416,7 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
             # Accès limité à la carte
             template_context = get_context(request)
             template_context['base_template'] = 'reunion/blank_base.html'
+            template_context['qrcode_uuid'] = qrcode_uuid # pour faire la requete token table
             return render(request, "reunion/views/account/restricted_access.html", context=template_context)
 
 
@@ -453,7 +499,6 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
                 membership.first_name = user.first_name
                 membership.last_name = user.last_name
                 membership.save()
-
 
         return HttpResponseClientRedirect(request.headers['Referer'])
 
