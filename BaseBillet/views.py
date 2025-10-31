@@ -1426,6 +1426,7 @@ class FederationViewset(viewsets.ViewSet):
             for asset in AssetFedowPublic.objects.all():
                 for tenant in asset.federated_with.all():
                     tenants.append(tenant)
+                tenants.append(asset.origin)
 
             for place in list(set(tenants)):
                 with tenant_context(place):
