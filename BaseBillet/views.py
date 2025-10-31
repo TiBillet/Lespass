@@ -98,9 +98,9 @@ def encode_uid(pk):
 
 def get_context(request):
 
-    context_cached = cache.get(f'get_context_{connection.tenant.uuid}')
-    if context_cached:
-        return context_cached
+    # context_cached = cache.get(f'get_context_{connection.tenant.uuid}')
+    # if context_cached:
+    #     return context_cached
 
     config = Configuration.get_solo()
     crowd_config = CrowdConfig.get_solo()
@@ -158,7 +158,7 @@ def get_context(request):
              'label': f'{crowd_config.title}', 'icon': 'piggy-bank'}
         )
 
-    cache.set(f'get_context_{connection.tenant.uuid}', context, 10)
+    # cache.set(f'get_context_{connection.tenant.uuid}', context, 10)
     return context
 
 
