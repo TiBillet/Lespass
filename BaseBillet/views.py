@@ -307,6 +307,34 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
     authentication_classes = [SessionAuthentication, ]
 
     @action(detail=True, methods=['GET'])
+    def refill_wallet_qrcode(self, request, pk):
+        qrcode_uuid: uuid.uuid4 = uuid.UUID(pk)
+        fedowAPI = FedowAPI()
+
+        serialized_qrcode_card = fedowAPI.NFCcard.qr_retrieve(qrcode_uuid)
+        if not serialized_qrcode_card:
+            logger.warning(f"serialized_qrcode_card {qrcode_uuid} non valide")
+            raise Http404()
+
+        # La carte n'a pas d'user, on est sensé l'avoir créé juste avant : 404
+        if serialized_qrcode_card['is_wallet_ephemere']:
+            raise Http404()
+
+        wallet = Wallet.objects.get(uuid=serialized_qrcode_card['wallet_uuid'])
+        user: TibilletUser = wallet.user
+        # C'est fedow qui génère la demande de paiement à Stripe.
+        # Il ajoute dans les metadonnée les infos du wallet, et le signe.
+        # Lors du retour du paiement, la signature est vérifiée pour être sur que la demande de paiement vient bien de Fedow.
+        stripe_checkout_url = fedowAPI.wallet.get_federated_token_refill_checkout(user)
+        if stripe_checkout_url:
+            # Redirection du client vers le lien stripe demandé par Fedow
+            return HttpResponseClientRedirect(stripe_checkout_url)
+        else:
+            messages.add_message(request, messages.ERROR, _("Not available. Contact an admin."))
+            return HttpResponseClientRedirect('/my_account/')
+
+
+    @action(detail=True, methods=['GET'])
     def token_table_qrcode(self, request, pk=None):
         qrcode_uuid: uuid.uuid4 = uuid.UUID(pk)
         fedowAPI = FedowAPI()
