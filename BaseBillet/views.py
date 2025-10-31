@@ -98,6 +98,7 @@ def encode_uid(pk):
 
 def get_context(request):
     config = Configuration.get_solo()
+    crowd_config = CrowdConfig.get_solo()
     # logger.debug("request.htmx") if request.htmx else None
     base_template = "reunion/headless.html" if request.htmx else "reunion/base.html"
     serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
@@ -120,7 +121,7 @@ def get_context(request):
         "user": request.user,
         "profile": serialized_user,
         "config": config,
-        "crowd_config": CrowdConfig.get_solo(),
+        "crowd_config": crowd_config,
         "meta_url": meta_url,
         "header": True,
         # "tenant": connection.tenant,
@@ -134,9 +135,24 @@ def get_context(request):
             {'name': 'memberships_mvt', 'url': '/memberships/',
              'label': config.membership_menu_name if config.membership_menu_name else _('Subscriptions'),
              'icon': 'person-badge'},
-            {'name': 'federation', 'url': '/federation/', 'label': 'Local network', 'icon': 'diagram-2-fill'},
         ]
     }
+
+    navbar: list = context["main_nav"]
+    federation_active = FederatedPlace.objects.exists()
+    if federation_active :
+        navbar.append(
+            {'name': 'federation', 'url': '/federation/',
+             'label': 'Local network', 'icon': 'diagram-2-fill'}
+        )
+
+    if crowd_config.active:
+        navbar.append(
+            {'name': f'crowd-list', 'url': '/crowd/',
+             'label': f'{crowd_config.title}', 'icon': 'piggy-bank'}
+        )
+
+
     return context
 
 
