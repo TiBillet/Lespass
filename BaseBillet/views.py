@@ -1415,26 +1415,35 @@ class FederationViewset(viewsets.ViewSet):
 
         def build_federated_places():
             results = list()
-
             tenants = list()
+
             actual_tenant = connection.tenant
             tenants.append(actual_tenant)
             # Les lieux fédéré en agenda
             for fed in FederatedPlace.objects.all():
-                tenants.append(fed.tenant)
+                if fed.tenant not in tenants :
+                    tenants.append(fed.tenant)
             # Les lieux fédéré en Asset
             for asset in AssetFedowPublic.objects.all():
+                tenant_origin = asset.origin
+                if tenant_origin not in tenants:
+                    tenants.append(tenant_origin)
                 for tenant in asset.federated_with.all():
-                    tenants.append(tenant)
-                tenants.append(asset.origin)
+                    if tenant not in tenants:
+                        tenants.append(tenant)
 
             logger.info(f"Tenants: {tenants}")
 
             for client in list(set(tenants)):
-                if tenant.categorie != Client.ROOT:
+                if client.categorie != Client.ROOT:
                     with tenant_context(client):
-                        config = Configuration.get_solo()
                         tenant = connection.tenant
+                        logger.info(f"with tenant_context(client): {client}")
+                        logger.info(f"with tenant: {tenant}")
+                        logger.info(f"with categorie: {tenant.categorie}")
+
+                        config = Configuration.get_solo()
+
                         assets = list()
 
                         # les assets fédérés
