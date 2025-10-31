@@ -1469,7 +1469,7 @@ class FederationViewset(viewsets.ViewSet):
                         "slug": config.slug,
                         "short_description": config.short_description,
                         "long_description": config.long_description,
-                        "img": config.get_social_card,
+                        "img": config.get_hdr_img,
                         "assets": [{"name":f"{asset.name}","category":f"{asset.category}"} for asset in assets],
                         "url": config.full_url(),
                     })
