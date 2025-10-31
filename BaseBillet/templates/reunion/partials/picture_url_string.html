@@ -13,6 +13,6 @@
     <img
             class="object-fit-cover w-100 h-100{% if class %} {{ class }}{% endif %}"
             {% if style %}style="{{ style }}"{% endif %}
-            src="{{ img_url }}" alt="{{ alt }}"
+            src="{{ img_url | randImg }}" alt="{{ alt }}"
     />
 </picture>
