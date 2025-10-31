@@ -1430,10 +1430,11 @@ class FederationViewset(viewsets.ViewSet):
 
             logger.info(f"Tenants: {tenants}")
 
-            for tenant in list(set(tenants)):
+            for client in list(set(tenants)):
                 if tenant.categorie != Client.ROOT:
-                    with tenant_context(tenant):
+                    with tenant_context(client):
                         config = Configuration.get_solo()
+                        tenant = connection.tenant
                         assets = list()
 
                         # les assets fédérés
