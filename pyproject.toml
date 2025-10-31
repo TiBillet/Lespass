@@ -43,6 +43,7 @@ django-import-export = "^4.3"
 sib-api-v3-sdk = "^7.6.0"
 nh3 = "^0.3.0"
 pytest = "^8.4.2"
+django-simple-captcha = "^0.6.2"
 
 [tool.poetry.group.dev.dependencies]
 django-debug-toolbar = "^4.2.0"

@@ -56,7 +56,7 @@ from BaseBillet.validators import LoginEmailValidator, MembershipValidator, Link
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from TiBillet import settings
-from crowds.models import CrowdConfig
+from crowds.models import CrowdConfig, Initiative
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
 from fedow_connect.utils import dround
@@ -146,7 +146,7 @@ def get_context(request):
              'label': 'Local network', 'icon': 'diagram-2-fill'}
         )
 
-    if crowd_config.active:
+    if crowd_config.active and Initiative.objects.exists():
         navbar.append(
             {'name': f'crowd-list', 'url': '/crowd/',
              'label': f'{crowd_config.title}', 'icon': 'piggy-bank'}
