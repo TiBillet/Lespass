@@ -1449,8 +1449,8 @@ class FederationViewset(viewsets.ViewSet):
 
         federated_places = cache.get_or_set(
             f"federated_places_{connection.tenant.uuid}",
-            build_federated_places, 1
-            # 60 * 60  # cache for 1 hour
+            build_federated_places,
+            60 * 60  # cache for 1 hour
         )
 
         template_context['federated_places'] = federated_places
