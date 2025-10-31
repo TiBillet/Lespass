@@ -1435,13 +1435,13 @@ class FederationViewset(viewsets.ViewSet):
             for tenant in tenants:
                 if tenant.categorie == Client.ROOT:
                     tenants.remove(tenant)
-            logger.info(f"Tenants: {tenants}")
+            # logger.info(f"Tenants: {tenants}")
 
             for client in list(set(tenants)):
                 with tenant_context(client):
-                    logger.info(f"with tenant_context(client): {client}")
-                    logger.info(f"with tenant: {client}")
-                    logger.info(f"with categorie: {client.categorie}")
+                    # logger.info(f"with tenant_context(client): {client}")
+                    # logger.info(f"with tenant: {client}")
+                    # logger.info(f"with categorie: {client.categorie}")
 
                     config = Configuration.get_solo()
 
@@ -1476,7 +1476,7 @@ class FederationViewset(viewsets.ViewSet):
 
             return results
 
-        federated_places = None
+        # federated_places = None
         federated_places = cache.get('federated_places')
         if not federated_places:
             federated_places = build_federated_places()
