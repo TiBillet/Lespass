@@ -11,7 +11,7 @@
             <div class="col-md-8 offset-md-2 col-lg-6 offset-lg-3 col-xl-4 offset-xl-4">
                 <h1>{% trans 'Basic card access' %}</h1>
 
-                <div hx-get="/my_account/tokens_table/" hx-trigger="revealed" class="mt-4">
+                <div hx-get="/qr/{{ qrcode_uuid }}/token_table_qrcode/" hx-trigger="revealed" class="mt-4">
                     <span>{% translate "Loading list" %}</span>
                     <div class="d-flex justify-content-center align-items-center ">
                         <div class="spinner-border text-info"
