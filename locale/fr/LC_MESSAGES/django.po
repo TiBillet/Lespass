@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-10-31 09:59+0000\n"
+"POT-Creation-Date: 2025-10-31 10:29+0000\n"
 "PO-Revision-Date: 2025-03-12 09:37+0100\n"
 "Last-Translator: Diane Alma Kay <pro@kayathommy.fr>\n"
 "Language-Team: French\n"
@@ -3444,11 +3444,10 @@ msgstr ""
 "fédération de collectifs, le tout libre et open-source."
 
 #: BaseBillet/templates/reunion/partials/footer.html:109
-#| msgid "Name of your collective"
 msgid "Create a TiBillet space for your collective"
 msgstr "Créez un espace TiBillet pour votre collectif"
 
-#: BaseBillet/templates/reunion/partials/footer.html:120
+#: BaseBillet/templates/reunion/partials/footer.html:121
 msgid "Documentation"
 msgstr "Documentation"
 
@@ -4031,7 +4030,6 @@ msgid "Home page"
 msgstr "Page d'accueil"
 
 #: BaseBillet/templates/reunion/views/federation/list.html:18
-#| msgid "Local network members"
 msgid "Network members"
 msgstr "Membres du réseau"
 
@@ -5380,7 +5378,6 @@ msgid "Assets"
 msgstr "Actifs"
 
 #: TiBillet/settings.py:710
-#| msgid "Contribution"
 msgid "Contributions"
 msgstr "Contributions"
 
