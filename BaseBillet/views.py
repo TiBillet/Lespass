@@ -1477,7 +1477,7 @@ class FederationViewset(viewsets.ViewSet):
             return results
 
         federated_places = None
-        # federated_places = cache.get('federated_places')
+        federated_places = cache.get('federated_places')
         if not federated_places:
             federated_places = build_federated_places()
             cache.set('federated_places', federated_places, 60)
