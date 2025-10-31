@@ -687,27 +687,6 @@ UNFOLD = {
                 ],
             },
             {
-                "title": _("Financement participatif"),
-                "separator": True,  # Top border
-                "collapsible": True,  # Collapsible group of links
-                "items": [
-                    {
-                        "title": _("Configuration"),
-                        "icon": "manufacturing",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:crowds_crowdconfig_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-                    },
-                    {
-                        "title": _("Initiative"),
-                        "icon": "crowdsource",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:crowds_initiative_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-                    },
-                ],
-            },
-            {
                 "title": _("Fédération"),
                 "separator": True,  # Top border
                 "collapsible": True,  # Collapsible group of links
@@ -723,6 +702,27 @@ UNFOLD = {
                         "title": _("Assets"),
                         "icon": "currency_exchange",  # Supported icon set: https://fonts.google.com/icons
                         "link": reverse_lazy("staff_admin:fedow_public_assetfedowpublic_changelist"),
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+                    },
+                ],
+            },
+            {
+                "title": _("Contributions"),
+                "separator": True,  # Top border
+                "collapsible": True,  # Collapsible group of links
+                "items": [
+                    {
+                        "title": _("Configuration"),
+                        "icon": "manufacturing",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:crowds_crowdconfig_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+                    },
+                    {
+                        "title": _("Initiative"),
+                        "icon": "crowdsource",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:crowds_initiative_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
                     },
                 ],

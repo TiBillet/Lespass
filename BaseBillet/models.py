@@ -2674,7 +2674,7 @@ class FederatedPlace(models.Model):
         return self.tenant.name
 
     def save(self, *args, **kwargs):
-        cache.delete(f"federated_places_{connection.tenant.uuid}")
+        cache.delete(f"federated_places")
         super().save(*args, **kwargs)
 
 

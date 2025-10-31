@@ -2,6 +2,7 @@ from django.db import models
 from uuid import uuid4
 from django.db.models import UniqueConstraint, Q
 from django.utils.translation import gettext_lazy as _
+from django.core.cache import cache
 
 
 class AssetFedowPublic(models.Model):
@@ -57,6 +58,10 @@ class AssetFedowPublic(models.Model):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        cache.delete(f"federated_places")
+        super().save(*args, **kwargs)
 
     class Meta:
         # Only one can be true :

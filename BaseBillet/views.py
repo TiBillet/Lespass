@@ -97,6 +97,11 @@ def encode_uid(pk):
 
 
 def get_context(request):
+
+    context_cached = cache.get(f'get_context_{connection.tenant.uuid}')
+    if context_cached:
+        return context_cached
+
     config = Configuration.get_solo()
     crowd_config = CrowdConfig.get_solo()
     # logger.debug("request.htmx") if request.htmx else None
@@ -139,8 +144,9 @@ def get_context(request):
     }
 
     navbar: list = context["main_nav"]
-    federation_active = FederatedPlace.objects.exists()
-    if federation_active:
+    agenda_federation_active = FederatedPlace.objects.exists()
+    asset_federation_active = AssetFedowPublic.objects.filter(federated_with__isnull=False).exists()
+    if agenda_federation_active or asset_federation_active:
         navbar.append(
             {'name': 'federation', 'url': '/federation/',
              'label': 'Local network', 'icon': 'diagram-2-fill'}
@@ -152,6 +158,7 @@ def get_context(request):
              'label': f'{crowd_config.title}', 'icon': 'piggy-bank'}
         )
 
+    cache.set(f'get_context_{connection.tenant.uuid}', context, 10)
     return context
 
 
@@ -1407,34 +1414,41 @@ class FederationViewset(viewsets.ViewSet):
         template_context = get_context(request)
 
         def build_federated_places():
-            results = []
-            for place in FederatedPlace.objects.all():
-                with tenant_context(place.tenant):
+            results = list()
+
+            tenants = list()
+            actual_tenant = connection.tenant
+            tenants.append(actual_tenant)
+            # Les lieux fédéré en agenda
+            for fed in FederatedPlace.objects.all():
+                tenants.append(fed.tenant)
+            # Les lieux fédéré en Asset
+            for asset in AssetFedowPublic.objects.all():
+                for tenant in asset.federated_with.all():
+                    tenants.append(tenant)
+
+            for place in list(set(tenants)):
+                with tenant_context(place):
                     config = Configuration.get_solo()
-                    client: Client = place.tenant
-                    assets = []
+                    tenant: Client = place
+                    assets = list()
 
                     # les assets fédérés
-                    for asset in client.federated_assets_fedow_public.filter(
+                    for asset in tenant.federated_assets_fedow_public.exclude(
                             category__in=[
-                                AssetFedowPublic.STRIPE_FED_FIAT,
-                                AssetFedowPublic.TOKEN_LOCAL_FIAT,
-                                AssetFedowPublic.TOKEN_LOCAL_NOT_FIAT,
-                                AssetFedowPublic.TIME,
-                                AssetFedowPublic.FIDELITY,
+                                AssetFedowPublic.BADGE,
+                                AssetFedowPublic.SUBSCRIPTION,
                             ]):
-                        assets.append({"name":f"{asset.name}"})
+                        assets.append(asset)
 
                     # Les assets créés
-                    for asset in client.assets_fedow_public.filter(
+                    for asset in tenant.assets_fedow_public.exclude(
                             category__in=[
-                                AssetFedowPublic.STRIPE_FED_FIAT,
-                                AssetFedowPublic.TOKEN_LOCAL_FIAT,
-                                AssetFedowPublic.TOKEN_LOCAL_NOT_FIAT,
-                                AssetFedowPublic.TIME,
-                                AssetFedowPublic.FIDELITY,
+                                AssetFedowPublic.BADGE,
+                                AssetFedowPublic.SUBSCRIPTION,
                             ]):
-                        assets.append({"name":f"{asset.name}"})
+                        if asset not in assets:
+                            assets.append(asset)
 
                     results.append({
                         "organisation": config.organisation,
@@ -1442,16 +1456,17 @@ class FederationViewset(viewsets.ViewSet):
                         "short_description": config.short_description,
                         "long_description": config.long_description,
                         "img": config.get_social_card,
-                        "assets": assets,
+                        "assets": [{"name":f"{asset.name}"} for asset in assets],
                         "url": config.full_url(),
                     })
+
             return results
 
-        federated_places = cache.get_or_set(
-            f"federated_places_{connection.tenant.uuid}",
-            build_federated_places,
-            60 * 60  # cache for 1 hour
-        )
+        federated_places = None
+        federated_places = cache.get('federated_places')
+        if not federated_places:
+            federated_places = build_federated_places()
+            cache.set('federated_places', federated_places, 60)
 
         template_context['federated_places'] = federated_places
         logger.info(f"Federated places: {federated_places}")
