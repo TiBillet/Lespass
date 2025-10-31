@@ -1428,40 +1428,40 @@ class FederationViewset(viewsets.ViewSet):
                     tenants.append(tenant)
                 tenants.append(asset.origin)
 
-            for place in list(set(tenants)):
-                with tenant_context(place):
-                    config = Configuration.get_solo()
-                    tenant: Client = place
-                    assets = list()
+            for tenant in list(set(tenants)):
+                if tenant.categorie not in [Client.WAITING_CONFIG, Client.ROOT]:
+                    with tenant_context(tenant):
+                        config = Configuration.get_solo()
+                        assets = list()
 
-                    # les assets fédérés
-                    for asset in tenant.federated_assets_fedow_public.exclude(
-                            category__in=[
-                                AssetFedowPublic.BADGE,
-                                AssetFedowPublic.SUBSCRIPTION,
-                            ]):
-                        assets.append(asset)
-
-                    # Les assets créés
-                    for asset in tenant.assets_fedow_public.exclude(
-                            category__in=[
-                                AssetFedowPublic.BADGE,
-                                AssetFedowPublic.SUBSCRIPTION,
-                            ]):
-                        if asset not in assets:
+                        # les assets fédérés
+                        for asset in tenant.federated_assets_fedow_public.exclude(
+                                category__in=[
+                                    AssetFedowPublic.BADGE,
+                                    AssetFedowPublic.SUBSCRIPTION,
+                                ]):
                             assets.append(asset)
 
-                    results.append({
-                        "organisation": config.organisation,
-                        "slug": config.slug,
-                        "short_description": config.short_description,
-                        "long_description": config.long_description,
-                        "img": config.get_social_card,
-                        "assets": [{"name":f"{asset.name}"} for asset in assets],
-                        "url": config.full_url(),
-                    })
+                        # Les assets créés
+                        for asset in tenant.assets_fedow_public.exclude(
+                                category__in=[
+                                    AssetFedowPublic.BADGE,
+                                    AssetFedowPublic.SUBSCRIPTION,
+                                ]):
+                            if asset not in assets:
+                                assets.append(asset)
 
-            return results
+                        results.append({
+                            "organisation": config.organisation,
+                            "slug": config.slug,
+                            "short_description": config.short_description,
+                            "long_description": config.long_description,
+                            "img": config.get_social_card,
+                            "assets": [{"name":f"{asset.name}"} for asset in assets],
+                            "url": config.full_url(),
+                        })
+
+                return results
 
         federated_places = None
         # federated_places = cache.get('federated_places')
