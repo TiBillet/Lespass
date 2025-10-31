@@ -306,6 +306,31 @@ def emailconfirmation(request, token):
 class ScanQrCode(viewsets.ViewSet):  # /qr
     authentication_classes = [SessionAuthentication, ]
 
+    def resend_email_confirmation(self, request, pk):
+        qrcode_uuid: uuid.uuid4 = uuid.UUID(pk)
+        fedowAPI = FedowAPI()
+
+        serialized_qrcode_card = fedowAPI.NFCcard.qr_retrieve(qrcode_uuid)
+        if not serialized_qrcode_card:
+            messages.add_message(request, messages.ERROR, f"QrCode inconnu")
+            raise Http404()
+
+        # La carte n'a pas d'user, on est sensé l'avoir créé juste avant : 404
+        if serialized_qrcode_card['is_wallet_ephemere']:
+            messages.add_message(request, messages.ERROR, _("This card is not linked"))
+            raise Http404()
+
+        try :
+            wallet = Wallet.objects.get(uuid=serialized_qrcode_card['wallet_uuid'])
+            user: TibilletUser = wallet.user
+            user = get_or_create_user(email=user.email, send_mail=True, force_mail=True)
+
+            messages.add_message(request, messages.SUCCESS, _("To access your space, please validate\n"
+                                                          "your email address. Don't forget to check your spam!"))
+        except Exception as e:
+            messages.add_message(request, messages.ERROR, f"Error on email confirmation : {e}")
+        return HttpResponseClientRedirect(request.headers['Referer'])
+
     @action(detail=True, methods=['GET'])
     def refill_wallet_qrcode(self, request, pk):
         qrcode_uuid: uuid.uuid4 = uuid.UUID(pk)
