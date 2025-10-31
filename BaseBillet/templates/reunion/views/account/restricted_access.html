@@ -21,7 +21,7 @@
                 </div>
 
                 <div class="col-6 col-md-auto me-md-2">
-                    <a href="#" hx-get="/my_account/refill_wallet" hx-indicator="#tibillet-spinner"
+                    <a href="#" hx-get="/qr/{{ qrcode_uuid }}/refill_wallet_qrcode/" hx-indicator="#tibillet-spinner"
                     class="btn btn-primary square-btn w-100">
                         <i class="bi bi-plus-circle"></i>
                         {% trans "Refill TiBillets" %}
