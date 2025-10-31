@@ -1428,6 +1428,8 @@ class FederationViewset(viewsets.ViewSet):
                     tenants.append(tenant)
                 tenants.append(asset.origin)
 
+            logger.info(f"Tenants: {tenants}")
+
             for tenant in list(set(tenants)):
                 if tenant.categorie not in [Client.WAITING_CONFIG, Client.ROOT]:
                     with tenant_context(tenant):
