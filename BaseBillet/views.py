@@ -313,12 +313,10 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
         serialized_qrcode_card = fedowAPI.NFCcard.qr_retrieve(qrcode_uuid)
         if not serialized_qrcode_card:
             messages.add_message(request, messages.ERROR, f"QrCode inconnu")
-            raise Http404()
 
         # La carte n'a pas d'user, on est sensé l'avoir créé juste avant : 404
         if serialized_qrcode_card['is_wallet_ephemere']:
             messages.add_message(request, messages.ERROR, _("This card is not linked"))
-            raise Http404()
 
         try :
             wallet = Wallet.objects.get(uuid=serialized_qrcode_card['wallet_uuid'])
