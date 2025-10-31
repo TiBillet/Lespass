@@ -1181,7 +1181,7 @@ class Event(models.Model):
         else:
             config = Configuration.get_solo()
             if config.img:
-                logger.info("config img")
+                # logger.info("config img")
                 result = config.img
             else:
                 result = None
