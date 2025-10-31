@@ -480,6 +480,8 @@ class Configuration(SingletonModel):
         else:
             return []
 
+
+
     def full_url(self):
         return f"https://{connection.tenant.get_primary_domain().domain}/"
 
