@@ -1463,7 +1463,7 @@ class FederationViewset(viewsets.ViewSet):
                             category__in=[
                                 AssetFedowPublic.BADGE,
                                 AssetFedowPublic.SUBSCRIPTION,
-                            ]):
+                            ], archive=False):
                         assets.append(asset)
 
                     # Les assets créés
@@ -1471,7 +1471,7 @@ class FederationViewset(viewsets.ViewSet):
                             category__in=[
                                 AssetFedowPublic.BADGE,
                                 AssetFedowPublic.SUBSCRIPTION,
-                            ]):
+                            ], archive=False):
                         if asset not in assets:
                             assets.append(asset)
 
