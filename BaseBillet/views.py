@@ -1417,7 +1417,7 @@ class FederationViewset(viewsets.ViewSet):
             results = list()
             tenants = list()
 
-            actual_tenant = connection.tenant
+            actual_tenant: Client = connection.tenant
             tenants.append(actual_tenant)
             # Les lieux fédéré en agenda
             for fed in FederatedPlace.objects.all():
@@ -1469,7 +1469,7 @@ class FederationViewset(viewsets.ViewSet):
                         "slug": config.slug,
                         "short_description": config.short_description,
                         "long_description": config.long_description,
-                        "img": config.get_hdr_img,
+                        "img": config.get_med_img,
                         "assets": [{"name":f"{asset.name}","category":f"{asset.category}"} for asset in assets],
                         "url": config.full_url(),
                     })
@@ -1477,10 +1477,10 @@ class FederationViewset(viewsets.ViewSet):
             return results
 
         # federated_places = None
-        federated_places = cache.get('federated_places')
+        federated_places = cache.get(f'federated_places_{connection.tenant.uuid}')
         if not federated_places:
             federated_places = build_federated_places()
-            cache.set('federated_places', federated_places, 60)
+            cache.set(f'federated_places_{connection.tenant.uuid}', federated_places, 60)
 
         template_context['federated_places'] = federated_places
         logger.info(f"Federated places: {federated_places}")

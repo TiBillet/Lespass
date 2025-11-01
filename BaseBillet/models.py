@@ -400,6 +400,21 @@ class Configuration(SingletonModel):
                         delete_orphans=True,
                         verbose_name=_('Background image'),
                         )
+    @property
+    def get_med_img(self):
+        # Cache key based on instance ID and method name
+        cache_key = f'config_get_med_{self.pk}'
+        cached_result = cache.get(cache_key)
+        if cached_result is not None:
+            return cached_result
+
+        result = None
+        if self.img:
+            result = self.img.med.url
+            # Cache the result for 1 hour (3600 seconds)
+            cache.set(cache_key, result, 3600)
+
+        return result
 
     @property
     def get_hdr_img(self):
