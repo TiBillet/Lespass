@@ -97,7 +97,6 @@ def encode_uid(pk):
 
 
 def get_context(request):
-
     # context_cached = cache.get(f'get_context_{connection.tenant.uuid}')
     # if context_cached:
     #     return context_cached
@@ -1416,15 +1415,27 @@ class FederationViewset(viewsets.ViewSet):
         def build_federated_places():
             results = list()
             tenants = list()
+            assets = list()
 
             actual_tenant: Client = connection.tenant
             tenants.append(actual_tenant)
             # Les lieux fédéré en agenda
             for fed in FederatedPlace.objects.all():
-                if fed.tenant not in tenants :
+                if fed.tenant not in tenants:
                     tenants.append(fed.tenant)
+
+            for asset in AssetFedowPublic.objects.filter(
+                    origin=actual_tenant, archive=False
+            ).exclude(category=AssetFedowPublic.STRIPE_FED_FIAT):
+                assets.append(asset)
+
+            for asset in AssetFedowPublic.objects.filter(
+                    federated_with=actual_tenant, archive=False
+            ).exclude(category=AssetFedowPublic.STRIPE_FED_FIAT):
+                assets.append(asset)
+
             # Les lieux fédéré en Asset
-            for asset in AssetFedowPublic.objects.all():
+            for asset in assets:
                 tenant_origin = asset.origin
                 if tenant_origin not in tenants:
                     tenants.append(tenant_origin)
@@ -1470,7 +1481,7 @@ class FederationViewset(viewsets.ViewSet):
                         "short_description": config.short_description,
                         "long_description": config.long_description,
                         "img": config.get_med_img,
-                        "assets": [{"name":f"{asset.name}","category":f"{asset.category}"} for asset in assets],
+                        "assets": [{"name": f"{asset.name}", "category": f"{asset.category}"} for asset in assets],
                         "url": config.full_url(),
                     })
 
