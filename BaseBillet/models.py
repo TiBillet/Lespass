@@ -1118,6 +1118,7 @@ class Event(models.Model):
     full_url = models.URLField(blank=True, null=True)
 
     published = models.BooleanField(default=True, verbose_name=_("Publish"))
+    # archived = models.BooleanField(default=False, verbose_name=_("Archive"))
     private = models.BooleanField(default=False, verbose_name=_("Non-federable event"),
                                   help_text=_("Will not be displayed on shared calendars."))
 
@@ -1473,7 +1474,9 @@ class Event(models.Model):
         """
         config = Configuration.get_solo()
         timezone = pytz.timezone(config.fuseau_horaire)
-        self.slug = slugify(f"{self.name} {self.datetime.astimezone(timezone).strftime('%y%m%d-%H%M')} {self.uuid.hex[:8]}")
+        if not self.uuid:
+            self.uuid = uuid.uuid4()
+        self.slug = slugify(f"{self.name} {self.datetime.astimezone(timezone).strftime('%y%m%d-%H%M')} {self.pk.hex[:8]}")
 
         # Génère l'url de l'évènement si il n'est pas externe.
         # Nécéssaire pour le prefetch multi tenant
