@@ -1485,6 +1485,7 @@ class FederationViewset(viewsets.ViewSet):
                         "url": config.full_url(),
                     })
 
+            logger.info(f"Mse en cache : federated places: {results}")
             return results
 
         # federated_places = None
@@ -1494,7 +1495,6 @@ class FederationViewset(viewsets.ViewSet):
             cache.set(f'federated_places_{connection.tenant.uuid}', federated_places, 60)
 
         template_context['federated_places'] = federated_places
-        logger.info(f"Federated places: {federated_places}")
         return render(request, "reunion/views/federation/list.html", context=template_context)
 
 
