@@ -4,6 +4,7 @@ import logging
 from typing import Iterable, List
 
 from celery import shared_task
+from django.db import connection
 from django.utils.translation import gettext_lazy as _, activate
 from django.utils import timezone
 from django.contrib.auth import get_user_model
@@ -11,37 +12,12 @@ from django_tenants.utils import schema_context
 
 from BaseBillet.tasks import CeleryMailerClass
 from BaseBillet.models import Configuration
+from Customers.models import Client
 from .models import Initiative, Participation, Contribution
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
-
-def _admin_recipients() -> List[str]:
-    """Return unique list of admin/staff recipient emails for the current tenant.
-    Priority: Configuration.email then all staff/superusers.
-    """
-    emails: List[str] = []
-    try:
-        config = Configuration.get_solo()
-        if getattr(config, "email", None):
-            emails.append(config.email)
-    except Exception:
-        pass
-    try:
-        for u in User.objects.filter(is_active=True).filter(is_staff=True).only("email"):
-            if u.email:
-                emails.append(u.email)
-    except Exception:
-        pass
-    # dedupe while preserving order
-    seen = set()
-    uniq: List[str] = []
-    for e in emails:
-        if e and e not in seen:
-            seen.add(e)
-            uniq.append(e)
-    return uniq
 
 
 def _currency(initiative: Initiative) -> str:
@@ -58,13 +34,14 @@ def email_participation_requested_admin(schema_name: str, initiative_uuid: str, 
     """
     try:
         with schema_context(schema_name):
+            client: Client = connection.tenant
             config = Configuration.get_solo()
             activate(config.language)
 
             part = Participation.objects.select_related("initiative", "participant").get(pk=participation_uuid)
             init = part.initiative
 
-            recipients = _admin_recipients() or ([config.email] if getattr(config, "email", None) else [])
+            recipients = [user.email for user in client.user_admin.all()]
             if not recipients:
                 logger.warning("crowds.email_participation_requested_admin: no recipients found")
                 return False
@@ -107,13 +84,15 @@ def email_contribution_paid_admin(schema_name: str, initiative_uuid: str, contri
     """
     try:
         with schema_context(schema_name):
+            client: Client = connection.tenant
+
             config = Configuration.get_solo()
             activate(config.language)
 
             contrib = Contribution.objects.select_related("initiative", "contributor").get(pk=contribution_uuid)
             init = contrib.initiative
 
-            recipients = _admin_recipients() or ([config.email] if getattr(config, "email", None) else [])
+            recipients = [user.email for user in client.user_admin.all()]
             if not recipients:
                 logger.warning("crowds.email_contribution_paid_admin: no recipients found")
                 return False
