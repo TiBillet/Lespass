@@ -1801,8 +1801,8 @@ class EventMVT(viewsets.ViewSet):
     @action(detail=True, methods=['POST'])
     def reservation(self, request, pk):
         # Vérification que l'évent existe bien sur ce tenant.
-        event = get_object_or_404(Event, slug=pk)
-        logger.info(f"Event Reservation : {request.data}")
+        # event = get_object_or_404(Event, slug=pk)
+        logger.debug(f"Event Reservation : {request.data}")
         validator = ReservationValidator(data=request.data, context={'request': request})
 
         if not validator.is_valid():
@@ -1829,7 +1829,7 @@ class EventMVT(viewsets.ViewSet):
 
         # SI on a un besoin de paiement, on redirige vers :
         if validator.checkout_link:
-            logger.info("validator reservation OK, get checkout link -> redirect")
+            logger.debug("validator reservation OK, get checkout link -> redirect")
             return HttpResponseClientRedirect(validator.checkout_link)
 
         return render(request, "reunion/views/event/reservation_ok.html", context={
