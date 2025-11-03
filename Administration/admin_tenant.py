@@ -858,7 +858,31 @@ class ProductAdmin(ModelAdmin):
     def save_model(self, request, obj: Product, form, change):
         # Sanitize all TextField inputs to avoid XSS via WysiwYG/TextField
         sanitize_textfields(obj)
-        super().save_model(request, obj, form, change)
+        try:
+            super().save_model(request, obj, form, change)
+        except IntegrityError as err:
+            err_str = str(err)
+            # Handle unique_together = ("categorie_article", "name") on Product
+            if (
+                "BaseBillet_product_categorie_article_name" in err_str
+                or "BaseBillet_product_categorie_article_name_" in err_str
+                or "duplicate key value violates unique constraint" in err_str and "(categorie_article, name)" in err_str
+            ):
+                messages.error(
+                    request,
+                    _(
+                        "Un produit avec ce nom existe déjà dans cette catégorie.\n"
+                        "Merci de choisir un autre nom pour éviter les doublons."
+                    ),
+                )
+                # Stay on the same page
+                return redirect(request.META.get("HTTP_REFERER", reverse("admin:index")))
+            # Unknown integrity error: log and re-raise
+            logger.error(err)
+            raise err
+        except Exception as err:
+            logger.error(err)
+            raise err
 
     # def save_model(self, request, obj, form, change):
     #     try:
