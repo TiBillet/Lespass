@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load i18n tibitags %}
 
 {% if resa.custom_form %}
 <div class="accordion accordion-flush mt-3" id="resa{{ resa.uuid }}FormAccordion">
@@ -18,7 +18,7 @@
           {% for key, value in resa.custom_form.items %}
             <tr>
               <th>{{ key }}</th>
-              <td>{{ value }}</td>
+              <td>{{ value | safe_join:", " }}</td>
             </tr>
           {% endfor %}
           </tbody>

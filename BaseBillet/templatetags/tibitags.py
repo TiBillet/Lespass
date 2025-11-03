@@ -123,6 +123,15 @@ def dict_key(d, k):
     except KeyError:
         return ""
 
+@register.filter
+def safe_join(value, sep=", "):
+    """Join a list safely, otherwise return the value unchanged."""
+    if type(value)==list:
+        return sep.join(map(str, value))
+    elif type(value)==bool:
+        return _("Yes") if value else _("No")
+    return value
+
 @register.filter(name='get_choice_string')
 def get_choice_string(value: str, choice: tuple):
     # Le dictionnaire des choix : {clé: libellé}
