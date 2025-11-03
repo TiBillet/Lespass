@@ -643,6 +643,114 @@ class PriceInline(TabularInline):
         return TenantAdminPermissionWithRequest(request)
 
 
+class ProductFormFieldInlineForm(ModelForm):
+    """
+    Inline form that exposes a user-friendly CSV input for options on
+    RADIO_SELECT and MULTI_SELECT field types, while storing a JSON list
+    in the underlying `options` JSONField.
+    """
+    options_csv = forms.CharField(
+        required=False,
+        label=_("Choices"),
+        help_text=_('For Single select (menu), Radio or Multiple select, enter choices separated by commas. Example: Rock, Electro, Jazz'),
+        widget=UnfoldAdminTextInputWidget(attrs={"placeholder": "Rock, Electro, Jazz"}),
+    )
+
+    class Meta:
+        model = ProductFormField
+        # Exclude the real `options` field from the rendered form; it will be
+        # set from `options_csv` in `clean()`/`save()`.
+        fields = ("label", "field_type", "required", "help_text", "order")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Initialize CSV proxy from existing JSON list
+        try:
+            opts = self.instance.options if getattr(self, 'instance', None) else None
+            if isinstance(opts, list) and all(isinstance(x, str) for x in opts):
+                self.fields["options_csv"].initial = ", ".join(opts)
+        except Exception:
+            pass
+        # Disable the Choices input unless type is Single/Radio/Multi select
+        try:
+            ftype = getattr(self.instance, 'field_type', None)
+            selectable = ftype in (
+                ProductFormField.FieldType.SINGLE_SELECT,
+                ProductFormField.FieldType.RADIO_SELECT,
+                ProductFormField.FieldType.MULTI_SELECT,
+            )
+            if not selectable:
+                self.fields["options_csv"].widget.attrs["disabled"] = "disabled"
+                # self.fields["options_csv"].widget.attrs["placeholder"] = "Inutile"
+                # self.fields["options_csv"].widget.attrs["style"] = "display: none"
+        except Exception:
+            pass
+
+    @staticmethod
+    def _parse_csv_or_json(value: str):
+        """Parse a CSV string or JSON array into a list of non-empty strings."""
+        if value is None:
+            return []
+        s = str(value).strip()
+        if not s:
+            return []
+        # If JSON-looking, try to parse first
+        if s.startswith("[") or s.startswith("{"):
+            try:
+                data = json.loads(s)
+                if isinstance(data, list):
+                    res = []
+                    for v in data:
+                        if v is None:
+                            continue
+                        sv = str(v).strip()
+                        if sv:
+                            # Collapse internal multiple spaces
+                            sv = re.sub(r"\s+", " ", sv)
+                            if sv not in res:
+                                res.append(sv)
+                    return res
+            except Exception:
+                # fall back to CSV parsing
+                pass
+        # CSV path
+        parts = [re.sub(r"\s+", " ", p.strip()) for p in s.split(",")]
+        res = []
+        for p in parts:
+            if p and p not in res:
+                res.append(p)
+        return res
+
+    def clean(self):
+        cleaned = super().clean()
+        ftype = cleaned.get("field_type")
+        csv_val = cleaned.get("options_csv")
+        # Manage options list for Single select, Radio and Multi select
+        if ftype in (
+            ProductFormField.FieldType.SINGLE_SELECT,
+            ProductFormField.FieldType.RADIO_SELECT,
+            ProductFormField.FieldType.MULTI_SELECT,
+        ):
+            options_list = self._parse_csv_or_json(csv_val)
+            cleaned["options"] = options_list if options_list else None
+        else:
+            # For non-choice types, clear options to avoid stale data
+            cleaned["options"] = None
+        return cleaned
+
+    def save(self, commit=True):
+        """Ensure the cleaned options are written to the instance even if the
+        underlying model field `options` is not rendered in the form/inline.
+        """
+        instance = super().save(commit=False)
+        # Use cleaned_data computed in clean()
+        if "options" in self.cleaned_data:
+            instance.options = self.cleaned_data.get("options")
+        if commit:
+            instance.save()
+        return instance
+
+
 class ProductFormFieldInline(TabularInline):
     """Sortable inline for dynamic membership form fields (ProductFormField)."""
     model = ProductFormField
@@ -660,20 +768,26 @@ class ProductFormFieldInline(TabularInline):
     # Columns in the inline rows (Unfold supports list_display for inlines)
     list_display = ["label", "field_type", "required", "order"]
 
+    # Use custom form with CSV proxy field
+    form = ProductFormFieldInlineForm
+
     # Fields displayed in the inline form (key is auto-generated from label)
     fields = (
         "label",
         "field_type",
         "required",
-        "options",
+        "options_csv",
         "help_text",
         "order",
     )
 
-    # Reduce JSONField textarea size (about one third of default)
+    # Keep JSON widget small for advanced/legacy editing
     formfield_overrides = {
-        models.JSONField: {"widget": forms.Textarea(attrs={"rows": 4})}
+        models.JSONField: {"widget": forms.Textarea(attrs={"rows": 3})}
     }
+
+    # Optional: show an information block before the inline (Unfold supports before templates on components)
+    # list_before_template = "admin/product/product_form_fields_inline_before.html"
 
     def has_delete_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
