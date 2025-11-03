@@ -219,7 +219,7 @@ class TicketCreator():
         reservation.status = Reservation.UNPAID
         reservation.save()
 
-        print(f"get_checkout_stripe OK : {new_paiement_stripe.checkout_session.stripe_id}")
+        logger.debug(f"get_checkout_stripe OK : {new_paiement_stripe.checkout_session.stripe_id}")
         return new_paiement_stripe.checkout_session.url
 
 
