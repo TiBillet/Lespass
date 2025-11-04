@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-11-03 10:56+0000\n"
+"POT-Creation-Date: 2025-11-04 06:45+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -166,12 +166,17 @@ msgstr ""
 
 #: Administration/admin_tenant.py:1330 Administration/admin_tenant.py:1363
 #: Administration/admin_tenant.py:2482 Administration/admin_tenant.py:2765
-#: BaseBillet/tasks.py:257
+#: Administration/importers/membership_importers.py:66
+#: Administration/importers/ticket_exporter.py:29 BaseBillet/tasks.py:257
+#: BaseBillet/templatetags/tibitags.py:132
 msgid "Yes"
 msgstr ""
 
 #: Administration/admin_tenant.py:1330 Administration/admin_tenant.py:1364
 #: Administration/admin_tenant.py:2483 Administration/admin_tenant.py:2766
+#: Administration/importers/membership_importers.py:66
+#: Administration/importers/ticket_exporter.py:29
+#: BaseBillet/templatetags/tibitags.py:132
 msgid "No"
 msgstr ""
 
@@ -300,7 +305,7 @@ msgstr ""
 
 #: Administration/admin_tenant.py:1936
 #: Administration/templates/admin/membership/wallet_info.html:128
-#: ApiBillet/templates/ticket/ticket.html:174 BaseBillet/models.py:2311
+#: ApiBillet/templates/ticket/ticket.html:199 BaseBillet/models.py:2311
 #: BaseBillet/templates/reunion/partials/account/ticket_accordion.html:40
 #: BaseBillet/templates/reunion/partials/account/transaction_history.html:8
 msgid "Value"
@@ -812,7 +817,7 @@ msgid "Cards"
 msgstr ""
 
 #: Administration/templates/admin/membership/wallet_info.html:50
-#: ApiBillet/templates/ticket/ticket.html:156
+#: ApiBillet/templates/ticket/ticket.html:181
 #: BaseBillet/templates/invoice/invoice.html:157
 #: BaseBillet/templates/reunion/partials/account/ticket_accordion.html:22
 msgid "Number"
@@ -939,7 +944,7 @@ msgstr ""
 msgid "Maximum capacity reached: event full."
 msgstr ""
 
-#: ApiBillet/serializers.py:1194 BaseBillet/validators.py:282
+#: ApiBillet/serializers.py:1194 BaseBillet/validators.py:371
 msgid "Email does not match logged-in user."
 msgstr ""
 
@@ -1004,43 +1009,51 @@ msgstr ""
 msgid "Invalid Stripe checkout."
 msgstr ""
 
-#: ApiBillet/templates/ticket/ticket.html:162
+#: ApiBillet/templates/ticket/ticket.html:187
 #: BaseBillet/templates/reunion/partials/account/ticket_accordion.html:28
 msgid "Booking"
 msgstr ""
 
-#: ApiBillet/templates/ticket/ticket.html:168 BaseBillet/models.py:952
+#: ApiBillet/templates/ticket/ticket.html:193 BaseBillet/models.py:952
 #: BaseBillet/templates/reunion/partials/account/ticket_accordion.html:34
 msgid "Rate name"
 msgstr ""
 
-#: ApiBillet/templates/ticket/ticket.html:180
+#: ApiBillet/templates/ticket/ticket.html:205
 #: BaseBillet/templates/reunion/partials/account/ticket_accordion.html:46
 msgid "Seating"
 msgstr ""
 
-#: ApiBillet/templates/ticket/ticket.html:183
+#: ApiBillet/templates/ticket/ticket.html:208
 msgid "Free"
 msgstr ""
 
-#: ApiBillet/templates/ticket/ticket.html:185
+#: ApiBillet/templates/ticket/ticket.html:210
 #: BaseBillet/templates/reunion/partials/account/ticket_accordion.html:51
 msgid "Seat"
 msgstr ""
 
-#: ApiBillet/templates/ticket/ticket.html:190 BaseBillet/tasks.py:351
+#: ApiBillet/templates/ticket/ticket.html:215 BaseBillet/tasks.py:351
 #: BaseBillet/templates/reunion/partials/account/ticket_accordion.html:66
 #: BaseBillet/templates/reunion/views/event/partial/booking_form.html:15
 #: BaseBillet/templates/reunion/views/event/partial/booking_form.html:43
 msgid "Email"
 msgstr ""
 
-#: ApiBillet/templates/ticket/ticket.html:202
+#: ApiBillet/templates/ticket/ticket.html:227
 msgid "Ticket made with"
 msgstr ""
 
-#: ApiBillet/templates/ticket/ticket.html:212
+#: ApiBillet/templates/ticket/ticket.html:237
 msgid "the collective organization toolbox."
+msgstr ""
+
+#: ApiBillet/templates/ticket/ticket.html:243
+msgid "Form information"
+msgstr ""
+
+#: ApiBillet/templates/ticket/ticket.html:251
+msgid "No additional information"
 msgstr ""
 
 #: ApiBillet/views.py:515
@@ -4664,13 +4677,13 @@ msgstr ""
 msgid "Domain name choice"
 msgstr ""
 
-#: BaseBillet/templatetags/tibitags.py:190
-#: BaseBillet/templatetags/tibitags.py:278
+#: BaseBillet/templatetags/tibitags.py:199
+#: BaseBillet/templatetags/tibitags.py:287
 msgid "Field"
 msgstr ""
 
-#: BaseBillet/templatetags/tibitags.py:190
-#: BaseBillet/templatetags/tibitags.py:278
+#: BaseBillet/templatetags/tibitags.py:199
+#: BaseBillet/templatetags/tibitags.py:287
 msgid "Answer"
 msgstr ""
 
@@ -4678,131 +4691,133 @@ msgstr ""
 msgid "This is a test 404 error"
 msgstr ""
 
-#: BaseBillet/validators.py:56 BaseBillet/validators.py:58
+#: BaseBillet/validators.py:67 BaseBillet/validators.py:86
+#: BaseBillet/validators.py:103 BaseBillet/validators.py:112
+msgid "This field is required."
+msgstr ""
+
+#: BaseBillet/validators.py:73 BaseBillet/validators.py:89
+msgid "Invalid choice."
+msgstr ""
+
+#: BaseBillet/validators.py:78 BaseBillet/validators.py:91
+#: BaseBillet/validators.py:105 BaseBillet/validators.py:115
+msgid "Duplicate field label. Please change the label."
+msgstr ""
+
+#: BaseBillet/validators.py:145 BaseBillet/validators.py:147
 msgid ""
 "Email confirmation failed: the email and its confirmation are different. A "
 "typo, maybe?"
 msgstr ""
 
-#: BaseBillet/validators.py:211
+#: BaseBillet/validators.py:300
 msgid "checkout strip not valid"
 msgstr ""
 
-#: BaseBillet/validators.py:272
+#: BaseBillet/validators.py:361
 msgid "Max capacity reached: event full."
 msgstr ""
 
-#: BaseBillet/validators.py:293
+#: BaseBillet/validators.py:382
 msgid "No event selected. Please retry."
 msgstr ""
 
-#: BaseBillet/validators.py:298
+#: BaseBillet/validators.py:387
 #, python-brace-format
 msgid "Option {option.name} unavailable for event"
 msgstr ""
 
-#: BaseBillet/validators.py:315 BaseBillet/validators.py:323
+#: BaseBillet/validators.py:404 BaseBillet/validators.py:412
 msgid "Invalid or inactive promotional code."
 msgstr ""
 
-#: BaseBillet/validators.py:326
+#: BaseBillet/validators.py:415
 msgid "Invalid promotional code."
 msgstr ""
 
-#: BaseBillet/validators.py:355
+#: BaseBillet/validators.py:444
 msgid "No products."
 msgstr ""
 
-#: BaseBillet/validators.py:364
+#: BaseBillet/validators.py:453
 msgid "The promotional code is not valid for the selected products."
 msgstr ""
 
-#: BaseBillet/validators.py:371
+#: BaseBillet/validators.py:460
 msgid "Invalid product."
 msgstr ""
 
-#: BaseBillet/validators.py:378
+#: BaseBillet/validators.py:467
 msgid "Bookings exceed capacity for this rate."
 msgstr ""
 
-#: BaseBillet/validators.py:385 BaseBillet/validators.py:386
+#: BaseBillet/validators.py:474 BaseBillet/validators.py:475
 msgid "User is not subscribed."
 msgstr ""
 
-#: BaseBillet/validators.py:390
+#: BaseBillet/validators.py:479
 msgid "No ticket."
 msgstr ""
 
-#: BaseBillet/validators.py:395
+#: BaseBillet/validators.py:484
 msgid "Order quantity surpasses maximum allowed per user."
 msgstr ""
 
-#: BaseBillet/validators.py:401
+#: BaseBillet/validators.py:490
 msgid "A free price must be selected alone."
 msgstr ""
 
-#: BaseBillet/validators.py:408
+#: BaseBillet/validators.py:497
 msgid "Number of places available : "
 msgstr ""
 
-#: BaseBillet/validators.py:425
+#: BaseBillet/validators.py:514
 msgid "You have already booked this slot."
 msgstr ""
 
-#: BaseBillet/validators.py:458 BaseBillet/validators.py:474
-#: BaseBillet/validators.py:489 BaseBillet/validators.py:496
-#: BaseBillet/validators.py:674 BaseBillet/validators.py:690
-#: BaseBillet/validators.py:705 BaseBillet/validators.py:712
-msgid "This field is required."
-msgstr ""
-
-#: BaseBillet/validators.py:464 BaseBillet/validators.py:477
-#: BaseBillet/validators.py:680 BaseBillet/validators.py:693
-msgid "Invalid choice."
-msgstr ""
-
-#: BaseBillet/validators.py:609
+#: BaseBillet/validators.py:631
 msgid "The amount must be greater than the minimum amount."
 msgstr ""
 
-#: BaseBillet/validators.py:622
+#: BaseBillet/validators.py:644
 msgid "This product is limited in quantity per person."
 msgstr ""
 
-#: BaseBillet/validators.py:739
+#: BaseBillet/validators.py:694
 msgid "Please accept terms and conditions."
 msgstr ""
 
-#: BaseBillet/validators.py:744 BaseBillet/validators.py:746
-#: BaseBillet/validators.py:748
+#: BaseBillet/validators.py:699 BaseBillet/validators.py:701
+#: BaseBillet/validators.py:703
 msgid "This name is not available"
 msgstr ""
 
-#: BaseBillet/validators.py:876
+#: BaseBillet/validators.py:831
 msgid "le format du tag NFC n'est pas bon"
 msgstr ""
 
-#: BaseBillet/validators.py:888
+#: BaseBillet/validators.py:843
 msgid "La carte n'existe pas"
 msgstr ""
 
-#: BaseBillet/validators.py:892
+#: BaseBillet/validators.py:847
 msgid ""
 "La carte n'est pas liée à un.e utilisateur.ice. Merci de demander à la "
 "personne propriétaire de la lier en flashant le qrcode au dos de la carte."
 msgstr ""
 
-#: BaseBillet/validators.py:897
+#: BaseBillet/validators.py:852
 msgid ""
 "Le portefeuille n'est pas liée à un.e utilisateur.ice. Merci de demander à "
 "la personne propriétaire de la lier en flashant le qrcode au dos de la carte."
 msgstr ""
 
-#: BaseBillet/validators.py:908
+#: BaseBillet/validators.py:863
 msgid "Paiement introuvable."
 msgstr ""
 
-#: BaseBillet/validators.py:915
+#: BaseBillet/validators.py:870
 msgid ""
 "Solde insuffisant. Il reste {dround(self.user_balance)} sur le portefeuille."
 msgstr ""
@@ -5376,11 +5391,11 @@ msgstr ""
 msgid "Participations"
 msgstr ""
 
-#: crowds/tasks.py:72
+#: crowds/tasks.py:49
 msgid "Nouvelle participation demandée"
 msgstr ""
 
-#: crowds/tasks.py:121
+#: crowds/tasks.py:100
 msgid "Contribution payée"
 msgstr ""
 
