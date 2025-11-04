@@ -2143,7 +2143,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
     date_hierarchy = "datetime"
-
+    ordering = ("-datetime",)
     # Unfold sections (expandable rows)
     list_sections = [
         EventPricesSummaryTable,
