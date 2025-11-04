@@ -16,6 +16,7 @@
 	<!-- init global values and function -->
 	<script src="{% static 'js/tibilletUtils.js' %}"></script>
 	<!-- passing django values to javascript - ex : state.demo.active -->
+	<script src="{% static 'js/nfc.js' %}"></script>
 	<script>
 		const state = JSON.parse("{{stateJson|escapejs}}")
 	</script>
@@ -35,7 +36,6 @@
 	<script src="http://localhost/cordova.js"></script>
 	<script src="{% static 'js/htmx@2.0.6.min.js' %}"></script>
 	<script src="{% static 'js/socket.io.3.0.4.js' %}"></script>
-	<script src="{% static 'js/nfc.js' %}"></script>
 	{% block script %} {% endblock script %}
 </body>
 

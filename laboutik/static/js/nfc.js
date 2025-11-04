@@ -63,13 +63,21 @@ let NfcReader = class {
 
 	sendSimuNfcTagId(event) {
 		if (event.target.className === 'nfc-reader-simu-bt') {
-			const tagId = event.target.getAttribute('tag-id')
-			// entrer la valeur dans le formulaire
-			document.querySelector('#nfc-result-tag-id').value = tagId
-			// envoyer le résultat au formulaire
-			const newEvent = new CustomEvent("nfcResult", {detail: null })
-			document.querySelector('form').dispatchEvent(newEvent)
-			this.stop()
+			// console.log('-> sendSimuNfcTagId')
+			try {
+				const tagId = event.target.getAttribute('tag-id')
+				// entrer la valeur dans le formulaire
+				document.querySelector('#nfc-result-tag-id').value = tagId
+				// envoyer le résultat au formulaire
+				const newEvent = new CustomEvent("nfcResult", { detail: null })
+				// envoie sur tous les formulaires
+				document.querySelectorAll('form').forEach(form => {
+					form.dispatchEvent(newEvent)
+				})
+				this.stop()
+			} catch (error) {
+				console.log('-> sendSimuNfcTagId,', error)
+			}
 		}
 	}
 

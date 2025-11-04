@@ -22,7 +22,7 @@
 		</div>
 	</div>
 	<!-- bouton CHECK CARTE -->
-	<div id="bt-check-card" class="BF-ligne footer-bt fond-normal test-check-carte">
+	<div id="bt-check-card" class="BF-ligne footer-bt fond-normal test-check-carte" hx-get="hx_check_card" hx-target="#messages" hx-swap="outerHTML">
 		<i class="fas fa-money-check-alt md4px"></i>
 		<div class="BF-col-deb footer-bt-text mg4px">
 			<div>{% translate "CHECK" %}</div>

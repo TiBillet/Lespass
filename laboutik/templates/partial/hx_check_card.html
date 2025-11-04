@@ -1,0 +1,40 @@
+{% load static i18n %}
+
+<div id="messages" style="background-color:{{ background }};" class="BF-col-uniforme popup-cashless-conteneur">
+	{% if method == 'GET' %}
+	<c-read-nfc title-nfc='{% translate "Attente lecture carte" %}' selector="#messages" hx-post="hx_check_card" hx-target="#messages" />
+	{% endif %}
+
+	{% if method == 'POST' %}
+	<div class="check-carte-container" style="background-color: var({{ background }});">
+		{{ tag_id }}
+	</div>
+	{% endif %}
+
+	<style>
+		#messages {
+			position: absolute;
+			left: 0;
+			top: 0;
+			width: 100%;
+			height: 100%;
+			width: 100%;
+			height: 100%;
+			display: flex;
+			flex-direction: column;
+			justify-content: center;
+			align-items: center;
+			background-color: var(--noir01);
+			color: var(--blanc01);
+		}
+		.check-carte-container {
+			width: 100%;
+			height: 100%;
+			color: var(--white);
+			display: flex;
+			flex-direction: column;
+			justify-content: center;
+			align-items: center;
+		}
+	</style>
+</div>

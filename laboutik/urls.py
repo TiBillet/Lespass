@@ -12,5 +12,5 @@ urlpatterns=[
 	path('hx_display_type_payment',views.hx_display_type_payment),
 	path('hx_confirm_payment',views.hx_confirm_payment),
 	path('hx_payment',views.hx_payment),
-	path('check_card',views.check_card)
+	path('hx_check_card',views.hx_check_card)
 ]

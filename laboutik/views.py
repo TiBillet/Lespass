@@ -79,48 +79,66 @@ def new_hardware(request):
         return render(request, "components/new-hardware-error.html", context)
 
 
-def ask_primary_card(request):
-    # dev
-    # state['demo']['active'] = False
-
-    context = {"state": state, "stateJson": dumps(state)}
-
+def hx_check_card(request):
+    background = "--success"
+    context = {"method": request.method}
     if request.method == "POST":
-        tag_id_cm = request.POST.get("tag-id-cm").upper()
-        print(f"ask_primary_card, tag_id_cm = {tag_id_cm}")
+        tag_id = request.POST.get("tag_id").upper()
+        context["tag_id"] = tag_id
 
         # dev
-        carte_perdu = False
-        testCard = mockData.get_card_from_tagid(tag_id_cm)
-        print(f"laboutik - DEV | testCard = {testCard}")
+        card = mockData.get_card_from_tagid(tag_id)
+        background = "--warning"
+        card["type_card"] = "unknown"
 
-        # carte primaire
-        if testCard["type_card"] == "primary_card" and testCard["tag_id"] == "A49E8E2A":
-            print("laboutik - DEV | c'est une carte primaire")
-            # carte perdue
-            if carte_perdu:
-                context = {"msg": _("Carte perdue ? On passe en non primaire")}
-                return render(request, "partial/hx_primary_card_message.html", context)
-            else:
-                # carte primaire ok
-                uuid_pv = testCard["pvs_list"][0]["uuid"]
-                print(f"laboutik - DEV | uuid pv = {uuid_pv}")
-                return HttpResponseClientRedirect(
-                    "pv_route?uuid_pv=" + uuid_pv + "&tag_id_cm=" + tag_id_cm
-                )
+        if card["type_card"] == "unknown":
+            background = "--rouge06"
+            error_msg = _("Carte inconnue")
 
-        # carte cliente
-        if testCard["type_card"] == "client_card":
-            print("laboutik - DEV | c'est une carte client")
-            context = {"msg": _("Carte non primaire")}
-            return render(request, "partial/hx_primary_card_message.html", context)
+        context["background"] = background
+    # print(f"-- context = {context}")
+    return render(request, "partial/hx_check_card.html", context)
 
-        # carte inconnue
-        if testCard["type_card"] == "unknown":
-            context = {"msg": _("Carte inconnue")}
-            return render(request, "partial/hx_primary_card_message.html", context)
 
-    return render(request, "views/ask_primary_card.html", context)
+def ask_primary_card(request):
+  msg = {}
+  context = {"state": state, "stateJson": dumps(state), "method": request.method}
+
+  if request.method == "POST":
+    tag_id_cm = request.POST.get("tag_id").upper()
+    print(f"ask_primary_card, tag_id_cm = {tag_id_cm}")
+
+    # dev
+    carte_perdu = False
+    testCard = mockData.get_card_from_tagid(tag_id_cm)
+    print(f"-- testCard = {testCard}")
+
+    # carte primaire
+    if testCard["type_card"] == "primary_card" and testCard["tag_id"] == "A49E8E2A":
+      # carte perdue
+      if carte_perdu:
+        msg = { "color": '--yellow00', "content": _("Carte perdue ? non primaire") }
+        # return render(request, "partial/hx_primary_card_message.html", context)
+      else:
+        # carte primaire ok => redirection
+        uuid_pv = testCard["pvs_list"][0]["uuid"]
+        print(f"laboutik - DEV | uuid pv = {uuid_pv}")
+        return HttpResponseClientRedirect("pv_route?uuid_pv=" + uuid_pv + "&tag_id_cm=" + tag_id_cm)
+        
+    # carte cliente
+    if testCard["type_card"] == "client_card":
+      print("laboutik - DEV | c'est une carte client")
+      msg = { "color": '--yellow00', "content": _("Carte non primaire") }
+      # return render(request, "partial/hx_primary_card_message.html", context)
+
+    # carte inconnue
+    if testCard["type_card"] == "unknown":
+      msg = { "color": '--yellow00', "content": _("Carte inconnue") }
+      # return render(request, "partial/hx_primary_card_message.html", context)
+
+  context["msg"] = msg
+  return render(request, "views/ask_primary_card.html", context)
+
 
 def pv_route(request):
     # pour un mode restaurant (non service direct)
@@ -171,7 +189,7 @@ def pv_route(request):
     state["service_direct"] = pv["service_direct"]
     state["monnaie_principale_name"] = "TestCoin"
     state["passageModeGerant"] = True
-    state["mode_gerant"] = card['mode_gerant']
+    state["mode_gerant"] = card["mode_gerant"]
     # triage par poid_liste
     card["pvs_list"] = sorted(card["pvs_list"], key=lambda x: x["poid_liste"])
 
@@ -191,94 +209,75 @@ def pv_route(request):
     }
     return render(request, "views/" + template, context)
 
-def check_card(request):
-	tag_id_request = request.data.get('tag_id_client').upper()
-	card = mockData.get_card_from_tagid(tag_id_request)
-	background = '--warning'
-
-	if card['type_card'] == 'unknown':
-		background = '--rouge06'
-		error_msg =  _('Carte inconnue')
-
-	context = {
-		"card": card
-	}
-	return render(request, "components/check_card.html", context)
-
 
 def hx_display_type_payment(request):
-	dataPost = request.POST
-	tag_id_cm = dataPost.get("tag_id_cm")
-	uuid_pv = dataPost.get("uuid_pv")
-	id_table = dataPost.get("id_table")
+    dataPost = request.POST
+    tag_id_cm = dataPost.get("tag_id_cm")
+    uuid_pv = dataPost.get("uuid_pv")
+    id_table = dataPost.get("id_table")
 
-	# récupère uniquement les uuid articles
-	uuids = method.post_filter(request.POST)
+    # récupère uniquement les uuid articles
+    uuids = method.post_filter(request.POST)
 
-	if len(uuids) > 0:
-		# obtenir le point de vente en fonction de son uuid
-		pv = mockData.get_pv_from_uuid(uuid_pv, data_pvs)
+    if len(uuids) > 0:
+        # obtenir le point de vente en fonction de son uuid
+        pv = mockData.get_pv_from_uuid(uuid_pv, data_pvs)
 
-		# retourne les moyens de paiement nécessaires et filtrés par moyens de paiement acceptés
-		moyens_paiement = method.selection_moyens_paiement(pv, uuids, request.POST)
+        # retourne les moyens de paiement nécessaires et filtrés par moyens de paiement acceptés
+        moyens_paiement = method.selection_moyens_paiement(pv, uuids, request.POST)
 
-		# import ipdb; ipdb.set_trace()
-		# calcul du total de l'addition
-		total = method.calcul_total_addition(pv, uuids, request.POST)
+        # import ipdb; ipdb.set_trace()
+        # calcul du total de l'addition
+        total = method.calcul_total_addition(pv, uuids, request.POST)
 
-		context = {
-			"moyens_paiement": moyens_paiement,
-			"currency_data": {"cc": "EUR", "symbol": "€", "name": "European Euro"},
-			"total": total
-		}
+        context = {
+            "moyens_paiement": moyens_paiement,
+            "currency_data": {"cc": "EUR", "symbol": "€", "name": "European Euro"},
+            "total": total,
+        }
 
-		return render(request, "partial/hx_display_type_payment.html", context)
+        return render(request, "partial/hx_display_type_payment.html", context)
 
-	else:
-		# aucun article
-		context = {
-			'msg_type': 'info',
-			'msg_content': _("Aucun article n'a été selectioné")
-		}
-		return render(request, "components/messages.html", context)
+    else:
+        # aucun article
+        context = {
+            "msg_type": "info",
+            "msg_content": _("Aucun article n'a été selectioné"),
+        }
+        return render(request, "components/messages.html", context)
+
 
 def hx_read_nfc(request):
-	context = {
-		'message': _("Attente lecture carte")
-	}
-	return render(request, "partial/hx_read_nfc.html", context)
+    context = {}
+    return render(request, "partial/hx_read_nfc.html", context)
+
 
 def hx_confirm_payment(request):
-	payment_method = request.GET.get("method")
-	payments = {
-		'nfc': _('cashless'),
-		'espece': _('espèce'),
-		'carte_bancaire': _('carte bancaire'),
-		'CH': _('chèque')
-	}
-	context = {
-		'method': payment_method,
-		'payment_method': payments[payment_method]
-	}
-	return render(request, "partial/hx_confirm_payment.html", context)
+    payment_method = request.GET.get("method")
+    payments = {
+        "nfc": _("cashless"),
+        "espece": _("espèce"),
+        "carte_bancaire": _("carte bancaire"),
+        "CH": _("chèque"),
+    }
+    context = {"method": payment_method, "payment_method": payments[payment_method]}
+    return render(request, "partial/hx_confirm_payment.html", context)
+
 
 def hx_payment(request):
-	# msg_type = success, info, error, warning
+    # msg_type = success, info, error, warning
 
-	# # attention pas de test si method = post
-	# # dev
-	paiement_ok = False
+    # # attention pas de test si method = post
+    # # dev
+    paiement_ok = False
 
-	if paiement_ok:
-		context = {
-			'msg_type': 'success',
-			'msg_content': _('Paiement ok')
-		}
-	if paiement_ok == False:
-		context = {
-			'msg_type': "warning",
-			'msg_content': "Il y a une erreur !",
-			'selector_bt_retour': '#messages'
-		}
+    if paiement_ok:
+        context = {"msg_type": "success", "msg_content": _("Paiement ok")}
+    if paiement_ok == False:
+        context = {
+            "msg_type": "warning",
+            "msg_content": "Il y a une erreur !",
+            "selector_bt_retour": "#messages",
+        }
 
-	return render(request, "partial/hx_messages.html", context)
+    return render(request, "partial/hx_messages.html", context)

@@ -1,0 +1,50 @@
+{% load static %}
+	<form id="form-nfc" class="hide" {{ attrs }} hx-trigger="nfcResult" hx-swap="outerHTML">
+		{% csrf_token %}
+		<input id="nfc-result-tag-id" name="tag_id" />
+	</form>
+	<c-spinner.nfc />
+	<h1>{{ title_nfc }}</h1>
+
+	<h3 id="message-nfc" style="z-index: 4; color: var({{ msg.color }});">
+		{% if msg.content %}{{msg.content}}{% endif %}
+	</h3>
+
+
+	<!-- reference(id) for the insertion of simulation buttons -->
+	<div id="nfc-simu-tag" style="z-index: 4;"></div>
+	{% if selector %}
+	<c-bt.return selector="{{selector}}" style="z-index: 4;" />
+	{% endif %}
+	<!-- lance le lecteure nfc -->
+	<script>
+		window.nfc = new NfcReader()
+		nfc.start()
+	</script>
+
+	<style>
+		.nfc-reader-simu-bt {
+			width: 200px;
+			height: 70px;
+			background-color: var(--bleu04);
+			color: var(--blanc01);
+			display: flex;
+			flex-direction: row;
+			justify-content: center;
+			align-items: center;
+			font-size: 1.5rem;
+			margin-bottom: 2rem;
+			border-radius: 8px;
+			font-weight: bold;
+			white-space: pre-line;
+			text-align: center;
+		}
+
+		#message-nfc {
+			min-height: 1.5rem;
+			margin-bottom: 0.7rem;
+			font-weight: bold;
+			white-space: pre-line;
+			text-align: center;
+		}
+	</style>

@@ -2,59 +2,74 @@
 {% load static i18n %}
 
 <div id="confirm" role="status" aria-label="waiting primary card">
-	<h1>{{ message }}</h1>
+	<!-- ref pour entrer automatiquement le tag_id par nfc.js-->
+	<input class="addition-include-data" id="nfc-result-tag-id" name="tag_id" />
 
 	<c-spinner.nfc />
-	<div id="nfc-simu-tag" style="z-index:4;"></div>
+
+	<h1>{% translate "Attente lecture carte" %}</h1>
+
+	<!-- reference(id) for the insertion of simulation buttons -->
+	<div id="nfc-simu-tag" style="z-index: 4;"></div>
+
 	<c-bt.return selector="#confirm" style="z-index: 4;" />
 
-<!-- lance le lecteure nfc -->
-<script>
-	window.nfc = new NfcReader()
-	nfc.start()
-</script>
+	<script>
+		// lance le lecteure nfc
+		window.nfc = new NfcReader()
+		nfc.start()
+		//  modification du mouen de paiement
+		document.querySelector('#addition-moyen-paiement').value = 'nfc'
+		const formToModify = document.querySelector('#addition-form')
+		// change le trigger de form #addition-form pour "nfcResult"
+		formToModify.setAttribute('hx-trigger', 'nfcResult')
+		// changer l'url du POST
+		formToModify.setAttribute('hx-post', 'hx_payment')
+		// prend en compte les changements dynamiques sur le formulaire
+		htmx.process(formToModify)
+	</script>
 
-<style>
-	#confirm {
-		position: absolute;
-		left: 0;
-		top: 0;
-		width: 100%;
-		height: 100%;
-		width: 100%;
-		height: 100%;
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
-		align-items: center;
-		background-color: var(--noir01);
-		color: var(--blanc01);
-	}
+	<style>
+		#confirm {
+			position: absolute;
+			left: 0;
+			top: 0;
+			width: 100%;
+			height: 100%;
+			width: 100%;
+			height: 100%;
+			display: flex;
+			flex-direction: column;
+			justify-content: center;
+			align-items: center;
+			background-color: var(--noir01);
+			color: var(--blanc01);
+		}
 
-	.nfc-reader-simu-bt {
-		width: 200px;
-		height: 70px;
-		background-color: var(--bleu04);
-		color: var(--blanc01);
-		display: flex;
-		flex-direction: row;
-		justify-content: center;
-		align-items: center;
-		font-size: 1.5rem;
-		margin-bottom: 2rem;
-		border-radius: 8px;
-		font-weight: bold;
-		white-space: pre-line;
-		text-align: center;
-	}
+		.nfc-reader-simu-bt {
+			width: 200px;
+			height: 70px;
+			background-color: var(--bleu04);
+			color: var(--blanc01);
+			display: flex;
+			flex-direction: row;
+			justify-content: center;
+			align-items: center;
+			font-size: 1.5rem;
+			margin-bottom: 2rem;
+			border-radius: 8px;
+			font-weight: bold;
+			white-space: pre-line;
+			text-align: center;
+		}
 
-	#message-nfc {
-		flex-direction: row;
-		justify-content: center;
-		align-items: center;
-		font-weight: bold;
-		white-space: pre-line;
-		text-align: center;
-	}
-</style>
+		#message-nfc {
+			flex-direction: row;
+			justify-content: center;
+			align-items: center;
+			font-weight: bold;
+			white-space: pre-line;
+			text-align: center;
+		}
+	</style>
 </div>

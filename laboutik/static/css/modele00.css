@@ -207,6 +207,7 @@
 		width: var(--spinner-width);
 		height: var(--spinner-width);
 		animation: spin 2s linear infinite;
+		z-index: 1;
 	}
 
 	@keyframes spin {

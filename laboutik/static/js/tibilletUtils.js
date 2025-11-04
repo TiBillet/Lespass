@@ -60,11 +60,9 @@ function sendEvent(name, selector, data) {
 	try {
 		const event = new CustomEvent(name, { detail: data })
 		document.querySelector(selector).dispatchEvent(event)
-		console.log(`-> sendEvent "${name}"`);
-
+		// console.log(`-> sendEvent "${name}"`);
 	} catch (error) {
 		console.log('sendEvent,', error);
-
 	}
 }
 

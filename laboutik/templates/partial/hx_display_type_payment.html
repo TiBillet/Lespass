@@ -5,7 +5,7 @@
 	<h1 class="message-title">{% translate "Types de paiement" %}</h1>
 	<!-- cashless -->
 	{% if 'nfc' in moyens_paiement %}
-	<c-bt.paiement name='{% translate "CASHLESS" %}' icon="fa-address-card" hx-get="hx_read_nfc" hx-on:click="modifyPaymentNfc()" />
+	<c-bt.paiement name='{% translate "CASHLESS" %}' icon="fa-address-card" hx-get="hx_read_nfc" />
 	{% endif %}
 
 	<!-- espèce, pas une consigne -->
@@ -37,27 +37,6 @@
 	<!-- include bt_return.html -->
 	 <c-bt.return />
 </div>
-
-<script>
-	function modifyPaymentNfc() {
-		// console.log('-> modifyPaymentNfc')
-		document.querySelector('#addition-moyen-paiement').value = 'nfc'
-		const form = document.querySelector('#addition-form')
-		// change le trigger de form #addition-form pour "nfcResult"
-		form.setAttribute('hx-trigger', 'nfcResult')
-		// changer l'url du POST
-		form.setAttribute('hx-post', 'hx_payment')
-		// prend en compte les changements dynamiques sur le formulaire
-		htmx.process(form)
-
-		// test input exist
-		const inputExist = document.querySelector('#nfc-result-tag-id')
-		if (inputExist === null) {
-			// ajouter le input réceptionnant le tag_id lue par le lecteur nfc
-			document.querySelector('#addition-form').insertAdjacentHTML('afterend', `<input class="addition-include-data" id="nfc-result-tag-id" name="tag_id" />`)
-		}
-	}
-</script>
 
 <style>
 	#messages {
