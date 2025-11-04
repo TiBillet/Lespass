@@ -66,8 +66,10 @@ let NfcReader = class {
 			// console.log('-> sendSimuNfcTagId')
 			try {
 				const tagId = event.target.getAttribute('tag-id')
-				// entrer la valeur dans le formulaire
-				document.querySelector('#nfc-result-tag-id').value = tagId
+				// entrer la valeur dans les input ayant un attribut data-ref="nfc-result-tag-id"
+				document.querySelectorAll('input[data-ref="nfc-result-tag-id"]').forEach(input => {
+					input.value = tagId
+				})
 				// envoyer le résultat au formulaire
 				const newEvent = new CustomEvent("nfcResult", { detail: null })
 				// envoie sur tous les formulaires

@@ -1,7 +1,7 @@
 {% load static %}
 	<form id="form-nfc" class="hide" {{ attrs }} hx-trigger="nfcResult" hx-swap="outerHTML">
 		{% csrf_token %}
-		<input id="nfc-result-tag-id" name="tag_id" />
+		<input data-ref="nfc-result-tag-id" name="tag_id" />
 	</form>
 	<c-spinner.nfc />
 	<h1>{{ title_nfc }}</h1>
