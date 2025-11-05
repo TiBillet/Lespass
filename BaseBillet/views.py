@@ -43,7 +43,7 @@ from AuthBillet.models import TibilletUser, Wallet, HumanUser
 from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
-from BaseBillet.models import Configuration, Ticket, Product, Event, Paiement_stripe, Membership, Reservation, \
+from BaseBillet.models import Configuration, Ticket, Product, Event, Tag, Paiement_stripe, Membership, Reservation, \
     FormbricksConfig, FormbricksForms, FederatedPlace, Carrousel, LigneArticle, PriceSold, \
     Price, ProductSold, PaymentMethod
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, new_tenant_mailer, \
@@ -1684,9 +1684,16 @@ class EventMVT(viewsets.ViewSet):
         # - passer sur du partial render avec HTMX
         context = get_context(request)
         tags = request.GET.getlist('tag')
-        # search = str(request.data['search'])  # on s'assure que c'est bien une string. Todo : Validator !
+        search = request.GET.get('search')
+        if search:
+            search = str(search)
         page = request.GET.get('page', 1)
-        context['dated_events'], context['paginated_info'] = self.federated_events_filter(tags=tags, page=page)
+        # Data for tag filters UI
+        context['all_tags'] = Tag.objects.filter(events__isnull=False).distinct()
+        context['active_tag'] = Tag.objects.filter(slug=tags[0]).first() if tags else None
+        context['tags'] = tags
+        context['search'] = search
+        context['dated_events'], context['paginated_info'] = self.federated_events_filter(tags=tags, search=search, page=page)
         # On renvoie la page en entier
         return render(request, "reunion/views/event/list.html", context=context)
 

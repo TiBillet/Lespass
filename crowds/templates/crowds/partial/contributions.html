@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load i18n tibitags %}
 <div class="table-responsive">
   <table class="table align-middle">
     <thead>
@@ -13,13 +13,13 @@
     <tbody>
       {% for c in contributions %}
         <tr>
-          <td>{{ c.contributor_name|default:c.contributor.email }}</td>
+          <td>{{ c.get_contriutor_name }}</td>
           <td class="small">{{ c.description|default:""|linebreaksbr }}</td>
           <td class="text-end">{{ c.amount_eur|floatformat:2 }} {{ initiative.currency }}</td>
           <td>
             {% if c.payment_status == 'pending' %}
               {% if user.is_authenticated %}
-                {% if user.is_staff or user.is_superuser %}
+                {% if user|can_admin %}
                   <button class="badge text-bg-warning border-0" style="cursor:pointer"
                           title="{% translate 'Marquer comme payée' %}"
                           onclick="crowdsConfirmMarkContributionPaid('{{ c.uuid }}')">

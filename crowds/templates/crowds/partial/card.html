@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load i18n tibitags %}
 <div class="col-md-6 col-lg-4">
     <div class="card h-100" data-initiative="{{ initiative.uuid }}">
         {% include 'reunion/partials/picture.html' with img=initiative.get_img alt=initiative.name style='aspect-ratio:16/9;max-height:12rem;object-fit:cover' %}
@@ -11,47 +11,47 @@
 
             {# Tags #}
             {% if initiative.tags.all %}
-            <p class="mb-2" aria-label="Tags">
-              {% for tag in initiative.tags.all %}
-                <a class="badge rounded-pill text-decoration-none me-1 mb-1"
-                   style="{{ tag.style_attr }}"
-                   href="?tag={{ tag.slug }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}"
-                   hx-get="?tag={{ tag.slug }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}"
-                   hx-target="body"
-                   hx-swap="innerHTML"
-                   hx-push-url="true">
-                  <i class="bi bi-tag"></i> {{ tag.name }}
-                </a>
-              {% endfor %}
-            </p>
+                <p class="mb-2" aria-label="Tags">
+                    {% for tag in initiative.tags.all %}
+                        <a class="badge rounded-pill text-decoration-none me-1 mb-1"
+                           style="{{ tag.style_attr }}"
+                           href="?tag={{ tag.slug }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}"
+                           hx-get="?tag={{ tag.slug }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}"
+                           hx-target="body"
+                           hx-swap="innerHTML"
+                           hx-push-url="true">
+                            <i class="bi bi-tag"></i> {{ tag.name }}
+                        </a>
+                    {% endfor %}
+                </p>
             {% endif %}
 
             {# Bloc FALC: deux valeurs claires sur le financement et les demandes validées #}
             <div class="rounded bg-body-tertiary p-2 mb-2 small" role="group"
                  aria-label="{% translate 'Informations simples : argent reçu et demandes validées' %}">
+
+                {# objectif #}
                 <div class="d-flex justify-content-between align-items-center">
-          <span class="text-muted">
-            <i class="bi bi-piggy-bank me-1" aria-hidden="true"></i>
-            {% translate 'Argent reçu' %}
-          </span>
-                    <strong>{{ initiative.funded_amount_eur|floatformat:2 }} {{ initiative.currency }}</strong>
+                      <span class="text-muted">
+                        <i class="bi bi-piggy-bank me-1" aria-hidden="true"></i>{{ crowd_config.name_funding_goal }}
+                      </span>
+                      <strong>{{ initiative.get_funding_goal|dround }} {{ initiative.currency }}</strong>
                 </div>
+
+                {# budget_contributif #}
+                {% if initiative.budget_contributif %}
                 <div class="d-flex justify-content-between align-items-center mt-1">
-          <span class="text-muted">
-            <i class="bi bi-clipboard-check me-1" aria-hidden="true"></i>
-            {% translate 'Demandes validées' %}
-          </span>
+                  <span class="text-muted">
+                    <i class="bi bi-clipboard-check me-1" aria-hidden="true"></i>{{ crowd_config.name_participations }}
+                  </span>
                     <span class="d-inline-flex align-items-center gap-2">
-            <span class="rounded-circle bg-{{ initiative.requested_ratio_color }}" aria-hidden="true"
-                  style="width:.75rem;height:.75rem;display:inline-block"></span>
-            <strong>{{ initiative.requested_total_eur|floatformat:2 }} {{ initiative.currency }}</strong>
-          </span>
+                    <span class="rounded-circle bg-{{ initiative.requested_ratio_color }}" aria-hidden="true"
+                          style="width:.75rem;height:.75rem;display:inline-block"></span>
+                    <strong>{{ initiative.requested_total_eur|floatformat:2 }} {{ initiative.currency }}</strong>
+                  </span>
                 </div>
-                <p class="visually-hidden mb-0">
-                    {% blocktrans with funded=initiative.funded_amount_eur|floatformat:2 requested=initiative.requested_total_eur|floatformat:2 currency=initiative.currency %}
-                        Argent reçu : {{ funded }} {{ currency }}. Demandes validées : {{ requested }} {{ currency }}.
-                    {% endblocktrans %}
-                </p>
+                {% endif %}
+
             </div>
 
             <!-- Bloc FALC : Avancement du financement avec objectif, plus lisible -->
@@ -60,44 +60,51 @@
                 <div class="d-flex justify-content-between align-items-center">
                     <span class="text-muted">
                         <i class="bi bi-graph-up me-1" aria-hidden="true"></i>
-                        {% translate 'Avancement' %}
+                        {% translate 'Financement' %}
                     </span>
                     <span>
                         <strong class="text-body">{{ initiative.progress_percent_int }}%</strong>
                         <span class="text-muted">{% translate 'sur' %}</span>
-                        <strong class="text-body">{{ initiative.funding_goal_eur|floatformat:2 }} {{ initiative.currency }}</strong>
+                        <strong class="text-body">{{ initiative.get_funding_goal|dround }} {{ initiative.currency }}</strong>
                     </span>
                 </div>
                 <div class="progress mt-2" style="height: .5rem;">
-                    <div class="progress-bar {% if initiative.progress_percent_int >= 100 %}bg-success{% elif initiative.progress_percent_int >= 80 %}bg-warning{% else %}bg-info{% endif %}" role="progressbar"
-                         style="width: 0%" data-crowds-progress="1" data-width-int="{{ initiative.progress_percent_int }}"
-                         aria-valuenow="{{ initiative.progress_percent_int }}" aria-valuemin="0" aria-valuemax="100"></div>
+                    <div class="progress-bar {% if initiative.progress_percent_int >= 100 %}bg-success{% elif initiative.progress_percent_int >= 80 %}bg-warning{% else %}bg-info{% endif %}"
+                         role="progressbar"
+                         style="width: 0%" data-crowds-progress="1"
+                         data-width-int="{{ initiative.progress_percent_int }}"
+                         aria-valuenow="{{ initiative.progress_percent_int }}" aria-valuemin="0"
+                         aria-valuemax="100"></div>
                 </div>
                 <script>
-                  (function(){
-                    if (window.__crowdsProgInit) return; // guard once
-                    window.__crowdsProgInit = true;
-                    function applyCrowdsProgress(){
-                      try {
-                        document.querySelectorAll('[data-crowds-progress]')?.forEach(function(el){
-                          var v = parseInt(el.getAttribute('data-width-int') || '0', 10);
-                          if (isNaN(v) || v < 0) v = 0;
-                          if (v > 100) v = 100;
-                          el.style.width = v + '%';
-                        });
-                      } catch(e) { /* noop */ }
-                    }
-                    if (document.readyState === 'loading') {
-                      document.addEventListener('DOMContentLoaded', applyCrowdsProgress);
-                    } else {
-                      applyCrowdsProgress();
-                    }
-                    document.body.addEventListener('htmx:afterSwap', applyCrowdsProgress);
-                  })();
+                    (function () {
+                        if (window.__crowdsProgInit) return; // guard once
+                        window.__crowdsProgInit = true;
+
+                        function applyCrowdsProgress() {
+                            try {
+                                document.querySelectorAll('[data-crowds-progress]')?.forEach(function (el) {
+                                    var v = parseInt(el.getAttribute('data-width-int') || '0', 10);
+                                    if (isNaN(v) || v < 0) v = 0;
+                                    if (v > 100) v = 100;
+                                    el.style.width = v + '%';
+                                });
+                            } catch (e) { /* noop */
+                            }
+                        }
+
+                        if (document.readyState === 'loading') {
+                            document.addEventListener('DOMContentLoaded', applyCrowdsProgress);
+                        } else {
+                            applyCrowdsProgress();
+                        }
+                        document.body.addEventListener('htmx:afterSwap', applyCrowdsProgress);
+                    })();
                 </script>
                 <p class="visually-hidden mb-0">
                     {% blocktrans with percent=initiative.progress_percent_int goal=initiative.funding_goal_eur|floatformat:2 currency=initiative.currency %}
-                        Avancement du financement : {{ percent }} pour cent sur un objectif de {{ goal }} {{ currency }}.
+                        Avancement du financement : {{ percent }} pour cent sur un objectif de {{ goal }} {{ currency }}
+                        .
                     {% endblocktrans %}
                 </p>
             </div>

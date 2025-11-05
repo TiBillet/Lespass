@@ -53,14 +53,14 @@ class InitiativeViewSet(viewsets.ViewSet):
         """
         Affiche la liste des projets avec le thème TiBillet + HTMX (pas de blink).
         """
-        if settings.TEST:
-            seed_crowds_demo()
+        # if settings.TEST:
+        #     seed_crowds_demo()
 
         active_slug = (request.GET.get("tag") or "").strip()
         search_query = (request.GET.get("q") or "").strip()
 
         initiatives_qs = (
-            Initiative.objects.all()
+            Initiative.objects.filter(archived=False)
             .annotate(votes_total=Count("votes", distinct=True))
             .prefetch_related("tags")
         )
@@ -90,7 +90,7 @@ class InitiativeViewSet(viewsets.ViewSet):
             "page_obj": page_obj,
             "initiatives": page_obj.object_list,
             "active_tag": active_tag,
-            "all_tags": Tag.objects.all(),
+            "all_tags": Tag.objects.filter(initiatives__isnull=False).distinct(),
             "search_query": search_query,
         })
 
@@ -128,10 +128,10 @@ class InitiativeViewSet(viewsets.ViewSet):
             "votes": votes,
             "voters_count": votes.count(),
             "participations": participations,
-            "funded_eur": (initiative.funded_amount or 0) / 100,
+            # "funded_eur": (initiative.funded_amount or 0) / 100,
             "goal_eur": (initiative.funding_goal or 0) / 100,
             # Progression des demandes de participations vs financements
-            "requested_eur": initiative.requested_total_eur,
+            # "requested_eur": initiative.requested_total_eur,
             "requested_percent_int": initiative.requested_vs_funded_percent_int,
             "requested_percent_int_capped": min(100, initiative.requested_vs_funded_percent_int),
             "requested_color": initiative.requested_ratio_color,

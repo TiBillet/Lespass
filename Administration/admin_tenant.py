@@ -390,10 +390,51 @@ class WebhookAdmin(ModelAdmin):
 
 
 ########################################################################
+# class ConfigurationAdminForm(ModelForm):
+#     """Admin form to add a 'Nom de domaine' input with live slug preview that maps to Configuration.slug."""
+#
+#     domain_name = forms.CharField(
+#         label=_("Sous domaine"),
+#         max_length=100,
+#         required=False,
+#         help_text=mark_safe('''<span>Attention ! Changer ceci changera l'adresse de touuuuut votre espace</span></br><small>Slug: <code id="slug-preview"></code></small>'''),
+#         widget=UnfoldAdminTextInputWidget(
+#             attrs={
+#                 # Live preview of slug using HTMX
+#                 "hx-post": "slugify_preview/",
+#                 "hx-trigger": "keyup changed delay:300ms",
+#                 "hx-target": "#slug-preview",
+#                 "hx-swap": "innerHTML",
+#             }
+#         ),
+#     )
+#
+#     class Meta:
+#         model = Configuration
+#         fields = '__all__'
+#
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+#         # Initialize domain_name from current slug (best effort)
+#         if self.instance and getattr(self.instance, 'slug', ''):
+#             self.fields['domain_name'].initial = self.instance.slug
+#
+#     def save(self, commit=True):
+#         instance: Configuration = super().save(commit=False)
+#         domain = self.cleaned_data.get('domain_name')
+#         if domain:
+#             instance.slug = slugify(domain)
+#         if commit:
+#             instance.save()
+#             self.save_m2m()
+#         return instance
+#
+
 @admin.register(Configuration, site=staff_admin_site)
 class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
+    # form = ConfigurationAdminForm
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
@@ -450,6 +491,11 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 # 'stripe_mode_test',
             ),
         }),
+        # ('Danger !', {
+        #     'fields': (
+        #         'domain_name',  # Virtual field to set slug
+        #     ),
+        # }),
     )
 
     readonly_fields = ['onboard_stripe', ]
@@ -460,6 +506,24 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
             "widget": WysiwygWidget,
         }
     }
+    #
+    # def get_urls(self):
+    #     urls = super().get_urls()
+    #     custom_urls = [
+    #         re_path(
+    #             r'^slugify_preview/$',
+    #             self.admin_site.admin_view(csrf_protect(require_POST(self.slugify_preview))),
+    #             name='configuration-slugify-preview',
+    #         ),
+    #     ]
+    #     return custom_urls + urls
+    #
+    # def slugify_preview(self, request: HttpRequest):
+    #     """HTMX endpoint: returns the slugified version of posted domain_name."""
+    #     if not TenantAdminPermissionWithRequest(request):
+    #         return HttpResponse("", status=403)
+    #     value = request.POST.get('domain_name', '')
+    #     return HttpResponse(slugify(value))
 
     def save_model(self, request, obj, form, change):
         obj: Configuration
@@ -3890,7 +3954,14 @@ class CrowdConfigAdmin(SingletonModelAdmin, ModelAdmin):
 
     fieldsets = (
         (_("Général"), {"fields": ("active",)}),
-        (_("Affichage"), {"fields": ("title", "description", "vote_button_name")}),
+        (_("Affichage"), {"fields": (
+            "title",
+            "description",
+            "vote_button_name",
+            "name_funding_goal",
+            "name_contributions",
+            "name_participations",
+        )}),
     )
 
     formfield_overrides = {
@@ -3943,9 +4014,11 @@ class ContributionInline(TabularInline):
     model = Contribution
     fk_name = 'initiative'
     extra = 0
-    can_delete = False
-    fields = ("contributor_name", "amount_eur_display", "payment_status", "paid_at")
-    readonly_fields = ("amount_eur_display", "payment_status", "paid_at")
+    can_delete = True
+    show_change_link = True
+
+    fields = ("contributor_name", "amount", "amount_eur_display", "payment_status", "paid_at")
+    readonly_fields = ("amount_eur_display", )
 
     def amount_eur_display(self, obj):
         if not obj:
@@ -4084,8 +4157,10 @@ class InitiativeAdmin(ModelAdmin):
         "currency",
         # "direct_debit",
         "img",
-        "budget_contributif",
         "tags",
+        "archived",
+        "budget_contributif",
+        "adaptative_funding_goal_on_participation",
     )
 
     list_filter = ("created_at", "tags")

@@ -24,7 +24,9 @@ class CrowdConfig(SingletonModel):
     description = models.TextField(blank=True, default="Découvrez les projets à financer et les budgets contributifs")
     vote_button_name = models.CharField(max_length=255, blank=True, verbose_name=_("Nom du bouton de vote"),
                                         default="Ça m'intérèsse !")
-
+    name_funding_goal = models.CharField(max_length=255, blank=True, verbose_name=_("Mot pour 'Objectif'"), default=_("Objectif"), help_text=_("Sera affiché en face de la somme"))
+    name_contributions = models.CharField(max_length=255, blank=True, verbose_name=_("Mot pour 'Contributions'"), default=_("Contributions"), help_text=_("Sera affiché en face de la somme et sur le detail"))
+    name_participations = models.CharField(max_length=255, blank=True, verbose_name=_("Mot pour 'Participations'"), default=_("Participations"), help_text=_("Sera affiché en face de la somme et sur le detail"))
 
 class Initiative(models.Model):
     """
@@ -38,6 +40,10 @@ class Initiative(models.Model):
     funding_goal = models.PositiveIntegerField(verbose_name=_("Goal (cents)"), help_text=_("Serves only to calculate the percentage claimed by participants."))
     # funded_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Montant financé (€)")
     created_at = models.DateTimeField(default=timezone.now, verbose_name=_("Created at"))
+    archived = models.BooleanField(default=False, verbose_name=_("Archived"), help_text=_("Archived initiatives are not displayed in the main page."))
+
+    budget_contributif = models.BooleanField(default=False, verbose_name=_("Budget contributif"), help_text=_("Permettez a votre communauté de proposer des actions qui s'inscrivent dans un budget contributif : https://movilab.org/wiki/Coremuneration_et_budget_contributif"))
+    adaptative_funding_goal_on_participation = models.BooleanField(default=False, verbose_name=_("Objectif lié aux demandes de participation"), help_text=_("Si activé, l'objectif à financer augmentera en fonction des demandes de participations au budget contributif validées."))
 
     asset = models.ForeignKey("fedow_public.AssetFedowPublic", on_delete=models.PROTECT,
                               related_name="projects", verbose_name=_("Asset"),
@@ -53,7 +59,6 @@ class Initiative(models.Model):
         default="adaptative"
     )
 
-    budget_contributif = models.BooleanField(default=False, verbose_name=_("Budget contributif"), help_text=_("Permettez a votre communauté de proposer des actions qui s'inscrivent dans un budget contributif : https://movilab.org/wiki/Coremuneration_et_budget_contributif"))
     currency = models.CharField(max_length=250, default="€", verbose_name=_("Devise"), help_text=_("Changez la valeur de la contribution : Comptez en €, monnaie locale, monnaie temps, bonbons ?"))
     direct_debit = models.BooleanField(default=False, verbose_name=_("Paiement direct"), help_text=_("Réclamer le paiement de la contribution financière en ligne. Cela redirigera la personne sur Stripe pour un paiement."))
 
@@ -115,6 +120,7 @@ class Initiative(models.Model):
     def __str__(self):
         return self.name
 
+
     # --- Financement reçu ---
     @property
     def funded_amount(self):
@@ -152,6 +158,18 @@ class Initiative(models.Model):
         except Exception:
             return 0
 
+    # Calcul de l'objectif si adaptatif ou pas :
+    @property
+    def get_funding_goal(self):
+        if self.adaptative_funding_goal_on_participation:
+            requested = self.requested_total_cents
+            if self.funding_goal > requested:
+                return self.funding_goal
+            return requested
+        else:
+            return self.funding_goal
+
+
     @property
     def requested_total_eur(self) -> float:
         return (self.requested_total_cents or 0) / 100
@@ -186,9 +204,9 @@ class Initiative(models.Model):
 
     @property
     def progress_percent(self):
-        if self.funding_goal == 0:
+        if self.get_funding_goal == 0:
             return 0
-        return min(100, (self.funded_amount / self.funding_goal) * 100)
+        return (self.funded_amount / self.get_funding_goal) * 100
 
     @property
     def progress_percent_int(self):
@@ -223,7 +241,7 @@ class Contribution(models.Model):
     initiative = models.ForeignKey(Initiative, related_name="contributions", on_delete=models.PROTECT)
     contributor_name = models.CharField(max_length=255, verbose_name=_("Name"), help_text=_("Nom affiché de l'origine de la contribution"), blank=True, null=True)
     description = models.TextField(blank=True, verbose_name=_("Decrivez ce que vous attendez de la contribution, ou envoyez un messages sympa à l'équipe !"))
-    contributor = models.ForeignKey("AuthBillet.TibilletUser", related_name="contributions", on_delete=models.PROTECT)
+    contributor = models.ForeignKey("AuthBillet.TibilletUser", related_name="contributions", on_delete=models.PROTECT, null=True, blank=True)
     amount = models.PositiveIntegerField(verbose_name="Montant (centimes)")
     payment_status = models.CharField(max_length=16, choices=PaymentStatus.choices, default=PaymentStatus.PENDING, verbose_name=_("Statut de paiement"))
     paid_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Payée le"))
@@ -233,8 +251,22 @@ class Contribution(models.Model):
     def amount_eur(self) -> float:
         return (self.amount or 0) / 100
 
+    @property
+    def get_contriutor_name(self):
+        if self.contributor_name:
+            return f"{self.contributor_name}"
+        elif self.contributor :
+            return f"{self.contributor.full_name()}"
+        return f""
+
+
     def __str__(self):
-        return f"{self.contributor.email} → {self.amount / 100:.2f} {self.initiative.currency}"
+        if self.contributor :
+            return f"{self.contributor.email} → {self.amount / 100:.2f} {self.initiative.currency}"
+        elif self.contributor_name:
+            return f"{self.contributor_name} → {self.amount / 100:.2f} {self.initiative.currency}"
+        return f"{self.amount / 100:.2f} {self.initiative.currency}"
+
 
 
 class Vote(models.Model):

@@ -70,7 +70,8 @@
                 {% translate 'Filtrer par tags' %}:
             </span>
             {% for tag in all_tags %}
-                <a class="badge rounded-pill {% if active_tag and active_tag.slug == tag.slug %}text-bg-primary{% else %}text-bg-secondary{% endif %} text-decoration-none"
+                <a class="badge rounded-pill text-decoration-none me-1 mb-1"
+                   style="{{ tag.style_attr }}"
                    href="?tag={{ tag.slug }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}"
                    hx-get="?tag={{ tag.slug }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}"
                    hx-target="body"
