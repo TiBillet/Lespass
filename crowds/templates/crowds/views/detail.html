@@ -1,5 +1,5 @@
 {% extends base_template %}
-{% load i18n %}
+{% load i18n tibitags %}
 
 {% block title %}{{ initiative.name }}{% endblock %}
 {% block meta_description %}{% if initiative.short_description %}{{ initiative.short_description|striptags }}
@@ -53,43 +53,54 @@
 
         <p class="lead">{{ initiative.description |safe |default:"" }}</p>
 
-        <section class="my-4">
-            <progress value="{{ initiative.progress_percent_int }}" max="100" class="w-100"
-                      style="height: 1rem;"></progress>
-            <p class="mt-2 mb-0 text-center">
-                <strong>{{ funded_eur|floatformat:2 }} {{ initiative.currency }}</strong> / {{ goal_eur|floatformat:2 }} {{ initiative.currency }}
-            </p>
-        </section>
-
-        {# Barre de progression des demandes de participations vs financements #}
+        {# Barre de progression des financement #}
         <section class="my-4">
             <div class="progress">
                 <div class="progress-bar bg-{{ requested_color }}" role="progressbar" aria-valuemin="0"
-                     aria-valuemax="100" aria-valuenow="{{ requested_percent_int_capped }}" style="width: 0%"
-                     data-requested-bar="1" data-width-int="{{ requested_percent_int_capped }}">
+                     aria-valuemax="100" aria-valuenow="{{ initiative.progress_percent_int }}" style="width: 0%"
+                     data-requested-bar="1" data-width-int="{{ initiative.progress_percent_int }}">
                     <span class="visually-hidden">{{ requested_percent_int }}%</span>
                 </div>
             </div>
             <p class="mt-2 mb-0 text-center text-muted small">
-                {% translate "Demandé par les contributeur.ices" %}:
-                <strong>{{ requested_eur|floatformat:2 }} {{ initiative.currency }}</strong>
-                — {% translate "financé" %}: <strong>{{ funded_eur|floatformat:2 }} {{ initiative.currency }}</strong>
-                — {{ requested_percent_int }}%
+                {% translate "Financé" %}:
+                <strong>{{ initiative.funded_amount|dround }} {{ initiative.currency }}</strong>
+                / <strong>{{ initiative.get_funding_goal|dround }} {{ initiative.currency }}</strong>
             </p>
-            <script>
-                (function () {
-                    try {
-                        document.querySelectorAll('[data-requested-bar]')?.forEach(function (el) {
-                            var v = parseInt(el.getAttribute('data-width-int') || '0', 10);
-                            if (isNaN(v) || v < 0) v = 0;
-                            if (v > 100) v = 100;
-                            el.style.width = v + '%';
-                        });
-                    } catch (e) { /* noop */
-                    }
-                })();
-            </script>
+
         </section>
+
+
+        {# Barre de progression des demandes de participations vs financements #}
+        {% if initiative.budget_contributif %}
+            <section class="my-4">
+                <div class="progress">
+                    <div class="progress-bar bg-{{ requested_color }}" role="progressbar" aria-valuemin="0"
+                         aria-valuemax="100" aria-valuenow="{{ requested_percent_int_capped }}" style="width: 0%"
+                         data-requested-bar="1" data-width-int="{{ requested_percent_int_capped }}">
+                        <span class="visually-hidden">{{ requested_percent_int }}%</span>
+                    </div>
+                </div>
+                <p class="mt-2 mb-0 text-center text-muted small">
+                    {% translate "Demandé par les contributeur.ices" %}:
+                    <strong>{{ initiative.requested_total_cents|dround }} {{ initiative.currency }}</strong>
+                </p>
+            </section>
+        {% endif %}
+
+        <script>
+            (function () {
+                try {
+                    document.querySelectorAll('[data-requested-bar]')?.forEach(function (el) {
+                        var v = parseInt(el.getAttribute('data-width-int') || '0', 10);
+                        if (isNaN(v) || v < 0) v = 0;
+                        if (v > 100) v = 100;
+                        el.style.width = v + '%';
+                    });
+                } catch (e) { /* noop */
+                }
+            })();
+        </script>
 
         <div class="d-grid gap-2 d-sm-flex justify-content-sm-start align-items-center my-4">
             <a href="{% url 'crowds-list' %}"
@@ -105,21 +116,19 @@
             {% if user.is_authenticated %}
                 <button
                         class="btn btn-primary"
-                        title="{% translate 'Voter pour la pertinence' %}"
+                        title="{{ crowd_config.vote_button_name }}"
                         hx-post="{{ initiative.get_absolute_url }}vote/"
                         hx-trigger="click"
                         hx-target="#votes-{{ initiative.uuid }}"
                         hx-swap="outerHTML">
-                    <i class="bi bi-hand-thumbs-up"></i>
-                    {% translate 'Voter' %}
+                    <i class="bi bi-hand-thumbs-up"> </i>{{ crowd_config.vote_button_name }}
                 </button>
             {% else %}
                 <button
                         class="btn btn-primary"
-                        title="{% translate 'Voter pour la pertinence' %}"
+                        title="{{ crowd_config.vote_button_name }}"
                         onclick="crowdsVoteRequireLogin()">
-                    <i class="bi bi-hand-thumbs-up"></i>
-                    {% translate 'Voter' %}
+                    <i class="bi bi-hand-thumbs-up"> </i>{{ crowd_config.vote_button_name }}
                 </button>
             {% endif %}
 
@@ -140,14 +149,14 @@
 
             {# Contribution financière (formulaire Swal → HTMX) #}
             {% if user.is_authenticated %}
-                <button type="button" class="btn btn-primary" title="{% translate 'Contribuer financièrement' %}"
+                <button type="button" class="btn btn-primary" title="{% translate 'Financer' %}"
                         onclick="openContributionModal()">
-                    💸 {% translate 'Contribuer financièrement' %}
+                    💸 {% translate 'Financer' %}
                 </button>
             {% else %}
-                <button type="button" class="btn btn-primary" title="{% translate 'Contribuer financièrement' %}"
+                <button type="button" class="btn btn-primary" title="{% translate 'Financer' %}"
                         onclick="crowdsVoteRequireLogin()">
-                    💸 {% translate 'Contribuer financièrement' %}
+                    💸 {% translate 'Financer' %}
                 </button>
             {% endif %}
         </div>
@@ -234,7 +243,8 @@
                             <div class="form-text">{{ contrib_desc_help }}</div>
                         </div>
                         <div class="mb-0 text-start">
-                            <label for="contrib-amt" class="form-label">{% blocktrans with cur=initiative.currency %}Montant (en {{ cur }}){% endblocktrans %}</label>
+                            <label for="contrib-amt" class="form-label">{% blocktrans with cur=initiative.currency %}
+                        Montant (en {{ cur }}){% endblocktrans %}</label>
                             <input id="contrib-amt" type="number" min="0" step="0.01" class="form-control" placeholder="0.00">
                             <div class="form-text">{% translate "Le montant sera converti en centimes." %}</div>
                         </div>
@@ -340,7 +350,8 @@
                             <textarea id="part-desc" class="form-control" rows="4" placeholder="{% translate "Décrivez votre apport, rôle, tâches…" %}"></textarea>
                         </div>
                         <div class="mb-0 text-start">
-                            <label class="form-label">{% blocktrans with cur=initiative.currency %}Montant sollicité (en {{ cur }}){% endblocktrans %}</label>
+                            <label class="form-label">{% blocktrans with cur=initiative.currency %}
+                        Montant sollicité (en {{ cur }}){% endblocktrans %}</label>
                             <input id="part-amt" type="number" min="0" step="0.01" class="form-control" placeholder="0.00">
                             <div class="form-text">{% translate "Ce montant correspond à votre part du budget estimé." %}</div>
                         </div>
