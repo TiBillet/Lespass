@@ -2237,6 +2237,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
                 'short_description',
                 'long_description',
                 'jauge_max',
+                'show_gauge',
                 'postal_address',
             )
         }),

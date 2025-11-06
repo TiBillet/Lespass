@@ -1746,16 +1746,21 @@ class EventMVT(viewsets.ViewSet):
             event_products = event.products.prefetch_related("prices")
             products = list(event_products)
 
+            # Récupération des prix
+            prices = [price for product in products for price in product.prices.all()]
+
             # Si l'user est connecté, on vérifie qu'il n'a pas déja reservé
-            # On rajoute une information au produit pour le récupérer dans le template
             product_max_per_user_reached = []
+            price_max_per_user_reached = []
+
             if request.user.is_authenticated:
                 for product in products:
                     if product.max_per_user_reached(user=request.user, event=event):
                         product_max_per_user_reached.append(product)
-
-            # Récupération des prix
-            prices = [price for product in products for price in product.prices.all()]
+                for price in prices:
+                    logger.info(f"price.max_per_user_reached : {price.name} {price.max_per_user_reached(user=request.user, event=event)}")
+                    if price.max_per_user_reached(user=request.user, event=event):
+                        price_max_per_user_reached.append(price)
 
             tarifs = [price.prix for price in prices]
             # Calcul des prix min et max
@@ -1785,6 +1790,7 @@ class EventMVT(viewsets.ViewSet):
         # Attribution directe à l'event (en mémoire, pas en base)
         event.prices = prices
         template_context['product_max_per_user_reached'] = product_max_per_user_reached
+        template_context['price_max_per_user_reached'] = price_max_per_user_reached
         template_context['event'] = event
         template_context['event_in_this_tenant'] = event_in_this_tenant
 

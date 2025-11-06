@@ -73,9 +73,20 @@
                                 {% endif %}
                                 </label>
                                 <!-- Adhésion obligatoire pour selectionner ce produit ! -->
-                                {% if price.product|in_list:product_max_per_user_reached %}
+                                {% if price_max_per_user_reached or product_max_per_user_reached %}
+{#                                {% if product_max_per_user_reached or price_max_per_user_reached %}#}
+                                    {% if price.product|in_list:product_max_per_user_reached %}
+                                        <div class="alert alert-danger" role="alert">
+                                            {% trans "You have reached the maximum number of reservations possible for this event." %}
+                                        </div>
+                                    {% elif price|in_list:price_max_per_user_reached  %}
+                                        <div class="alert alert-danger" role="alert">
+                                            {% trans "You have reached the maximum number of reservations possible for this price." %}
+                                        </div>
+                                    {% endif %}
+                                {% elif price|price_out_of_stock:event %}
                                     <div class="alert alert-danger" role="alert">
-                                        {% trans "You have reached the maximum number of reservations possible for this event." %}
+                                        {% trans "This price is no longer available." %}
                                     </div>
                                 {% elif price.adhesion_obligatoire %}
                                     {% if not user.is_authenticated %}

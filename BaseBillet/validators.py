@@ -465,6 +465,14 @@ class ReservationValidator(serializers.Serializer):
 
             # chaque maximum par user est respecté ?
             for price, qty in price_dict.items():
+                # Si l'user a déja reservé avant :
+                if price.max_per_user_reached(user, event=event):
+                    raise serializers.ValidationError(_(f'Maximum capacity reached for this price.'))
+
+                # Si la jauge de ce prix est atteinte
+                if price.out_of_stock(event=event):
+                    raise serializers.ValidationError(_(f'Maximum capacity reached for this price.'))
+
                 if price.max_per_user:
                     if qty > price.max_per_user:
                         raise serializers.ValidationError(

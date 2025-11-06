@@ -1,10 +1,8 @@
 from datetime import datetime
-from itertools import product
 from random import randint
 
 import requests
 from django import template
-from django.core.cache import cache
 from django.db import connection
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -49,7 +47,15 @@ def range_by(events: list, val: int):
 
 
 @register.filter
+def price_out_of_stock(value, event):
+    price = value
+    return price.out_of_stock(event=event)
+
+
+
+@register.filter
 def in_list(value:str, liste:list):
+    logger.info(f"in_list {value} in {liste}")
     return value in liste
 
 # @register.filter

@@ -1005,31 +1005,55 @@ class Price(models.Model):
 
 
     stock = models.SmallIntegerField(blank=True, null=True,
-                                     verbose_name=_("Simultaneous membership possible"),
-                                     help_text=_("Number of valid subscriptions or memberships possible at the same time. Only works for membership or subscription-type products."),)
+                                     verbose_name=_("Maximum capacity"),
+                                     help_text=_("Number of valid subscriptions or memberships possible simultaneously or maximum capacity for this price per event. Leave this field blank if the number is unlimited."),
+                                     )
 
-    def out_of_stock(self):
+    def out_of_stock(self, event=None):
         if self.stock is None or self.stock < 1 :
             return False
 
         if self.product.categorie_article == Product.ADHESION:
-            logger.info(f"    out_of_stock : {self.stock}")
-            total_valid_subscriptions = Membership.objects.filter(
-                price=self,
-                deadline__gt=timezone.localtime()).count()
-            return self.stock <= total_valid_subscriptions
+            return self.membership.filter(deadline__gt=timezone.localtime()).count() >= self.stock
+
+        if self.product.categorie_article in [Product.FREERES, Product.BILLET]:
+            return Ticket.objects.filter(
+                reservation__event__pk=event.pk,
+                pricesold__price__pk=self.pk,
+                status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED]
+            ).count() >= self.stock
 
         return False
-
 
     max_per_user = models.PositiveSmallIntegerField(
         blank=True, null=True,
         verbose_name=_("Maximum per user"),
-        help_text=_("Limit the quantity per user. Leave this field blank if the number is unlimited. if it is a recurring payment, the maximum is necessarily 1")
+        help_text=_("Limit the quantity per user. Leave this field blank if the number is unlimited.")
     )
 
-    def max_per_user_reached(self):
+    def max_per_user_reached(self, user, event=None) -> bool:
         # import ipdb; ipdb.set_trace()
+        if not self.max_per_user:
+            return False  # Aucune limite
+
+        if self.product.categorie_article == self.product.ADHESION:
+            # Adhésion: on compte uniquement les adhésions encore valides pour CE produit
+            return user.memberships.filter(
+                deadline__gte=timezone.now(),
+                price__product__pk=self.pk,
+            ).count() >= self.max_per_user
+
+        # Billetterie / réservations gratuites: on compte tous les tickets de l'utilisateur (logique existante)
+        elif self.product.categorie_article in [self.product.BILLET, self.product.FREERES] and event:
+            # Compte direct des tickets liés aux réservations de l'utilisateur
+            return Ticket.objects.filter(
+                reservation__user_commande__pk=user.pk,
+                reservation__event__pk=event.pk,
+                pricesold__price__pk=self.pk,
+                status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED]
+            ).count() >= self.max_per_user
+
+        return False
         pass
 
     # gauge_max = models.PositiveSmallIntegerField(blank=True, null=True,
@@ -1136,6 +1160,8 @@ class Event(models.Model):
 
     created = models.DateTimeField(auto_now=True)
     jauge_max = models.PositiveSmallIntegerField(default=50, verbose_name=_("Maximum capacity"))
+    show_gauge = models.BooleanField(default=False, verbose_name=_("Show gauge"))
+
     max_per_user = models.PositiveSmallIntegerField(default=10,
                                                     verbose_name=_(
                                                         "Maximum bookings per user"),
