@@ -834,6 +834,35 @@ class Product(models.Model):
 
     archive = models.BooleanField(default=False, verbose_name=_("Archive"))
 
+    max_per_user = models.PositiveSmallIntegerField(
+        blank=True, null=True,
+        verbose_name=_("Maximum per user"),
+        help_text=_("Limit the quantity per user. Leave this field blank if the number is unlimited.")
+    )
+
+    def max_per_user_reached(self, user, event=None) -> bool:
+        if not self.max_per_user:
+            return False  # Aucune limite
+
+        if self.categorie_article == self.ADHESION:
+            # Adhésion: on compte uniquement les adhésions encore valides pour CE produit
+            return user.memberships.filter(
+                deadline__gte=timezone.now(),
+                price__product__pk=self.pk,
+            ).count() >= self.max_per_user
+
+        # Billetterie / réservations gratuites: on compte tous les tickets de l'utilisateur (logique existante)
+        elif self.categorie_article in [self.BILLET, self.FREERES] and event:
+            # Compte direct des tickets liés aux réservations de l'utilisateur
+            return Ticket.objects.filter(
+                reservation__user_commande=user,
+                reservation__event=event,
+                pricesold__price__product__pk=self.pk,
+                status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED]
+            ).count() >= self.max_per_user
+
+        return False
+
     validate_button_text = models.CharField(blank=True, null=True, max_length=20,
                                             verbose_name=_("Validate button text for membership"),
                                             help_text=_(
@@ -984,6 +1013,7 @@ class Price(models.Model):
             return False
 
         if self.product.categorie_article == Product.ADHESION:
+            logger.info(f"    out_of_stock : {self.stock}")
             total_valid_subscriptions = Membership.objects.filter(
                 price=self,
                 deadline__gt=timezone.localtime()).count()
@@ -997,6 +1027,10 @@ class Price(models.Model):
         verbose_name=_("Maximum per user"),
         help_text=_("Limit the quantity per user. Leave this field blank if the number is unlimited. if it is a recurring payment, the maximum is necessarily 1")
     )
+
+    def max_per_user_reached(self):
+        # import ipdb; ipdb.set_trace()
+        pass
 
     # gauge_max = models.PositiveSmallIntegerField(blank=True, null=True,
     #                                                 verbose_name=_("Maximum all user"),

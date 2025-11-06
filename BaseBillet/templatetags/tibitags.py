@@ -49,16 +49,20 @@ def range_by(events: list, val: int):
 
 
 @register.filter
-def in_list(value, list):
-    value = str(value)
-    retour = value in list.split(',')
-    return retour
+def in_list(value:str, liste:list):
+    return value in liste
 
-@register.filter
-def not_in_list(value, list):
-    value = str(value)
-    retour = value not in list.split(',')
-    return retour
+# @register.filter
+# def in_list(value, liste):
+#     value = str(value)
+#     retour = value in liste.split(',')
+#     return retour
+#
+# @register.filter
+# def not_in_list(value, liste):
+#     value = str(value)
+#     retour = value not in liste.split(',')
+#     return retour
 
 
 @register.filter

@@ -217,3 +217,162 @@ Objectif: des pages rapides, accessibles, sans « blink », en HTML rendu côté
 - Ajouter des tests d’intégration HTMX (ex: vérif des headers et du contenu partiel).
 - Marqueurs Schema.org sur la page détail.
 - Éventuel renderer Markdown (actuellement, la description est affichée en texte/linebreaks).
+
+
+
+## Toasts SweetAlert2 avec le framework `django.messages`
+
+Objectif: afficher des toasts uniformes (SweetAlert2 en mode `toast:true`) pour les messages envoyés côté serveur via `django.contrib.messages`, dans deux cas:
+- Page complète (rechargement total)
+- Réponse partielle HTMX (swap d'une cible)
+
+Prérequis côté front: SweetAlert2 est déjà chargé par la base (`reunion/base.html`).
+
+### 1) Page complète: rendre les messages en toasts automatiquement
+
+Dans un template de base rendu pour des pages complètes (ex: `reunion/base.html` ou un bloc `scripts` commun), boucler sur `messages` et appeler `Swal.fire` en mode `toast`.
+
+Exemple de snippet réutilisable (à inclure une seule fois dans la page complète):
+
+```django
+{% if messages %}
+<script>
+  (function(){
+    const iconMap = {success:'success', error:'error', warning:'warning', info:'info', debug:'info'};
+    const toasts = [
+      {% for message in messages %}
+      {level: "{{ message.level_tag|default:message.tags|default:'info' }}", text: "{{ message|escapejs }}"},
+      {% endfor %}
+    ];
+    toasts.forEach(t => {
+      Swal.fire({
+        toast: true,
+        position: 'top',
+        timer: 2200,
+        showConfirmButton: false,
+        icon: iconMap[t.level] || 'info',
+        title: t.text
+      });
+    });
+  })();
+</script>
+{% endif %}
+```
+
+Côté contrôleur, il suffit d'ajouter le message, puis de rendre une page complète:
+
+```python
+from django.contrib import messages
+from django.utils.translation import gettext_lazy as _
+
+messages.add_message(request, messages.SUCCESS, _("Check in registered!"))
+return render(request, "ma/page.html", context)
+```
+
+Remarques:
+- Utiliser `escapejs` pour sécuriser le contenu injecté dans le JavaScript inline.
+- `message.level_tag` fournit `success|info|warning|error` utilisables tels quels par SweetAlert2.
+
+### 2) Réponses HTMX: propager les messages via `HX-Trigger`
+
+Quand la vue répond par un partiel (swap ciblé), la variable de template `messages` n'est pas idéale, et on veut éviter d'injecter des `<script>` dans les fragments. Recommander l'usage d'un événement HTMX via l'entête `HX-Trigger`.
+
+Patron côté contrôleur:
+
+```python
+import json
+from django.contrib import messages
+from django.utils.translation import gettext_lazy as _
+from django_htmx.http import HttpResponseClientRedirect
+from django.shortcuts import render
+
+# Exemple dans une action qui répond en partiel
+messages.add_message(request, messages.SUCCESS, _("Check in registered!"))
+
+# Extraire les messages (note: get_messages consomme la file)
+from django.contrib.messages import get_messages
+payload = [{
+    'level': m.level_tag,
+    'text': str(m),
+} for m in get_messages(request)]
+
+response = render(request, "mon/partial.html", context)
+# Déclenche un événement 'toast' côté client avec la liste de messages
+response["HX-Trigger"] = json.dumps({
+    "toast": {"items": payload}
+})
+return response
+```
+
+Listener générique côté client (à inclure une seule fois, par exemple dans `reunion/base.html` ou dans un bloc `scripts` présent sur les pages qui utilisent HTMX):
+
+```html
+<script>
+  // Affiche un toast SweetAlert2 pour un message
+  function showToast(level, text, opts) {
+    const iconMap = {success:'success', error:'error', warning:'warning', info:'info', debug:'info'};
+    Swal.fire(Object.assign({
+      toast: true,
+      position: 'top',
+      timer: 2200,
+      showConfirmButton: false,
+      icon: iconMap[level] || 'info',
+      title: text
+    }, opts || {}));
+  }
+
+  // 1) Support pour HX-Trigger: { toast: { items: [{level, text}, ...] } }
+  document.body.addEventListener('toast', function(e) {
+    const items = (e.detail && (e.detail.items || e.detail)) || [];
+    (Array.isArray(items) ? items : [items]).forEach(it => showToast(it.level, it.text));
+  });
+
+  // 2) Exemple existant: feedback vote déjà utilisé dans CROWDS
+  document.body.addEventListener('crowds:vote', function (e) {
+    const created = !!(e && e.detail && e.detail.created);
+    showToast(created ? 'success' : 'info', created ?
+      '{% translate "Merci pour votre vote !" %}' :
+      '{% translate "Votre vote est déjà pris en compte." %}');
+  });
+</script>
+```
+
+Avantages:
+- Aucune logique toast dans les partiels: un header suffit.
+- Le même mécanisme fonctionne pour tous les contrôleurs HTMX.
+
+Astuce: si vous redirigez côté client HTMX (`HttpResponseClientRedirect`), placez l'entête `HX-Trigger` sur cette réponse pour déclencher le toast avant/pendant la redirection.
+
+```python
+r = HttpResponseClientRedirect(request.headers.get('Referer', '/'))
+r["HX-Trigger"] = json.dumps({"toast": {"items": [{"level": "success", "text": _("Fait !")}]}})
+return r
+```
+
+### 3) Choix pratique selon le contexte
+
+- Page complète (ex: POST classique avec `return redirect(...)` ou `render(...)`):
+  - Utiliser uniquement `django.messages` et le snippet de rendu "page complète".
+- HTMX (swap de cible):
+  - Préférer `HX-Trigger` + listener global `toast`.
+  - Éviter d'inclure des `<script>` dans les fragments pour rester "anti‑blink" et centraliser le JS.
+
+### 4) Exemple concret tiré de CROWDS
+
+Dans `crowds/views/list.html`, un listener affiche déjà un toast après un vote via l'événement `crowds:vote`:
+
+```js
+document.body.addEventListener('crowds:vote', function (e) {
+  const created = !!(e && e.detail && e.detail.created);
+  Swal.fire({
+    toast: true,
+    position: 'top',
+    timer: 1600,
+    showConfirmButton: false,
+    icon: created ? 'success' : 'info',
+    title: created ? 'Merci pour votre vote !' : 'Votre vote est déjà pris en compte.'
+  });
+});
+```
+
+Répliquez ce modèle pour d'autres événements métiers, ou unifiez via l'événement générique `toast` ci‑dessus afin d'exploiter directement `django.messages` depuis les contrôleurs.

@@ -1738,15 +1738,34 @@ class EventMVT(viewsets.ViewSet):
             event.img = event.get_img()
             event.sticker_img = event.get_sticker_img()
 
+            # Récupération des produits et des prix pour :
+            # - afficher le min / max
+            # - vérifier le max par user
+
+            # Précharger les prix en même temps que les produits
+            event_products = event.products.prefetch_related("prices")
+            products = list(event_products)
+
+            # Si l'user est connecté, on vérifie qu'il n'a pas déja reservé
+            # On rajoute une information au produit pour le récupérer dans le template
+            product_max_per_user_reached = []
+            if request.user.is_authenticated:
+                for product in products:
+                    if product.max_per_user_reached(user=request.user, event=event):
+                        product_max_per_user_reached.append(product)
+
             # Récupération des prix
-            event.prices = [price for product in event.products.all() for price in product.prices.all()]
-            tarifs = [price.prix for price in event.prices]
+            prices = [price for product in products for price in product.prices.all()]
+
+            tarifs = [price.prix for price in prices]
             # Calcul des prix min et max
             event.price_min = min(tarifs) if tarifs else None
             event.price_max = max(tarifs) if tarifs else None
-            # Vérification de l'existence d'un prix libre
+
+            # Vérification de l'existence d'un prix libre (sans requêtes supplémentaires)
             event.free_price = any(
-                price.free_price for product in event.products.all() for price in product.prices.all())
+                price.free_price for product in products for price in product.prices.all()
+            )
 
             event_in_this_tenant = True
 
@@ -1763,6 +1782,9 @@ class EventMVT(viewsets.ViewSet):
             return redirect("/event/")
 
         template_context = get_context(request)
+        # Attribution directe à l'event (en mémoire, pas en base)
+        event.prices = prices
+        template_context['product_max_per_user_reached'] = product_max_per_user_reached
         template_context['event'] = event
         template_context['event_in_this_tenant'] = event_in_this_tenant
 
@@ -2097,6 +2119,16 @@ class MembershipMVT(viewsets.ViewSet):
         try:
             # On essaye sur ce tenant :
             product = Product.objects.get(uuid=pk, categorie_article=Product.ADHESION, publish=True)
+            context = get_context(request)
+            context['product'] = product
+
+            # On check que l'user n'a pas déja prix un abonnement limité
+            if request.user.is_authenticated:
+                if product.max_per_user_reached(user=request.user):
+                    return render(request, "reunion/views/membership/already_has_membership.html", context=context)
+
+            return render(request, "reunion/views/membership/form.html", context=context)
+
         except Product.DoesNotExist:
             try:
                 # Il est possible que ça soit sur un autre tenant ?
@@ -2116,9 +2148,7 @@ class MembershipMVT(viewsets.ViewSet):
             context = get_context(request)
             return render(request, "reunion/views/membership/404.html", context=context, status=404)
 
-        context = get_context(request)
-        context['product'] = product
-        return render(request, "reunion/views/membership/form.html", context=context)
+
 
     @action(detail=True, methods=['GET'])
     def get_checkout_for_membership(self, request, pk):

@@ -25,13 +25,14 @@
                 {% if price.publish %}
                     {% if price.free_price and price.recurring_payment %}
                         <!-- Prix libre ET récurrent : input décimal avec incrémentation par 10 cts -->
-                        <div class="mb-4 p-3 border border-primary rounded bg-light">
+                        <!-- Utilise des classes compatibles mode clair/sombre (Bootstrap 5.3 color modes) -->
+                        <div class="mb-4 p-3 border border-primary-subtle rounded bg-body-tertiary">
                             <label class="form-label fw-bold text-primary" for="price-{{ price.uuid }}">
                                 {{ price.name }}
                             </label>
-                            {% if price.out_of_stock %}
+                            {% if price.max_per_user_reached %}
                                 <div class="alert alert-danger" role="alert">
-                                    {% trans "Out of stock." %}
+                                    {% trans "Vous êtes déja abonné à ce tarif" %}
                                 </div>
                             {% else %}
                                 <input id="price-{{ price.uuid }}" hidden name="price" value="{{ price.uuid }}">
@@ -42,8 +43,9 @@
                                        min="{{ price.prix }}"
                                        step="0.10"
                                        placeholder="{% trans 'Enter the amount (minimum' %} {{ price.prix }}€)"
+                                       aria-describedby="custom-amount-help-{{ price.uuid }}"
                                        required>
-                                <small class="form-text text-muted">
+                                <small id="custom-amount-help-{{ price.uuid }}" class="form-text text-muted">
                                     {% trans "Recurring payment - Enter your desired amount" %}
                                 </small>
                                 {% if price.fedow_reward_enabled %}

@@ -455,6 +455,10 @@ class ReservationValidator(serializers.Serializer):
             logger.info(f"Promotional code {promo_code.name} validated for product {promo_code.product.name}")
 
         for product, price_dict in products_dict.items():
+            # Si le maximum par user produit est déja atteint :
+            if product.max_per_user_reached(user, event=event):
+                raise serializers.ValidationError(_(f'Maximum capacity reached for this product.'))
+
             # les produits sont prévu par l'évent ?
             if product not in event.products.all():
                 raise serializers.ValidationError(_(f'Invalid product.'))
@@ -632,6 +636,10 @@ class MembershipValidator(serializers.Serializer):
 
         # Création de l'user après les validation champs par champ ( un robot peut spammer le POST et créer des user a la volée sinon )
         self.user = get_or_create_user(attrs['email'])
+
+        # Vérififaction du max par user sur le produit :
+        if self.price.product.max_per_user_reached(user=self.user):
+                raise serializers.ValidationError(_(f'This product is limited in quantity per person.'))
 
         # Vérification du max per user
         if self.price.max_per_user:

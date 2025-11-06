@@ -959,6 +959,7 @@ class ProductAdmin(ModelAdmin):
                 'poids',
                 'short_description',
                 'long_description',
+                'max_per_user',
                 'validate_button_text',
                 'legal_link',
                 'publish',
