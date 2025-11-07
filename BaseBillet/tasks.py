@@ -1408,6 +1408,55 @@ def trigger_product_update_tasks(product_pk):
 
 
 @app.task
+def refill_from_lespass_to_user_wallet_from_ticket_scanned(ticket_pk):
+    time.sleep(1)  # wait for trigger pre_save
+    ticket = Ticket.objects.get(pk=ticket_pk, status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED])
+    metadata = ticket.metadata if ticket.metadata else {}
+
+    if metadata.get('rewarded_from_ticket_scanned'):
+        logger.info("    TASKS TICKET SCANNED -> Fedow reward already sent for this ticket, skipping")
+        return "Fedow reward already sent for this ticket"
+
+    metadata['rewarded_from_ticket_scanned'] = {
+        "sent_at": timezone.now().isoformat()
+    }
+
+    try:
+        price: Price = ticket.pricesold.price
+
+        if price.reward_on_ticket_scanned and price.fedow_reward_asset and price.fedow_reward_amount:
+            fedowAPI = FedowAPI()
+            asset = price.fedow_reward_asset
+            float_amount = price.fedow_reward_amount
+            amount = int(dround(float_amount) * 100)
+            user = ticket.reservation.user_commande
+
+
+            from fedow_connect.models import FedowConfig
+            if FedowConfig.get_solo().can_fedow():
+                logger.info("    TASKS TICKET SCANNED -> Fedow reward enabled: sending tokens to user wallet")
+                reward_tx = fedowAPI.transaction.refill_from_lespass_to_user_wallet(
+                    user=user,
+                    amount=amount,
+                    asset=asset,
+                    metadata=metadata,
+                )
+
+                # add to metadata for trace
+                ticket.metadata["rewarded_from_ticket_scanned"] = {
+                    "transaction_uuid": str(reward_tx.get("uuid")),
+                    "hash": reward_tx.get("hash"),
+                    "asset": str(asset.uuid),
+                    "amount": int(amount),
+                    "sent_at": timezone.now().isoformat(),
+                }
+                logger.info(f"    TASKS TICKET SCANNED -> Fedow reward sent: {ticket.metadata['fedow_reward']}")
+                ticket.save(update_fields=["metadata"])
+
+    except Exception as e:
+        logger.error(f"refill_from_lespass_to_user_wallet_from_ticket_scanned error: {e}")
+
+@app.task
 def refill_from_lespass_to_user_wallet_from_price_solded(ligne_article_pk):
     time.sleep(1)  # wait for trigger pre_save
     ligne_article = LigneArticle.objects.get(pk=ligne_article_pk)
@@ -1416,10 +1465,10 @@ def refill_from_lespass_to_user_wallet_from_price_solded(ligne_article_pk):
         product: Product = ligne_article.pricesold.productsold.product
         price: Price = ligne_article.pricesold.price
 
-        if getattr(price, "fedow_reward_enabled", False) and getattr(price, "fedow_reward_asset", None) and getattr(
-                price, "fedow_reward_amount", None):
+        if price.fedow_reward_enabled and price.fedow_reward_asset and price.fedow_reward_amount:
+        # if getattr(price, "fedow_reward_enabled", False) and getattr(price, "fedow_reward_asset", None) and getattr(
+        #         price, "fedow_reward_amount", None):
             fedowAPI = FedowAPI()
-
             asset = getattr(price, "fedow_reward_asset", None)
             float_amount = getattr(price, "fedow_reward_amount", None)
             amount = int(dround(float_amount) * 100)
@@ -1428,7 +1477,7 @@ def refill_from_lespass_to_user_wallet_from_price_solded(ligne_article_pk):
             if asset and amount and membership.user:
                 from fedow_connect.models import FedowConfig
                 if FedowConfig.get_solo().can_fedow():
-                    logger.info("    TRIGGER_A ADHESION PAID -> Fedow reward enabled: sending tokens to user wallet")
+                    logger.info("    TASK ADHESION PAID -> Fedow reward enabled: sending tokens to user wallet")
                     checkout_session_id_stripe = ligne_article.paiement_stripe.checkout_session_id_stripe
                     invoice_stripe_id = ligne_article.paiement_stripe.invoice_stripe # on est peut être sur un renouvellement
                     metadata = {

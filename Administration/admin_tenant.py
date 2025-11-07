@@ -1269,6 +1269,7 @@ class PriceAdmin(ModelAdmin):
         (_('Triggers'), {
             'fields': (
                 'fedow_reward_enabled',
+                'reward_on_ticket_scanned',
                 'fedow_reward_asset',
                 'fedow_reward_amount',
             ),

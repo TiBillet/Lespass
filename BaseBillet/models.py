@@ -1111,6 +1111,12 @@ class Price(models.Model):
         help_text=_("If enabled, after a successful payment, the user wallet will receive tokens."),
     )
 
+    reward_on_ticket_scanned = models.BooleanField(
+        default=False,
+        verbose_name=_("Reward user wallet on ticket scanning"),
+        help_text=_("If enabled, after scanning a ticket, the user wallet will receive tokens."),
+    )
+
     fedow_reward_asset = models.ForeignKey("fedow_public.AssetFedowPublic", on_delete=models.SET_NULL,
                                            blank=True,
                                            null=True,
@@ -2113,6 +2119,7 @@ class Ticket(models.Model):
                                       verbose_name=_("Payment method"))
 
     scanned_by = models.ForeignKey(ScanApp, on_delete=models.PROTECT, blank=True, null=True, )
+    metadata = models.JSONField(null=True, blank=True, verbose_name=_('Metadata'), help_text=_('Custom metadata'))
 
     def paid(self):
         if self.pricesold:

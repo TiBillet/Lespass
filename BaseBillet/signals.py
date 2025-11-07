@@ -15,7 +15,8 @@ from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, LigneArticle, Ticket, Paiement_stripe, Product, Price, \
     PaymentMethod, Membership, SaleOrigin, Configuration
 from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation, \
-    trigger_product_update_tasks, send_sale_to_laboutik, send_refund_to_laboutik, webhook_membership
+    trigger_product_update_tasks, send_sale_to_laboutik, send_refund_to_laboutik, webhook_membership, \
+    refill_from_lespass_to_user_wallet_from_ticket_scanned
 from BaseBillet.triggers import TRIGGER_LigneArticlePaid_ActionByCategorie
 from fedow_connect.fedow_api import AssetFedow
 from fedow_connect.models import FedowConfig
@@ -176,6 +177,17 @@ def error_in_mail(old_instance: Reservation, new_instance: Reservation):
     # TODO: Prévenir l'admin q'un billet a été acheté, mais pas envoyé
 
 
+######################## SIGNAL TICKET ########################
+
+def check_reward(old_instance: Ticket, new_instance: Ticket):
+    try :
+        price: Price = new_instance.pricesold.price
+        if price.reward_on_ticket_scanned:
+            refill_from_lespass_to_user_wallet_from_ticket_scanned.delay(new_instance.pk)
+    except Exception as e :
+        logger.error(f"check_reward : {e}")
+
+
 ######################## SIGNAL TIBILLETUSER ########################
 
 def activator_free_reservation(old_instance: TibilletUser, new_instance: TibilletUser):
@@ -237,6 +249,9 @@ def error_regression(old_instance, new_instance):
 def test_signal(old_instance, new_instance):
     logger.info(f"Test signal instance : {new_instance} - Status : {new_instance.status}")
 
+# def test_signal_ipdb(old_instance, new_instance):
+#     logger.info(f"Test signal instance : {new_instance} - Status : {new_instance.status}")
+#     import ipdb; ipdb.set_trace()
 
 # On déclare les transitions possibles entre différents etats des statuts.
 # Exemple première ligne : Si status passe de PENDING vers PAID, alors on lance set_ligne_article_paid
@@ -313,6 +328,12 @@ PRE_SAVE_TRANSITIONS = {
             True: activator_free_reservation,
         }
     },
+
+    'TICKET': {
+        Ticket.NOT_SCANNED: {
+            Ticket.SCANNED: check_reward,
+        }
+    }
 }
 
 
