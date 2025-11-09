@@ -336,8 +336,18 @@ class ReservationValidator(serializers.Serializer):
         for product in event.products.all():
             for price in product.prices.all():
                 # Un input possède l'uuid du prix ?
-                if self.initial_data.get(str(price.uuid)):
-                    qty = int(self.initial_data.get(str(price.uuid)))
+                raw_val = self.initial_data.get(str(price.uuid))
+                if raw_val not in [None, '']:
+                    # Certains frontends envoient des nombres comme "15.00" → normaliser en int de manière sûre
+                    try:
+                        # Depuis une QueryDict, la valeur peut être une liste
+                        if isinstance(raw_val, list):
+                            raw_val = raw_val[-1] if raw_val else ''
+                        sval = str(raw_val).strip().replace(',', '.')
+                        # Autoriser les décimales mais caster en entier (quantité)
+                        qty = int(Decimal(sval))
+                    except Exception:
+                        raise serializers.ValidationError({str(price.uuid): [_('Invalid quantity.')]})
 
                     if qty <= 0:  # Skip zero or negative quantities
                         continue
