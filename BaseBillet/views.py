@@ -1722,6 +1722,12 @@ class EventMVT(viewsets.ViewSet):
 
         # Si False, alors le bouton reserver renvoi vers la page event du tenant.
         event_in_this_tenant = False
+        # Defaults to prevent UnboundLocalError when event is retrieved from federation
+        products = []
+        prices = []
+        product_max_per_user_reached = []
+        price_max_per_user_reached = []
+
         try:
             if hex8:
                 event = Event.objects.select_related('postal_address', ).prefetch_related('tag', 'products',
