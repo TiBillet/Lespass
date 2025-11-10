@@ -9,8 +9,8 @@
 	<!-- catégories -->
 	<c-categories />
 	<div id="products-container">
-	<c-articles />
-	<c-addition />
+		<c-articles />
+		<c-addition />
 	</div>
 </main>
 <footer>
@@ -22,7 +22,8 @@
 		</div>
 	</div>
 	<!-- bouton CHECK CARTE -->
-	<div id="bt-check-card" class="BF-ligne footer-bt fond-normal test-check-carte" hx-get="hx_check_card" hx-target="#messages" hx-swap="outerHTML">
+	<div id="bt-check-card" class="BF-ligne footer-bt fond-normal test-check-carte" hx-get="hx_check_card"
+		hx-target="#messages" hx-swap="outerHTML">
 		<i class="fas fa-money-check-alt md4px"></i>
 		<div class="BF-col-deb footer-bt-text mg4px">
 			<div>{% translate "CHECK" %}</div>
@@ -43,6 +44,26 @@
 	</div>
 </footer>
 
+<script>
+	/**
+	* Reset articles, addition list and value of button valider
+	*/
+	function manageReset() {
+		// reset articles
+		sendEvent('resetArticles', '#products', {})
+	}
+
+	function updateBtValider(event) {
+		// console.log('-> updateBtValider, event.detail =', event.detail)
+		document.querySelector('#bt-valider-total').innerText = (event.detail.totalAddition / 100)
+	}
+
+	document.addEventListener('DOMContentLoaded', () => {
+		document.querySelector('#bt-reset').addEventListener('click', manageReset)
+		document.querySelector('body').addEventListener('infoTotalAddition', updateBtValider)
+	})
+
+</script>
 <!-- no articles -->
 {% include "partial/no_articles.html" %}
 

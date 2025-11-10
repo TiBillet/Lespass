@@ -4,8 +4,9 @@
 <!-- les data articles sont prises dans le container #products -->
 <div id="products">
 	{% for article in pv.articles %}
+	<!-- TODO: supprimer dès le back l'article paiement fractionné -->
 	{% if article.id != uuidArticlePaiementFractionne %}
-	<div data-uuid="{{article.id}}" data-price="{{article.prix}}" data-currency="{{ currency_data.symbol }}" data-group="{{article.bt_groupement.groupe}}"
+	<div data-uuid="{{article.id}}" data-name="{{article.name}}" data-price="{{article.prix}}" data-currency="{{ currency_data.symbol }}" data-group="{{article.bt_groupement.groupe}}"
 		class="article-container cat-{{ article.categorie.id}}"
 		style="background-color:{{ article.categorie.couleur_backgr }};">
 		<!-- image -->

@@ -64,7 +64,7 @@ def new_hardware(request):
     # dev
     devHardwareOk = True
 
-    # hardware active
+    # hardware activé
     if devHardwareOk == True:
         # Le code pin a été validé, on renvoie vers la page de login
         return HttpResponseClientRedirect("login_hardware?activation=1")
