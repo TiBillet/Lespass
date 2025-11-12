@@ -61,7 +61,7 @@
                     {% endif %}
 
                     {# Bouton admin : Ajouter un évènement #}
-                    {% if can_admin %}
+                    {% if profile.admin_this_tenant %}
                         <div class="ms-auto">
                             <button
                                 class="btn btn-sm btn-success"
