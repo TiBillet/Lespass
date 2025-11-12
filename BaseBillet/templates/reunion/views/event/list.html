@@ -87,7 +87,7 @@
     </main>
 
     {# Offcanvas admin pour la création rapide d'évènements #}
-    {% if can_admin %}
+    {% if profile.admin_this_tenant %}
     <style>
         #adminAddEventPanel { --bs-offcanvas-width: 100vw; }
         @media (min-width: 992px) { #adminAddEventPanel { --bs-offcanvas-width: 800px; } }
