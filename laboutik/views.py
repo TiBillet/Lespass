@@ -212,39 +212,37 @@ def pv_route(request):
 
 def hx_display_type_payment(request):
     dataPost = request.POST
-    tag_id_cm = dataPost.get("tag_id_cm")
     uuid_pv = dataPost.get("uuid_pv")
-    id_table = dataPost.get("id_table")
 
     # récupère uniquement les uuid articles
     uuids = method.post_filter(request.POST)
 
-    if len(uuids) > 0:
-        # obtenir le point de vente en fonction de son uuid
-        pv = mockData.get_pv_from_uuid(uuid_pv, data_pvs)
+    # obtenir le point de vente en fonction de son uuid
+    pv = mockData.get_pv_from_uuid(uuid_pv, data_pvs)
 
-        # retourne les moyens de paiement nécessaires et filtrés par moyens de paiement acceptés
-        moyens_paiement = method.selection_moyens_paiement(pv, uuids, request.POST)
+    # retourne les moyens de paiement nécessaires et filtrés par moyens de paiement acceptés
+    moyens_paiement = method.selection_moyens_paiement(pv, uuids, request.POST)
 
-        # import ipdb; ipdb.set_trace()
-        # calcul du total de l'addition
-        total = method.calcul_total_addition(pv, uuids, request.POST)
+    # import ipdb; ipdb.set_trace()
+    # calcul du total de l'addition
+    total = method.calcul_total_addition(pv, uuids, request.POST)
 
-        context = {
-            "moyens_paiement": moyens_paiement,
-            "currency_data": {"cc": "EUR", "symbol": "€", "name": "European Euro"},
-            "total": total,
-        }
+		# dev mock
+    mode_gerant = True
 
-        return render(request, "partial/hx_display_type_payment.html", context)
+		# dev mock (article consigne présent)
+    deposit_is_present = True
 
-    else:
-        # aucun article
-        context = {
-            "msg_type": "info",
-            "msg_content": _("Aucun article n'a été selectioné"),
-        }
-        return render(request, "components/messages.html", context)
+    context = {
+      "moyens_paiement": moyens_paiement,
+      "currency_data": {"cc": "EUR", "symbol": "€", "name": "European Euro"},
+      "total": total,
+			"mode_gerant": mode_gerant,
+      "deposit_is_present": deposit_is_present,
+			"comportement": pv['comportement']
+    }
+
+    return render(request, "partial/hx_display_type_payment.html", context)
 
 
 def hx_read_nfc(request):

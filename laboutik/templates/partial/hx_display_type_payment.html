@@ -10,7 +10,11 @@
 
 	<!-- espèce, pas une consigne -->
 	{% if 'espece' in moyens_paiement %}
-	<c-bt.paiement name='{% translate "ESPÈCE" %}' icon="fa-coins" hx-get="hx_confirm_payment?method=espece"/>
+	{% if deposit_is_present %}
+	<c-bt.paiement name='{% translate "ESPÈCE" %}' icon="fa-coins" hx-get="hx_confirm_payment?method=espece" />
+	{% else %}
+	<c-bt.paiement name='{% translate "ESPÈCE" %}' icon="fa-coins" hx-get="hx_payment"  hx-target="#messages" />
+	{% endif %}
 	{% endif %}
 
 	<!-- TODO: espèce, une consigne: espèce à rendre, depositIsPresent -->
@@ -19,15 +23,18 @@
 
 	<!-- carte bancaire -->
 	{% if 'carte_bancaire' in moyens_paiement %}
-	<c-bt.paiement name='{% translate "CB" %}' icon="fa-credit-card" hx-get="hx_confirm_payment?method=carte_bancaire"/>
+	<c-bt.paiement name='{% translate "CB" %}' icon="fa-credit-card" hx-get="hx_confirm_payment?method=carte_bancaire" />
 	{% endif %}
 
 	<!-- cheque -->
 	{% if 'CH' in moyens_paiement %}
-	<c-bt.paiement name='{% translate "CHÈQUE" %}' icon="fa-money-check" hx-get="hx_confirm_payment?method=CH"/>
+	<c-bt.paiement name='{% translate "CHÈQUE" %}' icon="fa-money-check" hx-get="hx_confirm_payment?method=CH" />
 	{% endif %}
 
-	<!-- bouton "OFFRIR"  en mode gérant uniquement masi pas pour le point de ventes "CASHLESS" -->
+	<!-- "OFFRIR" en mode gérant uniquement mais pas pour le point de ventes "CASHLESS" -->
+	{% if mode_gerant and comportement != 'C' %}
+	<c-bt.paiement name='{% translate "OFFRIR" %}' icon="fa-gift" hx-get="hx_confirm_payment?method=gift" />
+	{% endif %}
 
 	<!-- pas de moyens de paiement -->
 	{% if moyens_paiement|length == 0%}
@@ -35,7 +42,7 @@
 	{% endif %}
 
 	<!-- include bt_return.html -->
-	 <c-bt.return />
+	<c-bt.return />
 </div>
 
 <style>

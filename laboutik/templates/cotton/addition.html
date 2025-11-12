@@ -8,8 +8,11 @@
 		<div>{% translate "PRIX" %}</div>
 	</div>
 	<div id="addition-list"></div>
-	<!-- Attention aucun input dans #addition-form ne doit contenir "repid-" dans son attribut name 
-	 le formulaire est rempli automatiquement par article.js -->
+	<!-- Attention:
+	 - aucun input dans #addition-form ne doit contenir "repid-" dans son attribut name, 
+	 		le formulaire est rempli automatiquement par article.js
+	 - les attributs hx-post et hx-triger sont dynamic en fonction des étapes "paiement" et "affichage des moyens de paiement"
+	-->
 	<form id="addition-form" class="hide" hx-post="hx_display_type_payment" hx-trigger="validerPaiement"
 		hx-target="#messages" hx-swap="outerHTML" hx-include='[class="addition-include-data"]'
 		hx-on::after-request="hideAndEmptyElement('#confirm')"></form>
