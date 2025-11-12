@@ -1693,13 +1693,6 @@ class EventMVT(viewsets.ViewSet):
         context['active_tag'] = Tag.objects.filter(slug=tags[0]).first() if tags else None
         context['tags'] = tags
         context['search'] = search
-        # Affichage conditionnel du bouton d'ajout (admin uniquement)
-        try:
-            # Import retardé pour éviter les import cycles
-            from ApiBillet.permissions import TenantAdminPermissionWithRequest
-            context['can_admin'] = TenantAdminPermissionWithRequest(request)
-        except Exception:
-            context['can_admin'] = False
         context['dated_events'], context['paginated_info'] = self.federated_events_filter(tags=tags, search=search, page=page)
         # On renvoie la page en entier
         return render(request, "reunion/views/event/list.html", context=context)
