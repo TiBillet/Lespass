@@ -15,9 +15,40 @@
             <label for="message" class="form-label">{% trans "Message" %}</label>
             <textarea class="form-control" id="message" rows="3" required name="message"></textarea>
         </div>
+        <!-- Captcha léger anti-spam: question arithmétique -->
+        <div class="mb-3">
+            <label for="answer" class="form-label">
+                {% trans "Anti-spam" %} — {% trans "How much is" %}
+                <span id="captcha-x">0</span> + <span id="captcha-y">0</span> ?
+            </label>
+            <input type="number" class="form-control" id="answer" name="answer" required inputmode="numeric" pattern="[0-9]*">
+            <input type="hidden" id="captcha-hidden-x" name="x" value="0">
+            <input type="hidden" id="captcha-hidden-y" name="y" value="0">
+            <div class="form-text">{% trans "Please answer this simple question to prove you are human." %}</div>
+        </div>
     </div>
     <div class="p-3">
         <button type="submit" class="btn btn-primary d-block mb-3 w-100">{% trans "Send" %}</button>
         <a href="." class="btn btn-danger d-block">{% trans "Cancel" %}</a>
     </div>
 </form>
+
+<script>
+    (function() {
+        try {
+            // Petits nombres entre 1 et 9
+            var x = Math.floor(Math.random() * 9) + 1;
+            var y = Math.floor(Math.random() * 9) + 1;
+            var sx = document.getElementById('captcha-x');
+            var sy = document.getElementById('captcha-y');
+            var hx = document.getElementById('captcha-hidden-x');
+            var hy = document.getElementById('captcha-hidden-y');
+            if (sx) sx.textContent = x;
+            if (sy) sy.textContent = y;
+            if (hx) hx.value = x;
+            if (hy) hy.value = y;
+        } catch (e) {
+            // En cas d'erreur JS, on laisse les valeurs par défaut, la validation serveur bloquera
+        }
+    })();
+</script>

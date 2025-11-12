@@ -124,6 +124,24 @@ class ContactValidator(serializers.Serializer):
     email = serializers.EmailField()
     subject = serializers.CharField()
     message = serializers.CharField()
+    # Captcha arithmétique très simple: x + y == answer
+    x = serializers.IntegerField(required=True, min_value=0)
+    y = serializers.IntegerField(required=True, min_value=0)
+    answer = serializers.IntegerField(required=True)
+
+    def validate(self, attrs):
+        # Vérifie que la réponse correspond à la somme x + y
+        try:
+            x = int(attrs.get('x', 0))
+            y = int(attrs.get('y', 0))
+            answer = int(attrs.get('answer', -1))
+        except (TypeError, ValueError):
+            raise serializers.ValidationError({'answer': [_('Please answer the anti-spam question.')]})
+
+        if x + y != answer:
+            raise serializers.ValidationError({'answer': [_('Wrong answer to the anti-spam question.')]})
+
+        return attrs
 
 
 class TagValidator(serializers.Serializer):
