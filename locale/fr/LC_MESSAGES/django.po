@@ -3350,11 +3350,11 @@ msgstr ""
 
 #: BaseBillet/templates/reunion/forms/contact.html:21
 msgid "How much is"
-msgstr ""
+msgstr "Combien font"
 
 #: BaseBillet/templates/reunion/forms/contact.html:27
 msgid "Please answer this simple question to prove you are human."
-msgstr ""
+msgstr "Veuillez répondre à cette question pour prouver que vous êtes un être humain."
 
 #: BaseBillet/templates/reunion/forms/contact.html:31
 msgid "Send"
