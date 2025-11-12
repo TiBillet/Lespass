@@ -80,7 +80,9 @@ def is_membership(user, membership_product) -> bool:
 
 @register.filter
 def can_admin(user):
-    if user.is_superuser:
+    if user.is_anonymous:
+        return False
+    elif user.is_superuser:
         return True
 
     admin_this = False
