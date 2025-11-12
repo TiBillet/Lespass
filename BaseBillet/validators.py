@@ -1,7 +1,8 @@
 import logging
+import re
 from datetime import timedelta
 from decimal import Decimal
-import re
+from typing import Any, Dict, Optional, List
 
 import stripe
 from django.conf import settings
@@ -13,18 +14,19 @@ from django.utils.translation import gettext_lazy as _
 from django_tenants.utils import tenant_context, schema_context
 from rest_framework import serializers
 
+from Administration.utils import clean_html as admin_clean_html
 from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
 from AuthBillet.models import TibilletUser, Wallet
 from AuthBillet.utils import get_or_create_user
-from BaseBillet.models import Price, Product, OptionGenerale, Membership, Paiement_stripe, LigneArticle, Tag, Event, \
-    Reservation, PriceSold, Ticket, ProductSold, Configuration, ProductFormField, PromotionalCode, PaymentMethod
+from BaseBillet.models import Event, PostalAddress, Tag, Configuration
+from BaseBillet.models import Price, Product, OptionGenerale, Membership, Paiement_stripe, LigneArticle, Reservation, \
+    PriceSold, Ticket, ProductSold, ProductFormField, PromotionalCode, PaymentMethod
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from PaiementStripe.views import CreationPaiementStripe
+from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.utils import dround
 from root_billet.models import RootConfiguration
-from QrcodeCashless.models import CarteCashless
-from fedow_connect.fedow_api import FedowAPI
 
 logger = logging.getLogger(__name__)
 
@@ -896,3 +898,170 @@ class QrCodeScanPayNfcValidator(serializers.Serializer):
             raise serializers.ValidationError(_(f'Solde insuffisant. Il reste {dround(self.user_balance)} sur le portefeuille.'))
 
         return attrs
+
+
+
+
+
+class EventQuickCreateSerializer(serializers.Serializer):
+    """Serializer DRF pour la création rapide d'un évènement simple via l'offcanvas HTMX.
+
+    Champs en entrée (POST):
+      - name: str (obligatoire)
+      - datetime_start: str (input type="datetime-local") (obligatoire)
+      - datetime_end: str (optionnel)
+      - short_description: str (optionnel, 250 char max côté modèle)
+      - long_description: str (optionnel, HTML autorisé mais nettoyé comme dans l'admin)
+      - postal_address: pk (optionnel)
+      - tags: str (liste séparée par virgules/point-virgule)
+      - img: InMemoryUploadedFile (optionnel) — doit être passé via request.FILES
+
+    Comportements:
+      - Parse les datetimes comme des dates locales (naïves) et les localise dans le fuseau de Configuration.
+      - Valide que datetime_end >= datetime_start si renseigné.
+      - Nettoie long_description via l'utilitaire d'admin pour éviter les injections JS/HTML.
+      - Crée l'Event publié et rattache les tags (création automatique si nécessaires).
+      - Utilise request.user (contexte) pour remplir created_by.
+    """
+
+    name = serializers.CharField(allow_blank=False, trim_whitespace=True, max_length=200)
+    datetime_start = serializers.CharField(allow_blank=False)
+    datetime_end = serializers.CharField(required=False, allow_blank=True)
+    short_description = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=250)
+    long_description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    postal_address = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    tags = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    jauge_max = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    # L'image arrive dans files; on la récupère dans create via self.context
+
+    def _get_tz(self):
+        config = Configuration.get_solo()
+        import pytz
+        return pytz.timezone(getattr(config, 'fuseau_horaire', 'UTC'))
+
+    def _parse_dt_local(self, raw: Optional[str]):
+        if not raw:
+            return None
+        from datetime import datetime
+        dt = datetime.fromisoformat(raw)
+        # Si naïf, on localise dans le fuseau horaire de la configuration
+        if dt.tzinfo is None:
+            tz = self._get_tz()
+            dt = tz.localize(dt)
+        return dt
+
+    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+        errors: Dict[str, List[str]] = {}
+
+        # Datetimes
+        try:
+            dt_start = self._parse_dt_local(attrs.get('datetime_start'))
+        except Exception:
+            errors.setdefault('datetime_start', []).append("Format de date invalide. Veuillez utiliser le sélecteur de date.")
+            dt_start = None
+
+        try:
+            dt_end = self._parse_dt_local(attrs.get('datetime_end')) if attrs.get('datetime_end') else None
+        except Exception:
+            errors.setdefault('datetime_end', []).append("Format de date invalide. Veuillez utiliser le sélecteur de date.")
+            dt_end = None
+
+        if dt_start and dt_end and dt_end < dt_start:
+            errors.setdefault('datetime_end', []).append("La fin doit être postérieure au début.")
+
+        # Adresse
+        postal_address = None
+        addr_pk = attrs.get('postal_address')
+        if addr_pk:
+            try:
+                postal_address = PostalAddress.objects.get(pk=addr_pk)
+            except PostalAddress.DoesNotExist:
+                errors.setdefault('postal_address', []).append("Adresse sélectionnée introuvable.")
+
+        # Long description sanitation
+        ld = attrs.get('long_description')
+        attrs['long_description'] = admin_clean_html(ld)
+
+        # Jauge maximale (capacité)
+        raw_jauge = attrs.get('jauge_max')
+        jauge_value: Optional[int] = None
+        if raw_jauge not in (None, ""):
+            try:
+                jauge_value = int(str(raw_jauge).strip())
+                if jauge_value < 1:
+                    raise ValueError()
+            except Exception:
+                errors.setdefault('jauge_max', []).append("Veuillez indiquer un nombre entier positif pour la jauge ou laisser vide.")
+
+        # Si une jauge est renseignée, on exige l'existence d'un produit "réservation gratuite"
+        free_res_product = None
+        if jauge_value is not None:
+            try:
+                free_res_product = Product.objects.filter(
+                    categorie_article=Product.FREERES,
+                    publish=True,
+                    archive=False,
+                ).first()
+            except Exception:
+                free_res_product = None
+
+            if not free_res_product:
+                errors.setdefault('jauge_max', []).append(
+                    "Aucun produit de réservation gratuite n'a été trouvé. Merci de créer d'abord un produit de réservation gratuite dans l'administration."
+                )
+
+        if errors:
+            raise serializers.ValidationError(errors)
+
+        attrs['datetime'] = dt_start
+        attrs['end_datetime'] = dt_end
+        attrs['postal_address_obj'] = postal_address
+        attrs['jauge_value'] = jauge_value
+        attrs['free_res_product'] = free_res_product
+        return attrs
+
+    def create(self, validated_data: Dict[str, Any]) -> Event:
+        request = self.context.get('request')
+        name = validated_data.get('name').strip()
+        short_desc = (validated_data.get('short_description') or '').strip() or None
+        long_desc = validated_data.get('long_description') or None
+        postal_address = validated_data.get('postal_address_obj')  # peut être None -> remplacé au save
+        jauge_value = validated_data.get('jauge_value')
+        free_res_product: Optional[Product] = validated_data.get('free_res_product')
+
+        event = Event(
+            name=name,
+            datetime=validated_data['datetime'],
+            end_datetime=validated_data.get('end_datetime') or None,
+            short_description=short_desc,
+            long_description=long_desc,
+            postal_address=postal_address,
+            created_by=(request.user if request and getattr(request, 'user', None) and request.user.is_authenticated else None),
+            published=True,
+        )
+
+        # Image (si transmise)
+        if request and hasattr(request, 'FILES') and request.FILES.get('img'):
+            event.img = request.FILES['img']
+
+        # Capacité / jauge: si fournie, on l'applique et on affiche la jauge
+        if jauge_value is not None:
+            event.jauge_max = jauge_value
+            event.show_gauge = True
+
+        event.save()
+
+        # Tags
+        tags_input = self.initial_data.get('tags') if hasattr(self, 'initial_data') else None
+        if tags_input:
+            names = [t.strip() for t in re.split(r",|;", str(tags_input)) if t and t.strip()]
+            for tname in names:
+                # Ne pas utiliser "_" pour éviter d'écraser _() de traduction
+                tag_obj, created = Tag.objects.get_or_create(name=tname)
+                event.tag.add(tag_obj)
+
+        # Si jauge -> rattacher le produit de réservation gratuite à l'évènement
+        if jauge_value is not None and free_res_product:
+            event.products.add(free_res_product)
+
+        return event

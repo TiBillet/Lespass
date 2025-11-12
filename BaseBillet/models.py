@@ -1165,6 +1165,8 @@ class Event(models.Model):
                                         help_text=_("Second date / time optional"))
 
     created = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, verbose_name=_("Created by"))
+
     jauge_max = models.PositiveSmallIntegerField(default=50, verbose_name=_("Maximum capacity"))
     show_gauge = models.BooleanField(default=False, verbose_name=_("Show gauge"))
 
@@ -1178,7 +1180,6 @@ class Event(models.Model):
 
     short_description = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Short description"))
     long_description = models.TextField(blank=True, null=True, verbose_name=_("Long description"))
-
     is_external = models.BooleanField(default=False, verbose_name=_("External event"), help_text=_(
         "The event is handled outside of this platform (ex: Facebook event)."))
     full_url = models.URLField(blank=True, null=True)

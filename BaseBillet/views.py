@@ -45,14 +45,14 @@ from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, Product, Event, Tag, Paiement_stripe, Membership, Reservation, \
     FormbricksConfig, FormbricksForms, FederatedPlace, Carrousel, LigneArticle, PriceSold, \
-    Price, ProductSold, PaymentMethod
+    Price, ProductSold, PaymentMethod, PostalAddress
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, new_tenant_mailer, \
     contact_mailer, new_tenant_after_stripe_mailer, send_to_ghost_email, send_sale_to_laboutik, \
     send_payment_success_admin, send_payment_success_user, send_reservation_cancellation_user, \
     send_ticket_cancellation_user, send_email_generique, \
     send_membership_pending_admin, send_membership_pending_user, send_membership_payment_link_user
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
-    ReservationValidator, ContactValidator, QrCodeScanPayNfcValidator
+    ReservationValidator, ContactValidator, QrCodeScanPayNfcValidator, EventQuickCreateSerializer
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from TiBillet import settings
@@ -1693,6 +1693,13 @@ class EventMVT(viewsets.ViewSet):
         context['active_tag'] = Tag.objects.filter(slug=tags[0]).first() if tags else None
         context['tags'] = tags
         context['search'] = search
+        # Affichage conditionnel du bouton d'ajout (admin uniquement)
+        try:
+            # Import retardé pour éviter les import cycles
+            from ApiBillet.permissions import TenantAdminPermissionWithRequest
+            context['can_admin'] = TenantAdminPermissionWithRequest(request)
+        except Exception:
+            context['can_admin'] = False
         context['dated_events'], context['paginated_info'] = self.federated_events_filter(tags=tags, search=search, page=page)
         # On renvoie la page en entier
         return render(request, "reunion/views/event/list.html", context=context)
@@ -1910,12 +1917,84 @@ class EventMVT(viewsets.ViewSet):
         return redirect('/event/')
 
     def get_permissions(self):
-        # if self.action in ['create']:
-        #     permission_classes = [permissions.IsAuthenticated]
-        # else:
-        permission_classes = [permissions.AllowAny]
+        # Permissions spécifiques pour les actions d'administration (création d'évènement simple)
+        if self.action in ['admin_add_form', 'admin_create']:
+            permission_classes = [TenantAdminPermission]
+        else:
+            permission_classes = [permissions.AllowAny]
         return [permission() for permission in permission_classes]
 
+    @action(detail=False, methods=['GET'])
+    def admin_add_form(self, request: HttpRequest):
+        """
+        Offcanvas de création rapide d'un évènement SANS billetterie (gratuit ou sans réservation payante).
+        - Accessible uniquement aux admins du tenant
+        - Préremplit l'adresse avec la valeur par défaut de la Configuration
+        - Propose l'autocomplétion des tags (datalist), avec création automatique côté serveur
+        """
+        context = get_context(request)
+        config = Configuration.get_solo()
+        context.update({
+            'default_address': config.postal_address,
+            'addresses': PostalAddress.objects.all().order_by('name', 'address_locality', 'postal_code'),
+            'all_tags': Tag.objects.all().order_by('name'),
+        })
+        return render(request, "reunion/views/event/partial/admin_add_form.html", context=context)
+
+    @action(detail=False, methods=['POST'])
+    def admin_create(self, request: HttpRequest):
+        """
+        Crée un évènement simple à partir du formulaire Offcanvas (HTMX).
+        Champs supportés:
+        - name, datetime_start, datetime_end, short_description, long_description
+        - postal_address (pk) optionnel
+        - img (image) optionnelle
+        - tags (liste séparée par des virgules)
+        """
+        # Utilise un Serializer DRF pour valider, nettoyer et créer l'évènement
+        serializer = EventQuickCreateSerializer(data=request.POST, context={'request': request})
+        if not serializer.is_valid():
+            # Transformer les erreurs structurées du serializer en liste simple FALC
+            form_errors = []
+            for field, msgs in serializer.errors.items():
+                if isinstance(msgs, (list, tuple)):
+                    for msg in msgs:
+                        form_errors.append(str(msg))
+                else:
+                    form_errors.append(str(msgs))
+
+            context = get_context(request)
+            context.update({
+                'form_errors': form_errors,
+                'default_address': Configuration.get_solo().postal_address,
+                'addresses': PostalAddress.objects.all().order_by('name', 'address_locality', 'postal_code'),
+                'all_tags': Tag.objects.all().order_by('name'),
+                'prefill': {
+                    'name': request.POST.get('name', ''),
+                    'datetime_start': request.POST.get('datetime_start', ''),
+                    'datetime_end': request.POST.get('datetime_end', ''),
+                    'short_description': request.POST.get('short_description', ''),
+                    'long_description': request.POST.get('long_description', ''),
+                    'postal_address': request.POST.get('postal_address', ''),
+                    'tags': request.POST.get('tags', ''),
+                    'jauge_max': request.POST.get('jauge_max', ''),
+                }
+            })
+            return render(request, "reunion/views/event/partial/admin_add_form.html", context=context, status=400)
+
+        event = serializer.save()
+
+        # Message succès utilisateur
+        try:
+            messages.add_message(request, messages.SUCCESS, _("Évènement créé !"))
+        except MessageFailure:
+            pass
+
+        context = get_context(request)
+        context.update({'event': event})
+        # Réponse HTMX: remplace le contenu de l'offcanvas par un message de succès
+        # return render(request, "reunion/views/event/partial/admin_add_success.html", context=context)
+        return HttpResponseClientRedirect("/event/")
 
 '''
 @require_GET

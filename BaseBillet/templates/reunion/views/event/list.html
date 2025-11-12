@@ -59,6 +59,24 @@
                             <i class="bi bi-x-circle"></i> {% translate 'Effacer le filtre' %}
                         </a>
                     {% endif %}
+
+                    {# Bouton admin : Ajouter un évènement #}
+                    {% if can_admin %}
+                        <div class="ms-auto">
+                            <button
+                                class="btn btn-sm btn-success"
+                                type="button"
+                                hx-get="/event/admin_add_form/"
+                                hx-target="#offcanvas-event-admin"
+                                hx-swap="innerHTML"
+                                data-bs-toggle="offcanvas"
+                                data-bs-target="#adminAddEventPanel"
+                                aria-controls="adminAddEventPanel">
+                                <i class="bi bi-plus-circle"></i>
+                                {% translate 'Ajouter un évènement' %}
+                            </button>
+                        </div>
+                    {% endif %}
                 </div>
             </div>
         </section>
@@ -67,4 +85,21 @@
     <main class="container-lg" id="event_list">
         {% include "reunion/views/event/partial/list.html" %}
     </main>
+
+    {# Offcanvas admin pour la création rapide d'évènements #}
+    {% if can_admin %}
+    <style>
+        #adminAddEventPanel { --bs-offcanvas-width: 100vw; }
+        @media (min-width: 992px) { #adminAddEventPanel { --bs-offcanvas-width: 800px; } }
+    </style>
+    <div class="offcanvas-start offcanvas" tabindex="-1" id="adminAddEventPanel" aria-labelledby="adminAddEventPanelLabel">
+        <div class="offcanvas-header">
+            <h5 class="offcanvas-title" id="adminAddEventPanelLabel">{% translate 'Ajouter un évènement' %}</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% trans 'Close' %}"></button>
+        </div>
+        <div class="offcanvas-body" id="offcanvas-event-admin">
+            {# Le contenu du formulaire est chargé ici via HTMX #}
+        </div>
+    </div>
+    {% endif %}
 {% endblock %}

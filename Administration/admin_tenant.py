@@ -4,7 +4,7 @@ import re
 from datetime import timedelta
 from decimal import Decimal
 from typing import Any, Optional, Dict
-from unicodedata import category
+from urllib.parse import urlencode
 from uuid import UUID
 
 import requests
@@ -14,7 +14,6 @@ from django.conf import settings
 from django.contrib import admin
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from django.contrib.admin import AdminSite
 from django.core.signing import TimestampSigner
 from django.db import models, connection, IntegrityError
 from django.db.models import Model, Count, Q, Prefetch
@@ -24,14 +23,15 @@ from django.shortcuts import redirect, get_object_or_404
 from django.template.defaultfilters import slugify
 from django.template.loader import render_to_string
 from django.urls import reverse, re_path
-from django.views.decorators.csrf import csrf_protect
-from django.views.decorators.http import require_POST
 from django.utils import timezone
-from django_tenants.utils import schema_context, tenant_context
 from django.utils.html import format_html
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
+from django.views.decorators.csrf import csrf_protect
+from django.views.decorators.http import require_POST
+from django_htmx.http import HttpResponseClientRedirect
+from django_tenants.utils import tenant_context
 from import_export.admin import ImportExportModelAdmin, ExportActionModelAdmin
 from rest_framework import status
 from rest_framework.response import Response
@@ -63,9 +63,8 @@ from unfold.widgets import (
     UnfoldAdminTextInputWidget,
 )
 
-from django_htmx.http import HttpResponseClientRedirect
-
 from Administration.importers.ticket_exporter import TicketExportResource
+from Administration.utils import clean_html
 from ApiBillet.permissions import TenantAdminPermissionWithRequest, RootPermissionWithRequest
 from ApiBillet.serializers import get_or_create_price_sold
 from AuthBillet.models import HumanUser, TibilletUser, Wallet
@@ -77,82 +76,20 @@ from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Pai
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
     webhook_membership, create_ticket_pdf, ticket_celery_mailer, send_ticket_cancellation_user, \
     send_reservation_cancellation_user, send_sale_to_laboutik
-from BaseBillet.validators import ReservationValidator
 from Customers.models import Client
 from MetaBillet.models import WaitingConfiguration
 from crowds.models import Contribution, Vote, Participation, CrowdConfig, Initiative
-from fedow_connect.fedow_api import AssetFedow, FedowAPI
+from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
 from fedow_connect.utils import dround
-from fedow_connect.validators import validate_hex8
-
 from fedow_public.models import AssetFedowPublic as Asset, AssetFedowPublic
-import nh3
-from urllib.parse import urlparse, urlencode
 
 # from simple_history.admin import SimpleHistoryAdmin
 
 logger = logging.getLogger(__name__)
 
-## SANITIZER
 
 
-ALLOWED_TAGS = [
-    "p", "br", "strong", "em", "u",
-    "ul", "ol", "li",
-    "blockquote", "code", "pre",
-    "h1", "h2", "h3", "h4", "h5", "h6",
-    "a", "img", "span"
-]
-ALLOWED_ATTRIBUTES = {
-    "a": ["href", "title", "rel"],
-    "img": ["src", "alt", "title"],
-}
-
-# Disallow image URLs pointing to potentially dangerous internal routes
-DISALLOWED_IMAGE_PATH_PREFIXES = (
-    "/admin",
-    "/logout",
-    "/deconnexion",
-    "/signout",
-)
-
-
-def _attribute_filter(tag: str, attr: str, value: str) -> Optional[str]:
-    """Filter attributes during sanitization.
-    - For <img src>, remove the attribute if it targets problematic internal routes
-      like /admin or logout endpoints (even if relative URLs).
-    Returning None removes the attribute.
-    """
-    try:
-        if tag == "img" and attr == "src" and isinstance(value, str):
-            parsed = urlparse(value)
-            path = (parsed.path or "").lower()
-            # Only consider regular http/https/relative URLs; schemes are filtered elsewhere
-            for prefix in DISALLOWED_IMAGE_PATH_PREFIXES:
-                if path.startswith(prefix):
-                    return None  # drop src attribute
-        return value
-    except Exception:
-        # On any parsing error, drop the attribute to be safe
-        return None
-
-
-def clean_html(html: str) -> str:
-    # Use nh3 (ammonia) to sanitize HTML; explicitly restrict URL schemes and strip comments.
-    url_schemes = {"http", "https", "mailto", "tel"}
-    # nh3 expects sets for tags and attributes values
-    tags = set(ALLOWED_TAGS)
-    attributes = {k: set(v) for k, v in ALLOWED_ATTRIBUTES.items()}
-    return nh3.clean(
-        html,
-        tags=tags,
-        attributes=attributes,
-        url_schemes=url_schemes,
-        attribute_filter=_attribute_filter,
-        strip_comments=True,
-        link_rel=None,  # allow existing rel and don't auto-insert
-    )
 
 
 def sanitize_textfields(instance: models.Model) -> None:
