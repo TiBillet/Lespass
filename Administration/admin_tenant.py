@@ -1655,6 +1655,7 @@ class MembershipAddForm(ModelForm):
         return super().save(commit=commit)
 
 
+
 class MembershipChangeForm(ModelForm):
     # Le formulaire pour changer une adhésion
     class Meta:

@@ -1478,8 +1478,12 @@ def refill_from_lespass_to_user_wallet_from_price_solded(ligne_article_pk):
                 from fedow_connect.models import FedowConfig
                 if FedowConfig.get_solo().can_fedow():
                     logger.info("    TASK ADHESION PAID -> Fedow reward enabled: sending tokens to user wallet")
-                    checkout_session_id_stripe = ligne_article.paiement_stripe.checkout_session_id_stripe
-                    invoice_stripe_id = ligne_article.paiement_stripe.invoice_stripe # on est peut être sur un renouvellement
+
+                    checkout_session_id_stripe, invoice_stripe_id = None, None # Restera None si adhésion réalisé depuis l'admin
+                    if ligne_article.paiement_stripe :
+                        checkout_session_id_stripe = ligne_article.paiement_stripe.checkout_session_id_stripe
+                        invoice_stripe_id = ligne_article.paiement_stripe.invoice_stripe # on est peut être sur un renouvellement
+
                     metadata = {
                         "ligne_article_uuid": str(ligne_article.uuid),
                         "membership_uuid": str(membership.uuid),
