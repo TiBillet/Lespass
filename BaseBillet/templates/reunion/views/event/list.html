@@ -37,7 +37,7 @@
                         {% translate 'Filtrer par tags' %}:
                     </span>
                     {% for tag in all_tags %}
-                        <a class="badge rounded-pill text-decoration-none me-1 mb-1"
+                        <a class="btn btn-sm mb-1"
                            style="{{ tag.style_attr }}"
                            href="?tag={{ tag.slug }}{% if search %}&search={{ search|urlencode }}{% endif %}"
                            hx-get="?tag={{ tag.slug }}{% if search %}&search={{ search|urlencode }}{% endif %}"
@@ -45,7 +45,7 @@
                            hx-swap="innerHTML"
                            hx-push-url="true"
                            aria-label="{% blocktrans %}Filtrer par le tag {{ tag.name }}{% endblocktrans %}">
-                            <i class="bi bi-tag" aria-hidden="true"></i>
+{#                            <i class="bi bi-tag" aria-hidden="true"></i>#}
                             {{ tag.name }}
                         </a>
                     {% empty %}

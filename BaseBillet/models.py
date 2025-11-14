@@ -1065,7 +1065,7 @@ class Price(models.Model):
                                              related_name="adhesion_obligatoire",
                                              verbose_name=_("Subscription required"),
                                              help_text=_(
-                                                 "Rate available to suscribers only: "),
+                                                 "Rate available to suscribers only. Only works for reservation-type products. The rate will be visible if the user is logged in AND has paid their membership fees."),
                                              blank=True, null=True)
 
     NA, YEAR, MONTH = 'N', 'Y', 'M'
