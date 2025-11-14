@@ -57,6 +57,9 @@ def update_membership_state_after_stripe_paiement(ligne_article):
         contribution = dround(checkout_session['amount_total'])
         membership.contribution_value = contribution
 
+    if not membership.first_contribution:
+        membership.first_contribution = timezone.now()
+
     membership.last_contribution = timezone.now()
     membership.stripe_paiement.add(paiement_stripe)
 
@@ -70,6 +73,19 @@ def update_membership_state_after_stripe_paiement(ligne_article):
     if paiement_stripe.subscription:
         membership.stripe_id_subscription = paiement_stripe.subscription
         membership.status = Membership.AUTO
+
+        # Si c'est un paiement récurrent :
+        if price.recurring_payment :
+            membership.current_iteration += 1
+
+            # On dit a stripe d'annuler les prochaines itérations
+            if membership.max_iteration:
+                if membership.current_iteration == membership.max_iteration:
+                    subscription = stripe.Subscription.modify(
+                        f"{checkout_session.subscription}",
+                        stripe_account=Configuration.get_solo().get_stripe_connect_account(),
+                        cancel_at_period_end=True
+                    )
 
     membership.save()
     logger.info(f"    update_membership_state_after_paiement : Mise à jour de la fiche membre OK")

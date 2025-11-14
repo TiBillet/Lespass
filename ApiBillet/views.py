@@ -1062,7 +1062,7 @@ class Webhook_stripe(APIView):
                 if paiement_stripe.traitement_en_cours:
                     return Response(f"Traitement en cours : {paiement_stripe.get_status_display()}", status=status.HTTP_208_ALREADY_REPORTED)
 
-                paiement_stripe.update_checkout_status()
+                paiement_stripe.update_checkout_status() # mets à jour l'objet stripe.subscription si besoin
                 paiement_stripe.refresh_from_db()
                 return Response(f"Traité par /api/Webhook_stripe : {paiement_stripe.get_status_display()}", status=status.HTTP_200_OK)
 

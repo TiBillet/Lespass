@@ -689,6 +689,7 @@ class MembershipValidator(serializers.Serializer):
                 logger.info("max per user")
                 raise serializers.ValidationError(_(f'This product is limited in quantity per person.'))
 
+
         ### CREATION DE LA FICHE MEMBRE
         # Il peut y avoir plusieurs adhésions pour le même user (ex : parent/enfant)
         membership = Membership.objects.create(
@@ -697,6 +698,9 @@ class MembershipValidator(serializers.Serializer):
             contribution_value=custom_amount,
             # None si pas de contribution value, sera rempli par la validation du paiement
         )
+
+        if self.price.recurring_payment and self.price.iteration :
+            membership.max_iteration = self.price.iteration
 
         membership.first_name = attrs['firstname']
         membership.last_name = attrs['lastname']

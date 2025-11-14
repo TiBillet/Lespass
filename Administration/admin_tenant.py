@@ -1159,7 +1159,7 @@ class PriceChangeForm(ModelForm):
                 self.fields['recurring_payment'].widget = HiddenInput()
                 self.fields['iteration'].widget = HiddenInput()
                 self.fields['manual_validation'].widget = HiddenInput()
-                # self.fields['product'].widget = HiddenInput() # caché sauf si bouton + en haut a droite
+                self.fields['product'].widget = HiddenInput() # caché sauf si bouton + en haut a droite
                 # Filtrage des produits : uniquement des produits adhésions.
                 # Possible facilement car Foreign Key (voir get_search_results dans ProductAdmin)
                 self.fields['adhesion_obligatoire'].queryset = Product.objects.filter(
@@ -1167,7 +1167,7 @@ class PriceChangeForm(ModelForm):
                     archive=False,
                 )
             elif instance.product.categorie_article == Product.ADHESION : # si c'est un produit qui n'est pas l'adhésion
-                # self.fields['product'].widget = HiddenInput() # caché sauf si bouton + en haut a droite
+                self.fields['product'].widget = HiddenInput() # caché sauf si bouton + en haut a droite
                 self.fields['adhesion_obligatoire'].widget = HiddenInput()
 
         except AttributeError as e :
@@ -1371,7 +1371,7 @@ class is_tenant_admin(admin.SimpleListFilter):
             ).distinct()
 
 
-class MembershipValid(admin.SimpleListFilter):
+class UserWithMembershipValid(admin.SimpleListFilter):
     # Human-readable title which will be displayed in the
     # right admin sidebar just above the filter options.
     title = _("Valid subscription")
@@ -1469,7 +1469,7 @@ class HumanUserAdmin(ModelAdmin):
     list_filter = [
         "is_active",
         "email_error",
-        MembershipValid,
+        UserWithMembershipValid,
         "is_staff",
         "email_valid",
         "email_error",
@@ -1694,7 +1694,6 @@ class MembershipChangeForm(ModelForm):
             'custom_form',
         )
 
-
 # Le petit badge route a droite du titre "adhésion"
 def adhesion_badge_callback(request):
     # Recherche de la quantité de nouvelles adhésions ces 14 dernièrs jours
@@ -1756,17 +1755,17 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
         'options',
         'last_contribution',
         'deadline',
-        'is_valid',
+        'display_is_valid',
         'status',
         'payment_method',
-        'state_display',
+        # 'state_display',
         # 'commentaire',
     )
 
     ordering = ('-date_added',)
     search_fields = ('user__email', 'user__first_name', 'user__last_name', 'card_number', 'last_contribution',
                      'custom_form')
-    list_filter = ['price__product', 'last_contribution', 'deadline', 'state', ]
+    list_filter = ['price__product', 'last_contribution', 'deadline', ]
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -1910,10 +1909,14 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
 
         return redirect(f"{add_url}?{query}")
 
-    @display(description=_("State"))
-    def state_display(self, instance: Membership):
-        # Show human-readable label for state, possibly with icon/color later
-        return instance.get_state_display()
+    @display(description=_("Valid"), boolean=True)
+    def display_is_valid(self, instance: Membership):
+        return instance.is_valid()
+
+    # @display(description=_("State"))
+    # def state_display(self, instance: Membership):
+        #### Show human-readable label for state, possibly with icon/color later
+        # return instance.get_state_display()
 
     def has_custom_actions_detail_permission(self, request, object_id):
         return TenantAdminPermissionWithRequest(request)

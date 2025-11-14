@@ -2342,25 +2342,22 @@ class Paiement_stripe(models.Model):
             if checkout_session.mode == 'subscription':
                 if bool(checkout_session.subscription):
                     self.subscription = checkout_session.subscription
-
-                    # import ipdb; ipdb.set_trace()
-
-                    # Ajout des metadata du checkout pour les futur webhook de renouvellement
+                    metadata = checkout_session.metadata
+                    # La récurrence est géré dans le webhook de renouvellement.
+                    # Ajout des metadata du checkout pour les futurs webhook de renouvellement
                     subscription = stripe.Subscription.modify(
                         f"{checkout_session.subscription}",
                         stripe_account=Configuration.get_solo().get_stripe_connect_account(),
-                        metadata=checkout_session.metadata,
+                        metadata=metadata,
                     )
+
                     self.invoice_stripe = subscription.latest_invoice
 
         else:
             self.status = Paiement_stripe.CANCELED
 
-        # cela va déclencher des pre_save
-
-        # le .save() lance le process pre_save BaseBillet.models.send_to_cashless
+        # le .save() lance le process BaseBillet.triggers.TRIGGER_LigneArticlePaid_ActionByCategorie
         # qui modifie le status de chaque ligne
-        # et envoie les informations au serveur cashless.
 
         # si validé par le serveur cashless, alors la ligne sera VALID.
         # Si toute les lignes sont VALID, le paiement_stripe sera aussi VALID
@@ -2500,7 +2497,9 @@ class Membership(models.Model):
     date_added = models.DateTimeField(auto_now_add=True)
 
     last_contribution = models.DateTimeField(null=True, blank=True, verbose_name=_("Payment date"))
-    first_contribution = models.DateTimeField(null=True, blank=True)  # encore utilisé ? On utilise last plutot ?
+    first_contribution = models.DateTimeField(null=True, blank=True) # utilisé dans le cas des iterations max
+    max_iteration = models.IntegerField(null=True, blank=True)
+    current_iteration = models.IntegerField(null=True, blank=True)
 
     last_action = models.DateTimeField(auto_now=True, verbose_name=_("Presence"))
     contribution_value = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True,
@@ -2508,7 +2507,7 @@ class Membership(models.Model):
     payment_method = models.CharField(max_length=2, choices=PaymentMethod.choices, blank=True, null=True,
                                       verbose_name=_("Payment method"))
 
-    deadline = models.DateTimeField(null=True, blank=True, verbose_name=_("Subscription end"))
+    deadline = models.DateTimeField(null=True, blank=True, verbose_name=_("End of current subscription"))
 
     first_name = models.CharField(
         db_index=True,
@@ -2550,15 +2549,16 @@ class Membership(models.Model):
 
     ### Pour le cas des adhésions à validation manuelle
     # need_admin_validation = models.BooleanField(default=False)
-    ADMIN_CANCELED, ADMIN_VALID, ADMIN_WAITING, PAID_BY_USER, NO_ADMIN_VALID = "CA", "VA", "WA", "PA", "AU"
+    WAITING_PAYMENT, ADMIN_CANCELED, ADMIN_VALID, ADMIN_WAITING, PAID_BY_USER, NO_ADMIN_VALID = "WP", "CA", "VA", "WA", "PA", "AU"
     STATE_CHOICES = [
+        (WAITING_PAYMENT, _("Waiting for payment")),
         (ADMIN_CANCELED, _('Cancelled')),
         (ADMIN_WAITING, _('Waiting for admin validation')),
         (ADMIN_VALID, _('Confirmed by admin, waiting for payment')),
         (PAID_BY_USER, _('Paid by user')),
         (NO_ADMIN_VALID, _('Confirmed by system')),
     ]
-    state = models.CharField(max_length=2, choices=STATE_CHOICES, default=NO_ADMIN_VALID,
+    state = models.CharField(max_length=2, choices=STATE_CHOICES, default=WAITING_PAYMENT,
                              verbose_name=_("State"))
 
 
@@ -2616,17 +2616,19 @@ class Membership(models.Model):
                 last_day = calendar.monthrange(dt.year, dt.month)[1]
                 deadline = datetime(dt.year, dt.month, last_day, 23, 59, 59, 999999, tzinfo=tenant_tzinfo)
             elif self.price.subscription_type == Price.YEAR:
-                deadline = dt + timedelta(days=365)
+                deadline = dt + relativedelta(months=12)
             elif self.price.subscription_type == Price.CIVIL:
-                # jusqu'au 31 decembre de cette année
-                deadline = datetime.strptime(f'{dt.year}-12-31', '%Y-%m-%d')
+                # jusqu'au 31 decembre de cette année (tz-aware, fin de journée)
+                deadline = datetime(dt.year, 12, 31, 23, 59, 59, 999999, tzinfo=tenant_tzinfo)
             elif self.price.subscription_type == Price.SCHOLAR:
                 # Si la date de contribustion est avant septembre, alors on prend l'année de la contribution.
                 if dt.month < 9:
-                    deadline = datetime.strptime(f'{dt.year}-08-31', '%Y-%m-%d')
+                    year = dt.year
                 # Si elle est après septembre, on prend l'année prochaine
                 else:
-                    deadline = datetime.strptime(f'{dt.year + 1}-08-31', '%Y-%m-%d')
+                    year = dt.year + 1
+                # Fin de l'année scolaire au 31 août 23:59:59.999999 (tz-aware)
+                deadline = datetime(year, 8, 31, 23, 59, 59, 999999, tzinfo=tenant_tzinfo)
         self.deadline = deadline
         self.save()
         return deadline
@@ -2635,6 +2637,67 @@ class Membership(models.Model):
         if not self.deadline:
             return self.set_deadline()
         return self.deadline
+
+    def get_iteration_end_date(self, dt0=None):
+        # Si pas de récurrence, pas d'itération max
+        if not self.price or not self.price.recurring_payment:
+            return None
+
+        iteration: int | None = getattr(self.price, 'iteration', None)
+        if not iteration or iteration < 1:
+            return None
+
+        # Date de premier paiement
+        if not dt0: # peut être appellé avec l'argument lors du retour webhook de stripe
+            dt0 = self.first_contribution
+        if not dt0:
+            return None
+
+        # Pour calculer la date de fin de la dernière itération, on réplique
+        # la logique de set_deadline, en l'appliquant sur la "dernière"
+        # contribution théorique.
+        tenant_tzinfo = Configuration.get_solo().get_tzinfo()
+
+        # Raccourcis
+        sub = self.price.subscription_type
+
+        # Cas simples: on additionne la période "iteration" fois à la
+        # première contribution (car set_deadline fait dt + période).
+        if sub == Price.HOUR:
+            return dt0 + timedelta(hours=iteration)
+        if sub == Price.DAY:
+            return dt0 + timedelta(days=iteration)
+        if sub == Price.WEEK:
+            return dt0 + timedelta(weeks=iteration)
+        if sub == Price.MONTH:
+            return dt0 + relativedelta(months=iteration)
+        if sub == Price.YEAR:
+            return dt0 + relativedelta(months=12 * iteration)
+
+        # Cas spéciaux alignés sur set_deadline
+        if sub == Price.CAL_MONTH:
+            # Dernière contribution se produit le (iteration-1)-ième mois après dt0
+            target = dt0 + relativedelta(months=iteration - 1)
+            last_day = calendar.monthrange(target.year, target.month)[1]
+            return datetime(target.year, target.month, last_day, 23, 59, 59, 999999, tzinfo=tenant_tzinfo)
+
+        if sub == Price.CIVIL:
+            # Fin au 31/12 de l'année de la dernière itération, tz-aware fin de journée
+            target_year = dt0.year + (iteration - 1)
+            return datetime(target_year, 12, 31, 23, 59, 59, 999999, tzinfo=tenant_tzinfo)
+
+        if sub == Price.SCHOLAR:
+            # Année scolaire se terminant le 31/08.
+            # Si contribution avant septembre -> fin 31/08 de la même année
+            # Sinon -> 31/08 de l'année suivante. Puis + (iteration-1) années scolaires.
+            base_year = dt0.year if dt0.month < 9 else dt0.year + 1
+            target_year = base_year + (iteration - 1)
+            # Retour tz-aware à la fin de la journée
+            return datetime(target_year, 8, 31, 23, 59, 59, 999999, tzinfo=tenant_tzinfo)
+
+        # Par défaut (NA ou autre): aucune itération applicable
+        return None
+        
 
     def is_valid(self):
         if self.get_deadline():
