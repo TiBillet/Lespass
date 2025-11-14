@@ -118,7 +118,8 @@ class CreationPaiementStripe():
     def _mode(self):
         """
         Mode Stripe payment ou subscription
-        Si c'est une subscription avec itération, on le modifiera dans le retour stripe
+        Si c'est une subscription avec une récurrence max, on le modifiera dans le retour stripe
+        Le controleur pour la récurrence :
         :return: string
         """
         mode = 'payment'

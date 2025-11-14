@@ -1030,6 +1030,14 @@ class Webhook_stripe(APIView):
         except KeyError:
             pass
 
+
+        ##################
+        # 3 Type de webhook possible :
+        # - Checkout session completed.
+        # - Transfert stripe compte à compte
+        # - invoice paid pour un paiement récurrent
+        ##################
+
         # c'est une requete depuis un webhook stripe
         if payload.get('type') == "checkout.session.completed":
             if "return_refill_wallet" in payload["data"]["object"]["success_url"]:
@@ -1122,17 +1130,6 @@ class Webhook_stripe(APIView):
             # send_stripe_transfert_to_laboutik(payload)
 
 
-        # Prélèvement automatique d'un abonnement :
-        # elif payload.get('type') == "customer.subscription.updated":
-        #     # on récupère le don dans le paiement récurent si besoin
-        #     logger.info(f"Webhook_stripe customer.subscription.updated : {payload['data']['object']['id']}")
-        #     logger.info(f"")
-        #     logger.info(f"")
-        #     logger.info(f"{payload}")
-        #     logger.info(f"")
-        #     logger.info(f"")
-        #
-
         elif payload.get('type') == "invoice.paid": # Les abonnements
             # logger.info(f" ")
             # logger.info(payload)
@@ -1191,11 +1188,3 @@ class Webhook_stripe(APIView):
         # logger.info(f"Webhook stripe bien reçu, mais aucune action lancée. --> {payload}")
         return Response('Webhook stripe bien reçu, mais aucune action lancée.', status=status.HTTP_207_MULTI_STATUS)
 
-    # def get(self, request, uuid_paiement):
-    #     logger.info("*" * 30)
-    #     logger.info(f"{datetime.now()} - Webhook_stripe GET : {uuid_paiement}")
-    #     logger.info("*" * 30)
-    #
-    #     paiement_stripe = get_object_or_404(Paiement_stripe,
-    #                                         uuid=uuid_paiement)
-    #     return paiment_stripe_validator(request, paiement_stripe)

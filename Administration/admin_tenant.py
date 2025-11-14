@@ -1125,7 +1125,15 @@ class PriceChangeForm(ModelForm):
             # if data.get('free_price'):
             #     raise forms.ValidationError(_("Un tarif ne peut être récurent et libre."), code="invalid")
 
-            product: Product = self.cleaned_data['product']
+            try :
+                product = self.instance.product # on vient de modifier, il existe déja
+            except Exception as e :
+                logger.info(e)
+                product: Product = self.cleaned_data['product'] # pour le add
+            except Exception as e :
+                raise e
+
+
             if product.categorie_article != Product.ADHESION:
                 raise forms.ValidationError(
                     _("Un tarif en mode paiement récurrent doit avoir un produit de type adhésion."), code="invalid")
@@ -1154,7 +1162,7 @@ class PriceChangeForm(ModelForm):
                 self.fields['recurring_payment'].widget = HiddenInput()
                 self.fields['iteration'].widget = HiddenInput()
                 self.fields['manual_validation'].widget = HiddenInput()
-                self.fields['product'].widget = HiddenInput() # caché sauf si bouton + en haut a droite
+                # self.fields['product'].widget = HiddenInput() # caché sauf si bouton + en haut a droite
                 # Filtrage des produits : uniquement des produits adhésions.
                 # Possible facilement car Foreign Key (voir get_search_results dans ProductAdmin)
                 self.fields['adhesion_obligatoire'].queryset = Product.objects.filter(
@@ -1162,12 +1170,15 @@ class PriceChangeForm(ModelForm):
                     archive=False,
                 )
             elif instance.product.categorie_article == Product.ADHESION : # si c'est un produit qui n'est pas l'adhésion
-                self.fields['product'].widget = HiddenInput() # caché sauf si bouton + en haut a droite
+                # self.fields['product'].widget = HiddenInput() # caché sauf si bouton + en haut a droite
                 self.fields['adhesion_obligatoire'].widget = HiddenInput()
 
+        except AttributeError as e :
+            # NoneType' object has no attribute 'product
+            logger.info(f"Formulaire add : {e} ")
         except Exception as e :
             logger.error(f"Error in PriceChangeForm __init__ : {e}")
-            pass
+            raise e
 
 
         client: Client = connection.tenant

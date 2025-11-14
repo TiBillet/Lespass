@@ -2311,6 +2311,10 @@ class Paiement_stripe(models.Model):
         return checkout_session
 
     def update_checkout_status(self) -> str:
+        """
+        Fonction qui met à jour le statut juste après le webhook stripe de paiement reçu.
+        """
+
         self.refresh_from_db()
         if self.status == Paiement_stripe.VALID:
             return self.status
@@ -2339,10 +2343,7 @@ class Paiement_stripe(models.Model):
                 if bool(checkout_session.subscription):
                     self.subscription = checkout_session.subscription
 
-                    # subscription = stripe.Subscription.retrieve(
-                    #     checkout_session.subscription,
-                    #     stripe_account=Configuration.get_solo().get_stripe_connect_account()
-                    # )
+                    # import ipdb; ipdb.set_trace()
 
                     # Ajout des metadata du checkout pour les futur webhook de renouvellement
                     subscription = stripe.Subscription.modify(
