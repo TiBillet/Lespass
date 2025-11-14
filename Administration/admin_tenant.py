@@ -17,7 +17,7 @@ from django.core.exceptions import ValidationError
 from django.core.signing import TimestampSigner
 from django.db import models, connection, IntegrityError
 from django.db.models import Model, Count, Q, Prefetch
-from django.forms import ModelForm, Form
+from django.forms import ModelForm, Form, HiddenInput
 from django.http import HttpResponse, HttpRequest, HttpResponseRedirect
 from django.shortcuts import redirect, get_object_or_404
 from django.template.defaultfilters import slugify
@@ -1100,7 +1100,7 @@ class PriceChangeForm(ModelForm):
         model = Price
         fields = (
             'name',
-            'product',
+            # 'product',
             'prix',
             'free_price',
             'subscription_type',
@@ -1108,9 +1108,9 @@ class PriceChangeForm(ModelForm):
             'iteration',
             'order',
             'publish',
-            'adhesion_obligatoire',
             'max_per_user',
             'stock',
+            'adhesion_obligatoire',
             # topup when paid :
             'fedow_reward_enabled',
             'fedow_reward_asset',
@@ -1146,6 +1146,26 @@ class PriceChangeForm(ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        # self.fields['product_is_membership'] = _forms.BooleanField(
+        #     required=False,
+        #     initial=is_membership,
+        #     widget=_forms.HiddenInput,
+        # )
+
+        # On cache les options réservés aux adhésions
+        try :
+            instance: Price = kwargs.get('instance')
+            if instance.product.categorie_article != Product.ADHESION:
+                self.fields['subscription_type'].widget = HiddenInput()
+                self.fields['recurring_payment'].widget = HiddenInput()
+                self.fields['iteration'].widget = HiddenInput()
+                self.fields['manual_validation'].widget = HiddenInput()
+            else : # si c'est un produit qui n'est pas l'adhésion
+                self.fields['adhesion_obligatoire'].widget = HiddenInput()
+
+        except Exception:
+            pass
 
         # Filtrage des produits : uniquement des produits adhésions.
         # Possible facilement car Foreign Key (voir get_search_results dans ProductAdmin)
@@ -1184,22 +1204,25 @@ class PriceAdmin(ModelAdmin):
     warn_unsaved_form = True  # Default: False
     form = PriceChangeForm
 
+    conditional_fields = {
+        "max_per_user": "free_price == false"
+    }
+
     fieldsets = (
         (_('General'), {
             'fields': (
                 'name',
-                'product',
+                # 'product',
                 'prix',
-                'free_price',
-                'max_per_user',
                 'subscription_type',
+                'free_price',
                 ('recurring_payment', 'iteration'),
-                # 'recurring_payment',
                 'manual_validation',
                 'order',
-                'publish',
-                'adhesion_obligatoire',
+                'max_per_user',
                 'stock',
+                'adhesion_obligatoire',
+                'publish',
             ),
             'classes': ['tab'],
         }),

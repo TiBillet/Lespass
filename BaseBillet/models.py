@@ -975,6 +975,10 @@ class Price(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
     product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="prices", verbose_name=_("Product"))
 
+    @property
+    def product_is_membership_from_model(self):
+        return True
+
     short_description = models.CharField(max_length=250, blank=True, null=True)
     long_description = models.TextField(blank=True, null=True)
 
@@ -1006,8 +1010,9 @@ class Price(models.Model):
 
     stock = models.SmallIntegerField(blank=True, null=True,
                                      verbose_name=_("Maximum capacity"),
-                                     help_text=_("Number of valid subscriptions or memberships possible simultaneously or maximum capacity for this price per event. Leave this field blank if the number is unlimited."),
+                                     help_text=_("Number of valid memberships possible simultaneously or maximum capacity for this price per event. Leave this field blank if the quantity is unlimited."),
                                      )
+
 
     def out_of_stock(self, event=None):
         if self.stock is None or self.stock < 1 :
@@ -1087,6 +1092,7 @@ class Price(models.Model):
                                          choices=SUB_CHOICES,
                                          default=NA,
                                          verbose_name=_("Subscription duration"),
+                                         help_text=_("Valid membership period for each payment")
                                          )
 
     recurring_payment = models.BooleanField(default=False,
