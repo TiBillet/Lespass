@@ -1122,24 +1122,21 @@ class PriceChangeForm(ModelForm):
         recurring_payment = cleaned_data.get('recurring_payment')
         if recurring_payment:
             data = self.data  # récupère les data sans les avoir validé
-            # if data.get('free_price'):
-            #     raise forms.ValidationError(_("Un tarif ne peut être récurent et libre."), code="invalid")
 
-            try :
-                product = self.instance.product # on vient de modifier, il existe déja
-            except Exception as e :
-                logger.info(e)
-                product: Product = self.cleaned_data['product'] # pour le add
-            except Exception as e :
-                raise e
+            if hasattr(self.instance, 'product'):
+                categorie_product = self.instance.product.categorie_article
+            elif self.cleaned_data.get('product'):
+                categorie_product = self.cleaned_data['product'].categorie_article
+            else :
+                raise forms.ValidationError(_("No product ?"), code="invalid")
 
-
-            if product.categorie_article != Product.ADHESION:
-                raise forms.ValidationError(
-                    _("Un tarif en mode paiement récurrent doit avoir un produit de type adhésion."), code="invalid")
+            if categorie_product :
+                if categorie_product != Product.ADHESION:
+                    raise forms.ValidationError(
+                    _("A recurring payment plan must have a membership-type product."), code="invalid")
 
             if data.get('subscription_type') not in [Price.DAY, Price.WEEK, Price.MONTH, Price.CAL_MONTH, Price.YEAR]:
-                raise forms.ValidationError(_("Un paiement récurent ne peut être que : day, week, month, year"),
+                raise forms.ValidationError(_("A recurring payment must have a membership term. Re-enter the term just above."),
                                             code="invalid")
 
         return recurring_payment
@@ -1219,9 +1216,8 @@ class PriceAdmin(ModelAdmin):
             'fields': (
                 'name',
                 'product',
-                'prix',
+                ('prix', 'free_price'),
                 'subscription_type',
-                'free_price',
                 ('recurring_payment', 'iteration'),
                 'manual_validation',
                 'order',
