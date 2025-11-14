@@ -1100,7 +1100,7 @@ class PriceChangeForm(ModelForm):
         model = Price
         fields = (
             'name',
-            # 'product',
+            'product',
             'prix',
             'free_price',
             'subscription_type',
@@ -1146,13 +1146,6 @@ class PriceChangeForm(ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-        # self.fields['product_is_membership'] = _forms.BooleanField(
-        #     required=False,
-        #     initial=is_membership,
-        #     widget=_forms.HiddenInput,
-        # )
-
         # On cache les options réservés aux adhésions
         try :
             instance: Price = kwargs.get('instance')
@@ -1161,18 +1154,20 @@ class PriceChangeForm(ModelForm):
                 self.fields['recurring_payment'].widget = HiddenInput()
                 self.fields['iteration'].widget = HiddenInput()
                 self.fields['manual_validation'].widget = HiddenInput()
-            else : # si c'est un produit qui n'est pas l'adhésion
+                self.fields['product'].widget = HiddenInput() # caché sauf si bouton + en haut a droite
+                # Filtrage des produits : uniquement des produits adhésions.
+                # Possible facilement car Foreign Key (voir get_search_results dans ProductAdmin)
+                self.fields['adhesion_obligatoire'].queryset = Product.objects.filter(
+                    categorie_article=Product.ADHESION,
+                    archive=False,
+                )
+            elif instance.product.categorie_article == Product.ADHESION : # si c'est un produit qui n'est pas l'adhésion
+                self.fields['product'].widget = HiddenInput() # caché sauf si bouton + en haut a droite
                 self.fields['adhesion_obligatoire'].widget = HiddenInput()
 
-        except Exception:
+        except Exception as e :
+            logger.error(f"Error in PriceChangeForm __init__ : {e}")
             pass
-
-        # Filtrage des produits : uniquement des produits adhésions.
-        # Possible facilement car Foreign Key (voir get_search_results dans ProductAdmin)
-        self.fields['adhesion_obligatoire'].queryset = Product.objects.filter(
-            categorie_article=Product.ADHESION,
-            archive=False,
-        )
 
 
         client: Client = connection.tenant
@@ -1212,7 +1207,7 @@ class PriceAdmin(ModelAdmin):
         (_('General'), {
             'fields': (
                 'name',
-                # 'product',
+                'product',
                 'prix',
                 'subscription_type',
                 'free_price',
