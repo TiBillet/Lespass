@@ -11,9 +11,9 @@
 	<!-- espèce, pas une consigne -->
 	{% if 'espece' in moyens_paiement %}
 	{% if deposit_is_present %}
-	<c-bt.paiement name='{% translate "ESPÈCE" %}' icon="fa-coins" hx-get="hx_confirm_payment?method=espece" />
+	<c-bt.paiement name='{% translate "ESPÈCE" %}' icon="fa-coins" action="setAndSubmitForm('espece')" />
 	{% else %}
-	<c-bt.paiement name='{% translate "ESPÈCE" %}' icon="fa-coins" hx-get="hx_payment"  hx-target="#messages" />
+	<c-bt.paiement name='{% translate "ESPÈCE" %}' icon="fa-coins" hx-get="hx_confirm_payment?method=espece" />
 	{% endif %}
 	{% endif %}
 

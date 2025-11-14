@@ -20,7 +20,7 @@
 		nfc.start()
 		//  modification du mouen de paiement
 		document.querySelector('#addition-moyen-paiement').value = 'nfc'
-		const formToModify = document.querySelector('#addition-form')
+		window.formToModify = document.querySelector('#addition-form')
 		// change le trigger de form #addition-form pour "nfcResult"
 		formToModify.setAttribute('hx-trigger', 'nfcResult')
 		// changer l'url du POST

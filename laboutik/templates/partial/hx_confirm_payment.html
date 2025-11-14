@@ -15,7 +15,7 @@
 		<!-- include bt_return.html -->
 		<c-bt.return selector="#confirm" layer="2" />
 
-		<div id="bt-valider-layer2" class="bt-basic-container bt-basic-bg-success" onclick="prepareForm('{{ method }}')">
+		<div id="bt-valider-layer2" class="bt-basic-container bt-basic-bg-success" onclick="setAndSubmitForm('{{ method }}')">
 			<div class="bt-basic-icon">
 				<i class="fas fa-check-circle"></i>
 			</div>
@@ -25,40 +25,6 @@
 		</div>
 	</div>
 </div>
-
-<script>
-	// maj des inputs
-	function prepareForm(method) {
-		// modifie la valeur de l'input moyen de paiement
-		document.querySelector('#addition-moyen-paiement').value = method
-
-		// modifie la valeur de l'input given-sum (somme donnée)
-		if (method === 'espece') {
-			const givenSum = document.querySelector('#given-sum').value
-			// test input exist
-			const inputExist = document.querySelector('#addition-given-sum')
-			if (inputExist === null) {
-				// premier insertion dans le dom
-				document.querySelector('#addition-form').insertAdjacentHTML('afterend', `<input class="addition-include-data" id="addition-given-sum" name="given_sum" value="${givenSum}" />`)
-			} else {
-				// maj value uniquement
-				inputExist.value = givenSum
-			}
-		}
-
-		// changer l'url du POST
-		const form = document.querySelector('#addition-form')
-		form.setAttribute('hx-post', 'hx_payment')
-		// prend en compte les changement sur le formulaire
-		htmx.process(form)
-
-		hideAndEmptyElement('#confirm')
-		hideAndEmptyElement('#messages')
-
-		// submit le formulaire
-		sendEvent('validerPaiement', '#addition-form')
-	}
-</script>
 
 <style>
 	#confirm {

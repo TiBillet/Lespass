@@ -17,14 +17,14 @@
 		hx-target="#messages" hx-swap="outerHTML" hx-include='[class="addition-include-data"]'
 		hx-on::after-request="hideAndEmptyElement('#confirm')"></form>
 	<!-- hx-include -->
-	<input class="addition-include-data" name="id_table" value="{{ id_table }}" />
-	<input class="addition-include-data" name="uuid_pv" value="{{ pv.id }}" />
-	<input class="addition-include-data" name="responsable" value="{{ card.name }}" />
-	<input class="addition-include-data" name="tag_id_cm" value="{{ card.tag_id }}" />
-	<input class="addition-include-data" id="addition-comportement" name="comportement" value="{{ pv.comportement }}" />
-	<input class="addition-include-data" id="addition-total" name="total" value="" />
-	<input class="addition-include-data" id="addition-moyen-paiement" name="moyen_paiement" value="" />
-	<input class="addition-include-data" id="addition-hostname-client" name="hostname_client" value="" />
+	<input type="text" class="addition-include-data" name="id_table" value="{{ id_table }}" />
+	<input type="text" class="addition-include-data" name="uuid_pv" value="{{ pv.id }}" />
+	<input type="text" class="addition-include-data" name="responsable" value="{{ card.name }}" />
+	<input type="text" class="addition-include-data" name="tag_id_cm" value="{{ card.tag_id }}" />
+	<input type="text" class="addition-include-data" id="addition-comportement" name="comportement" value="{{ pv.comportement }}" />
+	<input type="number" class="addition-include-data" id="addition-total" name="total" value="" />
+	<input type="text" class="addition-include-data" id="addition-moyen-paiement" name="moyen_paiement" value="" />
+	<input type="text" class="addition-include-data" id="addition-hostname-client" name="hostname_client" value="" />
 
 </div>
 
@@ -96,6 +96,8 @@
 			document.querySelector(`#addition-line-${uuid} .addition-col-quantity`).innerText = quantity
 		}
 		const totalAddition = calculateTotal()
+		// update input "#addition-total" and ".addition-include-data" (hx_payment)
+		document.querySelector('#addition-total').value = totalAddition
 		sendEvent('infoTotalAddition', 'body', { totalAddition })
 	}
 

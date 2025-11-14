@@ -1,0 +1,46 @@
+{% load static i18n %}
+<div id="messages" class="BF-col" style="background-color: var(--{{ msg_type }});">
+	<div class="payment-title1 test-return-title-content">{{ title }}</div>
+
+	<div class="test-return-total-achats payment-title1">
+		{% translate "Total" %}({{ moyen_paiement }}) {{ payment.total }} {{ currency_data.symbol }}
+	</div>
+
+	{% if payment.given_sum %}
+	<div class="test-return-given-sum payment-msg1" style="margin-top:2rem">
+		{% translate "Somme donnée" %} {{ payment.given_sum }} {{ currency_data.symbol }}
+	</div>
+
+	<div class="test-return-change payment-title1">
+		{% translate "Monnaie à rendre" %} {{ payment.give_back }} {{ currency_data.symbol }}
+	</div>
+	{% endif %}
+
+	<c-bt.return selector="#messages" layer="1" action="manageReset()" />
+</div>
+
+<style>
+	#messages {
+		position: absolute;
+		left: 0;
+		top: 0;
+		width: 100%;
+		height: 100%;
+		z-index: 800;
+		color: var(--blanc01);
+		font-size: 1.5rem;
+		text-align: center;
+	}
+
+	.payment-title1 {
+		font-size: 2.5rem;
+		font-weight: bold;
+		text-align: center;
+	}
+
+	.payment-msg1 {
+		font-size: 2.5rem;
+		font-weight: bold;
+		text-align: center;
+	}
+</style>

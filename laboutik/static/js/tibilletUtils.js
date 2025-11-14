@@ -57,10 +57,11 @@ function bigToFloat(value) {
  * @param {object} data 
  */
 function sendEvent(name, selector, data) {
+	data = data === undefined ? {} : data
+	// console.log(`-> sendEvent "${name}"  --   selector = ${selector}  -- data = ${data}`)
 	try {
 		const event = new CustomEvent(name, { detail: data })
 		document.querySelector(selector).dispatchEvent(event)
-		// console.log(`-> sendEvent "${name}"`);
 	} catch (error) {
 		console.log('sendEvent,', error);
 	}
@@ -72,4 +73,37 @@ function hideAndEmptyElement(selector) {
 	element.classList.add('hide')
 	// vide
 	element.innerHTML = ''
+}
+
+// maj des
+function setAndSubmitForm(method) {
+	// modifie la valeur de l'input moyen de paiement
+	document.querySelector('#addition-moyen-paiement').value = method
+
+	// Insert l'input given-sum (somme donnée) ou modifie sa valeur. 
+	const givenSumElement = document.querySelector('#given-sum')
+	if (method === 'espece' && givenSumElement !== null) {
+		const givenSum = givenSumElement.value
+		// test input exist
+		const inputExist = document.querySelector('#addition-given-sum')
+		if (inputExist === null) {
+			// premier insertion dans le dom
+			document.querySelector('#addition-form').insertAdjacentHTML('afterend', `<input type="number" class="addition-include-data" id="addition-given-sum" name="given_sum" value="${givenSum}" />`)
+		} else {
+			// maj value uniquement
+			inputExist.value = givenSum
+		}
+	}
+
+	// changer l'url du POST
+	const form = document.querySelector('#addition-form')
+	form.setAttribute('hx-post', 'hx_payment')
+	// prend en compte les changement sur le formulaire
+	htmx.process(form)
+
+	hideAndEmptyElement('#confirm')
+	hideAndEmptyElement('#messages')
+
+	// submit le formulaire
+	sendEvent('validerPaiement', '#addition-form')
 }

@@ -1,16 +1,34 @@
 {% load static i18n %}
-<c-vars hx_target="#confirm" />
+<!-- default values -->
+<c-vars hx_target="#confirm" action="" />
 
-<div class="bt-basic-container bt-basic-bg-success" {{ attrs }} hx-target="{{ hx_target }}" hx-trigger="click" hx-swap="outerHTML">
-		<div class="bt-basic-icon">
-			<i class="fas {{ icon }}"></i>
-		</div>
-		<div class="bt-basic-text">
-			<div>{{ name }}</div>
-			<div class="paiement-bt-total">
-				<span>{% translate "TOTAL" %}</span>
-				<span>{{ total }}</span>
-				<span>{{ currency_data.symbol }}</span>
-			</div>
+{% if action != '' %}
+<div class="bt-basic-container bt-basic-bg-success" onclick="{{action}}">
+	<div class="bt-basic-icon">
+		<i class="fas {{ icon }}"></i>
+	</div>
+	<div class="bt-basic-text">
+		<div>{{ name }}</div>
+		<div class="paiement-bt-total">
+			<span>{% translate "TOTAL" %}</span>
+			<span>{{ total }}</span>
+			<span>{{ currency_data.symbol }}</span>
 		</div>
 	</div>
+</div>
+{% else %}
+<div class="bt-basic-container bt-basic-bg-success" {{ attrs }} hx-target="{{ hx_target }}" hx-trigger="click"
+	hx-swap="outerHTML">
+	<div class="bt-basic-icon">
+		<i class="fas {{ icon }}"></i>
+	</div>
+	<div class="bt-basic-text">
+		<div>{{ name }}</div>
+		<div class="paiement-bt-total">
+			<span>{% translate "TOTAL" %}</span>
+			<span>{{ total }}</span>
+			<span>{{ currency_data.symbol }}</span>
+		</div>
+	</div>
+</div>
+{% endif %}
